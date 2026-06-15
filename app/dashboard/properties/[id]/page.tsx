@@ -8,8 +8,13 @@ import {
   statusLabel,
   type LeadStatus,
 } from "@/lib/pipeline";
-import { updateProperty } from "../actions";
+import { updateProperty, blastPriceDrop } from "../actions";
 import { CopyLink } from "./copy-link";
+import {
+  countEligible,
+  blastOfferable,
+  formatRentLabel,
+} from "@/lib/price-drop";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +27,7 @@ type Property = {
   parking: string | null;
   description: string | null;
   status: string;
+  price_drop_pending_cents: number | null;
 };
 
 type LeadRow = {
@@ -29,6 +35,7 @@ type LeadRow = {
   name: string | null;
   email: string | null;
   status: LeadStatus;
+  price_drop_notified_cents: number | null;
   created_at: string;
 };
 
@@ -37,12 +44,14 @@ export default async function PropertyDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { saved?: string };
+  searchParams: { saved?: string; blasted?: string };
 }) {
   const supabase = createClient();
   const { data: property } = await supabase
     .from("properties")
-    .select("id, address, rent_cents, beds, baths, parking, description, status")
+    .select(
+      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents",
+    )
     .eq("id", params.id)
     .maybeSingle();
 
@@ -51,10 +60,19 @@ export default async function PropertyDetailPage({
 
   const { data: leads } = await supabase
     .from("leads")
-    .select("id, name, email, status, created_at")
+    .select("id, name, email, status, price_drop_notified_cents, created_at")
     .eq("property_id", p.id)
     .order("created_at", { ascending: false });
   const leadRows = (leads ?? []) as LeadRow[];
+
+  const eligibleCount = countEligible(leadRows, p.rent_cents);
+  const showBlastCard = blastOfferable(
+    p.price_drop_pending_cents,
+    p.rent_cents,
+    eligibleCount,
+  );
+  const blastedCount =
+    searchParams.blasted != null ? Number(searchParams.blasted) : null;
 
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
@@ -76,6 +94,16 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {blastedCount != null && (
+        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          {blastedCount > 0
+            ? `Price-drop alert sent to ${blastedCount} ${
+                blastedCount === 1 ? "lead" : "leads"
+              }.`
+            : "No leads were eligible for a price-drop alert."}
+        </p>
+      )}
+
       <h2 className="mb-1 mt-3 text-xl font-bold text-gray-900">{p.address}</h2>
       <p className="mb-6 text-sm text-gray-500">
         {propertyStatusLabel(p.status)}
@@ -94,6 +122,34 @@ export default async function PropertyDetailPage({
         </p>
         <CopyLink url={publicUrl} />
       </div>
+
+      {showBlastCard && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <h3 className="mb-1 text-sm font-semibold text-amber-900">
+            Price dropped — notify past leads
+          </h3>
+          <p className="mb-3 text-xs text-amber-800">
+            You reduced the rent from{" "}
+            <span className="line-through">
+              {formatRentLabel(p.price_drop_pending_cents)}
+            </span>{" "}
+            to <strong>{formatRentLabel(p.rent_cents)}</strong>.{" "}
+            {eligibleCount} open {eligibleCount === 1 ? "lead" : "leads"} who
+            inquired earlier {eligibleCount === 1 ? "hasn't" : "haven't"} been
+            told. Email them a branded alert with a link back to the listing.
+          </p>
+          <form action={blastPriceDrop}>
+            <input type="hidden" name="id" value={p.id} />
+            <button
+              type="submit"
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+            >
+              Notify {eligibleCount} {eligibleCount === 1 ? "lead" : "leads"} of
+              the price drop
+            </button>
+          </form>
+        </div>
+      )}
 
       <form
         action={updateProperty}

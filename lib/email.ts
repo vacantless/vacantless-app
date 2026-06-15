@@ -425,6 +425,140 @@ export async function sendFeedbackRequest(p: FeedbackPayload): Promise<SendResul
   }
 }
 
+// ---------------------------------------------------------------------------
+// Price-drop blast (M5). Sent to still-open leads on a property after the
+// operator lowers its rent: "the price just dropped — still interested?".
+// ---------------------------------------------------------------------------
+
+export type PriceDropPayload = {
+  lead_id: string;
+  property_id: string;
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  new_rent_cents: number | null;
+  old_rent_cents: number | null;
+};
+
+function listingUrl(propertyId: string): string {
+  return `${APP_BASE_URL}/r/${encodeURIComponent(propertyId)}`;
+}
+
+function priceDropHtml(p: PriceDropPayload): string {
+  const brand = p.brand_color || "#4f46e5";
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const url = escapeHtml(listingUrl(p.property_id));
+  const newRent = formatRent(p.new_rent_cents);
+  const oldRent = formatRent(p.old_rent_cents);
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  // Show "was → now" when we have a credible prior price above the new one.
+  const showWas =
+    p.old_rent_cents != null &&
+    p.new_rent_cents != null &&
+    p.old_rent_cents > p.new_rent_cents;
+
+  const priceBlock = newRent
+    ? `<div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;text-align:center;">
+        <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
+        ${
+          showWas && oldRent
+            ? `<p style="margin:0;font-size:18px;"><span style="color:#a1a1aa;text-decoration:line-through;">${escapeHtml(
+                oldRent,
+              )}</span> &nbsp;<strong style="color:${escapeHtml(
+                brand,
+              )};">${escapeHtml(newRent)}</strong></p>`
+            : `<p style="margin:0;font-size:18px;"><strong style="color:${escapeHtml(
+                brand,
+              )};">${escapeHtml(newRent)}</strong></p>`
+        }
+      </div>`
+    : `<div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;text-align:center;">
+        <p style="margin:0;"><strong>${addr}</strong></p>
+      </div>`;
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">Good news — the price just dropped on a home you were interested in. It may still be available:</p>
+      ${priceBlock}
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">See it & book a showing</a>
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or paste this link into your browser:<br/><span style="color:#52525b;">${url}</span></p>
+      <p style="margin:24px 0 0;color:#52525b;">Talk soon,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you inquired about this listing with us.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded price-drop alert. Never throws; returns { sent:false }
+ * if BREVO_API_KEY is unset or the lead left no email.
+ */
+export async function sendPriceDropAlert(p: PriceDropPayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const newRent = formatRent(p.new_rent_cents);
+  const subject = p.property_address
+    ? `Price drop at ${p.property_address}${newRent ? ` — now ${newRent}` : ""}`
+    : "A home you were interested in just dropped in price";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: priceDropHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 /**
  * Best-effort branded auto-reply. Never throws — callers can ignore the result.
  */
