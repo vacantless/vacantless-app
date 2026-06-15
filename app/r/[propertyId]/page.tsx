@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { submitLead } from "./actions";
 import { generateSlots, type Availability } from "@/lib/booking";
 import { accessibleBrand } from "@/lib/brand-theme";
+import {
+  buildSpecLine,
+  buildAmenityChips,
+  formatAvailability,
+  utilitiesSummary,
+} from "@/lib/property-features";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +21,17 @@ type Listing = {
   parking: string | null;
   description: string | null;
   status: string;
+  available_date: string | null;
+  sqft: number | null;
+  floor: string | null;
+  laundry: string | null;
+  air_conditioning: boolean;
+  balcony: boolean;
+  furnished: boolean;
+  pet_friendly: boolean;
+  heat_included: boolean;
+  hydro_included: boolean;
+  water_included: boolean;
   org_name: string;
   brand_color: string;
   logo_url: string | null;
@@ -42,11 +59,10 @@ export default async function PublicListingPage({
   const av = avData as Availability | null;
   const days = av ? generateSlots(av) : [];
 
-  const specs = [
-    l.beds != null ? `${l.beds} bed${l.beds === 1 ? "" : "s"}` : null,
-    l.baths != null ? `${l.baths} bath` : null,
-    l.parking ? `Parking: ${l.parking}` : null,
-  ].filter(Boolean);
+  const specs = buildSpecLine(l);
+  const amenities = buildAmenityChips(l);
+  const utilities = utilitiesSummary(l);
+  const availability = formatAvailability(l.available_date);
 
   const booked = searchParams.submitted === "booked";
 
@@ -68,13 +84,35 @@ export default async function PublicListingPage({
 
       <main className="mx-auto max-w-2xl px-6 py-8">
         <h1 className="text-2xl font-bold text-gray-900">{l.address}</h1>
-        <p className="mt-1 text-lg font-semibold" style={{ color: brand }}>
-          {l.rent_cents
-            ? `$${(l.rent_cents / 100).toLocaleString()}/mo`
-            : "Contact for pricing"}
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="text-lg font-semibold" style={{ color: brand }}>
+            {l.rent_cents
+              ? `$${(l.rent_cents / 100).toLocaleString()}/mo`
+              : "Contact for pricing"}
+          </p>
+          <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+            {availability}
+          </span>
+        </div>
         {specs.length > 0 && (
           <p className="mt-1 text-sm text-gray-600">{specs.join(" · ")}</p>
+        )}
+        {amenities.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {amenities.map((a) => (
+              <span
+                key={a}
+                className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700"
+              >
+                {a}
+              </span>
+            ))}
+          </div>
+        )}
+        {utilities && (
+          <p className="mt-3 text-sm text-gray-600">
+            <span className="font-medium text-gray-700">{utilities}</span>
+          </p>
         )}
         {l.description && (
           <p className="mt-4 whitespace-pre-wrap text-gray-700">

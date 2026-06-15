@@ -72,7 +72,7 @@ export default async function AvailabilityPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-gray-900">Showing availability</h2>
+      <h2 className="text-xl font-bold text-gray-900">Showing times</h2>
       <p className="mt-1 text-sm text-gray-500">
         Set the weekly windows when renters can self-book showings. Open slots
         are generated from these times minus anything already booked.

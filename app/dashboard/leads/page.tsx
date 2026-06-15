@@ -44,7 +44,7 @@ export default async function LeadsPage({
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-bold text-gray-900">Leads</h2>
+      <h2 className="mb-4 text-xl font-bold text-gray-900">Inquiries</h2>
 
       <div className="mb-5 flex flex-wrap gap-2 text-sm">
         <FilterChip label={`All (${all.length})`} href="/dashboard/leads" active={!filter} />

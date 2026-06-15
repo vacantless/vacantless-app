@@ -19,12 +19,23 @@ type PropertyRow = {
 
 export default async function PropertiesPage() {
   const supabase = createClient();
-  const { data: properties } = await supabase
-    .from("properties")
-    .select("id, address, rent_cents, beds, baths, status")
-    .order("created_at", { ascending: false });
+  const [{ data: properties }, { data: leadRefs }] = await Promise.all([
+    supabase
+      .from("properties")
+      .select("id, address, rent_cents, beds, baths, status")
+      .order("created_at", { ascending: false }),
+    supabase.from("leads").select("property_id"),
+  ]);
 
   const rows = (properties ?? []) as PropertyRow[];
+
+  // Per-property inquiry counts (RLS already scopes both reads to this org).
+  const leadCounts = new Map<string, number>();
+  for (const r of (leadRefs ?? []) as { property_id: string | null }[]) {
+    if (r.property_id) {
+      leadCounts.set(r.property_id, (leadCounts.get(r.property_id) ?? 0) + 1);
+    }
+  }
 
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
@@ -56,6 +67,12 @@ export default async function PropertiesPage() {
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
+                {(leadCounts.get(p.id) ?? 0) > 0 && (
+                  <span className="ml-2 text-xs font-medium text-gray-500">
+                    · {leadCounts.get(p.id)}{" "}
+                    {leadCounts.get(p.id) === 1 ? "inquiry" : "inquiries"}
+                  </span>
+                )}
               </Link>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="text-sm text-gray-500">

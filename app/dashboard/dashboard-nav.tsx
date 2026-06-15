@@ -7,9 +7,9 @@ import { useEffect, useState } from "react";
 const LINKS: [string, string][] = [
   ["/dashboard", "Overview"],
   ["/dashboard/properties", "Properties"],
-  ["/dashboard/leads", "Leads"],
+  ["/dashboard/leads", "Inquiries"],
   ["/dashboard/showings", "Showings"],
-  ["/dashboard/availability", "Availability"],
+  ["/dashboard/availability", "Showing Times"],
   ["/dashboard/reports", "Reports"],
   ["/dashboard/billing", "Billing"],
   ["/dashboard/settings", "Settings"],

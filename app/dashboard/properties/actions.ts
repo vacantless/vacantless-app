@@ -7,6 +7,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { PROPERTY_STATUSES } from "@/lib/pipeline";
 import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
+import { normalizeLaundry } from "@/lib/property-features";
 
 function parseRentCents(raw: string): number | null {
   const v = raw.trim();
@@ -27,6 +28,17 @@ function parseFloatOrNull(raw: string): number | null {
   if (!v) return null;
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** A checkbox is present in FormData (value "on") only when checked. */
+function parseCheckbox(formData: FormData, name: string): boolean {
+  return formData.get(name) != null;
+}
+
+/** Normalize an HTML date input ("YYYY-MM-DD") to a value or null. */
+function parseDateOrNull(raw: string): string | null {
+  const v = raw.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
 
 export async function addProperty(formData: FormData) {
@@ -91,6 +103,19 @@ export async function updateProperty(formData: FormData) {
       description: String(formData.get("description") ?? "").trim() || null,
       status,
       price_drop_pending_cents: nextPending,
+      // Unit-level fields
+      available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),
+      sqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
+      floor: String(formData.get("floor") ?? "").trim() || null,
+      laundry: normalizeLaundry(formData.get("laundry")),
+      air_conditioning: parseCheckbox(formData, "air_conditioning"),
+      balcony: parseCheckbox(formData, "balcony"),
+      furnished: parseCheckbox(formData, "furnished"),
+      pet_friendly: parseCheckbox(formData, "pet_friendly"),
+      heat_included: parseCheckbox(formData, "heat_included"),
+      hydro_included: parseCheckbox(formData, "hydro_included"),
+      water_included: parseCheckbox(formData, "water_included"),
+      photos_ready: parseCheckbox(formData, "photos_ready"),
     })
     .eq("id", id);
 

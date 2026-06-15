@@ -15,6 +15,7 @@ import {
   blastOfferable,
   formatRentLabel,
 } from "@/lib/price-drop";
+import { LAUNDRY_OPTIONS, laundryLabel } from "@/lib/property-features";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,18 @@ type Property = {
   description: string | null;
   status: string;
   price_drop_pending_cents: number | null;
+  available_date: string | null;
+  sqft: number | null;
+  floor: string | null;
+  laundry: string | null;
+  air_conditioning: boolean;
+  balcony: boolean;
+  furnished: boolean;
+  pet_friendly: boolean;
+  heat_included: boolean;
+  hydro_included: boolean;
+  water_included: boolean;
+  photos_ready: boolean;
 };
 
 type LeadRow = {
@@ -50,7 +63,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents",
+      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, heat_included, hydro_included, water_included, photos_ready",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -244,6 +257,151 @@ export default async function PropertyDetailPage({
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
+
+        {/* --- Unit details --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Unit details
+          </legend>
+          <div className="flex flex-wrap gap-4">
+            <div className="w-40">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Available date
+              </label>
+              <input
+                name="available_date"
+                type="date"
+                defaultValue={p.available_date ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-gray-400">Blank = available now</p>
+            </div>
+            <div className="w-28">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Size (sq ft)
+              </label>
+              <input
+                name="sqft"
+                type="number"
+                step="1"
+                min="0"
+                defaultValue={p.sqft ?? ""}
+                placeholder="850"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-32">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Floor
+              </label>
+              <input
+                name="floor"
+                defaultValue={p.floor ?? ""}
+                placeholder="2nd"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-44">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Laundry
+              </label>
+              <select
+                name="laundry"
+                defaultValue={p.laundry ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Not specified</option>
+                {LAUNDRY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {laundryLabel(opt)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        {/* --- Amenities --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Amenities
+          </legend>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {(
+              [
+                ["air_conditioning", "Air conditioning", p.air_conditioning],
+                ["balcony", "Balcony", p.balcony],
+                ["furnished", "Furnished", p.furnished],
+                ["pet_friendly", "Pet friendly", p.pet_friendly],
+              ] as const
+            ).map(([name, label, checked]) => (
+              <label
+                key={name}
+                className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"
+              >
+                <input
+                  type="checkbox"
+                  name={name}
+                  defaultChecked={checked}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {/* --- Utilities included in rent --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Utilities included in rent
+          </legend>
+          <p className="mb-3 text-xs text-gray-400">
+            Leave a utility unchecked if the tenant pays it.
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {(
+              [
+                ["heat_included", "Heat", p.heat_included],
+                ["hydro_included", "Hydro", p.hydro_included],
+                ["water_included", "Water", p.water_included],
+              ] as const
+            ).map(([name, label, checked]) => (
+              <label
+                key={name}
+                className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"
+              >
+                <input
+                  type="checkbox"
+                  name={name}
+                  defaultChecked={checked}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {/* --- Internal (operator-only) --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Internal
+          </legend>
+          <p className="mb-3 text-xs text-gray-400">
+            Not shown to renters.
+          </p>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="photos_ready"
+              defaultChecked={p.photos_ready}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            Listing photos ready
+          </label>
+        </fieldset>
+
         <button
           type="submit"
           className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"

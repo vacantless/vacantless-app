@@ -109,7 +109,7 @@ export default async function OverviewPage() {
       <LaunchChecklist checklist={checklist} />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Stat label="Open leads" value={openLeads.length} />
+        <Stat label="Open inquiries" value={openLeads.length} />
         <Stat label="New this week" value={newThisWeek.length} />
         <Stat label="Properties" value={propertyCount ?? 0} />
       </div>
@@ -183,11 +183,11 @@ export default async function OverviewPage() {
       )}
 
       <SectionHeading action={{ href: "/dashboard/leads", label: "View all" }}>
-        Recent leads
+        Recent inquiries
       </SectionHeading>
       {allLeads.length === 0 ? (
         <EmptyState
-          title="No leads yet"
+          title="No inquiries yet"
           description="Share a property's public listing link to start collecting inquiries — they'll land here automatically."
           cta={{ href: "/dashboard/properties", label: "Open a property" }}
         />
