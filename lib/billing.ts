@@ -97,6 +97,49 @@ export function needsBillingAttention(status: string | null | undefined): boolea
   return !!status && (ATTENTION_STATUSES as readonly string[]).includes(status);
 }
 
+// --- Webhook sync helpers (M4) ---------------------------------------------
+// The current-period-end timestamp (unix seconds) for a Stripe subscription.
+// Newer Stripe API versions (2025-* / "dahlia") expose it per subscription item;
+// older versions put it at the top level. Prefer the item value, fall back to
+// the top level, else null. Reading only the top level (the old shape) yields
+// null on the newer payloads — the cause of the blank "period ends …" date.
+// Structural shape only (lib/billing stays Stripe-free). The caller casts its
+// Stripe.Subscription to this — the v17 SubscriptionItem type doesn't declare
+// current_period_end even though the runtime dahlia payload carries it.
+export type SubscriptionPeriodShape = {
+  current_period_end?: number | null;
+  items?: { data?: Array<{ current_period_end?: number | null }> | null } | null;
+};
+export function subscriptionPeriodEndSeconds(
+  sub: SubscriptionPeriodShape,
+): number | null {
+  const item = sub.items?.data?.[0]?.current_period_end;
+  if (typeof item === "number") return item;
+  if (typeof sub.current_period_end === "number") return sub.current_period_end;
+  return null;
+}
+
+// Guard against a stale, out-of-order `incomplete` event clobbering a
+// subscription that has already advanced past it. `incomplete` is only ever a
+// transient *initial* state — once a subscription is active / trialing /
+// past_due / unpaid / canceled, Stripe never legitimately moves it back to
+// `incomplete`. So an `incomplete` event that is processed after (but was
+// created before) the `active` event must not overwrite the real status.
+// Only guard when it's the SAME subscription; a brand-new subscription is
+// allowed to write `incomplete` so a genuinely-stuck payment still surfaces.
+const INCOMPLETE_STATUSES = ["incomplete", "incomplete_expired"] as const;
+export function shouldApplyStatus(
+  incomingStatus: string | null | undefined,
+  existingStatus: string | null | undefined,
+  sameSubscription: boolean,
+): boolean {
+  if (incomingStatus !== "incomplete") return true;
+  if (!sameSubscription) return true;
+  if (!existingStatus) return true;
+  // Existing status is settled (non-incomplete) → skip the stale downgrade.
+  return (INCOMPLETE_STATUSES as readonly string[]).includes(existingStatus);
+}
+
 // Human label for a raw Stripe status.
 export function statusLabel(status: string | null | undefined): string {
   switch (status) {

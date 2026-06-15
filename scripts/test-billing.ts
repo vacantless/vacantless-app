@@ -9,6 +9,8 @@ import {
   statusLabel,
   formatPeriodEnd,
   buildBillingView,
+  subscriptionPeriodEndSeconds,
+  shouldApplyStatus,
 } from "../lib/billing";
 
 let passed = 0;
@@ -139,6 +141,53 @@ const badDate = buildBillingView({
   current_period_end: "garbage",
 });
 ok("bad period end → null label", badDate.periodEndLabel === null && badDate.periodEnd === null);
+
+// --- subscriptionPeriodEndSeconds (webhook sync) ---------------------------
+// Newer API (dahlia): value lives on the item, top level absent → use item.
+ok(
+  "period end: reads item-level (dahlia shape)",
+  subscriptionPeriodEndSeconds({ items: { data: [{ current_period_end: 1784137920 }] } }) ===
+    1784137920,
+);
+// Older API: only top level present → fall back to it.
+ok(
+  "period end: falls back to top level (legacy shape)",
+  subscriptionPeriodEndSeconds({ current_period_end: 1700000000 }) === 1700000000,
+);
+// Item value wins when both are present.
+ok(
+  "period end: item wins over top level",
+  subscriptionPeriodEndSeconds({
+    current_period_end: 1700000000,
+    items: { data: [{ current_period_end: 1784137920 }] },
+  }) === 1784137920,
+);
+ok("period end: neither present → null", subscriptionPeriodEndSeconds({}) === null);
+ok(
+  "period end: empty items → null",
+  subscriptionPeriodEndSeconds({ items: { data: [] } }) === null,
+);
+
+// --- shouldApplyStatus (stale-incomplete guard) ----------------------------
+// Non-incomplete statuses always apply.
+ok("status: active always applies", shouldApplyStatus("active", "incomplete", true));
+ok("status: canceled always applies", shouldApplyStatus("canceled", "active", true));
+// Incomplete on a NEW subscription applies (a genuinely-stuck payment surfaces).
+ok("status: incomplete on new sub applies", shouldApplyStatus("incomplete", "canceled", false));
+ok("status: incomplete with no prior applies", shouldApplyStatus("incomplete", null, true));
+ok(
+  "status: incomplete when still incomplete applies",
+  shouldApplyStatus("incomplete", "incomplete", true),
+);
+// The bug we fixed: a stale `incomplete` must NOT clobber an active same-sub.
+ok(
+  "status: stale incomplete skipped over active (same sub)",
+  shouldApplyStatus("incomplete", "active", true) === false,
+);
+ok(
+  "status: stale incomplete skipped over past_due (same sub)",
+  shouldApplyStatus("incomplete", "past_due", true) === false,
+);
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, priceMap } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { planForPriceId } from "@/lib/billing";
+import { planForPriceId, subscriptionPeriodEndSeconds, shouldApplyStatus } from "@/lib/billing";
 
 // Stripe webhook (M4 billing). Keeps each org's plan / subscription_status /
 // current_period_end in sync with Stripe as the source of truth.
@@ -60,20 +60,49 @@ async function applySubscription(
     return { matched: true as const, orgId, plan: "trial" };
   }
 
+  // Read the org's current billing state so a stale, out-of-order `incomplete`
+  // event can't clobber a subscription that has already advanced past it.
+  const { data: existingRows } = await admin
+    .from("organizations")
+    .select("subscription_status, stripe_subscription_id")
+    .eq("id", orgId)
+    .limit(1);
+  const existing = (existingRows?.[0] ?? {}) as {
+    subscription_status?: string | null;
+    stripe_subscription_id?: string | null;
+  };
+
   const priceId = sub.items?.data?.[0]?.price?.id ?? null;
   const tier = planForPriceId(priceId, priceMap());
+  // stripe v17 types lag the dahlia runtime, where current_period_end moved onto
+  // the subscription item; cast so we can read it without fighting stale types.
+  const periodEndSec = subscriptionPeriodEndSeconds(
+    sub as unknown as Parameters<typeof subscriptionPeriodEndSeconds>[0],
+  );
 
   const update: Record<string, unknown> = {
-    subscription_status: sub.status,
     stripe_subscription_id: sub.id,
-    current_period_end: sub.current_period_end
-      ? new Date(sub.current_period_end * 1000).toISOString()
-      : null,
   };
+  // Only write a period end when we actually have one, so a stale event with a
+  // missing value can't wipe a good date (the cancel path nulls it explicitly).
+  if (periodEndSec != null) {
+    update.current_period_end = new Date(periodEndSec * 1000).toISOString();
+  }
   if (customerId) update.stripe_customer_id = customerId;
   // Only set the tier when we recognize the price — an unknown price must not
   // wipe an existing plan.
   if (tier) update.plan = tier;
+  // Apply the status unless it's a stale `incomplete` for a sub that already
+  // advanced (see shouldApplyStatus).
+  if (
+    shouldApplyStatus(
+      sub.status,
+      existing.subscription_status,
+      existing.stripe_subscription_id === sub.id,
+    )
+  ) {
+    update.subscription_status = sub.status;
+  }
 
   await admin.from("organizations").update(update).eq("id", orgId);
   return { matched: true as const, orgId, plan: tier ?? "(unchanged)" };
