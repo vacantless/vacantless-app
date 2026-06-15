@@ -8,6 +8,7 @@ name: Vacantless background sweeps
 #
 #   * /api/cron/reminders — 24h + 2h showing reminders (M3)
 #   * /api/cron/feedback  — post-showing feedback requests (M5)
+#   * /api/cron/nurture   — lead nurture drip to un-booked inquiries (M5)
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -38,4 +39,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/feedback" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger nurture sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/nurture" \
             -w "\nHTTP %{http_code}\n"

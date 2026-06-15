@@ -112,6 +112,7 @@ eq(
       reply_to_email: null,
       feedback_enabled: true,
       feedback_delay_hours: 2,
+      nurture_enabled: true,
     },
   },
 );
@@ -132,6 +133,7 @@ eq(
       reply_to_email: "leasing@agile.ca",
       feedback_enabled: true,
       feedback_delay_hours: 2,
+      nurture_enabled: true,
     },
   },
 );
@@ -200,6 +202,21 @@ eq("delay garbage rejected", validateFeedbackDelayHours("soon"), { ok: false });
   });
   eq("branding bad delay not ok", r.ok, false);
   eq("branding bad delay 1 error", r.ok === false && r.errors.length, 1);
+}
+{
+  // nurture_enabled defaults to true when the field is absent (checkbox unchecked
+  // sends nothing, but absence here means "not provided" — default on).
+  const r = validateBranding({ name: "OK", brand_color: "#0e8c8c", logo_url: "" });
+  eq("branding nurture default on", r.ok === true && r.values.nurture_enabled, true);
+}
+{
+  const r = validateBranding({
+    name: "OK",
+    brand_color: "#0e8c8c",
+    logo_url: "",
+    nurture_enabled: false,
+  });
+  eq("branding nurture disabled persisted", r.ok === true && r.values.nurture_enabled, false);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

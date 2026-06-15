@@ -23,6 +23,7 @@ export async function updateBranding(formData: FormData) {
     reply_to_email: String(formData.get("reply_to_email") ?? ""),
     feedback_enabled: formData.get("feedback_enabled") != null,
     feedback_delay_hours: String(formData.get("feedback_delay_hours") ?? ""),
+    nurture_enabled: formData.get("nurture_enabled") != null,
   });
 
   if (!result.ok) {

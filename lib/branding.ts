@@ -115,6 +115,7 @@ export type BrandingInput = {
   reply_to_email?: string | null;
   feedback_enabled?: boolean;
   feedback_delay_hours?: string | number | null;
+  nurture_enabled?: boolean;
 };
 
 export type BrandingUpdate = {
@@ -124,6 +125,7 @@ export type BrandingUpdate = {
   reply_to_email: string | null;
   feedback_enabled: boolean;
   feedback_delay_hours: number;
+  nurture_enabled: boolean;
 };
 
 export type BrandingValidation =
@@ -185,6 +187,7 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
       reply_to_email: replyTo.value,
       feedback_enabled: input.feedback_enabled !== false,
       feedback_delay_hours: delay.value,
+      nurture_enabled: input.nurture_enabled !== false,
     },
   };
 }

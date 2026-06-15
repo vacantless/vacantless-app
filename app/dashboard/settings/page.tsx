@@ -170,6 +170,32 @@ export default async function SettingsPage({
             </label>
           </div>
 
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Lead nurture
+            </h3>
+
+            <label className="flex items-start gap-3">
+              <input
+                name="nurture_enabled"
+                type="checkbox"
+                defaultChecked={org.nurture_enabled}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-gray-700">
+                  Automatically follow up with leads who haven&apos;t booked
+                </span>
+                <span className="block text-xs text-gray-400">
+                  Sends a gentle, branded sequence of up to 3 reminders (around 2,
+                  5, and 10 days after the inquiry) inviting them to book a
+                  showing. It stops automatically the moment a lead books, is
+                  marked lost, or moves further down the pipeline.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div className="mt-6 text-right">
             <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
               Save settings
