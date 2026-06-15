@@ -124,10 +124,18 @@ export default async function BillingPage({
             >
               <div className="flex items-baseline justify-between">
                 <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-                <p className="text-xl font-bold text-gray-900">
-                  {formatPlanPrice(plan.priceCents)}
+                <p className="text-right">
+                  <span className="mr-1.5 text-sm font-medium text-gray-400 line-through">
+                    {formatPlanPrice(plan.listPriceCents)}
+                  </span>
+                  <span className="text-xl font-bold text-gray-900">
+                    {formatPlanPrice(plan.priceCents)}
+                  </span>
                 </p>
               </div>
+              <p className="mt-0.5 text-right text-[11px] font-semibold uppercase tracking-wide text-brand">
+                Founding rate · locked while active
+              </p>
               <p className="mt-1 text-sm text-gray-500">{plan.blurb}</p>
               <ul className="mt-4 flex-1 space-y-2 text-sm text-gray-700">
                 {plan.features.map((f) => (

@@ -10,7 +10,8 @@ export type PaidPlanKey = "core" | "plus";
 export type PlanInfo = {
   key: PaidPlanKey;
   name: string;
-  priceCents: number; // CAD, per month
+  priceCents: number; // CAD, per month — the current (founding) charge
+  listPriceCents: number; // CAD, per month — the standard list anchor (shown struck through)
   priceEnv: string; // env var holding the Stripe price id
   blurb: string;
   features: string[];
@@ -26,6 +27,7 @@ export const PLANS: Record<PaidPlanKey, PlanInfo> = {
     key: "core",
     name: "Core",
     priceCents: 20000,
+    listPriceCents: 40000,
     priceEnv: "STRIPE_PRICE_CORE",
     blurb: "The full lead-to-lease loop for a single operator.",
     features: [
@@ -41,6 +43,7 @@ export const PLANS: Record<PaidPlanKey, PlanInfo> = {
     key: "plus",
     name: "Plus",
     priceCents: 37500,
+    listPriceCents: 75000,
     priceEnv: "STRIPE_PRICE_PLUS",
     blurb: "Everything in Core plus the retention differentiators.",
     features: [

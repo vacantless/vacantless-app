@@ -26,6 +26,10 @@ function ok(name: string, cond: boolean) {
 // --- Plan catalog ----------------------------------------------------------
 ok("core priced at $200/mo (20000 cents)", PLANS.core.priceCents === 20000);
 ok("plus priced at $375/mo (37500 cents)", PLANS.plus.priceCents === 37500);
+ok("core list anchor $400 (40000 cents)", PLANS.core.listPriceCents === 40000);
+ok("plus list anchor $750 (75000 cents)", PLANS.plus.listPriceCents === 75000);
+ok("founding rate is below the list anchor (core)", PLANS.core.priceCents < PLANS.core.listPriceCents);
+ok("founding rate is below the list anchor (plus)", PLANS.plus.priceCents < PLANS.plus.listPriceCents);
 ok("core price env name", PLANS.core.priceEnv === "STRIPE_PRICE_CORE");
 ok("plus price env name", PLANS.plus.priceEnv === "STRIPE_PRICE_PLUS");
 ok("formatPlanPrice core", formatPlanPrice(20000) === "$200/month");
