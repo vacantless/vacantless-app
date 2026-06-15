@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 export const metadata = {
-  title: "Vacantless — Catch every rental opportunity",
+  title: "Vacantless - Catch every rental opportunity",
   description:
     "One simple place to collect rental inquiries, reply fast, let renters book their own showings, and turn interest into signed leases.",
 };
@@ -531,7 +531,7 @@ const AUDIENCE: { title: string; body: string; icon: ReactNode }[] = [
   },
   {
     title: "Marketplace & Kijiji renters",
-    body: "Already posting on Facebook, Kijiji, email, calls, and texts — bring it together.",
+    body: "Already posting on Facebook, Kijiji, email, calls, and texts? Bring it all together.",
     icon: <ChatIcon />,
   },
 ];
