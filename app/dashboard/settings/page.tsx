@@ -1,0 +1,175 @@
+import { getCurrentOrg } from "@/lib/org";
+import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
+import { updateBranding } from "./actions";
+
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: { saved?: string; error?: string };
+}) {
+  const org = await getCurrentOrg();
+  if (!org) return null;
+
+  const color = org.brand_color || DEFAULT_BRAND_COLOR;
+  const saved = searchParams.saved === "1";
+  const error = searchParams.error;
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-gray-900">Branding</h2>
+      <p className="mt-1 text-sm text-gray-500">
+        These details appear to renters everywhere your brand shows up: your
+        dashboard header, your public listing pages, and every automated email
+        (inquiry auto-reply, booking confirmation, and showing reminders).
+      </p>
+
+      {saved && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Branding saved. Renter-facing pages and emails now use these details.
+        </div>
+      )}
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error === "save"
+            ? "Something went wrong saving your changes. Please try again."
+            : "Some fields weren't valid. Check the brand color (a hex like #0e8c8c) and logo URL (a full http(s) link, or leave it blank)."}
+        </div>
+      )}
+
+      <form
+        action={updateBranding}
+        className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3"
+      >
+        {/* Editable fields */}
+        <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Brand details
+          </h3>
+
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              Business name
+            </span>
+            <input
+              name="name"
+              type="text"
+              required
+              maxLength={120}
+              defaultValue={org.name}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-xs text-gray-400">
+              Shown as the sender name and sign-off in every email to renters.
+            </span>
+          </label>
+
+          <label className="mt-5 block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              Brand color
+            </span>
+            <span className="flex items-center gap-3">
+              <input
+                name="brand_color"
+                type="color"
+                defaultValue={color}
+                className="h-10 w-16 cursor-pointer rounded-lg border border-gray-300 p-1"
+              />
+              <code className="rounded bg-gray-100 px-2 py-1 text-sm text-gray-700">
+                {color}
+              </code>
+            </span>
+            <span className="mt-1 block text-xs text-gray-400">
+              Used for the header bar, listing accents, and the email accent
+              stripe.
+            </span>
+          </label>
+
+          <label className="mt-5 block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              Logo URL
+            </span>
+            <input
+              name="logo_url"
+              type="url"
+              inputMode="url"
+              placeholder="https://example.com/logo.png"
+              defaultValue={org.logo_url ?? ""}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-xs text-gray-400">
+              A full http(s) link to your logo image. Leave blank for no logo.
+            </span>
+          </label>
+
+          <div className="mt-6 text-right">
+            <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
+              Save branding
+            </button>
+          </div>
+        </div>
+
+        {/* Live (saved-state) preview */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Preview
+          </h3>
+          <div className="overflow-hidden rounded-lg border border-gray-200">
+            <div className="h-1.5" style={{ backgroundColor: color }} />
+            <div className="p-4">
+              {org.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={org.logo_url}
+                  alt={org.name}
+                  className="mb-3 max-h-10"
+                />
+              ) : (
+                <div
+                  className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
+                  style={{ backgroundColor: color }}
+                >
+                  {org.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <p className="text-sm font-semibold text-gray-900">{org.name}</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Hi there, thanks for your interest — someone from our team will
+                be in touch shortly.
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-gray-400">
+            Reflects your last saved branding. Save changes to update it.
+          </p>
+        </div>
+      </form>
+
+      {/* Read-only account context */}
+      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Account
+        </h3>
+        <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-gray-500">Plan</dt>
+            <dd className="font-medium text-gray-900">{org.plan}</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Listing link prefix</dt>
+            <dd className="font-medium text-gray-900">/r/&hellip;</dd>
+          </div>
+          <div>
+            <dt className="text-gray-500">Workspace ID</dt>
+            <dd className="font-mono text-xs text-gray-600">{org.slug}</dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-xs text-gray-400">
+          Renter replies to automated emails currently route to the shared
+          Vacantless inbox. A custom reply-to address is coming next.
+        </p>
+      </div>
+    </div>
+  );
+}
