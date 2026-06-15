@@ -20,6 +20,8 @@ export type ChecklistStep = {
   href: string;
   cta: string;
   status: ChecklistStatus;
+  /** When true the UI should open href in a new tab (e.g. a public /r page). */
+  newTab?: boolean;
 };
 
 export type LaunchChecklist = {
@@ -37,6 +39,13 @@ export type ChecklistInput = {
   brandingConfirmed: boolean;
   leadCount: number;
   subscriptionActive: boolean;
+  /**
+   * Id of a property to deep-link the "Test your renter intake page" step to.
+   * When set, that step points straight at the property's public `/r/[id]`
+   * page (opened in a new tab) instead of the Properties list, turning the
+   * step into a single click. Null/undefined until a property exists.
+   */
+  firstPropertyId?: string | null;
 };
 
 /**
@@ -125,6 +134,19 @@ export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
     } else {
       status = "todo";
     }
+
+    // Once a property exists, the "intake" step deep-links straight to that
+    // property's public renter page so testing it is one click, not a hunt.
+    if (def.key === "intake" && input.firstPropertyId) {
+      return {
+        ...def,
+        href: `/r/${input.firstPropertyId}`,
+        cta: "Preview intake page",
+        newTab: true,
+        status,
+      };
+    }
+
     return { ...def, status };
   });
 

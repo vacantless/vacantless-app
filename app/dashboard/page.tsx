@@ -48,7 +48,7 @@ export default async function OverviewPage() {
   // RLS scopes all of these to the caller's org automatically.
   const [
     { data: leads },
-    { count: propertyCount },
+    { data: propertyRows, count: propertyCount },
     { count: availabilityCount },
     { data: showingData },
   ] = await Promise.all([
@@ -56,7 +56,13 @@ export default async function OverviewPage() {
       .from("leads")
       .select("id, name, email, source, status, created_at, property_id")
       .order("created_at", { ascending: false }),
-    supabase.from("properties").select("id", { count: "exact", head: true }),
+    // Most-recent property id + total count — the id deep-links the "test your
+    // intake page" checklist step straight to a real public /r page.
+    supabase
+      .from("properties")
+      .select("id", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .limit(1),
     supabase
       .from("availability_rules")
       .select("id", { count: "exact", head: true }),
@@ -95,6 +101,7 @@ export default async function OverviewPage() {
     brandingConfirmed: org ? isBrandingConfirmed(org) : false,
     leadCount: allLeads.length,
     subscriptionActive: org?.subscription_status === "active",
+    firstPropertyId: (propertyRows as { id: string }[] | null)?.[0]?.id ?? null,
   });
 
   return (

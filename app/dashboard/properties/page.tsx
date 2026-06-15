@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { propertyStatusLabel } from "@/lib/pipeline";
 import { StatusChip, propertyStatusTone, EmptyState } from "@/components/ui";
 import { addProperty } from "./actions";
+import { CopyIntakeButton } from "./copy-intake-button";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,12 @@ export default async function PropertiesPage() {
 
   const rows = (properties ?? []) as PropertyRow[];
 
+  const h = headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const intakeUrl = (id: string) =>
+    host ? `${proto}://${host}/r/${id}` : `/r/${id}`;
+
   return (
     <div>
       <h2 className="mb-4 text-xl font-bold text-gray-900">Properties</h2>
@@ -31,33 +39,41 @@ export default async function PropertiesPage() {
       {rows.length > 0 ? (
         <ul className="mb-8 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
           {rows.map((p) => (
-            <li key={p.id}>
+            <li
+              key={p.id}
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3"
+            >
               <Link
                 href={`/dashboard/properties/${p.id}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50"
+                className="min-w-0 flex-1 hover:underline"
               >
-                <span className="min-w-0">
-                  <span className="text-gray-900">{p.address}</span>
-                  <span className="ml-2 text-xs text-gray-400">
-                    {[
-                      p.beds != null ? `${p.beds} bd` : null,
-                      p.baths != null ? `${p.baths} ba` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-sm text-gray-500">
-                    {p.rent_cents
-                      ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
-                      : "—"}
-                  </span>
-                  <StatusChip tone={propertyStatusTone(p.status)}>
-                    {propertyStatusLabel(p.status)}
-                  </StatusChip>
+                <span className="text-gray-900">{p.address}</span>
+                <span className="ml-2 text-xs text-gray-400">
+                  {[
+                    p.beds != null ? `${p.beds} bd` : null,
+                    p.baths != null ? `${p.baths} ba` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               </Link>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  {p.rent_cents
+                    ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
+                    : "—"}
+                </span>
+                <StatusChip tone={propertyStatusTone(p.status)}>
+                  {propertyStatusLabel(p.status)}
+                </StatusChip>
+                <CopyIntakeButton url={intakeUrl(p.id)} />
+                <Link
+                  href={`/dashboard/properties/${p.id}`}
+                  className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Edit
+                </Link>
+              </span>
             </li>
           ))}
         </ul>

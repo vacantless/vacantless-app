@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createOrganization } from "./actions";
+import { OnboardingForm } from "./onboarding-form";
 
 export default async function OnboardingPage({
   searchParams,
@@ -21,46 +22,27 @@ export default async function OnboardingPage({
   if (memberships && memberships.length > 0) redirect("/dashboard");
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-      <h1 className="text-2xl font-bold text-gray-900">
-        Set up your organization
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
+      <p className="text-sm font-semibold uppercase tracking-wider text-brand">
+        Vacantless
+      </p>
+      <p className="mt-6 text-xs font-medium uppercase tracking-wider text-gray-400">
+        Step 1 of 2
+      </p>
+      <h1 className="mt-1 text-2xl font-bold text-gray-900">
+        Create your workspace
       </h1>
       <p className="mt-2 text-sm text-gray-600">
-        This is your branded workspace. You can change it later.
+        This creates your branded leasing workspace — the home for your
+        properties, leads, and showings. You can change any of these settings
+        later in Settings.
       </p>
-      <form action={createOrganization} className="mt-6 space-y-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Organization name
-          </label>
-          <input
-            name="name"
-            required
-            placeholder="Agile Real Estate Group"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Brand color
-          </label>
-          <input
-            name="brand_color"
-            type="color"
-            defaultValue="#4f46e5"
-            className="h-10 w-20 rounded border border-gray-300"
-          />
-        </div>
-        {searchParams.error && (
-          <p className="text-sm text-red-600">{searchParams.error}</p>
-        )}
-        <button
-          type="submit"
-          className="w-full rounded-lg bg-brand px-4 py-2 font-medium text-white"
-        >
-          Create workspace
-        </button>
-      </form>
+
+      <OnboardingForm action={createOrganization} error={searchParams.error} />
+
+      <p className="mt-6 text-center text-xs text-gray-400">
+        Next: add your first property and share its intake page.
+      </p>
     </main>
   );
 }

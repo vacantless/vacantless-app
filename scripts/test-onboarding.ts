@@ -109,6 +109,31 @@ const ALL: ChecklistInput = {
   );
 }
 
+// --- Intake step deep-links to a property's public page when one exists -----
+{
+  const intakeOf = (c: ReturnType<typeof buildLaunchChecklist>) =>
+    c.steps.find((s) => s.key === "intake")!;
+
+  // No property yet → falls back to the Properties list, same-tab.
+  const none = intakeOf(buildLaunchChecklist(EMPTY));
+  ok("intake defaults to /dashboard/properties", none.href === "/dashboard/properties");
+  ok("intake default opens same-tab", !none.newTab);
+
+  // Property exists → deep-link to /r/[id] in a new tab with a clearer CTA.
+  const withProp = intakeOf(
+    buildLaunchChecklist({ ...EMPTY, propertyCount: 1, firstPropertyId: "prop-123" }),
+  );
+  ok("intake deep-links to /r/[id]", withProp.href === "/r/prop-123");
+  ok("intake opens in a new tab", withProp.newTab === true);
+  ok("intake CTA becomes Preview intake page", withProp.cta === "Preview intake page");
+
+  // Empty/whitespace id is ignored (no deep-link).
+  const blank = intakeOf(
+    buildLaunchChecklist({ ...EMPTY, firstPropertyId: "" }),
+  );
+  ok("blank firstPropertyId is ignored", blank.href === "/dashboard/properties");
+}
+
 // --- isBrandingConfirmed ---------------------------------------------------
 ok(
   "default color + no logo/reply = not confirmed",

@@ -74,6 +74,9 @@ export function LaunchChecklist({ checklist }: { checklist: Checklist }) {
               {isCurrent && (
                 <Link
                   href={step.href}
+                  {...(step.newTab
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : {})}
                   className="shrink-0 rounded-lg px-3.5 py-2 text-sm font-medium text-white shadow-sm"
                   style={{ backgroundColor: "var(--brand-color)" }}
                 >
@@ -83,6 +86,9 @@ export function LaunchChecklist({ checklist }: { checklist: Checklist }) {
               {step.status === "todo" && (
                 <Link
                   href={step.href}
+                  {...(step.newTab
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : {})}
                   className="shrink-0 self-center text-sm font-medium text-gray-400 hover:text-brand"
                 >
                   {step.cta} →
