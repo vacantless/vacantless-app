@@ -6,6 +6,7 @@ export type Org = {
   slug: string;
   brand_color: string;
   logo_url: string | null;
+  reply_to_email: string | null;
   plan: string;
   booking_timezone: string;
 };
@@ -16,7 +17,7 @@ export async function getCurrentOrg(): Promise<Org | null> {
   const supabase = createClient();
   const { data } = await supabase
     .from("organizations")
-    .select("id, name, slug, brand_color, logo_url, plan, booking_timezone")
+    .select("id, name, slug, brand_color, logo_url, reply_to_email, plan, booking_timezone")
     .limit(1);
   return (data?.[0] as Org) ?? null;
 }

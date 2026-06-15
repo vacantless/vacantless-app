@@ -3,6 +3,7 @@ import {
   normalizeHexColor,
   validateLogoUrl,
   validateOrgName,
+  validateReplyToEmail,
   validateBranding,
   MAX_NAME_LEN,
 } from "../lib/branding";
@@ -68,22 +69,63 @@ eq("name over max len reject", validateOrgName("a".repeat(MAX_NAME_LEN + 1)), {
   ok: false,
 });
 
+// --- validateReplyToEmail ---
+eq("reply-to empty → null (valid)", validateReplyToEmail(""), { ok: true, value: null });
+eq("reply-to blank → null (valid)", validateReplyToEmail("   "), { ok: true, value: null });
+eq("reply-to null → null (valid)", validateReplyToEmail(null), { ok: true, value: null });
+eq("reply-to simple ok", validateReplyToEmail("leasing@agile.ca"), {
+  ok: true,
+  value: "leasing@agile.ca",
+});
+eq("reply-to trims + lowercases", validateReplyToEmail("  Leasing@Agile.CA  "), {
+  ok: true,
+  value: "leasing@agile.ca",
+});
+eq("reply-to subdomain ok", validateReplyToEmail("a.b@mail.agile.co.uk"), {
+  ok: true,
+  value: "a.b@mail.agile.co.uk",
+});
+eq("reply-to plus tag ok", validateReplyToEmail("rentals+leads@agile.ca"), {
+  ok: true,
+  value: "rentals+leads@agile.ca",
+});
+eq("reply-to reject no @", validateReplyToEmail("agile.ca"), { ok: false });
+eq("reply-to reject no domain dot", validateReplyToEmail("a@localhost"), { ok: false });
+eq("reply-to reject space", validateReplyToEmail("a b@agile.ca"), { ok: false });
+eq("reply-to reject display name", validateReplyToEmail("Agile <a@agile.ca>"), { ok: false });
+eq("reply-to reject two addresses", validateReplyToEmail("a@x.ca,b@y.ca"), { ok: false });
+eq("reply-to reject trailing dot domain", validateReplyToEmail("a@agile."), { ok: false });
+
 // --- validateBranding (whole form) ---
 eq(
   "branding all valid normalizes",
   validateBranding({ name: " Vacantless ", brand_color: "0E8C8C", logo_url: "" }),
-  { ok: true, values: { name: "Vacantless", brand_color: "#0e8c8c", logo_url: null } },
+  {
+    ok: true,
+    values: {
+      name: "Vacantless",
+      brand_color: "#0e8c8c",
+      logo_url: null,
+      reply_to_email: null,
+    },
+  },
 );
 eq(
-  "branding valid with logo",
+  "branding valid with logo + reply-to",
   validateBranding({
     name: "Agile",
     brand_color: "#fff",
     logo_url: "https://x.io/l.png",
+    reply_to_email: "Leasing@Agile.CA",
   }),
   {
     ok: true,
-    values: { name: "Agile", brand_color: "#ffffff", logo_url: "https://x.io/l.png" },
+    values: {
+      name: "Agile",
+      brand_color: "#ffffff",
+      logo_url: "https://x.io/l.png",
+      reply_to_email: "leasing@agile.ca",
+    },
   },
 );
 {
@@ -95,6 +137,16 @@ eq(
   const r = validateBranding({ name: "OK", brand_color: "#0e8c8c", logo_url: "ftp://x" });
   eq("branding bad logo only not ok", r.ok, false);
   eq("branding bad logo 1 error", r.ok === false && r.errors.length, 1);
+}
+{
+  const r = validateBranding({
+    name: "OK",
+    brand_color: "#0e8c8c",
+    logo_url: "",
+    reply_to_email: "not-an-email",
+  });
+  eq("branding bad reply-to only not ok", r.ok, false);
+  eq("branding bad reply-to 1 error", r.ok === false && r.errors.length, 1);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

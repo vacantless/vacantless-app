@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     .from("showings")
     .select(
       "id, scheduled_at, reminder_24h_sent_at, reminder_2h_sent_at, organization_id, lead_id, " +
-        "leads(name, email), properties(address), organizations(name, brand_color, logo_url, booking_timezone)",
+        "leads(name, email), properties(address), organizations(name, brand_color, logo_url, reply_to_email, booking_timezone)",
     )
     .eq("outcome", "scheduled")
     .gt("scheduled_at", now.toISOString())
@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
       org_name: org?.name ?? null,
       brand_color: org?.brand_color ?? null,
       logo_url: org?.logo_url ?? null,
+      reply_to_email: org?.reply_to_email ?? null,
       property_address: property?.address ?? null,
       when_label: whenLabel,
     });

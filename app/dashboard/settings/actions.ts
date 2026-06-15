@@ -20,6 +20,7 @@ export async function updateBranding(formData: FormData) {
     name: String(formData.get("name") ?? ""),
     brand_color: String(formData.get("brand_color") ?? ""),
     logo_url: String(formData.get("logo_url") ?? ""),
+    reply_to_email: String(formData.get("reply_to_email") ?? ""),
   });
 
   if (!result.ok) {

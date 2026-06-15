@@ -64,16 +64,39 @@ export function validateOrgName(input: string | null | undefined): NameResult {
   return { ok: true, value: s };
 }
 
+export type ReplyToResult = { ok: true; value: string | null } | { ok: false };
+
+// Conservative single-address check: one local@domain.tld, no whitespace, no
+// list/display-name syntax. We don't need RFC-5322 completeness — just enough
+// to keep a malformed value out of the Brevo `replyTo`. Lowercased on save so
+// the stored value is canonical.
+const EMAIL_RE = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
+
+/**
+ * Validate the reply-to email. An empty/blank value is valid and means "use the
+ * default sender" (returns value: null). A non-empty value must look like a
+ * single deliverable address; anything else is rejected.
+ */
+export function validateReplyToEmail(input: string | null | undefined): ReplyToResult {
+  const s = (input ?? "").trim();
+  if (s === "") return { ok: true, value: null };
+  if (s.length > 254) return { ok: false };
+  if (!EMAIL_RE.test(s)) return { ok: false };
+  return { ok: true, value: s.toLowerCase() };
+}
+
 export type BrandingInput = {
   name?: string | null;
   brand_color?: string | null;
   logo_url?: string | null;
+  reply_to_email?: string | null;
 };
 
 export type BrandingUpdate = {
   name: string;
   brand_color: string;
   logo_url: string | null;
+  reply_to_email: string | null;
 };
 
 export type BrandingValidation =
@@ -103,12 +126,22 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
     errors.push("Logo URL must be a full http(s) link, or left blank.");
   }
 
-  if (errors.length > 0 || !name.ok || color == null || !logo.ok) {
+  const replyTo = validateReplyToEmail(input.reply_to_email);
+  if (!replyTo.ok) {
+    errors.push("Reply-to must be a valid email address, or left blank.");
+  }
+
+  if (errors.length > 0 || !name.ok || color == null || !logo.ok || !replyTo.ok) {
     return { ok: false, errors };
   }
 
   return {
     ok: true,
-    values: { name: name.value, brand_color: color, logo_url: logo.value },
+    values: {
+      name: name.value,
+      brand_color: color,
+      logo_url: logo.value,
+      reply_to_email: replyTo.value,
+    },
   };
 }

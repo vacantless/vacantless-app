@@ -76,6 +76,7 @@ export async function submitLead(formData: FormData) {
             org_name: string | null;
             brand_color: string | null;
             logo_url: string | null;
+            reply_to_email: string | null;
             property_address: string | null;
             renter_name: string | null;
             renter_email: string | null;
@@ -91,6 +92,7 @@ export async function submitLead(formData: FormData) {
             org_name: b.org_name,
             brand_color: b.brand_color,
             logo_url: b.logo_url,
+            reply_to_email: b.reply_to_email,
             property_address: b.property_address,
             when_label: whenLabel,
           });

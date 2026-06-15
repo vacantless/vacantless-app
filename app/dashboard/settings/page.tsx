@@ -34,7 +34,7 @@ export default async function SettingsPage({
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error === "save"
             ? "Something went wrong saving your changes. Please try again."
-            : "Some fields weren't valid. Check the brand color (a hex like #0e8c8c) and logo URL (a full http(s) link, or leave it blank)."}
+            : "Some fields weren't valid. Check the brand color (a hex like #0e8c8c), the logo URL (a full http(s) link, or leave it blank), and the reply-to (a valid email, or leave it blank)."}
         </div>
       )}
 
@@ -103,6 +103,24 @@ export default async function SettingsPage({
             </span>
           </label>
 
+          <label className="mt-5 block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              Reply-to email
+            </span>
+            <input
+              name="reply_to_email"
+              type="email"
+              inputMode="email"
+              placeholder="leasing@yourcompany.com"
+              defaultValue={org.reply_to_email ?? ""}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-xs text-gray-400">
+              Where renter replies to your automated emails are delivered. Leave
+              blank to use the shared Vacantless inbox.
+            </span>
+          </label>
+
           <div className="mt-6 text-right">
             <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
               Save branding
@@ -166,8 +184,9 @@ export default async function SettingsPage({
           </div>
         </dl>
         <p className="mt-3 text-xs text-gray-400">
-          Renter replies to automated emails currently route to the shared
-          Vacantless inbox. A custom reply-to address is coming next.
+          {org.reply_to_email
+            ? `Renter replies to automated emails are delivered to ${org.reply_to_email}.`
+            : "Renter replies to automated emails route to the shared Vacantless inbox. Set a reply-to email above to receive them directly."}
         </p>
       </div>
     </div>

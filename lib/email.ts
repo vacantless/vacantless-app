@@ -17,6 +17,16 @@ const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 // renters see the customer's brand.
 const DEFAULT_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "leads@vacantless.com";
 
+// The reply-to a renter's reply lands on. Uses the org's configured
+// reply_to_email when set; otherwise the shared default sender. Centralized so
+// all three senders (auto-reply, booking confirmation, reminder) stay in sync.
+function replyToOf(replyToEmail: string | null | undefined, orgName: string | null) {
+  return {
+    email: replyToEmail || DEFAULT_SENDER_EMAIL,
+    name: orgName || "Vacantless",
+  };
+}
+
 export type AutoReplyPayload = {
   lead_id: string;
   org_id: string;
@@ -25,6 +35,7 @@ export type AutoReplyPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  reply_to_email: string | null;
   property_address: string | null;
   rent_cents: number | null;
   template_subject: string | null;
@@ -114,6 +125,7 @@ export type BookingPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  reply_to_email: string | null;
   property_address: string | null;
   when_label: string; // already formatted in the org timezone
 };
@@ -175,7 +187,7 @@ export async function sendBookingConfirmation(
         ...(p.renter_name ? { name: p.renter_name } : {}),
       },
     ],
-    replyTo: { email: DEFAULT_SENDER_EMAIL, name: p.org_name || "Vacantless" },
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: bookingHtml(p),
   };
@@ -213,6 +225,7 @@ export type ReminderPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  reply_to_email: string | null;
   property_address: string | null;
   when_label: string; // already formatted in the org timezone
 };
@@ -277,7 +290,7 @@ export async function sendShowingReminder(p: ReminderPayload): Promise<SendResul
         ...(p.renter_name ? { name: p.renter_name } : {}),
       },
     ],
-    replyTo: { email: DEFAULT_SENDER_EMAIL, name: p.org_name || "Vacantless" },
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: reminderHtml(p),
   };
@@ -336,7 +349,7 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
         ...(p.renter_name ? { name: p.renter_name } : {}),
       },
     ],
-    replyTo: { email: DEFAULT_SENDER_EMAIL, name: p.org_name || "Vacantless" },
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent,
   };
