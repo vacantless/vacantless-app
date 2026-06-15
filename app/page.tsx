@@ -2,9 +2,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 export const metadata = {
-  title: "Vacantless — Fill vacant rentals faster",
+  title: "Vacantless — Catch every rental opportunity",
   description:
-    "One simple place to collect rental inquiries, reply quickly, let renters choose showing times, and track who still needs follow-up.",
+    "One simple place to collect rental inquiries, reply fast, let renters book their own showings, and turn interest into signed leases.",
 };
 
 export default function Home() {
@@ -13,9 +13,9 @@ export default function Home() {
       <SiteHeader />
       <main>
         <Hero />
-        <ProblemBand />
+        <OpportunityBand />
         <HowItWorks />
-        <BeforeAfter />
+        <EverythingInOnePlace />
         <WhoItIsFor />
         <FinalCta />
       </main>
@@ -40,7 +40,7 @@ function SiteHeader() {
           </Link>
           <Link
             href="/signup"
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            className="rounded-lg bg-gradient-to-r from-indigo-600 to-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
           >
             Start a 30-day pilot
           </Link>
@@ -50,10 +50,10 @@ function SiteHeader() {
   );
 }
 
-function Wordmark({ light = false }: { light?: boolean }) {
+function Wordmark() {
   return (
     <span className="flex items-center gap-2">
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-white shadow-sm">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-teal-500 text-white shadow-sm">
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
           <path
             d="M3 11.5 12 4l9 7.5"
@@ -78,11 +78,7 @@ function Wordmark({ light = false }: { light?: boolean }) {
           />
         </svg>
       </span>
-      <span
-        className={`text-lg font-bold tracking-tight ${
-          light ? "text-white" : "text-gray-900"
-        }`}
-      >
+      <span className="text-lg font-bold tracking-tight text-gray-900">
         Vacantless
       </span>
     </span>
@@ -94,32 +90,37 @@ function Wordmark({ light = false }: { light?: boolean }) {
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      {/* soft background depth */}
+      {/* layered background for depth */}
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-b from-indigo-50/70 via-white to-white" />
-        <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl" />
-        <div className="absolute right-0 top-20 h-80 w-80 rounded-full bg-teal-200/40 blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-b from-indigo-50 via-white to-white" />
+        <div className="absolute -left-28 -top-28 h-80 w-80 rounded-full bg-indigo-300/30 blur-3xl" />
+        <div className="absolute right-0 top-10 h-96 w-96 rounded-full bg-teal-300/30 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-violet-200/30 blur-3xl" />
       </div>
 
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 sm:py-24 lg:grid-cols-2">
         {/* Left: copy */}
         <div>
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand shadow-sm backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-teal-500" />
             Vacantless
           </p>
-          <h1 className="text-4xl font-bold leading-[1.1] tracking-tight text-gray-900 sm:text-5xl">
-            Fill vacant rentals faster, without chasing every renter.
+          <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-gray-900 sm:text-[3.25rem]">
+            Catch every{" "}
+            <span className="bg-gradient-to-r from-indigo-600 to-teal-500 bg-clip-text text-transparent">
+              rental opportunity
+            </span>
+            .
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-gray-600">
-            One simple place to collect rental inquiries, reply quickly, let
-            renters choose showing times, and keep track of who still needs
-            follow-up.
+            Vacantless gives you one simple place to collect rental inquiries,
+            reply fast, let renters book their own showing times, and turn
+            interest into signed leases.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
               href="/signup"
-              className="rounded-lg bg-brand px-5 py-3 font-semibold text-white shadow-sm transition hover:opacity-90"
+              className="rounded-lg bg-gradient-to-r from-indigo-600 to-teal-500 px-5 py-3 font-semibold text-white shadow-md transition hover:opacity-90"
             >
               Start a 30-day pilot
             </Link>
@@ -130,19 +131,39 @@ function Hero() {
               Log in
             </Link>
           </div>
-          <p className="mt-5 text-sm text-gray-500">
-            No setup fee. Cancel anytime during your pilot.
-          </p>
+
+          {/* graphic proof strip */}
+          <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3">
+            {PROOFS.map((p) => (
+              <span
+                key={p.label}
+                className="inline-flex items-center gap-2 text-sm font-medium text-gray-600"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-brand">
+                  {p.icon}
+                </span>
+                {p.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Right: product preview */}
         <div className="relative">
+          {/* glowing halo behind the mockup for pizazz */}
+          <div className="pointer-events-none absolute inset-0 -z-10 mx-auto h-full w-full max-w-md rounded-[2rem] bg-gradient-to-tr from-indigo-200/50 to-teal-200/50 blur-2xl" />
           <RenterListMockup />
         </div>
       </div>
     </section>
   );
 }
+
+const PROOFS: { label: string; icon: ReactNode }[] = [
+  { label: "Reply in seconds", icon: <BoltIcon /> },
+  { label: "One link to share", icon: <LinkIcon /> },
+  { label: "Every renter tracked", icon: <CheckIcon /> },
+];
 
 /* The hero product mockup — a tangible "renter list" so a landlord can see
    what the product actually does without any jargon. */
@@ -170,7 +191,8 @@ function RenterListMockup() {
             <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
             <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
           </div>
-          <span className="text-xs font-medium text-gray-400">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
             Your renter list
           </span>
         </div>
@@ -248,19 +270,23 @@ const MOCK_RENTERS: {
   },
 ];
 
-/* --------------------------------------------------------------- Problem band */
+/* ------------------------------------------------------------- Opportunity band */
 
-function ProblemBand() {
+function OpportunityBand() {
   return (
-    <section className="border-y border-gray-100 bg-gray-50">
-      <div className="mx-auto max-w-4xl px-6 py-12 text-center">
-        <h2 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
-          Stop losing renters in scattered messages.
+    <section className="relative overflow-hidden bg-gradient-to-r from-indigo-600 to-teal-500">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-10 top-0 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -bottom-10 right-10 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
+      </div>
+      <div className="relative mx-auto max-w-4xl px-6 py-14 text-center">
+        <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+          Make the most of every renter who reaches out.
         </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
-          Built for landlords who manage rentals through Facebook Marketplace,
-          Kijiji, texts, calls, and email — and want one calm place for all of
-          it.
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-white/90">
+          Every call, message, and inquiry from Facebook Marketplace, Kijiji,
+          email, and text lands in one place, gets a fast reply, and stays on
+          your list until the unit is leased.
         </p>
       </div>
     </section>
@@ -285,10 +311,10 @@ function HowItWorks() {
         {STEPS.map((s, i) => (
           <div
             key={s.title}
-            className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md"
+            className="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-brand">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-teal-500 text-white shadow-sm">
                 {s.icon}
               </span>
               <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -321,7 +347,7 @@ const STEPS: {
     icon: <PageIcon />,
     preview: (
       <div className="overflow-hidden rounded-xl border border-gray-200">
-        <div className="flex items-center gap-2 bg-brand px-3 py-2">
+        <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-teal-500 px-3 py-2">
           <span className="h-4 w-4 rounded bg-white/70" />
           <span className="text-xs font-bold text-white">
             Riverside Apartments
@@ -334,7 +360,7 @@ const STEPS: {
             <div className="h-7 rounded border border-gray-200 bg-gray-50" />
             <div className="h-7 rounded border border-gray-200 bg-gray-50" />
           </div>
-          <div className="mt-1 h-8 rounded-lg bg-brand" />
+          <div className="mt-1 h-8 rounded-lg bg-gradient-to-r from-indigo-600 to-teal-500" />
         </div>
       </div>
     ),
@@ -378,7 +404,7 @@ const STEPS: {
               key={t}
               className={`rounded-md px-1 py-1.5 text-center text-[11px] font-medium ${
                 i === 4
-                  ? "bg-brand text-white shadow-sm"
+                  ? "bg-gradient-to-r from-indigo-600 to-teal-500 text-white shadow-sm"
                   : "border border-gray-200 text-gray-600"
               }`}
             >
@@ -391,76 +417,66 @@ const STEPS: {
   },
 ];
 
-/* ---------------------------------------------------------------- Before/After */
+/* -------------------------------------------------------- Everything in one place */
 
-function BeforeAfter() {
+function EverythingInOnePlace() {
   return (
     <section className="bg-gray-50 py-20">
       <div className="mx-auto max-w-5xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-            The problem it solves
+            Everything in one place
           </h2>
           <p className="mt-3 text-lg text-gray-600">
-            From scattered and stressful to one organized place.
+            From the first message to the signed lease, Vacantless keeps every
+            opportunity moving forward.
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
-          {/* Before */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-7">
-            <span className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Before
-            </span>
-            <ul className="mt-5 space-y-3">
-              {BEFORE.map((t) => (
-                <li key={t} className="flex items-start gap-3 text-gray-600">
-                  <span className="mt-0.5 text-gray-300">
-                    <XIcon />
-                  </span>
-                  <span>{t}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* After */}
-          <div className="relative rounded-2xl border-2 border-brand bg-white p-7 shadow-md">
-            <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand">
-              With Vacantless
-            </span>
-            <ul className="mt-5 space-y-3">
-              {AFTER.map((t) => (
-                <li
-                  key={t}
-                  className="flex items-start gap-3 font-medium text-gray-800"
-                >
-                  <span className="mt-0.5 text-teal-600">
-                    <CheckIcon />
-                  </span>
-                  <span>{t}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="mt-12 grid gap-5 sm:grid-cols-2">
+          {WINS.map((w) => (
+            <div
+              key={w.title}
+              className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-teal-500 text-white">
+                {w.icon}
+              </span>
+              <div>
+                <h3 className="font-semibold text-gray-900">{w.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                  {w.body}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-const BEFORE = [
-  "Messages from everywhere — Marketplace, Kijiji, texts, email",
-  "Missed calls and repeated questions",
-  "Back-and-forth just to pick a showing time",
-  "No clear list of who still needs follow-up",
-];
-
-const AFTER = [
-  "One inquiry page renters fill out themselves",
-  "Quick, automatic replies so no one waits",
-  "Renters choose a showing time that works",
-  "An organized renter list, from new to leased",
+const WINS: { title: string; body: string; icon: ReactNode }[] = [
+  {
+    title: "One inquiry page renters fill out",
+    body: "Share a single link everywhere you post. Every interested renter comes in the same clean way.",
+    icon: <PageIcon />,
+  },
+  {
+    title: "Fast, automatic replies",
+    body: "Renters hear back right away, so you stay top of the list while their interest is fresh.",
+    icon: <BoltIcon />,
+  },
+  {
+    title: "Renters book their own showings",
+    body: "Set your available times once. Renters pick a slot, with no back-and-forth messaging.",
+    icon: <CalendarIcon />,
+  },
+  {
+    title: "An organized renter list",
+    body: "See everyone at a glance, from new inquiry to signed lease, and know exactly who needs follow-up.",
+    icon: <ListIcon />,
+  },
 ];
 
 /* ----------------------------------------------------------------- Who it's for */
@@ -500,7 +516,7 @@ function WhoItIsFor() {
 const AUDIENCE: { title: string; body: string; icon: ReactNode }[] = [
   {
     title: "Small landlords",
-    body: "Owners renting out a few units who want fewer missed messages.",
+    body: "Owners renting out a few units who want to catch every inquiry.",
     icon: <KeyIcon />,
   },
   {
@@ -525,17 +541,17 @@ const AUDIENCE: { title: string; body: string; icon: ReactNode }[] = [
 function FinalCta() {
   return (
     <section className="px-6 pb-20">
-      <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl bg-brand px-6 py-14 text-center shadow-lg">
+      <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 to-teal-500 px-6 py-14 text-center shadow-lg">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
-          <div className="absolute -bottom-20 right-0 h-64 w-64 rounded-full bg-teal-300/20 blur-2xl" />
+          <div className="absolute -left-16 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
+          <div className="absolute -bottom-20 right-0 h-64 w-64 rounded-full bg-white/15 blur-2xl" />
         </div>
         <div className="relative">
           <h2 className="mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Ready to stop losing renters in scattered messages?
+            Ready to fill your next vacancy?
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-white/85">
-            Start with a 30-day pilot. Set up your first rental inquiry page in
+          <p className="mx-auto mt-4 max-w-xl text-lg text-white/90">
+            Start a 30-day pilot and set up your first rental inquiry page in
             minutes.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -547,7 +563,7 @@ function FinalCta() {
             </Link>
             <Link
               href="/login"
-              className="rounded-lg border border-white/40 px-6 py-3 font-medium text-white transition hover:bg-white/10"
+              className="rounded-lg border border-white/50 px-6 py-3 font-medium text-white transition hover:bg-white/10"
             >
               Log in
             </Link>
@@ -566,7 +582,7 @@ function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <Wordmark />
         <p className="text-sm text-gray-500">
-          Fewer missed messages. Faster replies. Filled vacancies.
+          Faster replies. More showings. Filled vacancies.
         </p>
         <div className="flex items-center gap-4 text-sm">
           <Link href="/login" className="text-gray-500 hover:text-gray-900">
@@ -628,13 +644,26 @@ function CheckIcon() {
   );
 }
 
-function XIcon() {
+function BoltIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
       <path
-        d="M7 7l10 10M17 7 7 17"
+        d="M13 3 5 13h6l-1 8 8-10h-6l1-8Z"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
+      <path
+        d="M9.5 14.5 14.5 9.5M10 6.5l1.2-1.2a4 4 0 0 1 5.7 5.7L15.5 12M14 17.5l-1.2 1.2a4 4 0 0 1-5.7-5.7L8.5 12"
+        stroke="currentColor"
+        strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
