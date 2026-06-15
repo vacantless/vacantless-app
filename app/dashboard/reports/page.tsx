@@ -1,0 +1,314 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { propertyStatusLabel } from "@/lib/pipeline";
+import {
+  buildFunnel,
+  buildChannelReport,
+  buildPropertyReport,
+  buildShowingReport,
+  buildLeaseTiming,
+  parseWindow,
+  windowStartMs,
+  filterByWindow,
+  WINDOW_OPTIONS,
+  type LeadLite,
+  type ShowingLite,
+  type PropertyLite,
+} from "@/lib/reports";
+
+export const dynamic = "force-dynamic";
+
+function rent(cents: number | null): string {
+  if (cents == null) return "—";
+  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+}
+
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: { days?: string };
+}) {
+  const supabase = createClient();
+  const window = parseWindow(searchParams.days);
+  const nowMs = Date.now();
+  const startMs = windowStartMs(window, nowMs);
+
+  // RLS scopes every query to the caller's org.
+  const [{ data: leadsData }, { data: showingsData }, { data: propsData }] =
+    await Promise.all([
+      supabase
+        .from("leads")
+        .select("id, source, status, created_at, leased_date, property_id"),
+      supabase
+        .from("showings")
+        .select("id, outcome, scheduled_at, created_at, property_id"),
+      supabase
+        .from("properties")
+        .select("id, address, status, rent_cents, created_at"),
+    ]);
+
+  const allLeads = (leadsData ?? []) as LeadLite[];
+  const allShowings = (showingsData ?? []) as ShowingLite[];
+  const properties = (propsData ?? []) as PropertyLite[];
+
+  // Window the activity (leads + showings) by when it happened; the property
+  // catalog itself isn't windowed — we report each property's activity within
+  // the selected window.
+  const leads = filterByWindow(allLeads, startMs);
+  const showings = filterByWindow(allShowings, startMs);
+
+  const funnel = buildFunnel(leads);
+  const channels = buildChannelReport(leads);
+  const propertyRows = buildPropertyReport(properties, leads, showings);
+  const showRep = buildShowingReport(showings, nowMs);
+  const timing = buildLeaseTiming(leads);
+
+  const leasedStep = funnel[funnel.length - 1];
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-bold text-gray-900">Reports</h2>
+        <div className="flex flex-wrap gap-1.5">
+          {WINDOW_OPTIONS.map((opt) => {
+            const active = opt.value === window;
+            return (
+              <Link
+                key={String(opt.value)}
+                href={`/dashboard/reports?days=${opt.value}`}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? "border-transparent bg-brand text-white"
+                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+                style={
+                  active ? { backgroundColor: "var(--brand-color)" } : undefined
+                }
+              >
+                {opt.label}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Headline KPIs */}
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Kpi label="Leads" value={funnel[0].count} />
+        <Kpi
+          label="Leased"
+          value={leasedStep.count}
+          sub={`${leasedStep.ofTotal}% of leads`}
+        />
+        <Kpi
+          label="Showing attendance"
+          value={`${showRep.attendanceRate}%`}
+          sub={`${showRep.attended} of ${showRep.attended + showRep.noShow} kept`}
+        />
+        <Kpi
+          label="Avg days to lease"
+          value={timing.avgDays == null ? "—" : String(timing.avgDays)}
+          sub={
+            timing.avgDays == null
+              ? "no dated leases yet"
+              : `${timing.withDate} lease${timing.withDate === 1 ? "" : "s"}`
+          }
+        />
+      </div>
+
+      {/* Funnel */}
+      <Section title="Lead-to-lease funnel">
+        {funnel[0].count === 0 ? (
+          <Empty>No leads in this window yet.</Empty>
+        ) : (
+          <div className="space-y-2">
+            {funnel.map((step, i) => {
+              const widthPct = funnel[0].count
+                ? Math.max(4, Math.round((step.count / funnel[0].count) * 100))
+                : 0;
+              return (
+                <div key={step.key} className="flex items-center gap-3">
+                  <div className="w-20 shrink-0 text-right text-sm font-medium text-gray-600">
+                    {step.label}
+                  </div>
+                  <div className="relative h-8 flex-1 overflow-hidden rounded-md bg-gray-100">
+                    <div
+                      className="h-full rounded-md"
+                      style={{
+                        width: `${widthPct}%`,
+                        backgroundColor: "var(--brand-color)",
+                        opacity: 1 - i * 0.13,
+                      }}
+                    />
+                    <div className="absolute inset-0 flex items-center px-3 text-sm font-semibold text-gray-800">
+                      {step.count}
+                      <span className="ml-2 text-xs font-normal text-gray-500">
+                        {step.ofTotal}% of leads
+                        {i > 0 && ` · ${step.ofPrev}% of ${funnel[i - 1].label}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      {/* By channel */}
+      <Section title="By lead source">
+        {channels.length === 0 ? (
+          <Empty>No leads in this window yet.</Empty>
+        ) : (
+          <Table head={["Source", "Leads", "Booked", "Showed", "Leased", "Lease rate"]}>
+            {channels.map((c) => (
+              <tr key={c.source} className="border-t border-gray-100">
+                <Td>{c.source}</Td>
+                <Td num>{c.leads}</Td>
+                <Td num>{c.booked}</Td>
+                <Td num>{c.showed}</Td>
+                <Td num>{c.leased}</Td>
+                <Td num>{c.leaseRate}%</Td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Section>
+
+      {/* By property */}
+      <Section title="By property">
+        {propertyRows.length === 0 ? (
+          <Empty>No properties yet.</Empty>
+        ) : (
+          <Table
+            head={["Property", "Rent", "Status", "Leads", "Showings", "Booked", "Leased"]}
+          >
+            {propertyRows.map((p) => (
+              <tr key={p.id} className="border-t border-gray-100">
+                <Td>
+                  <Link
+                    href={`/dashboard/properties/${p.id}`}
+                    className="font-medium text-gray-900 hover:underline"
+                  >
+                    {p.address}
+                  </Link>
+                </Td>
+                <Td>{rent(p.rentCents)}</Td>
+                <Td>{propertyStatusLabel(p.status)}</Td>
+                <Td num>{p.leads}</Td>
+                <Td num>{p.showings}</Td>
+                <Td num>{p.booked}</Td>
+                <Td num>{p.leased}</Td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Section>
+
+      {/* Showings */}
+      <Section title="Showings">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <Kpi label="Total" value={showRep.total} />
+          <Kpi label="Attended" value={showRep.attended} />
+          <Kpi label="No-show" value={showRep.noShow} />
+          <Kpi label="Cancelled" value={showRep.cancelled} />
+          <Kpi label="Upcoming" value={showRep.upcoming} />
+          <Kpi label="Attendance" value={`${showRep.attendanceRate}%`} />
+        </div>
+      </Section>
+
+      <p className="mt-2 text-xs text-gray-400">
+        Activity counted by when it happened, within the selected window.
+        Funnel and source counts reflect each lead&apos;s furthest stage
+        reached; lost leads count toward total leads only.
+      </p>
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="text-2xl font-bold text-gray-900">{value}</div>
+      <div className="mt-0.5 text-sm text-gray-500">{label}</div>
+      {sub && <div className="mt-0.5 text-xs text-gray-400">{sub}</div>}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mb-8">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
+      {children}
+    </p>
+  );
+}
+
+function Table({
+  head,
+  children,
+}: {
+  head: string[];
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wider text-gray-400">
+            {head.map((h, i) => (
+              <th
+                key={h}
+                className={`px-4 py-2.5 font-medium ${i === 0 ? "" : "text-right"}`}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function Td({
+  children,
+  num,
+}: {
+  children: React.ReactNode;
+  num?: boolean;
+}) {
+  return (
+    <td
+      className={`px-4 py-2.5 text-gray-700 ${num ? "text-right tabular-nums" : ""}`}
+    >
+      {children}
+    </td>
+  );
+}

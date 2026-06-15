@@ -39,6 +39,7 @@ export default async function DashboardLayout({
             <NavLink href="/dashboard/leads">Leads</NavLink>
             <NavLink href="/dashboard/showings">Showings</NavLink>
             <NavLink href="/dashboard/availability">Availability</NavLink>
+            <NavLink href="/dashboard/reports">Reports</NavLink>
             <form action="/auth/signout" method="post" className="ml-2">
               <button className="rounded-lg bg-white/20 px-3 py-1.5 font-medium hover:bg-white/30">
                 Sign out
