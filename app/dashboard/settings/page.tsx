@@ -240,7 +240,7 @@ export default async function SettingsPage({
             <div className="p-4">
               <p className="text-sm font-semibold text-gray-900">{org.name}</p>
               <p className="mt-1 text-xs text-gray-500">
-                Hi there, thanks for your interest — someone from our team will
+                Hi there, thanks for your interest. Someone from our team will
                 be in touch shortly.
               </p>
               <span
@@ -257,8 +257,8 @@ export default async function SettingsPage({
           {wasDarkened && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
               Your brand color is light, so we use a slightly darker shade
-              ({displayColor}) behind white text — your header, buttons, and
-              links — to keep it readable. Your exact color is saved.
+              ({displayColor}) behind white text (your header, buttons, and
+              links) to keep it readable. Your exact color is saved.
             </p>
           )}
         </div>

@@ -36,7 +36,7 @@ export default async function BillingPage({
     plan: "That plan isn't recognized. Please pick Core or Plus.",
     checkout: "Couldn't start checkout. Please try again.",
     portal:
-      "No billing account yet — subscribe to a plan first, then you can manage it here.",
+      "No billing account yet. Subscribe to a plan first, then you can manage it here.",
   };
 
   return (
@@ -50,7 +50,7 @@ export default async function BillingPage({
       {checkout === "success" && (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           Thanks! Your subscription is being activated. It can take a few seconds
-          to reflect here — refresh if it still shows your old plan.
+          to reflect here. Refresh if it still shows your old plan.
         </div>
       )}
       {checkout === "cancel" && (
@@ -108,7 +108,7 @@ export default async function BillingPage({
       {!configured && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Billing isn't connected yet. Once your Stripe keys are set in Vercel,
-          the subscribe buttons below go live — no other change needed.
+          the subscribe buttons below go live, with no other change needed.
         </div>
       )}
 
@@ -176,8 +176,8 @@ export default async function BillingPage({
           with at least 60 days&apos; notice.
         </p>
         <p className="mt-1.5">
-          Billed monthly. Cancel anytime from the billing portal — no contract,
-          no cancellation fee.
+          Billed monthly. Cancel anytime from the billing portal, with no
+          contract and no cancellation fee.
         </p>
       </div>
 
