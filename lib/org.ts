@@ -7,6 +7,7 @@ export type Org = {
   brand_color: string;
   logo_url: string | null;
   plan: string;
+  booking_timezone: string;
 };
 
 // The org the signed-in user belongs to. RLS scopes the row to the caller,
@@ -15,7 +16,7 @@ export async function getCurrentOrg(): Promise<Org | null> {
   const supabase = createClient();
   const { data } = await supabase
     .from("organizations")
-    .select("id, name, slug, brand_color, logo_url, plan")
+    .select("id, name, slug, brand_color, logo_url, plan, booking_timezone")
     .limit(1);
   return (data?.[0] as Org) ?? null;
 }

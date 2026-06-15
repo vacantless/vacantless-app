@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import { StatusSelect } from "../status-select";
 import { addNote } from "../actions";
@@ -67,6 +68,9 @@ export default async function LeadDetailPage({
     .order("scheduled_at", { ascending: false });
   const showings = (showingData ?? []) as Showing[];
 
+  const org = await getCurrentOrg();
+  const timeZone = org?.booking_timezone ?? "America/Toronto";
+
   return (
     <div>
       <Link href="/dashboard/leads" className="text-sm font-medium text-brand">
@@ -129,12 +133,14 @@ export default async function LeadDetailPage({
               >
                 <span className="text-sm font-medium text-gray-900">
                   {s.scheduled_at
-                    ? new Date(s.scheduled_at).toLocaleString(undefined, {
+                    ? new Date(s.scheduled_at).toLocaleString("en-US", {
+                        timeZone,
                         weekday: "short",
                         month: "short",
                         day: "numeric",
                         hour: "numeric",
                         minute: "2-digit",
+                        timeZoneName: "short",
                       })
                     : "Time TBD"}
                 </span>

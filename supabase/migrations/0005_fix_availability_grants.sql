@@ -1,0 +1,22 @@
+-- ============================================================================
+-- Vacantless — M3 fix: grant table privileges on availability_rules.
+-- ============================================================================
+-- 0004 created public.availability_rules (with RLS + the availability_all
+-- policy) but, unlike every M1 table in 0001, never GRANTed table-level
+-- privileges to the `authenticated` role. Because "Automatically expose new
+-- tables" is OFF on this project, the operator dashboard (which reads/writes
+-- the table directly via the user's session, NOT via a SECURITY DEFINER RPC)
+-- got "permission denied for table availability_rules" — and because the
+-- Supabase JS client doesn't throw on that, the failure was silent: reads
+-- returned empty (every day showed "Unavailable") and "Add window" no-oped.
+--
+-- The public booking path was unaffected: get_public_availability /
+-- book_public_showing are SECURITY DEFINER and run as the owner, so they never
+-- needed a table grant. RLS (availability_all, keyed to user_org_ids()) still
+-- fully governs row access — this only restores the table-level privilege that
+-- 0001 established for the other tables.
+--
+-- Run once after 0004.
+-- ============================================================================
+
+grant select, insert, update, delete on public.availability_rules to authenticated;

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import {
   PIPELINE_STAGES,
   statusLabel,
@@ -29,6 +30,8 @@ const OPEN_STATUSES: LeadStatus[] = [
 
 export default async function OverviewPage() {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  const timeZone = org?.booking_timezone ?? "America/Toronto";
 
   // RLS scopes all of these to the caller's org automatically.
   const [{ data: leads }, { count: propertyCount }, { data: showingData }] =
@@ -137,12 +140,14 @@ export default async function OverviewPage() {
               </span>
               <span className="text-xs font-medium text-gray-500">
                 {s.scheduled_at
-                  ? new Date(s.scheduled_at).toLocaleString(undefined, {
+                  ? new Date(s.scheduled_at).toLocaleString("en-US", {
+                      timeZone,
                       weekday: "short",
                       month: "short",
                       day: "numeric",
                       hour: "numeric",
                       minute: "2-digit",
+                      timeZoneName: "short",
                     })
                   : "TBD"}
               </span>

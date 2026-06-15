@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import { OutcomeSelect } from "./outcome-select";
 
 export const dynamic = "force-dynamic";
@@ -12,19 +13,25 @@ type ShowingRow = {
   property: { id: string; address: string } | null;
 };
 
-function fmt(iso: string | null): string {
+// Format in the org's booking timezone. Without an explicit timeZone the
+// server (UTC on Vercel) renders the wrong wall-clock time.
+function fmt(iso: string | null, timeZone: string): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone,
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   });
 }
 
 export default async function ShowingsPage() {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  const timeZone = org?.booking_timezone ?? "America/Toronto";
   const { data } = await supabase
     .from("showings")
     .select(
@@ -56,8 +63,8 @@ export default async function ShowingsPage() {
         keep the pipeline accurate.
       </p>
 
-      <Section title={`Upcoming (${upcoming.length})`} rows={upcoming} empty="No upcoming showings." />
-      <Section title="Past" rows={past} empty="No past showings yet." />
+      <Section title={`Upcoming (${upcoming.length})`} rows={upcoming} empty="No upcoming showings." timeZone={timeZone} />
+      <Section title="Past" rows={past} empty="No past showings yet." timeZone={timeZone} />
     </div>
   );
 }
@@ -66,10 +73,12 @@ function Section({
   title,
   rows,
   empty,
+  timeZone,
 }: {
   title: string;
   rows: ShowingRow[];
   empty: string;
+  timeZone: string;
 }) {
   return (
     <>
@@ -89,7 +98,7 @@ function Section({
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900">
-                  {fmt(s.scheduled_at)}
+                  {fmt(s.scheduled_at, timeZone)}
                 </p>
                 <p className="truncate text-xs text-gray-500">
                   {s.lead ? (
