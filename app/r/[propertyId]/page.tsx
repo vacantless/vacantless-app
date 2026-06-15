@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitLead } from "./actions";
 import { generateSlots, type Availability } from "@/lib/booking";
+import { accessibleBrand } from "@/lib/brand-theme";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,9 @@ export default async function PublicListingPage({
 
   if (!data) notFound();
   const l = data as Listing;
-  const brand = l.brand_color || "#4f46e5";
+  // Guardrail: keep white-on-brand (header, button) and brand-on-white (price)
+  // legible even when the tenant picked a pale color.
+  const brand = accessibleBrand(l.brand_color || "#4f46e5");
 
   const av = avData as Availability | null;
   const days = av ? generateSlots(av) : [];

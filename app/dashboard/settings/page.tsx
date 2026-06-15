@@ -1,5 +1,6 @@
 import { getCurrentOrg } from "@/lib/org";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
+import { accessibleBrand, isBrandColorTooLight } from "@/lib/brand-theme";
 import { updateBranding } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,11 @@ export default async function SettingsPage({
   if (!org) return null;
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
+  // The preview mirrors what renters actually see: the dashboard header and
+  // public pages use an accessibility-guardrailed (darkened-as-needed) variant
+  // so white text stays readable on a pale color.
+  const displayColor = accessibleBrand(color);
+  const wasDarkened = isBrandColorTooLight(color);
   const saved = searchParams.saved === "1";
   const error = searchParams.error;
 
@@ -177,33 +183,42 @@ export default async function SettingsPage({
             Preview
           </h3>
           <div className="overflow-hidden rounded-lg border border-gray-200">
-            <div className="h-1.5" style={{ backgroundColor: color }} />
-            <div className="p-4">
+            {/* Mini renter header — white text on the brand, exactly as renters see it */}
+            <div
+              className="flex items-center gap-2 px-4 py-3 text-white"
+              style={{ backgroundColor: displayColor }}
+            >
               {org.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={org.logo_url}
-                  alt={org.name}
-                  className="mb-3 max-h-10"
-                />
+                <img src={org.logo_url} alt={org.name} className="max-h-7" />
               ) : (
-                <div
-                  className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
-                  style={{ backgroundColor: color }}
-                >
-                  {org.name.charAt(0).toUpperCase()}
-                </div>
+                <span className="text-sm font-bold">{org.name}</span>
               )}
+            </div>
+            <div className="p-4">
               <p className="text-sm font-semibold text-gray-900">{org.name}</p>
               <p className="mt-1 text-xs text-gray-500">
                 Hi there, thanks for your interest — someone from our team will
                 be in touch shortly.
               </p>
+              <span
+                className="mt-3 inline-flex rounded-lg px-3 py-1.5 text-xs font-medium text-white"
+                style={{ backgroundColor: displayColor }}
+              >
+                Book a showing
+              </span>
             </div>
           </div>
           <p className="mt-3 text-xs text-gray-400">
             Reflects your last saved branding. Save changes to update it.
           </p>
+          {wasDarkened && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Your brand color is light, so we use a slightly darker shade
+              ({displayColor}) behind white text — your header, buttons, and
+              links — to keep it readable. Your exact color is saved.
+            </p>
+          )}
         </div>
       </form>
 

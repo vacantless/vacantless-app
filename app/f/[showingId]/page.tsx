@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitFeedback } from "./actions";
 import { StarRating } from "./star-rating";
+import { accessibleBrand } from "@/lib/brand-theme";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,8 @@ export default async function PublicFeedbackPage({
 
   if (!data) notFound();
   const c = data as Context;
-  const brand = c.brand_color || "#4f46e5";
+  // Guardrail: legible header/button white text + visible stars on a pale brand.
+  const brand = accessibleBrand(c.brand_color || "#4f46e5");
 
   const done = c.already_submitted || searchParams.submitted === "1";
   const addr = c.property_address || "your showing";
