@@ -167,7 +167,21 @@ export default async function BillingPage({
         })}
       </div>
 
-      <p className="mt-6 text-xs text-gray-400">
+      <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+        <p>
+          <span className="font-medium text-gray-700">
+            Founding pricing is locked for 12 months
+          </span>{" "}
+          after your pilot starts, then moves to the then-current standard rate
+          with at least 60 days&apos; notice.
+        </p>
+        <p className="mt-1.5">
+          Billed monthly. Cancel anytime from the billing portal — no contract,
+          no cancellation fee.
+        </p>
+      </div>
+
+      <p className="mt-3 text-xs text-gray-400">
         Payments are processed by Stripe; Vacantless never sees your card
         details. Prices are in CAD.
       </p>

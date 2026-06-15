@@ -1,4 +1,7 @@
+import Link from "next/link";
+import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
+import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import { accessibleBrand, isBrandColorTooLight } from "@/lib/brand-theme";
 import { updateBranding } from "./actions";
@@ -12,6 +15,24 @@ export default async function SettingsPage({
 }) {
   const org = await getCurrentOrg();
   if (!org) return null;
+
+  // Most-recent property (if any) powers the "View public renter page" link —
+  // a one-click way to see exactly what renters get from the shared intake URL.
+  const supabase = createClient();
+  const { data: propertyRows } = await supabase
+    .from("properties")
+    .select("id")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const firstPropertyId = (propertyRows as { id: string }[] | null)?.[0]?.id;
+  const h = headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const renterPageUrl = firstPropertyId
+    ? host
+      ? `${proto}://${host}/r/${firstPropertyId}`
+      : `/r/${firstPropertyId}`
+    : null;
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
   // The preview mirrors what renters actually see: the dashboard header and
@@ -196,11 +217,6 @@ export default async function SettingsPage({
             </label>
           </div>
 
-          <div className="mt-6 text-right">
-            <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
-              Save settings
-            </button>
-          </div>
         </div>
 
         {/* Live (saved-state) preview */}
@@ -246,13 +262,42 @@ export default async function SettingsPage({
             </p>
           )}
         </div>
+
+        {/* Sticky save bar — stays in view while you scroll the form */}
+        <div className="sticky bottom-4 lg:col-span-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white/95 px-5 py-3 shadow-lg backdrop-blur">
+            <p className="text-xs text-gray-500">
+              Changes apply to your renter-facing pages and emails as soon as
+              you save.
+            </p>
+            <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+              Save changes
+            </button>
+          </div>
+        </div>
       </form>
 
       {/* Read-only account context */}
       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Account
-        </h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Account
+          </h3>
+          {renterPageUrl ? (
+            <Link
+              href={renterPageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              View public renter page ↗
+            </Link>
+          ) : (
+            <span className="text-xs text-gray-400">
+              Add a property to preview your public renter page.
+            </span>
+          )}
+        </div>
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-gray-500">Plan</dt>
