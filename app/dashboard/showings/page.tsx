@@ -71,7 +71,7 @@ export default async function ShowingsPage() {
       <h2 className="text-xl font-bold text-gray-900">Showings</h2>
       <p className="mt-1 text-sm text-gray-500">
         Self-booked and scheduled viewings. Mark the outcome after each one to
-        keep the pipeline accurate.
+        keep your renter list accurate.
       </p>
 
       <Section
@@ -80,7 +80,7 @@ export default async function ShowingsPage() {
         empty={
           <EmptyState
             title="No upcoming showings yet"
-            description="Set your weekly availability so renters can self-book — confirmed showings appear here."
+            description="Set your weekly availability so renters can self-book. Confirmed showings appear here."
             cta={{ href: "/dashboard/availability", label: "Set availability" }}
           />
         }
@@ -92,7 +92,7 @@ export default async function ShowingsPage() {
         empty={
           <EmptyState
             title="No past showings yet"
-            description="Once renters attend, mark each outcome here to keep the pipeline accurate and trigger feedback requests."
+            description="Once renters attend, mark each outcome here to keep your renter list accurate and send feedback requests."
           />
         }
         timeZone={timeZone}
@@ -138,10 +138,10 @@ function Section({
                         href={`/dashboard/leads/${s.lead.id}`}
                         className="text-brand hover:underline"
                       >
-                        {s.lead.name || s.lead.email || "Lead"}
+                        {s.lead.name || s.lead.email || "Renter"}
                       </Link>
                     ) : (
-                      "—"
+                      "Renter"
                     )}
                     {s.property ? ` · ${s.property.address}` : ""}
                   </p>

@@ -114,7 +114,7 @@ export default async function OverviewPage() {
         <Stat label="Properties" value={propertyCount ?? 0} />
       </div>
 
-      <SectionHeading>Pipeline</SectionHeading>
+      <SectionHeading>Renters by stage</SectionHeading>
       <div className="mb-8 flex flex-wrap gap-2">
         {PIPELINE_STAGES.map((stage) => (
           <div
@@ -153,10 +153,10 @@ export default async function OverviewPage() {
                     href={`/dashboard/leads/${s.lead.id}`}
                     className="hover:underline"
                   >
-                    {s.lead.name || s.lead.email || "Lead"}
+                    {s.lead.name || s.lead.email || "Renter"}
                   </Link>
                 ) : (
-                  "Lead"
+                  "Renter"
                 )}
                 {s.property && (
                   <span className="ml-2 text-xs text-gray-400">
@@ -188,7 +188,7 @@ export default async function OverviewPage() {
       {allLeads.length === 0 ? (
         <EmptyState
           title="No inquiries yet"
-          description="Share a property's public listing link to start collecting inquiries — they'll land here automatically."
+          description="Share a property's public listing link to start collecting inquiries. They'll land here automatically."
           cta={{ href: "/dashboard/properties", label: "Open a property" }}
         />
       ) : (
@@ -200,7 +200,7 @@ export default async function OverviewPage() {
                 className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50"
               >
                 <span className="min-w-0 truncate text-gray-900">
-                  {l.name || l.email || "Unnamed lead"}
+                  {l.name || l.email || "Unnamed renter"}
                   {l.source && (
                     <span className="ml-2 text-xs text-gray-400">
                       via {l.source}

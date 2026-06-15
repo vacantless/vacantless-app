@@ -165,7 +165,7 @@ export default async function AvailabilityPage() {
 
         {rules.length === 0 && (
           <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            No windows yet — add your first below so renters can self-book a
+            No times yet. Add your first below so renters can self-book a
             showing.
           </div>
         )}

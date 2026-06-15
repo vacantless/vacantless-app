@@ -125,7 +125,7 @@ const ALL: ChecklistInput = {
   );
   ok("intake deep-links to /r/[id]", withProp.href === "/r/prop-123");
   ok("intake opens in a new tab", withProp.newTab === true);
-  ok("intake CTA becomes Preview intake page", withProp.cta === "Preview intake page");
+  ok("intake CTA becomes Preview inquiry page", withProp.cta === "Preview inquiry page");
 
   // Empty/whitespace id is ignored (no deep-link).
   const blank = intakeOf(

@@ -193,7 +193,7 @@ export default async function SettingsPage({
 
           <div className="mt-6 border-t border-gray-100 pt-5">
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-              Lead nurture
+              Automatic follow-up
             </h3>
 
             <label className="flex items-start gap-3">
@@ -205,13 +205,13 @@ export default async function SettingsPage({
               />
               <span className="text-sm">
                 <span className="block font-medium text-gray-700">
-                  Automatically follow up with leads who haven&apos;t booked
+                  Automatically follow up with renters who haven&apos;t booked
                 </span>
                 <span className="block text-xs text-gray-400">
                   Sends a gentle, branded sequence of up to 3 reminders (around 2,
                   5, and 10 days after the inquiry) inviting them to book a
-                  showing. It stops automatically the moment a lead books, is
-                  marked lost, or moves further down the pipeline.
+                  showing. It stops automatically the moment a renter books, is
+                  marked lost, or moves further along.
                 </span>
               </span>
             </label>

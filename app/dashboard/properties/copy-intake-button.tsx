@@ -26,7 +26,7 @@ export function CopyIntakeButton({ url }: { url: string }) {
       onClick={copy}
       className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
     >
-      {copied ? "Copied!" : "Copy intake link"}
+      {copied ? "Copied!" : "Copy inquiry link"}
     </button>
   );
 }

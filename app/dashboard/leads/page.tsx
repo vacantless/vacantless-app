@@ -64,14 +64,14 @@ export default async function LeadsPage({
       {rows.length === 0 ? (
         all.length === 0 ? (
           <EmptyState
-            title="No leads yet"
-            description="Share a property's public listing link to start collecting inquiries — every submission lands here automatically."
+            title="No inquiries yet"
+            description="Share a property's public listing link to start collecting inquiries. Every submission lands here automatically."
             cta={{ href: "/dashboard/properties", label: "Open a property" }}
           />
         ) : (
           <EmptyState
-            title="No leads in this stage"
-            description="Try another stage filter above, or clear it to see every lead."
+            title="No inquiries in this stage"
+            description="Try another stage filter above, or clear it to see every inquiry."
           />
         )
       ) : (

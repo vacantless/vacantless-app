@@ -71,7 +71,7 @@ const STEP_DEFS: StepDef[] = [
     key: "property",
     label: "Add your first property",
     description:
-      "Create a listing so you have a public intake page renters can find.",
+      "Create a listing so you have a public inquiry page renters can find.",
     href: "/dashboard/properties",
     cta: "Add property",
   },
@@ -93,9 +93,9 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "intake",
-    label: "Test your renter intake page",
+    label: "Test your renter inquiry page",
     description:
-      "Submit a test inquiry on a property's public link to see the full lead-to-lease loop run.",
+      "Submit a test inquiry on a property's public link to see the full inquiry-to-lease flow.",
     href: "/dashboard/properties",
     cta: "Open a property",
   },
@@ -141,7 +141,7 @@ export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
       return {
         ...def,
         href: `/r/${input.firstPropertyId}`,
-        cta: "Preview intake page",
+        cta: "Preview inquiry page",
         newTab: true,
         status,
       };

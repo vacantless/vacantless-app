@@ -98,7 +98,7 @@ export default async function PropertiesPage() {
         <div className="mb-8">
           <EmptyState
             title="No properties yet"
-            description="Add your first property below to generate its public intake page and start collecting leads."
+            description="Add your first property below to create its public inquiry page and start collecting inquiries."
           />
         </div>
       )}

@@ -111,9 +111,9 @@ export default async function PropertyDetailPage({
         <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           {blastedCount > 0
             ? `Price-drop alert sent to ${blastedCount} ${
-                blastedCount === 1 ? "lead" : "leads"
+                blastedCount === 1 ? "renter" : "renters"
               }.`
-            : "No leads were eligible for a price-drop alert."}
+            : "No renters were eligible for a price-drop alert."}
         </p>
       )}
 
@@ -130,8 +130,8 @@ export default async function PropertyDetailPage({
           Public listing link
         </h3>
         <p className="mb-3 text-xs text-gray-500">
-          Share this branded page on Kijiji, Facebook, email — inquiries land
-          straight in your pipeline.
+          Share this branded page on Kijiji, Facebook, and email. Inquiries
+          land straight in your renter list.
         </p>
         <CopyLink url={publicUrl} />
       </div>
@@ -139,7 +139,7 @@ export default async function PropertyDetailPage({
       {showBlastCard && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <h3 className="mb-1 text-sm font-semibold text-amber-900">
-            Price dropped — notify past leads
+            Price dropped: notify past renters
           </h3>
           <p className="mb-3 text-xs text-amber-800">
             You reduced the rent from{" "}
@@ -147,9 +147,9 @@ export default async function PropertyDetailPage({
               {formatRentLabel(p.price_drop_pending_cents)}
             </span>{" "}
             to <strong>{formatRentLabel(p.rent_cents)}</strong>.{" "}
-            {eligibleCount} open {eligibleCount === 1 ? "lead" : "leads"} who
+            {eligibleCount} {eligibleCount === 1 ? "renter" : "renters"} who
             inquired earlier {eligibleCount === 1 ? "hasn't" : "haven't"} been
-            told. Email them a branded alert with a link back to the listing.
+            told yet. Email them a branded alert with a link back to the listing.
           </p>
           <form action={blastPriceDrop}>
             <input type="hidden" name="id" value={p.id} />
@@ -157,8 +157,8 @@ export default async function PropertyDetailPage({
               type="submit"
               className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
             >
-              Notify {eligibleCount} {eligibleCount === 1 ? "lead" : "leads"} of
-              the price drop
+              Notify {eligibleCount}{" "}
+              {eligibleCount === 1 ? "renter" : "renters"} of the price drop
             </button>
           </form>
         </div>
@@ -411,7 +411,7 @@ export default async function PropertyDetailPage({
       </form>
 
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        Leads for this property ({leadRows.length})
+        Inquiries for this property ({leadRows.length})
       </h3>
       {leadRows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
@@ -426,7 +426,7 @@ export default async function PropertyDetailPage({
                 className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
               >
                 <span className="text-gray-900">
-                  {l.name || l.email || "Unnamed lead"}
+                  {l.name || l.email || "Unnamed renter"}
                 </span>
                 <span className="text-xs font-medium text-gray-500">
                   {statusLabel(l.status)}

@@ -116,7 +116,7 @@ export type FunnelStep = {
 export function buildFunnel(leads: LeadLite[]): FunnelStep[] {
   const total = leads.length;
   const steps: { key: string; label: string; minRank: number }[] = [
-    { key: "leads", label: "Leads", minRank: 0 }, // all inquiries, incl. lost
+    { key: "leads", label: "Inquiries", minRank: 0 }, // all inquiries, incl. lost
     { key: "contacted", label: "Contacted", minRank: 3 },
     { key: "booked", label: "Booked", minRank: 4 },
     { key: "showed", label: "Showed", minRank: 5 },

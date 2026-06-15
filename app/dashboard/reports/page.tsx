@@ -104,11 +104,11 @@ export default async function ReportsPage({
 
       {/* Headline KPIs */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label="Leads" value={funnel[0].count} />
+        <Kpi label="Inquiries" value={funnel[0].count} />
         <Kpi
           label="Leased"
           value={leasedStep.count}
-          sub={`${leasedStep.ofTotal}% of leads`}
+          sub={`${leasedStep.ofTotal}% of inquiries`}
         />
         <Kpi
           label="Showing attendance"
@@ -127,11 +127,11 @@ export default async function ReportsPage({
       </div>
 
       {/* Funnel */}
-      <Section title="Lead-to-lease funnel">
+      <Section title="Inquiry to lease">
         {funnel[0].count === 0 ? (
           <Empty>
-            Not enough data yet — your funnel fills in as leads come in during
-            this window.
+            Not enough data yet. This fills in as inquiries come in during this
+            window.
           </Empty>
         ) : (
           <div className="space-y-2">
@@ -156,7 +156,7 @@ export default async function ReportsPage({
                     <div className="absolute inset-0 flex items-center px-3 text-sm font-semibold text-gray-800">
                       {step.count}
                       <span className="ml-2 text-xs font-normal text-gray-500">
-                        {step.ofTotal}% of leads
+                        {step.ofTotal}% of inquiries
                         {i > 0 && ` · ${step.ofPrev}% of ${funnel[i - 1].label}`}
                       </span>
                     </div>
@@ -169,14 +169,14 @@ export default async function ReportsPage({
       </Section>
 
       {/* By channel */}
-      <Section title="By lead source">
+      <Section title="Where renters come from">
         {channels.length === 0 ? (
           <Empty>
-            Not enough data yet — source performance appears once leads arrive
-            in this window.
+            Not enough data yet. This appears once inquiries arrive in this
+            window.
           </Empty>
         ) : (
-          <Table head={["Source", "Leads", "Booked", "Showed", "Leased", "Lease rate"]}>
+          <Table head={["Source", "Inquiries", "Booked", "Showed", "Leased", "Lease rate"]}>
             {channels.map((c) => (
               <tr key={c.source} className="border-t border-gray-100">
                 <Td>{c.source}</Td>
@@ -195,12 +195,12 @@ export default async function ReportsPage({
       <Section title="By property">
         {propertyRows.length === 0 ? (
           <Empty>
-            No properties yet — add a listing to start tracking per-property
+            No properties yet. Add a listing to start tracking per-property
             performance.
           </Empty>
         ) : (
           <Table
-            head={["Property", "Rent", "Status", "Leads", "Showings", "Booked", "Leased"]}
+            head={["Property", "Rent", "Status", "Inquiries", "Showings", "Booked", "Leased"]}
           >
             {propertyRows.map((p) => (
               <tr key={p.id} className="border-t border-gray-100">
@@ -263,8 +263,8 @@ export default async function ReportsPage({
 
       <p className="mt-2 text-xs text-gray-400">
         Activity counted by when it happened, within the selected window.
-        Funnel and source counts reflect each lead&apos;s furthest stage
-        reached; lost leads count toward total leads only.
+        Inquiry and source counts reflect each inquiry&apos;s furthest stage
+        reached; lost inquiries count toward total inquiries only.
       </p>
     </div>
   );
