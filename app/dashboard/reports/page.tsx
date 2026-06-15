@@ -129,7 +129,10 @@ export default async function ReportsPage({
       {/* Funnel */}
       <Section title="Lead-to-lease funnel">
         {funnel[0].count === 0 ? (
-          <Empty>No leads in this window yet.</Empty>
+          <Empty>
+            Not enough data yet — your funnel fills in as leads come in during
+            this window.
+          </Empty>
         ) : (
           <div className="space-y-2">
             {funnel.map((step, i) => {
@@ -168,7 +171,10 @@ export default async function ReportsPage({
       {/* By channel */}
       <Section title="By lead source">
         {channels.length === 0 ? (
-          <Empty>No leads in this window yet.</Empty>
+          <Empty>
+            Not enough data yet — source performance appears once leads arrive
+            in this window.
+          </Empty>
         ) : (
           <Table head={["Source", "Leads", "Booked", "Showed", "Leased", "Lease rate"]}>
             {channels.map((c) => (
@@ -188,7 +194,10 @@ export default async function ReportsPage({
       {/* By property */}
       <Section title="By property">
         {propertyRows.length === 0 ? (
-          <Empty>No properties yet.</Empty>
+          <Empty>
+            No properties yet — add a listing to start tracking per-property
+            performance.
+          </Empty>
         ) : (
           <Table
             head={["Property", "Rent", "Status", "Leads", "Showings", "Booked", "Leased"]}

@@ -6,6 +6,7 @@ import {
   isLeadStatus,
   type LeadStatus,
 } from "@/lib/pipeline";
+import { EmptyState } from "@/components/ui";
 import { StatusSelect } from "./status-select";
 
 export const dynamic = "force-dynamic";
@@ -61,13 +62,20 @@ export default async function LeadsPage({
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
-          {all.length === 0
-            ? "No leads yet. Share a property's public listing link to start collecting inquiries."
-            : "No leads in this stage."}
-        </p>
+        all.length === 0 ? (
+          <EmptyState
+            title="No leads yet"
+            description="Share a property's public listing link to start collecting inquiries — every submission lands here automatically."
+            cta={{ href: "/dashboard/properties", label: "Open a property" }}
+          />
+        ) : (
+          <EmptyState
+            title="No leads in this stage"
+            description="Try another stage filter above, or clear it to see every lead."
+          />
+        )
       ) : (
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
               <tr>

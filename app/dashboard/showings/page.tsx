@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { EmptyState } from "@/components/ui";
 import { OutcomeSelect } from "./outcome-select";
 
 export const dynamic = "force-dynamic";
@@ -73,8 +74,29 @@ export default async function ShowingsPage() {
         keep the pipeline accurate.
       </p>
 
-      <Section title={`Upcoming (${upcoming.length})`} rows={upcoming} empty="No upcoming showings." timeZone={timeZone} />
-      <Section title="Past" rows={past} empty="No past showings yet." timeZone={timeZone} />
+      <Section
+        title={`Upcoming (${upcoming.length})`}
+        rows={upcoming}
+        empty={
+          <EmptyState
+            title="No upcoming showings yet"
+            description="Set your weekly availability so renters can self-book — confirmed showings appear here."
+            cta={{ href: "/dashboard/availability", label: "Set availability" }}
+          />
+        }
+        timeZone={timeZone}
+      />
+      <Section
+        title="Past"
+        rows={past}
+        empty={
+          <EmptyState
+            title="No past showings yet"
+            description="Once renters attend, mark each outcome here to keep the pipeline accurate and trigger feedback requests."
+          />
+        }
+        timeZone={timeZone}
+      />
     </div>
   );
 }
@@ -87,7 +109,7 @@ function Section({
 }: {
   title: string;
   rows: ShowingRow[];
-  empty: string;
+  empty: React.ReactNode;
   timeZone: string;
 }) {
   return (
@@ -96,11 +118,9 @@ function Section({
         {title}
       </h3>
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
-          {empty}
-        </p>
+        empty
       ) : (
-        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
           {rows.map((s) => {
             const fb = s.feedback?.[0];
             return (

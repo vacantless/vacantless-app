@@ -6,6 +6,18 @@ import {
   statusLabel,
   type LeadStatus,
 } from "@/lib/pipeline";
+import {
+  buildLaunchChecklist,
+  isBrandingConfirmed,
+} from "@/lib/onboarding";
+import {
+  Card,
+  SectionHeading,
+  EmptyState,
+  StatusChip,
+  leadStatusTone,
+} from "@/components/ui";
+import { LaunchChecklist } from "./launch-checklist";
 
 export const dynamic = "force-dynamic";
 
@@ -34,23 +46,30 @@ export default async function OverviewPage() {
   const timeZone = org?.booking_timezone ?? "America/Toronto";
 
   // RLS scopes all of these to the caller's org automatically.
-  const [{ data: leads }, { count: propertyCount }, { data: showingData }] =
-    await Promise.all([
-      supabase
-        .from("leads")
-        .select("id, name, email, source, status, created_at, property_id")
-        .order("created_at", { ascending: false }),
-      supabase.from("properties").select("id", { count: "exact", head: true }),
-      supabase
-        .from("showings")
-        .select(
-          "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(address)",
-        )
-        .eq("outcome", "scheduled")
-        .gte("scheduled_at", new Date().toISOString())
-        .order("scheduled_at", { ascending: true })
-        .limit(5),
-    ]);
+  const [
+    { data: leads },
+    { count: propertyCount },
+    { count: availabilityCount },
+    { data: showingData },
+  ] = await Promise.all([
+    supabase
+      .from("leads")
+      .select("id, name, email, source, status, created_at, property_id")
+      .order("created_at", { ascending: false }),
+    supabase.from("properties").select("id", { count: "exact", head: true }),
+    supabase
+      .from("availability_rules")
+      .select("id", { count: "exact", head: true }),
+    supabase
+      .from("showings")
+      .select(
+        "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(address)",
+      )
+      .eq("outcome", "scheduled")
+      .gte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: true })
+      .limit(5),
+  ]);
 
   const upcomingShowings = (showingData ?? []) as unknown as {
     id: string;
@@ -70,22 +89,30 @@ export default async function OverviewPage() {
   for (const stage of PIPELINE_STAGES) counts[stage] = 0;
   for (const l of allLeads) counts[l.status] = (counts[l.status] ?? 0) + 1;
 
+  const checklist = buildLaunchChecklist({
+    propertyCount: propertyCount ?? 0,
+    availabilityWindowCount: availabilityCount ?? 0,
+    brandingConfirmed: org ? isBrandingConfirmed(org) : false,
+    leadCount: allLeads.length,
+    subscriptionActive: org?.subscription_status === "active",
+  });
+
   return (
     <div>
+      <LaunchChecklist checklist={checklist} />
+
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat label="Open leads" value={openLeads.length} />
         <Stat label="New this week" value={newThisWeek.length} />
         <Stat label="Properties" value={propertyCount ?? 0} />
       </div>
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        Pipeline
-      </h2>
+      <SectionHeading>Pipeline</SectionHeading>
       <div className="mb-8 flex flex-wrap gap-2">
         {PIPELINE_STAGES.map((stage) => (
           <div
             key={stage}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-center"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-center shadow-sm"
           >
             <div className="text-lg font-bold text-gray-900">
               {counts[stage]}
@@ -95,27 +122,19 @@ export default async function OverviewPage() {
         ))}
       </div>
 
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Upcoming showings
-        </h2>
-        <Link
-          href="/dashboard/showings"
-          className="text-sm font-medium text-brand"
-        >
-          View all →
-        </Link>
-      </div>
+      <SectionHeading action={{ href: "/dashboard/showings", label: "View all" }}>
+        Upcoming showings
+      </SectionHeading>
       {upcomingShowings.length === 0 ? (
-        <p className="mb-8 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
-          No upcoming showings. Set your{" "}
-          <Link href="/dashboard/availability" className="text-brand">
-            availability
-          </Link>{" "}
-          so renters can self-book.
-        </p>
+        <div className="mb-8">
+          <EmptyState
+            title="No upcoming showings"
+            description="Set your weekly availability so renters can self-book showings."
+            cta={{ href: "/dashboard/availability", label: "Set availability" }}
+          />
+        </div>
       ) : (
-        <ul className="mb-8 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+        <ul className="mb-8 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
           {upcomingShowings.map((s) => (
             <li
               key={s.id}
@@ -156,29 +175,24 @@ export default async function OverviewPage() {
         </ul>
       )}
 
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Recent leads
-        </h2>
-        <Link href="/dashboard/leads" className="text-sm font-medium text-brand">
-          View all →
-        </Link>
-      </div>
-
+      <SectionHeading action={{ href: "/dashboard/leads", label: "View all" }}>
+        Recent leads
+      </SectionHeading>
       {allLeads.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
-          No leads yet. Share a property&apos;s public listing link to start
-          collecting inquiries.
-        </p>
+        <EmptyState
+          title="No leads yet"
+          description="Share a property's public listing link to start collecting inquiries — they'll land here automatically."
+          cta={{ href: "/dashboard/properties", label: "Open a property" }}
+        />
       ) : (
-        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
           {allLeads.slice(0, 8).map((l) => (
             <li key={l.id}>
               <Link
                 href={`/dashboard/leads/${l.id}`}
-                className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50"
               >
-                <span className="text-gray-900">
+                <span className="min-w-0 truncate text-gray-900">
                   {l.name || l.email || "Unnamed lead"}
                   {l.source && (
                     <span className="ml-2 text-xs text-gray-400">
@@ -186,9 +200,9 @@ export default async function OverviewPage() {
                     </span>
                   )}
                 </span>
-                <span className="text-xs font-medium text-gray-500">
+                <StatusChip tone={leadStatusTone(l.status)}>
                   {statusLabel(l.status)}
-                </span>
+                </StatusChip>
               </Link>
             </li>
           ))}
@@ -200,9 +214,9 @@ export default async function OverviewPage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
+    <Card>
       <div className="text-3xl font-bold text-gray-900">{value}</div>
       <div className="mt-1 text-sm text-gray-500">{label}</div>
-    </div>
+    </Card>
   );
 }

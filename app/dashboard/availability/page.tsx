@@ -81,7 +81,7 @@ export default async function AvailabilityPage() {
       {/* Booking settings */}
       <form
         action={updateBookingSettings}
-        className="mt-6 rounded-xl border border-gray-200 bg-white p-5"
+        className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
           Booking settings
@@ -154,10 +154,21 @@ export default async function AvailabilityPage() {
       </form>
 
       {/* Weekly windows */}
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
           Weekly windows
         </h3>
+        <p className="mb-3 mt-1 text-sm text-gray-500">
+          These are the windows renters can choose from. Times that are already
+          booked are removed automatically.
+        </p>
+
+        {rules.length === 0 && (
+          <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            No windows yet — add your first below so renters can self-book a
+            showing.
+          </div>
+        )}
 
         <div className="space-y-2">
           {WEEKDAY_LABELS.map((label, wd) => {
