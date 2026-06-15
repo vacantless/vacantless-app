@@ -85,11 +85,36 @@ export function validateReplyToEmail(input: string | null | undefined): ReplyToR
   return { ok: true, value: s.toLowerCase() };
 }
 
+export const MAX_FEEDBACK_DELAY_HOURS = 336; // 14 days
+export const DEFAULT_FEEDBACK_DELAY_HOURS = 2;
+
+export type DelayResult = { ok: true; value: number } | { ok: false };
+
+/**
+ * Validate the post-showing feedback delay (hours to wait after a showing
+ * before emailing the feedback request). A blank value falls back to the
+ * default. Must be a whole number from 0 to MAX_FEEDBACK_DELAY_HOURS.
+ */
+export function validateFeedbackDelayHours(
+  input: string | number | null | undefined,
+): DelayResult {
+  if (input == null || (typeof input === "string" && input.trim() === "")) {
+    return { ok: true, value: DEFAULT_FEEDBACK_DELAY_HOURS };
+  }
+  const n = typeof input === "number" ? input : Number(input.trim());
+  if (!Number.isInteger(n) || n < 0 || n > MAX_FEEDBACK_DELAY_HOURS) {
+    return { ok: false };
+  }
+  return { ok: true, value: n };
+}
+
 export type BrandingInput = {
   name?: string | null;
   brand_color?: string | null;
   logo_url?: string | null;
   reply_to_email?: string | null;
+  feedback_enabled?: boolean;
+  feedback_delay_hours?: string | number | null;
 };
 
 export type BrandingUpdate = {
@@ -97,6 +122,8 @@ export type BrandingUpdate = {
   brand_color: string;
   logo_url: string | null;
   reply_to_email: string | null;
+  feedback_enabled: boolean;
+  feedback_delay_hours: number;
 };
 
 export type BrandingValidation =
@@ -131,7 +158,21 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
     errors.push("Reply-to must be a valid email address, or left blank.");
   }
 
-  if (errors.length > 0 || !name.ok || color == null || !logo.ok || !replyTo.ok) {
+  const delay = validateFeedbackDelayHours(input.feedback_delay_hours);
+  if (!delay.ok) {
+    errors.push(
+      `Feedback delay must be a whole number of hours from 0 to ${MAX_FEEDBACK_DELAY_HOURS}.`,
+    );
+  }
+
+  if (
+    errors.length > 0 ||
+    !name.ok ||
+    color == null ||
+    !logo.ok ||
+    !replyTo.ok ||
+    !delay.ok
+  ) {
     return { ok: false, errors };
   }
 
@@ -142,6 +183,8 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
       brand_color: color,
       logo_url: logo.value,
       reply_to_email: replyTo.value,
+      feedback_enabled: input.feedback_enabled !== false,
+      feedback_delay_hours: delay.value,
     },
   };
 }

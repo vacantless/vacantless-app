@@ -21,6 +21,8 @@ export async function updateBranding(formData: FormData) {
     brand_color: String(formData.get("brand_color") ?? ""),
     logo_url: String(formData.get("logo_url") ?? ""),
     reply_to_email: String(formData.get("reply_to_email") ?? ""),
+    feedback_enabled: formData.get("feedback_enabled") != null,
+    feedback_delay_hours: String(formData.get("feedback_delay_hours") ?? ""),
   });
 
   if (!result.ok) {

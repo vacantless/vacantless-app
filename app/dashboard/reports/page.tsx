@@ -7,6 +7,7 @@ import {
   buildPropertyReport,
   buildShowingReport,
   buildLeaseTiming,
+  buildFeedbackReport,
   parseWindow,
   windowStartMs,
   filterByWindow,
@@ -14,6 +15,7 @@ import {
   type LeadLite,
   type ShowingLite,
   type PropertyLite,
+  type FeedbackLite,
 } from "@/lib/reports";
 
 export const dynamic = "force-dynamic";
@@ -34,34 +36,42 @@ export default async function ReportsPage({
   const startMs = windowStartMs(window, nowMs);
 
   // RLS scopes every query to the caller's org.
-  const [{ data: leadsData }, { data: showingsData }, { data: propsData }] =
-    await Promise.all([
-      supabase
-        .from("leads")
-        .select("id, source, status, created_at, leased_date, property_id"),
-      supabase
-        .from("showings")
-        .select("id, outcome, scheduled_at, created_at, property_id"),
-      supabase
-        .from("properties")
-        .select("id, address, status, rent_cents, created_at"),
-    ]);
+  const [
+    { data: leadsData },
+    { data: showingsData },
+    { data: propsData },
+    { data: feedbackData },
+  ] = await Promise.all([
+    supabase
+      .from("leads")
+      .select("id, source, status, created_at, leased_date, property_id"),
+    supabase
+      .from("showings")
+      .select("id, outcome, scheduled_at, created_at, property_id"),
+    supabase
+      .from("properties")
+      .select("id, address, status, rent_cents, created_at"),
+    supabase.from("feedback").select("rating, created_at"),
+  ]);
 
   const allLeads = (leadsData ?? []) as LeadLite[];
   const allShowings = (showingsData ?? []) as ShowingLite[];
   const properties = (propsData ?? []) as PropertyLite[];
+  const allFeedback = (feedbackData ?? []) as FeedbackLite[];
 
-  // Window the activity (leads + showings) by when it happened; the property
-  // catalog itself isn't windowed — we report each property's activity within
-  // the selected window.
+  // Window the activity (leads + showings + feedback) by when it happened; the
+  // property catalog itself isn't windowed — we report each property's activity
+  // within the selected window.
   const leads = filterByWindow(allLeads, startMs);
   const showings = filterByWindow(allShowings, startMs);
+  const feedback = filterByWindow(allFeedback, startMs);
 
   const funnel = buildFunnel(leads);
   const channels = buildChannelReport(leads);
   const propertyRows = buildPropertyReport(properties, leads, showings);
   const showRep = buildShowingReport(showings, nowMs);
   const timing = buildLeaseTiming(leads);
+  const feedbackRep = buildFeedbackReport(feedback);
 
   const leasedStep = funnel[funnel.length - 1];
 
@@ -215,6 +225,31 @@ export default async function ReportsPage({
           <Kpi label="Upcoming" value={showRep.upcoming} />
           <Kpi label="Attendance" value={`${showRep.attendanceRate}%`} />
         </div>
+      </Section>
+
+      {/* Feedback */}
+      <Section title="Renter feedback">
+        {feedbackRep.responses === 0 ? (
+          <Empty>
+            No feedback yet. Requests go out automatically after a showing is
+            marked Attended (configurable in Settings).
+          </Empty>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <Kpi
+              label="Avg rating"
+              value={feedbackRep.avgRating == null ? "—" : `${feedbackRep.avgRating}★`}
+            />
+            <Kpi label="Responses" value={feedbackRep.responses} />
+            {([5, 4, 3, 2, 1] as const).map((star) => (
+              <Kpi
+                key={star}
+                label={`${star}★`}
+                value={feedbackRep.distribution[star - 1]}
+              />
+            ))}
+          </div>
+        )}
       </Section>
 
       <p className="mt-2 text-xs text-gray-400">

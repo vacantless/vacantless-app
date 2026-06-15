@@ -8,7 +8,13 @@ export type Org = {
   logo_url: string | null;
   reply_to_email: string | null;
   plan: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
+  current_period_end: string | null;
   booking_timezone: string;
+  feedback_enabled: boolean;
+  feedback_delay_hours: number;
 };
 
 // The org the signed-in user belongs to. RLS scopes the row to the caller,
@@ -17,7 +23,9 @@ export async function getCurrentOrg(): Promise<Org | null> {
   const supabase = createClient();
   const { data } = await supabase
     .from("organizations")
-    .select("id, name, slug, brand_color, logo_url, reply_to_email, plan, booking_timezone")
+    .select(
+      "id, name, slug, brand_color, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, booking_timezone, feedback_enabled, feedback_delay_hours",
+    )
     .limit(1);
   return (data?.[0] as Org) ?? null;
 }

@@ -294,6 +294,41 @@ export type LeaseTiming = {
   avgDays: number | null; // null when no dated leases
 };
 
+// ---------------------------------------------------------------------------
+// Post-showing feedback (M5): response volume + average rating + the 1–5 star
+// distribution, over the feedback rows in the window.
+// ---------------------------------------------------------------------------
+
+export type FeedbackLite = {
+  rating: number | null;
+  created_at: string;
+};
+
+export type FeedbackReport = {
+  responses: number;
+  avgRating: number | null; // rounded to 1 decimal; null when no rated responses
+  distribution: [number, number, number, number, number]; // counts for 1..5
+};
+
+export function buildFeedbackReport(feedback: FeedbackLite[]): FeedbackReport {
+  const distribution: [number, number, number, number, number] = [0, 0, 0, 0, 0];
+  let sum = 0;
+  let rated = 0;
+  for (const f of feedback) {
+    const r = f.rating;
+    if (r != null && Number.isInteger(r) && r >= 1 && r <= 5) {
+      distribution[r - 1]++;
+      sum += r;
+      rated++;
+    }
+  }
+  return {
+    responses: feedback.length,
+    avgRating: rated === 0 ? null : Math.round((sum / rated) * 10) / 10,
+    distribution,
+  };
+}
+
 export function buildLeaseTiming(leads: LeadLite[]): LeaseTiming {
   const leased = leads.filter((l) => l.status === "leased");
   const dated = leased.filter((l) => l.leased_date);

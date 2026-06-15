@@ -11,7 +11,17 @@ type ShowingRow = {
   outcome: string;
   lead: { id: string; name: string | null; email: string | null } | null;
   property: { id: string; address: string } | null;
+  feedback: { rating: number | null; comments: string | null }[] | null;
 };
+
+function Stars({ rating }: { rating: number }) {
+  return (
+    <span className="text-amber-500" aria-label={`${rating} out of 5 stars`}>
+      {"★".repeat(rating)}
+      <span className="text-gray-300">{"★".repeat(5 - rating)}</span>
+    </span>
+  );
+}
 
 // Format in the org's booking timezone. Without an explicit timeZone the
 // server (UTC on Vercel) renders the wrong wall-clock time.
@@ -35,7 +45,7 @@ export default async function ShowingsPage() {
   const { data } = await supabase
     .from("showings")
     .select(
-      "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(id, address)",
+      "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(id, address), feedback(rating, comments)",
     )
     .order("scheduled_at", { ascending: true });
 
@@ -91,32 +101,43 @@ function Section({
         </p>
       ) : (
         <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-          {rows.map((s) => (
-            <li
-              key={s.id}
-              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900">
-                  {fmt(s.scheduled_at, timeZone)}
-                </p>
-                <p className="truncate text-xs text-gray-500">
-                  {s.lead ? (
-                    <Link
-                      href={`/dashboard/leads/${s.lead.id}`}
-                      className="text-brand hover:underline"
-                    >
-                      {s.lead.name || s.lead.email || "Lead"}
-                    </Link>
-                  ) : (
-                    "—"
+          {rows.map((s) => {
+            const fb = s.feedback?.[0];
+            return (
+              <li
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">
+                    {fmt(s.scheduled_at, timeZone)}
+                  </p>
+                  <p className="truncate text-xs text-gray-500">
+                    {s.lead ? (
+                      <Link
+                        href={`/dashboard/leads/${s.lead.id}`}
+                        className="text-brand hover:underline"
+                      >
+                        {s.lead.name || s.lead.email || "Lead"}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                    {s.property ? ` · ${s.property.address}` : ""}
+                  </p>
+                  {fb && fb.rating != null && (
+                    <p className="mt-1 text-xs">
+                      <Stars rating={fb.rating} />
+                      {fb.comments ? (
+                        <span className="ml-2 text-gray-500">“{fb.comments}”</span>
+                      ) : null}
+                    </p>
                   )}
-                  {s.property ? ` · ${s.property.address}` : ""}
-                </p>
-              </div>
-              <OutcomeSelect showingId={s.id} outcome={s.outcome} />
-            </li>
-          ))}
+                </div>
+                <OutcomeSelect showingId={s.id} outcome={s.outcome} />
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

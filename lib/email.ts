@@ -17,6 +17,12 @@ const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 // renters see the customer's brand.
 const DEFAULT_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "leads@vacantless.com";
 
+// Public base URL for links we put in emails (e.g. the feedback page). Override
+// with NEXT_PUBLIC_APP_URL in Vercel; defaults to the production deployment.
+const APP_BASE_URL = (
+  process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app"
+).replace(/\/+$/, "");
+
 // The reply-to a renter's reply lands on. Uses the org's configured
 // reply_to_email when set; otherwise the shared default sender. Centralized so
 // all three senders (auto-reply, booking confirmation, reminder) stay in sync.
@@ -293,6 +299,109 @@ export async function sendShowingReminder(p: ReminderPayload): Promise<SendResul
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: reminderHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Post-showing feedback request (M5). Sent a few hours after an attended
+// showing, inviting the renter to rate the visit on the public /f page.
+// ---------------------------------------------------------------------------
+
+export type FeedbackPayload = {
+  lead_id: string;
+  showing_id: string;
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+};
+
+function feedbackUrl(showingId: string): string {
+  return `${APP_BASE_URL}/f/${encodeURIComponent(showingId)}`;
+}
+
+function feedbackHtml(p: FeedbackPayload): string {
+  const brand = p.brand_color || "#4f46e5";
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const url = escapeHtml(feedbackUrl(p.showing_id));
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">Thanks for visiting <strong>${addr}</strong>. How was your showing? It only takes a few seconds and helps us serve you better.</p>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Leave quick feedback</a>
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or paste this link into your browser:<br/><span style="color:#52525b;">${url}</span></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you attended a showing with us.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded post-showing feedback request. Never throws; returns
+ * { sent:false } if BREVO_API_KEY is unset or the renter left no email.
+ */
+export async function sendFeedbackRequest(p: FeedbackPayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `How was your showing at ${p.property_address}?`
+    : "How was your showing?";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: feedbackHtml(p),
   };
 
   try {

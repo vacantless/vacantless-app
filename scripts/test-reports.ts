@@ -11,10 +11,12 @@ import {
   buildPropertyReport,
   buildShowingReport,
   buildLeaseTiming,
+  buildFeedbackReport,
   UNKNOWN_SOURCE,
   type LeadLite,
   type ShowingLite,
   type PropertyLite,
+  type FeedbackLite,
 } from "../lib/reports";
 
 let pass = 0;
@@ -185,6 +187,23 @@ eq("leased count", timing.leasedCount, 3);
 eq("with date", timing.withDate, 2);
 eq("avg days (20+10)/2", timing.avgDays, 15);
 eq("no dated leases → null", buildLeaseTiming([lead({ status: "new" })]).avgDays, null);
+
+// --- feedback report ---
+const fb = (rating: number | null): FeedbackLite => ({ rating, created_at: daysAgo(1) });
+const fbRep = buildFeedbackReport([fb(5), fb(4), fb(5), fb(2), fb(null)]);
+eq("feedback responses (incl null)", fbRep.responses, 5);
+eq("feedback avg (5+4+5+2)/4=4.0", fbRep.avgRating, 4);
+eq("feedback distribution", fbRep.distribution, [0, 1, 0, 1, 2]);
+const fbEmpty = buildFeedbackReport([]);
+eq("feedback empty responses", fbEmpty.responses, 0);
+eq("feedback empty avg null", fbEmpty.avgRating, null);
+eq("feedback empty distribution", fbEmpty.distribution, [0, 0, 0, 0, 0]);
+eq("feedback avg rounds to 1dp", buildFeedbackReport([fb(5), fb(4), fb(4)]).avgRating, 4.3);
+eq(
+  "feedback ignores out-of-range ratings",
+  buildFeedbackReport([fb(0), fb(6), fb(3)]).avgRating,
+  3,
+);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

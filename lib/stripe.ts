@@ -1,0 +1,51 @@
+// Server-only Stripe client + env-driven price lookup (M4 billing).
+//
+// DEGRADES GRACEFULLY: getStripe() returns null when STRIPE_SECRET_KEY is not
+// set, so the app keeps building/running and the billing UI can show a clear
+// "billing not configured yet" state instead of throwing. This mirrors
+// lib/email.ts (Brevo) and lib/supabase/admin.ts (service role): a feature that
+// activates the moment its key lands in Vercel — no code change needed.
+//
+// NEVER import this into a client component; it must stay server-only.
+// Env (all server-only, NO NEXT_PUBLIC_):
+//   STRIPE_SECRET_KEY      — sk_test_… (sandbox) or sk_live_… (production)
+//   STRIPE_WEBHOOK_SECRET  — whsec_…  (used by app/api/stripe/webhook)
+//   STRIPE_PRICE_CORE      — the Stripe price id for the Core tier
+//   STRIPE_PRICE_PLUS      — the Stripe price id for the Plus tier
+
+import Stripe from "stripe";
+import { PLANS, type PaidPlanKey } from "@/lib/billing";
+
+let _stripe: Stripe | null | undefined;
+
+export function getStripe(): Stripe | null {
+  if (_stripe !== undefined) return _stripe;
+  const key = process.env.STRIPE_SECRET_KEY;
+  _stripe = key ? new Stripe(key) : null;
+  return _stripe;
+}
+
+// The configured Stripe price id for a given plan tier (from env), or null if
+// that tier's price env var isn't set.
+export function priceIdForPlan(plan: PaidPlanKey): string | null {
+  return process.env[PLANS[plan].priceEnv] || null;
+}
+
+// Reverse lookup: { [priceId]: planKey } built from the configured env vars.
+// Used by the webhook to turn a subscription's price back into a tier. Skips
+// any tier whose price env var isn't set.
+export function priceMap(): Record<string, PaidPlanKey> {
+  const map: Record<string, PaidPlanKey> = {};
+  (Object.keys(PLANS) as PaidPlanKey[]).forEach((plan) => {
+    const id = process.env[PLANS[plan].priceEnv];
+    if (id) map[id] = plan;
+  });
+  return map;
+}
+
+// True when both the secret key and at least one price id are configured —
+// i.e. checkout can actually run. The UI uses this to decide whether to show
+// the subscribe buttons or a "billing not configured" notice.
+export function isBillingConfigured(): boolean {
+  return !!getStripe() && Object.keys(priceMap()).length > 0;
+}

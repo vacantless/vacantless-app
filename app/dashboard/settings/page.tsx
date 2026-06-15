@@ -121,9 +121,52 @@ export default async function SettingsPage({
             </span>
           </label>
 
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Renter feedback
+            </h3>
+
+            <label className="flex items-start gap-3">
+              <input
+                name="feedback_enabled"
+                type="checkbox"
+                defaultChecked={org.feedback_enabled}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-gray-700">
+                  Email a feedback request after each attended showing
+                </span>
+                <span className="block text-xs text-gray-400">
+                  Renters get a one-tap 1–5 star rating link once you mark their
+                  showing as Attended. Results show on the showing and in Reports.
+                </span>
+              </span>
+            </label>
+
+            <label className="mt-4 block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Send delay (hours after the showing)
+              </span>
+              <input
+                name="feedback_delay_hours"
+                type="number"
+                min={0}
+                max={336}
+                step={1}
+                defaultValue={org.feedback_delay_hours}
+                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <span className="mt-1 block text-xs text-gray-400">
+                How long to wait after the showing time before sending. Default
+                is 2 hours.
+              </span>
+            </label>
+          </div>
+
           <div className="mt-6 text-right">
             <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
-              Save branding
+              Save settings
             </button>
           </div>
         </div>

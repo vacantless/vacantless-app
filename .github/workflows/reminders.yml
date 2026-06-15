@@ -1,10 +1,13 @@
-name: Showing reminders sweep
+name: Vacantless background sweeps
 
-# Free external pinger for the M3 reminder cron. Vercel Hobby caps native cron
-# at once/day, which can't drive the ~2h reminder, so this GitHub Actions
-# schedule hits the idempotent sweep endpoint every 15 minutes. The route only
-# sends reminders whose sent-at column is still null, so frequent pings are
-# safe and compose with the daily Vercel cron.
+# Free external pinger for the Vacantless cron sweeps. Vercel Hobby caps native
+# cron at once/day, which can't drive the ~2h reminder, so this GitHub Actions
+# schedule hits the idempotent sweep endpoints every 15 minutes. Each route only
+# acts on rows whose sent-at column is still null, so frequent pings are safe
+# and compose with the daily Vercel cron.
+#
+#   * /api/cron/reminders — 24h + 2h showing reminders (M3)
+#   * /api/cron/feedback  — post-showing feedback requests (M5)
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -18,7 +21,7 @@ name: Showing reminders sweep
 on:
   schedule:
     - cron: "*/15 * * * *"
-  workflow_dispatch: {} # lets you trigger a sweep manually from the Actions tab
+  workflow_dispatch: {} # lets you trigger the sweeps manually from the Actions tab
 
 jobs:
   ping:
@@ -29,4 +32,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/reminders" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger feedback sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/feedback" \
             -w "\nHTTP %{http_code}\n"

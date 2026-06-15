@@ -4,8 +4,11 @@ import {
   validateLogoUrl,
   validateOrgName,
   validateReplyToEmail,
+  validateFeedbackDelayHours,
   validateBranding,
   MAX_NAME_LEN,
+  DEFAULT_FEEDBACK_DELAY_HOURS,
+  MAX_FEEDBACK_DELAY_HOURS,
 } from "../lib/branding";
 
 let pass = 0;
@@ -107,6 +110,8 @@ eq(
       brand_color: "#0e8c8c",
       logo_url: null,
       reply_to_email: null,
+      feedback_enabled: true,
+      feedback_delay_hours: 2,
     },
   },
 );
@@ -125,6 +130,8 @@ eq(
       brand_color: "#ffffff",
       logo_url: "https://x.io/l.png",
       reply_to_email: "leasing@agile.ca",
+      feedback_enabled: true,
+      feedback_delay_hours: 2,
     },
   },
 );
@@ -147,6 +154,52 @@ eq(
   });
   eq("branding bad reply-to only not ok", r.ok, false);
   eq("branding bad reply-to 1 error", r.ok === false && r.errors.length, 1);
+}
+
+// --- validateFeedbackDelayHours ---
+eq("delay blank → default", validateFeedbackDelayHours(""), { ok: true, value: DEFAULT_FEEDBACK_DELAY_HOURS });
+eq("delay null → default", validateFeedbackDelayHours(null), { ok: true, value: DEFAULT_FEEDBACK_DELAY_HOURS });
+eq("delay 0 ok", validateFeedbackDelayHours("0"), { ok: true, value: 0 });
+eq("delay 24 ok", validateFeedbackDelayHours("24"), { ok: true, value: 24 });
+eq("delay max ok", validateFeedbackDelayHours(MAX_FEEDBACK_DELAY_HOURS), { ok: true, value: MAX_FEEDBACK_DELAY_HOURS });
+eq("delay over max rejected", validateFeedbackDelayHours(MAX_FEEDBACK_DELAY_HOURS + 1), { ok: false });
+eq("delay negative rejected", validateFeedbackDelayHours("-1"), { ok: false });
+eq("delay non-integer rejected", validateFeedbackDelayHours("2.5"), { ok: false });
+eq("delay garbage rejected", validateFeedbackDelayHours("soon"), { ok: false });
+
+// --- validateBranding with feedback fields ---
+{
+  const r = validateBranding({
+    name: "OK",
+    brand_color: "#0e8c8c",
+    logo_url: "",
+    reply_to_email: "",
+    feedback_enabled: true,
+    feedback_delay_hours: "6",
+  });
+  eq("branding feedback ok", r.ok, true);
+  eq("branding feedback_enabled persisted", r.ok === true && r.values.feedback_enabled, true);
+  eq("branding feedback_delay persisted", r.ok === true && r.values.feedback_delay_hours, 6);
+}
+{
+  const r = validateBranding({
+    name: "OK",
+    brand_color: "#0e8c8c",
+    logo_url: "",
+    feedback_enabled: false,
+  });
+  eq("branding feedback default delay when blank", r.ok === true && r.values.feedback_delay_hours, DEFAULT_FEEDBACK_DELAY_HOURS);
+  eq("branding feedback disabled persisted", r.ok === true && r.values.feedback_enabled, false);
+}
+{
+  const r = validateBranding({
+    name: "OK",
+    brand_color: "#0e8c8c",
+    logo_url: "",
+    feedback_delay_hours: "9999",
+  });
+  eq("branding bad delay not ok", r.ok, false);
+  eq("branding bad delay 1 error", r.ok === false && r.errors.length, 1);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
