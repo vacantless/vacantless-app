@@ -31,13 +31,30 @@ export default async function OverviewPage() {
   const supabase = createClient();
 
   // RLS scopes all of these to the caller's org automatically.
-  const [{ data: leads }, { count: propertyCount }] = await Promise.all([
-    supabase
-      .from("leads")
-      .select("id, name, email, source, status, created_at, property_id")
-      .order("created_at", { ascending: false }),
-    supabase.from("properties").select("id", { count: "exact", head: true }),
-  ]);
+  const [{ data: leads }, { count: propertyCount }, { data: showingData }] =
+    await Promise.all([
+      supabase
+        .from("leads")
+        .select("id, name, email, source, status, created_at, property_id")
+        .order("created_at", { ascending: false }),
+      supabase.from("properties").select("id", { count: "exact", head: true }),
+      supabase
+        .from("showings")
+        .select(
+          "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(address)",
+        )
+        .eq("outcome", "scheduled")
+        .gte("scheduled_at", new Date().toISOString())
+        .order("scheduled_at", { ascending: true })
+        .limit(5),
+    ]);
+
+  const upcomingShowings = (showingData ?? []) as unknown as {
+    id: string;
+    scheduled_at: string | null;
+    lead: { id: string; name: string | null; email: string | null } | null;
+    property: { address: string } | null;
+  }[];
 
   const allLeads = (leads ?? []) as LeadRow[];
   const openLeads = allLeads.filter((l) => OPEN_STATUSES.includes(l.status));
@@ -74,6 +91,65 @@ export default async function OverviewPage() {
           </div>
         ))}
       </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Upcoming showings
+        </h2>
+        <Link
+          href="/dashboard/showings"
+          className="text-sm font-medium text-brand"
+        >
+          View all →
+        </Link>
+      </div>
+      {upcomingShowings.length === 0 ? (
+        <p className="mb-8 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
+          No upcoming showings. Set your{" "}
+          <Link href="/dashboard/availability" className="text-brand">
+            availability
+          </Link>{" "}
+          so renters can self-book.
+        </p>
+      ) : (
+        <ul className="mb-8 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+          {upcomingShowings.map((s) => (
+            <li
+              key={s.id}
+              className="flex items-center justify-between px-4 py-3"
+            >
+              <span className="text-sm text-gray-900">
+                {s.lead ? (
+                  <Link
+                    href={`/dashboard/leads/${s.lead.id}`}
+                    className="hover:underline"
+                  >
+                    {s.lead.name || s.lead.email || "Lead"}
+                  </Link>
+                ) : (
+                  "Lead"
+                )}
+                {s.property && (
+                  <span className="ml-2 text-xs text-gray-400">
+                    {s.property.address}
+                  </span>
+                )}
+              </span>
+              <span className="text-xs font-medium text-gray-500">
+                {s.scheduled_at
+                  ? new Date(s.scheduled_at).toLocaleString(undefined, {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : "TBD"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">

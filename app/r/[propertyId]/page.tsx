@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitLead } from "./actions";
+import { generateSlots, type Availability } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
 
@@ -26,19 +27,25 @@ export default async function PublicListingPage({
   searchParams: { submitted?: string; error?: string };
 }) {
   const supabase = createClient();
-  const { data } = await supabase.rpc("get_public_listing", {
-    p_property_id: params.propertyId,
-  });
+  const [{ data }, { data: avData }] = await Promise.all([
+    supabase.rpc("get_public_listing", { p_property_id: params.propertyId }),
+    supabase.rpc("get_public_availability", { p_property_id: params.propertyId }),
+  ]);
 
   if (!data) notFound();
   const l = data as Listing;
   const brand = l.brand_color || "#4f46e5";
+
+  const av = avData as Availability | null;
+  const days = av ? generateSlots(av) : [];
 
   const specs = [
     l.beds != null ? `${l.beds} bed${l.beds === 1 ? "" : "s"}` : null,
     l.baths != null ? `${l.baths} bath` : null,
     l.parking ? `Parking: ${l.parking}` : null,
   ].filter(Boolean);
+
+  const booked = searchParams.submitted === "booked";
 
   return (
     <div
@@ -76,88 +83,131 @@ export default async function PublicListingPage({
           {searchParams.submitted ? (
             <div className="text-center">
               <h2 className="text-xl font-bold text-gray-900">
-                Thanks — we got your inquiry!
+                {booked ? "Your showing is booked!" : "Thanks — we got your inquiry!"}
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                The team at {l.org_name} will be in touch shortly to set up a
-                viewing.
+                {booked
+                  ? `We've emailed you the details. ${l.org_name} will see you then.`
+                  : `The team at ${l.org_name} will be in touch shortly to set up a viewing.`}
               </p>
             </div>
           ) : (
             <>
               <h2 className="text-lg font-bold text-gray-900">
-                Request a showing
+                {days.length > 0 ? "Book a showing" : "Request a showing"}
               </h2>
               <p className="mb-4 mt-1 text-sm text-gray-500">
-                Tell us a bit about you and we&apos;ll reach out to book a time.
+                {days.length > 0
+                  ? "Pick a time that works for you, or just send your details and we'll reach out."
+                  : "Tell us a bit about you and we'll reach out to book a time."}
               </p>
               {searchParams.error && (
                 <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   Sorry, something went wrong. Please try again.
                 </p>
               )}
-              <form action={submitLead} className="space-y-3">
+              <form action={submitLead} className="space-y-4">
                 <input type="hidden" name="property_id" value={l.id} />
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Full name
-                  </label>
-                  <input
-                    name="name"
-                    required
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                <div className="space-y-3">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Email
+                      Full name
                     </label>
                     <input
-                      name="email"
-                      type="email"
+                      name="name"
                       required
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Email
+                      </label>
+                      <input
+                        name="email"
+                        type="email"
+                        required
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Phone
+                      </label>
+                      <input
+                        name="phone"
+                        type="tel"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Phone
+                      Desired move-in date
                     </label>
                     <input
-                      name="phone"
-                      type="tel"
+                      name="move_in"
+                      type="date"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Anything else?
+                    </label>
+                    <textarea
+                      name="notes"
+                      rows={3}
+                      placeholder="Number of occupants, pets, questions…"
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Desired move-in date
-                  </label>
-                  <input
-                    name="move_in"
-                    type="date"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Anything else?
-                  </label>
-                  <textarea
-                    name="notes"
-                    rows={3}
-                    placeholder="Number of occupants, pets, questions…"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </div>
+
+                {days.length > 0 && (
+                  <fieldset className="rounded-lg border border-gray-200 p-4">
+                    <legend className="px-1 text-sm font-medium text-gray-700">
+                      Choose a showing time{" "}
+                      <span className="font-normal text-gray-400">(optional)</span>
+                    </legend>
+                    <p className="mb-3 mt-1 text-xs text-gray-400">
+                      Times shown in {av?.timezone?.replace(/_/g, " ")}.
+                    </p>
+                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                      {days.map((day) => (
+                        <div key={day.dayKey}>
+                          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            {day.dayLabel}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {day.slots.map((s) => (
+                              <label key={s.iso} className="cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="slot"
+                                  value={s.iso}
+                                  className="peer sr-only"
+                                />
+                                <span className="block rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:border-gray-400 peer-checked:border-gray-900 peer-checked:bg-gray-900 peer-checked:text-white">
+                                  {s.label}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
+
                 <button
                   type="submit"
                   className="w-full rounded-lg px-4 py-2.5 font-medium text-white"
                   style={{ backgroundColor: brand }}
                 >
-                  Request a showing
+                  {days.length > 0 ? "Confirm" : "Request a showing"}
                 </button>
               </form>
             </>

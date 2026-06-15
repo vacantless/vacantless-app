@@ -2,13 +2,20 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { sendAutoReply, type AutoReplyPayload } from "@/lib/email";
+import {
+  sendAutoReply,
+  sendBookingConfirmation,
+  type AutoReplyPayload,
+} from "@/lib/email";
+import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 
 // Public, unauthenticated lead submission. Calls a SECURITY DEFINER RPC that
 // resolves the org from the property and inserts the lead — the renter can
-// create a lead but can never read or target another tenant's data. The RPC
-// returns the payload needed to fire an instant branded auto-reply (best-effort:
-// a failed/dormant email never blocks the lead from being captured).
+// create a lead but can never read or target another tenant's data. If the
+// renter also picked a showing slot, we book it (M3) and send a booking
+// confirmation; otherwise we fall back to the M2 instant auto-reply. Every
+// email path is best-effort: nothing here can turn a captured lead into an
+// error for the renter.
 export async function submitLead(formData: FormData) {
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) return;
@@ -18,6 +25,7 @@ export async function submitLead(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim();
   const moveInRaw = String(formData.get("move_in") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const slot = String(formData.get("slot") ?? "").trim();
 
   const supabase = createClient();
   const { data, error } = await supabase.rpc("submit_public_lead", {
@@ -33,16 +41,79 @@ export async function submitLead(formData: FormData) {
     redirect(`/r/${propertyId}?error=1`);
   }
 
-  // Instant auto-reply — entirely best-effort. Wrapped so nothing here can throw
-  // and turn a captured lead into an error for the renter. Stays dormant until
-  // BREVO_API_KEY is set in the environment.
   const payload = data as AutoReplyPayload | null;
-  if (payload?.lead_id) {
+  if (!payload?.lead_id) {
+    redirect(`/r/${propertyId}?submitted=1`);
+  }
+
+  let outcome: "submitted" | "booked" | "booking_failed" = "submitted";
+
+  // --- Booking path -------------------------------------------------------
+  if (slot) {
+    let booked = false;
+    try {
+      // Re-validate the chosen slot server-side against live availability
+      // before booking (the RPC additionally guards recency + double-booking).
+      const { data: avData } = await supabase.rpc("get_public_availability", {
+        p_property_id: propertyId,
+      });
+      const av = avData as Availability | null;
+
+      if (av && isValidSlot(av, slot)) {
+        const { data: bookData, error: bookErr } = await supabase.rpc(
+          "book_public_showing",
+          {
+            p_lead_id: payload.lead_id,
+            p_property_id: propertyId,
+            p_slot: slot,
+          },
+        );
+        if (!bookErr && bookData) {
+          booked = true;
+          const b = bookData as {
+            scheduled_at: string;
+            timezone: string | null;
+            org_name: string | null;
+            brand_color: string | null;
+            logo_url: string | null;
+            property_address: string | null;
+            renter_name: string | null;
+            renter_email: string | null;
+          };
+          const whenLabel = formatSlotLong(
+            b.scheduled_at,
+            b.timezone || "America/Toronto",
+          );
+          const result = await sendBookingConfirmation({
+            lead_id: payload.lead_id,
+            renter_name: b.renter_name,
+            renter_email: b.renter_email,
+            org_name: b.org_name,
+            brand_color: b.brand_color,
+            logo_url: b.logo_url,
+            property_address: b.property_address,
+            when_label: whenLabel,
+          });
+          if (result.sent) {
+            await supabase.rpc("record_booking_email", {
+              p_lead_id: payload.lead_id,
+              p_to: b.renter_email,
+              p_subject: result.subject ?? null,
+            });
+          }
+        }
+      }
+    } catch {
+      // swallow — the lead is saved; fall through to the auto-reply below.
+    }
+    outcome = booked ? "booked" : "booking_failed";
+  }
+
+  // --- Auto-reply path (no slot, or booking failed) -----------------------
+  if (outcome !== "booked") {
     try {
       const result = await sendAutoReply(payload);
       if (result.sent) {
-        // Log the sent email to the lead's activity timeline (anon-safe RPC,
-        // scoped to this just-created lead).
         await supabase.rpc("record_auto_reply", {
           p_lead_id: payload.lead_id,
           p_subject: result.subject ?? null,
@@ -54,5 +125,5 @@ export async function submitLead(formData: FormData) {
     }
   }
 
-  redirect(`/r/${propertyId}?submitted=1`);
+  redirect(`/r/${propertyId}?submitted=${outcome === "booked" ? "booked" : "1"}`);
 }

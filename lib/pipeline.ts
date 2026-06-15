@@ -30,6 +30,30 @@ export function isLeadStatus(value: string): value is LeadStatus {
   return (PIPELINE_STAGES as readonly string[]).includes(value);
 }
 
+export const SHOWING_OUTCOMES = [
+  "scheduled",
+  "attended",
+  "no_show",
+  "cancelled",
+] as const;
+
+export type ShowingOutcome = (typeof SHOWING_OUTCOMES)[number];
+
+const OUTCOME_LABELS: Record<ShowingOutcome, string> = {
+  scheduled: "Scheduled",
+  attended: "Attended",
+  no_show: "No-show",
+  cancelled: "Cancelled",
+};
+
+export function showingOutcomeLabel(outcome: string): string {
+  return (OUTCOME_LABELS as Record<string, string>)[outcome] ?? outcome;
+}
+
+export function isShowingOutcome(value: string): value is ShowingOutcome {
+  return (SHOWING_OUTCOMES as readonly string[]).includes(value);
+}
+
 export const PROPERTY_STATUSES = ["available", "leased", "off_market"] as const;
 export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
 

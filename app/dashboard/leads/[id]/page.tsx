@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import { StatusSelect } from "../status-select";
 import { addNote } from "../actions";
+import { OutcomeSelect } from "../../showings/outcome-select";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,12 @@ type Message = {
   created_at: string;
 };
 
+type Showing = {
+  id: string;
+  scheduled_at: string | null;
+  outcome: string;
+};
+
 export default async function LeadDetailPage({
   params,
 }: {
@@ -52,6 +59,13 @@ export default async function LeadDetailPage({
     .eq("lead_id", l.id)
     .order("created_at", { ascending: false });
   const messages = (msgs ?? []) as Message[];
+
+  const { data: showingData } = await supabase
+    .from("showings")
+    .select("id, scheduled_at, outcome")
+    .eq("lead_id", l.id)
+    .order("scheduled_at", { ascending: false });
+  const showings = (showingData ?? []) as Showing[];
 
   return (
     <div>
@@ -100,6 +114,35 @@ export default async function LeadDetailPage({
           </h3>
           <p className="whitespace-pre-wrap text-sm text-gray-700">{l.notes}</p>
         </div>
+      )}
+
+      {showings.length > 0 && (
+        <>
+          <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Showings
+          </h3>
+          <ul className="space-y-2">
+            {showings.map((s) => (
+              <li
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3"
+              >
+                <span className="text-sm font-medium text-gray-900">
+                  {s.scheduled_at
+                    ? new Date(s.scheduled_at).toLocaleString(undefined, {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })
+                    : "Time TBD"}
+                </span>
+                <OutcomeSelect showingId={s.id} outcome={s.outcome} />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">

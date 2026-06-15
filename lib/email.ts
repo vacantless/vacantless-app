@@ -103,6 +103,104 @@ function defaultHtml(p: AutoReplyPayload): string {
 </body></html>`;
 }
 
+// ---------------------------------------------------------------------------
+// Booking confirmation (M3). Sent when a renter self-books a showing slot.
+// ---------------------------------------------------------------------------
+
+export type BookingPayload = {
+  lead_id: string;
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  property_address: string | null;
+  when_label: string; // already formatted in the org timezone
+};
+
+function bookingHtml(p: BookingPayload): string {
+  const brand = p.brand_color || "#4f46e5";
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const when = escapeHtml(p.when_label);
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">Your showing is confirmed. Here are the details:</p>
+      <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
+        <p style="margin:0;color:#3f3f46;">${when}</p>
+      </div>
+      <p style="margin:0 0 16px;">If you need to change or cancel, just reply to this email and we'll sort it out.</p>
+      <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you booked a showing on our listing page.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded booking confirmation. Never throws; returns
+ * { sent:false } if BREVO_API_KEY is unset or the renter left no email.
+ */
+export async function sendBookingConfirmation(
+  p: BookingPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `Your showing at ${p.property_address} is confirmed`
+    : "Your showing is confirmed";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: { email: DEFAULT_SENDER_EMAIL, name: p.org_name || "Vacantless" },
+    subject,
+    htmlContent: bookingHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 /**
  * Best-effort branded auto-reply. Never throws — callers can ignore the result.
  */
