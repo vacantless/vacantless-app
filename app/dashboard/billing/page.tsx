@@ -134,7 +134,7 @@ export default async function BillingPage({
                 </p>
               </div>
               <p className="mt-0.5 text-right text-[11px] font-semibold uppercase tracking-wide text-brand">
-                Founding rate · locked while active
+                Founding rate · locked for 12 months
               </p>
               <p className="mt-1 text-sm text-gray-500">{plan.blurb}</p>
               <ul className="mt-4 flex-1 space-y-2 text-sm text-gray-700">
