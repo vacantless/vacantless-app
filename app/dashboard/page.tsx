@@ -1,126 +1,127 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { addProperty } from "./actions";
+import {
+  PIPELINE_STAGES,
+  statusLabel,
+  type LeadStatus,
+} from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
 
-type Org = {
+type LeadRow = {
   id: string;
-  name: string;
-  brand_color: string;
-  plan: string;
+  name: string | null;
+  email: string | null;
+  source: string | null;
+  status: LeadStatus;
+  created_at: string;
+  property_id: string | null;
 };
 
-export default async function DashboardPage() {
+const OPEN_STATUSES: LeadStatus[] = [
+  "new",
+  "replied",
+  "contacted",
+  "booked",
+  "showed",
+  "applied",
+];
+
+export default async function OverviewPage() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
 
-  // RLS scopes this to the caller's org only.
-  const { data: orgs } = await supabase
-    .from("organizations")
-    .select("id, name, brand_color, plan");
+  // RLS scopes all of these to the caller's org automatically.
+  const [{ data: leads }, { count: propertyCount }] = await Promise.all([
+    supabase
+      .from("leads")
+      .select("id, name, email, source, status, created_at, property_id")
+      .order("created_at", { ascending: false }),
+    supabase.from("properties").select("id", { count: "exact", head: true }),
+  ]);
 
-  if (!orgs || orgs.length === 0) redirect("/onboarding");
-  const org = orgs[0] as Org;
+  const allLeads = (leads ?? []) as LeadRow[];
+  const openLeads = allLeads.filter((l) => OPEN_STATUSES.includes(l.status));
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const newThisWeek = allLeads.filter(
+    (l) => new Date(l.created_at).getTime() >= weekAgo,
+  );
 
-  const { data: properties } = await supabase
-    .from("properties")
-    .select("id, address, rent_cents, status")
-    .order("created_at", { ascending: false });
+  const counts: Record<string, number> = {};
+  for (const stage of PIPELINE_STAGES) counts[stage] = 0;
+  for (const l of allLeads) counts[l.status] = (counts[l.status] ?? 0) + 1;
 
   return (
-    <main
-      className="min-h-screen"
-      style={{ ["--brand-color" as string]: org.brand_color }}
-    >
-      <header
-        className="flex items-center justify-between px-6 py-4 text-white"
-        style={{ backgroundColor: org.brand_color }}
-      >
-        <div>
-          <p className="text-xs uppercase tracking-wider opacity-80">
-            Vacantless · {org.plan}
-          </p>
-          <h1 className="text-xl font-bold">{org.name}</h1>
-        </div>
-        <form action="/auth/signout" method="post">
-          <button className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30">
-            Sign out
-          </button>
-        </form>
-      </header>
+    <div>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Stat label="Open leads" value={openLeads.length} />
+        <Stat label="New this week" value={newThisWeek.length} />
+        <Stat label="Properties" value={propertyCount ?? 0} />
+      </div>
 
-      <section className="mx-auto max-w-3xl px-6 py-8">
-        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
-          Signed in as <span className="font-medium">{user.email}</span>. You are
-          seeing only <span className="font-medium">{org.name}</span>&apos;s data —
-          Postgres row-level security blocks every other tenant&apos;s rows.
-        </div>
-
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Properties</h2>
-        {properties && properties.length > 0 ? (
-          <ul className="mb-6 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
-            {properties.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between px-4 py-3"
-              >
-                <span className="text-gray-900">{p.address}</span>
-                <span className="text-sm text-gray-500">
-                  {p.rent_cents
-                    ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
-                    : "—"}{" "}
-                  · {p.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mb-6 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
-            No properties yet. Add your first below.
-          </p>
-        )}
-
-        <form
-          action={addProperty}
-          className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4"
-        >
-          <input type="hidden" name="organization_id" value={org.id} />
-          <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
-              Address
-            </label>
-            <input
-              name="address"
-              required
-              placeholder="833 Pillette Rd, Unit 20"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="w-28">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
-              Rent ($/mo)
-            </label>
-            <input
-              name="rent"
-              type="number"
-              step="1"
-              placeholder="1250"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <button
-            type="submit"
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: org.brand_color }}
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+        Pipeline
+      </h2>
+      <div className="mb-8 flex flex-wrap gap-2">
+        {PIPELINE_STAGES.map((stage) => (
+          <div
+            key={stage}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-center"
           >
-            Add property
-          </button>
-        </form>
-      </section>
-    </main>
+            <div className="text-lg font-bold text-gray-900">
+              {counts[stage]}
+            </div>
+            <div className="text-xs text-gray-500">{statusLabel(stage)}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Recent leads
+        </h2>
+        <Link href="/dashboard/leads" className="text-sm font-medium text-brand">
+          View all →
+        </Link>
+      </div>
+
+      {allLeads.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
+          No leads yet. Share a property&apos;s public listing link to start
+          collecting inquiries.
+        </p>
+      ) : (
+        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+          {allLeads.slice(0, 8).map((l) => (
+            <li key={l.id}>
+              <Link
+                href={`/dashboard/leads/${l.id}`}
+                className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+              >
+                <span className="text-gray-900">
+                  {l.name || l.email || "Unnamed lead"}
+                  {l.source && (
+                    <span className="ml-2 text-xs text-gray-400">
+                      via {l.source}
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs font-medium text-gray-500">
+                  {statusLabel(l.status)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5">
+      <div className="text-3xl font-bold text-gray-900">{value}</div>
+      <div className="mt-1 text-sm text-gray-500">{label}</div>
+    </div>
   );
 }

@@ -29,8 +29,8 @@ export default function Home() {
         </Link>
       </div>
       <p className="mt-10 text-xs text-gray-400">
-        M1 Foundation build — multi-tenant scaffold with row-level tenant
-        isolation.
+        Multi-tenant, row-level isolated — branded intake pages and a lead
+        pipeline your team actually keeps up with.
       </p>
     </main>
   );
