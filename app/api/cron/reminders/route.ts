@@ -95,6 +95,9 @@ export async function GET(req: NextRequest) {
   const summary: Summary = { ok: true, scanned: rows.length, sent: 0, smsSent: 0, skipped: 0, errors: 0, details: [] };
 
   for (const row of rows as any[]) {
+   // Per-row isolation (audit C2): a thrown PostgREST/network error inside one
+   // row must not abort the sweep for the remaining (timing-sensitive) rows.
+   try {
     const scheduledAt: string | null = row.scheduled_at;
     if (!scheduledAt) {
       summary.skipped++;
@@ -212,6 +215,13 @@ export async function GET(req: NextRequest) {
     }
 
     if (!didSomething) summary.skipped++;
+   } catch (err) {
+     summary.errors++;
+     summary.details.push({
+       showing: (row as any)?.id,
+       error: `row_threw:${err instanceof Error ? err.message : "unknown"}`,
+     });
+   }
   }
 
   return NextResponse.json(summary, { status: 200 });

@@ -56,6 +56,11 @@ export async function submitLead(formData: FormData) {
   }
 
   let outcome: "submitted" | "booked" | "booking_failed" = "submitted";
+  // The renter picked a time but it was no longer bookable (already taken
+  // between page load and submit, or won a same-instant race). Drives a distinct
+  // "that time was just taken" state on the page instead of the generic
+  // inquiry-received message (audit B1). The lead is still saved either way.
+  let slotTaken = false;
 
   // --- Booking path -------------------------------------------------------
   if (slot) {
@@ -68,7 +73,11 @@ export async function submitLead(formData: FormData) {
       });
       const av = avData as Availability | null;
 
-      if (av && isValidSlot(av, slot)) {
+      if (av && !isValidSlot(av, slot)) {
+        // The slot is no longer offered (taken / fell outside the window since
+        // the page loaded). Tell the renter rather than silently dropping it.
+        slotTaken = true;
+      } else if (av && isValidSlot(av, slot)) {
         const { data: bookData, error: bookErr } = await supabase.rpc(
           "book_public_showing",
           {
@@ -77,6 +86,12 @@ export async function submitLead(formData: FormData) {
             p_slot: slot,
           },
         );
+        // The RPC raises 'That time was just taken' on the unique-violation race
+        // (two renters, same instant). Any booking error after the slot passed
+        // re-validation means the time is gone, so surface the pick-another state.
+        if (bookErr) {
+          slotTaken = true;
+        }
         if (!bookErr && bookData) {
           booked = true;
           const b = bookData as {
@@ -161,5 +176,7 @@ export async function submitLead(formData: FormData) {
     }
   }
 
-  redirect(`/r/${propertyId}?submitted=${outcome === "booked" ? "booked" : "1"}`);
+  const submittedState =
+    outcome === "booked" ? "booked" : slotTaken ? "slottaken" : "1";
+  redirect(`/r/${propertyId}?submitted=${submittedState}`);
 }

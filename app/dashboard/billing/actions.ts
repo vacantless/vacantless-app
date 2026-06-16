@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { requireCapability } from "@/lib/membership";
 import { getStripe, priceIdForPlan, depositPriceId } from "@/lib/stripe";
 import { isPaidPlan, isPilotPlan, PILOT_DEPOSIT_CENTS, normalizeDepositStatus } from "@/lib/billing";
 
@@ -14,6 +15,9 @@ import { isPaidPlan, isPilotPlan, PILOT_DEPOSIT_CENTS, normalizeDepositStatus } 
 export async function startPilot() {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Billing is owner-only (audit C1 + locked seat model): operators and showing
+  // helpers can't start/cancel a subscription, pay the deposit, or open the portal.
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
   if (isPaidPlan(org.plan)) redirect("/dashboard/billing?error=already_paid");
   if (org.pilot_started_at) redirect("/dashboard/billing?pilot=already");
 
@@ -68,6 +72,9 @@ async function ensureCustomer(
 export async function startCheckout(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Billing is owner-only (audit C1 + locked seat model): operators and showing
+  // helpers can't start/cancel a subscription, pay the deposit, or open the portal.
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
 
   const plan = String(formData.get("plan") ?? "");
   if (!isPaidPlan(plan)) redirect("/dashboard/billing?error=plan");
@@ -111,6 +118,9 @@ export async function startCheckout(formData: FormData) {
 export async function startDepositCheckout() {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Billing is owner-only (audit C1 + locked seat model): operators and showing
+  // helpers can't start/cancel a subscription, pay the deposit, or open the portal.
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
   if (!isPilotPlan(org.plan)) redirect("/dashboard/billing?error=deposit_not_pilot");
   if (normalizeDepositStatus(org.pilot_deposit_status) === "paid") {
     redirect("/dashboard/billing?deposit=already");
@@ -167,6 +177,9 @@ export async function startDepositCheckout() {
 export async function openBillingPortal() {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Billing is owner-only (audit C1 + locked seat model): operators and showing
+  // helpers can't start/cancel a subscription, pay the deposit, or open the portal.
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
 
   const stripe = getStripe();
   if (!stripe || !org.stripe_customer_id) {

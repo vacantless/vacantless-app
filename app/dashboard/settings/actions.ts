@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { requireCapability } from "@/lib/membership";
 import { validateBranding } from "@/lib/branding";
 import { validateTestRecipient } from "@/lib/test-email";
 import { sendTestEmail } from "@/lib/email";
@@ -24,6 +25,9 @@ const LOGO_BUCKET = "org-logos";
 export async function updateBranding(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Org settings + branding are admin/operator only (locked seat model): a
+  // showing helper can't touch account settings.
+  await requireCapability("manage_settings", "/dashboard/settings?forbidden=1");
 
   const result = validateBranding({
     name: String(formData.get("name") ?? ""),
@@ -62,6 +66,9 @@ export async function updateBranding(formData: FormData) {
 export async function sendTestEmailAction(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Org settings + branding are admin/operator only (locked seat model): a
+  // showing helper can't touch account settings.
+  await requireCapability("manage_settings", "/dashboard/settings?forbidden=1");
 
   const recipient = validateTestRecipient(String(formData.get("test_email") ?? ""));
   if (!recipient.ok) {
@@ -119,6 +126,9 @@ async function clearOrgLogoFolder(
 export async function uploadOrgLogo(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Org settings + branding are admin/operator only (locked seat model): a
+  // showing helper can't touch account settings.
+  await requireCapability("manage_settings", "/dashboard/settings?forbidden=1");
 
   const entry = formData.get("logo");
   const file =
@@ -173,6 +183,9 @@ export async function uploadOrgLogo(formData: FormData) {
 export async function removeOrgLogo() {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
+  // Org settings + branding are admin/operator only (locked seat model): a
+  // showing helper can't touch account settings.
+  await requireCapability("manage_settings", "/dashboard/settings?forbidden=1");
 
   const supabase = createClient();
   // Best-effort object cleanup, then null the column (the column is the source

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { requireCapability } from "@/lib/membership";
 import { timeStrToMinutes } from "@/lib/booking";
 
 const COMMON_TZ = new Set([
@@ -21,6 +22,8 @@ const COMMON_TZ = new Set([
 export async function updateBookingSettings(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) return;
+  // Viewing settings are admin/operator only (locked seat model).
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
 
   const tz = String(formData.get("timezone") ?? "").trim();
   const slot = Number(formData.get("slot_minutes"));
@@ -49,6 +52,8 @@ export async function updateBookingSettings(formData: FormData) {
 export async function updateClusteringSettings(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) return;
+  // Viewing settings are admin/operator only (locked seat model).
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
 
   const enabled = formData.get("clustering_enabled") === "on";
   const buffer = Number(formData.get("clustering_buffer_minutes"));
@@ -72,6 +77,8 @@ export async function updateClusteringSettings(formData: FormData) {
 export async function addAvailabilityWindow(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) return;
+  // Viewing settings are admin/operator only (locked seat model).
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
 
   const weekday = Number(formData.get("weekday"));
   const start = timeStrToMinutes(String(formData.get("start") ?? ""));
@@ -103,6 +110,7 @@ export async function addAvailabilityWindow(formData: FormData) {
 export async function deleteAvailabilityWindow(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
   const supabase = createClient();
   // RLS scopes the delete to the caller's org.
   await supabase.from("availability_rules").delete().eq("id", id);

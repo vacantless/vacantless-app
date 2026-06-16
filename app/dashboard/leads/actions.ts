@@ -6,12 +6,31 @@ import { getCurrentOrg } from "@/lib/org";
 import { isLeadStatus } from "@/lib/pipeline";
 import { normalizeDate, normalizeText } from "@/lib/lead-detail";
 
+// Confirm a lead belongs to the caller's org before we write anything that
+// carries its id (audit C6). The RLS select only returns leads in the caller's
+// org, so a foreign / forged lead id resolves to "not found" and the action
+// no-ops. This guards the messages insert in particular: messages' RLS WITH
+// CHECK only validates organization_id, so without this a note could be written
+// referencing another org's lead id.
+async function leadInOrg(
+  supabase: ReturnType<typeof createClient>,
+  id: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("id", id)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
 export async function updateLeadStatus(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!id || !isLeadStatus(status)) return;
 
   const supabase = createClient();
+  if (!(await leadInOrg(supabase, id))) return;
   // RLS scopes the update to the caller's org; status check is also enforced
   // by the table's CHECK constraint.
   await supabase
@@ -50,6 +69,7 @@ export async function addNote(formData: FormData) {
   if (!org) return;
 
   const supabase = createClient();
+  if (!(await leadInOrg(supabase, id))) return;
   await supabase.from("messages").insert({
     organization_id: org.id,
     lead_id: id,
@@ -73,6 +93,7 @@ export async function setNextAction(formData: FormData) {
   if (!org) return;
 
   const supabase = createClient();
+  if (!(await leadInOrg(supabase, id))) return;
   // RLS scopes the update to the caller's org. A blank date clears the follow-up
   // (and its note, which is meaningless without a date).
   await supabase
@@ -107,6 +128,7 @@ export async function clearNextAction(formData: FormData) {
   if (!org) return;
 
   const supabase = createClient();
+  if (!(await leadInOrg(supabase, id))) return;
   await supabase
     .from("leads")
     .update({ next_action_at: null, next_action_note: null })

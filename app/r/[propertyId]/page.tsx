@@ -83,6 +83,9 @@ export default async function PublicListingPage({
   const photos = Array.isArray(l.photos) ? l.photos : [];
 
   const booked = searchParams.submitted === "booked";
+  // The renter's chosen time was taken before we could book it (audit B1). Their
+  // inquiry is still saved; we tell them clearly and let them pick another time.
+  const slotTaken = searchParams.submitted === "slottaken";
 
   return (
     <div
@@ -156,6 +159,24 @@ export default async function PublicListingPage({
                 {l.org_name} isn&apos;t taking inquiries for this listing right
                 now. Please check back, or reach out about their other rentals.
               </p>
+            </div>
+          ) : slotTaken ? (
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-gray-900">
+                That time was just taken
+              </h2>
+              <p className="mt-2 text-sm text-gray-600">
+                Someone booked that slot moments before you. We saved your inquiry,
+                so {l.org_name} can still reach out, but you can grab another time
+                right now.
+              </p>
+              <a
+                href={`/r/${l.id}${trackedPostId ? `?p=${encodeURIComponent(trackedPostId)}` : ""}`}
+                className="mt-4 inline-block rounded-lg px-4 py-2.5 text-sm font-medium text-white"
+                style={{ backgroundColor: brand }}
+              >
+                Choose another time
+              </a>
             </div>
           ) : searchParams.submitted ? (
             <div className="text-center">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { requireCapability } from "@/lib/membership";
 import { PROPERTY_STATUSES } from "@/lib/pipeline";
 import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
@@ -62,6 +63,9 @@ function parseDateOrNull(raw: string): string | null {
 }
 
 export async function addProperty(formData: FormData) {
+  // Property management is admin/operator only (locked seat model): a showing
+  // helper can't create/edit/delete units, listing posts, or photos.
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const address = String(formData.get("address") ?? "").trim();
   if (!address) return;
 
@@ -88,6 +92,7 @@ export async function addProperty(formData: FormData) {
 }
 
 export async function updateProperty(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const id = String(formData.get("id") ?? "");
   const address = String(formData.get("address") ?? "").trim();
   if (!id || !address) return;
@@ -161,6 +166,7 @@ export async function updateProperty(formData: FormData) {
  * (dodges the 503 WATCH on revalidate-only server actions, S170).
  */
 export async function duplicateProperty(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
@@ -246,6 +252,7 @@ export async function duplicateProperty(formData: FormData) {
  * on revalidate-only server actions).
  */
 export async function blastPriceDrop(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
@@ -360,6 +367,7 @@ export async function blastPriceDrop(formData: FormData) {
 // ===========================================================================
 
 export async function addListingPost(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) return;
 
@@ -391,6 +399,7 @@ export async function addListingPost(formData: FormData) {
 }
 
 export async function updateListingPost(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   const id = String(formData.get("post_id") ?? "");
   if (!propertyId || !id) return;
@@ -422,6 +431,7 @@ export async function updateListingPost(formData: FormData) {
 }
 
 export async function removeListingPost(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   const id = String(formData.get("post_id") ?? "");
   if (!propertyId || !id) return;
@@ -447,6 +457,7 @@ export async function removeListingPost(formData: FormData) {
 type PhotoRow = PhotoLike & { storage_path: string };
 
 export async function uploadPropertyPhotos(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) return;
 
@@ -535,6 +546,7 @@ export async function uploadPropertyPhotos(formData: FormData) {
 }
 
 export async function setCoverPhoto(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   const id = String(formData.get("photo_id") ?? "");
   if (!propertyId || !id) return;
@@ -557,6 +569,7 @@ export async function setCoverPhoto(formData: FormData) {
 }
 
 export async function movePhoto(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   const id = String(formData.get("photo_id") ?? "");
   const dirRaw = String(formData.get("direction") ?? "");
@@ -587,6 +600,7 @@ export async function movePhoto(formData: FormData) {
 }
 
 export async function deletePhoto(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   const id = String(formData.get("photo_id") ?? "");
   if (!propertyId || !id) return;

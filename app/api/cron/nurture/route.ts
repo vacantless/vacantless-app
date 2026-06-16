@@ -85,6 +85,9 @@ export async function GET(req: NextRequest) {
   const summary: Summary = { ok: true, scanned: rows.length, sent: 0, skipped: 0, errors: 0, details: [] };
 
   for (const row of rows as any[]) {
+   // Per-row isolation (audit C2): one row's thrown error must not abort the
+   // rest of the sweep.
+   try {
     // Supabase returns to-one relations as an object (or array on some shapes).
     const property = Array.isArray(row.properties) ? row.properties[0] : row.properties;
     const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
@@ -156,6 +159,13 @@ export async function GET(req: NextRequest) {
 
     summary.sent++;
     summary.details.push({ lead: row.id, step, to: renterEmail });
+   } catch (err) {
+     summary.errors++;
+     summary.details.push({
+       lead: (row as any)?.id,
+       error: `row_threw:${err instanceof Error ? err.message : "unknown"}`,
+     });
+   }
   }
 
   return NextResponse.json(summary, { status: 200 });

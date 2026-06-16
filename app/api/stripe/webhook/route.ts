@@ -149,8 +149,17 @@ async function applyDepositPaid(
 }
 
 // Flip a paid deposit to 'refunded' when its charge is fully refunded. Matches
-// the org by the stored PaymentIntent id. Only acts on a full refund of a
-// currently-paid deposit (a partial refund leaves it 'paid').
+// the org by the stored PaymentIntent id. Order-independent (audit C4): it acts
+// on any matched org whose deposit isn't already 'refunded', regardless of the
+// current status string, so a refund event delivered out of order (e.g. after a
+// later status write) can't leave the org stuck on 'paid'. Idempotent: a replay
+// once 'refunded' is a no-op. A partial refund leaves the deposit 'paid'.
+//
+// Residual (acceptable): the PI id is only stored at deposit-paid time, so a
+// refund delivered strictly BEFORE the deposit-paid write matches nothing. In
+// practice the refund is a manual end-of-pilot action months after payment, so
+// that ordering does not occur; if it ever did, re-driving the refund event
+// (Stripe dashboard "resend") after the paid row lands resolves it.
 async function applyDepositRefund(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
   charge: Stripe.Charge,
@@ -175,7 +184,11 @@ async function applyDepositRefund(
     .eq("pilot_deposit_payment_intent_id", paymentIntentId)
     .limit(1);
   const org = rows?.[0] as { id?: string; pilot_deposit_status?: string } | undefined;
-  if (!org?.id || org.pilot_deposit_status !== "paid") return { matched: false as const };
+  if (!org?.id) return { matched: false as const };
+  // Already refunded: idempotent no-op (don't re-write).
+  if (org.pilot_deposit_status === "refunded") {
+    return { matched: true as const, orgId: org.id, skipped: true };
+  }
 
   await admin
     .from("organizations")
@@ -219,9 +232,12 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        // The one-time pilot deposit (mode='payment') is handled separately from
-        // the subscription Checkout; recognize it by mode + the stamped kind.
-        if (session.mode === "payment" || session.metadata?.kind === "pilot_deposit") {
+        // The one-time pilot deposit is recognized SOLELY by its stamped kind
+        // (audit C3). startDepositCheckout always sets metadata.kind='pilot_deposit'
+        // on the session, so this is precise; a future one-time payment Checkout
+        // for anything else won't be misrouted to applyDepositPaid (it would fall
+        // through, find no subscription, and be a harmless no-op).
+        if (session.metadata?.kind === "pilot_deposit") {
           await applyDepositPaid(admin, session);
           break;
         }
