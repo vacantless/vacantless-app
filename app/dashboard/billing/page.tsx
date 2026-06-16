@@ -14,7 +14,7 @@ import {
   startPilot,
   startDepositCheckout,
 } from "./actions";
-import { PageHeader } from "@/components/ui";
+import { BrandBanner } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -77,8 +77,9 @@ export default async function BillingPage({
 
   return (
     <div>
-      <PageHeader
+      <BrandBanner
         icon={<Icons.card />}
+        eyebrow="Account"
         title="Billing"
         subtitle="Your plan. Billed monthly - change or cancel anytime, no contract."
       />

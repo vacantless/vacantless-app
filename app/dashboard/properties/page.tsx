@@ -6,7 +6,7 @@ import {
   StatusChip,
   propertyStatusTone,
   EmptyState,
-  PageHeader,
+  BrandBanner,
   SectionHeading,
   PRIMARY_ACTION_CLASS,
 } from "@/components/ui";
@@ -57,8 +57,9 @@ export default async function PropertiesPage({
 
   return (
     <div>
-      <PageHeader
+      <BrandBanner
         icon={<Icons.building />}
+        eyebrow="Portfolio"
         title="Rentals"
         subtitle="Your rental portfolio. Each rental has its own public inquiry page and lead tracking."
       />
@@ -181,7 +182,7 @@ export default async function PropertiesPage({
         <button
           type="submit"
           className={PRIMARY_ACTION_CLASS}
-          style={{ backgroundColor: "var(--brand-color)" }}
+          style={{ background: "var(--brand-gradient, var(--brand-color))" }}
         >
           Add rental
         </button>

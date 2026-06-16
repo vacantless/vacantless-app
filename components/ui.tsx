@@ -79,9 +79,10 @@ export function IconTile({
 /**
  * A gradient hero band that carries the marketing homepage's signature look
  * into a portal page header. White text on the tenant's brand ombre (or solid),
- * both legibility-guarded via --brand-gradient. Use at the very top of the
- * highest-traffic pages (Overview, Reports) for depth; quieter pages keep the
- * plain PageHeader.
+ * both legibility-guarded via --brand-gradient. Used at the top of the primary
+ * working pages (Overview, Inquiries, Rentals, Viewing Times, Billing) so the
+ * portal consistently carries the homepage depth; small sub-pages and forms keep
+ * the plain PageHeader.
  */
 export function BrandBanner({
   title,

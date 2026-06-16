@@ -13,7 +13,7 @@ import {
   followUpLabel,
   type FollowUpStatus,
 } from "@/lib/lead-detail";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { BrandBanner, EmptyState } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { StatusSelect } from "./status-select";
 
@@ -62,8 +62,9 @@ export default async function LeadsPage({
 
   return (
     <div>
-      <PageHeader
+      <BrandBanner
         icon={<Icons.chat />}
+        eyebrow="Renters"
         title="Inquiries"
         subtitle="Every renter who has reached out about one of your rentals."
       />
