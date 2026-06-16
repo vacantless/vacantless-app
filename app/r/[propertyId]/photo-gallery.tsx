@@ -57,7 +57,7 @@ export function PhotoGallery({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={cover}
-          alt={`${address} — photo 1`}
+          alt={`${address} - photo 1`}
           className="max-h-[28rem] w-full object-cover transition hover:opacity-95"
         />
       </button>
@@ -74,7 +74,7 @@ export function PhotoGallery({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={url}
-                alt={`${address} — photo ${i + 2}`}
+                alt={`${address} - photo ${i + 2}`}
                 className="h-full w-full object-cover transition hover:opacity-90"
               />
             </button>
@@ -114,7 +114,7 @@ export function PhotoGallery({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={photos[open]}
-            alt={`${address} — photo ${open + 1}`}
+            alt={`${address} - photo ${open + 1}`}
             onClick={(e) => e.stopPropagation()}
             className="max-h-[90vh] max-w-full rounded-lg object-contain"
           />

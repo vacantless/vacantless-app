@@ -110,7 +110,7 @@ export default async function LeadDetailPage({
             {l.name || l.email || "Unnamed renter"}
           </h2>
           <p className="text-sm text-gray-500">
-            Received {new Date(l.created_at).toLocaleString()}
+            Received {new Date(l.created_at).toLocaleString("en-US", { timeZone })}
             {sourceDisplay ? (
               <>
                 {" · via "}
@@ -196,7 +196,7 @@ export default async function LeadDetailPage({
         />
         <Field
           label="Desired move-in"
-          value={l.move_in ? new Date(l.move_in).toLocaleDateString() : null}
+          value={l.move_in ? new Date(l.move_in).toLocaleDateString("en-CA", { timeZone: "UTC" }) : null}
         />
       </div>
 
@@ -284,7 +284,7 @@ export default async function LeadDetailPage({
                 <span>·</span>
                 <span>{m.direction ?? ""}</span>
                 <span>·</span>
-                <span>{new Date(m.created_at).toLocaleString()}</span>
+                <span>{new Date(m.created_at).toLocaleString("en-US", { timeZone })}</span>
               </div>
               <p className="whitespace-pre-wrap text-sm text-gray-700">
                 {m.body}

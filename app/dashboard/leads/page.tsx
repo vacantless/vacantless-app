@@ -149,7 +149,7 @@ export default async function LeadsPage({
                     <div className="flex justify-between gap-3">
                       <dt className="text-gray-400">Received</dt>
                       <dd className="text-right text-gray-500">
-                        {new Date(l.created_at).toLocaleDateString()}
+                        {new Date(l.created_at).toLocaleDateString("en-CA", { timeZone })}
                       </dd>
                     </div>
                   </dl>
@@ -198,7 +198,7 @@ export default async function LeadsPage({
                     </td>
                     <td className="px-4 py-2 text-gray-600">{l.source ?? "—"}</td>
                     <td className="px-4 py-2 text-gray-500">
-                      {new Date(l.created_at).toLocaleDateString()}
+                      {new Date(l.created_at).toLocaleDateString("en-CA", { timeZone })}
                     </td>
                     <td className="px-4 py-2">
                       <StatusSelect leadId={l.id} status={l.status} />

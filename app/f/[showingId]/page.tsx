@@ -81,7 +81,7 @@ export default async function PublicFeedbackPage({
               )}
               {searchParams.error === "1" && (
                 <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  We couldn't record that — your feedback may already be in.
+                  We couldn't record that. Your feedback may already be in.
                   Thanks all the same!
                 </p>
               )}

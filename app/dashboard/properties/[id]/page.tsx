@@ -321,15 +321,15 @@ export default async function PropertyDetailPage({
         </h3>
         <p className="mb-4 text-xs text-gray-500">
           Add photos renters will see on your listing page. The{" "}
-          <strong>cover photo</strong> shows first. Drag isn&apos;t needed — use
-          the arrows to reorder. JPG, PNG, WebP, or GIF, up to 10&nbsp;MB each
+          <strong>cover photo</strong> shows first. Drag isn&apos;t needed, just
+          use the arrows to reorder. JPG, PNG, WebP, or GIF, up to 10&nbsp;MB each
           ({photoRows.length}/{MAX_PHOTOS_PER_PROPERTY}).
         </p>
 
         {photoRows.length === 0 ? (
           <p className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-xs text-gray-500">
-            No photos yet. A listing with photos gets far more inquiries — add a
-            few below.
+            No photos yet. A listing with photos gets far more inquiries, so add
+            a few below.
           </p>
         ) : (
           <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -448,7 +448,7 @@ export default async function PropertyDetailPage({
         <p className="mb-4 text-xs text-gray-500">
           Track each portal you advertise on. Share that portal&apos;s{" "}
           <strong>tracked link</strong> instead of the plain one, and every
-          inquiry through it is tagged with the channel it came from — so your
+          inquiry through it is tagged with the channel it came from, so your
           reports show what&apos;s actually working.
         </p>
 

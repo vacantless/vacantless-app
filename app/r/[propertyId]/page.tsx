@@ -160,7 +160,7 @@ export default async function PublicListingPage({
           ) : searchParams.submitted ? (
             <div className="text-center">
               <h2 className="text-xl font-bold text-gray-900">
-                {booked ? "Your showing is booked!" : "Thanks — we got your inquiry!"}
+                {booked ? "Your showing is booked!" : "Thanks, we got your inquiry!"}
               </h2>
               <p className="mt-2 text-sm text-gray-600">
                 {booked
