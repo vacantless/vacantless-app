@@ -18,6 +18,10 @@ import { logoUploadErrorMessage } from "@/lib/logo";
 import BrandColorField from "@/components/brand-color-field";
 import { PageHeader, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import RotessaSettingsCard, {
+  type RotessaAccountView,
+} from "@/components/rotessa-settings-card";
+import { encryptionConfigured } from "@/lib/crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +35,7 @@ export default async function SettingsPage({
     to?: string;
     logo?: string;
     logoerr?: string;
+    rotessa?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -52,6 +57,32 @@ export default async function SettingsPage({
     data: { user },
   } = await supabase.auth.getUser();
   const operatorEmail = user?.email ?? "";
+
+  // Rotessa rent-collection connection (RLS scopes the row to this org). The
+  // stored key is never read here — we only surface status + environment.
+  const { data: rotessaRows } = await supabase
+    .from("rotessa_accounts")
+    .select("environment, connection_status, last_verified_at, last_error, api_key_encrypted")
+    .limit(1);
+  const rotessaRow = rotessaRows?.[0] as
+    | {
+        environment: string;
+        connection_status: string;
+        last_verified_at: string | null;
+        last_error: string | null;
+        api_key_encrypted: string | null;
+      }
+    | undefined;
+  const rotessaAccount: RotessaAccountView | null = rotessaRow
+    ? {
+        environment: rotessaRow.environment,
+        connection_status: rotessaRow.connection_status,
+        last_verified_at: rotessaRow.last_verified_at,
+        last_error: rotessaRow.last_error,
+        hasKey: !!rotessaRow.api_key_encrypted,
+      }
+    : null;
+  const rotessaEncConfigured = encryptionConfigured();
 
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
@@ -144,6 +175,55 @@ export default async function SettingsPage({
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           Something went wrong sending the test email. Please try again in a
           moment.
+        </div>
+      )}
+
+      {searchParams.rotessa === "connected" && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Rotessa connected. We verified your API key and can now schedule rent
+          collection.
+        </div>
+      )}
+      {searchParams.rotessa === "tested" && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Rotessa connection verified.
+        </div>
+      )}
+      {searchParams.rotessa === "disconnected" && (
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          Rotessa disconnected. Your stored key was removed. Schedules already in
+          Rotessa are unaffected.
+        </div>
+      )}
+      {(searchParams.rotessa === "connfail" ||
+        searchParams.rotessa === "testfail") && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          We couldn&apos;t verify the Rotessa connection. See the details below
+          and check your API key and environment.
+        </div>
+      )}
+      {searchParams.rotessa === "invalid" && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          That API key didn&apos;t look valid. Paste the key from your Rotessa
+          admin portal.
+        </div>
+      )}
+      {searchParams.rotessa === "nokey" && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Secure key storage isn&apos;t configured on this deployment yet
+          (ROTESSA_ENC_KEY). The key wasn&apos;t saved.
+        </div>
+      )}
+      {searchParams.rotessa === "decfail" && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          We couldn&apos;t read the stored Rotessa key. Reconnect with your API
+          key to fix this.
+        </div>
+      )}
+      {(searchParams.rotessa === "saveerror" ||
+        searchParams.rotessa === "norow") && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Something went wrong with the Rotessa connection. Please try again.
         </div>
       )}
 
@@ -467,6 +547,12 @@ export default async function SettingsPage({
           changes first so the test reflects them.
         </p>
       </div>
+
+      {/* Rent collection (Rotessa) */}
+      <RotessaSettingsCard
+        account={rotessaAccount}
+        encConfigured={rotessaEncConfigured}
+      />
 
       {/* Read-only account context */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">

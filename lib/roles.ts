@@ -28,6 +28,7 @@ export const CAPABILITIES = [
   "manage_settings", // branding, logo, reply-to, feature toggles (incl. SMS)
   "manage_properties", // create/edit/duplicate/delete units, listing posts, photos, price-drop blast
   "manage_tenancies", // create/edit/end tenancies + co-tenants (post-lease property management)
+  "manage_rotessa", // connect/manage the org's Rotessa rent-collection account + API key
   "manage_availability", // booking windows, clustering settings
   "manage_leads", // change a lead's stage, set/clear follow-ups
   "add_notes", // add a timeline note to a lead
