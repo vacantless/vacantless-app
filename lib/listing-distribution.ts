@@ -1,0 +1,159 @@
+// ============================================================================
+// Pure helpers for listing distribution / source tracking.
+// No DOM / env / IO — fully unit-testable (see scripts/test-listing-distribution.ts).
+// Drives the operator "Where this is posted" UI; the portal -> human-source
+// mapping here MUST stay in sync with the CASE in submit_public_lead (migration
+// 0014), which is what actually stamps leads.source at insert time.
+// ============================================================================
+
+export const PORTAL_KEYS = [
+  "kijiji",
+  "facebook",
+  "rentals_ca",
+  "zumper",
+  "viewit",
+  "realtor_ca",
+  "other",
+] as const;
+export type PortalKey = (typeof PORTAL_KEYS)[number];
+
+// Display labels for the operator UI (portal picker, post header).
+const PORTAL_LABELS: Record<PortalKey, string> = {
+  kijiji: "Kijiji",
+  facebook: "Facebook Marketplace",
+  rentals_ca: "Rentals.ca",
+  zumper: "Zumper",
+  viewit: "Viewit.ca",
+  realtor_ca: "Realtor.ca",
+  other: "Other",
+};
+
+// Ordered list for rendering the portal <select>.
+export const PORTALS: ReadonlyArray<{ key: PortalKey; label: string }> =
+  PORTAL_KEYS.map((key) => ({ key, label: PORTAL_LABELS[key] }));
+
+export function isPortalKey(value: unknown): value is PortalKey {
+  return (
+    typeof value === "string" &&
+    (PORTAL_KEYS as readonly string[]).includes(value)
+  );
+}
+
+/** Normalize a raw form value to a valid portal key, defaulting to "other". */
+export function normalizePortal(raw: unknown): PortalKey {
+  if (typeof raw === "string") {
+    const v = raw.trim();
+    if (isPortalKey(v)) return v;
+  }
+  return "other";
+}
+
+/** Operator-facing display label for a portal key. */
+export function portalLabel(key: unknown): string {
+  return isPortalKey(key) ? PORTAL_LABELS[key] : "Other";
+}
+
+// --- post status -----------------------------------------------------------
+export const LISTING_POST_STATUSES = [
+  "draft",
+  "live",
+  "expired",
+  "removed",
+] as const;
+export type ListingPostStatus = (typeof LISTING_POST_STATUSES)[number];
+
+const STATUS_LABELS: Record<ListingPostStatus, string> = {
+  draft: "Draft",
+  live: "Live",
+  expired: "Expired",
+  removed: "Removed",
+};
+
+export function isListingPostStatus(value: unknown): value is ListingPostStatus {
+  return (
+    typeof value === "string" &&
+    (LISTING_POST_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/** Normalize a raw form value to a valid status, defaulting to "live". */
+export function normalizeListingStatus(raw: unknown): ListingPostStatus {
+  if (typeof raw === "string") {
+    const v = raw.trim();
+    if (isListingPostStatus(v)) return v;
+  }
+  return "live";
+}
+
+export function listingPostStatusLabel(value: unknown): string {
+  return isListingPostStatus(value) ? STATUS_LABELS[value] : "Live";
+}
+
+// --- field normalizers (mirror the server action) --------------------------
+
+/** Trim a URL; return null when blank. Prefixes a scheme on a bare domain so
+ *  the operator's "Open" link works even if they paste "kijiji.ca/...". */
+export function normalizeUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  // Looks like a domain (has a dot, no spaces) — assume https.
+  if (/^[^\s]+\.[^\s]+$/.test(v)) return `https://${v}`;
+  return v;
+}
+
+/** Trim free text; return null when blank. */
+export function normalizeText(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return v || null;
+}
+
+/** Normalize an HTML date input ("YYYY-MM-DD") to a value or null. */
+export function normalizeDate(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+// --- tracked link ----------------------------------------------------------
+
+/**
+ * Build the per-post tracked inquiry link. Appends `p=<postId>` to the public
+ * listing URL so a lead that arrives through it is attributed to this post.
+ * Preserves any existing query string.
+ */
+export function buildTrackedLink(publicUrl: string, postId: string): string {
+  if (!postId) return publicUrl;
+  const sep = publicUrl.includes("?") ? "&" : "?";
+  return `${publicUrl}${sep}p=${encodeURIComponent(postId)}`;
+}
+
+/**
+ * The human source label a lead gets when it arrives through this post — must
+ * match the CASE in submit_public_lead. Used for previews + keeping the two
+ * layers honest in tests.
+ */
+export function sourceLabelForPost(post: {
+  portal: unknown;
+  label?: unknown;
+}): string {
+  const key = isPortalKey(post.portal) ? post.portal : "other";
+  if (key === "other") return normalizeText(post.label) ?? "Other portal";
+  return PORTAL_LABELS[key];
+}
+
+// --- counts ----------------------------------------------------------------
+
+/** Tally how many of the given leads came through each post id. */
+export function countLeadsByPost(
+  leads: ReadonlyArray<{ listing_post_id: string | null }>,
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const l of leads) {
+    if (!l.listing_post_id) continue;
+    m.set(l.listing_post_id, (m.get(l.listing_post_id) ?? 0) + 1);
+  }
+  return m;
+}

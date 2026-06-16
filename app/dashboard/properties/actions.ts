@@ -8,6 +8,13 @@ import { PROPERTY_STATUSES } from "@/lib/pipeline";
 import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
 import { normalizeLaundry } from "@/lib/property-features";
+import {
+  normalizePortal,
+  normalizeListingStatus,
+  normalizeUrl,
+  normalizeText,
+  normalizeDate,
+} from "@/lib/listing-distribution";
 
 function parseRentCents(raw: string): number | null {
   const v = raw.trim();
@@ -236,4 +243,72 @@ export async function blastPriceDrop(formData: FormData) {
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/leads");
   redirect(`/dashboard/properties/${id}?blasted=${sent}`);
+}
+
+// ===========================================================================
+// Listing distribution — record where a property is posted (one property -> many
+// portal posts). Each post yields a tracked inquiry link so an arriving renter
+// is attributed to the right channel. All three actions are redirect-based to
+// dodge the 503 WATCH on revalidate-only server actions (see S170). RLS scopes
+// every write to the caller's org; the FK + check constraints are the backstop.
+// ===========================================================================
+
+export async function addListingPost(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+  await supabase.from("listing_posts").insert({
+    organization_id: org.id,
+    property_id: propertyId,
+    portal: normalizePortal(formData.get("portal")),
+    label: normalizeText(formData.get("label")),
+    url: normalizeUrl(formData.get("url")),
+    status: normalizeListingStatus(formData.get("status")),
+    posted_on: normalizeDate(formData.get("posted_on")),
+    notes: normalizeText(formData.get("notes")),
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?post=added`);
+}
+
+export async function updateListingPost(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  const id = String(formData.get("post_id") ?? "");
+  if (!propertyId || !id) return;
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org; .eq("id") targets one post.
+  await supabase
+    .from("listing_posts")
+    .update({
+      portal: normalizePortal(formData.get("portal")),
+      label: normalizeText(formData.get("label")),
+      url: normalizeUrl(formData.get("url")),
+      status: normalizeListingStatus(formData.get("status")),
+      posted_on: normalizeDate(formData.get("posted_on")),
+      notes: normalizeText(formData.get("notes")),
+    })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?post=saved`);
+}
+
+export async function removeListingPost(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  const id = String(formData.get("post_id") ?? "");
+  if (!propertyId || !id) return;
+
+  const supabase = createClient();
+  // RLS scopes the delete to the caller's org. Leads keep their captured source
+  // text; their listing_post_id FK is set null by the ON DELETE rule.
+  await supabase.from("listing_posts").delete().eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?post=removed`);
 }

@@ -8,7 +8,13 @@ import {
   statusLabel,
   type LeadStatus,
 } from "@/lib/pipeline";
-import { updateProperty, blastPriceDrop } from "../actions";
+import {
+  updateProperty,
+  blastPriceDrop,
+  addListingPost,
+  updateListingPost,
+  removeListingPost,
+} from "../actions";
 import { CopyLink } from "./copy-link";
 import {
   countEligible,
@@ -16,6 +22,16 @@ import {
   formatRentLabel,
 } from "@/lib/price-drop";
 import { LAUNDRY_OPTIONS, laundryLabel } from "@/lib/property-features";
+import {
+  PORTALS,
+  LISTING_POST_STATUSES,
+  portalLabel,
+  listingPostStatusLabel,
+  buildTrackedLink,
+  countLeadsByPost,
+  type PortalKey,
+  type ListingPostStatus,
+} from "@/lib/listing-distribution";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +65,18 @@ type LeadRow = {
   email: string | null;
   status: LeadStatus;
   price_drop_notified_cents: number | null;
+  listing_post_id: string | null;
   created_at: string;
+};
+
+type ListingPostRow = {
+  id: string;
+  portal: PortalKey;
+  label: string | null;
+  url: string | null;
+  status: ListingPostStatus;
+  posted_on: string | null;
+  notes: string | null;
 };
 
 export default async function PropertyDetailPage({
@@ -57,7 +84,7 @@ export default async function PropertyDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { saved?: string; blasted?: string };
+  searchParams: { saved?: string; blasted?: string; post?: string };
 }) {
   const supabase = createClient();
   const { data: property } = await supabase
@@ -73,10 +100,20 @@ export default async function PropertyDetailPage({
 
   const { data: leads } = await supabase
     .from("leads")
-    .select("id, name, email, status, price_drop_notified_cents, created_at")
+    .select(
+      "id, name, email, status, price_drop_notified_cents, listing_post_id, created_at",
+    )
     .eq("property_id", p.id)
     .order("created_at", { ascending: false });
   const leadRows = (leads ?? []) as LeadRow[];
+
+  const { data: posts } = await supabase
+    .from("listing_posts")
+    .select("id, portal, label, url, status, posted_on, notes")
+    .eq("property_id", p.id)
+    .order("created_at", { ascending: true });
+  const postRows = (posts ?? []) as ListingPostRow[];
+  const postCounts = countLeadsByPost(leadRows);
 
   const eligibleCount = countEligible(leadRows, p.rent_cents);
   const showBlastCard = blastOfferable(
@@ -117,6 +154,16 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {searchParams.post && (
+        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          {searchParams.post === "added"
+            ? "Listing post added."
+            : searchParams.post === "removed"
+              ? "Listing post removed."
+              : "Listing post saved."}
+        </p>
+      )}
+
       <h2 className="mb-1 mt-3 text-xl font-bold text-gray-900">{p.address}</h2>
       <p className="mb-6 text-sm text-gray-500">
         {propertyStatusLabel(p.status)}
@@ -134,6 +181,283 @@ export default async function PropertyDetailPage({
           land straight in your renter list.
         </p>
         <CopyLink url={publicUrl} />
+      </div>
+
+      {/* --- Where this is posted (listing distribution / source tracking) --- */}
+      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+        <h3 className="mb-1 text-sm font-semibold text-gray-900">
+          Where this is posted
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">
+          Track each portal you advertise on. Share that portal&apos;s{" "}
+          <strong>tracked link</strong> instead of the plain one, and every
+          inquiry through it is tagged with the channel it came from — so your
+          reports show what&apos;s actually working.
+        </p>
+
+        {postRows.length === 0 ? (
+          <p className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
+            No posts tracked yet. Add the portals you&apos;ve listed this unit on
+            below.
+          </p>
+        ) : (
+          <ul className="mb-4 space-y-3">
+            {postRows.map((post) => {
+              const count = postCounts.get(post.id) ?? 0;
+              const trackedUrl = buildTrackedLink(publicUrl, post.id);
+              return (
+                <li
+                  key={post.id}
+                  className="rounded-lg border border-gray-200 p-3"
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">
+                      {portalLabel(post.portal)}
+                      {post.portal === "other" && post.label
+                        ? ` · ${post.label}`
+                        : ""}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        post.status === "live"
+                          ? "bg-green-50 text-green-700"
+                          : post.status === "draft"
+                            ? "bg-gray-100 text-gray-600"
+                            : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {listingPostStatusLabel(post.status)}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {count} {count === 1 ? "inquiry" : "inquiries"}
+                    </span>
+                    {post.posted_on && (
+                      <span className="text-xs text-gray-400">
+                        posted {post.posted_on}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mb-1 text-xs font-medium text-gray-500">
+                    Tracked inquiry link for this portal
+                  </p>
+                  <CopyLink url={trackedUrl} />
+
+                  {post.notes && (
+                    <p className="mt-2 text-xs text-gray-500">{post.notes}</p>
+                  )}
+
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs font-medium text-brand">
+                      Edit / remove
+                    </summary>
+                    <form
+                      action={updateListingPost}
+                      className="mt-3 space-y-3 border-t border-gray-100 pt-3"
+                    >
+                      <input type="hidden" name="property_id" value={p.id} />
+                      <input type="hidden" name="post_id" value={post.id} />
+                      <div className="flex flex-wrap gap-3">
+                        <div className="w-44">
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Portal
+                          </label>
+                          <select
+                            name="portal"
+                            defaultValue={post.portal}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                          >
+                            {PORTALS.map((opt) => (
+                              <option key={opt.key} value={opt.key}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-36">
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Status
+                          </label>
+                          <select
+                            name="status"
+                            defaultValue={post.status}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                          >
+                            {LISTING_POST_STATUSES.map((s) => (
+                              <option key={s} value={s}>
+                                {listingPostStatusLabel(s)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-40">
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Posted date
+                          </label>
+                          <input
+                            name="posted_on"
+                            type="date"
+                            defaultValue={post.posted_on ?? ""}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                          Ad URL
+                        </label>
+                        <input
+                          name="url"
+                          defaultValue={post.url ?? ""}
+                          placeholder="https://www.kijiji.ca/..."
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <div className="flex-1 min-w-[12rem]">
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Label{" "}
+                            <span className="font-normal text-gray-400">
+                              (for &quot;Other&quot;)
+                            </span>
+                          </label>
+                          <input
+                            name="label"
+                            defaultValue={post.label ?? ""}
+                            placeholder="PadMapper"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-[12rem]">
+                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                            Notes
+                          </label>
+                          <input
+                            name="notes"
+                            defaultValue={post.notes ?? ""}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white"
+                      >
+                        Save post
+                      </button>
+                    </form>
+                    <form action={removeListingPost} className="mt-2">
+                      <input type="hidden" name="property_id" value={p.id} />
+                      <input type="hidden" name="post_id" value={post.id} />
+                      <button
+                        type="submit"
+                        className="text-xs font-medium text-red-600 hover:text-red-700"
+                      >
+                        Remove this post
+                      </button>
+                    </form>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-brand">
+            + Add a post
+          </summary>
+          <form
+            action={addListingPost}
+            className="mt-3 space-y-3 border-t border-gray-100 pt-3"
+          >
+            <input type="hidden" name="property_id" value={p.id} />
+            <div className="flex flex-wrap gap-3">
+              <div className="w-44">
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Portal
+                </label>
+                <select
+                  name="portal"
+                  defaultValue="kijiji"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  {PORTALS.map((opt) => (
+                    <option key={opt.key} value={opt.key}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-36">
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Status
+                </label>
+                <select
+                  name="status"
+                  defaultValue="live"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  {LISTING_POST_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {listingPostStatusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-40">
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Posted date
+                </label>
+                <input
+                  name="posted_on"
+                  type="date"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Ad URL
+              </label>
+              <input
+                name="url"
+                placeholder="https://www.kijiji.ca/..."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <div className="flex-1 min-w-[12rem]">
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Label{" "}
+                  <span className="font-normal text-gray-400">
+                    (for &quot;Other&quot;)
+                  </span>
+                </label>
+                <input
+                  name="label"
+                  placeholder="PadMapper"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex-1 min-w-[12rem]">
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Notes
+                </label>
+                <input
+                  name="notes"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+            >
+              Add post
+            </button>
+          </form>
+        </details>
       </div>
 
       {showBlastCard && (

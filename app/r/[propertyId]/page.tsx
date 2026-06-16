@@ -42,8 +42,11 @@ export default async function PublicListingPage({
   searchParams,
 }: {
   params: { propertyId: string };
-  searchParams: { submitted?: string; error?: string };
+  searchParams: { submitted?: string; error?: string; p?: string };
 }) {
+  // Per-post tracking id carried by a tracked inquiry link (/r/<id>?p=<postId>).
+  const trackedPostId =
+    typeof searchParams.p === "string" ? searchParams.p : "";
   const supabase = createClient();
   const [{ data }, { data: avData }] = await Promise.all([
     supabase.rpc("get_public_listing", { p_property_id: params.propertyId }),
@@ -149,6 +152,13 @@ export default async function PublicListingPage({
               )}
               <form action={submitLead} className="space-y-4">
                 <input type="hidden" name="property_id" value={l.id} />
+                {trackedPostId && (
+                  <input
+                    type="hidden"
+                    name="listing_post_id"
+                    value={trackedPostId}
+                  />
+                )}
 
                 <div className="space-y-3">
                   <div>

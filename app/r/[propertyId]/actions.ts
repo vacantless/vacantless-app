@@ -26,6 +26,10 @@ export async function submitLead(formData: FormData) {
   const moveInRaw = String(formData.get("move_in") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const slot = String(formData.get("slot") ?? "").trim();
+  // Source-tracking: a per-post tracked link carries ?p=<listing_post_id>. The
+  // RPC validates it belongs to this property before stamping the lead's
+  // source; an absent/foreign value safely falls back to 'website'.
+  const listingPostId = String(formData.get("listing_post_id") ?? "").trim();
 
   const supabase = createClient();
   const { data, error } = await supabase.rpc("submit_public_lead", {
@@ -35,10 +39,14 @@ export async function submitLead(formData: FormData) {
     p_phone: phone || null,
     p_move_in: moveInRaw || null,
     p_notes: notes || null,
+    p_listing_post_id: listingPostId || null,
   });
 
   if (error) {
-    redirect(`/r/${propertyId}?error=1`);
+    const keep = listingPostId
+      ? `&p=${encodeURIComponent(listingPostId)}`
+      : "";
+    redirect(`/r/${propertyId}?error=1${keep}`);
   }
 
   const payload = data as AutoReplyPayload | null;
