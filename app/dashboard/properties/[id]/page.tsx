@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import {
   PROPERTY_STATUSES,
   propertyStatusLabel,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/pipeline";
 import {
   updateProperty,
+  duplicateProperty,
   blastPriceDrop,
   addListingPost,
   updateListingPost,
@@ -19,6 +21,11 @@ import {
   movePhoto,
   deletePhoto,
 } from "../actions";
+import {
+  buildAllListingCopy,
+  copyPortalLabel,
+} from "@/lib/listing-copy";
+import { ListingCopyCard } from "./listing-copy-card";
 import {
   MAX_PHOTOS_PER_PROPERTY,
   sortPhotos,
@@ -106,6 +113,7 @@ export default async function PropertyDetailPage({
     post?: string;
     photos?: string;
     photoerr?: string;
+    duplicated?: string;
   };
 }) {
   const supabase = createClient();
@@ -158,6 +166,37 @@ export default async function PropertyDetailPage({
   const proto = h.get("x-forwarded-proto") ?? "https";
   const publicUrl = host ? `${proto}://${host}/r/${p.id}` : `/r/${p.id}`;
 
+  // Ready-to-paste per-channel listing copy, built from this unit's real fields.
+  const org = await getCurrentOrg();
+  const copyTabs = buildAllListingCopy({
+    businessName: org?.name ?? null,
+    address: p.address,
+    rentCents: p.rent_cents,
+    beds: p.beds,
+    baths: p.baths,
+    description: p.description,
+    publicUrl,
+    features: {
+      available_date: p.available_date,
+      sqft: p.sqft,
+      floor: p.floor,
+      parking: p.parking,
+      laundry: p.laundry,
+      air_conditioning: p.air_conditioning,
+      balcony: p.balcony,
+      furnished: p.furnished,
+      pet_friendly: p.pet_friendly,
+      heat_included: p.heat_included,
+      hydro_included: p.hydro_included,
+      water_included: p.water_included,
+    },
+  }).map((c) => ({
+    key: c.portal,
+    label: copyPortalLabel(c.portal),
+    title: c.title,
+    body: c.body,
+  }));
+
   return (
     <div>
       <Link
@@ -170,6 +209,13 @@ export default async function PropertyDetailPage({
       {searchParams.saved && (
         <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Changes saved.
+        </p>
+      )}
+
+      {searchParams.duplicated && (
+        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Copied from another rental. Update the address and rent below, then set
+          it live when you&apos;re ready — it&apos;s off market for now.
         </p>
       )}
 
@@ -221,7 +267,18 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
-      <h2 className="mb-1 mt-3 text-xl font-bold text-gray-900">{p.address}</h2>
+      <div className="mb-1 mt-3 flex flex-wrap items-start justify-between gap-2">
+        <h2 className="text-xl font-bold text-gray-900">{p.address}</h2>
+        <form action={duplicateProperty}>
+          <input type="hidden" name="id" value={p.id} />
+          <button
+            type="submit"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Duplicate this rental
+          </button>
+        </form>
+      </div>
       <p className="mb-6 text-sm text-gray-500">
         {propertyStatusLabel(p.status)}
         {p.rent_cents
@@ -239,6 +296,9 @@ export default async function PropertyDetailPage({
         </p>
         <CopyLink url={publicUrl} />
       </div>
+
+      {/* --- Listing copy for each channel --- */}
+      <ListingCopyCard tabs={copyTabs} />
 
       {/* --- Photos for this rental --- */}
       <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">

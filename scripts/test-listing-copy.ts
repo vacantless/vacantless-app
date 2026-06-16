@@ -1,0 +1,165 @@
+// Unit tests for the pure listing-copy logic. Run: npx tsx scripts/test-listing-copy.ts
+import {
+  COPY_PORTAL_KEYS,
+  COPY_PORTALS,
+  isCopyPortalKey,
+  normalizeCopyPortal,
+  copyPortalLabel,
+  formatRent,
+  bedsBathsSummary,
+  truncateTitle,
+  buildHeadline,
+  buildListingCopy,
+  buildAllListingCopy,
+  stripEmDashes,
+  type ListingCopyInput,
+} from "../lib/listing-copy";
+
+let passed = 0;
+let failed = 0;
+
+function ok(name: string, cond: boolean) {
+  if (cond) {
+    passed++;
+  } else {
+    failed++;
+    console.error(`  ✗ ${name}`);
+  }
+}
+
+const NOW = new Date("2026-06-15T12:00:00Z");
+
+// --- portal keys -----------------------------------------------------------
+ok("COPY_PORTAL_KEYS has 6", COPY_PORTAL_KEYS.length === 6);
+ok("COPY_PORTALS mirrors keys", COPY_PORTALS.length === COPY_PORTAL_KEYS.length);
+ok("isCopyPortalKey: kijiji", isCopyPortalKey("kijiji"));
+ok("isCopyPortalKey: rejects junk", !isCopyPortalKey("craigslist"));
+ok("isCopyPortalKey: rejects non-string", !isCopyPortalKey(7));
+ok("normalizeCopyPortal: trims + accepts", normalizeCopyPortal(" facebook ") === "facebook");
+ok("normalizeCopyPortal: blank -> generic", normalizeCopyPortal("") === "generic");
+ok("normalizeCopyPortal: junk -> generic", normalizeCopyPortal("nope") === "generic");
+ok("copyPortalLabel: kijiji", copyPortalLabel("kijiji") === "Kijiji");
+ok("copyPortalLabel: junk -> Master copy", copyPortalLabel("x") === "Master copy");
+
+// --- formatRent ------------------------------------------------------------
+ok("formatRent: whole dollars no cents", formatRent(185000) === "$1,850/month");
+ok("formatRent: keeps odd cents", formatRent(185050) === "$1,850.50/month");
+ok("formatRent: null -> null", formatRent(null) === null);
+ok("formatRent: zero -> null", formatRent(0) === null);
+ok("formatRent: negative -> null", formatRent(-5) === null);
+ok("formatRent: NaN -> null", formatRent(Number.NaN) === null);
+
+// --- bedsBathsSummary ------------------------------------------------------
+ok("bb: 2 bed 1 bath", bedsBathsSummary(2, 1) === "2 bed, 1 bath");
+ok("bb: studio", bedsBathsSummary(0, 1) === "Studio, 1 bath");
+ok("bb: beds only", bedsBathsSummary(3, null) === "3 bed");
+ok("bb: baths only", bedsBathsSummary(null, 2) === "2 bath");
+ok("bb: 1.5 bath", bedsBathsSummary(2, 1.5) === "2 bed, 1.5 bath");
+ok("bb: none -> null", bedsBathsSummary(null, null) === null);
+
+// --- truncateTitle ---------------------------------------------------------
+ok("truncate: short passthrough", truncateTitle("Nice 2 bed", 64) === "Nice 2 bed");
+ok("truncate: collapses whitespace", truncateTitle("a   b", 64) === "a b");
+ok(
+  "truncate: word boundary <= max",
+  truncateTitle("one two three four five six seven", 15).length <= 15,
+);
+ok(
+  "truncate: no trailing punctuation",
+  !/[\s,.;:-]$/.test(truncateTitle("one two three, four five", 14)),
+);
+
+// --- buildHeadline ---------------------------------------------------------
+const headInput: ListingCopyInput = {
+  address: "123 Main St, Unit 4",
+  rentCents: 185000,
+  beds: 2,
+  baths: 1,
+};
+ok(
+  "headline: has beds/baths + address + rent",
+  buildHeadline(headInput) === "2 bed, 1 bath for rent - 123 Main St, Unit 4 - $1,850/month",
+);
+ok(
+  "headline: no rent gracefully",
+  buildHeadline({ address: "5 Oak Ave", beds: 1, baths: 1 }) ===
+    "1 bed, 1 bath for rent - 5 Oak Ave",
+);
+ok(
+  "headline: uses hyphen not em dash",
+  !/[–—]/.test(buildHeadline(headInput)),
+);
+
+// --- buildListingCopy ------------------------------------------------------
+const fullInput: ListingCopyInput = {
+  businessName: "Maple Door Rentals",
+  address: "123 Main St, Unit 4",
+  rentCents: 185000,
+  beds: 2,
+  baths: 1,
+  description: "Bright corner suite with great light.",
+  publicUrl: "https://vacantless-app.vercel.app/r/abc123",
+  features: {
+    available_date: "2026-08-01",
+    sqft: 850,
+    floor: "3rd",
+    parking: "1 spot",
+    laundry: "in_suite",
+    air_conditioning: true,
+    balcony: true,
+    heat_included: true,
+    water_included: true,
+  },
+  now: NOW,
+};
+
+const generic = buildListingCopy(fullInput, "generic");
+ok("copy: portal echoed", generic.portal === "generic");
+ok("copy: title length-capped (generic 120)", generic.title.length <= 120);
+ok("copy: body includes rent", generic.body.includes("$1,850/month"));
+ok("copy: body includes availability", generic.body.includes("Available Aug 1"));
+ok("copy: body includes sqft", generic.body.includes("850 sq ft"));
+ok("copy: body includes amenity", generic.body.includes("Air conditioning"));
+ok("copy: body includes utilities derived", generic.body.includes("Heat & water included in rent."));
+ok("copy: body includes description", generic.body.includes("Bright corner suite"));
+ok("copy: body includes link", generic.body.includes("https://vacantless-app.vercel.app/r/abc123"));
+ok("copy: body signs off with business", generic.body.includes("- Maple Door Rentals"));
+ok("copy: no em dashes anywhere", !/[–—]/.test(generic.body) && !/[–—]/.test(generic.title));
+
+// Kijiji title cap is 64.
+const kijiji = buildListingCopy(fullInput, "kijiji");
+ok("copy: kijiji title <= 64", kijiji.title.length <= 64);
+
+// Facebook puts the link on its own line.
+const fb = buildListingCopy(fullInput, "facebook");
+ok("copy: facebook link on own line", fb.body.includes("inquiry:\n\nhttps://"));
+
+// Sparse unit still renders cleanly.
+const sparse = buildListingCopy(
+  { address: "9 Elm", beds: 1, baths: 1 },
+  "kijiji",
+);
+ok("copy: sparse has title", sparse.title.length > 0);
+ok("copy: sparse falls back to contact CTA", sparse.body.includes("Contact us to book a viewing."));
+ok("copy: sparse no available-date still says Available now", sparse.body.includes("Available now"));
+
+// utilities NOT hardcoded: a unit with no included utilities omits the line.
+const noUtils = buildListingCopy(
+  { address: "1 A St", beds: 1, baths: 1, features: { furnished: false } },
+  "generic",
+);
+ok("copy: no utilities line when none included", !noUtils.body.includes("in rent."));
+
+// buildAllListingCopy returns one per portal.
+const all = buildAllListingCopy(fullInput);
+ok("buildAll: one per portal", all.length === COPY_PORTAL_KEYS.length);
+ok("buildAll: each has title+body", all.every((c) => c.title.length > 0 && c.body.length > 0));
+
+// --- stripEmDashes ---------------------------------------------------------
+ok("stripEmDashes: em -> hyphen", stripEmDashes("a — b") === "a - b");
+ok("stripEmDashes: en -> hyphen", stripEmDashes("a – b") === "a - b");
+ok("stripEmDashes: leaves hyphen", stripEmDashes("a - b") === "a - b");
+
+// --- summary ---------------------------------------------------------------
+console.log(`\nlisting-copy: ${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);

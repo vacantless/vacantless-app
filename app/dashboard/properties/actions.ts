@@ -148,6 +148,95 @@ export async function updateProperty(formData: FormData) {
 }
 
 /**
+ * Duplicate a rental: clone the property row + all of its 0013 unit-feature
+ * fields into a NEW row so an operator with several near-identical units (e.g.
+ * units in the same building) doesn't re-enter every amenity/utility flag.
+ *
+ * The clone is created OFF MARKET (a "draft" until per-unit Draft status lands
+ * in block 2) and its address is prefixed "Copy of " so a half-edited duplicate
+ * never goes public with the wrong address. We deliberately do NOT copy
+ * per-listing event/relationship state: price-drop flags, photos, listing posts,
+ * leads, or showings — only the unit's own descriptive fields. Redirect-based
+ * (dodges the 503 WATCH on revalidate-only server actions, S170).
+ */
+export async function duplicateProperty(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+
+  // RLS scopes this read to the caller's org, so a foreign id returns nothing.
+  const { data: source } = await supabase
+    .from("properties")
+    .select(
+      "address, rent_cents, beds, baths, parking, description, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, heat_included, hydro_included, water_included, photos_ready",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!source) redirect("/dashboard/properties");
+  const s = source as {
+    address: string;
+    rent_cents: number | null;
+    beds: number | null;
+    baths: number | null;
+    parking: string | null;
+    description: string | null;
+    available_date: string | null;
+    sqft: number | null;
+    floor: string | null;
+    laundry: string | null;
+    air_conditioning: boolean;
+    balcony: boolean;
+    furnished: boolean;
+    pet_friendly: boolean;
+    heat_included: boolean;
+    hydro_included: boolean;
+    water_included: boolean;
+    photos_ready: boolean;
+  };
+
+  const { data: inserted } = await supabase
+    .from("properties")
+    .insert({
+      organization_id: org.id,
+      address: `Copy of ${s.address}`,
+      rent_cents: s.rent_cents,
+      beds: s.beds,
+      baths: s.baths,
+      parking: s.parking,
+      description: s.description,
+      status: "off_market", // a private draft until the operator sets it live
+      available_date: s.available_date,
+      sqft: s.sqft,
+      floor: s.floor,
+      laundry: s.laundry,
+      air_conditioning: s.air_conditioning,
+      balcony: s.balcony,
+      furnished: s.furnished,
+      pet_friendly: s.pet_friendly,
+      heat_included: s.heat_included,
+      hydro_included: s.hydro_included,
+      water_included: s.water_included,
+      // Photos are not copied, so the clone has none ready yet.
+      photos_ready: false,
+    })
+    .select("id")
+    .maybeSingle();
+
+  revalidatePath("/dashboard/properties");
+  revalidatePath("/dashboard");
+
+  const newId = (inserted as { id: string } | null)?.id;
+  if (!newId) redirect("/dashboard/properties");
+  // Land the operator on the clone's edit page so they fix the address + rent.
+  redirect(`/dashboard/properties/${newId}?duplicated=1`);
+}
+
+/**
  * Price-drop blast: email every still-open lead on a property that the rent has
  * dropped, inviting them back to the public listing. Recomputes eligibility
  * server-side (never trusts the client), sends best-effort branded emails, logs
