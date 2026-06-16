@@ -38,6 +38,12 @@ export default async function BillingPage({
     // Without this, a Pilot org's pilot window can't be derived, so the page
     // wrongly falls through to the "free trial" copy (live QA finding S192).
     pilot_started_at: org.pilot_started_at,
+    // Deposit state must be threaded in or buildBillingView defaults it to
+    // "none" and the panel always shows "Pay deposit" even after it's paid
+    // (live QA finding S202: deposit recorded in the DB but never reflected).
+    pilot_deposit_status: org.pilot_deposit_status,
+    pilot_deposit_amount_cents: org.pilot_deposit_amount_cents,
+    pilot_deposit_paid_at: org.pilot_deposit_paid_at,
     timezone: org.booking_timezone,
   });
 
