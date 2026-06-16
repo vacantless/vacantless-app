@@ -25,6 +25,9 @@ export default async function BillingPage({
     subscription_status: org.subscription_status,
     stripe_subscription_id: org.stripe_subscription_id,
     current_period_end: org.current_period_end,
+    // Without this, a Pilot org's pilot window can't be derived, so the page
+    // wrongly falls through to the "free trial" copy (live QA finding S192).
+    pilot_started_at: org.pilot_started_at,
     timezone: org.booking_timezone,
   });
 
@@ -53,8 +56,8 @@ export default async function BillingPage({
     <div>
       <h2 className="text-xl font-bold text-gray-900">Billing</h2>
       <p className="mt-1 text-sm text-gray-500">
-        Your Vacantless subscription. Plans are billed monthly; you can change
-        or cancel anytime from the billing portal.
+        Your plan. You're billed monthly and can change or cancel anytime, with
+        no contract.
       </p>
 
       {checkout === "success" && (
@@ -108,7 +111,7 @@ export default async function BillingPage({
               ) : view.pilotExpired ? (
                 "Your 30-day pilot has ended. Choose a plan below to keep going."
               ) : (
-                "You're on the free trial. Start a pilot or choose a plan below to go live."
+                "You haven't started yet. Begin a 30-day pilot or choose a plan below to go live."
               )}
             </p>
           </div>

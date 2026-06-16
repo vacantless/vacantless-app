@@ -25,9 +25,9 @@ export default async function OnboardingPage({
   return (
     <AuthShell
       eyebrow="Step 1 of 2"
-      title="Create your workspace"
-      subtitle="This is your branded leasing workspace, the home for your properties, renters, and showings. You can change any of these settings later."
-      footer="Next: add your first property and share its inquiry page."
+      title="Create your account"
+      subtitle="This is your account, the home for your rentals, renters, and showings. You can change any of these settings later."
+      footer="Next: add your first rental and share its inquiry page."
     >
       {/* gradient step indicator */}
       <div className="mb-6 flex items-center gap-2" aria-hidden>

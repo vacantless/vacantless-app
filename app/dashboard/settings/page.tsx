@@ -381,7 +381,7 @@ export default async function SettingsPage({
             <dd className="font-medium text-gray-900">/r/&hellip;</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Workspace ID</dt>
+            <dt className="text-gray-500">Account ID</dt>
             <dd className="font-mono text-xs text-gray-600">{org.slug}</dd>
           </div>
         </dl>

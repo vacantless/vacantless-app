@@ -43,7 +43,7 @@ export default function SignupPage() {
     <AuthShell
       eyebrow="Start a 30-day pilot"
       title="Create your account"
-      subtitle="Set up your branded leasing workspace in a couple of minutes. No credit card to start."
+      subtitle="Set up your account in a couple of minutes. No credit card to start."
       footer={
         <>
           Already have an account?{" "}

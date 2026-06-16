@@ -17,7 +17,11 @@ type PropertyRow = {
   status: string;
 };
 
-export default async function PropertiesPage() {
+export default async function PropertiesPage({
+  searchParams,
+}: {
+  searchParams: { added?: string };
+}) {
   const supabase = createClient();
   const [{ data: properties }, { data: leadRefs }] = await Promise.all([
     supabase
@@ -46,6 +50,12 @@ export default async function PropertiesPage() {
   return (
     <div>
       <h2 className="mb-4 text-xl font-bold text-gray-900">Properties</h2>
+
+      {searchParams.added && (
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Property added. Its public inquiry page is ready to share.
+        </p>
+      )}
 
       {rows.length > 0 ? (
         <ul className="mb-8 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">

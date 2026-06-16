@@ -91,53 +91,108 @@ export default async function LeadsPage({
           />
         )
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
-              <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Property</th>
-                <th className="px-4 py-2 font-medium">Source</th>
-                <th className="px-4 py-2 font-medium">Received</th>
-                <th className="px-4 py-2 font-medium">Stage</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {rows.map((l) => {
-                const fStatus = followUpStatus(l.next_action_at, today);
-                return (
-                <tr key={l.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2">
+        <>
+          {/* Mobile: a card per inquiry (the table is too cramped on phones). */}
+          <ul className="space-y-3 md:hidden">
+            {rows.map((l) => {
+              const fStatus = followUpStatus(l.next_action_at, today);
+              return (
+                <li
+                  key={l.id}
+                  className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
                     <Link
                       href={`/dashboard/leads/${l.id}`}
-                      className="font-medium text-gray-900 hover:text-brand"
+                      className="font-semibold text-gray-900 hover:text-brand"
                     >
                       {l.name || l.email || "Unnamed renter"}
                     </Link>
                     {fStatus !== "none" && (
                       <span
-                        className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${FOLLOW_CHIP[fStatus]}`}
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${FOLLOW_CHIP[fStatus]}`}
                       >
                         {followUpLabel(l.next_action_at, today)}
                       </span>
                     )}
-                  </td>
-                  <td className="px-4 py-2 text-gray-600">
-                    {l.property?.address ?? "—"}
-                  </td>
-                  <td className="px-4 py-2 text-gray-600">{l.source ?? "—"}</td>
-                  <td className="px-4 py-2 text-gray-500">
-                    {new Date(l.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2">
+                  </div>
+                  <dl className="mt-2 space-y-1 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-400">Rental</dt>
+                      <dd className="text-right text-gray-700">
+                        {l.property?.address ?? "—"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-400">Source</dt>
+                      <dd className="text-right text-gray-700">
+                        {l.source ?? "—"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-400">Received</dt>
+                      <dd className="text-right text-gray-500">
+                        {new Date(l.created_at).toLocaleDateString()}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="mt-3 border-t border-gray-100 pt-3">
                     <StatusSelect leadId={l.id} status={l.status} />
-                  </td>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* md+ : the full table. */}
+          <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:block">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Name</th>
+                  <th className="px-4 py-2 font-medium">Rental</th>
+                  <th className="px-4 py-2 font-medium">Source</th>
+                  <th className="px-4 py-2 font-medium">Received</th>
+                  <th className="px-4 py-2 font-medium">Stage</th>
                 </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {rows.map((l) => {
+                  const fStatus = followUpStatus(l.next_action_at, today);
+                  return (
+                  <tr key={l.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2">
+                      <Link
+                        href={`/dashboard/leads/${l.id}`}
+                        className="font-medium text-gray-900 hover:text-brand"
+                      >
+                        {l.name || l.email || "Unnamed renter"}
+                      </Link>
+                      {fStatus !== "none" && (
+                        <span
+                          className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${FOLLOW_CHIP[fStatus]}`}
+                        >
+                          {followUpLabel(l.next_action_at, today)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">
+                      {l.property?.address ?? "—"}
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">{l.source ?? "—"}</td>
+                    <td className="px-4 py-2 text-gray-500">
+                      {new Date(l.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2">
+                      <StatusSelect leadId={l.id} status={l.status} />
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

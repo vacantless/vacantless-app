@@ -80,6 +80,10 @@ export async function addProperty(formData: FormData) {
 
   revalidatePath("/dashboard/properties");
   revalidatePath("/dashboard");
+  // Redirect (not just revalidate) so the add form REMOUNTS and its uncontrolled
+  // inputs clear — otherwise the typed values linger and invite a duplicate
+  // unit on the next submit (live QA finding S192).
+  redirect("/dashboard/properties?added=1");
 }
 
 export async function updateProperty(formData: FormData) {

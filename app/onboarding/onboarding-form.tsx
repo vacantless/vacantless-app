@@ -31,7 +31,7 @@ export function OnboardingForm({
     <form action={action} className="mt-6 space-y-5">
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
-          Organization name
+          Business name
         </label>
         <input
           name="name"
@@ -93,7 +93,7 @@ export function OnboardingForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button type="submit" className={AUTH_BUTTON_CLASS}>
-        Create workspace
+        Create my account
       </button>
     </form>
   );
