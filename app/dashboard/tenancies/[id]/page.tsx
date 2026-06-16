@@ -24,6 +24,7 @@ import {
   removeTenant,
   makePrimaryTenant,
 } from "../actions";
+import { createRotessaCustomer } from "../rotessa-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,8 @@ type Tenancy = {
   move_in_notes: string | null;
   notes: string | null;
   lead_id: string | null;
+  rotessa_customer_id: string | null;
+  rotessa_customer_synced_at: string | null;
   property: { id: string; address: string } | null;
   tenants: Tenant[];
 };
@@ -67,19 +70,40 @@ const TENANT_FLASH: Record<string, string> = {
   removed: "Tenant removed.",
   primary: "Primary tenant updated.",
 };
+// Rotessa customer-creation outcomes (?rotessa=...). `created`/`already` are
+// success-toned; the rest are errors.
+const ROTESSA_SUCCESS: Record<string, string> = {
+  created: "Rotessa customer created from the primary tenant. You can now set up rent collection for this tenancy.",
+  already: "This tenancy already has a Rotessa customer.",
+};
+const ROTESSA_ERROR: Record<string, string> = {
+  notconnected: "Connect your Rotessa account in Settings before creating a customer.",
+  noprimary: "This tenancy needs a primary tenant first.",
+  noname: "Give the primary tenant a name before creating a Rotessa customer.",
+  decfail: "We couldn't read your stored Rotessa key. Reconnect it in Settings.",
+  createfail: "Rotessa couldn't create the customer. Check your connection in Settings and try again.",
+  forbidden: "You don't have permission to manage rent collection.",
+};
 
 export default async function TenancyDetailPage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { saved?: string; created?: string; ended?: string; tenant?: string; err?: string };
+  searchParams: {
+    saved?: string;
+    created?: string;
+    ended?: string;
+    tenant?: string;
+    err?: string;
+    rotessa?: string;
+  };
 }) {
   const supabase = createClient();
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, property:properties(id, address), tenants(id, name, email, phone, is_primary)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -91,13 +115,29 @@ export default async function TenancyDetailPage({
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary));
   const primary = tenants.find((x) => x.is_primary) ?? tenants[0] ?? null;
 
+  // The org's Rotessa connection state (RLS scopes the row to this org). We
+  // surface whether rent collection is connected so the Rent-collection card
+  // below can show the right call-to-action; the stored key is never read here.
+  const { data: rotessaRows } = await supabase
+    .from("rotessa_accounts")
+    .select("connection_status, api_key_encrypted")
+    .limit(1);
+  const rotessaRow = rotessaRows?.[0] as
+    | { connection_status: string; api_key_encrypted: string | null }
+    | undefined;
+  const rotessaConnected = !!rotessaRow?.api_key_encrypted;
+  const rotessaStatus = rotessaRow?.connection_status ?? "not_connected";
+
   const flash =
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created && FLASH.created) ||
     (searchParams.ended && FLASH.ended) ||
     (searchParams.tenant && TENANT_FLASH[searchParams.tenant]) ||
+    (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
     null;
-  const errMsg = tenancyErrorMessage(searchParams.err);
+  const errMsg =
+    tenancyErrorMessage(searchParams.err) ||
+    (searchParams.rotessa ? ROTESSA_ERROR[searchParams.rotessa] ?? null : null);
 
   return (
     <div>
@@ -273,6 +313,78 @@ export default async function TenancyDetailPage({
           Save changes
         </button>
       </form>
+
+      {/* Rent collection (Rotessa) --------------------------------------- */}
+      <SectionHeading>Rent collection</SectionHeading>
+      <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        {t.rotessa_customer_id ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusChip tone="success">Customer on file</StatusChip>
+              <span className="text-sm text-gray-600">
+                {primary?.name || "Primary tenant"} is set up as a Rotessa customer.
+              </span>
+            </div>
+            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-gray-500">Rotessa customer ID</dt>
+                <dd className="font-mono text-xs text-gray-700">{t.rotessa_customer_id}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Created</dt>
+                <dd className="font-medium text-gray-900">
+                  {t.rotessa_customer_synced_at
+                    ? new Date(t.rotessa_customer_synced_at).toLocaleString()
+                    : "—"}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-xs text-gray-400">
+              Next: schedule the monthly rent for this tenancy (coming soon). Your
+              tenant authorizes their bank details directly in Rotessa — Vacantless
+              never stores bank account numbers.
+            </p>
+          </div>
+        ) : !rotessaConnected ? (
+          <p className="text-sm text-gray-600">
+            Connect your Rotessa account in{" "}
+            <Link href="/dashboard/settings#rotessa" className="font-medium text-brand hover:underline">
+              Settings
+            </Link>{" "}
+            to collect rent by pre-authorized debit for this tenancy.
+          </p>
+        ) : !primary?.name ? (
+          <p className="text-sm text-gray-600">
+            Add a name to the primary tenant above before creating a Rotessa
+            customer.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Create a Rotessa customer for{" "}
+              <span className="font-medium text-gray-900">{primary.name}</span>{" "}
+              (the primary tenant) to start collecting rent. We send only their
+              name and contact details — never bank account numbers.
+            </p>
+            {rotessaStatus === "error" && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Your last Rotessa connection check reported an error. If creating
+                the customer fails, re-test the connection in Settings.
+              </p>
+            )}
+            <form action={createRotessaCustomer}>
+              <input type="hidden" name="tenancy_id" value={t.id} />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+              >
+                Create Rotessa customer
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
 
       {/* Lifecycle actions ----------------------------------------------- */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
