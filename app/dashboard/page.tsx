@@ -10,6 +10,7 @@ import {
   buildLaunchChecklist,
   isBrandingConfirmed,
 } from "@/lib/onboarding";
+import { isSubscriptionActive, pilotStatus } from "@/lib/billing";
 import {
   Card,
   SectionHeading,
@@ -100,7 +101,10 @@ export default async function OverviewPage() {
     availabilityWindowCount: availabilityCount ?? 0,
     brandingConfirmed: org ? isBrandingConfirmed(org) : false,
     leadCount: allLeads.length,
-    subscriptionActive: org?.subscription_status === "active",
+    // "Go live" is satisfied by an active paid subscription OR an active pilot.
+    subscriptionActive:
+      isSubscriptionActive(org?.subscription_status) ||
+      pilotStatus(org?.pilot_started_at).active,
     firstPropertyId: (propertyRows as { id: string }[] | null)?.[0]?.id ?? null,
   });
 

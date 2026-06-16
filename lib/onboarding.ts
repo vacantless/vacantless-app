@@ -103,7 +103,7 @@ const STEP_DEFS: StepDef[] = [
     key: "golive",
     label: "Go live",
     description:
-      "Subscribe to a plan when you're ready to run real listings on Vacantless.",
+      "Start a 30-day pilot or subscribe to a plan when you're ready to run real listings on Vacantless.",
     href: "/dashboard/billing",
     cta: "View billing",
   },

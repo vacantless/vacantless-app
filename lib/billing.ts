@@ -4,7 +4,7 @@
 // unit-tests cleanly via `npx tsx scripts/test-billing.ts`. The impure pieces
 // (the Stripe client, env-driven price-id lookup) live in lib/stripe.ts.
 
-export type PlanKey = "trial" | "core" | "plus";
+export type PlanKey = "trial" | "pilot" | "core" | "plus";
 export type PaidPlanKey = "core" | "plus";
 
 export type PlanInfo = {
@@ -60,6 +60,85 @@ export const PAID_PLAN_KEYS: PaidPlanKey[] = ["core", "plus"];
 
 export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey {
   return plan === "core" || plan === "plus";
+}
+
+// --- Pilot tier (GTM Layer 1) ----------------------------------------------
+// A self-serve 30-day, founder-led pilot at $0/month with a refundable $200
+// setup deposit (collected out-of-band for now — there's no in-app Stripe
+// one-time charge yet). Recorded as plan='pilot' + organizations.pilot_started_at;
+// the 30-day end is DERIVED here, never stored. A pilot gets full product access
+// because no feature is gated on plan tier.
+export const PILOT_DURATION_DAYS = 30;
+export const PILOT_DEPOSIT_CENTS = 20000; // CAD, one-time, refundable
+const DAY_MS = 86_400_000;
+
+export const PILOT = {
+  key: "pilot" as const,
+  name: "Pilot",
+  durationDays: PILOT_DURATION_DAYS,
+  depositCents: PILOT_DEPOSIT_CENTS,
+  blurb:
+    "A 30-day, set-up-with-you trial of the full system, at no monthly cost.",
+  features: [
+    "Full access to every Core and Plus feature",
+    "We set it up and onboard you",
+    "$0 monthly fee for 30 days",
+    "Refundable $200 setup deposit",
+    "Third-party ad/portal costs billed at cost",
+  ],
+};
+
+export function isPilotPlan(plan: string | null | undefined): boolean {
+  return plan === "pilot";
+}
+
+// Format a plain one-time amount, e.g. "$200" (no "/month"). Use for the deposit.
+export function formatAmount(cents: number): string {
+  return "$" + Math.round(cents / 100).toLocaleString("en-CA");
+}
+
+export type PilotStatus = {
+  started: boolean; // a pilot was ever started
+  active: boolean; // started and within the 30-day window
+  expired: boolean; // started but the 30 days have passed
+  daysRemaining: number; // whole days left (0 once expired / not started)
+  startedAt: Date | null;
+  endsAt: Date | null;
+};
+
+// Derive the live pilot status from the stored start timestamp. `now` is
+// injectable for testing. A missing/invalid start = "never started".
+export function pilotStatus(
+  startedAt: string | Date | null | undefined,
+  now: Date = new Date(),
+): PilotStatus {
+  const start =
+    startedAt == null
+      ? null
+      : startedAt instanceof Date
+        ? startedAt
+        : new Date(startedAt);
+  if (!start || isNaN(start.getTime())) {
+    return {
+      started: false,
+      active: false,
+      expired: false,
+      daysRemaining: 0,
+      startedAt: null,
+      endsAt: null,
+    };
+  }
+  const endsAt = new Date(start.getTime() + PILOT_DURATION_DAYS * DAY_MS);
+  const msLeft = endsAt.getTime() - now.getTime();
+  const active = msLeft > 0;
+  return {
+    started: true,
+    active,
+    expired: !active,
+    daysRemaining: active ? Math.ceil(msLeft / DAY_MS) : 0,
+    startedAt: start,
+    endsAt,
+  };
 }
 
 // Format a cents amount as a monthly price label, e.g. "$400/month".
@@ -165,8 +244,13 @@ export function statusLabel(status: string | null | undefined): string {
 
 export type BillingView = {
   planKey: PlanKey;
-  planLabel: string; // "Trial" | "Core" | "Plus"
+  planLabel: string; // "Trial" | "Pilot" | "Core" | "Plus"
   isPaid: boolean; // org is on a paid tier (core/plus)
+  isPilot: boolean; // org is on the pilot plan (active OR expired-not-yet-converted)
+  pilotActive: boolean; // pilot started and within the 30-day window
+  pilotExpired: boolean; // pilot started but the 30 days have passed
+  pilotDaysRemaining: number;
+  pilotEndsAtLabel: string | null; // formatted in the org timezone
   hasSubscription: boolean; // a Stripe subscription is on file
   status: string | null;
   statusLabel: string;
@@ -180,12 +264,15 @@ export type BillingInput = {
   subscription_status: string | null | undefined;
   stripe_subscription_id: string | null | undefined;
   current_period_end: string | Date | null | undefined;
+  pilot_started_at?: string | Date | null | undefined;
   timezone?: string;
+  now?: Date; // injectable for tests
 };
 
 function planLabelOf(plan: PlanKey): string {
   if (plan === "core") return "Core";
   if (plan === "plus") return "Plus";
+  if (plan === "pilot") return "Pilot";
   return "Trial";
 }
 
@@ -208,7 +295,12 @@ export function formatPeriodEnd(
 
 // Build the view-model the Billing page + settings Account panel render from.
 export function buildBillingView(input: BillingInput): BillingView {
-  const planKey: PlanKey = isPaidPlan(input.plan) ? input.plan : "trial";
+  // A paid Stripe plan wins; otherwise the org may be on a pilot; else trial.
+  const planKey: PlanKey = isPaidPlan(input.plan)
+    ? input.plan
+    : isPilotPlan(input.plan)
+      ? "pilot"
+      : "trial";
   const status = input.subscription_status ?? null;
   const periodEnd =
     input.current_period_end != null
@@ -218,10 +310,20 @@ export function buildBillingView(input: BillingInput): BillingView {
       : null;
   const validPeriodEnd = periodEnd && !isNaN(periodEnd.getTime()) ? periodEnd : null;
 
+  const pilot = pilotStatus(input.pilot_started_at, input.now);
+
   return {
     planKey,
     planLabel: planLabelOf(planKey),
     isPaid: isPaidPlan(planKey),
+    isPilot: planKey === "pilot",
+    pilotActive: planKey === "pilot" && pilot.active,
+    pilotExpired: planKey === "pilot" && pilot.expired,
+    pilotDaysRemaining: planKey === "pilot" ? pilot.daysRemaining : 0,
+    pilotEndsAtLabel:
+      planKey === "pilot" && pilot.endsAt
+        ? formatPeriodEnd(pilot.endsAt, input.timezone)
+        : null,
     hasSubscription: !!input.stripe_subscription_id,
     status,
     statusLabel: statusLabel(status),

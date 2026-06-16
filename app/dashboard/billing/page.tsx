@@ -2,18 +2,20 @@ import { getCurrentOrg } from "@/lib/org";
 import {
   PLANS,
   PAID_PLAN_KEYS,
+  PILOT,
   formatPlanPrice,
+  formatAmount,
   buildBillingView,
 } from "@/lib/billing";
 import { isBillingConfigured } from "@/lib/stripe";
-import { startCheckout, openBillingPortal } from "./actions";
+import { startCheckout, openBillingPortal, startPilot } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: { checkout?: string; error?: string };
+  searchParams: { checkout?: string; error?: string; pilot?: string };
 }) {
   const org = await getCurrentOrg();
   if (!org) return null;
@@ -29,6 +31,7 @@ export default async function BillingPage({
   const configured = isBillingConfigured();
   const checkout = searchParams.checkout;
   const error = searchParams.error;
+  const pilot = searchParams.pilot;
 
   const errorCopy: Record<string, string> = {
     not_configured:
@@ -37,7 +40,14 @@ export default async function BillingPage({
     checkout: "Couldn't start checkout. Please try again.",
     portal:
       "No billing account yet. Subscribe to a plan first, then you can manage it here.",
+    already_paid:
+      "You're already on a paid plan, so there's no need to start a pilot.",
+    pilot: "Couldn't start your pilot. Please try again.",
   };
+
+  // Whether to show the standalone pilot offer (only for a fresh trial org that
+  // hasn't started a pilot or subscribed).
+  const showPilotOffer = !view.isPaid && !view.isPilot;
 
   return (
     <div>
@@ -56,6 +66,13 @@ export default async function BillingPage({
       {checkout === "cancel" && (
         <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
           Checkout was canceled. No charge was made.
+        </div>
+      )}
+      {pilot === "started" && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Your 30-day pilot has started. You have full access to every feature.
+          We&apos;ll be in touch to help you set up and to arrange the refundable
+          ${PILOT.depositCents / 100} setup deposit.
         </div>
       )}
       {error && (
@@ -82,8 +99,16 @@ export default async function BillingPage({
                     ? ` · current period ends ${view.periodEndLabel}`
                     : ""}
                 </>
+              ) : view.pilotActive ? (
+                <>
+                  {view.pilotDaysRemaining} day
+                  {view.pilotDaysRemaining === 1 ? "" : "s"} left
+                  {view.pilotEndsAtLabel ? ` · ends ${view.pilotEndsAtLabel}` : ""}
+                </>
+              ) : view.pilotExpired ? (
+                "Your 30-day pilot has ended. Choose a plan below to keep going."
               ) : (
-                "You're on the free trial. Choose a plan below to go live."
+                "You're on the free trial. Start a pilot or choose a plan below to go live."
               )}
             </p>
           </div>
@@ -112,8 +137,86 @@ export default async function BillingPage({
         </div>
       )}
 
+      {/* Pilot offer — only for a fresh trial org */}
+      {showPilotOffer && (
+        <div className="mt-6 overflow-hidden rounded-xl border-2 border-brand bg-white">
+          <div className="border-b border-gray-100 bg-gray-50 px-6 py-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-brand">
+              Recommended to start
+            </span>
+          </div>
+          <div className="p-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-lg font-bold text-gray-900">
+                {PILOT.name} · 30 days
+              </h3>
+              <p className="text-right">
+                <span className="text-xl font-bold text-gray-900">
+                  $0<span className="text-sm font-medium text-gray-500">/month</span>
+                </span>
+                <span className="ml-2 text-sm text-gray-500">
+                  + {formatAmount(PILOT.depositCents)} refundable deposit
+                </span>
+              </p>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">{PILOT.blurb}</p>
+            <ul className="mt-4 grid grid-cols-1 gap-2 text-sm text-gray-700 sm:grid-cols-2">
+              {PILOT.features.map((f) => (
+                <li key={f} className="flex items-start gap-2">
+                  <span className="mt-0.5 text-brand">✓</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-6">
+              <form action={startPilot}>
+                <button className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white sm:w-auto sm:px-8">
+                  Start my 30-day pilot
+                </button>
+              </form>
+              <p className="mt-2 text-xs text-gray-400">
+                Starts instantly with full access. We&apos;ll reach out to help
+                you set up and arrange the refundable{" "}
+                {formatAmount(PILOT.depositCents)} deposit (a secure payment link,
+                returned at the end of the pilot). No card needed to start.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active-pilot status panel */}
+      {view.pilotActive && (
+        <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Your pilot is active
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {view.pilotDaysRemaining} day
+                {view.pilotDaysRemaining === 1 ? "" : "s"} left
+                {view.pilotEndsAtLabel ? ` · ends ${view.pilotEndsAtLabel}` : ""}.
+                You have full access to every feature. Choose a plan below
+                whenever you&apos;re ready to continue after the pilot.
+              </p>
+            </div>
+            <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+              Pilot
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Plan options */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <h3 className="mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">
+        {view.pilotActive
+          ? "Continue after your pilot"
+          : view.pilotExpired
+            ? "Choose a plan to keep going"
+            : "Founding plans"}
+      </h3>
+      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {PAID_PLAN_KEYS.map((key) => {
           const plan = PLANS[key];
           const isCurrent = view.planKey === key && view.isPaid;
@@ -157,7 +260,11 @@ export default async function BillingPage({
                       disabled={!configured}
                       className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {view.isPaid ? `Switch to ${plan.name}` : `Subscribe to ${plan.name}`}
+                      {view.isPaid
+                        ? `Switch to ${plan.name}`
+                        : view.isPilot
+                          ? `Continue on ${plan.name}`
+                          : `Subscribe to ${plan.name}`}
                     </button>
                   </form>
                 )}

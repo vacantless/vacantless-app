@@ -11,6 +11,12 @@ import {
   buildBillingView,
   subscriptionPeriodEndSeconds,
   shouldApplyStatus,
+  pilotStatus,
+  formatAmount,
+  isPilotPlan,
+  PILOT,
+  PILOT_DURATION_DAYS,
+  PILOT_DEPOSIT_CENTS,
 } from "../lib/billing";
 
 let passed = 0;
@@ -188,6 +194,90 @@ ok(
   "status: stale incomplete skipped over past_due (same sub)",
   shouldApplyStatus("incomplete", "past_due", true) === false,
 );
+
+// --- Pilot tier ------------------------------------------------------------
+ok("isPilotPlan true for 'pilot'", isPilotPlan("pilot"));
+ok("isPilotPlan false for core/plus/trial/null",
+  !isPilotPlan("core") && !isPilotPlan("plus") && !isPilotPlan("trial") && !isPilotPlan(null));
+ok("pilot is not a paid plan", !isPaidPlan("pilot"));
+
+ok("formatAmount has no /month suffix", formatAmount(20000) === "$200");
+ok("PILOT deposit + duration constants", PILOT_DEPOSIT_CENTS === 20000 && PILOT_DURATION_DAYS === 30);
+ok("PILOT config exposes deposit + duration", PILOT.depositCents === 20000 && PILOT.durationDays === 30);
+
+// pilotStatus: never started
+{
+  const s = pilotStatus(null);
+  ok("pilot not started => inactive", !s.started && !s.active && !s.expired && s.daysRemaining === 0);
+}
+// pilotStatus: day 0 (just started) => ~30 days left, active
+{
+  const now = new Date("2026-06-15T12:00:00.000Z");
+  const s = pilotStatus("2026-06-15T12:00:00.000Z", now);
+  ok("pilot just started is active", s.started && s.active && !s.expired);
+  ok("pilot day 0 has 30 days left", s.daysRemaining === 30);
+  ok("pilot endsAt = +30 days", s.endsAt?.toISOString() === "2026-07-15T12:00:00.000Z");
+}
+// pilotStatus: mid-window => days remaining counts down (ceil)
+{
+  const start = "2026-06-01T00:00:00.000Z";
+  const now = new Date("2026-06-21T00:00:00.000Z"); // 20 days in -> 10 left
+  const s = pilotStatus(start, now);
+  ok("pilot mid-window active", s.active && !s.expired);
+  ok("pilot mid-window 10 days left", s.daysRemaining === 10);
+}
+// pilotStatus: just past 30 days => expired, 0 left
+{
+  const start = "2026-06-01T00:00:00.000Z";
+  const now = new Date("2026-07-01T00:00:01.000Z"); // 1s past 30d
+  const s = pilotStatus(start, now);
+  ok("pilot expired after 30 days", s.started && s.expired && !s.active);
+  ok("pilot expired has 0 days left", s.daysRemaining === 0);
+}
+// pilotStatus: invalid date => not started
+ok("pilot invalid date => not started", pilotStatus("not-a-date").started === false);
+
+// buildBillingView: active pilot
+{
+  const now = new Date("2026-06-20T00:00:00.000Z");
+  const v = buildBillingView({
+    plan: "pilot",
+    subscription_status: null,
+    stripe_subscription_id: null,
+    current_period_end: null,
+    pilot_started_at: "2026-06-15T00:00:00.000Z", // 5 days in -> 25 left
+    timezone: "America/Toronto",
+    now,
+  });
+  ok("view pilot planKey + label", v.planKey === "pilot" && v.planLabel === "Pilot");
+  ok("view pilot is not paid", v.isPaid === false && v.isPilot === true);
+  ok("view pilot active + 25 days left", v.pilotActive && !v.pilotExpired && v.pilotDaysRemaining === 25);
+  ok("view pilot ends label present", typeof v.pilotEndsAtLabel === "string");
+}
+// buildBillingView: expired pilot
+{
+  const now = new Date("2026-08-01T00:00:00.000Z");
+  const v = buildBillingView({
+    plan: "pilot",
+    subscription_status: null,
+    stripe_subscription_id: null,
+    current_period_end: null,
+    pilot_started_at: "2026-06-15T00:00:00.000Z",
+    now,
+  });
+  ok("view expired pilot flagged", v.isPilot && v.pilotExpired && !v.pilotActive && v.pilotDaysRemaining === 0);
+}
+// buildBillingView: a paid plan ignores pilot fields
+{
+  const v = buildBillingView({
+    plan: "core",
+    subscription_status: "active",
+    stripe_subscription_id: "sub_x",
+    current_period_end: null,
+    pilot_started_at: "2026-06-15T00:00:00.000Z",
+  });
+  ok("paid plan not treated as pilot", v.isPaid && !v.isPilot && !v.pilotActive);
+}
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

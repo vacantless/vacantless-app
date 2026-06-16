@@ -6,6 +6,27 @@ import { getCurrentOrg } from "@/lib/org";
 import { getStripe, priceIdForPlan } from "@/lib/stripe";
 import { isPaidPlan } from "@/lib/billing";
 
+// Start a 30-day, founder-led pilot ($0/month, refundable $200 setup deposit
+// collected out-of-band). Records plan='pilot' + pilot_started_at=now via the
+// RLS-scoped client (owner updates their own org). Idempotent + guarded: a paid
+// org can't downgrade into a pilot, and an existing pilot is never restarted
+// (which would extend the window). Redirect-based, per the S170 503 WATCH.
+export async function startPilot() {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  if (isPaidPlan(org.plan)) redirect("/dashboard/billing?error=already_paid");
+  if (org.pilot_started_at) redirect("/dashboard/billing?pilot=already");
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ plan: "pilot", pilot_started_at: new Date().toISOString() })
+    .eq("id", org.id);
+
+  if (error) redirect("/dashboard/billing?error=pilot");
+  redirect("/dashboard/billing?pilot=started");
+}
+
 // Public base URL for Stripe success/cancel/return redirects. Matches the
 // helper in lib/email.ts; override with NEXT_PUBLIC_APP_URL in Vercel.
 const APP_BASE_URL = (
