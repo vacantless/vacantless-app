@@ -531,7 +531,15 @@ export async function uploadPropertyPhotos(formData: FormData) {
     });
     if (insErr) {
       // Roll back the orphaned object so Storage and the table stay in sync.
-      await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+      const { error: rbErr } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .remove([path]);
+      if (rbErr) {
+        console.error("uploadPhotos: rollback remove failed", {
+          path,
+          error: rbErr.message,
+        });
+      }
       continue;
     }
 
@@ -628,9 +636,26 @@ export async function deletePhoto(formData: FormData) {
       .update({ is_cover: true })
       .eq("id", promoteId);
   }
-  // Best-effort remove the underlying object.
+  // Remove the underlying object. The authenticated SELECT policy (migration
+  // 0025) is what lets remove() actually see + delete the row; without it the
+  // Storage API returned 200 with an empty deleted-list and silently orphaned
+  // the object. Log any error or an empty result instead of swallowing it so a
+  // future regression is visible (the reconcile script is the last-resort
+  // backstop). Failure here is non-fatal: the row is already gone.
   if (target) {
-    await supabase.storage.from(PHOTO_BUCKET).remove([target.storage_path]);
+    const { data: removed, error: rmErr } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .remove([target.storage_path]);
+    if (rmErr) {
+      console.error("deletePhoto: storage remove failed", {
+        path: target.storage_path,
+        error: rmErr.message,
+      });
+    } else if (!removed || removed.length === 0) {
+      console.error("deletePhoto: storage remove deleted 0 objects (orphan)", {
+        path: target.storage_path,
+      });
+    }
   }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);

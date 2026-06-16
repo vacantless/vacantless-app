@@ -113,13 +113,30 @@ async function clearOrgLogoFolder(
   supabase: ReturnType<typeof createClient>,
   orgId: string,
 ) {
-  const { data: existing } = await supabase.storage
+  // The authenticated SELECT policy (migration 0025) is what lets .list() see
+  // the org's objects and remove() delete them; before it, both silently
+  // no-op'd and orphaned the old logo on every replace/remove. Log failures
+  // instead of swallowing them.
+  const { data: existing, error: listErr } = await supabase.storage
     .from(LOGO_BUCKET)
     .list(orgId);
+  if (listErr) {
+    console.error("clearOrgLogoFolder: list failed", {
+      orgId,
+      error: listErr.message,
+    });
+    return;
+  }
   if (existing && existing.length > 0) {
-    await supabase.storage
+    const { error: rmErr } = await supabase.storage
       .from(LOGO_BUCKET)
       .remove(existing.map((f) => `${orgId}/${f.name}`));
+    if (rmErr) {
+      console.error("clearOrgLogoFolder: remove failed", {
+        orgId,
+        error: rmErr.message,
+      });
+    }
   }
 }
 
@@ -173,7 +190,15 @@ export async function uploadOrgLogo(formData: FormData) {
     .eq("id", org.id);
   if (dbErr) {
     // Roll back the orphaned object so Storage + the row stay in sync.
-    await supabase.storage.from(LOGO_BUCKET).remove([path]);
+    const { error: rbErr } = await supabase.storage
+      .from(LOGO_BUCKET)
+      .remove([path]);
+    if (rbErr) {
+      console.error("uploadOrgLogo: rollback remove failed", {
+        path,
+        error: rbErr.message,
+      });
+    }
     redirect("/dashboard/settings?logoerr=failed");
   }
 
