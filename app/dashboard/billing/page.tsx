@@ -7,15 +7,25 @@ import {
   formatAmount,
   buildBillingView,
 } from "@/lib/billing";
-import { isBillingConfigured } from "@/lib/stripe";
-import { startCheckout, openBillingPortal, startPilot } from "./actions";
+import { isBillingConfigured, isDepositConfigured } from "@/lib/stripe";
+import {
+  startCheckout,
+  openBillingPortal,
+  startPilot,
+  startDepositCheckout,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: { checkout?: string; error?: string; pilot?: string };
+  searchParams: {
+    checkout?: string;
+    error?: string;
+    pilot?: string;
+    deposit?: string;
+  };
 }) {
   const org = await getCurrentOrg();
   if (!org) return null;
@@ -32,9 +42,11 @@ export default async function BillingPage({
   });
 
   const configured = isBillingConfigured();
+  const depositConfigured = isDepositConfigured();
   const checkout = searchParams.checkout;
   const error = searchParams.error;
   const pilot = searchParams.pilot;
+  const deposit = searchParams.deposit;
 
   const errorCopy: Record<string, string> = {
     not_configured:
@@ -46,6 +58,9 @@ export default async function BillingPage({
     already_paid:
       "You're already on a paid plan, so there's no need to start a pilot.",
     pilot: "Couldn't start your pilot. Please try again.",
+    deposit: "Couldn't start the deposit payment. Please try again.",
+    deposit_not_pilot:
+      "The setup deposit is part of the pilot. Start your pilot first.",
   };
 
   // Whether to show the standalone pilot offer (only for a fresh trial org that
@@ -74,8 +89,24 @@ export default async function BillingPage({
       {pilot === "started" && (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           Your 30-day pilot has started. You have full access to every feature.
-          We&apos;ll be in touch to help you set up and to arrange the refundable
-          ${PILOT.depositCents / 100} setup deposit.
+          You can pay your refundable ${PILOT.depositCents / 100} setup deposit
+          below whenever you&apos;re ready.
+        </div>
+      )}
+      {deposit === "success" && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Thanks! Your refundable setup deposit is being processed. It can take a
+          few seconds to show as paid here. Refresh if it still shows as unpaid.
+        </div>
+      )}
+      {deposit === "cancel" && (
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          Deposit payment was canceled. No charge was made.
+        </div>
+      )}
+      {deposit === "already" && (
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          Your setup deposit is already paid. Nothing more to do.
         </div>
       )}
       {error && (
@@ -178,10 +209,10 @@ export default async function BillingPage({
                 </button>
               </form>
               <p className="mt-2 text-xs text-gray-400">
-                Starts instantly with full access. We&apos;ll reach out to help
-                you set up and arrange the refundable{" "}
-                {formatAmount(PILOT.depositCents)} deposit (a secure payment link,
-                returned at the end of the pilot). No card needed to start.
+                Starts instantly with full access, no card needed. You can pay the
+                refundable {formatAmount(PILOT.depositCents)} deposit afterward
+                (returned at the end of the pilot), and we&apos;ll help you get set
+                up.
               </p>
             </div>
           </div>
@@ -207,6 +238,67 @@ export default async function BillingPage({
             <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
               Pilot
             </span>
+          </div>
+
+          {/* Refundable setup deposit */}
+          <div className="mt-5 border-t border-gray-100 pt-5">
+            {view.depositPaid ? (
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    Setup deposit paid
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {view.depositAmountLabel} received
+                    {view.depositPaidAtLabel ? ` on ${view.depositPaidAtLabel}` : ""}.
+                    It&apos;s fully refundable and returned at the end of your
+                    pilot.
+                  </p>
+                </div>
+                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                  Paid
+                </span>
+              </div>
+            ) : view.depositRefunded ? (
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    Setup deposit refunded
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Your {view.depositAmountLabel} deposit has been returned.
+                  </p>
+                </div>
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                  Refunded
+                </span>
+              </div>
+            ) : view.showDepositCta ? (
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  Pay your refundable {view.depositAmountLabel} setup deposit
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  A one-time, fully refundable deposit, returned at the end of
+                  your pilot. Paid securely through Stripe; we never see your card
+                  details.
+                </p>
+                <form action={startDepositCheckout} className="mt-4">
+                  <button
+                    disabled={!depositConfigured}
+                    className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-8"
+                  >
+                    Pay {view.depositAmountLabel} deposit
+                  </button>
+                </form>
+                {!depositConfigured && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Online deposit payment isn&apos;t connected yet. We&apos;ll
+                    send you a secure payment link instead.
+                  </p>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       )}

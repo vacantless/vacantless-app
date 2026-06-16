@@ -12,6 +12,12 @@
 //   STRIPE_WEBHOOK_SECRET  — whsec_…  (used by app/api/stripe/webhook)
 //   STRIPE_PRICE_CORE      — the Stripe price id for the Core tier
 //   STRIPE_PRICE_PLUS      — the Stripe price id for the Plus tier
+//   STRIPE_PRICE_PILOT_DEPOSIT — (optional) a one-time Price for the refundable
+//                            pilot setup deposit. If unset, the deposit Checkout
+//                            falls back to an inline price built from
+//                            PILOT_DEPOSIT_CENTS (CAD), so the feature works
+//                            without a dashboard step; set this to manage the
+//                            amount/currency in the Stripe dashboard instead.
 
 import Stripe from "stripe";
 import { PLANS, type PaidPlanKey } from "@/lib/billing";
@@ -48,4 +54,16 @@ export function priceMap(): Record<string, PaidPlanKey> {
 // the subscribe buttons or a "billing not configured" notice.
 export function isBillingConfigured(): boolean {
   return !!getStripe() && Object.keys(priceMap()).length > 0;
+}
+
+// The optional managed Price id for the one-time pilot deposit, or null. When
+// null, the deposit Checkout uses an inline price (PILOT_DEPOSIT_CENTS, CAD).
+export function depositPriceId(): string | null {
+  return process.env.STRIPE_PRICE_PILOT_DEPOSIT || null;
+}
+
+// Deposit Checkout can run whenever Stripe is configured — the amount has an
+// inline fallback, so it needs no dedicated Price env var.
+export function isDepositConfigured(): boolean {
+  return !!getStripe();
 }

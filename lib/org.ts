@@ -13,6 +13,10 @@ export type Org = {
   subscription_status: string | null;
   current_period_end: string | null;
   pilot_started_at: string | null;
+  pilot_deposit_status: string;
+  pilot_deposit_payment_intent_id: string | null;
+  pilot_deposit_amount_cents: number | null;
+  pilot_deposit_paid_at: string | null;
   booking_timezone: string;
   feedback_enabled: boolean;
   feedback_delay_hours: number;
@@ -29,7 +33,7 @@ export async function getCurrentOrg(): Promise<Org | null> {
   const { data } = await supabase
     .from("organizations")
     .select(
-      "id, name, slug, brand_color, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, booking_timezone, feedback_enabled, feedback_delay_hours, nurture_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
+      "id, name, slug, brand_color, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, feedback_enabled, feedback_delay_hours, nurture_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
     )
     .limit(1);
   return (data?.[0] as Org) ?? null;

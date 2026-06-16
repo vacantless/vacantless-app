@@ -16,7 +16,8 @@ import { planForPriceId, subscriptionPeriodEndSeconds, shouldApplyStatus } from 
 // Set the endpoint in Stripe → Developers → Webhooks to:
 //   https://vacantless-app.vercel.app/api/stripe/webhook
 // listening for: checkout.session.completed, customer.subscription.created,
-// customer.subscription.updated, customer.subscription.deleted.
+// customer.subscription.updated, customer.subscription.deleted, charge.refunded
+// (the last for the refundable pilot deposit).
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // Stripe signature verification needs Node crypto
@@ -108,6 +109,81 @@ async function applySubscription(
   return { matched: true as const, orgId, plan: tier ?? "(unchanged)" };
 }
 
+// Record a paid pilot deposit on its org (one-time payment Checkout).
+// Idempotent: a replayed event just re-writes the same paid state. Never
+// un-refunds — if the org's deposit was already refunded, a late/duplicate
+// completed event is ignored.
+async function applyDepositPaid(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  session: Stripe.Checkout.Session,
+) {
+  const orgId =
+    (session.metadata?.org_id as string | undefined) ||
+    session.client_reference_id ||
+    null;
+  if (!orgId) return { matched: false as const };
+
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id ?? null;
+
+  const { data: rows } = await admin
+    .from("organizations")
+    .select("pilot_deposit_status")
+    .eq("id", orgId)
+    .limit(1);
+  const current = (rows?.[0]?.pilot_deposit_status as string | undefined) ?? "none";
+  if (current === "refunded") return { matched: true as const, orgId, skipped: true };
+
+  await admin
+    .from("organizations")
+    .update({
+      pilot_deposit_status: "paid",
+      pilot_deposit_payment_intent_id: paymentIntentId,
+      pilot_deposit_amount_cents: session.amount_total ?? null,
+      pilot_deposit_paid_at: new Date().toISOString(),
+    })
+    .eq("id", orgId);
+  return { matched: true as const, orgId };
+}
+
+// Flip a paid deposit to 'refunded' when its charge is fully refunded. Matches
+// the org by the stored PaymentIntent id. Only acts on a full refund of a
+// currently-paid deposit (a partial refund leaves it 'paid').
+async function applyDepositRefund(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  charge: Stripe.Charge,
+) {
+  const fullyRefunded =
+    charge.refunded === true ||
+    (typeof charge.amount_refunded === "number" &&
+      typeof charge.amount === "number" &&
+      charge.amount_refunded >= charge.amount &&
+      charge.amount > 0);
+  if (!fullyRefunded) return { matched: false as const };
+
+  const paymentIntentId =
+    typeof charge.payment_intent === "string"
+      ? charge.payment_intent
+      : charge.payment_intent?.id ?? null;
+  if (!paymentIntentId) return { matched: false as const };
+
+  const { data: rows } = await admin
+    .from("organizations")
+    .select("id, pilot_deposit_status")
+    .eq("pilot_deposit_payment_intent_id", paymentIntentId)
+    .limit(1);
+  const org = rows?.[0] as { id?: string; pilot_deposit_status?: string } | undefined;
+  if (!org?.id || org.pilot_deposit_status !== "paid") return { matched: false as const };
+
+  await admin
+    .from("organizations")
+    .update({ pilot_deposit_status: "refunded" })
+    .eq("id", org.id);
+  return { matched: true as const, orgId: org.id };
+}
+
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -143,6 +219,12 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+        // The one-time pilot deposit (mode='payment') is handled separately from
+        // the subscription Checkout; recognize it by mode + the stamped kind.
+        if (session.mode === "payment" || session.metadata?.kind === "pilot_deposit") {
+          await applyDepositPaid(admin, session);
+          break;
+        }
         const subId =
           typeof session.subscription === "string"
             ? session.subscription
@@ -164,6 +246,10 @@ export async function POST(req: NextRequest) {
       }
       case "customer.subscription.deleted": {
         await applySubscription(admin, event.data.object as Stripe.Subscription, true);
+        break;
+      }
+      case "charge.refunded": {
+        await applyDepositRefund(admin, event.data.object as Stripe.Charge);
         break;
       }
       default:

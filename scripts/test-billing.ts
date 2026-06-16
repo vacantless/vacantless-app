@@ -17,6 +17,9 @@ import {
   PILOT,
   PILOT_DURATION_DAYS,
   PILOT_DEPOSIT_CENTS,
+  normalizeDepositStatus,
+  depositStatusLabel,
+  DEPOSIT_STATUSES,
 } from "../lib/billing";
 
 let passed = 0;
@@ -277,6 +280,94 @@ ok("pilot invalid date => not started", pilotStatus("not-a-date").started === fa
     pilot_started_at: "2026-06-15T00:00:00.000Z",
   });
   ok("paid plan not treated as pilot", v.isPaid && !v.isPilot && !v.pilotActive);
+}
+
+// --- Pilot deposit ---------------------------------------------------------
+{
+  ok("deposit statuses are none/paid/refunded", DEPOSIT_STATUSES.join(",") === "none,paid,refunded");
+  ok("normalize paid", normalizeDepositStatus("paid") === "paid");
+  ok("normalize refunded", normalizeDepositStatus("refunded") === "refunded");
+  ok("normalize none default for null", normalizeDepositStatus(null) === "none");
+  ok("normalize none default for junk", normalizeDepositStatus("whatever") === "none");
+  ok("label paid", depositStatusLabel("paid") === "Deposit paid");
+  ok("label refunded", depositStatusLabel("refunded") === "Deposit refunded");
+  ok("label none", depositStatusLabel("none") === "Deposit not paid");
+}
+// buildBillingView: active pilot, deposit unpaid -> CTA shown
+{
+  const now = new Date("2026-06-20T00:00:00.000Z");
+  const v = buildBillingView({
+    plan: "pilot",
+    subscription_status: null,
+    stripe_subscription_id: null,
+    current_period_end: null,
+    pilot_started_at: "2026-06-15T00:00:00.000Z",
+    pilot_deposit_status: "none",
+    now,
+  });
+  ok("active pilot unpaid: CTA shown", v.showDepositCta === true);
+  ok("active pilot unpaid: not paid", v.depositPaid === false && v.depositRefunded === false);
+  ok("active pilot unpaid: default $200 label", v.depositAmountLabel === "$200");
+  ok("active pilot unpaid: status label", v.depositStatusLabel === "Deposit not paid");
+  ok("active pilot unpaid: no paid date", v.depositPaidAtLabel === null);
+}
+// buildBillingView: active pilot, deposit paid -> CTA hidden, paid reflected
+{
+  const now = new Date("2026-06-20T00:00:00.000Z");
+  const v = buildBillingView({
+    plan: "pilot",
+    subscription_status: null,
+    stripe_subscription_id: null,
+    current_period_end: null,
+    pilot_started_at: "2026-06-15T00:00:00.000Z",
+    pilot_deposit_status: "paid",
+    pilot_deposit_amount_cents: 20000,
+    pilot_deposit_paid_at: "2026-06-16T12:00:00.000Z",
+    now,
+  });
+  ok("paid pilot: CTA hidden", v.showDepositCta === false);
+  ok("paid pilot: depositPaid true", v.depositPaid === true);
+  ok("paid pilot: amount label from collected", v.depositAmountLabel === "$200");
+  ok("paid pilot: paid date present", typeof v.depositPaidAtLabel === "string");
+}
+// buildBillingView: refunded deposit
+{
+  const v = buildBillingView({
+    plan: "pilot",
+    subscription_status: null,
+    stripe_subscription_id: null,
+    current_period_end: null,
+    pilot_started_at: "2026-06-15T00:00:00.000Z",
+    pilot_deposit_status: "refunded",
+    now: new Date("2026-06-20T00:00:00.000Z"),
+  });
+  ok("refunded pilot: refunded flag", v.depositRefunded === true && v.depositPaid === false);
+  ok("refunded pilot: CTA hidden", v.showDepositCta === false);
+}
+// buildBillingView: expired pilot, unpaid -> no CTA (window over)
+{
+  const v = buildBillingView({
+    plan: "pilot",
+    subscription_status: null,
+    stripe_subscription_id: null,
+    current_period_end: null,
+    pilot_started_at: "2026-05-01T00:00:00.000Z",
+    pilot_deposit_status: "none",
+    now: new Date("2026-06-20T00:00:00.000Z"),
+  });
+  ok("expired pilot unpaid: no CTA", v.showDepositCta === false);
+}
+// buildBillingView: trial (no pilot) never shows the deposit CTA
+{
+  const v = buildBillingView({
+    plan: "trial",
+    subscription_status: null,
+    stripe_subscription_id: null,
+    current_period_end: null,
+    pilot_deposit_status: "none",
+  });
+  ok("trial: no deposit CTA", v.showDepositCta === false);
+  ok("trial: deposit status none", v.depositStatus === "none");
 }
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);

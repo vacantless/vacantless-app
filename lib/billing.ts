@@ -92,6 +92,33 @@ export function isPilotPlan(plan: string | null | undefined): boolean {
   return plan === "pilot";
 }
 
+// --- Pilot deposit state (Phase B: in-app Stripe deposit Checkout) ----------
+// The refundable setup deposit is a one-time charge, tracked separately from the
+// subscription fields. `none` = not paid yet, `paid` = collected (refundable at
+// the end of the pilot), `refunded` = returned. Mirrors the DB CHECK in 0021.
+export type DepositStatus = "none" | "paid" | "refunded";
+
+export const DEPOSIT_STATUSES: DepositStatus[] = ["none", "paid", "refunded"];
+
+// Coerce any stored/raw value to a known DepositStatus (defaults to "none").
+export function normalizeDepositStatus(
+  value: string | null | undefined,
+): DepositStatus {
+  return value === "paid" || value === "refunded" ? value : "none";
+}
+
+// Human label for the deposit state.
+export function depositStatusLabel(status: DepositStatus): string {
+  switch (status) {
+    case "paid":
+      return "Deposit paid";
+    case "refunded":
+      return "Deposit refunded";
+    default:
+      return "Deposit not paid";
+  }
+}
+
 // Format a plain one-time amount, e.g. "$200" (no "/month"). Use for the deposit.
 export function formatAmount(cents: number): string {
   return "$" + Math.round(cents / 100).toLocaleString("en-CA");
@@ -257,6 +284,14 @@ export type BillingView = {
   needsAttention: boolean; // past_due / unpaid / incomplete
   periodEnd: Date | null;
   periodEndLabel: string | null; // formatted in the org timezone
+  // Pilot deposit
+  depositStatus: DepositStatus; // none | paid | refunded
+  depositPaid: boolean; // status === "paid"
+  depositRefunded: boolean; // status === "refunded"
+  depositStatusLabel: string;
+  depositAmountLabel: string; // the collected amount, else the standard $200
+  depositPaidAtLabel: string | null; // formatted in the org timezone
+  showDepositCta: boolean; // active pilot + deposit not yet paid -> show "Pay deposit"
 };
 
 export type BillingInput = {
@@ -265,6 +300,9 @@ export type BillingInput = {
   stripe_subscription_id: string | null | undefined;
   current_period_end: string | Date | null | undefined;
   pilot_started_at?: string | Date | null | undefined;
+  pilot_deposit_status?: string | null | undefined;
+  pilot_deposit_amount_cents?: number | null | undefined;
+  pilot_deposit_paid_at?: string | Date | null | undefined;
   timezone?: string;
   now?: Date; // injectable for tests
 };
@@ -312,6 +350,13 @@ export function buildBillingView(input: BillingInput): BillingView {
 
   const pilot = pilotStatus(input.pilot_started_at, input.now);
 
+  const depositStatus = normalizeDepositStatus(input.pilot_deposit_status);
+  const depositAmountCents =
+    typeof input.pilot_deposit_amount_cents === "number" &&
+    input.pilot_deposit_amount_cents > 0
+      ? input.pilot_deposit_amount_cents
+      : PILOT_DEPOSIT_CENTS;
+
   return {
     planKey,
     planLabel: planLabelOf(planKey),
@@ -330,5 +375,14 @@ export function buildBillingView(input: BillingInput): BillingView {
     needsAttention: needsBillingAttention(status),
     periodEnd: validPeriodEnd,
     periodEndLabel: formatPeriodEnd(input.current_period_end, input.timezone),
+    depositStatus,
+    depositPaid: depositStatus === "paid",
+    depositRefunded: depositStatus === "refunded",
+    depositStatusLabel: depositStatusLabel(depositStatus),
+    depositAmountLabel: formatAmount(depositAmountCents),
+    depositPaidAtLabel: formatPeriodEnd(input.pilot_deposit_paid_at, input.timezone),
+    // Only nudge an active pilot that hasn't paid yet; an expired pilot or a paid
+    // one shows status instead of a CTA.
+    showDepositCta: planKey === "pilot" && pilot.active && depositStatus === "none",
   };
 }

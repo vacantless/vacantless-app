@@ -3,8 +3,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { getStripe, priceIdForPlan } from "@/lib/stripe";
-import { isPaidPlan } from "@/lib/billing";
+import { getStripe, priceIdForPlan, depositPriceId } from "@/lib/stripe";
+import { isPaidPlan, isPilotPlan, PILOT_DEPOSIT_CENTS, normalizeDepositStatus } from "@/lib/billing";
 
 // Start a 30-day, founder-led pilot ($0/month, refundable $200 setup deposit
 // collected out-of-band). Records plan='pilot' + pilot_started_at=now via the
@@ -98,6 +98,67 @@ export async function startCheckout(formData: FormData) {
   });
 
   if (!session.url) redirect("/dashboard/billing?error=checkout");
+  redirect(session.url);
+}
+
+// Start a one-time Stripe Checkout for the refundable pilot setup deposit and
+// redirect the owner to Stripe's hosted page. Only for an org on the pilot plan
+// whose deposit isn't already paid. Uses a managed Price (STRIPE_PRICE_PILOT_DEPOSIT)
+// when set, else an inline price built from PILOT_DEPOSIT_CENTS (CAD) so the
+// flow works without a dashboard step. The webhook records the result on the org
+// (mode='payment' + metadata.kind='pilot_deposit'). Redirect-based per the S170
+// 503 WATCH.
+export async function startDepositCheckout() {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  if (!isPilotPlan(org.plan)) redirect("/dashboard/billing?error=deposit_not_pilot");
+  if (normalizeDepositStatus(org.pilot_deposit_status) === "paid") {
+    redirect("/dashboard/billing?deposit=already");
+  }
+
+  const stripe = getStripe();
+  if (!stripe) redirect("/dashboard/billing?error=not_configured");
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const customerId = await ensureCustomer(org, user?.email ?? null);
+  if (!customerId) redirect("/dashboard/billing?error=not_configured");
+
+  const managedPrice = depositPriceId();
+  const lineItem = managedPrice
+    ? { price: managedPrice, quantity: 1 }
+    : {
+        quantity: 1,
+        price_data: {
+          currency: "cad",
+          unit_amount: PILOT_DEPOSIT_CENTS,
+          product_data: {
+            name: "Vacantless pilot setup deposit (refundable)",
+          },
+        },
+      };
+
+  const session = await stripe!.checkout.sessions.create({
+    mode: "payment",
+    customer: customerId,
+    line_items: [lineItem],
+    client_reference_id: org.id,
+    // Metadata on BOTH the session and the resulting PaymentIntent: the session
+    // metadata lets the webhook recognize the deposit on checkout.session.completed;
+    // the PaymentIntent metadata travels with a later refund event.
+    metadata: { kind: "pilot_deposit", org_id: org.id },
+    payment_intent_data: {
+      metadata: { kind: "pilot_deposit", org_id: org.id },
+      description: "Vacantless pilot setup deposit (refundable)",
+    },
+    success_url: `${APP_BASE_URL}/dashboard/billing?deposit=success`,
+    cancel_url: `${APP_BASE_URL}/dashboard/billing?deposit=cancel`,
+  });
+
+  if (!session.url) redirect("/dashboard/billing?error=deposit");
   redirect(session.url);
 }
 
