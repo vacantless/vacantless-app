@@ -107,17 +107,17 @@ export type NurtureCopy = {
 const STEP_COPY: Record<number, NurtureCopy> = {
   1: {
     subject: "Still interested? Let's find a time",
-    lead: "We wanted to follow up on the home you asked about. It may still be available — would you like to come see it?",
+    lead: "We wanted to follow up on the home you asked about. It may still be available - would you like to come see it?",
     cta: "Book a showing",
   },
   2: {
     subject: "Your next home might still be waiting",
-    lead: "Just checking back in — the listing you inquired about could still be a fit. Booking a quick viewing is the best way to know.",
+    lead: "Just checking back in - the listing you inquired about could still be a fit. Booking a quick viewing is the best way to know.",
     cta: "See it & book a showing",
   },
   3: {
     subject: "One last note about that listing",
-    lead: "We don't want you to miss out. If you're still looking, we'd love to show you around — and if the timing isn't right, just let us know.",
+    lead: "We don't want you to miss out. If you're still looking, we'd love to show you around - and if the timing isn't right, just let us know.",
     cta: "Take a look",
   },
 };

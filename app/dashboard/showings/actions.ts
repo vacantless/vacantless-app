@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { requireCapability } from "@/lib/membership";
 import { isShowingOutcome, showingOutcomeLabel } from "@/lib/pipeline";
 
 // Operator sets the outcome of a showing. RLS scopes everything to the org.
 // attended -> advance the lead to 'showed'; the change is logged to the lead
 // timeline so the pipeline history stays complete (the audit gap M3 closes).
 export async function updateShowingOutcome(formData: FormData) {
+  await requireCapability("manage_showings", "/dashboard/showings?forbidden=1");
   const id = String(formData.get("id") ?? "");
   const outcome = String(formData.get("outcome") ?? "");
   if (!id || !isShowingOutcome(outcome)) return;

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { requireCapability } from "@/lib/membership";
 import { isLeadStatus } from "@/lib/pipeline";
 import { normalizeDate, normalizeText } from "@/lib/lead-detail";
 
@@ -25,6 +26,7 @@ async function leadInOrg(
 }
 
 export async function updateLeadStatus(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!id || !isLeadStatus(status)) return;
@@ -61,6 +63,7 @@ export async function updateLeadStatus(formData: FormData) {
 }
 
 export async function addNote(formData: FormData) {
+  await requireCapability("add_notes", "/dashboard/leads?forbidden=1");
   const id = String(formData.get("id") ?? "");
   const body = String(formData.get("body") ?? "").trim();
   if (!id || !body) return;
@@ -83,6 +86,7 @@ export async function addNote(formData: FormData) {
 
 // Set (or update) a follow-up reminder on a lead. A blank date clears it.
 export async function setNextAction(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
@@ -121,6 +125,7 @@ export async function setNextAction(formData: FormData) {
 
 // Clear a follow-up reminder (e.g. once it's been actioned).
 export async function clearNextAction(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 

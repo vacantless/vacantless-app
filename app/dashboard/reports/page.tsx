@@ -292,7 +292,7 @@ export default async function ReportsPage({
         Activity counted by when it happened, within the selected window.
         Inquiry and source counts reflect each inquiry&apos;s furthest stage
         reached; lost inquiries count toward total inquiries only. &ldquo;Booked&rdquo;
-        in those counts is a pipeline stage, not a calendar showing. The
+        in those counts is a stage in your renter list, not a calendar showing. The
         Showings section is the count of actual showings.
       </p>
     </div>

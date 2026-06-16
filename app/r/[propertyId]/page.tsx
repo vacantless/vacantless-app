@@ -210,10 +210,13 @@ export default async function PublicListingPage({
               <h2 className="text-lg font-bold text-gray-900">
                 {days.length > 0 ? "Book a showing" : "Request a showing"}
               </h2>
-              <p className="mb-4 mt-1 text-sm text-gray-500">
+              <p className="mb-1 mt-1 text-sm text-gray-500">
                 {days.length > 0
                   ? "Pick a time that works for you, or just send your details and we'll reach out."
                   : "Tell us a bit about you and we'll reach out to book a time."}
+              </p>
+              <p className="mb-4 text-sm text-gray-500">
+                This is an in-person viewing (not a phone call). You will visit the home at the address above.
               </p>
               {searchParams.error && (
                 <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

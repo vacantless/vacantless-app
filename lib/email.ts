@@ -161,7 +161,8 @@ function bookingHtml(p: BookingPayload): string {
       <p style="margin:0 0 16px;">Your showing is confirmed. Here are the details:</p>
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
         <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
-        <p style="margin:0;color:#3f3f46;">${when}</p>
+        <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
+        <p style="margin:0;color:#3f3f46;">This is an in-person viewing (not a phone call). Please come to the address above.</p>
       </div>
       <p style="margin:0 0 16px;">If you need to change or cancel, just reply to this email and we'll sort it out.</p>
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
@@ -248,7 +249,7 @@ function reminderHtml(p: ReminderPayload): string {
 
   const lead =
     p.kind === "2h"
-      ? "Just a quick reminder — your showing is coming up soon:"
+      ? "Just a quick reminder - your showing is coming up soon:"
       : "This is a friendly reminder of your upcoming showing:";
 
   const logo = p.logo_url
@@ -266,7 +267,8 @@ function reminderHtml(p: ReminderPayload): string {
       <p style="margin:0 0 16px;">${lead}</p>
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
         <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
-        <p style="margin:0;color:#3f3f46;">${when}</p>
+        <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
+        <p style="margin:0;color:#3f3f46;">This is an in-person viewing (not a phone call). Please come to the address above.</p>
       </div>
       <p style="margin:0 0 16px;">If you can no longer make it or need to reschedule, just reply to this email and we'll sort it out.</p>
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
@@ -497,7 +499,7 @@ function priceDropHtml(p: PriceDropPayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
-      <p style="margin:0 0 16px;">Good news — the price just dropped on a home you were interested in. It may still be available:</p>
+      <p style="margin:0 0 16px;">Good news - the price just dropped on a home you were interested in. It may still be available:</p>
       ${priceBlock}
       <p style="margin:0 0 24px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
@@ -525,7 +527,7 @@ export async function sendPriceDropAlert(p: PriceDropPayload): Promise<SendResul
 
   const newRent = formatRent(p.new_rent_cents);
   const subject = p.property_address
-    ? `Price drop at ${p.property_address}${newRent ? ` — now ${newRent}` : ""}`
+    ? `Price drop at ${p.property_address}${newRent ? ` - now ${newRent}` : ""}`
     : "A home you were interested in just dropped in price";
 
   const body = {
@@ -654,7 +656,7 @@ export async function sendNurtureEmail(p: NurturePayload): Promise<SendResult> {
 
   const copy = nurtureCopy(p.step);
   const subject = p.property_address
-    ? `${copy.subject} — ${p.property_address}`
+    ? `${copy.subject} - ${p.property_address}`
     : copy.subject;
 
   const body = {

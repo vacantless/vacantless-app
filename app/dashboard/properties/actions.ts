@@ -570,7 +570,8 @@ export async function setCoverPhoto(formData: FormData) {
   await supabase
     .from("property_photos")
     .update({ is_cover: true })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("property_id", propertyId);
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?photos=cover`);
