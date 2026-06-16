@@ -1,11 +1,17 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import {
   PIPELINE_STAGES,
   statusLabel,
   isLeadStatus,
   type LeadStatus,
 } from "@/lib/pipeline";
+import {
+  followUpStatus,
+  followUpLabel,
+  type FollowUpStatus,
+} from "@/lib/lead-detail";
 import { EmptyState } from "@/components/ui";
 import { StatusSelect } from "./status-select";
 
@@ -19,7 +25,14 @@ type LeadRow = {
   source: string | null;
   status: LeadStatus;
   created_at: string;
+  next_action_at: string | null;
   property: { address: string } | null;
+};
+
+const FOLLOW_CHIP: Record<Exclude<FollowUpStatus, "none">, string> = {
+  overdue: "bg-red-100 text-red-700",
+  today: "bg-amber-100 text-amber-700",
+  upcoming: "bg-gray-100 text-gray-600",
 };
 
 export default async function LeadsPage({
@@ -31,11 +44,14 @@ export default async function LeadsPage({
   const { data } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, status, created_at, property:properties(address)",
+      "id, name, email, phone, source, status, created_at, next_action_at, property:properties(address)",
     )
     .order("created_at", { ascending: false });
 
   const all = (data ?? []) as unknown as LeadRow[];
+  const org = await getCurrentOrg();
+  const timeZone = org?.booking_timezone ?? "America/Toronto";
+  const today = new Date().toLocaleDateString("en-CA", { timeZone });
   const filter =
     searchParams.status && isLeadStatus(searchParams.status)
       ? searchParams.status
@@ -87,15 +103,24 @@ export default async function LeadsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {rows.map((l) => (
+              {rows.map((l) => {
+                const fStatus = followUpStatus(l.next_action_at, today);
+                return (
                 <tr key={l.id} className="hover:bg-gray-50">
                   <td className="px-4 py-2">
                     <Link
                       href={`/dashboard/leads/${l.id}`}
                       className="font-medium text-gray-900 hover:text-brand"
                     >
-                      {l.name || l.email || "Unnamed lead"}
+                      {l.name || l.email || "Unnamed renter"}
                     </Link>
+                    {fStatus !== "none" && (
+                      <span
+                        className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${FOLLOW_CHIP[fStatus]}`}
+                      >
+                        {followUpLabel(l.next_action_at, today)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-gray-600">
                     {l.property?.address ?? "—"}
@@ -108,7 +133,8 @@ export default async function LeadsPage({
                     <StatusSelect leadId={l.id} status={l.status} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
