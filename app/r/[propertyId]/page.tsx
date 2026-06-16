@@ -4,6 +4,7 @@ import { submitLead } from "./actions";
 import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
 import { accessibleBrand } from "@/lib/brand-theme";
+import { Icons } from "@/components/icons";
 import {
   buildSpecLine,
   buildAmenityChips,
@@ -92,7 +93,10 @@ export default async function PublicListingPage({
       className="min-h-screen bg-gray-50"
       style={{ ["--brand-color" as string]: brand }}
     >
-      <header className="text-white" style={{ backgroundColor: brand }}>
+      <header
+        className="text-white shadow-sm"
+        style={{ backgroundColor: brand }}
+      >
         <div className="mx-auto max-w-2xl px-6 py-5">
           {l.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -104,52 +108,58 @@ export default async function PublicListingPage({
       </header>
 
       <main className="mx-auto max-w-2xl px-6 py-8">
-        <h1 className="text-2xl font-bold text-gray-900">{l.address}</h1>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p className="text-lg font-semibold" style={{ color: brand }}>
-            {l.rent_cents
-              ? `$${(l.rent_cents / 100).toLocaleString()}/mo`
-              : "Contact for pricing"}
-          </p>
-          {isAvailable ? (
-            <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
-              {availability}
-            </span>
-          ) : (
-            <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-              No longer available
-            </span>
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            {l.address}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-xl font-bold" style={{ color: brand }}>
+              {l.rent_cents
+                ? `$${(l.rent_cents / 100).toLocaleString()}/mo`
+                : "Contact for pricing"}
+            </p>
+            {isAvailable ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-100">
+                <Icons.check className="h-3 w-3" />
+                {availability}
+              </span>
+            ) : (
+              <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-200">
+                No longer available
+              </span>
+            )}
+          </div>
+          {specs.length > 0 && (
+            <p className="mt-2 text-sm text-gray-600">{specs.join(" · ")}</p>
+          )}
+          {amenities.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {amenities.map((a) => (
+                <span
+                  key={a}
+                  className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700"
+                >
+                  {a}
+                </span>
+              ))}
+            </div>
+          )}
+          {utilities && (
+            <p className="mt-3 text-sm font-medium text-gray-700">{utilities}</p>
           )}
         </div>
-        {specs.length > 0 && (
-          <p className="mt-1 text-sm text-gray-600">{specs.join(" · ")}</p>
-        )}
-        {amenities.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {amenities.map((a) => (
-              <span
-                key={a}
-                className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700"
-              >
-                {a}
-              </span>
-            ))}
-          </div>
-        )}
-        {utilities && (
-          <p className="mt-3 text-sm text-gray-600">
-            <span className="font-medium text-gray-700">{utilities}</span>
-          </p>
-        )}
+
         <PhotoGallery address={l.address} photos={photos} />
 
         {l.description && (
-          <p className="mt-4 whitespace-pre-wrap text-gray-700">
-            {l.description}
-          </p>
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <p className="whitespace-pre-wrap leading-relaxed text-gray-700">
+              {l.description}
+            </p>
+          </div>
         )}
 
-        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           {!isAvailable ? (
             <div className="text-center">
               <h2 className="text-xl font-bold text-gray-900">
@@ -172,7 +182,7 @@ export default async function PublicListingPage({
               </p>
               <a
                 href={`/r/${l.id}${trackedPostId ? `?p=${encodeURIComponent(trackedPostId)}` : ""}`}
-                className="mt-4 inline-block rounded-lg px-4 py-2.5 text-sm font-medium text-white"
+                className="mt-4 inline-block rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
                 style={{ backgroundColor: brand }}
               >
                 Choose another time
@@ -180,6 +190,12 @@ export default async function PublicListingPage({
             </div>
           ) : searchParams.submitted ? (
             <div className="text-center">
+              <span
+                className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full text-white"
+                style={{ backgroundColor: brand }}
+              >
+                <Icons.check className="h-6 w-6" />
+              </span>
               <h2 className="text-xl font-bold text-gray-900">
                 {booked ? "Your showing is booked!" : "Thanks, we got your inquiry!"}
               </h2>
@@ -306,7 +322,7 @@ export default async function PublicListingPage({
                                   value={s.iso}
                                   className="peer sr-only"
                                 />
-                                <span className="block rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:border-gray-400 peer-checked:border-gray-900 peer-checked:bg-gray-900 peer-checked:text-white">
+                                <span className="block rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:border-gray-400 peer-checked:border-[var(--brand-color)] peer-checked:bg-[var(--brand-color)] peer-checked:text-white">
                                   {s.label}
                                 </span>
                               </label>
@@ -320,7 +336,7 @@ export default async function PublicListingPage({
 
                 <button
                   type="submit"
-                  className="w-full rounded-lg px-4 py-2.5 font-medium text-white"
+                  className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
                   style={{ backgroundColor: brand }}
                 >
                   {days.length > 0 ? "Confirm" : "Request a showing"}

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { propertyStatusLabel } from "@/lib/pipeline";
+import { PageHeader, StatCard } from "@/components/ui";
+import { Icons } from "@/components/icons";
 import {
   buildFunnel,
   buildChannelReport,
@@ -77,52 +79,65 @@ export default async function ReportsPage({
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-bold text-gray-900">Reports</h2>
-        <div className="flex flex-wrap gap-1.5">
-          {WINDOW_OPTIONS.map((opt) => {
-            const active = opt.value === window;
-            return (
-              <Link
-                key={String(opt.value)}
-                href={`/dashboard/reports?days=${opt.value}`}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                  active
-                    ? "border-transparent bg-brand text-white"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-                style={
-                  active ? { backgroundColor: "var(--brand-color)" } : undefined
-                }
-              >
-                {opt.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      <PageHeader
+        icon={<Icons.chart />}
+        title="Reports"
+        subtitle="How inquiries, showings, and leases are trending over time."
+        action={
+          <div className="flex flex-wrap gap-1.5">
+            {WINDOW_OPTIONS.map((opt) => {
+              const active = opt.value === window;
+              return (
+                <Link
+                  key={String(opt.value)}
+                  href={`/dashboard/reports?days=${opt.value}`}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                    active
+                      ? "border-transparent text-white shadow-sm"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                  style={
+                    active
+                      ? { backgroundColor: "var(--brand-color)" }
+                      : undefined
+                  }
+                >
+                  {opt.label}
+                </Link>
+              );
+            })}
+          </div>
+        }
+      />
 
       {/* Headline KPIs */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label="Inquiries" value={funnel[0].count} />
-        <Kpi
+        <StatCard
+          label="Inquiries"
+          value={funnel[0].count}
+          icon={<Icons.chat className="h-4 w-4" />}
+        />
+        <StatCard
           label="Leased"
           value={leasedStep.count}
-          sub={`${leasedStep.ofTotal}% of inquiries`}
+          hint={`${leasedStep.ofTotal}% of inquiries`}
+          icon={<Icons.key className="h-4 w-4" />}
         />
-        <Kpi
+        <StatCard
           label="Showing attendance"
           value={`${showRep.attendanceRate}%`}
-          sub={`${showRep.attended} of ${showRep.attended + showRep.noShow} kept`}
+          hint={`${showRep.attended} of ${showRep.attended + showRep.noShow} kept`}
+          icon={<Icons.check className="h-4 w-4" />}
         />
-        <Kpi
+        <StatCard
           label="Avg days to lease"
           value={timing.avgDays == null ? "—" : String(timing.avgDays)}
-          sub={
+          hint={
             timing.avgDays == null
               ? "no dated leases yet"
               : `${timing.withDate} lease${timing.withDate === 1 ? "" : "s"}`
           }
+          icon={<Icons.clock className="h-4 w-4" />}
         />
       </div>
 
@@ -137,7 +152,7 @@ export default async function ReportsPage({
             window.
           </Empty>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             {funnel.map((step, i) => {
               const widthPct = funnel[0].count
                 ? Math.max(4, Math.round((step.count / funnel[0].count) * 100))
@@ -294,9 +309,13 @@ function Kpi({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      <div className="mt-0.5 text-sm text-gray-500">{label}</div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="text-2xl font-bold tracking-tight text-gray-900">
+        {value}
+      </div>
+      <div className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
+        {label}
+      </div>
       {sub && <div className="mt-0.5 text-xs text-gray-400">{sub}</div>}
     </div>
   );
@@ -325,7 +344,7 @@ function Section({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
+    <p className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
       {children}
     </p>
   );
@@ -339,7 +358,7 @@ function Table({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+    <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wider text-gray-400">

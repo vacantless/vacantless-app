@@ -29,9 +29,12 @@ export default async function DashboardLayout({
   const brand = accessibleBrand(org.brand_color);
 
   return (
-    <div style={{ ["--brand-color" as string]: brand }}>
+    <div
+      className="min-h-screen bg-slate-50"
+      style={{ ["--brand-color" as string]: brand }}
+    >
       <header
-        className="relative text-white"
+        className="relative text-white shadow-sm"
         style={{ backgroundColor: brand }}
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">

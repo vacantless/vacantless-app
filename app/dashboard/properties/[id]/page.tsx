@@ -11,6 +11,17 @@ import {
   propertyStatusBadge,
 } from "@/lib/listing-state";
 import {
+  PageHeader,
+  SectionHeading,
+  StatusChip,
+  leadStatusTone,
+  EmptyState,
+  IconTile,
+  PRIMARY_ACTION_CLASS,
+  SECONDARY_ACTION_CLASS,
+} from "@/components/ui";
+import { Icons } from "@/components/icons";
+import {
   updateProperty,
   duplicateProperty,
   blastPriceDrop,
@@ -204,19 +215,19 @@ export default async function PropertyDetailPage({
     <div>
       <Link
         href="/dashboard/properties"
-        className="text-sm font-medium text-brand"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
       >
         ← Rentals
       </Link>
 
       {searchParams.saved && (
-        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Changes saved.
         </p>
       )}
 
       {searchParams.duplicated && (
-        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Copied from another rental. Update the address and rent below, then set
           it Live when you&apos;re ready. It&apos;s saved as a Draft for now, so
           renters can&apos;t see it.
@@ -224,7 +235,7 @@ export default async function PropertyDetailPage({
       )}
 
       {blastedCount != null && (
-        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           {blastedCount > 0
             ? `Price-drop alert sent to ${blastedCount} ${
                 blastedCount === 1 ? "renter" : "renters"
@@ -234,7 +245,7 @@ export default async function PropertyDetailPage({
       )}
 
       {searchParams.post && (
-        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           {searchParams.post === "added"
             ? "Listing post added."
             : searchParams.post === "removed"
@@ -244,13 +255,13 @@ export default async function PropertyDetailPage({
       )}
 
       {searchParams.posterr && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {listingPostErrorMessage(searchParams.posterr)}
         </p>
       )}
 
       {searchParams.photos && (
-        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           {searchParams.photos === "cover"
             ? "Cover photo updated."
             : searchParams.photos === "order"
@@ -264,7 +275,7 @@ export default async function PropertyDetailPage({
       )}
 
       {searchParams.photoerr && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {searchParams.photoerr === "type" ||
           searchParams.photoerr === "size" ||
           searchParams.photoerr === "empty"
@@ -277,33 +288,39 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
-      <div className="mb-1 mt-3 flex flex-wrap items-start justify-between gap-2">
-        <h2 className="text-xl font-bold text-gray-900">{p.address}</h2>
-        <form action={duplicateProperty}>
-          <input type="hidden" name="id" value={p.id} />
-          <button
-            type="submit"
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Duplicate this rental
-          </button>
-        </form>
-      </div>
-      <p className="mb-6 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${propertyStatusBadge(p.status).className}`}
-        >
-          {propertyStatusBadge(p.status).label}
-        </span>
-        {p.rent_cents
-          ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
-          : ""}
-      </p>
+      <PageHeader
+        icon={<Icons.building />}
+        eyebrow="Rental"
+        title={p.address}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${propertyStatusBadge(p.status).className}`}
+            >
+              {propertyStatusBadge(p.status).label}
+            </span>
+            {p.rent_cents ? (
+              <span className="text-sm text-gray-500">
+                ${(p.rent_cents / 100).toLocaleString()}/mo
+              </span>
+            ) : null}
+            <form action={duplicateProperty}>
+              <input type="hidden" name="id" value={p.id} />
+              <button type="submit" className={SECONDARY_ACTION_CLASS}>
+                Duplicate this rental
+              </button>
+            </form>
+          </div>
+        }
+      />
 
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-1 text-sm font-semibold text-gray-900">
-          Public listing link
-        </h3>
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2.5">
+          <IconTile size="sm"><Icons.link className="h-4 w-4" /></IconTile>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Public listing link
+          </h3>
+        </div>
         <p className="mb-3 text-xs text-gray-500">
           Share this branded page on Kijiji, Facebook, and email. Inquiries
           land straight in your renter list.
@@ -315,10 +332,13 @@ export default async function PropertyDetailPage({
       <ListingCopyCard tabs={copyTabs} />
 
       {/* --- Photos for this rental --- */}
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-1 text-sm font-semibold text-gray-900">
-          Photos for this rental
-        </h3>
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2.5">
+          <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Photos for this rental
+          </h3>
+        </div>
         <p className="mb-4 text-xs text-gray-500">
           Add photos renters will see on your listing page. The{" "}
           <strong>cover photo</strong> shows first. Drag isn&apos;t needed, just
@@ -327,16 +347,19 @@ export default async function PropertyDetailPage({
         </p>
 
         {photoRows.length === 0 ? (
-          <p className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-xs text-gray-500">
-            No photos yet. A listing with photos gets far more inquiries, so add
-            a few below.
-          </p>
+          <div className="mb-4">
+            <EmptyState
+              icon={<Icons.page />}
+              title="No photos yet"
+              description="A listing with photos gets far more inquiries, so add a few below."
+            />
+          </div>
         ) : (
           <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {photoRows.map((photo, i) => (
               <li
                 key={photo.id}
-                className="overflow-hidden rounded-lg border border-gray-200"
+                className="overflow-hidden rounded-xl border border-gray-200"
               >
                 <div className="relative aspect-[4/3] bg-gray-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -432,7 +455,8 @@ export default async function PropertyDetailPage({
             />
             <button
               type="submit"
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+              className={PRIMARY_ACTION_CLASS}
+              style={{ backgroundColor: "var(--brand-color)" }}
             >
               Upload photos
             </button>
@@ -441,10 +465,13 @@ export default async function PropertyDetailPage({
       </div>
 
       {/* --- Where this is posted (listing distribution / source tracking) --- */}
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-1 text-sm font-semibold text-gray-900">
-          Where this is posted
-        </h3>
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2.5">
+          <IconTile size="sm"><Icons.list className="h-4 w-4" /></IconTile>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Where this is posted
+          </h3>
+        </div>
         <p className="mb-4 text-xs text-gray-500">
           Track each portal you advertise on. Share that portal&apos;s{" "}
           <strong>tracked link</strong> instead of the plain one, and every
@@ -453,10 +480,13 @@ export default async function PropertyDetailPage({
         </p>
 
         {postRows.length === 0 ? (
-          <p className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">
-            No posts tracked yet. Add the portals you&apos;ve listed this unit on
-            below.
-          </p>
+          <div className="mb-4">
+            <EmptyState
+              icon={<Icons.list />}
+              title="No posts tracked yet"
+              description="Add the portals you've listed this unit on below to track inquiries by source."
+            />
+          </div>
         ) : (
           <ul className="mb-4 space-y-3">
             {postRows.map((post) => {
@@ -465,7 +495,7 @@ export default async function PropertyDetailPage({
               return (
                 <li
                   key={post.id}
-                  className="rounded-lg border border-gray-200 p-3"
+                  className="rounded-xl border border-gray-200 p-4"
                 >
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900">
@@ -602,7 +632,8 @@ export default async function PropertyDetailPage({
                       </div>
                       <button
                         type="submit"
-                        className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white"
+                        className={PRIMARY_ACTION_CLASS}
+                        style={{ backgroundColor: "var(--brand-color)" }}
                       >
                         Save post
                       </button>
@@ -716,7 +747,8 @@ export default async function PropertyDetailPage({
             </div>
             <button
               type="submit"
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+              className={PRIMARY_ACTION_CLASS}
+              style={{ backgroundColor: "var(--brand-color)" }}
             >
               Add post
             </button>
@@ -725,9 +757,9 @@ export default async function PropertyDetailPage({
       </div>
 
       {showBlastCard && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <h3 className="mb-1 text-sm font-semibold text-amber-900">
-            Price dropped: notify past renters
+            Price dropped - notify past renters
           </h3>
           <p className="mb-3 text-xs text-amber-800">
             You reduced the rent from{" "}
@@ -754,7 +786,7 @@ export default async function PropertyDetailPage({
 
       <form
         action={updateProperty}
-        className="mb-8 space-y-4 rounded-lg border border-gray-200 bg-white p-4"
+        className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <input type="hidden" name="id" value={p.id} />
         <div>
@@ -1009,21 +1041,24 @@ export default async function PropertyDetailPage({
 
         <button
           type="submit"
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+          className={PRIMARY_ACTION_CLASS}
+          style={{ backgroundColor: "var(--brand-color)" }}
         >
           Save changes
         </button>
       </form>
 
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        Inquiries for this property ({leadRows.length})
-      </h3>
+      <SectionHeading>
+        Inquiries for this rental ({leadRows.length})
+      </SectionHeading>
       {leadRows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
-          No inquiries yet.
-        </p>
+        <EmptyState
+          icon={<Icons.users />}
+          title="No inquiries yet"
+          description="Share the public listing link above to start collecting inquiries."
+        />
       ) : (
-        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {leadRows.map((l) => (
             <li key={l.id}>
               <Link
@@ -1033,9 +1068,9 @@ export default async function PropertyDetailPage({
                 <span className="text-gray-900">
                   {l.name || l.email || "Unnamed renter"}
                 </span>
-                <span className="text-xs font-medium text-gray-500">
+                <StatusChip tone={leadStatusTone(l.status)}>
                   {statusLabel(l.status)}
-                </span>
+                </StatusChip>
               </Link>
             </li>
           ))}

@@ -12,12 +12,14 @@ import {
 } from "@/lib/onboarding";
 import { isSubscriptionActive, pilotStatus } from "@/lib/billing";
 import {
-  Card,
   SectionHeading,
   EmptyState,
   StatusChip,
+  StatCard,
+  PageHeader,
   leadStatusTone,
 } from "@/components/ui";
+import { Icons } from "@/components/icons";
 import { LaunchChecklist } from "./launch-checklist";
 
 export const dynamic = "force-dynamic";
@@ -112,23 +114,46 @@ export default async function OverviewPage() {
     <div>
       <LaunchChecklist checklist={checklist} />
 
+      <PageHeader
+        icon={<Icons.home />}
+        title="Overview"
+        subtitle="Everything that needs your attention, at a glance."
+      />
+
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Stat label="Open inquiries" value={openLeads.length} />
-        <Stat label="New this week" value={newThisWeek.length} />
-        <Stat label="Rentals" value={propertyCount ?? 0} />
+        <StatCard
+          label="Open inquiries"
+          value={openLeads.length}
+          icon={<Icons.chat className="h-4 w-4" />}
+        />
+        <StatCard
+          label="New this week"
+          value={newThisWeek.length}
+          icon={<Icons.bolt className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Rentals"
+          value={propertyCount ?? 0}
+          icon={<Icons.building className="h-4 w-4" />}
+        />
       </div>
 
       <SectionHeading>Renters by stage</SectionHeading>
-      <div className="mb-8 flex flex-wrap gap-2">
+      <div className="mb-8 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
         {PIPELINE_STAGES.map((stage) => (
           <div
             key={stage}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-center shadow-sm"
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-center shadow-sm sm:min-w-[5rem]"
           >
-            <div className="text-lg font-bold text-gray-900">
+            <div
+              className="text-xl font-bold tracking-tight"
+              style={{ color: "var(--brand-color)" }}
+            >
               {counts[stage]}
             </div>
-            <div className="text-xs text-gray-500">{statusLabel(stage)}</div>
+            <div className="mt-0.5 text-xs text-gray-500">
+              {statusLabel(stage)}
+            </div>
           </div>
         ))}
       </div>
@@ -139,13 +164,14 @@ export default async function OverviewPage() {
       {upcomingShowings.length === 0 ? (
         <div className="mb-8">
           <EmptyState
+            icon={<Icons.calendar />}
             title="No upcoming showings"
             description="Set your weekly availability so renters can book their own showings online."
             cta={{ href: "/dashboard/availability", label: "Set availability" }}
           />
         </div>
       ) : (
-        <ul className="mb-8 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <ul className="mb-8 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {upcomingShowings.map((s) => (
             <li
               key={s.id}
@@ -191,12 +217,13 @@ export default async function OverviewPage() {
       </SectionHeading>
       {allLeads.length === 0 ? (
         <EmptyState
+          icon={<Icons.chat />}
           title="No inquiries yet"
           description="Share a rental's public listing link to start collecting inquiries. They'll land here automatically."
           cta={{ href: "/dashboard/properties", label: "Open a rental" }}
         />
       ) : (
-        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {allLeads.slice(0, 8).map((l) => (
             <li key={l.id}>
               <Link
@@ -220,14 +247,5 @@ export default async function OverviewPage() {
         </ul>
       )}
     </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <Card>
-      <div className="text-3xl font-bold text-gray-900">{value}</div>
-      <div className="mt-1 text-sm text-gray-500">{label}</div>
-    </Card>
   );
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, PageHeader, SectionHeading } from "@/components/ui";
+import { Icons } from "@/components/icons";
 import { groupShowingsIntoBlocks } from "@/lib/booking";
 import { OutcomeSelect } from "./outcome-select";
 
@@ -98,22 +99,20 @@ export default async function ShowingsPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-gray-900">Showings</h2>
-      <p className="mt-1 text-sm text-gray-500">
-        Showings renters booked online, plus ones you scheduled. Mark the
-        outcome after each one to keep your renter list accurate.
-      </p>
+      <PageHeader
+        icon={<Icons.calendar />}
+        title="Showings"
+        subtitle="Showings renters booked online, plus ones you scheduled. Mark the outcome after each one to keep your renter list accurate."
+      />
 
       {blocks.length > 0 && (
-        <div className="mt-6">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Grouped by building
-          </h3>
+        <div className="mb-8">
+          <SectionHeading>Grouped by building</SectionHeading>
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {blocks.map((b) => (
               <li
                 key={b.key}
-                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
               >
                 <p className="text-sm font-semibold text-gray-900">
                   {b.buildingLabel}
@@ -136,6 +135,7 @@ export default async function ShowingsPage() {
         rows={upcoming}
         empty={
           <EmptyState
+            icon={<Icons.calendar className="h-5 w-5" />}
             title="No upcoming showings yet"
             description="Set your weekly availability so renters can book their own showings online. Confirmed showings appear here."
             cta={{ href: "/dashboard/availability", label: "Set availability" }}
@@ -148,6 +148,7 @@ export default async function ShowingsPage() {
         rows={past}
         empty={
           <EmptyState
+            icon={<Icons.check className="h-5 w-5" />}
             title="No past showings yet"
             description="Once renters attend, mark each outcome here to keep your renter list accurate and send feedback requests."
           />
@@ -170,14 +171,12 @@ function Section({
   timeZone: string;
 }) {
   return (
-    <>
-      <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        {title}
-      </h3>
+    <div className="mb-8">
+      <SectionHeading>{title}</SectionHeading>
       {rows.length === 0 ? (
         empty
       ) : (
-        <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white shadow-sm">
           {rows.map((s) => {
             const fb = s.feedback?.[0];
             return (
@@ -217,6 +216,6 @@ function Section({
           })}
         </ul>
       )}
-    </>
+    </div>
   );
 }

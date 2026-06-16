@@ -2,7 +2,15 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { propertyStatusLabel } from "@/lib/pipeline";
-import { StatusChip, propertyStatusTone, EmptyState } from "@/components/ui";
+import {
+  StatusChip,
+  propertyStatusTone,
+  EmptyState,
+  PageHeader,
+  SectionHeading,
+  PRIMARY_ACTION_CLASS,
+} from "@/components/ui";
+import { Icons } from "@/components/icons";
 import { addProperty } from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
 
@@ -49,7 +57,11 @@ export default async function PropertiesPage({
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-bold text-gray-900">Rentals</h2>
+      <PageHeader
+        icon={<Icons.building />}
+        title="Rentals"
+        subtitle="Your rental portfolio. Each rental has its own public inquiry page and lead tracking."
+      />
 
       {searchParams.added && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
@@ -58,7 +70,7 @@ export default async function PropertiesPage({
       )}
 
       {rows.length > 0 ? (
-        <ul className="mb-8 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <ul className="mb-8 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {rows.map((p) => (
             <li
               key={p.id}
@@ -107,18 +119,17 @@ export default async function PropertiesPage({
       ) : (
         <div className="mb-8">
           <EmptyState
+            icon={<Icons.building />}
             title="No rentals yet"
             description="Add your first rental below to create its public inquiry page and start collecting inquiries."
           />
         </div>
       )}
 
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        Add a rental
-      </h3>
+      <SectionHeading>Add a rental</SectionHeading>
       <form
         action={addProperty}
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4"
+        className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <div className="min-w-[16rem] flex-1">
           <label className="mb-1 block text-xs font-medium text-gray-600">
@@ -169,7 +180,8 @@ export default async function PropertiesPage({
         </div>
         <button
           type="submit"
-          className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+          className={PRIMARY_ACTION_CLASS}
+          style={{ backgroundColor: "var(--brand-color)" }}
         >
           Add rental
         </button>

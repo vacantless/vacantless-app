@@ -7,6 +7,8 @@ import {
   addAvailabilityWindow,
   deleteAvailabilityWindow,
 } from "./actions";
+import { PageHeader } from "@/components/ui";
+import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -96,12 +98,12 @@ export default async function AvailabilityPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-gray-900">Showing times</h2>
-      <p className="mt-1 text-sm text-gray-500">
-        Set the weekly windows when renters can book their own showings. Open
-        slots are generated from these times minus anything already booked.
-      </p>
-      <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+      <PageHeader
+        icon={<Icons.clock />}
+        title="Showing Times"
+        subtitle="Set the weekly windows when renters can book their own showings. Open slots are generated from these times minus anything already booked."
+      />
+      <p className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
         These windows apply to <strong>all of your rentals</strong>, so you keep
         one showing schedule instead of setting times per unit. To keep visits to
         the same building together on a given day, turn on &ldquo;Group showings
@@ -111,7 +113,7 @@ export default async function AvailabilityPage() {
       {/* Booking settings */}
       <form
         action={updateBookingSettings}
-        className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+        className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
           Booking settings
@@ -186,7 +188,7 @@ export default async function AvailabilityPage() {
       {/* Group showings by building (Hero blocks) */}
       <form
         action={updateClusteringSettings}
-        className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+        className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
           Group showings by building
@@ -245,7 +247,7 @@ export default async function AvailabilityPage() {
       </form>
 
       {/* Week at a glance + renter preview */}
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
           Your week at a glance
         </h3>
@@ -346,7 +348,7 @@ export default async function AvailabilityPage() {
       </div>
 
       {/* Weekly windows */}
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
           Weekly windows
         </h3>

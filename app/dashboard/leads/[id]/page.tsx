@@ -10,6 +10,8 @@ import {
   suggestedNextStageOptions,
   type FollowUpStatus,
 } from "@/lib/lead-detail";
+import { PageHeader, SectionHeading, EmptyState } from "@/components/ui";
+import { Icons } from "@/components/icons";
 import { StatusSelect } from "../status-select";
 import { addNote, setNextAction, clearNextAction, updateLeadStatus } from "../actions";
 import { OutcomeSelect } from "../../showings/outcome-select";
@@ -100,16 +102,18 @@ export default async function LeadDetailPage({
 
   return (
     <div>
-      <Link href="/dashboard/leads" className="text-sm font-medium text-brand">
+      <Link
+        href="/dashboard/leads"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+      >
         ← Inquiries
       </Link>
 
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">
-            {l.name || l.email || "Unnamed renter"}
-          </h2>
-          <p className="text-sm text-gray-500">
+      <PageHeader
+        icon={<Icons.users />}
+        title={l.name || l.email || "Unnamed renter"}
+        subtitle={
+          <>
             Received {new Date(l.created_at).toLocaleString("en-US", { timeZone })}
             {sourceDisplay ? (
               <>
@@ -130,15 +134,17 @@ export default async function LeadDetailPage({
                 )}
               </>
             ) : null}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-gray-400">
-            Stage
-          </span>
-          <StatusSelect leadId={l.id} status={l.status} />
-        </div>
-      </div>
+          </>
+        }
+        action={
+          <div className="flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wider text-gray-400">
+              Stage
+            </span>
+            <StatusSelect leadId={l.id} status={l.status} />
+          </div>
+        }
+      />
 
       {/* Quick stage moves — one click to the likely next stages. */}
       {quickStages.length > 0 && (
@@ -201,7 +207,7 @@ export default async function LeadDetailPage({
       </div>
 
       {l.notes && (
-        <div className="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
             Inquiry message
           </h3>
@@ -211,14 +217,14 @@ export default async function LeadDetailPage({
 
       {showings.length > 0 && (
         <>
-          <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Showings
-          </h3>
+          <div className="mt-8">
+            <SectionHeading>Showings</SectionHeading>
+          </div>
           <ul className="space-y-2">
             {showings.map((s) => (
               <li
                 key={s.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
               >
                 <span className="text-sm font-medium text-gray-900">
                   {s.scheduled_at
@@ -240,13 +246,13 @@ export default async function LeadDetailPage({
         </>
       )}
 
-      <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        Activity
-      </h3>
+      <div className="mt-8">
+        <SectionHeading>Activity</SectionHeading>
+      </div>
 
       <form
         action={addNote}
-        className="mb-5 rounded-lg border border-gray-200 bg-white p-4"
+        className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
       >
         <input type="hidden" name="id" value={l.id} />
         <textarea
@@ -267,15 +273,17 @@ export default async function LeadDetailPage({
       </form>
 
       {messages.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">
-          No activity yet.
-        </p>
+        <EmptyState
+          icon={<Icons.chat />}
+          title="No activity yet"
+          description="Log a call, email, or note using the form above."
+        />
       ) : (
         <ul className="space-y-2">
           {messages.map((m) => (
             <li
               key={m.id}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-3"
+              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
             >
               <div className="mb-1 flex items-center gap-2 text-xs text-gray-400">
                 <span className="font-medium uppercase tracking-wider">
@@ -332,7 +340,7 @@ function FollowUp({
   const styles = isSet ? FOLLOW_STYLES[status] : FOLLOW_STYLES.upcoming;
 
   return (
-    <div className={`mt-4 rounded-lg border p-4 ${styles.wrap}`}>
+    <div className={`mt-4 rounded-2xl border p-4 shadow-sm ${styles.wrap}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -422,7 +430,7 @@ function Field({
   external?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="text-xs font-medium uppercase tracking-wider text-gray-500">
         {label}
       </div>

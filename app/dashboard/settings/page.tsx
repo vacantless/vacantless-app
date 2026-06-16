@@ -11,6 +11,8 @@ import {
   removeOrgLogo,
 } from "./actions";
 import { logoUploadErrorMessage } from "@/lib/logo";
+import { PageHeader, IconTile } from "@/components/ui";
+import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -77,12 +79,11 @@ export default async function SettingsPage({
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-gray-900">Branding</h2>
-      <p className="mt-1 text-sm text-gray-500">
-        These details appear to renters everywhere your brand shows up: your
-        dashboard header, your public listing pages, and every automated email
-        (inquiry auto-reply, booking confirmation, and showing reminders).
-      </p>
+      <PageHeader
+        icon={<Icons.settings />}
+        title="Settings"
+        subtitle="Control how your brand appears to renters and how automated emails and texts behave."
+      />
 
       {saved && (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
@@ -143,10 +144,13 @@ export default async function SettingsPage({
         className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3"
       >
         {/* Editable fields */}
-        <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Brand details
-          </h3>
+        <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="mb-4 flex items-center gap-2.5">
+            <IconTile size="sm"><Icons.bolt className="h-4 w-4" /></IconTile>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Brand details
+            </h3>
+          </div>
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">
@@ -305,10 +309,13 @@ export default async function SettingsPage({
         </div>
 
         {/* Live (saved-state) preview */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Preview
-          </h3>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="mb-4 flex items-center gap-2.5">
+            <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Preview
+            </h3>
+          </div>
           <div className="overflow-hidden rounded-lg border border-gray-200">
             {/* Mini renter header — white text on the brand, exactly as renters see it */}
             <div
@@ -350,7 +357,7 @@ export default async function SettingsPage({
 
         {/* Sticky save bar — stays in view while you scroll the form */}
         <div className="sticky bottom-4 lg:col-span-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white/95 px-5 py-3 shadow-lg backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/95 px-5 py-3 shadow-lg backdrop-blur">
             <p className="text-xs text-gray-500">
               Changes apply to your renter-facing pages and emails as soon as
               you save.
@@ -364,10 +371,13 @@ export default async function SettingsPage({
 
       {/* Logo — uploaded to storage; sets the image on the public page + emails */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Logo
-          </h3>
+        <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center gap-2.5">
+            <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Logo
+            </h3>
+          </div>
           <p className="mt-1 text-sm text-gray-500">
             Shown on your public listing pages and at the top of every email to
             renters. Use a PNG, JPG, WebP, GIF, or SVG up to 2 MB.
@@ -416,10 +426,13 @@ export default async function SettingsPage({
       </div>
 
       {/* Send a test email — confirm branding + deliverability before going live */}
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Send a test email
-        </h3>
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center gap-2.5">
+          <IconTile size="sm"><Icons.mail className="h-4 w-4" /></IconTile>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Send a test email
+          </h3>
+        </div>
         <p className="mt-1 text-sm text-gray-500">
           Email yourself a copy of the renter auto-reply with your current
           branding (name, color, logo, and reply-to) so you can see exactly what
@@ -454,11 +467,14 @@ export default async function SettingsPage({
       </div>
 
       {/* Read-only account context */}
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Account
-          </h3>
+          <div className="flex items-center gap-2.5">
+            <IconTile size="sm"><Icons.key className="h-4 w-4" /></IconTile>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Account
+            </h3>
+          </div>
           {renterPageUrl ? (
             <Link
               href={renterPageUrl}

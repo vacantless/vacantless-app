@@ -13,7 +13,8 @@ import {
   followUpLabel,
   type FollowUpStatus,
 } from "@/lib/lead-detail";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
+import { Icons } from "@/components/icons";
 import { StatusSelect } from "./status-select";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +62,11 @@ export default async function LeadsPage({
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-bold text-gray-900">Inquiries</h2>
+      <PageHeader
+        icon={<Icons.chat />}
+        title="Inquiries"
+        subtitle="Every renter who has reached out about one of your rentals."
+      />
 
       <div className="mb-5 flex flex-wrap gap-2 text-sm">
         <FilterChip label={`All (${all.length})`} href="/dashboard/leads" active={!filter} />
@@ -82,7 +87,7 @@ export default async function LeadsPage({
         <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
           What the stages mean
         </summary>
-        <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
+        <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 rounded-2xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
           {PIPELINE_STAGES.map((s) => (
             <div key={s} className="flex gap-2">
               <dt className="shrink-0 font-medium text-gray-700">
@@ -97,12 +102,14 @@ export default async function LeadsPage({
       {rows.length === 0 ? (
         all.length === 0 ? (
           <EmptyState
+            icon={<Icons.chat />}
             title="No inquiries yet"
             description="Share a rental's public listing link to start collecting inquiries. Every submission lands here automatically."
             cta={{ href: "/dashboard/properties", label: "Open a rental" }}
           />
         ) : (
           <EmptyState
+            icon={<Icons.chat />}
             title="No inquiries in this stage"
             description="Try another stage filter above, or clear it to see every inquiry."
           />
@@ -116,7 +123,7 @@ export default async function LeadsPage({
               return (
                 <li
                   key={l.id}
-                  className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                  className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <Link
@@ -162,7 +169,7 @@ export default async function LeadsPage({
           </ul>
 
           {/* md+ : the full table. */}
-          <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:block">
+          <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm md:block">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
                 <tr>
