@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { classifyInbound, samePhone, verifyTwilioSignature } from "@/lib/sms";
+import { classifyInbound, normalizePhoneE164, verifyTwilioSignature } from "@/lib/sms";
 
 // Twilio inbound-SMS webhook. Honors opt-out: a renter who texts STOP (or
 // UNSUBSCRIBE/CANCEL/etc.) is suppressed from all future Vacantless SMS by
@@ -72,16 +72,19 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
   if (!admin) return twiml(); // not configured -> acknowledge, do nothing
 
-  // Find leads whose stored phone resolves to the sender's number. leads.phone
-  // is free-text, so we match in JS via samePhone. Pilot-scale volumes; a
-  // normalized phone column would let us filter in SQL at larger scale.
+  // Find every lead whose number resolves to the sender's, matched in SQL on
+  // the normalized leads.phone_e164 column (migration 0023). This honors a STOP
+  // across ALL of the sender's leads with no row cap (a STOP must never be
+  // silently dropped) - the old free-text JS scan was capped at 2000.
+  const senderE164 = normalizePhoneE164(from);
+  if (!senderE164) return twiml(); // unparseable sender -> nothing to match
+
   const { data: leads } = await admin
     .from("leads")
-    .select("id, phone, organization_id, sms_opt_out")
-    .not("phone", "is", null)
-    .limit(2000);
+    .select("id, organization_id, sms_opt_out")
+    .eq("phone_e164", senderE164);
 
-  const matches = (leads ?? []).filter((l: any) => samePhone(l.phone, from));
+  const matches = leads ?? [];
   if (matches.length === 0) return twiml();
 
   const optOut = action === "stop";

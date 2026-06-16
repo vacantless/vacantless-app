@@ -91,6 +91,7 @@ export async function submitLead(formData: FormData) {
             renter_email: string | null;
             sms_enabled?: boolean | null;
             renter_phone?: string | null;
+            sms_opt_out?: boolean | null;
           };
           const whenLabel = formatSlotLong(
             b.scheduled_at,
@@ -116,9 +117,11 @@ export async function submitLead(formData: FormData) {
           }
 
           // Parallel booking-confirmation SMS, when the org has SMS on and the
-          // renter left a usable number. Best-effort (no_credentials until
-          // Twilio is configured); the renter just consented by booking.
-          if (b.sms_enabled && b.renter_phone) {
+          // renter left a usable number AND has not opted out (a prior STOP for
+          // this number is inherited onto the new lead at creation). Best-effort
+          // (no_credentials until Twilio is configured); the renter just
+          // consented by booking.
+          if (b.sms_enabled && b.renter_phone && !b.sms_opt_out) {
             const sms = await sendSms({
               to: b.renter_phone,
               body: bookingConfirmationSms({
