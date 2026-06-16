@@ -55,6 +55,12 @@ export default async function PublicListingPage({
 
   if (!data) notFound();
   const l = data as Listing;
+  // A unit can be marked "leased" (or off-market) after its link is shared. The
+  // public action RPCs (availability / inquiry / booking) hard-block anything
+  // that isn't 'available'; the page must visibly reflect that instead of still
+  // showing "Available now" + a booking form. (off-market returns no listing at
+  // all above → 404; 'leased' still loads here so we can say it's gone.)
+  const isAvailable = l.status === "available";
   // Guardrail: keep white-on-brand (header, button) and brand-on-white (price)
   // legible even when the tenant picked a pale color.
   const brand = accessibleBrand(l.brand_color || "#4f46e5");
@@ -98,9 +104,15 @@ export default async function PublicListingPage({
               ? `$${(l.rent_cents / 100).toLocaleString()}/mo`
               : "Contact for pricing"}
           </p>
-          <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
-            {availability}
-          </span>
+          {isAvailable ? (
+            <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+              {availability}
+            </span>
+          ) : (
+            <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+              No longer available
+            </span>
+          )}
         </div>
         {specs.length > 0 && (
           <p className="mt-1 text-sm text-gray-600">{specs.join(" · ")}</p>
@@ -129,7 +141,17 @@ export default async function PublicListingPage({
         )}
 
         <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          {searchParams.submitted ? (
+          {!isAvailable ? (
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-gray-900">
+                This rental is no longer available
+              </h2>
+              <p className="mt-2 text-sm text-gray-600">
+                {l.org_name} isn&apos;t taking inquiries for this listing right
+                now. Please check back, or reach out about their other rentals.
+              </p>
+            </div>
+          ) : searchParams.submitted ? (
             <div className="text-center">
               <h2 className="text-xl font-bold text-gray-900">
                 {booked ? "Your showing is booked!" : "Thanks — we got your inquiry!"}
