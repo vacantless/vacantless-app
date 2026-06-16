@@ -215,7 +215,7 @@ export default async function PropertyDetailPage({
       {searchParams.duplicated && (
         <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Copied from another rental. Update the address and rent below, then set
-          it live when you&apos;re ready — it&apos;s off market for now.
+          it live when you&apos;re ready. It&apos;s off market for now.
         </p>
       )}
 
