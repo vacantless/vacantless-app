@@ -60,6 +60,10 @@ async function walk(bucket, prefix = "") {
     if (entry.id === null) {
       // a folder — recurse
       out.push(...(await walk(bucket, full)));
+    } else if (entry.name === ".emptyFolderPlaceholder") {
+      // Supabase's dashboard auto-creates a 0-byte placeholder to keep an
+      // emptied folder visible in the UI. Not a real object — never an orphan.
+      continue;
     } else {
       out.push({ name: full, created_at: entry.created_at });
     }
