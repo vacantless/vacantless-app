@@ -226,6 +226,17 @@ export default async function SettingsPage({
           Something went wrong with the Rotessa connection. Please try again.
         </div>
       )}
+      {searchParams.rotessa === "notconnected" && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Connect your Rotessa account below before exporting rent payments.
+        </div>
+      )}
+      {searchParams.rotessa === "exportfail" && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          We couldn&apos;t pull your Rotessa payment history just now. Check the
+          connection below and try again.
+        </div>
+      )}
 
       <form
         action={updateBranding}

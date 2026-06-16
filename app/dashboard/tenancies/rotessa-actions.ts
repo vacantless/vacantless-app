@@ -10,6 +10,8 @@ import {
   normalizeEnvironment,
   validateCustomerInput,
   createCustomer,
+  validateScheduleInput,
+  createSchedule,
 } from "@/lib/rotessa";
 
 // Rotessa customer-creation action for a tenancy (platform pivot step 2,
@@ -109,4 +111,87 @@ export async function createRotessaCustomer(formData: FormData) {
 
   revalidatePath(tenancyPath(tenancyId));
   redirect(`${tenancyPath(tenancyId)}?rotessa=created`);
+}
+
+// ===========================================================================
+// Increment 3 — create a Monthly rent schedule for a tenancy.
+// Requires the tenancy to already have a Rotessa customer (increment 2) and a
+// rent amount. Idempotent on rotessa_schedule_id. Bills the customer monthly at
+// the tenancy rent starting on the chosen process date.
+// ===========================================================================
+
+type ScheduleTenancyRow = {
+  id: string;
+  rent_cents: number | null;
+  rotessa_customer_id: string | null;
+  rotessa_schedule_id: string | null;
+};
+
+export async function createRotessaSchedule(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+  const processDateIso = String(formData.get("process_date") ?? "").trim();
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rotessa", `${tenancyPath(tenancyId)}?rotessa=forbidden`);
+
+  const supabase = createClient();
+
+  const { data: tData } = await supabase
+    .from("tenancies")
+    .select("id, rent_cents, rotessa_customer_id, rotessa_schedule_id")
+    .eq("id", tenancyId)
+    .maybeSingle();
+  const tenancy = tData as ScheduleTenancyRow | null;
+  if (!tenancy) redirect("/dashboard/tenancies");
+  if (!tenancy.rotessa_customer_id) redirect(`${tenancyPath(tenancyId)}?rotessa=nocustomer`);
+  if (tenancy.rotessa_schedule_id) redirect(`${tenancyPath(tenancyId)}?rotessa=schedalready`);
+
+  // The org's connected Rotessa account.
+  const { data: aData } = await supabase
+    .from("rotessa_accounts")
+    .select("api_key_encrypted, environment")
+    .eq("organization_id", org.id)
+    .limit(1);
+  const account = (aData?.[0] as RotessaAccountRow | undefined) ?? undefined;
+  if (!account?.api_key_encrypted) redirect(`${tenancyPath(tenancyId)}?rotessa=notconnected`);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const check = validateScheduleInput(
+    {
+      customerId: tenancy.rotessa_customer_id,
+      amountCents: tenancy.rent_cents,
+      processDateIso,
+    },
+    todayIso,
+  );
+  if (!check.ok) {
+    const code = !tenancy.rent_cents ? "norent" : "baddate";
+    redirect(`${tenancyPath(tenancyId)}?rotessa=${code}`);
+  }
+
+  let apiKey: string;
+  try {
+    apiKey = decryptSecret(account.api_key_encrypted);
+  } catch {
+    redirect(`${tenancyPath(tenancyId)}?rotessa=decfail`);
+    return; // unreachable; redirect throws
+  }
+
+  const environment = normalizeEnvironment(account.environment);
+  const result = await createSchedule(apiKey, environment, check.value);
+  if (!result.ok) redirect(`${tenancyPath(tenancyId)}?rotessa=schedfail`);
+
+  await supabase
+    .from("tenancies")
+    .update({
+      rotessa_schedule_id: result.scheduleId,
+      rotessa_schedule_synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", tenancyId);
+
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?rotessa=scheduled`);
 }

@@ -23,6 +23,21 @@ import {
   buildCustomerBody,
   extractRotessaErrors,
   parseCreateCustomerResponse,
+  addBusinessDays,
+  toIsoDate,
+  minProcessDate,
+  defaultFirstProcessDate,
+  isValidProcessDate,
+  formatProcessDate,
+  validateScheduleInput,
+  centsToAmount,
+  buildScheduleBody,
+  parseCreateScheduleResponse,
+  normalizeTransaction,
+  parseTransactionReport,
+  csvCell,
+  transactionsToCsv,
+  buildReportQuery,
 } from "../lib/rotessa";
 
 let passed = 0;
@@ -182,6 +197,104 @@ ok("parse 401 -> error", parseCreateCustomerResponse(401, null).ok === false);
 ok("parse 400 -> error", parseCreateCustomerResponse(400, null).ok === false);
 ok("parse 500 -> error (unavailable)", parseCreateCustomerResponse(503, null).ok === false);
 ok("parse unexpected -> error", parseCreateCustomerResponse(418, null).ok === false);
+
+// --- rotessa: business-day + process-date helpers (increment 3) -------------
+// 2026-06-15 is a Monday. +2 business days = Wednesday 2026-06-17.
+ok("addBusinessDays Mon +2 = Wed", toIsoDate(addBusinessDays(new Date(Date.UTC(2026, 5, 15)), 2)) === "2026-06-17");
+// 2026-06-18 is a Thursday. +2 business days skips the weekend -> Mon 2026-06-22.
+ok("addBusinessDays Thu +2 skips weekend = Mon", toIsoDate(addBusinessDays(new Date(Date.UTC(2026, 5, 18)), 2)) === "2026-06-22");
+// Friday 2026-06-19 +1 business day = Monday 2026-06-22.
+ok("addBusinessDays Fri +1 = Mon", toIsoDate(addBusinessDays(new Date(Date.UTC(2026, 5, 19)), 1)) === "2026-06-22");
+ok("minProcessDate Mon = Wed", minProcessDate("2026-06-15") === "2026-06-17");
+ok("defaultFirstProcessDate mid-month = 1st of next month", defaultFirstProcessDate("2026-06-15") === "2026-07-01");
+// On the 31st, the 1st of next month is only 1 day away -> bumped to min (2 biz days).
+ok("defaultFirstProcessDate bumps when next-1st too soon", defaultFirstProcessDate("2026-07-31") >= minProcessDate("2026-07-31"));
+ok("isValidProcessDate accepts >= min", isValidProcessDate("2026-07-01", "2026-06-15") === true);
+ok("isValidProcessDate rejects too soon", isValidProcessDate("2026-06-16", "2026-06-15") === false);
+ok("isValidProcessDate rejects malformed", isValidProcessDate("not-a-date", "2026-06-15") === false);
+ok("isValidProcessDate rejects impossible date", isValidProcessDate("2026-02-31", "2026-01-01") === false);
+ok("formatProcessDate -> Month D, YYYY", formatProcessDate("2026-07-01") === "July 1, 2026");
+ok("formatProcessDate handles double-digit day", formatProcessDate("2026-12-24") === "December 24, 2026");
+ok("formatProcessDate bad input -> empty", formatProcessDate("nope") === "");
+
+// --- rotessa: validateScheduleInput -----------------------------------------
+{
+  const v = validateScheduleInput({ customerId: "123", amountCents: 125000, processDateIso: "2026-07-01" }, "2026-06-15");
+  ok("validateScheduleInput accepts good input", v.ok === true);
+  if (v.ok) {
+    ok("validateScheduleInput default comment", v.value.comment === "Monthly rent via Vacantless");
+    ok("validateScheduleInput carries customerId", v.value.customerId === "123");
+  }
+}
+ok("validateScheduleInput rejects no customer", validateScheduleInput({ customerId: "", amountCents: 1000, processDateIso: "2026-07-01" }, "2026-06-15").ok === false);
+ok("validateScheduleInput rejects zero amount", validateScheduleInput({ customerId: "1", amountCents: 0, processDateIso: "2026-07-01" }, "2026-06-15").ok === false);
+ok("validateScheduleInput rejects negative amount", validateScheduleInput({ customerId: "1", amountCents: -5, processDateIso: "2026-07-01" }, "2026-06-15").ok === false);
+ok("validateScheduleInput rejects too-soon date", validateScheduleInput({ customerId: "1", amountCents: 1000, processDateIso: "2026-06-15" }, "2026-06-15").ok === false);
+{
+  const v = validateScheduleInput({ customerId: "1", amountCents: 1000, processDateIso: "2026-07-01", comment: " Unit 4 rent " }, "2026-06-15");
+  ok("validateScheduleInput trims custom comment", v.ok === true && v.value.comment === "Unit 4 rent");
+}
+
+// --- rotessa: centsToAmount + buildScheduleBody -----------------------------
+ok("centsToAmount whole dollars", centsToAmount(125000) === 1250);
+ok("centsToAmount with cents", centsToAmount(125050) === 1250.5);
+{
+  const body = buildScheduleBody({ customerId: "789", amountCents: 125000, processDateIso: "2026-07-01", comment: "Rent" });
+  ok("buildScheduleBody customer_id", body.customer_id === "789");
+  ok("buildScheduleBody amount in dollars", body.amount === 1250);
+  ok("buildScheduleBody frequency Monthly", body.frequency === "Monthly");
+  ok("buildScheduleBody process_date formatted", body.process_date === "July 1, 2026");
+  ok("buildScheduleBody omits installments (indefinite)", !("installments" in body));
+}
+
+// --- rotessa: parseCreateScheduleResponse -----------------------------------
+{
+  const r = parseCreateScheduleResponse(200, { id: 435194, next_process_date: "2026-07-01" });
+  ok("parse schedule 200 -> ok id", r.ok === true && r.scheduleId === "435194");
+  ok("parse schedule 200 carries next_process_date", r.ok === true && r.nextProcessDate === "2026-07-01");
+}
+ok("parse schedule 2xx without id -> error", parseCreateScheduleResponse(201, {}).ok === false);
+ok("parse schedule 401 -> error", parseCreateScheduleResponse(401, null).ok === false);
+{
+  const r = parseCreateScheduleResponse(422, { errors: [{ error_message: "Customer bank information is incomplete." }] });
+  ok("parse schedule 422 -> error", r.ok === false);
+  ok("parse schedule 422 surfaces bank message", r.ok === false && r.message.includes("bank information"));
+}
+ok("parse schedule 422 no detail -> bank hint", (() => { const r = parseCreateScheduleResponse(422, null); return r.ok === false && r.message.toLowerCase().includes("authorize their bank"); })());
+ok("parse schedule 500 -> error", parseCreateScheduleResponse(500, null).ok === false);
+
+// --- rotessa: transaction report parsing + CSV ------------------------------
+{
+  const tx = normalizeTransaction({ id: 1233, custom_identifier: "ten-1", customer_id: 1, amount: "1250.00", process_date: "2026-07-01", settlement_date: "2026-07-08", status: "Approved", status_reason: null, comment: "Rent" });
+  ok("normalizeTransaction id -> string", tx.id === "1233");
+  ok("normalizeTransaction customerId -> string", tx.customerId === "1");
+  ok("normalizeTransaction amount", tx.amount === "1250.00");
+  ok("normalizeTransaction status", tx.status === "Approved");
+  ok("normalizeTransaction null reason stays null", tx.statusReason === null);
+}
+ok("parseTransactionReport non-array -> []", parseTransactionReport({ foo: 1 }).length === 0);
+ok("parseTransactionReport array -> rows", parseTransactionReport([{ id: 1 }, { id: 2 }]).length === 2);
+
+ok("csvCell plain passes through", csvCell("Approved") === "Approved");
+ok("csvCell null -> empty", csvCell(null) === "");
+ok("csvCell with comma is quoted", csvCell("Smith, John") === '"Smith, John"');
+ok("csvCell with quote is escaped", csvCell('a"b') === '"a""b"');
+ok("csvCell with newline is quoted", csvCell("a\nb") === '"a\nb"');
+{
+  const csv = transactionsToCsv(parseTransactionReport([
+    { id: 1, custom_identifier: "ten-1", customer_id: 1, amount: "1250.00", process_date: "2026-07-01", settlement_date: "2026-07-08", status: "Approved", status_reason: null, comment: "Rent" },
+  ]));
+  const lines = csv.split("\r\n");
+  ok("transactionsToCsv has header", lines[0].startsWith("Transaction ID,Reference,"));
+  ok("transactionsToCsv has data row", lines[1].startsWith("1,ten-1,1,1250.00,"));
+  ok("transactionsToCsv row count", lines.length === 2);
+}
+ok("transactionsToCsv empty -> header only", transactionsToCsv([]).split("\r\n").length === 1);
+
+// --- rotessa: buildReportQuery ----------------------------------------------
+ok("buildReportQuery empty -> ''", buildReportQuery({}) === "");
+ok("buildReportQuery start+end", buildReportQuery({ startDate: "2026-01-01", endDate: "2026-12-31" }) === "?start_date=2026-01-01&end_date=2026-12-31");
+ok("buildReportQuery status only", buildReportQuery({ status: "Approved" }) === "?status=Approved");
 
 console.log(`\nrotessa: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

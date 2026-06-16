@@ -132,6 +132,29 @@ export default function RotessaSettingsCard({
             </form>
           </div>
 
+          {/* Export rent payments (the transaction report -> CSV) */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h4 className="text-sm font-semibold text-gray-700">Export rent payments</h4>
+            <p className="mt-1 text-xs text-gray-500">
+              Download your Rotessa payment history (amounts, dates, and status)
+              as a CSV for bookkeeping or taxes. Leave the dates blank for
+              everything.
+            </p>
+            <form action="/dashboard/rent/export" method="get" className="mt-3 flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">From</span>
+                <input type="date" name="from" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">To</span>
+                <input type="date" name="to" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </label>
+              <button type="submit" className={SECONDARY_ACTION_CLASS}>
+                Download CSV
+              </button>
+            </form>
+          </div>
+
           {/* Replace / rotate the stored key */}
           <details className="rounded-lg border border-gray-200 bg-gray-50 p-4">
             <summary className="cursor-pointer text-sm font-medium text-gray-700">

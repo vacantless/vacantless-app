@@ -24,7 +24,8 @@ import {
   removeTenant,
   makePrimaryTenant,
 } from "../actions";
-import { createRotessaCustomer } from "../rotessa-actions";
+import { createRotessaCustomer, createRotessaSchedule } from "../rotessa-actions";
+import { defaultFirstProcessDate, minProcessDate, formatProcessDate } from "@/lib/rotessa";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,8 @@ type Tenancy = {
   lead_id: string | null;
   rotessa_customer_id: string | null;
   rotessa_customer_synced_at: string | null;
+  rotessa_schedule_id: string | null;
+  rotessa_schedule_synced_at: string | null;
   property: { id: string; address: string } | null;
   tenants: Tenant[];
 };
@@ -75,6 +78,8 @@ const TENANT_FLASH: Record<string, string> = {
 const ROTESSA_SUCCESS: Record<string, string> = {
   created: "Rotessa customer created from the primary tenant. You can now set up rent collection for this tenancy.",
   already: "This tenancy already has a Rotessa customer.",
+  scheduled: "Monthly rent schedule created in Rotessa. Payments will run automatically on the schedule.",
+  schedalready: "This tenancy already has a rent schedule.",
 };
 const ROTESSA_ERROR: Record<string, string> = {
   notconnected: "Connect your Rotessa account in Settings before creating a customer.",
@@ -83,6 +88,10 @@ const ROTESSA_ERROR: Record<string, string> = {
   decfail: "We couldn't read your stored Rotessa key. Reconnect it in Settings.",
   createfail: "Rotessa couldn't create the customer. Check your connection in Settings and try again.",
   forbidden: "You don't have permission to manage rent collection.",
+  nocustomer: "Create the Rotessa customer first, then set up the rent schedule.",
+  norent: "Set a monthly rent amount on this tenancy before scheduling rent.",
+  baddate: "Pick a first payment date at least 2 business days from today.",
+  schedfail: "Rotessa couldn't create the rent schedule. The tenant may still need to authorize their bank in Rotessa. Check Settings and try again.",
 };
 
 export default async function TenancyDetailPage({
@@ -103,7 +112,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -127,6 +136,9 @@ export default async function TenancyDetailPage({
     | undefined;
   const rotessaConnected = !!rotessaRow?.api_key_encrypted;
   const rotessaStatus = rotessaRow?.connection_status ?? "not_connected";
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const defaultProcessDate = defaultFirstProcessDate(todayIso);
+  const minProcDate = minProcessDate(todayIso);
 
   const flash =
     (searchParams.saved && FLASH.saved) ||
@@ -339,11 +351,76 @@ export default async function TenancyDetailPage({
                 </dd>
               </div>
             </dl>
-            <p className="text-xs text-gray-400">
-              Next: schedule the monthly rent for this tenancy (coming soon). Your
-              tenant authorizes their bank details directly in Rotessa — Vacantless
-              never stores bank account numbers.
-            </p>
+
+            {/* Monthly rent schedule (increment 3) ------------------------ */}
+            <div className="border-t border-gray-100 pt-4">
+              {t.rotessa_schedule_id ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusChip tone="success">Rent schedule active</StatusChip>
+                    <span className="text-sm text-gray-600">
+                      {formatRentCents(t.rent_cents)}/mo, billed monthly to the primary tenant.
+                    </span>
+                  </div>
+                  <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-gray-500">Rotessa schedule ID</dt>
+                      <dd className="font-mono text-xs text-gray-700">{t.rotessa_schedule_id}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Set up</dt>
+                      <dd className="font-medium text-gray-900">
+                        {t.rotessa_schedule_synced_at
+                          ? new Date(t.rotessa_schedule_synced_at).toLocaleString()
+                          : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="text-xs text-gray-400">
+                    Payments run automatically. Manage or cancel the schedule from
+                    your Rotessa dashboard.
+                  </p>
+                </div>
+              ) : t.rent_cents == null ? (
+                <p className="text-sm text-gray-600">
+                  Set a monthly rent amount in Lease details below, then you can
+                  schedule automatic rent collection.
+                </p>
+              ) : (
+                <form action={createRotessaSchedule} className="space-y-3">
+                  <input type="hidden" name="tenancy_id" value={t.id} />
+                  <p className="text-sm text-gray-600">
+                    Schedule automatic monthly rent of{" "}
+                    <span className="font-medium text-gray-900">{formatRentCents(t.rent_cents)}</span>{" "}
+                    starting on your chosen date. Your tenant must have authorized
+                    their bank in Rotessa first.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className={labelCls}>First payment date</label>
+                      <input
+                        type="date"
+                        name="process_date"
+                        required
+                        min={minProcDate}
+                        defaultValue={defaultProcessDate}
+                        className={inputCls}
+                      />
+                      <span className="mt-1 block text-xs text-gray-400">
+                        At least 2 business days out (e.g. {formatProcessDate(defaultProcessDate)}).
+                      </span>
+                    </div>
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+                      style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+                    >
+                      Set up monthly rent
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         ) : !rotessaConnected ? (
           <p className="text-sm text-gray-600">
