@@ -29,6 +29,17 @@ export interface RGB {
  */
 export const DEFAULT_BRAND_COLOR = "#4f46e5";
 
+/**
+ * The default SECOND ombre stop (Tailwind teal-500, the right anchor of the
+ * marketing homepage's indigo->teal gradient). A brand-new org defaults to the
+ * homepage ombre (`DEFAULT_BRAND_COLOR` -> `DEFAULT_BRAND_SECONDARY`) rather than
+ * a flat solid; the tenant can still switch to a solid or any other ombre. This
+ * is the tenant's editable STARTING brand that happens to match the homepage —
+ * not the marketing gradient overriding a chosen color (see
+ * feedback_tenant_brand_not_marketing_gradient).
+ */
+export const DEFAULT_BRAND_SECONDARY = "#14b8a6";
+
 /** @deprecated Back-compat alias of {@link DEFAULT_BRAND_COLOR}. */
 export const DEFAULT_BRAND = DEFAULT_BRAND_COLOR;
 

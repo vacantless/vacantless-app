@@ -2,7 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { normalizeHexColor, DEFAULT_BRAND_COLOR } from "@/lib/branding";
+import {
+  normalizeHexColor,
+  DEFAULT_BRAND_COLOR,
+  DEFAULT_BRAND_SECONDARY,
+} from "@/lib/branding";
 
 function slugify(name: string) {
   return (
@@ -19,10 +23,18 @@ export async function createOrganization(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const brandColor =
     normalizeHexColor(String(formData.get("brand_color") ?? "")) ?? DEFAULT_BRAND_COLOR;
-  // Optional ombre second stop: keep only a valid hex distinct from the primary.
-  const rawSecondary = normalizeHexColor(String(formData.get("brand_color_secondary") ?? ""));
+  // Ombre second stop. A brand-new org defaults to the homepage ombre teal, so a
+  // valid distinct second stop wins; an entirely ABSENT field (e.g. a no-JS
+  // direct post) falls back to the teal default; a present-but-blank field means
+  // the tenant deliberately chose a Solid brand (no second stop).
+  const secondaryField = formData.get("brand_color_secondary");
+  const rawSecondary = normalizeHexColor(String(secondaryField ?? ""));
+  const fallbackSecondary =
+    secondaryField === null && DEFAULT_BRAND_SECONDARY !== brandColor
+      ? DEFAULT_BRAND_SECONDARY
+      : null;
   const brandColorSecondary =
-    rawSecondary && rawSecondary !== brandColor ? rawSecondary : null;
+    rawSecondary && rawSecondary !== brandColor ? rawSecondary : fallbackSecondary;
 
   if (!name) {
     redirect("/onboarding?error=Name+is+required");

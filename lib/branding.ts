@@ -13,7 +13,7 @@
 export const MAX_NAME_LEN = 120;
 // Single source of truth lives in brand-theme; re-exported here so existing
 // importers of `@/lib/branding` keep working.
-export { DEFAULT_BRAND_COLOR } from "./brand-theme";
+export { DEFAULT_BRAND_COLOR, DEFAULT_BRAND_SECONDARY } from "./brand-theme";
 
 /**
  * Normalize a user-entered hex color to a canonical lowercase `#rrggbb`.

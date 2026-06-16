@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_BRAND_COLOR,
+  DEFAULT_BRAND_SECONDARY,
   SOLID_PRESETS,
   GRADIENT_PRESETS,
   brandGradientCss,
@@ -164,9 +165,11 @@ export default function BrandColorField({
   }, [primary, secondaryOut]);
 
   function reset() {
-    setMode("solid");
+    // The default brand is the homepage ombre (indigo -> teal), so reset
+    // restores that, not a flat solid.
+    setMode("ombre");
     setPrimary(DEFAULT_BRAND_COLOR);
-    setSecondary(GRADIENT_PRESETS[0].to);
+    setSecondary(DEFAULT_BRAND_SECONDARY);
   }
 
   const swatchBtn =

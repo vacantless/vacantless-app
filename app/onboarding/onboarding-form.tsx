@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
+import {
+  brandGradientCss,
+  DEFAULT_BRAND_COLOR,
+  DEFAULT_BRAND_SECONDARY,
+} from "@/lib/brand-theme";
 import BrandColorField from "@/components/brand-color-field";
 import { AUTH_BUTTON_CLASS, AUTH_INPUT_CLASS } from "@/components/auth-shell";
 
@@ -24,8 +28,11 @@ export function OnboardingForm({
   error?: string;
 }) {
   const [name, setName] = useState("");
+  // A brand-new org starts on the homepage ombre (indigo -> teal); the picker
+  // opens in Ombre mode seeded to match. The tenant can switch to a solid or
+  // any other ombre before creating the account.
   const [primary, setPrimary] = useState(DEFAULT_BRAND_COLOR);
-  const [secondary, setSecondary] = useState<string | null>(null);
+  const [secondary, setSecondary] = useState<string | null>(DEFAULT_BRAND_SECONDARY);
   const brandBg = brandGradientCss(primary, secondary);
   const displayName = name.trim() || "Your business";
 
@@ -53,6 +60,8 @@ export function OnboardingForm({
           Used on your renter pages and emails. Pick a solid or an ombre.
         </p>
         <BrandColorField
+          defaultPrimary={DEFAULT_BRAND_COLOR}
+          defaultSecondary={DEFAULT_BRAND_SECONDARY}
           onChange={(p, s) => {
             setPrimary(p);
             setSecondary(s);
