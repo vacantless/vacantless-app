@@ -86,6 +86,16 @@ export default async function LeadDetailPage({
     .order("scheduled_at", { ascending: false });
   const showings = (showingData ?? []) as Showing[];
 
+  // A leased lead can be converted into a tenancy (the property-management
+  // record). If one already exists for this lead, link to it instead of
+  // offering to create a duplicate.
+  const { data: tenancyRef } = await supabase
+    .from("tenancies")
+    .select("id")
+    .eq("lead_id", l.id)
+    .maybeSingle();
+  const existingTenancyId = (tenancyRef as { id: string } | null)?.id ?? null;
+
   const org = await getCurrentOrg();
   const timeZone = org?.booking_timezone ?? "America/Toronto";
   // "Today" in the org's timezone as YYYY-MM-DD (en-CA formats that way).
@@ -179,6 +189,40 @@ export default async function LeadDetailPage({
         date={l.next_action_at}
         note={l.next_action_note}
       />
+
+      {/* Convert-to-tenancy bridge: a leased renter moves from the leasing side
+          to the property-management side. Show once the lead is Leased. */}
+      {l.status === "leased" && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3">
+          {existingTenancyId ? (
+            <>
+              <p className="text-sm text-gray-700">
+                This renter has a tenancy on file.
+              </p>
+              <Link
+                href={`/dashboard/tenancies/${existingTenancyId}`}
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                View tenancy →
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700">
+                Lease signed? Create the tenancy record to manage rent and tenant
+                messaging.
+              </p>
+              <Link
+                href={`/dashboard/tenancies/new?from=${l.id}`}
+                className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+              >
+                Convert to tenancy
+              </Link>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field

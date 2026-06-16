@@ -327,6 +327,20 @@ export function propertyStatusTone(status: string): ChipTone {
   }
 }
 
+/** Tenancy status -> chip tone. */
+export function tenancyStatusTone(status: string): ChipTone {
+  switch (status) {
+    case "active":
+      return "success";
+    case "upcoming":
+      return "info";
+    case "ended":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
+
 /** Showing outcome -> chip tone. */
 export function showingOutcomeTone(outcome: string): ChipTone {
   switch (outcome) {
