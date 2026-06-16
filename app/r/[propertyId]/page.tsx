@@ -197,7 +197,7 @@ export default async function PublicListingPage({
                 <Icons.check className="h-6 w-6" />
               </span>
               <h2 className="text-xl font-bold text-gray-900">
-                {booked ? "Your showing is booked!" : "Thanks, we got your inquiry!"}
+                {booked ? "Your viewing is booked!" : "Thanks, we got your inquiry!"}
               </h2>
               <p className="mt-2 text-sm text-gray-600">
                 {booked
@@ -208,7 +208,7 @@ export default async function PublicListingPage({
           ) : (
             <>
               <h2 className="text-lg font-bold text-gray-900">
-                {days.length > 0 ? "Book a showing" : "Request a showing"}
+                {days.length > 0 ? "Book a viewing" : "Request a viewing"}
               </h2>
               <p className="mb-1 mt-1 text-sm text-gray-500">
                 {days.length > 0
@@ -267,7 +267,7 @@ export default async function PublicListingPage({
                       />
                       <span className="mt-1 block text-xs text-gray-400">
                         If you share your number we may text you about this
-                        showing (such as a confirmation and reminders). Message
+                        viewing (such as a confirmation and reminders). Message
                         and data rates may apply. Reply STOP anytime to opt out.
                       </span>
                     </div>
@@ -298,7 +298,7 @@ export default async function PublicListingPage({
                 {days.length > 0 && (
                   <fieldset className="rounded-lg border border-gray-200 p-4">
                     <legend className="px-1 text-sm font-medium text-gray-700">
-                      Choose a showing time{" "}
+                      Choose a viewing time{" "}
                       <span className="font-normal text-gray-400">(optional)</span>
                     </legend>
                     <p className="mb-3 mt-1 text-xs text-gray-400">
@@ -306,7 +306,7 @@ export default async function PublicListingPage({
                     </p>
                     {hasClustered && (
                       <p className="mb-3 -mt-2 text-xs text-gray-500">
-                        These times group your visit with other showings at this
+                        These times group your visit with other viewings at this
                         building.
                       </p>
                     )}
@@ -342,7 +342,7 @@ export default async function PublicListingPage({
                   className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
                   style={{ backgroundColor: brand }}
                 >
-                  {days.length > 0 ? "Confirm" : "Request a showing"}
+                  {days.length > 0 ? "Confirm" : "Request a viewing"}
                 </button>
               </form>
             </>

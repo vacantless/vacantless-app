@@ -26,7 +26,7 @@ export default async function OnboardingPage({
     <AuthShell
       eyebrow="Step 1 of 2"
       title="Create your account"
-      subtitle="This is your account, the home for your rentals, renters, and showings. You can change any of these settings later."
+      subtitle="This is your account, the home for your rentals, renters, and viewings. You can change any of these settings later."
       footer="Next: add your first rental and share its inquiry page."
     >
       {/* gradient step indicator */}

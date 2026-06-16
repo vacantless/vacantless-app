@@ -35,7 +35,7 @@ export function OutcomeSelect({
     <div
       className="inline-flex flex-wrap gap-1.5"
       role="group"
-      aria-label="Showing outcome"
+      aria-label="Viewing outcome"
     >
       {SHOWING_OUTCOMES.map((o) => {
         const active = o === outcome;

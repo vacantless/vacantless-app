@@ -45,7 +45,7 @@ const LABELS: Record<PropertyStatus, string> = {
 // so an operator knows exactly what a renter will (or won't) see.
 const HELP: Record<PropertyStatus, string> = {
   draft: "Private while you finish it. Renters can't see this unit yet.",
-  available: "Live. Renters can view the unit and book a showing online.",
+  available: "Live. Renters can view the unit and book a viewing online.",
   paused: "Hidden from new renters, but kept so you can relist it later.",
   leased: "Marked rented. The public page tells renters it's no longer available.",
   off_market: "Retired. The public link returns not-found.",

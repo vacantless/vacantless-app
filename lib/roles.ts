@@ -48,7 +48,7 @@ const MATRIX: Record<OrgRole, ReadonlySet<Capability>> = {
 const ROLE_LABELS: Record<OrgRole, string> = {
   owner_admin: "Owner / admin",
   operator: "Operator",
-  showing_helper: "Showing helper",
+  showing_helper: "Viewing helper",
 };
 
 export function isOrgRole(value: unknown): value is OrgRole {

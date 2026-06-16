@@ -89,8 +89,8 @@ ok("capabilitiesFor(operator) drops one (billing)", capabilitiesFor("operator").
 ok("capabilitiesFor(showing_helper) is 2", capabilitiesFor("showing_helper").length === 2);
 ok("roleLabel owner_admin", roleLabel("owner_admin") === "Owner / admin");
 ok("roleLabel operator", roleLabel("operator") === "Operator");
-ok("roleLabel showing_helper", roleLabel("showing_helper") === "Showing helper");
-ok("roleLabel unknown -> helper label", roleLabel("xyz") === "Showing helper");
+ok("roleLabel showing_helper", roleLabel("showing_helper") === "Viewing helper");
+ok("roleLabel unknown -> helper label", roleLabel("xyz") === "Viewing helper");
 
 // --- Matrix monotonicity: owner >= operator >= helper ----------------------
 ok(

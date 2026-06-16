@@ -158,7 +158,7 @@ function bookingHtml(p: BookingPayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
-      <p style="margin:0 0 16px;">Your showing is confirmed. Here are the details:</p>
+      <p style="margin:0 0 16px;">Your viewing is confirmed. Here are the details:</p>
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
         <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
@@ -168,7 +168,7 @@ function bookingHtml(p: BookingPayload): string {
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you booked a showing on our listing page.
+      You are receiving this because you booked a viewing on our listing page.
     </div>
   </div>
 </body></html>`;
@@ -186,8 +186,8 @@ export async function sendBookingConfirmation(
   if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
 
   const subject = p.property_address
-    ? `Your showing at ${p.property_address} is confirmed`
-    : "Your showing is confirmed";
+    ? `Your viewing at ${p.property_address} is confirmed`
+    : "Your viewing is confirmed";
 
   const body = {
     sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
@@ -249,8 +249,8 @@ function reminderHtml(p: ReminderPayload): string {
 
   const lead =
     p.kind === "2h"
-      ? "Just a quick reminder - your showing is coming up soon:"
-      : "This is a friendly reminder of your upcoming showing:";
+      ? "Just a quick reminder - your viewing is coming up soon:"
+      : "This is a friendly reminder of your upcoming viewing:";
 
   const logo = p.logo_url
     ? `<img src="${escapeHtml(
@@ -274,7 +274,7 @@ function reminderHtml(p: ReminderPayload): string {
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this reminder because you booked a showing on our listing page.
+      You are receiving this reminder because you booked a viewing on our listing page.
     </div>
   </div>
 </body></html>`;
@@ -290,8 +290,8 @@ export async function sendShowingReminder(p: ReminderPayload): Promise<SendResul
   if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
 
   const subject = p.property_address
-    ? `Reminder: your showing at ${p.property_address}`
-    : "Reminder: your upcoming showing";
+    ? `Reminder: your viewing at ${p.property_address}`
+    : "Reminder: your upcoming viewing";
 
   const body = {
     sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
@@ -367,7 +367,7 @@ function feedbackHtml(p: FeedbackPayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
-      <p style="margin:0 0 16px;">Thanks for visiting <strong>${addr}</strong>. How was your showing? It only takes a few seconds and helps us serve you better.</p>
+      <p style="margin:0 0 16px;">Thanks for visiting <strong>${addr}</strong>. How was your viewing? It only takes a few seconds and helps us serve you better.</p>
       <p style="margin:0 0 24px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
           brand,
@@ -377,7 +377,7 @@ function feedbackHtml(p: FeedbackPayload): string {
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you attended a showing with us.
+      You are receiving this because you attended a viewing with us.
     </div>
   </div>
 </body></html>`;
@@ -393,8 +393,8 @@ export async function sendFeedbackRequest(p: FeedbackPayload): Promise<SendResul
   if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
 
   const subject = p.property_address
-    ? `How was your showing at ${p.property_address}?`
-    : "How was your showing?";
+    ? `How was your viewing at ${p.property_address}?`
+    : "How was your viewing?";
 
   const body = {
     sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
@@ -504,7 +504,7 @@ function priceDropHtml(p: PriceDropPayload): string {
       <p style="margin:0 0 24px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
           brand,
-        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">See it & book a showing</a>
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">See it & book a viewing</a>
       </p>
       <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or paste this link into your browser:<br/><span style="color:#52525b;">${url}</span></p>
       <p style="margin:24px 0 0;color:#52525b;">Talk soon,<br/><strong>${org}</strong></p>

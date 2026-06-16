@@ -100,13 +100,13 @@ export default async function AvailabilityPage() {
     <div>
       <PageHeader
         icon={<Icons.clock />}
-        title="Showing Times"
-        subtitle="Set the weekly windows when renters can book their own showings. Open slots are generated from these times minus anything already booked."
+        title="Viewing Times"
+        subtitle="Set the weekly windows when renters can book their own viewings. Open slots are generated from these times minus anything already booked."
       />
       <p className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
         These windows apply to <strong>all of your rentals</strong>, so you keep
-        one showing schedule instead of setting times per unit. To keep visits to
-        the same building together on a given day, turn on &ldquo;Group showings
+        one viewing schedule instead of setting times per unit. To keep visits to
+        the same building together on a given day, turn on &ldquo;Group viewings
         by building&rdquo; below.
       </p>
 
@@ -191,13 +191,13 @@ export default async function AvailabilityPage() {
         className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Group showings by building
+          Group viewings by building
         </h3>
         <p className="mb-4 text-sm text-gray-500">
           When on, the booking page steers new renters toward times near the
-          showings already booked at the same building, so visits stay grouped
+          viewings already booked at the same building, so visits stay grouped
           per building per day and you spend less time travelling between them.
-          Buildings are matched by street address. Days with no showing yet stay
+          Buildings are matched by street address. Days with no viewing yet stay
           fully open.
         </p>
         <label className="flex items-start gap-3">
@@ -208,13 +208,13 @@ export default async function AvailabilityPage() {
             className="mt-0.5 h-4 w-4 rounded border-gray-300"
           />
           <span className="text-sm font-medium text-gray-700">
-            Group new showings around existing ones at the same building
+            Group new viewings around existing ones at the same building
           </span>
         </label>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">
-              How far around a booked showing to offer times (minutes)
+              How far around a booked viewing to offer times (minutes)
             </span>
             <input
               name="clustering_buffer_minutes"
@@ -227,7 +227,7 @@ export default async function AvailabilityPage() {
           </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">
-              Max showings per building per day
+              Max viewings per building per day
             </span>
             <input
               name="showing_block_capacity"
@@ -359,7 +359,7 @@ export default async function AvailabilityPage() {
 
         {rules.length === 0 && (
           <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            No times yet. Add your first below so renters can book a showing
+            No times yet. Add your first below so renters can book a viewing
             online.
           </div>
         )}

@@ -77,9 +77,9 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "availability",
-    label: "Set showing availability",
+    label: "Set viewing availability",
     description:
-      "Add weekly windows so renters can self-book showings around your schedule.",
+      "Add weekly windows so renters can self-book viewings around your schedule.",
     href: "/dashboard/availability",
     cta: "Set availability",
   },

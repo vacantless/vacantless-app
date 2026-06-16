@@ -39,7 +39,7 @@ export default async function PublicFeedbackPage({
   const brand = accessibleBrand(c.brand_color || "#4f46e5");
 
   const done = c.already_submitted || searchParams.submitted === "1";
-  const addr = c.property_address || "your showing";
+  const addr = c.property_address || "your viewing";
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ ["--brand-color" as string]: brand }}>
@@ -66,7 +66,7 @@ export default async function PublicFeedbackPage({
           ) : (
             <>
               <h1 className="text-xl font-bold text-gray-900">
-                How was your showing?
+                How was your viewing?
               </h1>
               <p className="mt-1 text-sm text-gray-600">
                 Hi {firstName(c.renter_name)}, thanks for visiting{" "}

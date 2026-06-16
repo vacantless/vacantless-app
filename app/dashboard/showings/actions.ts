@@ -44,7 +44,7 @@ export async function updateShowingOutcome(formData: FormData) {
       lead_id: s.lead_id,
       channel: "note",
       direction: "outbound",
-      body: `Showing marked ${showingOutcomeLabel(outcome)}.`,
+      body: `Viewing marked ${showingOutcomeLabel(outcome)}.`,
     });
 
     revalidatePath(`/dashboard/leads/${s.lead_id}`);

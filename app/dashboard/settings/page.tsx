@@ -222,18 +222,18 @@ export default async function SettingsPage({
               />
               <span className="text-sm">
                 <span className="block font-medium text-gray-700">
-                  Email a feedback request after each attended showing
+                  Email a feedback request after each attended viewing
                 </span>
                 <span className="block text-xs text-gray-400">
                   Renters get a one-tap 1–5 star rating link once you mark their
-                  showing as Attended. Results show on the showing and in Reports.
+                  viewing as Attended. Results show on the viewing and in Reports.
                 </span>
               </span>
             </label>
 
             <label className="mt-4 block">
               <span className="mb-1 block text-sm font-medium text-gray-700">
-                Send delay (hours after the showing)
+                Send delay (hours after the viewing)
               </span>
               <input
                 name="feedback_delay_hours"
@@ -245,7 +245,7 @@ export default async function SettingsPage({
                 className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <span className="mt-1 block text-xs text-gray-400">
-                How long to wait after the showing time before sending. Default
+                How long to wait after the viewing time before sending. Default
                 is 2 hours.
               </span>
             </label>
@@ -270,7 +270,7 @@ export default async function SettingsPage({
                 <span className="block text-xs text-gray-400">
                   Sends a gentle, branded sequence of up to 3 reminders (around 2,
                   5, and 10 days after the inquiry) inviting them to book a
-                  showing. It stops automatically the moment a renter books, is
+                  viewing. It stops automatically the moment a renter books, is
                   marked lost, or moves further along.
                 </span>
               </span>
@@ -291,13 +291,13 @@ export default async function SettingsPage({
               />
               <span className="text-sm">
                 <span className="block font-medium text-gray-700">
-                  Also text renters their booking confirmation and showing
+                  Also text renters their booking confirmation and viewing
                   reminders
                 </span>
                 <span className="block text-xs text-gray-400">
                   When a renter leaves a phone number, we send a short text
                   confirming their booking and reminders about 24 hours and 2
-                  hours before the showing, alongside the emails. Every text
+                  hours before the viewing, alongside the emails. Every text
                   includes &quot;Reply STOP to opt out,&quot; and a renter who
                   replies STOP is never texted again. Texting starts once your
                   account&apos;s SMS is connected.
@@ -339,7 +339,7 @@ export default async function SettingsPage({
                 className="mt-3 inline-flex rounded-lg px-3 py-1.5 text-xs font-medium text-white"
                 style={{ backgroundColor: displayColor }}
               >
-                Book a showing
+                Book a viewing
               </span>
             </div>
           </div>

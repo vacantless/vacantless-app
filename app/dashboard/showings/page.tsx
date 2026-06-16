@@ -101,8 +101,8 @@ export default async function ShowingsPage() {
     <div>
       <PageHeader
         icon={<Icons.calendar />}
-        title="Showings"
-        subtitle="Showings renters booked online, plus ones you scheduled. Mark the outcome after each one to keep your renter list accurate."
+        title="Viewings"
+        subtitle="Viewings renters booked online, plus ones you scheduled. Mark the outcome after each one to keep your renter list accurate."
       />
 
       {blocks.length > 0 && (
@@ -122,7 +122,7 @@ export default async function ShowingsPage() {
                   {fmtClock(b.startIso, timeZone)} – {fmtClock(b.endIso, timeZone)}
                 </p>
                 <span className="mt-2 inline-block rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-                  {b.count} showings
+                  {b.count} viewings
                 </span>
               </li>
             ))}
@@ -136,8 +136,8 @@ export default async function ShowingsPage() {
         empty={
           <EmptyState
             icon={<Icons.calendar className="h-5 w-5" />}
-            title="No upcoming showings yet"
-            description="Set your weekly availability so renters can book their own showings online. Confirmed showings appear here."
+            title="No upcoming viewings yet"
+            description="Set your weekly availability so renters can book their own viewings online. Confirmed viewings appear here."
             cta={{ href: "/dashboard/availability", label: "Set availability" }}
           />
         }
@@ -149,7 +149,7 @@ export default async function ShowingsPage() {
         empty={
           <EmptyState
             icon={<Icons.check className="h-5 w-5" />}
-            title="No past showings yet"
+            title="No past viewings yet"
             description="Once renters attend, mark each outcome here to keep your renter list accurate and send feedback requests."
           />
         }

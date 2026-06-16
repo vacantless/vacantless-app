@@ -153,7 +153,7 @@ export function bookingConfirmationSms(p: SmsCopyInput): string {
   const org = (p.org_name || "Our leasing team").trim();
   const addr = p.property_address ? p.property_address.trim() : "the property";
   return noEmDash(
-    `${org}: your showing at ${addr} is confirmed for ${p.when_label}. ` +
+    `${org}: your viewing at ${addr} is confirmed for ${p.when_label}. ` +
       `Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
   );
 }
@@ -164,8 +164,8 @@ export function showingReminderSms(p: SmsCopyInput, kind: "24h" | "2h"): string 
   const addr = p.property_address ? p.property_address.trim() : "the property";
   const lead =
     kind === "2h"
-      ? "your showing is coming up soon"
-      : "a reminder of your upcoming showing";
+      ? "your viewing is coming up soon"
+      : "a reminder of your upcoming viewing";
   return noEmDash(
     `${org}: ${lead} at ${addr} on ${p.when_label}. ` +
       `Reply here to reschedule. ${OPT_OUT_LINE}`,

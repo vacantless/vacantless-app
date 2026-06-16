@@ -159,14 +159,14 @@ export default async function OverviewPage() {
       </div>
 
       <SectionHeading action={{ href: "/dashboard/showings", label: "View all" }}>
-        Upcoming showings
+        Upcoming viewings
       </SectionHeading>
       {upcomingShowings.length === 0 ? (
         <div className="mb-8">
           <EmptyState
             icon={<Icons.calendar />}
-            title="No upcoming showings"
-            description="Set your weekly availability so renters can book their own showings online."
+            title="No upcoming viewings"
+            description="Set your weekly availability so renters can book their own viewings online."
             cta={{ href: "/dashboard/availability", label: "Set availability" }}
           />
         </div>

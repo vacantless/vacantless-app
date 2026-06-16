@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
             lead_id: row.lead_id,
             channel: "email",
             direction: "outbound",
-            body: `${emailKind === "2h" ? "2-hour" : "24-hour"} showing reminder sent to ${renterEmail}` +
+            body: `${emailKind === "2h" ? "2-hour" : "24-hour"} viewing reminder sent to ${renterEmail}` +
               (result.subject ? ` — "${result.subject}"` : ""),
           });
           summary.sent++;
@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
             lead_id: row.lead_id,
             channel: "sms",
             direction: "outbound",
-            body: `${smsKind === "2h" ? "2-hour" : "24-hour"} showing reminder text sent to ${phone}`,
+            body: `${smsKind === "2h" ? "2-hour" : "24-hour"} viewing reminder text sent to ${phone}`,
           });
           summary.smsSent++;
           didSomething = true;

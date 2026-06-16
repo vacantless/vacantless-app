@@ -218,7 +218,7 @@ export default async function LeadDetailPage({
       {showings.length > 0 && (
         <>
           <div className="mt-8">
-            <SectionHeading>Showings</SectionHeading>
+            <SectionHeading>Viewings</SectionHeading>
           </div>
           <ul className="space-y-2">
             {showings.map((s) => (

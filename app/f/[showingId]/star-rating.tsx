@@ -16,7 +16,7 @@ export function StarRating({ brand }: { brand: string }) {
       <div
         className="flex justify-center gap-1"
         role="radiogroup"
-        aria-label="Rate your showing from 1 to 5 stars"
+        aria-label="Rate your viewing from 1 to 5 stars"
       >
         {[1, 2, 3, 4, 5].map((n) => {
           const filled = n <= active;

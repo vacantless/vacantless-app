@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 export const metadata = {
   title: "Vacantless - Catch every rental opportunity",
   description:
-    "One simple place to collect rental inquiries, reply fast, let renters book their own showings, and turn interest into signed leases.",
+    "One simple place to collect rental inquiries, reply fast, let renters book their own viewings, and turn interest into signed leases.",
 };
 
 export default function Home() {
@@ -114,7 +114,7 @@ function Hero() {
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-gray-600">
             Vacantless gives you one simple place to collect rental inquiries,
-            reply fast, let renters book their own showing times, and turn
+            reply fast, let renters book their own viewing times, and turn
             interest into signed leases.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -177,7 +177,7 @@ function RenterListMockup() {
             <CheckIcon />
           </span>
           <div>
-            <p className="text-xs font-semibold text-gray-900">Showing booked</p>
+            <p className="text-xs font-semibold text-gray-900">Viewing booked</p>
             <p className="text-[11px] text-gray-500">Saturday, 2:00 PM</p>
           </div>
         </div>
@@ -239,7 +239,7 @@ const MOCK_RENTERS: {
   {
     name: "James T.",
     initials: "JT",
-    detail: "Showing Sat at 2:00 PM",
+    detail: "Viewing Sat at 2:00 PM",
     status: "Booked",
     tone: "teal",
     avatarClass: "bg-teal-100 text-teal-700",
@@ -390,8 +390,8 @@ const STEPS: {
     ),
   },
   {
-    title: "Showing times",
-    body: "Set your available times. Renters choose a showing without all the back-and-forth.",
+    title: "Viewing times",
+    body: "Set your available times. Renters choose a viewing without all the back-and-forth.",
     icon: <CalendarIcon />,
     preview: (
       <div className="rounded-xl border border-gray-200 p-3">
@@ -468,7 +468,7 @@ const WINS: { title: string; body: string; icon: ReactNode }[] = [
     icon: <BoltIcon />,
   },
   {
-    title: "Renters book their own showings",
+    title: "Renters book their own viewings",
     body: "Set your available times once. Renters pick a slot, with no back-and-forth messaging.",
     icon: <CalendarIcon />,
   },
@@ -526,7 +526,7 @@ const AUDIENCE: { title: string; body: string; icon: ReactNode }[] = [
   },
   {
     title: "Owners with multiple units",
-    body: "Keep every unit's inquiries, showings, and follow-ups organized.",
+    body: "Keep every unit's inquiries, viewings, and follow-ups organized.",
     icon: <BuildingIcon />,
   },
   {
@@ -582,7 +582,7 @@ function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <Wordmark />
         <p className="text-sm text-gray-500">
-          Faster replies. More showings. Filled vacancies.
+          Faster replies. More viewings. Filled vacancies.
         </p>
         <div className="flex items-center gap-4 text-sm">
           <Link href="/login" className="text-gray-500 hover:text-gray-900">

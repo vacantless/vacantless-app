@@ -82,7 +82,7 @@ export default async function ReportsPage({
       <PageHeader
         icon={<Icons.chart />}
         title="Reports"
-        subtitle="How inquiries, showings, and leases are trending over time."
+        subtitle="How inquiries, viewings, and leases are trending over time."
         action={
           <div className="flex flex-wrap gap-1.5">
             {WINDOW_OPTIONS.map((opt) => {
@@ -124,7 +124,7 @@ export default async function ReportsPage({
           icon={<Icons.key className="h-4 w-4" />}
         />
         <StatCard
-          label="Showing attendance"
+          label="Viewing attendance"
           value={`${showRep.attendanceRate}%`}
           hint={`${showRep.attended} of ${showRep.attended + showRep.noShow} kept`}
           icon={<Icons.check className="h-4 w-4" />}
@@ -144,7 +144,7 @@ export default async function ReportsPage({
       {/* Funnel */}
       <Section
         title="Inquiry to lease"
-        subtitle="Each inquiry is counted at the furthest stage it reached. Booked means the inquiry got to the Booked stage (whether it self-booked online or you moved it there), not the number of showings on your calendar. For actual showings, see the Showings section below."
+        subtitle="Each inquiry is counted at the furthest stage it reached. Booked means the inquiry got to the Booked stage (whether it self-booked online or you moved it there), not the number of viewings on your calendar. For actual viewings, see the Viewings section below."
       >
         {funnel[0].count === 0 ? (
           <Empty>
@@ -215,7 +215,7 @@ export default async function ReportsPage({
       {/* By rental */}
       <Section
         title="By rental"
-        subtitle="Showings counts actual showings on the calendar; Booked and Leased count inquiries that reached that stage."
+        subtitle="Viewings counts actual viewings on the calendar; Booked and Leased count inquiries that reached that stage."
       >
         {propertyRows.length === 0 ? (
           <Empty>
@@ -224,7 +224,7 @@ export default async function ReportsPage({
           </Empty>
         ) : (
           <Table
-            head={["Rental", "Rent", "Status", "Inquiries", "Showings", "Booked", "Leased"]}
+            head={["Rental", "Rent", "Status", "Inquiries", "Viewings", "Booked", "Leased"]}
           >
             {propertyRows.map((p) => (
               <tr key={p.id} className="border-t border-gray-100">
@@ -250,8 +250,8 @@ export default async function ReportsPage({
 
       {/* Showings */}
       <Section
-        title="Showings"
-        subtitle="Actual showings on your calendar (booked online by renters or scheduled by you), and how they turned out."
+        title="Viewings"
+        subtitle="Actual viewings on your calendar (booked online by renters or scheduled by you), and how they turned out."
       >
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <Kpi label="Total" value={showRep.total} />
@@ -267,7 +267,7 @@ export default async function ReportsPage({
       <Section title="Renter feedback">
         {feedbackRep.responses === 0 ? (
           <Empty>
-            No feedback yet. Requests go out automatically after a showing is
+            No feedback yet. Requests go out automatically after a viewing is
             marked Attended (configurable in Settings).
           </Empty>
         ) : (
@@ -292,8 +292,8 @@ export default async function ReportsPage({
         Activity counted by when it happened, within the selected window.
         Inquiry and source counts reflect each inquiry&apos;s furthest stage
         reached; lost inquiries count toward total inquiries only. &ldquo;Booked&rdquo;
-        in those counts is a stage in your renter list, not a calendar showing. The
-        Showings section is the count of actual showings.
+        in those counts is a stage in your renter list, not a calendar viewing. The
+        Viewings section is the count of actual viewings.
       </p>
     </div>
   );
