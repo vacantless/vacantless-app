@@ -426,3 +426,24 @@ export function minutesToLabel(min: number): string {
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
+
+/**
+ * The slot START minutes a single availability window produces for a given slot
+ * length. PURE preview helper for the "what renters will see" panel on the
+ * Showing-times page: it mirrors generateSlots' per-window stepping EXACTLY
+ * (`m + slot <= end`, so a trailing partial slot is dropped), without any
+ * timezone/date/booked logic. A non-positive slot length falls back to 30, and
+ * an empty/invalid window yields [].
+ */
+export function previewSlotStarts(
+  startMinute: number,
+  endMinute: number,
+  slotMinutes: number,
+): number[] {
+  const slot = slotMinutes > 0 ? slotMinutes : 30;
+  const out: number[] = [];
+  for (let m = startMinute; m + slot <= endMinute; m += slot) {
+    out.push(m);
+  }
+  return out;
+}

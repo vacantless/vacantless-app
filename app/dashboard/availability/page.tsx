@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { WEEKDAY_LABELS, minutesToLabel } from "@/lib/booking";
+import { WEEKDAY_LABELS, minutesToLabel, previewSlotStarts } from "@/lib/booking";
 import {
   updateBookingSettings,
   updateClusteringSettings,
@@ -76,6 +76,23 @@ export default async function AvailabilityPage() {
     list.push(r);
     byDay.set(r.weekday, list);
   }
+
+  // Renter preview: take the earliest window of the first day that has one and
+  // show the bookable start times it generates at the current slot length, so
+  // the operator sees exactly what a renter chooses from. Already-booked times
+  // are hidden live; this static preview shows the full set from the window.
+  const previewRule = rules.length > 0 ? rules[0] : null;
+  const previewStarts = previewRule
+    ? previewSlotStarts(
+        previewRule.start_minute,
+        previewRule.end_minute,
+        cfg.booking_slot_minutes,
+      )
+    : [];
+  const PREVIEW_MAX = 10;
+
+  // Short labels for the at-a-glance grid headers (Sun..Sat).
+  const shortDays = WEEKDAY_LABELS.map((l) => l.slice(0, 3));
 
   return (
     <div>
@@ -220,6 +237,107 @@ export default async function AvailabilityPage() {
           </button>
         </div>
       </form>
+
+      {/* Week at a glance + renter preview */}
+      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Your week at a glance
+        </h3>
+        <p className="mb-4 mt-1 text-sm text-gray-500">
+          A quick visual of when renters can book across the week. Edit the
+          windows below.
+        </p>
+
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+          {WEEKDAY_LABELS.map((label, wd) => {
+            const dayRules = byDay.get(wd) ?? [];
+            const open = dayRules.length > 0;
+            return (
+              <div key={wd} className="flex flex-col">
+                <div className="mb-1 text-center text-xs font-semibold text-gray-500">
+                  <span className="sm:hidden">{shortDays[wd][0]}</span>
+                  <span className="hidden sm:inline">{shortDays[wd]}</span>
+                </div>
+                <div
+                  className={`flex min-h-[4.5rem] flex-col gap-1 rounded-lg border p-1.5 ${
+                    open
+                      ? "border-gray-200 bg-gray-50"
+                      : "border-dashed border-gray-200 bg-white"
+                  }`}
+                >
+                  {open ? (
+                    dayRules.map((r) => (
+                      <span
+                        key={r.id}
+                        className="rounded-md border border-gray-200 bg-white px-1 py-1 text-center text-[10px] font-medium leading-tight text-gray-700 sm:text-xs"
+                        title={`${minutesToLabel(r.start_minute)} – ${minutesToLabel(r.end_minute)}`}
+                      >
+                        {minutesToLabel(r.start_minute)}
+                        <span className="hidden sm:inline">
+                          {" – "}
+                          {minutesToLabel(r.end_minute)}
+                        </span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="my-auto text-center text-[10px] text-gray-300">
+                      —
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* What renters will see */}
+        <div className="mt-5 rounded-lg border border-gray-100 bg-gray-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            What renters will see
+          </p>
+          {previewRule ? (
+            <>
+              <p className="mt-1 text-sm text-gray-600">
+                Booking the {WEEKDAY_LABELS[previewRule.weekday]}{" "}
+                {minutesToLabel(previewRule.start_minute)}–
+                {minutesToLabel(previewRule.end_minute)} window at your{" "}
+                {cfg.booking_slot_minutes}-minute slot length, renters pick from
+                times like these:
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {previewStarts.slice(0, PREVIEW_MAX).map((m) => (
+                  <span
+                    key={m}
+                    className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700"
+                  >
+                    {minutesToLabel(m)}
+                  </span>
+                ))}
+                {previewStarts.length > PREVIEW_MAX && (
+                  <span className="px-1 py-1 text-xs text-gray-400">
+                    +{previewStarts.length - PREVIEW_MAX} more
+                  </span>
+                )}
+                {previewStarts.length === 0 && (
+                  <span className="text-xs text-gray-400">
+                    This window is shorter than one slot, so it produces no
+                    bookable times. Widen it or shorten the slot length.
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-xs text-gray-400">
+                Times already booked are hidden automatically, and your minimum
+                notice ({cfg.booking_lead_hours}h) applies.
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-gray-500">
+              Add a window below to preview the times renters will be able to
+              book.
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* Weekly windows */}
       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">

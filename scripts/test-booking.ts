@@ -11,6 +11,7 @@ import {
   generateSlots,
   isValidSlot,
   groupShowingsIntoBlocks,
+  previewSlotStarts,
   type Availability,
   type DaySlots,
 } from "../lib/booking";
@@ -180,6 +181,30 @@ eq("Pillette Jul 1 groups 2 showings", pilletteJul1.count, 2);
 eq("block start = earliest", pilletteJul1.startIso, "2026-07-01T14:00:00.000Z");
 eq("block end = latest", pilletteJul1.endIso, "2026-07-01T15:30:00.000Z");
 ok("blocks sorted by start", blocks[0].startIso <= blocks[1].startIso && blocks[1].startIso <= blocks[2].startIso);
+
+// --- previewSlotStarts (Showing-times "what renters will see" panel) -------
+eq("30-min slots in 10:00-12:00 = 4 starts",
+  previewSlotStarts(600, 720, 30).length, 4);
+eq("first start = window start", previewSlotStarts(600, 720, 30)[0], 600);
+eq("last start leaves room for the slot", previewSlotStarts(600, 720, 30).at(-1), 690);
+eq("drops a trailing partial slot (10:00-11:20 @ 30 = 2)",
+  previewSlotStarts(600, 680, 30).length, 2);
+eq("60-min slots in 9:00-17:00 = 8", previewSlotStarts(540, 1020, 60).length, 8);
+eq("non-positive slot falls back to 30 (10:00-11:00 = 2)",
+  previewSlotStarts(600, 660, 0).length, 2);
+eq("empty window yields none", previewSlotStarts(600, 600, 30).length, 0);
+eq("window shorter than a slot yields none", previewSlotStarts(600, 615, 30).length, 0);
+// Matches generateSlots' own per-window stepping exactly.
+{
+  const av: Availability = {
+    timezone: "UTC", slot_minutes: 30, lead_hours: 0, horizon_days: 1,
+    rules: [{ weekday: 3, start_minute: 600, end_minute: 720 }], booked: [],
+  };
+  const gen = generateSlots(av, new Date("2026-07-01T00:00:00.000Z")); // Wed
+  const wed = gen.find((d) => d.dayKey === "2026-07-01");
+  eq("generateSlots agrees with previewSlotStarts count",
+    wed?.slots.length, previewSlotStarts(600, 720, 30).length);
+}
 
 console.log(`\nbooking: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

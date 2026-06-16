@@ -4,14 +4,14 @@ import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import { accessibleBrand, isBrandColorTooLight } from "@/lib/brand-theme";
-import { updateBranding } from "./actions";
+import { updateBranding, sendTestEmailAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: { saved?: string; error?: string };
+  searchParams: { saved?: string; error?: string; test?: string; to?: string };
 }) {
   const org = await getCurrentOrg();
   if (!org) return null;
@@ -25,6 +25,14 @@ export default async function SettingsPage({
     .order("created_at", { ascending: false })
     .limit(1);
   const firstPropertyId = (propertyRows as { id: string }[] | null)?.[0]?.id;
+
+  // The signed-in operator's own email prefills the test-send recipient — the
+  // common case is "send it to me so I can see what renters get".
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const operatorEmail = user?.email ?? "";
+
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
   const proto = h.get("x-forwarded-proto") ?? "https";
@@ -42,6 +50,8 @@ export default async function SettingsPage({
   const wasDarkened = isBrandColorTooLight(color);
   const saved = searchParams.saved === "1";
   const error = searchParams.error;
+  const test = searchParams.test;
+  const testedTo = searchParams.to;
 
   return (
     <div>
@@ -62,6 +72,31 @@ export default async function SettingsPage({
           {error === "save"
             ? "Something went wrong saving your changes. Please try again."
             : "Some fields weren't valid. Check the brand color (a hex like #0e8c8c), the logo URL (a full http(s) link, or leave it blank), and the reply-to (a valid email, or leave it blank)."}
+        </div>
+      )}
+
+      {test === "sent" && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Test email sent{testedTo ? ` to ${testedTo}` : ""}. Check your inbox
+          (and spam folder) to see exactly what renters receive.
+        </div>
+      )}
+      {test === "invalid" && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Please enter a valid email address to send the test to.
+        </div>
+      )}
+      {test === "nokey" && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Email sending isn&apos;t connected yet, so the test couldn&apos;t go
+          out. Your branded emails will start sending automatically once email
+          is enabled on your account.
+        </div>
+      )}
+      {test === "failed" && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Something went wrong sending the test email. Please try again in a
+          moment.
         </div>
       )}
 
@@ -276,6 +311,44 @@ export default async function SettingsPage({
           </div>
         </div>
       </form>
+
+      {/* Send a test email — confirm branding + deliverability before going live */}
+      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Send a test email
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Email yourself a copy of the renter auto-reply with your current
+          branding (name, color, logo, and reply-to) so you can see exactly what
+          renters receive before you share your listing link.
+        </p>
+        <form
+          action={sendTestEmailAction}
+          className="mt-4 flex flex-wrap items-end gap-3"
+        >
+          <label className="block flex-1 min-w-[16rem]">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              Send to
+            </span>
+            <input
+              name="test_email"
+              type="email"
+              inputMode="email"
+              required
+              placeholder="you@yourcompany.com"
+              defaultValue={operatorEmail}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+            Send test email
+          </button>
+        </form>
+        <p className="mt-3 text-xs text-gray-400">
+          The test uses sample renter and listing details. Save your branding
+          changes first so the test reflects them.
+        </p>
+      </div>
 
       {/* Read-only account context */}
       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">

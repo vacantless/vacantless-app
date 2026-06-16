@@ -11,6 +11,7 @@
 // Zapier) and set it in Vercel as BREVO_API_KEY (server-only, no NEXT_PUBLIC_).
 
 import { nurtureCopy, type NurtureCopy } from "@/lib/nurture";
+import { TEST_SAMPLE, TEST_SUBJECT_PREFIX } from "@/lib/test-email";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
@@ -667,6 +668,79 @@ export async function sendNurtureEmail(p: NurturePayload): Promise<SendResult> {
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: nurtureHtml(p, copy),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Settings "Send a test email". Emails the operator a copy of the branded
+// renter auto-reply (using their own saved branding + realistic sample data) so
+// they can confirm deliverability and how their brand looks before sharing the
+// intake link. Reuses the same Brevo plumbing — no new credentials.
+// ---------------------------------------------------------------------------
+
+export type TestEmailPayload = {
+  to_email: string;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+};
+
+/**
+ * Best-effort branded test email. Never throws; returns { sent:false } with a
+ * reason ("no_api_key" / "no_recipient" / "brevo_*" / "fetch_error") so the
+ * caller can show the operator an accurate message.
+ */
+export async function sendTestEmail(p: TestEmailPayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+
+  // Build the exact default auto-reply a real renter would get, with sample
+  // renter/listing data, so the operator sees a faithful preview.
+  const sample: AutoReplyPayload = {
+    lead_id: "test",
+    org_id: "test",
+    renter_name: TEST_SAMPLE.renter_name,
+    renter_email: p.to_email,
+    org_name: p.org_name,
+    brand_color: p.brand_color,
+    logo_url: p.logo_url,
+    reply_to_email: p.reply_to_email,
+    property_address: TEST_SAMPLE.property_address,
+    rent_cents: TEST_SAMPLE.rent_cents,
+    template_subject: null,
+    template_body: null,
+  };
+
+  const subject = `${TEST_SUBJECT_PREFIX}${defaultSubject(sample)}`;
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: defaultHtml(sample),
   };
 
   try {
