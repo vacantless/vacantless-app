@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 const LINKS: [string, string][] = [
   ["/dashboard", "Overview"],
-  ["/dashboard/properties", "Properties"],
+  ["/dashboard/properties", "Rentals"],
   ["/dashboard/leads", "Inquiries"],
   ["/dashboard/showings", "Showings"],
   ["/dashboard/availability", "Showing Times"],

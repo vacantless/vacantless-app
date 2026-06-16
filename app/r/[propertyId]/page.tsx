@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitLead } from "./actions";
+import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
 import { accessibleBrand } from "@/lib/brand-theme";
 import {
@@ -80,7 +81,6 @@ export default async function PublicListingPage({
   const availability = formatAvailability(l.available_date);
   // Photos come pre-ordered from the RPC (cover first, then sort order).
   const photos = Array.isArray(l.photos) ? l.photos : [];
-  const [coverPhoto, ...restPhotos] = photos;
 
   const booked = searchParams.submitted === "booked";
 
@@ -138,35 +138,7 @@ export default async function PublicListingPage({
             <span className="font-medium text-gray-700">{utilities}</span>
           </p>
         )}
-        {coverPhoto && (
-          <div className="mt-6 space-y-2">
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={coverPhoto}
-                alt={`${l.address} — photo 1`}
-                className="max-h-[28rem] w-full object-cover"
-              />
-            </div>
-            {restPhotos.length > 0 && (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {restPhotos.map((url, i) => (
-                  <div
-                    key={url}
-                    className="aspect-[4/3] overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={url}
-                      alt={`${l.address} — photo ${i + 2}`}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <PhotoGallery address={l.address} photos={photos} />
 
         {l.description && (
           <p className="mt-4 whitespace-pre-wrap text-gray-700">

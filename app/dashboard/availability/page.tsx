@@ -101,6 +101,12 @@ export default async function AvailabilityPage() {
         Set the weekly windows when renters can book their own showings. Open
         slots are generated from these times minus anything already booked.
       </p>
+      <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+        These windows apply to <strong>all of your rentals</strong>, so you keep
+        one showing schedule instead of setting times per unit. To keep visits to
+        the same building together on a given day, turn on &ldquo;Group showings
+        by building&rdquo; below.
+      </p>
 
       {/* Booking settings */}
       <form

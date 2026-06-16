@@ -26,6 +26,24 @@ export function statusLabel(status: string): string {
   return (LABELS as Record<string, string>)[status] ?? status;
 }
 
+// One-line meaning for each stage. The "Replied" vs "Contacted" pair looked
+// interchangeable in the QA review, so the wording here draws the line: Replied
+// = a first/auto response went out, Contacted = you've actually connected.
+const DESCRIPTIONS: Record<LeadStatus, string> = {
+  new: "Just inquired. No response yet.",
+  replied: "A first or automatic response has gone out.",
+  contacted: "You've actually connected (call, text, or back-and-forth email).",
+  booked: "Has a showing booked.",
+  showed: "Attended their showing.",
+  applied: "Submitted a rental application.",
+  leased: "Signed a lease.",
+  lost: "Not moving forward.",
+};
+
+export function statusDescription(status: string): string {
+  return (DESCRIPTIONS as Record<string, string>)[status] ?? "";
+}
+
 export function isLeadStatus(value: string): value is LeadStatus {
   return (PIPELINE_STAGES as readonly string[]).includes(value);
 }

@@ -144,6 +144,76 @@ export function sourceLabelForPost(post: {
   return PORTAL_LABELS[key];
 }
 
+// --- validation ------------------------------------------------------------
+
+/**
+ * Validate a listing post before it is saved. The product bug this guards:
+ * a post could be saved marked "Live" with no ad URL, so the tracked-source
+ * story and the operator's "where is this live right now" view both lied.
+ *
+ * Rules (intentionally light — this is an operator's own tracker, not a public
+ * form): a post that is Live MUST carry an ad URL, and any URL provided must be
+ * a plausible http(s) web address. Draft/Expired/Removed posts may have no URL
+ * (you're noting a plan or an old post). Returns the first problem found, keyed
+ * to the field so the UI can point at it; `ok` means safe to persist.
+ *
+ * Operates on the SAME normalized shapes the action persists (run the raw form
+ * values through normalizePortal/normalizeListingStatus/normalizeUrl first), so
+ * the check and the write never disagree.
+ */
+export type ListingPostInput = {
+  portal: PortalKey;
+  status: ListingPostStatus;
+  url: string | null;
+};
+
+export type ListingPostValidation =
+  | { ok: true }
+  | { ok: false; field: "url"; code: ListingPostError };
+
+export type ListingPostError = "live_needs_url" | "url_not_web";
+
+/** True when a string is a plausible absolute http(s) URL. */
+export function isWebUrl(value: string | null | undefined): boolean {
+  if (typeof value !== "string") return false;
+  const v = value.trim();
+  if (!/^https?:\/\//i.test(v)) return false;
+  try {
+    const u = new URL(v);
+    // Need a host with a dot (rules out "https://localhost" typos) and no spaces.
+    return u.hostname.includes(".") && !/\s/.test(v);
+  } catch {
+    return false;
+  }
+}
+
+export function validateListingPost(
+  input: ListingPostInput,
+): ListingPostValidation {
+  const url = input.url;
+  // A live ad with no link can't be tracked or reopened — block it.
+  if (input.status === "live" && !url) {
+    return { ok: false, field: "url", code: "live_needs_url" };
+  }
+  // Any URL that IS provided must look like a real web address.
+  if (url && !isWebUrl(url)) {
+    return { ok: false, field: "url", code: "url_not_web" };
+  }
+  return { ok: true };
+}
+
+/** Operator-facing copy for a validation error code. */
+export function listingPostErrorMessage(code: unknown): string {
+  switch (code) {
+    case "live_needs_url":
+      return "Add the ad's web link before marking this post Live, or set it to Draft for now.";
+    case "url_not_web":
+      return "That doesn't look like a web link. Use the full address, like https://www.kijiji.ca/...";
+    default:
+      return "Please check the post details and try again.";
+  }
+}
+
 // --- counts ----------------------------------------------------------------
 
 /** Tally how many of the given leads came through each post id. */

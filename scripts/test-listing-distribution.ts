@@ -16,6 +16,9 @@ import {
   buildTrackedLink,
   sourceLabelForPost,
   countLeadsByPost,
+  isWebUrl,
+  validateListingPost,
+  listingPostErrorMessage,
 } from "../lib/listing-distribution";
 
 let passed = 0;
@@ -123,6 +126,79 @@ ok("countLeadsByPost: a -> 2", counts.get("a") === 2);
 ok("countLeadsByPost: b -> 1", counts.get("b") === 1);
 ok("countLeadsByPost: ignores null", !counts.has("null"));
 ok("countLeadsByPost: missing -> undefined", counts.get("c") === undefined);
+
+// --- validation ------------------------------------------------------------
+ok("isWebUrl: https ok", isWebUrl("https://www.kijiji.ca/abc"));
+ok("isWebUrl: http ok", isWebUrl("http://example.com"));
+ok("isWebUrl: bare domain rejected (pre-normalize)", !isWebUrl("kijiji.ca/abc"));
+ok("isWebUrl: no dot in host rejected", !isWebUrl("https://localhost"));
+ok("isWebUrl: spaces rejected", !isWebUrl("https://a b.com"));
+ok("isWebUrl: junk rejected", !isWebUrl("not a url"));
+ok("isWebUrl: null rejected", !isWebUrl(null));
+
+ok(
+  "validate: live + url ok",
+  validateListingPost({ portal: "kijiji", status: "live", url: "https://k.ca/x" })
+    .ok === true,
+);
+const liveNoUrl = validateListingPost({
+  portal: "kijiji",
+  status: "live",
+  url: null,
+});
+ok("validate: live + no url fails", liveNoUrl.ok === false);
+ok(
+  "validate: live + no url -> live_needs_url on url field",
+  liveNoUrl.ok === false &&
+    liveNoUrl.field === "url" &&
+    liveNoUrl.code === "live_needs_url",
+);
+ok(
+  "validate: draft + no url ok",
+  validateListingPost({ portal: "kijiji", status: "draft", url: null }).ok ===
+    true,
+);
+ok(
+  "validate: expired + no url ok",
+  validateListingPost({ portal: "kijiji", status: "expired", url: null }).ok ===
+    true,
+);
+const badUrl = validateListingPost({
+  portal: "other",
+  status: "draft",
+  url: "ftp://nope",
+});
+ok("validate: any provided url must be web", badUrl.ok === false);
+ok(
+  "validate: bad url -> url_not_web",
+  badUrl.ok === false && badUrl.code === "url_not_web",
+);
+ok(
+  "validate: live whitespace-only url already normalized to null -> live_needs_url",
+  // normalizeUrl turns "   " into null; mirror that the action passes null here.
+  validateListingPost({ portal: "kijiji", status: "live", url: normalizeUrl("   ") })
+    .ok === false,
+);
+
+ok(
+  "errorMessage: live_needs_url mentions Live",
+  listingPostErrorMessage("live_needs_url").includes("Live"),
+);
+ok(
+  "errorMessage: url_not_web mentions web link",
+  listingPostErrorMessage("url_not_web").includes("web link"),
+);
+ok(
+  "errorMessage: unknown -> generic",
+  listingPostErrorMessage("???").length > 0,
+);
+ok(
+  "errorMessage: no em dashes",
+  !/[—–]/.test(
+    listingPostErrorMessage("live_needs_url") +
+      listingPostErrorMessage("url_not_web"),
+  ),
+);
 
 // ---------------------------------------------------------------------------
 console.log(`\nlisting-distribution: ${passed} passed, ${failed} failed`);

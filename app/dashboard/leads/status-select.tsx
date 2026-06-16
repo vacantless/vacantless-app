@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { PIPELINE_STAGES, statusLabel } from "@/lib/pipeline";
+import { PIPELINE_STAGES, statusLabel, statusDescription } from "@/lib/pipeline";
 import { updateLeadStatus } from "./actions";
 
 // A select that submits the status change as soon as it changes.
@@ -24,7 +24,7 @@ export function StatusSelect({
         className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm"
       >
         {PIPELINE_STAGES.map((s) => (
-          <option key={s} value={s}>
+          <option key={s} value={s} title={statusDescription(s)}>
             {statusLabel(s)}
           </option>
         ))}

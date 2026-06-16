@@ -44,6 +44,7 @@ import {
   LISTING_POST_STATUSES,
   portalLabel,
   listingPostStatusLabel,
+  listingPostErrorMessage,
   buildTrackedLink,
   countLeadsByPost,
   type PortalKey,
@@ -112,6 +113,7 @@ export default async function PropertyDetailPage({
     saved?: string;
     blasted?: string;
     post?: string;
+    posterr?: string;
     photos?: string;
     photoerr?: string;
     duplicated?: string;
@@ -204,7 +206,7 @@ export default async function PropertyDetailPage({
         href="/dashboard/properties"
         className="text-sm font-medium text-brand"
       >
-        ← Properties
+        ← Rentals
       </Link>
 
       {searchParams.saved && (
@@ -216,7 +218,8 @@ export default async function PropertyDetailPage({
       {searchParams.duplicated && (
         <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Copied from another rental. Update the address and rent below, then set
-          it live when you&apos;re ready. It&apos;s off market for now.
+          it Live when you&apos;re ready. It&apos;s saved as a Draft for now, so
+          renters can&apos;t see it.
         </p>
       )}
 
@@ -237,6 +240,12 @@ export default async function PropertyDetailPage({
             : searchParams.post === "removed"
               ? "Listing post removed."
               : "Listing post saved."}
+        </p>
+      )}
+
+      {searchParams.posterr && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {listingPostErrorMessage(searchParams.posterr)}
         </p>
       )}
 
@@ -560,6 +569,10 @@ export default async function PropertyDetailPage({
                           placeholder="https://www.kijiji.ca/..."
                           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                         />
+                        <p className="mt-1 text-xs text-gray-400">
+                          Required once the post is Live, so its tracked link
+                          works.
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-3">
                         <div className="flex-1 min-w-[12rem]">
@@ -673,6 +686,9 @@ export default async function PropertyDetailPage({
                 placeholder="https://www.kijiji.ca/..."
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
+              <p className="mt-1 text-xs text-gray-400">
+                Required once the post is Live, so its tracked link works.
+              </p>
             </div>
             <div className="flex flex-wrap gap-3">
               <div className="flex-1 min-w-[12rem]">

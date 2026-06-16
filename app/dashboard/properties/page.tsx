@@ -49,11 +49,11 @@ export default async function PropertiesPage({
 
   return (
     <div>
-      <h2 className="mb-4 text-xl font-bold text-gray-900">Properties</h2>
+      <h2 className="mb-4 text-xl font-bold text-gray-900">Rentals</h2>
 
       {searchParams.added && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          Property added. Its public inquiry page is ready to share.
+          Rental added. Its public inquiry page is ready to share.
         </p>
       )}
 
@@ -107,14 +107,14 @@ export default async function PropertiesPage({
       ) : (
         <div className="mb-8">
           <EmptyState
-            title="No properties yet"
-            description="Add your first property below to create its public inquiry page and start collecting inquiries."
+            title="No rentals yet"
+            description="Add your first rental below to create its public inquiry page and start collecting inquiries."
           />
         </div>
       )}
 
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        Add a property
+        Add a rental
       </h3>
       <form
         action={addProperty}
@@ -171,7 +171,7 @@ export default async function PropertiesPage({
           type="submit"
           className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
         >
-          Add property
+          Add rental
         </button>
       </form>
     </div>

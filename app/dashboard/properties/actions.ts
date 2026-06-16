@@ -14,6 +14,7 @@ import {
   normalizeUrl,
   normalizeText,
   normalizeDate,
+  validateListingPost,
 } from "@/lib/listing-distribution";
 import {
   validatePhotoUpload,
@@ -365,14 +366,22 @@ export async function addListingPost(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
+  const portal = normalizePortal(formData.get("portal"));
+  const status = normalizeListingStatus(formData.get("status"));
+  const url = normalizeUrl(formData.get("url"));
+  const check = validateListingPost({ portal, status, url });
+  if (!check.ok) {
+    redirect(`/dashboard/properties/${propertyId}?posterr=${check.code}`);
+  }
+
   const supabase = createClient();
   await supabase.from("listing_posts").insert({
     organization_id: org.id,
     property_id: propertyId,
-    portal: normalizePortal(formData.get("portal")),
+    portal,
     label: normalizeText(formData.get("label")),
-    url: normalizeUrl(formData.get("url")),
-    status: normalizeListingStatus(formData.get("status")),
+    url,
+    status,
     posted_on: normalizeDate(formData.get("posted_on")),
     notes: normalizeText(formData.get("notes")),
   });
@@ -386,15 +395,23 @@ export async function updateListingPost(formData: FormData) {
   const id = String(formData.get("post_id") ?? "");
   if (!propertyId || !id) return;
 
+  const portal = normalizePortal(formData.get("portal"));
+  const status = normalizeListingStatus(formData.get("status"));
+  const url = normalizeUrl(formData.get("url"));
+  const check = validateListingPost({ portal, status, url });
+  if (!check.ok) {
+    redirect(`/dashboard/properties/${propertyId}?posterr=${check.code}`);
+  }
+
   const supabase = createClient();
   // RLS scopes the update to the caller's org; .eq("id") targets one post.
   await supabase
     .from("listing_posts")
     .update({
-      portal: normalizePortal(formData.get("portal")),
+      portal,
       label: normalizeText(formData.get("label")),
-      url: normalizeUrl(formData.get("url")),
-      status: normalizeListingStatus(formData.get("status")),
+      url,
+      status,
       posted_on: normalizeDate(formData.get("posted_on")),
       notes: normalizeText(formData.get("notes")),
     })

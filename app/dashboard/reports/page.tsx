@@ -127,7 +127,10 @@ export default async function ReportsPage({
       </div>
 
       {/* Funnel */}
-      <Section title="Inquiry to lease">
+      <Section
+        title="Inquiry to lease"
+        subtitle="Each inquiry is counted at the furthest stage it reached. Booked means the inquiry got to the Booked stage (whether it self-booked online or you moved it there), not the number of showings on your calendar. For actual showings, see the Showings section below."
+      >
         {funnel[0].count === 0 ? (
           <Empty>
             Not enough data yet. This fills in as inquiries come in during this
@@ -169,7 +172,10 @@ export default async function ReportsPage({
       </Section>
 
       {/* By channel */}
-      <Section title="Where renters come from">
+      <Section
+        title="Where renters come from"
+        subtitle="Booked, Showed and Leased here count inquiries that reached each stage, by advertising source."
+      >
         {channels.length === 0 ? (
           <Empty>
             Not enough data yet. This appears once inquiries arrive in this
@@ -191,16 +197,19 @@ export default async function ReportsPage({
         )}
       </Section>
 
-      {/* By property */}
-      <Section title="By property">
+      {/* By rental */}
+      <Section
+        title="By rental"
+        subtitle="Showings counts actual showings on the calendar; Booked and Leased count inquiries that reached that stage."
+      >
         {propertyRows.length === 0 ? (
           <Empty>
-            No properties yet. Add a listing to start tracking per-property
+            No rentals yet. Add a rental to start tracking per-rental
             performance.
           </Empty>
         ) : (
           <Table
-            head={["Property", "Rent", "Status", "Inquiries", "Showings", "Booked", "Leased"]}
+            head={["Rental", "Rent", "Status", "Inquiries", "Showings", "Booked", "Leased"]}
           >
             {propertyRows.map((p) => (
               <tr key={p.id} className="border-t border-gray-100">
@@ -225,7 +234,10 @@ export default async function ReportsPage({
       </Section>
 
       {/* Showings */}
-      <Section title="Showings">
+      <Section
+        title="Showings"
+        subtitle="Actual showings on your calendar (booked online by renters or scheduled by you), and how they turned out."
+      >
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <Kpi label="Total" value={showRep.total} />
           <Kpi label="Attended" value={showRep.attended} />
@@ -264,7 +276,9 @@ export default async function ReportsPage({
       <p className="mt-2 text-xs text-gray-400">
         Activity counted by when it happened, within the selected window.
         Inquiry and source counts reflect each inquiry&apos;s furthest stage
-        reached; lost inquiries count toward total inquiries only.
+        reached; lost inquiries count toward total inquiries only. &ldquo;Booked&rdquo;
+        in those counts is a pipeline stage, not a calendar showing. The
+        Showings section is the count of actual showings.
       </p>
     </div>
   );
@@ -290,16 +304,20 @@ function Kpi({
 
 function Section({
   title,
+  subtitle,
   children,
 }: {
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="mb-8">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
         {title}
       </h3>
+      {subtitle && <p className="mb-3 text-xs text-gray-500">{subtitle}</p>}
+      {!subtitle && <div className="mb-3" />}
       {children}
     </section>
   );

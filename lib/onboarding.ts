@@ -69,11 +69,11 @@ type StepDef = Omit<ChecklistStep, "status">;
 const STEP_DEFS: StepDef[] = [
   {
     key: "property",
-    label: "Add your first property",
+    label: "Add your first rental",
     description:
       "Create a listing so you have a public inquiry page renters can find.",
     href: "/dashboard/properties",
-    cta: "Add property",
+    cta: "Add rental",
   },
   {
     key: "availability",
@@ -95,9 +95,9 @@ const STEP_DEFS: StepDef[] = [
     key: "intake",
     label: "Test your renter inquiry page",
     description:
-      "Submit a test inquiry on a property's public link to see the full inquiry-to-lease flow.",
+      "Submit a test inquiry on a rental's public link to see the full inquiry-to-lease flow.",
     href: "/dashboard/properties",
-    cta: "Open a property",
+    cta: "Open a rental",
   },
   {
     key: "golive",

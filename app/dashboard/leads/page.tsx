@@ -4,6 +4,7 @@ import { getCurrentOrg } from "@/lib/org";
 import {
   PIPELINE_STAGES,
   statusLabel,
+  statusDescription,
   isLeadStatus,
   type LeadStatus,
 } from "@/lib/pipeline";
@@ -77,12 +78,28 @@ export default async function LeadsPage({
         })}
       </div>
 
+      <details className="mb-5 text-sm">
+        <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
+          What the stages mean
+        </summary>
+        <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
+          {PIPELINE_STAGES.map((s) => (
+            <div key={s} className="flex gap-2">
+              <dt className="shrink-0 font-medium text-gray-700">
+                {statusLabel(s)}:
+              </dt>
+              <dd className="text-gray-500">{statusDescription(s)}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+
       {rows.length === 0 ? (
         all.length === 0 ? (
           <EmptyState
             title="No inquiries yet"
-            description="Share a property's public listing link to start collecting inquiries. Every submission lands here automatically."
-            cta={{ href: "/dashboard/properties", label: "Open a property" }}
+            description="Share a rental's public listing link to start collecting inquiries. Every submission lands here automatically."
+            cta={{ href: "/dashboard/properties", label: "Open a rental" }}
           />
         ) : (
           <EmptyState
