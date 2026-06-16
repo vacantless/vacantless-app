@@ -7,6 +7,7 @@ import {
   sendBookingConfirmation,
   type AutoReplyPayload,
 } from "@/lib/email";
+import { sendSms, bookingConfirmationSms } from "@/lib/sms";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 
 // Public, unauthenticated lead submission. Calls a SECURITY DEFINER RPC that
@@ -88,6 +89,8 @@ export async function submitLead(formData: FormData) {
             property_address: string | null;
             renter_name: string | null;
             renter_email: string | null;
+            sms_enabled?: boolean | null;
+            renter_phone?: string | null;
           };
           const whenLabel = formatSlotLong(
             b.scheduled_at,
@@ -110,6 +113,26 @@ export async function submitLead(formData: FormData) {
               p_to: b.renter_email,
               p_subject: result.subject ?? null,
             });
+          }
+
+          // Parallel booking-confirmation SMS, when the org has SMS on and the
+          // renter left a usable number. Best-effort (no_credentials until
+          // Twilio is configured); the renter just consented by booking.
+          if (b.sms_enabled && b.renter_phone) {
+            const sms = await sendSms({
+              to: b.renter_phone,
+              body: bookingConfirmationSms({
+                org_name: b.org_name,
+                property_address: b.property_address,
+                when_label: whenLabel,
+              }),
+            });
+            if (sms.sent) {
+              await supabase.rpc("record_booking_sms", {
+                p_lead_id: payload.lead_id,
+                p_to: b.renter_phone,
+              });
+            }
           }
         }
       }

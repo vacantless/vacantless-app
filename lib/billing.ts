@@ -64,8 +64,9 @@ export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey
 
 // --- Pilot tier (GTM Layer 1) ----------------------------------------------
 // A self-serve 30-day, founder-led pilot at $0/month with a refundable $200
-// setup deposit (collected out-of-band for now — there's no in-app Stripe
-// one-time charge yet). Recorded as plan='pilot' + organizations.pilot_started_at;
+// setup deposit (paid in-app via the one-time Stripe deposit Checkout, S199;
+// see startDepositCheckout + the deposit columns from migration 0021).
+// Recorded as plan='pilot' + organizations.pilot_started_at;
 // the 30-day end is DERIVED here, never stored. A pilot gets full product access
 // because no feature is gated on plan tier.
 export const PILOT_DURATION_DAYS = 30;

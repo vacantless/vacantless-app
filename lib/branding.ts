@@ -116,6 +116,7 @@ export type BrandingInput = {
   feedback_enabled?: boolean;
   feedback_delay_hours?: string | number | null;
   nurture_enabled?: boolean;
+  sms_enabled?: boolean;
 };
 
 export type BrandingUpdate = {
@@ -126,6 +127,7 @@ export type BrandingUpdate = {
   feedback_enabled: boolean;
   feedback_delay_hours: number;
   nurture_enabled: boolean;
+  sms_enabled: boolean;
 };
 
 export type BrandingValidation =
@@ -188,6 +190,8 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
       feedback_enabled: input.feedback_enabled !== false,
       feedback_delay_hours: delay.value,
       nurture_enabled: input.nurture_enabled !== false,
+      // SMS is OPT-IN: off unless the operator explicitly turns it on.
+      sms_enabled: input.sms_enabled === true,
     },
   };
 }

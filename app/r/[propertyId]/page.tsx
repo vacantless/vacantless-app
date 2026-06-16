@@ -225,6 +225,11 @@ export default async function PublicListingPage({
                         type="tel"
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                       />
+                      <span className="mt-1 block text-xs text-gray-400">
+                        If you share your number we may text you about this
+                        showing (such as a confirmation and reminders). Message
+                        and data rates may apply. Reply STOP anytime to opt out.
+                      </span>
                     </div>
                   </div>
                   <div>

@@ -113,6 +113,7 @@ eq(
       feedback_enabled: true,
       feedback_delay_hours: 2,
       nurture_enabled: true,
+      sms_enabled: false,
     },
   },
 );
@@ -134,6 +135,7 @@ eq(
       feedback_enabled: true,
       feedback_delay_hours: 2,
       nurture_enabled: true,
+      sms_enabled: false,
     },
   },
 );
@@ -217,6 +219,14 @@ eq("delay garbage rejected", validateFeedbackDelayHours("soon"), { ok: false });
     nurture_enabled: false,
   });
   eq("branding nurture disabled persisted", r.ok === true && r.values.nurture_enabled, false);
+}
+{
+  // sms_enabled is OPT-IN: defaults OFF when the field is absent (opposite of
+  // nurture), and only turns on when explicitly true.
+  const off = validateBranding({ name: "OK", brand_color: "#0e8c8c", logo_url: "" });
+  eq("branding sms default off", off.ok === true && off.values.sms_enabled, false);
+  const on = validateBranding({ name: "OK", brand_color: "#0e8c8c", logo_url: "", sms_enabled: true });
+  eq("branding sms enabled persisted", on.ok === true && on.values.sms_enabled, true);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

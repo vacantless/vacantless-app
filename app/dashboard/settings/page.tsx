@@ -273,6 +273,35 @@ export default async function SettingsPage({
             </label>
           </div>
 
+          <div className="mt-6 border-t border-gray-100 pt-5">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Text message reminders
+            </h3>
+
+            <label className="flex items-start gap-3">
+              <input
+                name="sms_enabled"
+                type="checkbox"
+                defaultChecked={org.sms_enabled}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-gray-700">
+                  Also text renters their booking confirmation and showing
+                  reminders
+                </span>
+                <span className="block text-xs text-gray-400">
+                  When a renter leaves a phone number, we send a short text
+                  confirming their booking and reminders about 24 hours and 2
+                  hours before the showing, alongside the emails. Every text
+                  includes &quot;Reply STOP to opt out,&quot; and a renter who
+                  replies STOP is never texted again. Texting starts once your
+                  account&apos;s SMS is connected.
+                </span>
+              </span>
+            </label>
+          </div>
+
         </div>
 
         {/* Live (saved-state) preview */}
