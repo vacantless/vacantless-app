@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { submitLead } from "./actions";
 import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
-import { accessibleBrand } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { Icons } from "@/components/icons";
 import {
   buildSpecLine,
@@ -36,6 +36,7 @@ type Listing = {
   water_included: boolean;
   org_name: string;
   brand_color: string;
+  brand_color_secondary: string | null;
   logo_url: string | null;
   photos: string[];
 };
@@ -67,6 +68,9 @@ export default async function PublicListingPage({
   // Guardrail: keep white-on-brand (header, button) and brand-on-white (price)
   // legible even when the tenant picked a pale color.
   const brand = accessibleBrand(l.brand_color || "#4f46e5");
+  // Ombre brand surface (header band, primary buttons) when the tenant picked a
+  // second stop; a solid otherwise. Both stops are legibility-guarded.
+  const brandBg = brandGradientCss(l.brand_color, l.brand_color_secondary);
 
   // Tag this listing's address as the clustering target so generateSlots can
   // find the building's existing anchor window (a no-op unless the org enabled
@@ -91,12 +95,19 @@ export default async function PublicListingPage({
   return (
     <div
       className="min-h-screen bg-gray-50"
-      style={{ ["--brand-color" as string]: brand }}
+      style={{
+        ["--brand-color" as string]: brand,
+        ["--brand-gradient" as string]: brandBg,
+      }}
     >
       <header
-        className="text-white shadow-sm"
-        style={{ backgroundColor: brand }}
+        className="relative text-white shadow-md"
+        style={{ background: brandBg }}
       >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/25"
+        />
         <div className="mx-auto max-w-2xl px-6 py-5">
           {l.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -183,7 +194,7 @@ export default async function PublicListingPage({
               <a
                 href={`/r/${l.id}${trackedPostId ? `?p=${encodeURIComponent(trackedPostId)}` : ""}`}
                 className="mt-4 inline-block rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
-                style={{ backgroundColor: brand }}
+                style={{ background: brandBg }}
               >
                 Choose another time
               </a>
@@ -191,8 +202,8 @@ export default async function PublicListingPage({
           ) : searchParams.submitted ? (
             <div className="text-center">
               <span
-                className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full text-white"
-                style={{ backgroundColor: brand }}
+                className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-sm"
+                style={{ background: brandBg }}
               >
                 <Icons.check className="h-6 w-6" />
               </span>
@@ -340,7 +351,7 @@ export default async function PublicListingPage({
                 <button
                   type="submit"
                   className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
-                  style={{ backgroundColor: brand }}
+                  style={{ background: brandBg }}
                 >
                   {days.length > 0 ? "Confirm" : "Request a viewing"}
                 </button>

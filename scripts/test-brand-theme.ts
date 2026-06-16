@@ -9,7 +9,14 @@ import {
   isBrandColorTooLight,
   readableTextColor,
   DEFAULT_BRAND,
+  DEFAULT_BRAND_COLOR,
   MIN_CONTRAST_WHITE_TEXT,
+  isGradientBrand,
+  accessibleStops,
+  brandGradientCss,
+  decorativeGradientCss,
+  SOLID_PRESETS,
+  GRADIENT_PRESETS,
   type RGB,
 } from "../lib/brand-theme";
 
@@ -124,6 +131,53 @@ eq("text on navy = white", readableTextColor("#001f3f"), "#ffffff");
 eq("text on yellow = dark ink", readableTextColor("#ffff00"), "#111827");
 eq("text on white = dark ink", readableTextColor("#ffffff"), "#111827");
 eq("text on invalid -> default(indigo) = white", readableTextColor("nope"), "#ffffff");
+
+// --- default-color alias is the single source of truth ---
+eq("DEFAULT_BRAND aliases DEFAULT_BRAND_COLOR", DEFAULT_BRAND, DEFAULT_BRAND_COLOR);
+eq("DEFAULT_BRAND_COLOR is indigo-600", DEFAULT_BRAND_COLOR, "#4f46e5");
+
+// --- isGradientBrand ---
+ok("solid: no secondary -> not gradient", !isGradientBrand("#4f46e5", null));
+ok("solid: blank secondary -> not gradient", !isGradientBrand("#4f46e5", ""));
+ok("solid: equal secondary -> not gradient", !isGradientBrand("#4f46e5", "#4F46E5"));
+ok("solid: invalid secondary -> not gradient", !isGradientBrand("#4f46e5", "nope"));
+ok("ombre: distinct valid stops -> gradient", isGradientBrand("#4f46e5", "#14b8a6"));
+ok("ombre: invalid primary -> not gradient", !isGradientBrand("nope", "#14b8a6"));
+
+// --- accessibleStops: solid collapses; ombre guards both stops ---
+eq("stops solid: to mirrors from", accessibleStops("#4f46e5", null), { from: "#4f46e5", to: "#4f46e5" });
+{
+  const s = accessibleStops("#4f46e5", "#14b8a6");
+  ok("stops ombre: from is AA", contrastWithWhite(s.from) >= MIN_CONTRAST_WHITE_TEXT);
+  ok("stops ombre: light teal 'to' darkened to AA", contrastWithWhite(s.to) >= MIN_CONTRAST_WHITE_TEXT);
+  ok("stops ombre: from != to", s.from !== s.to);
+}
+
+// --- brandGradientCss: solid hex vs guarded linear-gradient ---
+eq("css solid -> hex", brandGradientCss("#4f46e5", null), "#4f46e5");
+eq("css equal stops -> hex", brandGradientCss("#4f46e5", "#4f46e5"), "#4f46e5");
+ok("css ombre -> linear-gradient", brandGradientCss("#4f46e5", "#14b8a6").startsWith("linear-gradient(135deg,"));
+ok("css ombre angle override", brandGradientCss("#4f46e5", "#14b8a6", 90).startsWith("linear-gradient(90deg,"));
+ok("css ombre uses guarded stops (no raw light teal)", !brandGradientCss("#4f46e5", "#14b8a6").includes("#14b8a6"));
+
+// --- decorativeGradientCss: keeps raw colors, falls back on bad primary ---
+eq("decorative solid -> hex", decorativeGradientCss("#4f46e5", null), "#4f46e5");
+eq("decorative invalid primary -> default", decorativeGradientCss("nope", null), DEFAULT_BRAND_COLOR);
+ok("decorative ombre keeps raw teal", decorativeGradientCss("#4f46e5", "#14b8a6").includes("#14b8a6"));
+
+// --- presets are well-formed + AA-safe where it matters ---
+ok("8 solid presets", SOLID_PRESETS.length === 8);
+ok("default indigo is first solid preset", SOLID_PRESETS[0].hex === DEFAULT_BRAND_COLOR);
+for (const p of SOLID_PRESETS) {
+  ok(`solid preset ${p.name} is valid hex`, /^#[0-9a-f]{6}$/.test(p.hex));
+  ok(`solid preset ${p.name} clears AA with white text`, !isBrandColorTooLight(p.hex));
+}
+ok("6 gradient presets", GRADIENT_PRESETS.length === 6);
+for (const g of GRADIENT_PRESETS) {
+  ok(`gradient preset ${g.name} from is valid hex`, /^#[0-9a-f]{6}$/.test(g.from));
+  ok(`gradient preset ${g.name} to is valid hex`, /^#[0-9a-f]{6}$/.test(g.to));
+  ok(`gradient preset ${g.name} is a real ombre`, isGradientBrand(g.from, g.to));
+}
 
 console.log(`\nbrand-theme: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

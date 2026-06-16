@@ -32,6 +32,7 @@ export async function updateBranding(formData: FormData) {
   const result = validateBranding({
     name: String(formData.get("name") ?? ""),
     brand_color: String(formData.get("brand_color") ?? ""),
+    brand_color_secondary: String(formData.get("brand_color_secondary") ?? ""),
     // The logo is now managed by its own upload action (uploadOrgLogo /
     // removeOrgLogo), not this form — preserve whatever is stored.
     logo_url: org.logo_url ?? "",

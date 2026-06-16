@@ -66,11 +66,73 @@ export function IconTile({
   const dims = size === "sm" ? "h-9 w-9" : "h-11 w-11";
   return (
     <span
-      className={`flex ${dims} shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${className}`}
-      style={{ backgroundColor: "var(--brand-color)" }}
+      className={`flex ${dims} shrink-0 items-center justify-center rounded-xl text-white shadow-sm ring-1 ring-black/5 ${className}`}
+      style={{ background: "var(--brand-gradient, var(--brand-color))" }}
     >
       {children}
     </span>
+  );
+}
+
+// --- Brand banner (gradient hero) -------------------------------------------
+
+/**
+ * A gradient hero band that carries the marketing homepage's signature look
+ * into a portal page header. White text on the tenant's brand ombre (or solid),
+ * both legibility-guarded via --brand-gradient. Use at the very top of the
+ * highest-traffic pages (Overview, Reports) for depth; quieter pages keep the
+ * plain PageHeader.
+ */
+export function BrandBanner({
+  title,
+  subtitle,
+  eyebrow,
+  icon,
+  action,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  eyebrow?: ReactNode;
+  icon?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div
+      className="relative mb-6 overflow-hidden rounded-2xl p-6 text-white shadow-md"
+      style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-white/10 blur-2xl"
+      />
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3.5">
+          {icon && (
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+              {icon}
+            </span>
+          )}
+          <div className="min-w-0">
+            {eyebrow && (
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-white/80">
+                {eyebrow}
+              </p>
+            )}
+            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+            {subtitle && (
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/90">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        </div>
+        {action && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {action}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -322,7 +384,7 @@ export function EmptyState({
         <Link
           href={cta.href}
           className="mt-4 inline-flex items-center rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
-          style={{ backgroundColor: "var(--brand-color)" }}
+          style={{ background: "var(--brand-gradient, var(--brand-color))" }}
         >
           {cta.label}
         </Link>

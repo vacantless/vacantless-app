@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitFeedback } from "./actions";
 import { StarRating } from "./star-rating";
-import { accessibleBrand } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,7 @@ type Context = {
   showing_id: string;
   org_name: string;
   brand_color: string | null;
+  brand_color_secondary: string | null;
   logo_url: string | null;
   property_address: string | null;
   renter_name: string | null;
@@ -37,13 +38,24 @@ export default async function PublicFeedbackPage({
   const c = data as Context;
   // Guardrail: legible header/button white text + visible stars on a pale brand.
   const brand = accessibleBrand(c.brand_color || "#4f46e5");
+  const brandBg = brandGradientCss(c.brand_color, c.brand_color_secondary);
 
   const done = c.already_submitted || searchParams.submitted === "1";
   const addr = c.property_address || "your viewing";
 
   return (
-    <div className="min-h-screen bg-gray-50" style={{ ["--brand-color" as string]: brand }}>
-      <header className="text-white" style={{ backgroundColor: brand }}>
+    <div
+      className="min-h-screen bg-gray-50"
+      style={{
+        ["--brand-color" as string]: brand,
+        ["--brand-gradient" as string]: brandBg,
+      }}
+    >
+      <header className="relative text-white shadow-md" style={{ background: brandBg }}>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/25"
+        />
         <div className="mx-auto max-w-md px-6 py-5">
           {c.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -106,8 +118,8 @@ export default async function PublicFeedbackPage({
 
                 <button
                   type="submit"
-                  className="w-full rounded-lg px-4 py-2.5 font-medium text-white"
-                  style={{ backgroundColor: brand }}
+                  className="w-full rounded-lg px-4 py-2.5 font-medium text-white shadow-sm transition hover:opacity-90"
+                  style={{ background: brandBg }}
                 >
                   Submit feedback
                 </button>

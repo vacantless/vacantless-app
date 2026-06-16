@@ -9,7 +9,10 @@
  * Run tests: npx tsx scripts/test-onboarding.ts
  */
 
-export const DEFAULT_BRAND_COLOR = "#4f46e5";
+// Re-exported from the single source of truth so existing importers of
+// `@/lib/onboarding` (and its test) keep working.
+import { DEFAULT_BRAND_COLOR } from "./brand-theme";
+export { DEFAULT_BRAND_COLOR };
 
 export type ChecklistStatus = "complete" | "current" | "todo";
 

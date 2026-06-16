@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { accessibleBrand } from "@/lib/brand-theme";
+import { brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
+import BrandColorField from "@/components/brand-color-field";
 import { AUTH_BUTTON_CLASS, AUTH_INPUT_CLASS } from "@/components/auth-shell";
 
-const DEFAULT_BRAND_COLOR = "#4f46e5";
-
 /**
- * Create-workspace form with a live renter-brand preview. The brand color the
- * owner picks is run through accessibleBrand() so the preview header/button
- * match exactly what renters will see after the S180 contrast guardrail
- * (a pale pick is darkened just enough to keep white text readable).
+ * Create-workspace form with a live renter-brand preview. The brand can be a
+ * solid OR a two-stop ombre; BrandColorField owns the picker and posts the
+ * `brand_color` + `brand_color_secondary` hidden inputs. The colors are run
+ * through the legibility guard (brandGradientCss) so the preview header/button
+ * match exactly what renters will see (a pale pick is darkened just enough to
+ * keep white text readable).
  *
  * The server action is passed in as a prop so the page stays a server
  * component and the redirect-based createOrganization flow is unchanged.
@@ -23,8 +24,9 @@ export function OnboardingForm({
   error?: string;
 }) {
   const [name, setName] = useState("");
-  const [color, setColor] = useState(DEFAULT_BRAND_COLOR);
-  const accessible = accessibleBrand(color);
+  const [primary, setPrimary] = useState(DEFAULT_BRAND_COLOR);
+  const [secondary, setSecondary] = useState<string | null>(null);
+  const brandBg = brandGradientCss(primary, secondary);
   const displayName = name.trim() || "Your business";
 
   return (
@@ -47,18 +49,15 @@ export function OnboardingForm({
         <label className="mb-1 block text-sm font-medium text-gray-700">
           Brand color
         </label>
-        <div className="flex items-center gap-3">
-          <input
-            name="brand_color"
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="h-10 w-20 rounded border border-gray-300"
-          />
-          <span className="text-sm text-gray-500">
-            Used on your renter pages and emails.
-          </span>
-        </div>
+        <p className="mb-2 text-sm text-gray-500">
+          Used on your renter pages and emails. Pick a solid or an ombre.
+        </p>
+        <BrandColorField
+          onChange={(p, s) => {
+            setPrimary(p);
+            setSecondary(s);
+          }}
+        />
       </div>
 
       {/* Live renter-brand preview */}
@@ -67,10 +66,7 @@ export function OnboardingForm({
           Renter preview
         </p>
         <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-          <div
-            className="px-4 py-3"
-            style={{ backgroundColor: accessible }}
-          >
+          <div className="px-4 py-3" style={{ background: brandBg }}>
             <span className="text-sm font-semibold text-white">
               {displayName}
             </span>
@@ -82,7 +78,7 @@ export function OnboardingForm({
             <p className="text-xs text-gray-500">Book a viewing online</p>
             <span
               className="mt-2 inline-block rounded-md px-3 py-1.5 text-xs font-medium text-white"
-              style={{ backgroundColor: accessible }}
+              style={{ background: brandBg }}
             >
               Book a viewing
             </span>

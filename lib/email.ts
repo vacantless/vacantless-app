@@ -12,6 +12,7 @@
 
 import { nurtureCopy, type NurtureCopy } from "@/lib/nurture";
 import { TEST_SAMPLE, TEST_SUBJECT_PREFIX } from "@/lib/test-email";
+import { DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
@@ -88,7 +89,7 @@ function defaultSubject(p: AutoReplyPayload): string {
 }
 
 function defaultHtml(p: AutoReplyPayload): string {
-  const brand = p.brand_color || "#4f46e5";
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : null;
@@ -140,7 +141,7 @@ export type BookingPayload = {
 };
 
 function bookingHtml(p: BookingPayload): string {
-  const brand = p.brand_color || "#4f46e5";
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
@@ -241,7 +242,7 @@ export type ReminderPayload = {
 };
 
 function reminderHtml(p: ReminderPayload): string {
-  const brand = p.brand_color || "#4f46e5";
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
@@ -349,7 +350,7 @@ function feedbackUrl(showingId: string): string {
 }
 
 function feedbackHtml(p: FeedbackPayload): string {
-  const brand = p.brand_color || "#4f46e5";
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
@@ -454,7 +455,7 @@ function listingUrl(propertyId: string): string {
 }
 
 function priceDropHtml(p: PriceDropPayload): string {
-  const brand = p.brand_color || "#4f46e5";
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
@@ -586,7 +587,7 @@ export type NurturePayload = {
 };
 
 function nurtureHtml(p: NurturePayload, copy: NurtureCopy): string {
-  const brand = p.brand_color || "#4f46e5";
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : null;

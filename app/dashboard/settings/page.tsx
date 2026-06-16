@@ -3,7 +3,11 @@ import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
-import { accessibleBrand, isBrandColorTooLight } from "@/lib/brand-theme";
+import {
+  accessibleBrand,
+  isBrandColorTooLight,
+  brandGradientCss,
+} from "@/lib/brand-theme";
 import {
   updateBranding,
   sendTestEmailAction,
@@ -11,6 +15,7 @@ import {
   removeOrgLogo,
 } from "./actions";
 import { logoUploadErrorMessage } from "@/lib/logo";
+import BrandColorField from "@/components/brand-color-field";
 import { PageHeader, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
@@ -62,6 +67,9 @@ export default async function SettingsPage({
   // public pages use an accessibility-guardrailed (darkened-as-needed) variant
   // so white text stays readable on a pale color.
   const displayColor = accessibleBrand(color);
+  // Saved brand surface for the preview card: an ombre when a second stop is
+  // set, otherwise the solid (both legibility-guarded).
+  const displayBg = brandGradientCss(color, org.brand_color_secondary);
   const wasDarkened = isBrandColorTooLight(color);
   const saved = searchParams.saved === "1";
   const error = searchParams.error;
@@ -169,26 +177,20 @@ export default async function SettingsPage({
             </span>
           </label>
 
-          <label className="mt-5 block">
+          <div className="mt-5">
             <span className="mb-1 block text-sm font-medium text-gray-700">
               Brand color
             </span>
-            <span className="flex items-center gap-3">
-              <input
-                name="brand_color"
-                type="color"
-                defaultValue={color}
-                className="h-10 w-16 cursor-pointer rounded-lg border border-gray-300 p-1"
-              />
-              <code className="rounded bg-gray-100 px-2 py-1 text-sm text-gray-700">
-                {color}
-              </code>
-            </span>
-            <span className="mt-1 block text-xs text-gray-400">
+            <span className="mb-2 block text-xs text-gray-400">
               Used for the header bar, listing accents, and the email accent
-              stripe.
+              stripe. Pick a solid or a two-color ombre.
             </span>
-          </label>
+            <BrandColorField
+              defaultPrimary={color}
+              defaultSecondary={org.brand_color_secondary}
+              logoUrl={org.logo_url}
+            />
+          </div>
 
           <label className="mt-5 block">
             <span className="mb-1 block text-sm font-medium text-gray-700">
@@ -320,7 +322,7 @@ export default async function SettingsPage({
             {/* Mini renter header — white text on the brand, exactly as renters see it */}
             <div
               className="flex items-center gap-2 px-4 py-3 text-white"
-              style={{ backgroundColor: displayColor }}
+              style={{ background: displayBg }}
             >
               {org.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -337,7 +339,7 @@ export default async function SettingsPage({
               </p>
               <span
                 className="mt-3 inline-flex rounded-lg px-3 py-1.5 text-xs font-medium text-white"
-                style={{ backgroundColor: displayColor }}
+                style={{ background: displayBg }}
               >
                 Book a viewing
               </span>

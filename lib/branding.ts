@@ -11,7 +11,9 @@
 // `npx tsx scripts/test-branding.ts`, the same discipline as lib/reports.ts.
 
 export const MAX_NAME_LEN = 120;
-export const DEFAULT_BRAND_COLOR = "#4f46e5";
+// Single source of truth lives in brand-theme; re-exported here so existing
+// importers of `@/lib/branding` keep working.
+export { DEFAULT_BRAND_COLOR } from "./brand-theme";
 
 /**
  * Normalize a user-entered hex color to a canonical lowercase `#rrggbb`.
@@ -111,6 +113,7 @@ export function validateFeedbackDelayHours(
 export type BrandingInput = {
   name?: string | null;
   brand_color?: string | null;
+  brand_color_secondary?: string | null;
   logo_url?: string | null;
   reply_to_email?: string | null;
   feedback_enabled?: boolean;
@@ -122,6 +125,7 @@ export type BrandingInput = {
 export type BrandingUpdate = {
   name: string;
   brand_color: string;
+  brand_color_secondary: string | null;
   logo_url: string | null;
   reply_to_email: string | null;
   feedback_enabled: boolean;
@@ -152,6 +156,22 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
     errors.push("Brand color must be a valid hex color (e.g. #0e8c8c).");
   }
 
+  // Optional second ombre stop. Blank/absent => null => the brand is a SOLID
+  // (the default). A non-blank value must be a valid hex; an equal value is
+  // normalized to null so a solid never persists a redundant second stop.
+  const secondaryRaw = (input.brand_color_secondary ?? "").trim();
+  let secondary: string | null = null;
+  let secondaryOk = true;
+  if (secondaryRaw !== "") {
+    const s = normalizeHexColor(secondaryRaw);
+    if (s == null) {
+      secondaryOk = false;
+      errors.push("Second brand color must be a valid hex color, or left blank.");
+    } else {
+      secondary = color != null && s === color ? null : s;
+    }
+  }
+
   const logo = validateLogoUrl(input.logo_url);
   if (!logo.ok) {
     errors.push("Logo URL must be a full http(s) link, or left blank.");
@@ -173,6 +193,7 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
     errors.length > 0 ||
     !name.ok ||
     color == null ||
+    !secondaryOk ||
     !logo.ok ||
     !replyTo.ok ||
     !delay.ok
@@ -185,6 +206,7 @@ export function validateBranding(input: BrandingInput): BrandingValidation {
     values: {
       name: name.value,
       brand_color: color,
+      brand_color_secondary: secondary,
       logo_url: logo.value,
       reply_to_email: replyTo.value,
       feedback_enabled: input.feedback_enabled !== false,

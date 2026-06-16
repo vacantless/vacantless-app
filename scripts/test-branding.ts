@@ -108,6 +108,7 @@ eq(
     values: {
       name: "Vacantless",
       brand_color: "#0e8c8c",
+      brand_color_secondary: null,
       logo_url: null,
       reply_to_email: null,
       feedback_enabled: true,
@@ -130,6 +131,7 @@ eq(
     values: {
       name: "Agile",
       brand_color: "#ffffff",
+      brand_color_secondary: null,
       logo_url: "https://x.io/l.png",
       reply_to_email: "leasing@agile.ca",
       feedback_enabled: true,
@@ -148,6 +150,28 @@ eq(
   const r = validateBranding({ name: "OK", brand_color: "#0e8c8c", logo_url: "ftp://x" });
   eq("branding bad logo only not ok", r.ok, false);
   eq("branding bad logo 1 error", r.ok === false && r.errors.length, 1);
+}
+// --- brand_color_secondary (ombre second stop) ---
+{
+  // valid distinct ombre persists, normalized
+  const r = validateBranding({ name: "OK", brand_color: "#4f46e5", brand_color_secondary: "14B8A6", logo_url: "" });
+  eq("ombre: valid distinct secondary kept", r.ok === true && r.values.brand_color_secondary, "#14b8a6");
+}
+{
+  // blank/absent => solid (null)
+  const r = validateBranding({ name: "OK", brand_color: "#4f46e5", brand_color_secondary: "  ", logo_url: "" });
+  eq("ombre: blank secondary -> null (solid)", r.ok === true && r.values.brand_color_secondary, null);
+}
+{
+  // secondary equal to primary collapses to a solid (null), no redundant stop
+  const r = validateBranding({ name: "OK", brand_color: "#4f46e5", brand_color_secondary: "#4F46E5", logo_url: "" });
+  eq("ombre: equal secondary collapses to null", r.ok === true && r.values.brand_color_secondary, null);
+}
+{
+  // invalid secondary is an error
+  const r = validateBranding({ name: "OK", brand_color: "#4f46e5", brand_color_secondary: "not-a-color", logo_url: "" });
+  eq("ombre: invalid secondary not ok", r.ok, false);
+  eq("ombre: invalid secondary 1 error", r.ok === false && r.errors.length, 1);
 }
 {
   const r = validateBranding({

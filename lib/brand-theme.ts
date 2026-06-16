@@ -22,7 +22,15 @@ export interface RGB {
   b: number;
 }
 
-export const DEFAULT_BRAND = "#4f46e5";
+/**
+ * The single source of truth for the default brand color (Tailwind indigo-600,
+ * the left anchor of the marketing homepage's indigo->teal gradient). Every
+ * other module imports this rather than re-typing the literal.
+ */
+export const DEFAULT_BRAND_COLOR = "#4f46e5";
+
+/** @deprecated Back-compat alias of {@link DEFAULT_BRAND_COLOR}. */
+export const DEFAULT_BRAND = DEFAULT_BRAND_COLOR;
 
 /** WCAG AA contrast ratio for normal-size text. */
 export const MIN_CONTRAST_WHITE_TEXT = 4.5;
@@ -154,3 +162,116 @@ export function readableTextColor(hex: string | null | undefined): string {
     ? "#ffffff"
     : toHex(DARK_INK);
 }
+
+// ---------------------------------------------------------------------------
+// Brand GRADIENT (ombre) support.
+//
+// A tenant's brand can be a SOLID (one color) or a two-stop OMBRE
+// (brand_color -> brand_color_secondary). The ombre is used for decorative
+// DEPTH surfaces — the dashboard header band, icon tiles, hero accents — that
+// carry the marketing homepage's look into the portal, but with the TENANT's
+// own colors (never the indigo->teal marketing signature).
+//
+// Legibility: anywhere WHITE text sits on the brand, both stops are passed
+// through `accessibleBrand` first (darken-as-needed, hue preserved) so the text
+// stays WCAG AA across the whole band. A blank/invalid secondary collapses to
+// the primary, i.e. a solid — so every helper below degrades to the existing
+// solid behaviour for the (default) solid-brand org.
+// ---------------------------------------------------------------------------
+
+export interface BrandGradient {
+  /** Primary stop (always present). */
+  from: string;
+  /** Secondary stop, or null when the brand is a solid. */
+  to: string | null;
+}
+
+/** True when `secondary` is a usable, distinct second stop (=> ombre, not solid). */
+export function isGradientBrand(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+): boolean {
+  const p = parseHexColor(primary);
+  const s = parseHexColor(secondary);
+  if (!p || !s) return false;
+  return toHex(p) !== toHex(s);
+}
+
+/**
+ * Both stops run through `accessibleBrand` so white text is readable across the
+ * whole surface. A blank/invalid/equal secondary collapses to the primary, so
+ * the result is `{ from, to }` with `from === to` for a solid brand.
+ */
+export function accessibleStops(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+): { from: string; to: string } {
+  const from = accessibleBrand(primary);
+  const to = isGradientBrand(primary, secondary)
+    ? accessibleBrand(secondary)
+    : from;
+  return { from, to };
+}
+
+/**
+ * CSS value for a brand surface: a `linear-gradient(...)` when the brand is an
+ * ombre, otherwise the solid hex. Suitable for the `background` shorthand (NOT
+ * `background-color`, which rejects gradients). Stops are legibility-guarded, so
+ * this is safe behind white text (header band, primary buttons).
+ */
+export function brandGradientCss(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+  angleDeg: number = 135,
+): string {
+  const { from, to } = accessibleStops(primary, secondary);
+  return from === to ? from : `linear-gradient(${angleDeg}deg, ${from}, ${to})`;
+}
+
+/**
+ * Raw (NON-guarded) gradient for purely decorative, text-free tints — soft
+ * background washes, blur blobs, low-opacity fills where contrast is moot and
+ * preserving the picked colors exactly looks better. Falls back to the default
+ * brand for an unparseable primary; collapses to a solid for a missing
+ * secondary.
+ */
+export function decorativeGradientCss(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+  angleDeg: number = 135,
+): string {
+  const p = parseHexColor(primary) ? toHex(parseHexColor(primary)!) : DEFAULT_BRAND_COLOR;
+  if (!isGradientBrand(primary, secondary)) return p;
+  const s = toHex(parseHexColor(secondary)!);
+  return `linear-gradient(${angleDeg}deg, ${p}, ${s})`;
+}
+
+/**
+ * Curated SOLID brand presets. Every one clears WCAG AA with white text as-is
+ * (no surprise darkening), sampled across a tasteful range with the homepage
+ * indigo as the default-first option.
+ */
+export const SOLID_PRESETS: { name: string; hex: string }[] = [
+  { name: "Indigo", hex: "#4f46e5" },
+  { name: "Blue", hex: "#1d4ed8" },
+  { name: "Teal", hex: "#0f766e" },
+  { name: "Green", hex: "#166534" },
+  { name: "Violet", hex: "#7c3aed" },
+  { name: "Rose", hex: "#be123c" },
+  { name: "Orange", hex: "#c2410c" },
+  { name: "Slate", hex: "#334155" },
+];
+
+/**
+ * Curated OMBRE presets sampled to echo the homepage feel with varied palettes.
+ * Stored as the colors that look best as a decorative gradient; when used behind
+ * text they are legibility-guarded by `accessibleStops`/`brandGradientCss`.
+ */
+export const GRADIENT_PRESETS: { name: string; from: string; to: string }[] = [
+  { name: "Indigo to Teal", from: "#4f46e5", to: "#14b8a6" },
+  { name: "Ocean", from: "#2563eb", to: "#06b6d4" },
+  { name: "Violet", from: "#7c3aed", to: "#4f46e5" },
+  { name: "Sunset", from: "#db2777", to: "#ea580c" },
+  { name: "Forest", from: "#15803d", to: "#0d9488" },
+  { name: "Berry", from: "#be123c", to: "#7c3aed" },
+];

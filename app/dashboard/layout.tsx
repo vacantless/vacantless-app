@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { accessibleBrand } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { DashboardNav } from "./dashboard-nav";
 
 export const dynamic = "force-dynamic";
@@ -27,16 +27,35 @@ export default async function DashboardLayout({
   // primary buttons, the launch checklist, EmptyState CTAs, and text-brand
   // accents — stays legible.
   const brand = accessibleBrand(org.brand_color);
+  // The tenant's brand surface: a two-stop ombre when they picked one, else the
+  // solid (both legibility-guarded). Flows through --brand-gradient so every
+  // primitive (icon tiles, banners, CTAs) carries the depth, while --brand-color
+  // stays the solid for anything that needs a single color.
+  const brandGradient = brandGradientCss(org.brand_color, org.brand_color_secondary);
 
   return (
     <div
-      className="min-h-screen bg-slate-50"
-      style={{ ["--brand-color" as string]: brand }}
+      className="relative min-h-screen bg-slate-50"
+      style={{
+        ["--brand-color" as string]: brand,
+        ["--brand-gradient" as string]: brandGradient,
+      }}
     >
+      {/* Soft brand wash for depth — bleeds out from behind the header. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-24 right-0 h-72 w-72 rounded-full opacity-20 blur-3xl"
+        style={{ background: brandGradient }}
+      />
       <header
-        className="relative text-white shadow-sm"
-        style={{ backgroundColor: brand }}
+        className="relative z-10 text-white shadow-md"
+        style={{ background: brandGradient }}
       >
+        {/* subtle top sheen so the band reads as dimensional, not flat */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/25"
+        />
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div>
             <p className="text-xs uppercase tracking-wider opacity-80">
@@ -47,7 +66,7 @@ export default async function DashboardLayout({
           <DashboardNav />
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="relative z-10 mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>
   );
 }

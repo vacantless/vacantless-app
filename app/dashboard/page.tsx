@@ -16,7 +16,7 @@ import {
   EmptyState,
   StatusChip,
   StatCard,
-  PageHeader,
+  BrandBanner,
   leadStatusTone,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -114,8 +114,9 @@ export default async function OverviewPage() {
     <div>
       <LaunchChecklist checklist={checklist} />
 
-      <PageHeader
+      <BrandBanner
         icon={<Icons.home />}
+        eyebrow="Dashboard"
         title="Overview"
         subtitle="Everything that needs your attention, at a glance."
       />
