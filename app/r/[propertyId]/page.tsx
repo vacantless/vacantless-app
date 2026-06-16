@@ -59,8 +59,13 @@ export default async function PublicListingPage({
   // legible even when the tenant picked a pale color.
   const brand = accessibleBrand(l.brand_color || "#4f46e5");
 
+  // Tag this listing's address as the clustering target so generateSlots can
+  // find the building's existing anchor window (a no-op unless the org enabled
+  // clustering). target_address isn't known to the RPC, so inject it here.
   const av = avData as Availability | null;
-  const days = av ? generateSlots(av) : [];
+  const avForSlots = av ? { ...av, target_address: l.address } : null;
+  const days = avForSlots ? generateSlots(avForSlots) : [];
+  const hasClustered = days.some((d) => d.slots.some((s) => s.clustered));
 
   const specs = buildSpecLine(l);
   const amenities = buildAmenityChips(l);
@@ -226,6 +231,12 @@ export default async function PublicListingPage({
                     <p className="mb-3 mt-1 text-xs text-gray-400">
                       Times shown in {av?.timezone?.replace(/_/g, " ")}.
                     </p>
+                    {hasClustered && (
+                      <p className="mb-3 -mt-2 text-xs text-gray-500">
+                        These times group your visit with other showings at this
+                        building.
+                      </p>
+                    )}
                     <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
                       {days.map((day) => (
                         <div key={day.dayKey}>

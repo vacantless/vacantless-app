@@ -3,6 +3,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { WEEKDAY_LABELS, minutesToLabel } from "@/lib/booking";
 import {
   updateBookingSettings,
+  updateClusteringSettings,
   addAvailabilityWindow,
   deleteAvailabilityWindow,
 } from "./actions";
@@ -21,6 +22,9 @@ type OrgBooking = {
   booking_slot_minutes: number;
   booking_lead_hours: number;
   booking_horizon_days: number;
+  clustering_enabled: boolean;
+  clustering_buffer_minutes: number;
+  showing_block_capacity: number;
 };
 
 const TIMEZONES = [
@@ -44,7 +48,7 @@ export default async function AvailabilityPage() {
     supabase
       .from("organizations")
       .select(
-        "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days",
+        "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
       )
       .eq("id", org?.id ?? "")
       .maybeSingle(),
@@ -60,6 +64,9 @@ export default async function AvailabilityPage() {
     booking_slot_minutes: 30,
     booking_lead_hours: 12,
     booking_horizon_days: 14,
+    clustering_enabled: false,
+    clustering_buffer_minutes: 60,
+    showing_block_capacity: 6,
   };
   const rules = (rulesData ?? []) as Rule[];
 
@@ -149,6 +156,67 @@ export default async function AvailabilityPage() {
         <div className="mt-4 text-right">
           <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
             Save settings
+          </button>
+        </div>
+      </form>
+
+      {/* Group showings by building (Hero blocks) */}
+      <form
+        action={updateClusteringSettings}
+        className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+      >
+        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Group showings by building
+        </h3>
+        <p className="mb-4 text-sm text-gray-500">
+          When on, the booking page steers new renters toward times near the
+          showings already booked at the same building, so visits stay grouped
+          per building per day and you spend less time travelling between them.
+          Buildings are matched by street address. Days with no showing yet stay
+          fully open.
+        </p>
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            name="clustering_enabled"
+            defaultChecked={cfg.clustering_enabled}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300"
+          />
+          <span className="text-sm font-medium text-gray-700">
+            Group new showings around existing ones at the same building
+          </span>
+        </label>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              How far around a booked showing to offer times (minutes)
+            </span>
+            <input
+              name="clustering_buffer_minutes"
+              type="number"
+              min={0}
+              max={480}
+              defaultValue={cfg.clustering_buffer_minutes}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              Max showings per building per day
+            </span>
+            <input
+              name="showing_block_capacity"
+              type="number"
+              min={1}
+              max={50}
+              defaultValue={cfg.showing_block_capacity}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+        <div className="mt-4 text-right">
+          <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
+            Save
           </button>
         </div>
       </form>

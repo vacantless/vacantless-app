@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { EmptyState } from "@/components/ui";
+import { groupShowingsIntoBlocks } from "@/lib/booking";
 import { OutcomeSelect } from "./outcome-select";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,23 @@ function fmt(iso: string | null, timeZone: string): string {
   });
 }
 
+function fmtClock(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleTimeString("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function fmtDayShort(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    timeZone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default async function ShowingsPage() {
   const supabase = createClient();
   const org = await getCurrentOrg();
@@ -66,6 +84,18 @@ export default async function ShowingsPage() {
         new Date(a.scheduled_at ?? 0).getTime(),
     );
 
+  // Route view: when clustering is on, group upcoming showings into building+day
+  // blocks (2+ showings) so the agent sees what's grouped where.
+  const blocks = org?.clustering_enabled
+    ? groupShowingsIntoBlocks(
+        upcoming.map((s) => ({
+          scheduled_at: s.scheduled_at,
+          address: s.property?.address ?? null,
+        })),
+        timeZone,
+      ).filter((b) => b.count >= 2)
+    : [];
+
   return (
     <div>
       <h2 className="text-xl font-bold text-gray-900">Showings</h2>
@@ -73,6 +103,33 @@ export default async function ShowingsPage() {
         Self-booked and scheduled viewings. Mark the outcome after each one to
         keep your renter list accurate.
       </p>
+
+      {blocks.length > 0 && (
+        <div className="mt-6">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Grouped by building
+          </h3>
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {blocks.map((b) => (
+              <li
+                key={b.key}
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                <p className="text-sm font-semibold text-gray-900">
+                  {b.buildingLabel}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {fmtDayShort(b.startIso, timeZone)} ·{" "}
+                  {fmtClock(b.startIso, timeZone)} – {fmtClock(b.endIso, timeZone)}
+                </p>
+                <span className="mt-2 inline-block rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                  {b.count} showings
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <Section
         title={`Upcoming (${upcoming.length})`}

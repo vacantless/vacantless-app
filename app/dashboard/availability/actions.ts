@@ -43,6 +43,32 @@ export async function updateBookingSettings(formData: FormData) {
   revalidatePath("/dashboard/availability");
 }
 
+// Showing clustering ("Hero blocks"). Opt-in: when on, the public booking page
+// steers new renters toward time slots near a building's existing showings so
+// visits group per building per day (less travel between viewings).
+export async function updateClusteringSettings(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  const enabled = formData.get("clustering_enabled") === "on";
+  const buffer = Number(formData.get("clustering_buffer_minutes"));
+  const capacity = Number(formData.get("showing_block_capacity"));
+
+  const update: Record<string, string | number | boolean> = {
+    clustering_enabled: enabled,
+  };
+  if (Number.isFinite(buffer) && buffer >= 0 && buffer <= 480)
+    update.clustering_buffer_minutes = Math.round(buffer);
+  if (Number.isFinite(capacity) && capacity >= 1 && capacity <= 50)
+    update.showing_block_capacity = Math.round(capacity);
+
+  const supabase = createClient();
+  await supabase.from("organizations").update(update).eq("id", org.id);
+
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard/showings");
+}
+
 export async function addAvailabilityWindow(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) return;

@@ -10,6 +10,14 @@ export type AvailabilityRule = {
   end_minute: number;
 };
 
+// A future scheduled showing somewhere in the org, used to derive a building's
+// implicit anchor window (the "Hero block"). Only currently-listed properties
+// are surfaced by the RPC.
+export type ClusterCandidate = {
+  address: string | null;
+  scheduled_at: string; // ISO instant
+};
+
 export type Availability = {
   timezone: string;
   slot_minutes: number;
@@ -17,11 +25,18 @@ export type Availability = {
   horizon_days: number;
   rules: AvailabilityRule[];
   booked: string[]; // ISO timestamps already taken
+  // --- Showing clustering ("Hero blocks"), all optional / opt-in ---
+  clustering_enabled?: boolean;
+  clustering_buffer_minutes?: number; // how far adjacent slots may extend an anchor
+  showing_block_capacity?: number; // max showings to cluster into one building+day
+  cluster_candidates?: ClusterCandidate[]; // org's future scheduled showings
+  target_address?: string | null; // the listing being booked (its building anchors)
 };
 
 export type Slot = {
   iso: string; // exact instant, ISO 8601 (UTC)
   label: string; // e.g. "2:30 PM"
+  clustered?: boolean; // true when this slot falls inside a building anchor window
 };
 
 export type DaySlots = {
@@ -179,7 +194,174 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
     });
   }
 
+  // Showing clustering ("Hero blocks"): opt-in per org. When enabled, restrict
+  // each day that already has a showing for THIS building to slots near that
+  // building's anchor window; days with no anchor keep full availability (they
+  // can start a new anchor). Disabled (the default) = identical to before.
+  if (av.clustering_enabled) {
+    const targetKey = buildingKey(av.target_address);
+    if (targetKey) {
+      const anchors = (av.cluster_candidates || [])
+        .filter((c) => buildingKey(c.address) === targetKey)
+        .map((c) => new Date(c.scheduled_at).getTime())
+        .filter((t) => !Number.isNaN(t));
+      return clusterDays(days, anchors, {
+        timeZone: tz,
+        bufferMinutes: av.clustering_buffer_minutes ?? 60,
+        capacity: av.showing_block_capacity ?? 6,
+      });
+    }
+  }
+
   return days;
+}
+
+// ---------------------------------------------------------------------------
+// Building identity + clustering. buildingKey() is the SINGLE SOURCE OF TRUTH
+// for "same building" — the public RPC returns raw addresses and this groups
+// them; the operator Showings view uses the same function. Normalizes the
+// pre-comma street portion, drops unit/apt/suite/# designators, and folds a
+// few common street-type abbreviations so "Rd" and "Road" match.
+// ---------------------------------------------------------------------------
+const STREET_ABBR: Record<string, string> = {
+  road: "rd",
+  street: "st",
+  avenue: "ave",
+  av: "ave",
+  drive: "dr",
+  boulevard: "blvd",
+  court: "ct",
+  crt: "ct",
+  crescent: "cres",
+  cr: "cres",
+  lane: "ln",
+  place: "pl",
+  terrace: "ter",
+  parkway: "pkwy",
+  highway: "hwy",
+  circle: "cir",
+  square: "sq",
+  trail: "trl",
+};
+
+export function buildingKey(address: string | null | undefined): string {
+  const base = (address ?? "").split(",")[0].toLowerCase();
+  const cleaned = base
+    .replace(/\b(?:unit|apt|apartment|suite|ste)\b\.?\s*\S+/g, " ")
+    .replace(/#\s*\S+/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  return cleaned
+    .split(" ")
+    .map((t) => STREET_ABBR[t] ?? t)
+    .join(" ");
+}
+
+/**
+ * Apply building clustering to pre-generated days. For each day:
+ *  - no anchor for this building → keep the day as-is (a new anchor can form);
+ *  - anchors at/over capacity → drop the day (building+day is full);
+ *  - otherwise → keep only slots within [min(anchor), max(anchor)] expanded by
+ *    the buffer on each side, tagged `clustered`.
+ * Pure; `anchorInstantsMs` are this building's existing showing instants (UTC ms).
+ */
+export function clusterDays(
+  days: DaySlots[],
+  anchorInstantsMs: number[],
+  opts: { timeZone: string; bufferMinutes: number; capacity: number },
+): DaySlots[] {
+  const bufferMs = Math.max(0, opts.bufferMinutes) * 60_000;
+  const cap = opts.capacity > 0 ? opts.capacity : 6;
+
+  const byDay = new Map<string, number[]>();
+  for (const ms of anchorInstantsMs) {
+    if (Number.isNaN(ms)) continue;
+    const { year, month, day } = ymdInTz(ms, opts.timeZone);
+    const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const list = byDay.get(key) ?? [];
+    list.push(ms);
+    byDay.set(key, list);
+  }
+
+  const out: DaySlots[] = [];
+  for (const day of days) {
+    const anchors = byDay.get(day.dayKey);
+    if (!anchors || anchors.length === 0) {
+      out.push(day); // new-anchor day → full availability
+      continue;
+    }
+    if (anchors.length >= cap) continue; // building+day full → no slots
+    const lo = Math.min(...anchors) - bufferMs;
+    const hi = Math.max(...anchors) + bufferMs;
+    const slots = day.slots
+      .filter((s) => {
+        const t = new Date(s.iso).getTime();
+        return t >= lo && t <= hi;
+      })
+      .map((s) => ({ ...s, clustered: true }));
+    if (slots.length === 0) continue;
+    out.push({ ...day, slots });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Operator view: group an org's showings into building+day "blocks" so the
+// agent sees a clustered route ("833 Pillette Rd — 3 showings, 2:00–3:30 PM").
+// ---------------------------------------------------------------------------
+export type ShowingForBlock = {
+  scheduled_at: string | null;
+  address: string | null;
+};
+
+export type ShowingBlock = {
+  key: string; // buildingKey + dayKey
+  buildingKey: string;
+  buildingLabel: string; // representative address (pre-comma)
+  dayKey: string; // YYYY-MM-DD in org tz
+  startIso: string;
+  endIso: string;
+  count: number;
+};
+
+export function groupShowingsIntoBlocks(
+  rows: ShowingForBlock[],
+  timeZone: string,
+): ShowingBlock[] {
+  const groups = new Map<
+    string,
+    { bk: string; label: string; dayKey: string; instants: string[] }
+  >();
+  for (const r of rows) {
+    if (!r.scheduled_at) continue;
+    const ms = new Date(r.scheduled_at).getTime();
+    if (Number.isNaN(ms)) continue;
+    const bk = buildingKey(r.address);
+    const { year, month, day } = ymdInTz(ms, timeZone);
+    const dayKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const key = `${bk}|${dayKey}`;
+    const label = (r.address ?? "").split(",")[0].trim() || "Unknown address";
+    const g = groups.get(key) ?? { bk, label, dayKey, instants: [] };
+    g.instants.push(r.scheduled_at);
+    groups.set(key, g);
+  }
+
+  const blocks: ShowingBlock[] = [];
+  for (const [key, g] of groups) {
+    const sorted = [...g.instants].sort((a, b) => a.localeCompare(b));
+    blocks.push({
+      key,
+      buildingKey: g.bk,
+      buildingLabel: g.label,
+      dayKey: g.dayKey,
+      startIso: sorted[0],
+      endIso: sorted[sorted.length - 1],
+      count: sorted.length,
+    });
+  }
+  return blocks.sort((a, b) => a.startIso.localeCompare(b.startIso));
 }
 
 /** True if `iso` is one of the currently-bookable slots. Server-side guard. */
