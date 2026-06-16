@@ -15,6 +15,18 @@ import {
   normalizeText,
   normalizeDate,
 } from "@/lib/listing-distribution";
+import {
+  validatePhotoUpload,
+  extForType,
+  photoStoragePath,
+  nextSortOrder,
+  reorder,
+  coverAfterDelete,
+  MAX_PHOTOS_PER_PROPERTY,
+  type PhotoLike,
+} from "@/lib/photos";
+
+const PHOTO_BUCKET = "property-photos";
 
 function parseRentCents(raw: string): number | null {
   const v = raw.trim();
@@ -311,4 +323,192 @@ export async function removeListingPost(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?post=removed`);
+}
+
+// ===========================================================================
+// Property photos — upload + cover + reorder + delete (Supabase Storage).
+// Files ride this server action as multipart FormData (body cap raised in
+// next.config). Each file is validated against lib/photos before it touches
+// Storage; the bucket + storage RLS (migration 0019) are the backstop. All
+// actions are redirect-based to dodge the 503 WATCH on revalidate-only actions.
+// Status is surfaced back via ?photos=… / ?photoerr=… on the property page.
+// ===========================================================================
+
+type PhotoRow = PhotoLike & { storage_path: string };
+
+export async function uploadPropertyPhotos(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const fail = (reason: string) =>
+    redirect(`/dashboard/properties/${propertyId}?photoerr=${reason}`);
+
+  // Browser File objects arrive as FormData entries named "photos".
+  const files = formData
+    .getAll("photos")
+    .filter(
+      (f): f is File =>
+        typeof f === "object" && f !== null && "size" in f && "type" in f,
+    )
+    .filter((f) => f.size > 0); // empty file input yields a 0-byte entry
+
+  if (files.length === 0) fail("none");
+
+  const supabase = createClient();
+
+  // Enforce the per-unit cap against what's already stored.
+  const { data: existing } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover")
+    .eq("property_id", propertyId);
+  const existingRows = (existing ?? []) as PhotoLike[];
+
+  if (existingRows.length + files.length > MAX_PHOTOS_PER_PROPERTY) {
+    fail("max");
+  }
+
+  // Reject the whole batch on the first bad file so the operator re-picks with
+  // a clear message rather than getting a confusing partial upload.
+  for (const f of files) {
+    const v = validatePhotoUpload({ type: f.type, size: f.size });
+    if (!v.ok) fail(v.reason);
+  }
+
+  let order = nextSortOrder(existingRows);
+  let firstEver = existingRows.length === 0;
+  let uploaded = 0;
+
+  for (const file of files) {
+    const photoId = crypto.randomUUID();
+    const path = photoStoragePath(
+      org.id,
+      propertyId,
+      photoId,
+      extForType(file.type),
+    );
+
+    const { error: upErr } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) continue; // best-effort: skip a failed file, keep going
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+
+    const { error: insErr } = await supabase.from("property_photos").insert({
+      id: photoId,
+      organization_id: org.id,
+      property_id: propertyId,
+      storage_path: path,
+      url: publicUrl,
+      sort_order: order,
+      is_cover: firstEver, // the very first photo on a unit becomes the cover
+    });
+    if (insErr) {
+      // Roll back the orphaned object so Storage and the table stay in sync.
+      await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+      continue;
+    }
+
+    order += 1;
+    firstEver = false;
+    uploaded += 1;
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  if (uploaded === 0) redirect(`/dashboard/properties/${propertyId}?photoerr=failed`);
+  redirect(`/dashboard/properties/${propertyId}?photos=${uploaded}`);
+}
+
+export async function setCoverPhoto(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  const id = String(formData.get("photo_id") ?? "");
+  if (!propertyId || !id) return;
+
+  const supabase = createClient();
+  // Clear the existing cover first (the partial unique index allows only one),
+  // then set the new one. RLS scopes both writes to the caller's org.
+  await supabase
+    .from("property_photos")
+    .update({ is_cover: false })
+    .eq("property_id", propertyId)
+    .eq("is_cover", true);
+  await supabase
+    .from("property_photos")
+    .update({ is_cover: true })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?photos=cover`);
+}
+
+export async function movePhoto(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  const id = String(formData.get("photo_id") ?? "");
+  const dirRaw = String(formData.get("direction") ?? "");
+  const direction = dirRaw === "up" || dirRaw === "down" ? dirRaw : null;
+  if (!propertyId || !id || !direction) return;
+
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover")
+    .eq("property_id", propertyId);
+  const rows = (data ?? []) as PhotoLike[];
+
+  // Pure, tested reorder; persist only the rows whose order actually changed.
+  const next = reorder(rows, id, direction);
+  const before = new Map(rows.map((r) => [r.id, r.sort_order]));
+  for (const { id: pid, sort_order } of next) {
+    if (before.get(pid) !== sort_order) {
+      await supabase
+        .from("property_photos")
+        .update({ sort_order })
+        .eq("id", pid);
+    }
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?photos=order`);
+}
+
+export async function deletePhoto(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  const id = String(formData.get("photo_id") ?? "");
+  if (!propertyId || !id) return;
+
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover, storage_path")
+    .eq("property_id", propertyId);
+  const rows = (data ?? []) as PhotoRow[];
+
+  const target = rows.find((r) => r.id === id);
+  if (!target) {
+    redirect(`/dashboard/properties/${propertyId}?photos=removed`);
+  }
+
+  // If we're deleting the cover, decide who gets promoted (lowest order).
+  const promoteId = coverAfterDelete(rows, id);
+
+  // Delete the row first (frees the partial-unique cover slot), then promote.
+  await supabase.from("property_photos").delete().eq("id", id);
+  if (promoteId) {
+    await supabase
+      .from("property_photos")
+      .update({ is_cover: true })
+      .eq("id", promoteId);
+  }
+  // Best-effort remove the underlying object.
+  if (target) {
+    await supabase.storage.from(PHOTO_BUCKET).remove([target.storage_path]);
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?photos=removed`);
 }

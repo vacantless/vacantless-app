@@ -14,7 +14,16 @@ import {
   addListingPost,
   updateListingPost,
   removeListingPost,
+  uploadPropertyPhotos,
+  setCoverPhoto,
+  movePhoto,
+  deletePhoto,
 } from "../actions";
+import {
+  MAX_PHOTOS_PER_PROPERTY,
+  sortPhotos,
+  uploadErrorMessage,
+} from "@/lib/photos";
 import { CopyLink } from "./copy-link";
 import {
   countEligible,
@@ -79,12 +88,25 @@ type ListingPostRow = {
   notes: string | null;
 };
 
+type PhotoRow = {
+  id: string;
+  url: string;
+  sort_order: number;
+  is_cover: boolean;
+};
+
 export default async function PropertyDetailPage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { saved?: string; blasted?: string; post?: string };
+  searchParams: {
+    saved?: string;
+    blasted?: string;
+    post?: string;
+    photos?: string;
+    photoerr?: string;
+  };
 }) {
   const supabase = createClient();
   const { data: property } = await supabase
@@ -114,6 +136,13 @@ export default async function PropertyDetailPage({
     .order("created_at", { ascending: true });
   const postRows = (posts ?? []) as ListingPostRow[];
   const postCounts = countLeadsByPost(leadRows);
+
+  const { data: photos } = await supabase
+    .from("property_photos")
+    .select("id, url, sort_order, is_cover")
+    .eq("property_id", p.id);
+  const photoRows = sortPhotos((photos ?? []) as PhotoRow[]);
+  const atPhotoLimit = photoRows.length >= MAX_PHOTOS_PER_PROPERTY;
 
   const eligibleCount = countEligible(leadRows, p.rent_cents);
   const showBlastCard = blastOfferable(
@@ -164,6 +193,34 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {searchParams.photos && (
+        <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          {searchParams.photos === "cover"
+            ? "Cover photo updated."
+            : searchParams.photos === "order"
+              ? "Photo order updated."
+              : searchParams.photos === "removed"
+                ? "Photo removed."
+                : `${searchParams.photos} ${
+                    searchParams.photos === "1" ? "photo" : "photos"
+                  } uploaded.`}
+        </p>
+      )}
+
+      {searchParams.photoerr && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {searchParams.photoerr === "type" ||
+          searchParams.photoerr === "size" ||
+          searchParams.photoerr === "empty"
+            ? uploadErrorMessage(searchParams.photoerr)
+            : searchParams.photoerr === "max"
+              ? `You can add up to ${MAX_PHOTOS_PER_PROPERTY} photos per rental.`
+              : searchParams.photoerr === "none"
+                ? "Please choose at least one photo to upload."
+                : "Sorry, the upload didn't go through. Please try again."}
+        </p>
+      )}
+
       <h2 className="mb-1 mt-3 text-xl font-bold text-gray-900">{p.address}</h2>
       <p className="mb-6 text-sm text-gray-500">
         {propertyStatusLabel(p.status)}
@@ -181,6 +238,132 @@ export default async function PropertyDetailPage({
           land straight in your renter list.
         </p>
         <CopyLink url={publicUrl} />
+      </div>
+
+      {/* --- Photos for this rental --- */}
+      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+        <h3 className="mb-1 text-sm font-semibold text-gray-900">
+          Photos for this rental
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">
+          Add photos renters will see on your listing page. The{" "}
+          <strong>cover photo</strong> shows first. Drag isn&apos;t needed — use
+          the arrows to reorder. JPG, PNG, WebP, or GIF, up to 10&nbsp;MB each
+          ({photoRows.length}/{MAX_PHOTOS_PER_PROPERTY}).
+        </p>
+
+        {photoRows.length === 0 ? (
+          <p className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-xs text-gray-500">
+            No photos yet. A listing with photos gets far more inquiries — add a
+            few below.
+          </p>
+        ) : (
+          <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {photoRows.map((photo, i) => (
+              <li
+                key={photo.id}
+                className="overflow-hidden rounded-lg border border-gray-200"
+              >
+                <div className="relative aspect-[4/3] bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                  {photo.is_cover && (
+                    <span className="absolute left-1.5 top-1.5 rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">
+                      Cover
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-1 px-2 py-1.5">
+                  <div className="flex items-center gap-1">
+                    <form action={movePhoto}>
+                      <input type="hidden" name="property_id" value={p.id} />
+                      <input type="hidden" name="photo_id" value={photo.id} />
+                      <input type="hidden" name="direction" value="up" />
+                      <button
+                        type="submit"
+                        disabled={i === 0}
+                        aria-label="Move earlier"
+                        className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        ←
+                      </button>
+                    </form>
+                    <form action={movePhoto}>
+                      <input type="hidden" name="property_id" value={p.id} />
+                      <input type="hidden" name="photo_id" value={photo.id} />
+                      <input type="hidden" name="direction" value="down" />
+                      <button
+                        type="submit"
+                        disabled={i === photoRows.length - 1}
+                        aria-label="Move later"
+                        className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        →
+                      </button>
+                    </form>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!photo.is_cover && (
+                      <form action={setCoverPhoto}>
+                        <input type="hidden" name="property_id" value={p.id} />
+                        <input type="hidden" name="photo_id" value={photo.id} />
+                        <button
+                          type="submit"
+                          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100"
+                        >
+                          Set cover
+                        </button>
+                      </form>
+                    )}
+                    <form action={deletePhoto}>
+                      <input type="hidden" name="property_id" value={p.id} />
+                      <input type="hidden" name="photo_id" value={photo.id} />
+                      <button
+                        type="submit"
+                        aria-label="Delete photo"
+                        className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {atPhotoLimit ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            You&apos;ve reached the {MAX_PHOTOS_PER_PROPERTY}-photo limit. Delete
+            one to add another.
+          </p>
+        ) : (
+          <form
+            action={uploadPropertyPhotos}
+            className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3"
+          >
+            <input type="hidden" name="property_id" value={p.id} />
+            <input
+              type="file"
+              name="photos"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
+              required
+              className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+            >
+              Upload photos
+            </button>
+          </form>
+        )}
       </div>
 
       {/* --- Where this is posted (listing distribution / source tracking) --- */}
