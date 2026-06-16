@@ -4,14 +4,27 @@ import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import { accessibleBrand, isBrandColorTooLight } from "@/lib/brand-theme";
-import { updateBranding, sendTestEmailAction } from "./actions";
+import {
+  updateBranding,
+  sendTestEmailAction,
+  uploadOrgLogo,
+  removeOrgLogo,
+} from "./actions";
+import { logoUploadErrorMessage } from "@/lib/logo";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: { saved?: string; error?: string; test?: string; to?: string };
+  searchParams: {
+    saved?: string;
+    error?: string;
+    test?: string;
+    to?: string;
+    logo?: string;
+    logoerr?: string;
+  };
 }) {
   const org = await getCurrentOrg();
   if (!org) return null;
@@ -52,6 +65,15 @@ export default async function SettingsPage({
   const error = searchParams.error;
   const test = searchParams.test;
   const testedTo = searchParams.to;
+  const logoSaved = searchParams.logo === "saved";
+  const logoRemoved = searchParams.logo === "removed";
+  const logoErr = searchParams.logoerr;
+  const logoErrMsg =
+    logoErr === "empty" || logoErr === "type" || logoErr === "size"
+      ? logoUploadErrorMessage(logoErr)
+      : logoErr
+        ? "Something went wrong uploading your logo. Please try again."
+        : null;
 
   return (
     <div>
@@ -71,7 +93,23 @@ export default async function SettingsPage({
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error === "save"
             ? "Something went wrong saving your changes. Please try again."
-            : "Some fields weren't valid. Check the brand color (a hex like #0e8c8c), the logo URL (a full http(s) link, or leave it blank), and the reply-to (a valid email, or leave it blank)."}
+            : "Some fields weren't valid. Check the brand color (a hex like #0e8c8c) and the reply-to (a valid email, or leave it blank)."}
+        </div>
+      )}
+
+      {logoSaved && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Logo updated. It now appears on your public pages and emails.
+        </div>
+      )}
+      {logoRemoved && (
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          Logo removed. Your business name shows in its place.
+        </div>
+      )}
+      {logoErrMsg && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {logoErrMsg}
         </div>
       )}
 
@@ -145,23 +183,6 @@ export default async function SettingsPage({
             <span className="mt-1 block text-xs text-gray-400">
               Used for the header bar, listing accents, and the email accent
               stripe.
-            </span>
-          </label>
-
-          <label className="mt-5 block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">
-              Logo URL
-            </span>
-            <input
-              name="logo_url"
-              type="url"
-              inputMode="url"
-              placeholder="https://example.com/logo.png"
-              defaultValue={org.logo_url ?? ""}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <span className="mt-1 block text-xs text-gray-400">
-              A full http(s) link to your logo image. Leave blank for no logo.
             </span>
           </label>
 
@@ -311,6 +332,59 @@ export default async function SettingsPage({
           </div>
         </div>
       </form>
+
+      {/* Logo — uploaded to storage; sets the image on the public page + emails */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-5">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Logo
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Shown on your public listing pages and at the top of every email to
+            renters. Use a PNG, JPG, WebP, GIF, or SVG up to 2 MB.
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <div className="flex h-16 w-40 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3">
+              {org.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={org.logo_url}
+                  alt={org.name}
+                  className="max-h-12 max-w-full object-contain"
+                />
+              ) : (
+                <span className="text-xs text-gray-400">No logo yet</span>
+              )}
+            </div>
+
+            <form
+              action={uploadOrgLogo}
+              encType="multipart/form-data"
+              className="flex flex-wrap items-center gap-2"
+            >
+              <input
+                type="file"
+                name="logo"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                required
+                className="text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+              />
+              <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Upload
+              </button>
+            </form>
+          </div>
+
+          {org.logo_url && (
+            <form action={removeOrgLogo} className="mt-3">
+              <button className="text-xs font-medium text-red-600 hover:text-red-700">
+                Remove logo
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
 
       {/* Send a test email — confirm branding + deliverability before going live */}
       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">

@@ -54,10 +54,11 @@ export function isShowingOutcome(value: string): value is ShowingOutcome {
   return (SHOWING_OUTCOMES as readonly string[]).includes(value);
 }
 
-export const PROPERTY_STATUSES = ["available", "leased", "off_market"] as const;
-export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
-
-export function propertyStatusLabel(status: string): string {
-  if (status === "off_market") return "Off market";
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
+// Property/listing status now lives in lib/listing-state.ts (the richer
+// Draft/Live/Paused/Leased model added in block 2). Re-exported here so the
+// long-standing `@/lib/pipeline` import sites keep working unchanged.
+export {
+  PROPERTY_STATUSES,
+  type PropertyStatus,
+  propertyStatusLabel,
+} from "./listing-state";

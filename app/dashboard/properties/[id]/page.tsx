@@ -3,12 +3,13 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import {
   PROPERTY_STATUSES,
   propertyStatusLabel,
-  statusLabel,
-  type LeadStatus,
-} from "@/lib/pipeline";
+  propertyStatusHelp,
+  propertyStatusBadge,
+} from "@/lib/listing-state";
 import {
   updateProperty,
   duplicateProperty,
@@ -279,10 +280,14 @@ export default async function PropertyDetailPage({
           </button>
         </form>
       </div>
-      <p className="mb-6 text-sm text-gray-500">
-        {propertyStatusLabel(p.status)}
+      <p className="mb-6 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${propertyStatusBadge(p.status).className}`}
+        >
+          {propertyStatusBadge(p.status).label}
+        </span>
         {p.rent_cents
-          ? ` · $${(p.rent_cents / 100).toLocaleString()}/mo`
+          ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
           : ""}
       </p>
 
@@ -812,6 +817,23 @@ export default async function PropertyDetailPage({
             </select>
           </div>
         </div>
+        <details className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          <summary className="cursor-pointer font-medium text-gray-600">
+            What each status means
+          </summary>
+          <ul className="mt-2 space-y-1.5">
+            {PROPERTY_STATUSES.map((s) => (
+              <li key={s} className="flex items-start gap-2">
+                <span
+                  className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-medium ${propertyStatusBadge(s).className}`}
+                >
+                  {propertyStatusLabel(s)}
+                </span>
+                <span>{propertyStatusHelp(s)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">
             Description

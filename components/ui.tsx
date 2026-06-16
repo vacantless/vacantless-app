@@ -118,8 +118,11 @@ export function propertyStatusTone(status: string): ChipTone {
   switch (status) {
     case "available":
       return "success";
+    case "paused":
+      return "warn";
     case "leased":
       return "info";
+    case "draft":
     case "off_market":
       return "neutral";
     default:

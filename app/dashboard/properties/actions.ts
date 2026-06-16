@@ -152,9 +152,9 @@ export async function updateProperty(formData: FormData) {
  * fields into a NEW row so an operator with several near-identical units (e.g.
  * units in the same building) doesn't re-enter every amenity/utility flag.
  *
- * The clone is created OFF MARKET (a "draft" until per-unit Draft status lands
- * in block 2) and its address is prefixed "Copy of " so a half-edited duplicate
- * never goes public with the wrong address. We deliberately do NOT copy
+ * The clone is created as a DRAFT (private, not yet published) and its address
+ * is prefixed "Copy of " so a half-edited duplicate never goes public with the
+ * wrong address. We deliberately do NOT copy
  * per-listing event/relationship state: price-drop flags, photos, listing posts,
  * leads, or showings — only the unit's own descriptive fields. Redirect-based
  * (dodges the 503 WATCH on revalidate-only server actions, S170).
@@ -209,7 +209,7 @@ export async function duplicateProperty(formData: FormData) {
       baths: s.baths,
       parking: s.parking,
       description: s.description,
-      status: "off_market", // a private draft until the operator sets it live
+      status: "draft", // a real private Draft until the operator sets it Live
       available_date: s.available_date,
       sqft: s.sqft,
       floor: s.floor,
