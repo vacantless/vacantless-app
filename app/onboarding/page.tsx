@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createOrganization } from "./actions";
 import { OnboardingForm } from "./onboarding-form";
+import { AuthShell } from "@/components/auth-shell";
 
 export default async function OnboardingPage({
   searchParams,
@@ -22,27 +23,19 @@ export default async function OnboardingPage({
   if (memberships && memberships.length > 0) redirect("/dashboard");
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <p className="text-sm font-semibold uppercase tracking-wider text-brand">
-        Vacantless
-      </p>
-      <p className="mt-6 text-xs font-medium uppercase tracking-wider text-gray-400">
-        Step 1 of 2
-      </p>
-      <h1 className="mt-1 text-2xl font-bold text-gray-900">
-        Create your workspace
-      </h1>
-      <p className="mt-2 text-sm text-gray-600">
-        This creates your branded leasing workspace — the home for your
-        properties, leads, and showings. You can change any of these settings
-        later in Settings.
-      </p>
+    <AuthShell
+      eyebrow="Step 1 of 2"
+      title="Create your workspace"
+      subtitle="This is your branded leasing workspace, the home for your properties, renters, and showings. You can change any of these settings later."
+      footer="Next: add your first property and share its inquiry page."
+    >
+      {/* gradient step indicator */}
+      <div className="mb-6 flex items-center gap-2" aria-hidden>
+        <span className="h-1.5 flex-1 rounded-full bg-gradient-to-r from-indigo-600 to-teal-500" />
+        <span className="h-1.5 flex-1 rounded-full bg-gray-200" />
+      </div>
 
       <OnboardingForm action={createOrganization} error={searchParams.error} />
-
-      <p className="mt-6 text-center text-xs text-gray-400">
-        Next: add your first property and share its intake page.
-      </p>
-    </main>
+    </AuthShell>
   );
 }

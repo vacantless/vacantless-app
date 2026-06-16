@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { accessibleBrand } from "@/lib/brand-theme";
+import { AUTH_BUTTON_CLASS, AUTH_INPUT_CLASS } from "@/components/auth-shell";
 
 const DEFAULT_BRAND_COLOR = "#4f46e5";
 
@@ -38,7 +39,7 @@ export function OnboardingForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Agile Real Estate Group"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
+          className={AUTH_INPUT_CLASS}
         />
       </div>
 
@@ -91,10 +92,7 @@ export function OnboardingForm({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <button
-        type="submit"
-        className="w-full rounded-lg bg-brand px-4 py-2 font-medium text-white"
-      >
+      <button type="submit" className={AUTH_BUTTON_CLASS}>
         Create workspace
       </button>
     </form>

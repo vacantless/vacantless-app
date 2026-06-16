@@ -4,6 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import {
+  AuthShell,
+  AUTH_BUTTON_CLASS,
+  AUTH_INPUT_CLASS,
+} from "@/components/auth-shell";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -35,42 +40,53 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="text-2xl font-bold text-gray-900">Create your account</h1>
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <input
-          type="email"
-          required
-          placeholder="you@company.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
-        />
-        <input
-          type="password"
-          required
-          minLength={6}
-          placeholder="Password (min 6 chars)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2"
-        />
+    <AuthShell
+      eyebrow="Start a 30-day pilot"
+      title="Create your account"
+      subtitle="Set up your branded leasing workspace in a couple of minutes. No credit card to start."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold text-brand">
+            Log in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Email
+          </label>
+          <input
+            type="email"
+            required
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={AUTH_INPUT_CLASS}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <input
+            type="password"
+            required
+            minLength={6}
+            placeholder="At least 6 characters"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={AUTH_INPUT_CLASS}
+          />
+        </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {notice && <p className="text-sm text-green-700">{notice}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-brand px-4 py-2 font-medium text-white disabled:opacity-50"
-        >
-          {loading ? "Creating…" : "Sign up"}
+        <button type="submit" disabled={loading} className={AUTH_BUTTON_CLASS}>
+          {loading ? "Creating…" : "Create account"}
         </button>
       </form>
-      <p className="mt-4 text-sm text-gray-600">
-        Already have an account?{" "}
-        <Link href="/login" className="font-medium text-brand">
-          Log in
-        </Link>
-      </p>
-    </main>
+    </AuthShell>
   );
 }
