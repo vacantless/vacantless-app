@@ -98,8 +98,8 @@ export default async function AvailabilityPage() {
     <div>
       <h2 className="text-xl font-bold text-gray-900">Showing times</h2>
       <p className="mt-1 text-sm text-gray-500">
-        Set the weekly windows when renters can self-book showings. Open slots
-        are generated from these times minus anything already booked.
+        Set the weekly windows when renters can book their own showings. Open
+        slots are generated from these times minus anything already booked.
       </p>
 
       {/* Booking settings */}
@@ -351,8 +351,8 @@ export default async function AvailabilityPage() {
 
         {rules.length === 0 && (
           <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            No times yet. Add your first below so renters can self-book a
-            showing.
+            No times yet. Add your first below so renters can book a showing
+            online.
           </div>
         )}
 

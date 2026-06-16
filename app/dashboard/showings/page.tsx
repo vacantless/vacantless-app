@@ -100,8 +100,8 @@ export default async function ShowingsPage() {
     <div>
       <h2 className="text-xl font-bold text-gray-900">Showings</h2>
       <p className="mt-1 text-sm text-gray-500">
-        Self-booked and scheduled viewings. Mark the outcome after each one to
-        keep your renter list accurate.
+        Showings renters booked online, plus ones you scheduled. Mark the
+        outcome after each one to keep your renter list accurate.
       </p>
 
       {blocks.length > 0 && (
@@ -137,7 +137,7 @@ export default async function ShowingsPage() {
         empty={
           <EmptyState
             title="No upcoming showings yet"
-            description="Set your weekly availability so renters can self-book. Confirmed showings appear here."
+            description="Set your weekly availability so renters can book their own showings online. Confirmed showings appear here."
             cta={{ href: "/dashboard/availability", label: "Set availability" }}
           />
         }

@@ -79,7 +79,7 @@ export function OnboardingForm({
             <p className="text-sm font-medium text-gray-900">
               2 bedroom apartment
             </p>
-            <p className="text-xs text-gray-500">Self-book a showing online</p>
+            <p className="text-xs text-gray-500">Book a showing online</p>
             <span
               className="mt-2 inline-block rounded-md px-3 py-1.5 text-xs font-medium text-white"
               style={{ backgroundColor: accessible }}

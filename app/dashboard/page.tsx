@@ -140,7 +140,7 @@ export default async function OverviewPage() {
         <div className="mb-8">
           <EmptyState
             title="No upcoming showings"
-            description="Set your weekly availability so renters can self-book showings."
+            description="Set your weekly availability so renters can book their own showings online."
             cta={{ href: "/dashboard/availability", label: "Set availability" }}
           />
         </div>
