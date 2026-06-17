@@ -36,6 +36,15 @@ import {
   parseSubscription,
   subscriptionStatusLabel,
   subscriptionIsLive,
+  RENT_RECONCILE_EVENTS,
+  isRentReconcileEvent,
+  rentStatusFromEvent,
+  shouldApplyRentStatus,
+  centsToAmountString,
+  subscriptionIdOfInvoice,
+  normalizeStripeInvoice,
+  stripeCsvCell,
+  stripeInvoicesToCsv,
 } from "../lib/stripe-connect";
 
 let passed = 0;
@@ -338,6 +347,74 @@ ok("label past_due", subscriptionStatusLabel("past_due") === "Payment overdue");
 ok("label unknown -> Unknown", subscriptionStatusLabel("zzz") === "Unknown");
 ok("live for active/past_due/incomplete", subscriptionIsLive("active") && subscriptionIsLive("past_due") && subscriptionIsLive("incomplete"));
 ok("not live for canceled", !subscriptionIsLive("canceled"));
+
+// --- Increment 4: rent reconciliation mapper --------------------------------
+ok("reconcile events = invoice paid/failed + sub updated/deleted", RENT_RECONCILE_EVENTS.join(",") === "invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted");
+ok("isRentReconcileEvent true for invoice.paid", isRentReconcileEvent("invoice.paid"));
+ok("isRentReconcileEvent true for sub.deleted", isRentReconcileEvent("customer.subscription.deleted"));
+ok("isRentReconcileEvent false for platform event", !isRentReconcileEvent("checkout.session.completed"));
+ok("isRentReconcileEvent false for junk", !isRentReconcileEvent(undefined) && !isRentReconcileEvent(123));
+
+ok("sub.deleted -> canceled", rentStatusFromEvent("customer.subscription.deleted") === "canceled");
+ok("sub.updated mirrors sub status", rentStatusFromEvent("customer.subscription.updated", "past_due") === "past_due");
+ok("sub.updated active mirrored", rentStatusFromEvent("customer.subscription.updated", "active") === "active");
+ok("sub.updated with no status -> null", rentStatusFromEvent("customer.subscription.updated", "") === null && rentStatusFromEvent("customer.subscription.updated", null) === null);
+ok("invoice.paid -> active", rentStatusFromEvent("invoice.paid") === "active");
+ok("invoice.payment_failed -> past_due", rentStatusFromEvent("invoice.payment_failed") === "past_due");
+ok("unknown event -> null", rentStatusFromEvent("charge.dispute.created") === null && rentStatusFromEvent("invoice.paid".replace("paid", "void")) === null);
+
+// shouldApplyRentStatus: a canceled sub only changes via sub lifecycle events
+ok("apply: non-canceled always applies (invoice)", shouldApplyRentStatus("active", "invoice.paid"));
+ok("apply: non-canceled always applies (null current)", shouldApplyRentStatus(null, "invoice.payment_failed"));
+ok("guard: canceled blocks invoice.paid", !shouldApplyRentStatus("canceled", "invoice.paid"));
+ok("guard: canceled blocks invoice.payment_failed", !shouldApplyRentStatus("canceled", "invoice.payment_failed"));
+ok("guard: canceled allows sub.updated", shouldApplyRentStatus("canceled", "customer.subscription.updated"));
+ok("guard: canceled allows sub.deleted", shouldApplyRentStatus("canceled", "customer.subscription.deleted"));
+
+// --- Increment 5: invoices CSV ----------------------------------------------
+ok("centsToAmountString 125000 -> 1250.00", centsToAmountString(125000) === "1250.00");
+ok("centsToAmountString 0 -> 0.00", centsToAmountString(0) === "0.00");
+ok("centsToAmountString non-number -> null", centsToAmountString(null) === null && centsToAmountString("x") === null && centsToAmountString(NaN) === null);
+
+ok("subscriptionIdOfInvoice old shape string", subscriptionIdOfInvoice({ subscription: "sub_old" }) === "sub_old");
+ok("subscriptionIdOfInvoice old shape object", subscriptionIdOfInvoice({ subscription: { id: "sub_obj" } }) === "sub_obj");
+ok("subscriptionIdOfInvoice new parent shape", subscriptionIdOfInvoice({ parent: { subscription_details: { subscription: "sub_new" } } }) === "sub_new");
+ok("subscriptionIdOfInvoice none -> null", subscriptionIdOfInvoice({}) === null && subscriptionIdOfInvoice(null) === null);
+
+ok("normalizeStripeInvoice maps fields", (() => {
+  const r = normalizeStripeInvoice({
+    id: "in_1",
+    number: "VAC-001",
+    subscription: "sub_1",
+    customer_name: "Test Tenant",
+    customer_email: "t@example.com",
+    amount_paid: 125000,
+    amount_due: 0,
+    currency: "cad",
+    status: "paid",
+    created: isoToUnixSeconds("2026-07-01")!,
+    status_transitions: { paid_at: isoToUnixSeconds("2026-07-02")! },
+  });
+  return (
+    r.id === "in_1" && r.number === "VAC-001" && r.subscriptionId === "sub_1" &&
+    r.customerName === "Test Tenant" && r.customerEmail === "t@example.com" &&
+    r.amountPaid === "1250.00" && r.amountDue === "0.00" && r.currency === "CAD" &&
+    r.status === "paid" && r.created === "2026-07-01" && r.paidAt === "2026-07-02"
+  );
+})());
+ok("normalizeStripeInvoice empty -> nulls, no paidAt", (() => {
+  const r = normalizeStripeInvoice({});
+  return r.id === null && r.amountPaid === null && r.created === null && r.paidAt === null;
+})());
+
+ok("stripeCsvCell escapes commas/quotes/newlines", stripeCsvCell('a,b') === '"a,b"' && stripeCsvCell('he said "hi"') === '"he said ""hi"""' && stripeCsvCell("x") === "x" && stripeCsvCell(null) === "");
+ok("stripeInvoicesToCsv has header + rows", (() => {
+  const csv = stripeInvoicesToCsv([
+    normalizeStripeInvoice({ id: "in_1", number: "VAC-001", subscription: "sub_1", customer_name: "Tenant, Jr.", amount_paid: 125000, currency: "cad", status: "paid", created: isoToUnixSeconds("2026-07-01")! }),
+  ]);
+  const lines = csv.split("\r\n");
+  return lines[0].startsWith("Invoice ID,Number,Subscription ID,Tenant") && lines.length === 2 && lines[1].includes('"Tenant, Jr."') && lines[1].includes("1250.00");
+})());
 
 console.log(`\nstripe-connect: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

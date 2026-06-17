@@ -458,3 +458,196 @@ export function subscriptionStatusLabel(status: unknown): string {
 export function subscriptionIsLive(status: unknown): boolean {
   return typeof status === "string" && ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(status);
 }
+
+// ===========================================================================
+// Increment 4 — webhook reconciliation. The rent rail runs on the LANDLORD's
+// CONNECTED account, so its Stripe events arrive with `event.account` set
+// (the acct_... id) — distinct from the PLATFORM billing events (org plans) on
+// the platform account, which have no `event.account`. The webhook route
+// branches on `event.account` BEFORE the platform-billing switch and routes
+// these to tenancy reconciliation (match by stripe_subscription_id -> write
+// stripe_subscription_status + synced_at via the service-role admin client).
+//
+// This module owns the PURE decisions (which events count, what status to
+// write, whether a late event may overwrite a terminal one) so they unit-test
+// without the SDK; the route does the impure Supabase write + id extraction.
+//
+// Dispute mapping (charge.dispute.*) is intentionally OUT of scope here: it
+// needs charge -> invoice -> subscription resolution and has no schema field
+// yet; deferred to a dedicated field / v2.
+// ===========================================================================
+
+/** Connected-account events we reconcile onto a tenancy's rent subscription. */
+export const RENT_RECONCILE_EVENTS = [
+  "invoice.paid",
+  "invoice.payment_failed",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+] as const;
+export type RentReconcileEvent = (typeof RENT_RECONCILE_EVENTS)[number];
+
+/** Is this connected-account event one we act on? Pure. */
+export function isRentReconcileEvent(eventType: unknown): eventType is RentReconcileEvent {
+  return typeof eventType === "string" && (RENT_RECONCILE_EVENTS as readonly string[]).includes(eventType);
+}
+
+/**
+ * Map a connected-account event to the rent-subscription status to persist on
+ * the tenancy. Pure.
+ *   * customer.subscription.deleted -> "canceled" (terminal)
+ *   * customer.subscription.updated -> the subscription's own status (so a
+ *     genuine active/past_due/unpaid/incomplete transition is mirrored exactly)
+ *   * invoice.paid          -> "active"     (a debit cleared)
+ *   * invoice.payment_failed -> "past_due"  (a debit bounced)
+ * Returns null when the event shouldn't change the stored status (an unknown
+ * event, or a subscription.updated with no usable status string).
+ */
+export function rentStatusFromEvent(eventType: unknown, subStatus?: unknown): string | null {
+  switch (eventType) {
+    case "customer.subscription.deleted":
+      return "canceled";
+    case "customer.subscription.updated": {
+      const s = typeof subStatus === "string" ? subStatus.trim() : "";
+      return s || null;
+    }
+    case "invoice.paid":
+      return "active";
+    case "invoice.payment_failed":
+      return "past_due";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Guard against a late, out-of-order INVOICE event resurrecting a terminal
+ * subscription. Once a tenancy's rent subscription is "canceled", only a
+ * subscription lifecycle event (updated/deleted) may change its status — a
+ * straggling invoice.paid/payment_failed for the dead sub is ignored (a real
+ * re-subscribe writes a NEW subscription id, so it never collides). Pure.
+ */
+export function shouldApplyRentStatus(currentStatus: unknown, eventType: unknown): boolean {
+  if (currentStatus === "canceled") {
+    return eventType === "customer.subscription.updated" || eventType === "customer.subscription.deleted";
+  }
+  return true;
+}
+
+// ===========================================================================
+// Increment 5 — rent invoices CSV export. Lists the rent invoices Stripe
+// generated on the landlord's connected account (the rent-income slice) and
+// renders them as a CSV download — the Stripe-rail sibling of the Rotessa
+// transaction_report export, with the same RFC-4180 escaping and a parallel row
+// shape. All parsing/formatting is PURE; the route does the impure
+// invoices.list({...}, { stripeAccount }).
+// ===========================================================================
+
+export type StripeInvoiceRow = {
+  id: string | null;
+  number: string | null;
+  subscriptionId: string | null;
+  customerName: string | null;
+  customerEmail: string | null;
+  amountPaid: string | null;   // dollars, e.g. "1250.00"
+  amountDue: string | null;    // dollars
+  currency: string | null;     // e.g. "CAD"
+  status: string | null;       // paid | open | void | uncollectible | draft
+  created: string | null;      // YYYY-MM-DD (UTC)
+  paidAt: string | null;       // YYYY-MM-DD (UTC), null until paid
+};
+
+/** Minor units (cents) -> a "1250.00" dollar string. null for non-finite. Pure. */
+export function centsToAmountString(cents: unknown): string | null {
+  if (typeof cents !== "number" || !Number.isFinite(cents)) return null;
+  return (cents / 100).toFixed(2);
+}
+
+/** Structural shape of the Stripe.Invoice bits we read (keeps tests SDK-free). */
+export type RawStripeInvoice = {
+  id?: string | null;
+  number?: string | null;
+  subscription?: string | { id?: string | null } | null;
+  parent?: { subscription_details?: { subscription?: string | { id?: string | null } | null } | null } | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  amount_paid?: number | null;
+  amount_due?: number | null;
+  currency?: string | null;
+  status?: string | null;
+  created?: number | null;
+  status_transitions?: { paid_at?: number | null } | null;
+};
+
+/** Pull the subscription id off an invoice across Stripe API-version shapes. Pure. */
+export function subscriptionIdOfInvoice(invoice: RawStripeInvoice | null | undefined): string | null {
+  const i = invoice ?? {};
+  const idOf = (v: unknown): string | null =>
+    typeof v === "string" && v.trim()
+      ? v.trim()
+      : v && typeof v === "object" && typeof (v as { id?: unknown }).id === "string" && (v as { id: string }).id.trim()
+        ? (v as { id: string }).id.trim()
+        : null;
+  // Older API: invoice.subscription. Newer (2025+): invoice.parent.subscription_details.subscription.
+  return idOf(i.subscription) ?? idOf(i.parent?.subscription_details?.subscription);
+}
+
+/** Normalize one raw Stripe invoice into our CSV row. Pure. */
+export function normalizeStripeInvoice(raw: RawStripeInvoice | null | undefined): StripeInvoiceRow {
+  const i = raw ?? {};
+  return {
+    id: typeof i.id === "string" ? i.id : null,
+    number: typeof i.number === "string" ? i.number : null,
+    subscriptionId: subscriptionIdOfInvoice(i),
+    customerName: typeof i.customer_name === "string" ? i.customer_name : null,
+    customerEmail: typeof i.customer_email === "string" ? i.customer_email : null,
+    amountPaid: centsToAmountString(i.amount_paid),
+    amountDue: centsToAmountString(i.amount_due),
+    currency: typeof i.currency === "string" ? i.currency.toUpperCase() : null,
+    status: typeof i.status === "string" ? i.status : null,
+    created: unixToIsoDate(i.created),
+    paidAt: unixToIsoDate(i.status_transitions?.paid_at),
+  };
+}
+
+const STRIPE_INVOICE_CSV_HEADERS = [
+  "Invoice ID",
+  "Number",
+  "Subscription ID",
+  "Tenant",
+  "Email",
+  "Amount paid",
+  "Amount due",
+  "Currency",
+  "Status",
+  "Created",
+  "Paid date",
+];
+
+/** RFC-4180 escape one CSV field. Pure. (Mirrors rotessa.csvCell.) */
+export function stripeCsvCell(value: string | null): string {
+  const s = value ?? "";
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Render normalized Stripe invoice rows as a CSV string (with header). Pure. */
+export function stripeInvoicesToCsv(rows: StripeInvoiceRow[]): string {
+  const lines = [STRIPE_INVOICE_CSV_HEADERS.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.id,
+        r.number,
+        r.subscriptionId,
+        r.customerName,
+        r.customerEmail,
+        r.amountPaid,
+        r.amountDue,
+        r.currency,
+        r.status,
+        r.created,
+        r.paidAt,
+      ].map(stripeCsvCell).join(","),
+    );
+  }
+  return lines.join("\r\n");
+}

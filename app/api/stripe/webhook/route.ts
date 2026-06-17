@@ -3,6 +3,12 @@ import type Stripe from "stripe";
 import { getStripe, priceMap } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { planForPriceId, subscriptionPeriodEndSeconds, shouldApplyStatus } from "@/lib/billing";
+import {
+  isRentReconcileEvent,
+  rentStatusFromEvent,
+  shouldApplyRentStatus,
+  subscriptionIdOfInvoice,
+} from "@/lib/stripe-connect";
 
 // Stripe webhook (M4 billing). Keeps each org's plan / subscription_status /
 // current_period_end in sync with Stripe as the source of truth.
@@ -197,6 +203,66 @@ async function applyDepositRefund(
   return { matched: true as const, orgId: org.id };
 }
 
+// ---------------------------------------------------------------------------
+// Increment 4 — reconcile a CONNECTED-account (rent rail) event onto its
+// tenancy. These events arrive with `event.account` set; the POST handler
+// routes them here BEFORE the platform-billing switch so a rent event can never
+// be misread as a platform event. We match the tenancy by stripe_subscription_id
+// and write the rent status + synced_at via the service-role admin client (the
+// webhook is not an RLS user session). Idempotent: every handler is a plain
+// status UPSERT, so Stripe retries are harmless. The shouldApplyRentStatus
+// guard stops a late invoice event from resurrecting a canceled subscription.
+// ---------------------------------------------------------------------------
+async function reconcileRent(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  event: Stripe.Event,
+) {
+  if (!isRentReconcileEvent(event.type)) return { matched: false as const, reason: "ignored" };
+
+  // Resolve the subscription id + (for subscription events) its current status.
+  let subscriptionId: string | null = null;
+  let subStatus: string | null = null;
+  if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+    const sub = event.data.object as Stripe.Subscription;
+    subscriptionId = typeof sub.id === "string" ? sub.id : null;
+    subStatus = typeof sub.status === "string" ? sub.status : null;
+  } else {
+    // invoice.paid / invoice.payment_failed
+    const invoice = event.data.object as Stripe.Invoice;
+    subscriptionId = subscriptionIdOfInvoice(
+      invoice as unknown as Parameters<typeof subscriptionIdOfInvoice>[0],
+    );
+  }
+  if (!subscriptionId) return { matched: false as const, reason: "no_subscription_id" };
+
+  const nextStatus = rentStatusFromEvent(event.type, subStatus);
+  if (!nextStatus) return { matched: false as const, reason: "no_status" };
+
+  const { data: rows } = await admin
+    .from("tenancies")
+    .select("id, stripe_subscription_status")
+    .eq("stripe_subscription_id", subscriptionId)
+    .limit(1);
+  const tenancy = rows?.[0] as
+    | { id?: string; stripe_subscription_status?: string | null }
+    | undefined;
+  if (!tenancy?.id) return { matched: false as const, reason: "no_tenancy" };
+
+  // Don't let a straggling invoice event flip a terminal 'canceled' sub.
+  if (!shouldApplyRentStatus(tenancy.stripe_subscription_status, event.type)) {
+    return { matched: true as const, tenancyId: tenancy.id, skipped: true };
+  }
+
+  await admin
+    .from("tenancies")
+    .update({
+      stripe_subscription_status: nextStatus,
+      stripe_subscription_synced_at: new Date().toISOString(),
+    })
+    .eq("id", tenancy.id);
+  return { matched: true as const, tenancyId: tenancy.id, status: nextStatus };
+}
+
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -229,6 +295,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // CONNECTED-account (rent rail) events carry event.account (the acct_... id).
+    // They are a different surface from the PLATFORM billing events below (org
+    // plans, no event.account), so route them to tenancy reconciliation and
+    // return BEFORE the platform switch — a rent event must never be read as a
+    // platform-billing event.
+    if (event.account) {
+      const r = await reconcileRent(admin, event);
+      return NextResponse.json(
+        { ok: true, type: event.type, account: event.account, rent: r },
+        { status: 200 },
+      );
+    }
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
