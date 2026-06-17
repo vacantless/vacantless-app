@@ -15,6 +15,7 @@ import {
   channelIncludesSms,
   type MessageChannel,
 } from "@/lib/tenant-comms";
+import { FeatureLockedNotice } from "@/components/feature-locked-notice";
 
 export type ComposerTenant = {
   id: string;
@@ -171,13 +172,13 @@ export default function TenantMessageComposer({
           })}
         </div>
         {!smsAllowed && (
-          <p className="mt-2 text-xs text-gray-500">
-            Texting tenants is part of a higher plan.{" "}
-            <a href="/dashboard/billing" className="font-medium text-brand hover:underline">
-              Upgrade to enable texts
-            </a>
-            . Email is included on your plan.
-          </p>
+          <div className="mt-3">
+            <FeatureLockedNotice
+              title="Texting tenants is part of a higher plan"
+              description="Email is included on your plan. Upgrade to message tenants by text as well."
+              unlockTier="growth"
+            />
+          </div>
         )}
       </div>
 
