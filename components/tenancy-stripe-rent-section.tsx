@@ -14,6 +14,7 @@ import {
   subscriptionIsLive,
 } from "@/lib/stripe-connect";
 import { StatusChip, type ChipTone } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 // The Stripe Connect rent-collection panel on a tenancy (platform pivot step 2,
 // ALT provider, increment 2; S215). Sibling of the Rotessa block. Collects a
@@ -106,12 +107,12 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
             {!view.subscriptionId && (
               <form action={refreshStripeRentMandate}>
                 <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                <SubmitButton
+                  pendingLabel="Refreshing…"
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Refresh authorization
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>
@@ -146,12 +147,12 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                 </p>
                 <form action={refreshStripeRentSubscription}>
                   <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-                  <button
-                    type="submit"
-                    className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                  <SubmitButton
+                    pendingLabel="Refreshing…"
+                    className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Refresh status
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             ) : view.rentCents == null ? (
@@ -182,13 +183,13 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                       At least 2 business days out (e.g. {view.firstChargeHint}).
                     </span>
                   </div>
-                  <button
-                    type="submit"
-                    className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+                  <SubmitButton
+                    pendingLabel="Setting up…"
+                    className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     style={{ background: "var(--brand-gradient, var(--brand-color))" }}
                   >
                     Set up monthly rent
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
             )}
@@ -204,22 +205,22 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
           <div className="flex flex-wrap items-center gap-3">
             <form action={startStripeRentMandate}>
               <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              <SubmitButton
+                pendingLabel="Opening…"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Open authorization link
-              </button>
+              </SubmitButton>
             </form>
             <form action={refreshStripeRentMandate}>
               <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              <SubmitButton
+                pendingLabel="Refreshing…"
+                className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 style={{ background: "var(--brand-gradient, var(--brand-color))" }}
               >
                 Refresh status
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>
@@ -233,13 +234,13 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
           </p>
           <form action={startStripeRentMandate}>
             <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            <SubmitButton
+              pendingLabel="Starting…"
+              className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: "var(--brand-gradient, var(--brand-color))" }}
             >
               Start bank authorization
-            </button>
+            </SubmitButton>
           </form>
         </div>
       )}

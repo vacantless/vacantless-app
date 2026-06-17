@@ -18,6 +18,7 @@ import {
   SECONDARY_ACTION_CLASS,
   type ChipTone,
 } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 import { Icons } from "@/components/icons";
 
 // The Stripe Connect rent-collection panel on Settings (platform pivot step 2,
@@ -139,28 +140,31 @@ export default function StripeConnectSettingsCard({
           <div className="flex flex-wrap items-center gap-3">
             {state !== "ready" && (
               <form action={startStripeConnect}>
-                <button
-                  type="submit"
+                <SubmitButton
+                  pendingLabel="Opening…"
                   disabled={!stripeConfigured}
                   className={`${PRIMARY_ACTION_CLASS} disabled:cursor-not-allowed disabled:opacity-50`}
                   style={{ background: "var(--brand-gradient, var(--brand-color))" }}
                 >
                   Finish setup
-                </button>
+                </SubmitButton>
               </form>
             )}
             <form action={refreshStripeConnect}>
-              <button type="submit" className={SECONDARY_ACTION_CLASS}>
+              <SubmitButton
+                pendingLabel="Refreshing…"
+                className={`${SECONDARY_ACTION_CLASS} disabled:cursor-not-allowed disabled:opacity-60`}
+              >
                 Refresh status
-              </button>
+              </SubmitButton>
             </form>
             <form action={disconnectStripeConnect}>
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+              <SubmitButton
+                pendingLabel="Disconnecting…"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Disconnect
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>
@@ -181,14 +185,14 @@ export default function StripeConnectSettingsCard({
               (CAD for Canada, USD for the US).
             </span>
           </label>
-          <button
-            type="submit"
+          <SubmitButton
+            pendingLabel="Setting up…"
             disabled={!stripeConfigured}
             className={`${PRIMARY_ACTION_CLASS} disabled:cursor-not-allowed disabled:opacity-50`}
             style={{ background: "var(--brand-gradient, var(--brand-color))" }}
           >
             Set up rent collection with Stripe
-          </button>
+          </SubmitButton>
         </form>
       )}
     </Card>
