@@ -307,3 +307,132 @@ export function parseSetupSession(session: {
   // open / processing / complete-without-pm-yet -> still pending
   return { ok: true, paymentMethodId, mandateStatus: "pending" };
 }
+
+// ===========================================================================
+// Increment 3 — monthly rent subscription off the saved payment method.
+// Checkout SUBSCRIPTION mode doesn't support ACSS, so we create the
+// subscription through the Billing/Subscriptions API directly on the connected
+// account (Stripe-Account header), using the increment-2 payment method as the
+// default and an inline monthly price. Params builder + validation + parsing
+// are PURE here; the action does the single impure subscriptions.create.
+// ===========================================================================
+
+/** "YYYY-MM-DD" -> Unix seconds at 12:00 UTC (a safe future anchor). null if bad. */
+export function isoToUnixSeconds(iso: string | null | undefined): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso ?? "").trim());
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const ms = Date.UTC(y, mo - 1, d, 12, 0, 0);
+  const dt = new Date(ms);
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+  return Math.floor(ms / 1000);
+}
+
+export type RentSubscriptionPrereqs =
+  | { ok: true; amountCents: number; paymentMethodId: string }
+  | { ok: false; code: "no_mandate" | "no_pm" | "no_rent" };
+
+/** Gate subscription creation: mandate active + a saved pm + a positive rent. Pure. */
+export function validateRentSubscriptionPrereqs(input: {
+  mandateStatus: unknown;
+  paymentMethodId: string | null | undefined;
+  amountCents: number | null | undefined;
+}): RentSubscriptionPrereqs {
+  if (!mandateReady(input.mandateStatus)) return { ok: false, code: "no_mandate" };
+  const pm = (input.paymentMethodId ?? "").trim();
+  if (!pm) return { ok: false, code: "no_pm" };
+  const amount = input.amountCents ?? 0;
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, code: "no_rent" };
+  return { ok: true, amountCents: Math.round(amount), paymentMethodId: pm };
+}
+
+/**
+ * Build the subscriptions.create params for monthly rent on the connected
+ * account. Inline monthly price (no Product/Price to manage), the saved bank pm
+ * as default, charge_automatically, and the country's bank-debit method in
+ * payment_settings (ACSS carries its personal mandate option). An optional
+ * future billing_cycle_anchor sets the first charge date with no proration. Pure.
+ */
+export function buildSubscriptionParams(args: {
+  customerId: string;
+  paymentMethodId: string;
+  country: unknown;
+  amountCents: number;
+  anchorUnix?: number | null;
+}): Record<string, unknown> {
+  const { method, currency } = rentMethodForCountry(args.country);
+  const paymentSettings: Record<string, unknown> = {
+    payment_method_types: [method],
+    save_default_payment_method: "on_subscription",
+  };
+  if (method === "acss_debit") {
+    paymentSettings.payment_method_options = {
+      acss_debit: { mandate_options: { transaction_type: "personal" } },
+    };
+  }
+  const params: Record<string, unknown> = {
+    customer: args.customerId,
+    default_payment_method: args.paymentMethodId,
+    collection_method: "charge_automatically",
+    proration_behavior: "none",
+    items: [
+      {
+        price_data: {
+          currency,
+          product_data: { name: "Monthly rent" },
+          unit_amount: Math.round(args.amountCents),
+          recurring: { interval: "month" },
+        },
+      },
+    ],
+    payment_settings: paymentSettings,
+    metadata: { source: "vacantless_rent" },
+  };
+  if (args.anchorUnix && args.anchorUnix > 0) {
+    params.billing_cycle_anchor = args.anchorUnix;
+  }
+  return params;
+}
+
+export type ParsedSubscription =
+  | { ok: true; subscriptionId: string; status: string; currentPeriodEnd: string | null }
+  | { ok: false; message: string };
+
+/** Unix seconds -> "YYYY-MM-DD" (UTC). null for falsy/invalid. Pure. */
+export function unixToIsoDate(secs: number | null | undefined): string | null {
+  if (!secs || !Number.isFinite(secs) || secs <= 0) return null;
+  return new Date(secs * 1000).toISOString().slice(0, 10);
+}
+
+/** Classify a subscriptions.create / retrieve response. Pure. */
+export function parseSubscription(sub: {
+  id?: string | null;
+  status?: string | null;
+  current_period_end?: number | null;
+} | null | undefined): ParsedSubscription {
+  const s = sub ?? {};
+  const id = typeof s.id === "string" && s.id.trim() ? s.id.trim() : null;
+  if (!id) return { ok: false, message: "Stripe returned no subscription id." };
+  const status = typeof s.status === "string" ? s.status : "incomplete";
+  return { ok: true, subscriptionId: id, status, currentPeriodEnd: unixToIsoDate(s.current_period_end) };
+}
+
+const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
+  active: "Active",
+  trialing: "Active (scheduled)",
+  past_due: "Payment overdue",
+  unpaid: "Unpaid",
+  incomplete: "Awaiting first payment",
+  incomplete_expired: "Setup expired",
+  canceled: "Canceled",
+  paused: "Paused",
+};
+
+export function subscriptionStatusLabel(status: unknown): string {
+  return (typeof status === "string" && SUBSCRIPTION_STATUS_LABELS[status]) || "Unknown";
+}
+
+/** Is the subscription still on the hook to collect (not canceled/expired)? Pure. */
+export function subscriptionIsLive(status: unknown): boolean {
+  return typeof status === "string" && ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(status);
+}

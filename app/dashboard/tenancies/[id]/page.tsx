@@ -77,6 +77,8 @@ type Tenancy = {
   stripe_payment_method_id: string | null;
   stripe_mandate_status: string | null;
   stripe_rent_synced_at: string | null;
+  stripe_subscription_id: string | null;
+  stripe_subscription_status: string | null;
   property: { id: string; address: string } | null;
   tenants: Tenant[];
 };
@@ -149,6 +151,8 @@ const ROTESSA_ERROR: Record<string, string> = {
 // Stripe Connect rent outcomes (?striperent=...). `synced` is success-toned.
 const STRIPE_RENT_SUCCESS: Record<string, string> = {
   synced: "Stripe rent status refreshed.",
+  subscribed: "Monthly rent scheduled. Stripe will bill the saved bank account automatically.",
+  subsynced: "Subscription status refreshed.",
 };
 const STRIPE_RENT_ERROR: Record<string, string> = {
   notconfigured: "Payments aren't configured on this deployment yet.",
@@ -162,6 +166,14 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   linkfail: "Stripe couldn't create the authorization link. Try again.",
   syncfail: "We couldn't refresh the Stripe status just now. Try again.",
   forbidden: "You don't have permission to manage rent collection.",
+  subalready: "This tenancy already has a rent subscription.",
+  nocustomer: "Authorize the tenant's bank account before scheduling rent.",
+  nomandate: "The tenant needs to authorize their bank (mandate) before scheduling rent.",
+  nopm: "No saved payment method yet — finish the bank authorization first.",
+  norent: "Set a monthly rent amount on this tenancy before scheduling rent.",
+  baddate: "Pick a first charge date at least 2 business days from today.",
+  subfail: "Stripe couldn't create the rent subscription. Try again.",
+  nosub: "Set up the monthly rent subscription before refreshing.",
 };
 
 export default async function TenancyDetailPage({
@@ -188,7 +200,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -233,6 +245,13 @@ export default async function TenancyDetailPage({
     paymentMethodId: t.stripe_payment_method_id,
     syncedAt: t.stripe_rent_synced_at,
     stripeConfigured: !!getStripe(),
+    rentCents: t.rent_cents,
+    rentLabel: formatRentCents(t.rent_cents),
+    subscriptionId: t.stripe_subscription_id,
+    subscriptionStatus: t.stripe_subscription_status,
+    firstChargeDefault: defaultFirstProcessDate(new Date().toISOString().slice(0, 10)),
+    firstChargeMin: minProcessDate(new Date().toISOString().slice(0, 10)),
+    firstChargeHint: formatProcessDate(defaultFirstProcessDate(new Date().toISOString().slice(0, 10))),
   };
   const todayIso = new Date().toISOString().slice(0, 10);
   const defaultProcessDate = defaultFirstProcessDate(todayIso);

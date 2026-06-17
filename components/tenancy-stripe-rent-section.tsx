@@ -2,12 +2,16 @@ import Link from "next/link";
 import {
   startStripeRentMandate,
   refreshStripeRentMandate,
+  createStripeRentSubscription,
+  refreshStripeRentSubscription,
 } from "@/app/dashboard/tenancies/stripe-rent-actions";
 import {
   mandateStatusLabel,
   normalizeMandateStatus,
   rentMethodForCountry,
   connectCountryLabel,
+  subscriptionStatusLabel,
+  subscriptionIsLive,
 } from "@/lib/stripe-connect";
 import { StatusChip, type ChipTone } from "@/components/ui";
 
@@ -28,6 +32,14 @@ export type TenancyStripeRentView = {
   paymentMethodId: string | null;
   syncedAt: string | null;
   stripeConfigured: boolean;
+  // increment 3 (monthly subscription)
+  rentCents: number | null;
+  rentLabel: string;
+  subscriptionId: string | null;
+  subscriptionStatus: string | null;
+  firstChargeDefault: string;
+  firstChargeMin: string;
+  firstChargeHint: string;
 };
 
 function mandateTone(status: string): ChipTone {
@@ -73,32 +85,114 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
           and debit notices are emailed to them.
         </p>
       ) : status === "active" ? (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600">
-            {view.primaryName} authorized {method.label.toLowerCase()}. The saved
-            bank account is ready for monthly rent (coming in the next step).
-          </p>
-          <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-gray-500">Payment method</dt>
-              <dd className="font-mono text-xs text-gray-700">{view.paymentMethodId ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-gray-500">Last checked</dt>
-              <dd className="font-medium text-gray-900">
-                {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "—"}
-              </dd>
-            </div>
-          </dl>
-          <form action={refreshStripeRentMandate}>
-            <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-            >
-              Refresh status
-            </button>
-          </form>
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              {view.primaryName} authorized {method.label.toLowerCase()}. The saved
+              bank account is ready for monthly rent.
+            </p>
+            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-gray-500">Payment method</dt>
+                <dd className="font-mono text-xs text-gray-700">{view.paymentMethodId ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Last checked</dt>
+                <dd className="font-medium text-gray-900">
+                  {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "—"}
+                </dd>
+              </div>
+            </dl>
+            {!view.subscriptionId && (
+              <form action={refreshStripeRentMandate}>
+                <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  Refresh authorization
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* Monthly rent subscription (increment 3) */}
+          <div className="border-t border-gray-100 pt-4">
+            {view.subscriptionId ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusChip tone={subscriptionIsLive(view.subscriptionStatus) ? "success" : "warn"}>
+                    {subscriptionStatusLabel(view.subscriptionStatus)}
+                  </StatusChip>
+                  <span className="text-sm text-gray-600">
+                    {view.rentLabel}/mo, billed automatically to the saved bank account.
+                  </span>
+                </div>
+                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-gray-500">Subscription ID</dt>
+                    <dd className="font-mono text-xs text-gray-700">{view.subscriptionId}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Last synced</dt>
+                    <dd className="font-medium text-gray-900">
+                      {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "—"}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="text-xs text-gray-400">
+                  Bank debits can take a few business days to confirm. Manage or
+                  cancel the subscription from your Stripe dashboard.
+                </p>
+                <form action={refreshStripeRentSubscription}>
+                  <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                  >
+                    Refresh status
+                  </button>
+                </form>
+              </div>
+            ) : view.rentCents == null ? (
+              <p className="text-sm text-gray-600">
+                Set a monthly rent amount in Lease details below, then you can
+                schedule automatic rent collection.
+              </p>
+            ) : (
+              <form action={createStripeRentSubscription} className="space-y-3">
+                <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                <p className="text-sm text-gray-600">
+                  Schedule automatic monthly rent of{" "}
+                  <span className="font-medium text-gray-900">{view.rentLabel}</span> starting on
+                  your chosen date, billed to {view.primaryName}&apos;s authorized bank account.
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">First charge date</label>
+                    <input
+                      type="date"
+                      name="first_charge_date"
+                      required
+                      min={view.firstChargeMin}
+                      defaultValue={view.firstChargeDefault}
+                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <span className="mt-1 block text-xs text-gray-400">
+                      At least 2 business days out (e.g. {view.firstChargeHint}).
+                    </span>
+                  </div>
+                  <button
+                    type="submit"
+                    className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+                    style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+                  >
+                    Set up monthly rent
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       ) : status === "pending" ? (
         <div className="space-y-3">

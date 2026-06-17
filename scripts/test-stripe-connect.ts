@@ -27,6 +27,13 @@ import {
   buildCustomerCreateParams,
   buildSetupSessionParams,
   parseSetupSession,
+  isoToUnixSeconds,
+  unixToIsoDate,
+  validateRentSubscriptionPrereqs,
+  buildSubscriptionParams,
+  parseSubscription,
+  subscriptionStatusLabel,
+  subscriptionIsLive,
 } from "../lib/stripe-connect";
 
 let passed = 0;
@@ -224,6 +231,83 @@ ok("setup null -> pending (safe)", (() => {
   const r = parseSetupSession(null);
   return r.ok && r.mandateStatus === "pending";
 })());
+
+// ===========================================================================
+// Increment 3 — monthly rent subscription helpers
+// ===========================================================================
+
+// --- date conversion --------------------------------------------------------
+ok("isoToUnixSeconds round-trips a date", (() => {
+  const u = isoToUnixSeconds("2026-07-01");
+  return u !== null && unixToIsoDate(u) === "2026-07-01";
+})());
+ok("isoToUnixSeconds rejects junk", isoToUnixSeconds("nope") === null);
+ok("isoToUnixSeconds rejects impossible date", isoToUnixSeconds("2026-02-31") === null);
+ok("unixToIsoDate null on 0/empty", unixToIsoDate(0) === null && unixToIsoDate(null) === null);
+
+// --- validateRentSubscriptionPrereqs ----------------------------------------
+ok("prereqs ok when mandate active + pm + rent", (() => {
+  const r = validateRentSubscriptionPrereqs({ mandateStatus: "active", paymentMethodId: "pm_1", amountCents: 125000 });
+  return r.ok && r.amountCents === 125000 && r.paymentMethodId === "pm_1";
+})());
+ok("prereqs fail no_mandate when not active", (() => {
+  const r = validateRentSubscriptionPrereqs({ mandateStatus: "pending", paymentMethodId: "pm_1", amountCents: 125000 });
+  return !r.ok && r.code === "no_mandate";
+})());
+ok("prereqs fail no_pm when missing pm", (() => {
+  const r = validateRentSubscriptionPrereqs({ mandateStatus: "active", paymentMethodId: null, amountCents: 125000 });
+  return !r.ok && r.code === "no_pm";
+})());
+ok("prereqs fail no_rent when amount <= 0", (() => {
+  const r = validateRentSubscriptionPrereqs({ mandateStatus: "active", paymentMethodId: "pm_1", amountCents: 0 });
+  return !r.ok && r.code === "no_rent";
+})());
+
+// --- buildSubscriptionParams ------------------------------------------------
+ok("CA subscription = cad inline monthly price + acss + pm + anchor", (() => {
+  const p = buildSubscriptionParams({ customerId: "cus_1", paymentMethodId: "pm_1", country: "CA", amountCents: 125000, anchorUnix: 1900000000 }) as Record<string, unknown>;
+  const items = p.items as Array<{ price_data?: { currency?: string; unit_amount?: number; recurring?: { interval?: string } } }>;
+  const ps = p.payment_settings as { payment_method_types?: string[]; payment_method_options?: { acss_debit?: { mandate_options?: { transaction_type?: string } } } };
+  return (
+    p.customer === "cus_1" &&
+    p.default_payment_method === "pm_1" &&
+    p.collection_method === "charge_automatically" &&
+    p.proration_behavior === "none" &&
+    p.billing_cycle_anchor === 1900000000 &&
+    items[0].price_data?.currency === "cad" &&
+    items[0].price_data?.unit_amount === 125000 &&
+    items[0].price_data?.recurring?.interval === "month" &&
+    ps.payment_method_types?.[0] === "acss_debit" &&
+    ps.payment_method_options?.acss_debit?.mandate_options?.transaction_type === "personal"
+  );
+})());
+ok("US subscription = usd + us_bank_account, no acss options", (() => {
+  const p = buildSubscriptionParams({ customerId: "cus_2", paymentMethodId: "pm_2", country: "US", amountCents: 90000 }) as Record<string, unknown>;
+  const items = p.items as Array<{ price_data?: { currency?: string } }>;
+  const ps = p.payment_settings as { payment_method_types?: string[]; payment_method_options?: unknown };
+  return items[0].price_data?.currency === "usd" && ps.payment_method_types?.[0] === "us_bank_account" && ps.payment_method_options === undefined && !("billing_cycle_anchor" in p);
+})());
+
+// --- parseSubscription ------------------------------------------------------
+ok("parse subscription ok", (() => {
+  const r = parseSubscription({ id: "sub_1", status: "active", current_period_end: isoToUnixSeconds("2026-08-01")! });
+  return r.ok && r.subscriptionId === "sub_1" && r.status === "active" && r.currentPeriodEnd === "2026-08-01";
+})());
+ok("parse subscription fails without id", (() => {
+  const r = parseSubscription({ status: "active" });
+  return !r.ok;
+})());
+ok("parse subscription defaults status to incomplete", (() => {
+  const r = parseSubscription({ id: "sub_2" });
+  return r.ok && r.status === "incomplete";
+})());
+
+// --- subscription status labels / live --------------------------------------
+ok("label active", subscriptionStatusLabel("active") === "Active");
+ok("label past_due", subscriptionStatusLabel("past_due") === "Payment overdue");
+ok("label unknown -> Unknown", subscriptionStatusLabel("zzz") === "Unknown");
+ok("live for active/past_due/incomplete", subscriptionIsLive("active") && subscriptionIsLive("past_due") && subscriptionIsLive("incomplete"));
+ok("not live for canceled", !subscriptionIsLive("canceled"));
 
 console.log(`\nstripe-connect: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

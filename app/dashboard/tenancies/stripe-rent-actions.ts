@@ -1,5 +1,6 @@
 "use server";
 
+import type Stripe from "stripe";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -11,7 +12,12 @@ import {
   buildCustomerCreateParams,
   buildSetupSessionParams,
   parseSetupSession,
+  validateRentSubscriptionPrereqs,
+  buildSubscriptionParams,
+  parseSubscription,
+  isoToUnixSeconds,
 } from "@/lib/stripe-connect";
+import { isValidProcessDate } from "@/lib/rotessa";
 
 // Stripe Connect rent mandate actions for a tenancy (platform pivot step 2,
 // ALT provider, increment 2; S215). Sibling of rotessa-actions.ts.
@@ -185,4 +191,160 @@ export async function refreshStripeRentMandate(formData: FormData) {
 
   revalidatePath(tenancyPath(tenancyId));
   redirect(`${tenancyPath(tenancyId)}?striperent=synced`);
+}
+
+// ===========================================================================
+// Increment 3 — create a monthly rent subscription off the saved payment
+// method. Requires an active mandate (increment 2) + a rent amount. Idempotent
+// on stripe_subscription_id. Bills the tenant monthly at the tenancy rent,
+// starting on the chosen first-charge date.
+// ===========================================================================
+
+type SubTenancyRow = {
+  id: string;
+  rent_cents: number | null;
+  stripe_customer_id: string | null;
+  stripe_payment_method_id: string | null;
+  stripe_mandate_status: string | null;
+  stripe_subscription_id: string | null;
+};
+
+export async function createStripeRentSubscription(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+  const firstChargeIso = String(formData.get("first_charge_date") ?? "").trim();
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rent", `${tenancyPath(tenancyId)}?striperent=forbidden`);
+
+  const stripe = getStripe();
+  if (!stripe) redirect(`${tenancyPath(tenancyId)}?striperent=notconfigured`);
+
+  const supabase = createClient();
+
+  const { data: cData } = await supabase
+    .from("stripe_connect_accounts")
+    .select("connected_account_id, country, charges_enabled")
+    .eq("organization_id", org.id)
+    .limit(1);
+  const connect = cData?.[0] as
+    | { connected_account_id: string; country: string | null; charges_enabled: boolean }
+    | undefined;
+  if (!connect?.connected_account_id) redirect(`${tenancyPath(tenancyId)}?striperent=notconnected`);
+  if (!connect.charges_enabled) redirect(`${tenancyPath(tenancyId)}?striperent=notready`);
+
+  const { data: tData } = await supabase
+    .from("tenancies")
+    .select("id, rent_cents, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_subscription_id")
+    .eq("id", tenancyId)
+    .maybeSingle();
+  const tenancy = tData as SubTenancyRow | null;
+  if (!tenancy) redirect("/dashboard/tenancies");
+  if (tenancy.stripe_subscription_id) redirect(`${tenancyPath(tenancyId)}?striperent=subalready`);
+  if (!tenancy.stripe_customer_id) redirect(`${tenancyPath(tenancyId)}?striperent=nocustomer`);
+
+  const prereq = validateRentSubscriptionPrereqs({
+    mandateStatus: tenancy.stripe_mandate_status,
+    paymentMethodId: tenancy.stripe_payment_method_id,
+    amountCents: tenancy.rent_cents,
+  });
+  if (!prereq.ok) {
+    const code = prereq.code === "no_mandate" ? "nomandate" : prereq.code === "no_rent" ? "norent" : "nopm";
+    redirect(`${tenancyPath(tenancyId)}?striperent=${code}`);
+  }
+  // past this point prereq is the ok branch
+  const ok = prereq.ok ? prereq : null!;
+
+  // First-charge date: must be at least 2 business days out (same rule as the
+  // Rotessa rail). Convert to a future billing_cycle_anchor.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  if (!isValidProcessDate(firstChargeIso, todayIso)) {
+    redirect(`${tenancyPath(tenancyId)}?striperent=baddate`);
+  }
+  const anchorUnix = isoToUnixSeconds(firstChargeIso);
+
+  try {
+    const sub = await stripe!.subscriptions.create(
+      buildSubscriptionParams({
+        customerId: tenancy.stripe_customer_id!,
+        paymentMethodId: ok.paymentMethodId,
+        country: connect.country,
+        amountCents: ok.amountCents,
+        anchorUnix,
+      }) as unknown as Stripe.SubscriptionCreateParams,
+      { stripeAccount: connect.connected_account_id },
+    );
+    const parsed = parseSubscription(sub as Parameters<typeof parseSubscription>[0]);
+    if (!parsed.ok) redirect(`${tenancyPath(tenancyId)}?striperent=subfail`);
+
+    await supabase
+      .from("tenancies")
+      .update({
+        stripe_subscription_id: parsed.subscriptionId,
+        stripe_subscription_status: parsed.status,
+        stripe_subscription_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tenancyId);
+  } catch (err) {
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    redirect(`${tenancyPath(tenancyId)}?striperent=subfail`);
+  }
+
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?striperent=subscribed`);
+}
+
+// Refresh the subscription status from Stripe (until the webhook reconciliation
+// in increment 4, this is the manual pull).
+export async function refreshStripeRentSubscription(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rent", `${tenancyPath(tenancyId)}?striperent=forbidden`);
+
+  const stripe = getStripe();
+  if (!stripe) redirect(`${tenancyPath(tenancyId)}?striperent=notconfigured`);
+
+  const supabase = createClient();
+
+  const { data: cData } = await supabase
+    .from("stripe_connect_accounts")
+    .select("connected_account_id")
+    .eq("organization_id", org.id)
+    .limit(1);
+  const stripeAccount = (cData?.[0] as { connected_account_id: string } | undefined)?.connected_account_id;
+  if (!stripeAccount) redirect(`${tenancyPath(tenancyId)}?striperent=notconnected`);
+
+  const { data: tData } = await supabase
+    .from("tenancies")
+    .select("id, stripe_subscription_id")
+    .eq("id", tenancyId)
+    .maybeSingle();
+  const tenancy = tData as { id: string; stripe_subscription_id: string | null } | null;
+  if (!tenancy?.stripe_subscription_id) redirect(`${tenancyPath(tenancyId)}?striperent=nosub`);
+
+  try {
+    const sub = await stripe!.subscriptions.retrieve(tenancy.stripe_subscription_id, { stripeAccount });
+    const parsed = parseSubscription(sub as Parameters<typeof parseSubscription>[0]);
+    if (!parsed.ok) redirect(`${tenancyPath(tenancyId)}?striperent=syncfail`);
+
+    await supabase
+      .from("tenancies")
+      .update({
+        stripe_subscription_status: parsed.status,
+        stripe_subscription_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tenancyId);
+  } catch (err) {
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    redirect(`${tenancyPath(tenancyId)}?striperent=syncfail`);
+  }
+
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?striperent=subsynced`);
 }
