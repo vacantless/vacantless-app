@@ -189,6 +189,7 @@ export default async function TenancyDetailPage({
     err?: string;
     rotessa?: string;
     striperent?: string;
+    reason?: string;
     paid?: string;
     msg?: string;
     s?: string;
@@ -334,7 +335,10 @@ export default async function TenancyDetailPage({
     tenancyErrorMessage(searchParams.err) ||
     (searchParams.rotessa ? ROTESSA_ERROR[searchParams.rotessa] ?? null : null) ||
     (searchParams.striperent && !STRIPE_RENT_SUCCESS[searchParams.striperent]
-      ? STRIPE_RENT_ERROR[searchParams.striperent] ?? null
+      ? (STRIPE_RENT_ERROR[searchParams.striperent] ?? null) &&
+        `${STRIPE_RENT_ERROR[searchParams.striperent]}${
+          searchParams.reason ? ` (${searchParams.reason})` : ""
+        }`
       : null) ||
     (searchParams.paid && !PAYMENT_FLASH[searchParams.paid]
       ? paymentErrorMessage(searchParams.paid)

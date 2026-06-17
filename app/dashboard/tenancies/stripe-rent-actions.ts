@@ -289,7 +289,19 @@ export async function createStripeRentSubscription(formData: FormData) {
       .eq("id", tenancyId);
   } catch (err) {
     if (err && typeof err === "object" && "digest" in err) throw err;
-    redirect(`${tenancyPath(tenancyId)}?striperent=subfail`);
+    // Surface the real Stripe error instead of swallowing it (S216 pattern):
+    // log it server-side AND pass a short reason to the page via the redirect.
+    const reason =
+      (err && typeof err === "object"
+        ? ((err as { message?: string }).message ??
+            (err as { raw?: { message?: string } }).raw?.message)
+        : String(err)) || "unknown error";
+    console.error("[stripe-rent] subscriptions.create failed:", reason, err);
+    redirect(
+      `${tenancyPath(tenancyId)}?striperent=subfail&reason=${encodeURIComponent(
+        String(reason).slice(0, 300),
+      )}`,
+    );
   }
 
   revalidatePath(tenancyPath(tenancyId));
