@@ -265,10 +265,18 @@ export async function createStripeRentSubscription(formData: FormData) {
   const anchorUnix = isoToUnixSeconds(firstChargeIso);
 
   try {
+    // Subscription items' price_data needs an existing Product id (inline
+    // product_data is rejected by the Subscriptions API), so create a rent
+    // Product on the connected account first.
+    const product = await stripe!.products.create(
+      { name: "Monthly rent", metadata: { source: "vacantless_rent", tenancy_id: tenancyId } },
+      { stripeAccount: connect.connected_account_id },
+    );
     const sub = await stripe!.subscriptions.create(
       buildSubscriptionParams({
         customerId: tenancy.stripe_customer_id!,
         paymentMethodId: ok.paymentMethodId,
+        productId: product.id,
         country: connect.country,
         amountCents: ok.amountCents,
         anchorUnix,

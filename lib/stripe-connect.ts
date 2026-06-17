@@ -374,6 +374,7 @@ export function validateRentSubscriptionPrereqs(input: {
 export function buildSubscriptionParams(args: {
   customerId: string;
   paymentMethodId: string;
+  productId: string;
   country: unknown;
   amountCents: number;
   anchorUnix?: number | null;
@@ -395,9 +396,12 @@ export function buildSubscriptionParams(args: {
     proration_behavior: "none",
     items: [
       {
+        // Subscription items' price_data requires an existing `product` id —
+        // inline `product_data` is NOT supported here (only on Checkout line
+        // items). So the action creates/ensures a Product first and passes it in.
         price_data: {
           currency,
-          product_data: { name: "Monthly rent" },
+          product: args.productId,
           unit_amount: Math.round(args.amountCents),
           recurring: { interval: "month" },
         },

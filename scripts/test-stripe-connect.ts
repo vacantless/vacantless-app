@@ -291,9 +291,9 @@ ok("prereqs fail no_rent when amount <= 0", (() => {
 })());
 
 // --- buildSubscriptionParams ------------------------------------------------
-ok("CA subscription = cad inline monthly price + acss + pm + anchor", (() => {
-  const p = buildSubscriptionParams({ customerId: "cus_1", paymentMethodId: "pm_1", country: "CA", amountCents: 125000, anchorUnix: 1900000000 }) as Record<string, unknown>;
-  const items = p.items as Array<{ price_data?: { currency?: string; unit_amount?: number; recurring?: { interval?: string } } }>;
+ok("CA subscription = cad inline monthly price (product id) + acss + pm + anchor", (() => {
+  const p = buildSubscriptionParams({ customerId: "cus_1", paymentMethodId: "pm_1", productId: "prod_1", country: "CA", amountCents: 125000, anchorUnix: 1900000000 }) as Record<string, unknown>;
+  const items = p.items as Array<{ price_data?: { currency?: string; product?: string; product_data?: unknown; unit_amount?: number; recurring?: { interval?: string } } }>;
   const ps = p.payment_settings as { payment_method_types?: string[]; payment_method_options?: { acss_debit?: { mandate_options?: { transaction_type?: string } } } };
   return (
     p.customer === "cus_1" &&
@@ -302,6 +302,9 @@ ok("CA subscription = cad inline monthly price + acss + pm + anchor", (() => {
     p.proration_behavior === "none" &&
     p.billing_cycle_anchor === 1900000000 &&
     items[0].price_data?.currency === "cad" &&
+    // Subscriptions API requires `product` (id), NOT inline `product_data`.
+    items[0].price_data?.product === "prod_1" &&
+    items[0].price_data?.product_data === undefined &&
     items[0].price_data?.unit_amount === 125000 &&
     items[0].price_data?.recurring?.interval === "month" &&
     ps.payment_method_types?.[0] === "acss_debit" &&
@@ -309,10 +312,10 @@ ok("CA subscription = cad inline monthly price + acss + pm + anchor", (() => {
   );
 })());
 ok("US subscription = usd + us_bank_account, no acss options", (() => {
-  const p = buildSubscriptionParams({ customerId: "cus_2", paymentMethodId: "pm_2", country: "US", amountCents: 90000 }) as Record<string, unknown>;
-  const items = p.items as Array<{ price_data?: { currency?: string } }>;
+  const p = buildSubscriptionParams({ customerId: "cus_2", paymentMethodId: "pm_2", productId: "prod_2", country: "US", amountCents: 90000 }) as Record<string, unknown>;
+  const items = p.items as Array<{ price_data?: { currency?: string; product?: string } }>;
   const ps = p.payment_settings as { payment_method_types?: string[]; payment_method_options?: unknown };
-  return items[0].price_data?.currency === "usd" && ps.payment_method_types?.[0] === "us_bank_account" && ps.payment_method_options === undefined && !("billing_cycle_anchor" in p);
+  return items[0].price_data?.currency === "usd" && items[0].price_data?.product === "prod_2" && ps.payment_method_types?.[0] === "us_bank_account" && ps.payment_method_options === undefined && !("billing_cycle_anchor" in p);
 })());
 
 // --- parseSubscription ------------------------------------------------------
