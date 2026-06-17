@@ -21,7 +21,11 @@ import { Icons } from "@/components/icons";
 import RotessaSettingsCard, {
   type RotessaAccountView,
 } from "@/components/rotessa-settings-card";
+import StripeConnectSettingsCard, {
+  type StripeConnectAccountView,
+} from "@/components/stripe-connect-settings-card";
 import { encryptionConfigured } from "@/lib/crypto";
+import { getStripe } from "@/lib/stripe";
 import { saveMessageTemplate, deleteMessageTemplate } from "./comms-actions";
 import {
   MESSAGE_CHANNELS,
@@ -42,6 +46,7 @@ export default async function SettingsPage({
     logo?: string;
     logoerr?: string;
     rotessa?: string;
+    stripeconnect?: string;
     tpl?: string;
   };
 }) {
@@ -90,6 +95,44 @@ export default async function SettingsPage({
       }
     : null;
   const rotessaEncConfigured = encryptionConfigured();
+
+  // Stripe Connect rent-collection connection (RLS scopes the row to this org).
+  // We surface only the cached status snapshot — never a secret (there isn't one).
+  const { data: stripeConnectRows } = await supabase
+    .from("stripe_connect_accounts")
+    .select(
+      "connected_account_id, country, charges_enabled, payouts_enabled, details_submitted, acss_status, ach_status, onboarding_state, last_synced_at, last_error",
+    )
+    .limit(1);
+  const stripeConnectRow = stripeConnectRows?.[0] as
+    | {
+        connected_account_id: string;
+        country: string | null;
+        charges_enabled: boolean;
+        payouts_enabled: boolean;
+        details_submitted: boolean;
+        acss_status: string;
+        ach_status: string;
+        onboarding_state: string;
+        last_synced_at: string | null;
+        last_error: string | null;
+      }
+    | undefined;
+  const stripeConnectAccount: StripeConnectAccountView | null = stripeConnectRow
+    ? {
+        connected: !!stripeConnectRow.connected_account_id,
+        country: stripeConnectRow.country,
+        charges_enabled: stripeConnectRow.charges_enabled,
+        payouts_enabled: stripeConnectRow.payouts_enabled,
+        details_submitted: stripeConnectRow.details_submitted,
+        acss_status: stripeConnectRow.acss_status,
+        ach_status: stripeConnectRow.ach_status,
+        onboarding_state: stripeConnectRow.onboarding_state,
+        last_synced_at: stripeConnectRow.last_synced_at,
+        last_error: stripeConnectRow.last_error,
+      }
+    : null;
+  const stripeConfigured = !!getStripe();
 
   // Saved tenant-message templates (org-level). RLS scopes to this org.
   const { data: templateRows } = await supabase
@@ -267,6 +310,33 @@ export default async function SettingsPage({
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           We couldn&apos;t pull your Rotessa payment history just now. Check the
           connection below and try again.
+        </div>
+      )}
+
+      {(searchParams.stripeconnect === "returned" ||
+        searchParams.stripeconnect === "synced") && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Stripe rent collection updated. Use <strong>Refresh status</strong> below to
+          pull the latest from Stripe.
+        </div>
+      )}
+      {searchParams.stripeconnect === "disconnected" && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Stripe rent collection disconnected. Your Stripe account and any tenant
+          authorizations are unaffected.
+        </div>
+      )}
+      {searchParams.stripeconnect === "notconfigured" && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Payments aren&apos;t configured on this deployment yet (STRIPE_SECRET_KEY).
+        </div>
+      )}
+      {(searchParams.stripeconnect === "createfail" ||
+        searchParams.stripeconnect === "linkfail" ||
+        searchParams.stripeconnect === "syncfail" ||
+        searchParams.stripeconnect === "norow") && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Something went wrong setting up Stripe rent collection. Please try again.
         </div>
       )}
 
@@ -595,6 +665,12 @@ export default async function SettingsPage({
       <RotessaSettingsCard
         account={rotessaAccount}
         encConfigured={rotessaEncConfigured}
+      />
+
+      {/* Rent collection (Stripe Connect — the self-serve, cross-border backup rail) */}
+      <StripeConnectSettingsCard
+        account={stripeConnectAccount}
+        stripeConfigured={stripeConfigured}
       />
 
       {/* Tenant message templates */}

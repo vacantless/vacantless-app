@@ -29,6 +29,7 @@ export const CAPABILITIES = [
   "manage_properties", // create/edit/duplicate/delete units, listing posts, photos, price-drop blast
   "manage_tenancies", // create/edit/end tenancies + co-tenants (post-lease property management)
   "manage_rotessa", // connect/manage the org's Rotessa rent-collection account + API key
+  "manage_rent", // connect/manage the org's Stripe Connect rent rail (sibling of manage_rotessa; the two fold into one "rent collection" gate in the generic-provider refactor)
   "manage_availability", // booking windows, clustering settings
   "manage_leads", // change a lead's stage, set/clear follow-ups
   "add_notes", // add a timeline note to a lead
