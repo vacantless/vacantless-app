@@ -18,6 +18,13 @@
 
 export const ACSS_CAPABILITY = "acss_debit_payments" as const;
 export const ACH_CAPABILITY = "us_bank_account_ach_payments" as const;
+// Stripe requires every connected account to request a CORE capability
+// (card_payments or transfers). We use DIRECT charges (the connected account is
+// the merchant of record creating the charge), so card_payments is the correct
+// core capability — transfers is for the platform moving funds to the account
+// (destination / separate charges), which is not our model. Requested on every
+// account in addition to its country's bank-debit capability.
+export const CARD_CAPABILITY = "card_payments" as const;
 
 export const CONNECT_CAPABILITY_STATUSES = ["active", "inactive", "pending", "unrequested"] as const;
 export type ConnectCapabilityStatus = (typeof CONNECT_CAPABILITY_STATUSES)[number];
@@ -51,9 +58,14 @@ export function capabilityStatusLabel(value: unknown): string {
  * Unknown country defaults to CA (the primary market).
  */
 export function rentCapabilityRequest(country?: unknown): Record<string, { requested: true }> {
-  return normalizeConnectCountry(country) === "US"
-    ? { [ACH_CAPABILITY]: { requested: true } }
-    : { [ACSS_CAPABILITY]: { requested: true } };
+  const bankDebit =
+    normalizeConnectCountry(country) === "US" ? ACH_CAPABILITY : ACSS_CAPABILITY;
+  return {
+    // Core capability Stripe requires on every Standard account (direct charges).
+    [CARD_CAPABILITY]: { requested: true },
+    // The country-appropriate bank-debit rail for rent.
+    [bankDebit]: { requested: true },
+  };
 }
 
 // --- Supported countries -----------------------------------------------------
