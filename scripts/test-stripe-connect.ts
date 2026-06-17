@@ -6,6 +6,7 @@ import {
   ACSS_CAPABILITY,
   ACH_CAPABILITY,
   CARD_CAPABILITY,
+  TRANSFERS_CAPABILITY,
   CONNECT_CAPABILITY_STATUSES,
   normalizeCapabilityStatus,
   capabilityStatusLabel,
@@ -62,34 +63,36 @@ ok("label inactive", capabilityStatusLabel("inactive") === "Not enabled");
 ok("label unrequested", capabilityStatusLabel("nope") === "Not requested");
 
 // --- Capability request body ------------------------------------------------
-// Every account requests the card_payments CORE capability (Stripe requires
-// card_payments|transfers on a Standard account) PLUS only its own country's
-// bank-debit capability (the cross-country one makes accounts.create fail).
-ok("CA requests card_payments + ACSS only", (() => {
+// Every account requests the CORE pair (card_payments + transfers — card_payments
+// can't be requested without transfers) PLUS only its own country's bank-debit
+// capability (the cross-country one makes accounts.create fail).
+ok("CA requests card+transfers + ACSS only", (() => {
   const req = rentCapabilityRequest("CA");
-  return req[CARD_CAPABILITY]?.requested === true
+  return req[CARD_CAPABILITY]?.requested === true && req[TRANSFERS_CAPABILITY]?.requested === true
     && req[ACSS_CAPABILITY]?.requested === true && req[ACH_CAPABILITY] === undefined;
 })());
-ok("US requests card_payments + ACH only", (() => {
+ok("US requests card+transfers + ACH only", (() => {
   const req = rentCapabilityRequest("US");
-  return req[CARD_CAPABILITY]?.requested === true
+  return req[CARD_CAPABILITY]?.requested === true && req[TRANSFERS_CAPABILITY]?.requested === true
     && req[ACH_CAPABILITY]?.requested === true && req[ACSS_CAPABILITY] === undefined;
 })());
-ok("default/unknown country -> CA (card + ACSS)", (() => {
+ok("default/unknown country -> CA (card+transfers + ACSS)", (() => {
   const req = rentCapabilityRequest();
   const req2 = rentCapabilityRequest("ZZ");
-  return req[CARD_CAPABILITY]?.requested === true && req[ACSS_CAPABILITY]?.requested === true && req[ACH_CAPABILITY] === undefined
-    && req2[CARD_CAPABILITY]?.requested === true && req2[ACSS_CAPABILITY]?.requested === true && req2[ACH_CAPABILITY] === undefined;
+  return req[CARD_CAPABILITY]?.requested === true && req[TRANSFERS_CAPABILITY]?.requested === true && req[ACSS_CAPABILITY]?.requested === true && req[ACH_CAPABILITY] === undefined
+    && req2[CARD_CAPABILITY]?.requested === true && req2[TRANSFERS_CAPABILITY]?.requested === true && req2[ACSS_CAPABILITY]?.requested === true && req2[ACH_CAPABILITY] === undefined;
 })());
-ok("lowercase us normalizes to ACH (+ card)", (() => {
+ok("lowercase us normalizes to ACH (+ card+transfers)", (() => {
   const req = rentCapabilityRequest("us");
-  return req[ACH_CAPABILITY]?.requested === true && req[CARD_CAPABILITY]?.requested === true;
+  return req[ACH_CAPABILITY]?.requested === true && req[CARD_CAPABILITY]?.requested === true && req[TRANSFERS_CAPABILITY]?.requested === true;
 })());
-ok("every request includes the card core capability", (() => {
-  return rentCapabilityRequest("CA")[CARD_CAPABILITY]?.requested === true
-    && rentCapabilityRequest("US")[CARD_CAPABILITY]?.requested === true;
+ok("card_payments always paired with transfers (Stripe requirement)", (() => {
+  const ca = rentCapabilityRequest("CA");
+  const us = rentCapabilityRequest("US");
+  return ca[CARD_CAPABILITY]?.requested === true && ca[TRANSFERS_CAPABILITY]?.requested === true
+    && us[CARD_CAPABILITY]?.requested === true && us[TRANSFERS_CAPABILITY]?.requested === true;
 })());
-ok("capability keys are the Stripe names", ACSS_CAPABILITY === "acss_debit_payments" && ACH_CAPABILITY === "us_bank_account_ach_payments" && CARD_CAPABILITY === "card_payments");
+ok("capability keys are the Stripe names", ACSS_CAPABILITY === "acss_debit_payments" && ACH_CAPABILITY === "us_bank_account_ach_payments" && CARD_CAPABILITY === "card_payments" && TRANSFERS_CAPABILITY === "transfers");
 
 // --- Countries --------------------------------------------------------------
 ok("supported = CA, US", SUPPORTED_CONNECT_COUNTRIES.join(",") === "CA,US");

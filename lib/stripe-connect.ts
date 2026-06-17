@@ -19,12 +19,12 @@
 export const ACSS_CAPABILITY = "acss_debit_payments" as const;
 export const ACH_CAPABILITY = "us_bank_account_ach_payments" as const;
 // Stripe requires every connected account to request a CORE capability
-// (card_payments or transfers). We use DIRECT charges (the connected account is
-// the merchant of record creating the charge), so card_payments is the correct
-// core capability — transfers is for the platform moving funds to the account
-// (destination / separate charges), which is not our model. Requested on every
-// account in addition to its country's bank-debit capability.
+// (card_payments or transfers), and card_payments cannot be requested WITHOUT
+// transfers ("Accounts do not currently support card_payments without
+// transfers"). So we request BOTH — the standard pair every Standard account
+// gets — in addition to the country's bank-debit rail used for rent.
 export const CARD_CAPABILITY = "card_payments" as const;
+export const TRANSFERS_CAPABILITY = "transfers" as const;
 
 export const CONNECT_CAPABILITY_STATUSES = ["active", "inactive", "pending", "unrequested"] as const;
 export type ConnectCapabilityStatus = (typeof CONNECT_CAPABILITY_STATUSES)[number];
@@ -61,8 +61,10 @@ export function rentCapabilityRequest(country?: unknown): Record<string, { reque
   const bankDebit =
     normalizeConnectCountry(country) === "US" ? ACH_CAPABILITY : ACSS_CAPABILITY;
   return {
-    // Core capability Stripe requires on every Standard account (direct charges).
+    // Core capabilities Stripe requires on every Standard account. card_payments
+    // can't be requested without transfers, so request both (the standard pair).
     [CARD_CAPABILITY]: { requested: true },
+    [TRANSFERS_CAPABILITY]: { requested: true },
     // The country-appropriate bank-debit rail for rent.
     [bankDebit]: { requested: true },
   };
