@@ -311,6 +311,21 @@ export function tallyDeliveries(plan: PlannedDelivery[]): DeliveryTally {
 
 const SMS_OPT_OUT_LINE = "Reply STOP to opt out.";
 
+// Detect an *actual* opt-out instruction the operator may have already written,
+// so we don't append a duplicate line. Deliberately NOT a bare /\bSTOP\b/ — the
+// word "stop" appears innocently in org names ("One-Stop Rentals") and ordinary
+// copy ("please stop by the office"), and matching it there would DROP the
+// required opt-out line (a compliance defect). We only treat the message as
+// already carrying an opt-out instruction when it contains an actionable phrase:
+// "reply/text/send/txt STOP", or "STOP to opt out / unsubscribe / cancel / quit".
+const OPT_OUT_INSTRUCTION =
+  /\b(?:reply|text|send|txt)\s+stop\b|\bstop\b\s+to\s+(?:opt|unsub|cancel|quit|stop)/i;
+
+/** True if `text` already contains an SMS opt-out instruction. Exported for tests. */
+export function hasOptOutInstruction(text: string): boolean {
+  return OPT_OUT_INSTRUCTION.test(text);
+}
+
 // House style: hyphens, never em/en dashes, in customer-facing copy.
 function noEmDash(s: string): string {
   return s.replace(/[‒–—―]/g, "-");
@@ -319,13 +334,14 @@ function noEmDash(s: string): string {
 /**
  * Build the SMS body for a tenant message: the rendered operator text, prefixed
  * with the org name for recognizability and suffixed with the required opt-out
- * line (unless the rendered text already contains a STOP instruction). Pure.
+ * line (unless the rendered text already contains an opt-out INSTRUCTION — see
+ * OPT_OUT_INSTRUCTION; the bare word "stop" does not count). Pure.
  */
 export function buildTenantSmsBody(renderedBody: string, orgName: string | null): string {
   const org = (orgName ?? "").trim();
   const text = renderedBody.trim();
   const prefixed = org ? `${org}: ${text}` : text;
-  const hasOptOut = /\bSTOP\b/i.test(prefixed);
+  const hasOptOut = hasOptOutInstruction(prefixed);
   const full = hasOptOut ? prefixed : `${prefixed} ${SMS_OPT_OUT_LINE}`;
   return noEmDash(full);
 }

@@ -19,6 +19,7 @@ import {
   isSendable,
   tallyDeliveries,
   buildTenantSmsBody,
+  hasOptOutInstruction,
   type TenantContact,
 } from "../lib/tenant-comms";
 
@@ -205,6 +206,40 @@ ok(
   "sms body strips em dash",
   !buildTenantSmsBody("Rent is due - pay soon", "Acme").includes("—"),
 );
+
+// Regression: the opt-out line must NOT be dropped just because the bare word
+// "stop" appears innocently in the org name or the body. Only an actual opt-out
+// INSTRUCTION ("reply/text STOP", "STOP to opt out/unsubscribe/...") suppresses
+// the appended line. (Was a /\bSTOP\b/ false-positive that silently removed the
+// required compliance copy.)
+ok(
+  "sms body keeps opt-out when org name contains 'stop'",
+  buildTenantSmsBody("Plumber comes tomorrow 9am.", "One-Stop Rentals") ===
+    "One-Stop Rentals: Plumber comes tomorrow 9am. Reply STOP to opt out.",
+);
+ok(
+  "sms body keeps opt-out when body says 'stop by'",
+  buildTenantSmsBody("Please stop by the office to pick up keys.", "Acme") ===
+    "Acme: Please stop by the office to pick up keys. Reply STOP to opt out.",
+);
+ok(
+  "sms body suppresses dup on 'Text STOP to unsubscribe'",
+  buildTenantSmsBody("Text STOP to unsubscribe.", "Acme") ===
+    "Acme: Text STOP to unsubscribe.",
+);
+ok(
+  "sms body suppresses dup on 'STOP to cancel'",
+  buildTenantSmsBody("Reminder. STOP to cancel.", "Acme") ===
+    "Acme: Reminder. STOP to cancel.",
+);
+
+// hasOptOutInstruction unit coverage
+ok("optout detect: reply STOP", hasOptOutInstruction("Reply STOP to opt out."));
+ok("optout detect: text stop", hasOptOutInstruction("text stop anytime"));
+ok("optout detect: STOP to unsubscribe", hasOptOutInstruction("STOP to unsubscribe"));
+ok("optout NOT: one-stop", !hasOptOutInstruction("One-Stop Rentals"));
+ok("optout NOT: stop by", !hasOptOutInstruction("please stop by the office"));
+ok("optout NOT: bare stop word", !hasOptOutInstruction("we will stop the elevator service"));
 
 // ----------------------------------------------------------------------------
 console.log(`tenant-comms: ${passed} passed, ${failed} failed`);
