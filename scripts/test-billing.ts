@@ -21,9 +21,15 @@ import {
   depositStatusLabel,
   DEPOSIT_STATUSES,
   PLAN_ENTITLEMENTS,
+  PLAN_FEATURES,
   planEntitlements,
   hasEntitlement,
   canUseSms,
+  canUseRenterSms,
+  canCollectRentByPlan,
+  TIERS,
+  TIER_KEYS,
+  isTierPurchasable,
 } from "../lib/billing";
 
 let passed = 0;
@@ -374,8 +380,9 @@ ok("pilot invalid date => not started", pilotStatus("not-a-date").started === fa
   ok("trial: deposit status none", v.depositStatus === "none");
 }
 
-// --- Plan entitlements (S214 SMS tier gate) --------------------------------
-// canUseSms across the plan ladder (interim mapping: SMS on Plus + Pilot only).
+// --- Plan entitlements (S220 feature × tier matrix) ------------------------
+// The `sms` gate is LIVE-enforced (sendTenantMessage); its values across the
+// legacy plan ladder must NOT change from the S214 mapping (Plus + Pilot only).
 ok("canUseSms: trial false", canUseSms("trial") === false);
 ok("canUseSms: core false (base paid tier, email only)", canUseSms("core") === false);
 ok("canUseSms: plus true (upper paid tier)", canUseSms("plus") === true);
@@ -387,22 +394,61 @@ ok("canUseSms: undefined false", canUseSms(undefined) === false);
 // planEntitlements normalizes unknown -> trial (same object identity).
 ok("planEntitlements unknown -> trial", planEntitlements("nope") === PLAN_ENTITLEMENTS.trial);
 ok("planEntitlements plus has sms", planEntitlements("plus").sms === true);
-// hasEntitlement is the generic form canUseSms delegates to.
+// hasEntitlement is the generic form the typed helpers delegate to.
 ok("hasEntitlement(plus, sms) true", hasEntitlement("plus", "sms") === true);
 ok("hasEntitlement(core, sms) false", hasEntitlement("core", "sms") === false);
 ok(
   "canUseSms mirrors hasEntitlement",
-  ["trial", "pilot", "core", "plus", "x", null].every(
+  ["trial", "pilot", "core", "plus", "starter", "growth", "premium", "x", null].every(
     (p) => canUseSms(p) === hasEntitlement(p, "sms"),
   ),
 );
-// Email is NOT entitlement-gated: there is no "email" feature; every plan can
-// always email (the gate only governs SMS). Guard that the map stays SMS-only.
+// Every entitlement record now carries the full feature set (not just sms).
 ok(
-  "entitlements map: only sms key per plan",
+  "entitlements map: every plan has all PLAN_FEATURES keys",
   (Object.keys(PLAN_ENTITLEMENTS) as Array<keyof typeof PLAN_ENTITLEMENTS>).every(
-    (k) => JSON.stringify(Object.keys(PLAN_ENTITLEMENTS[k]).sort()) === '["sms"]',
+    (k) =>
+      JSON.stringify(Object.keys(PLAN_ENTITLEMENTS[k]).sort()) ===
+      JSON.stringify([...PLAN_FEATURES].sort()),
   ),
+);
+ok("PLAN_FEATURES has 5 features", PLAN_FEATURES.length === 5);
+
+// --- Renter-facing SMS gate (S220: paid tiers incl Starter; trial = false) --
+// DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
+ok("canUseRenterSms: trial false", canUseRenterSms("trial") === false);
+ok("canUseRenterSms: starter true (wedge needs it)", canUseRenterSms("starter") === true);
+ok("canUseRenterSms: growth true", canUseRenterSms("growth") === true);
+ok("canUseRenterSms: premium true", canUseRenterSms("premium") === true);
+ok("canUseRenterSms: pilot true", canUseRenterSms("pilot") === true);
+ok("canUseRenterSms: core true (legacy leasing tier)", canUseRenterSms("core") === true);
+ok("canUseRenterSms: null false", canUseRenterSms(null) === false);
+
+// --- Rent-collection gate (Growth & up) ------------------------------------
+ok("canCollectRentByPlan: starter false", canCollectRentByPlan("starter") === false);
+ok("canCollectRentByPlan: growth true", canCollectRentByPlan("growth") === true);
+ok("canCollectRentByPlan: premium true", canCollectRentByPlan("premium") === true);
+ok("canCollectRentByPlan: trial false", canCollectRentByPlan("trial") === false);
+
+// --- accounting (Premium only) ---------------------------------------------
+ok("accounting: premium only", hasEntitlement("premium", "accounting") === true);
+ok("accounting: growth false", hasEntitlement("growth", "accounting") === false);
+
+// --- New tier ladder shape (Starter < Growth < Premium) --------------------
+ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["starter","growth","premium"]');
+ok("Starter $49", TIERS.starter.priceCents === 4900);
+ok("Growth $99", TIERS.growth.priceCents === 9900);
+ok("Premium $249", TIERS.premium.priceCents === 24900);
+ok(
+  "tier prices strictly ascending",
+  TIERS.starter.priceCents < TIERS.growth.priceCents &&
+    TIERS.growth.priceCents < TIERS.premium.priceCents,
+);
+ok("Growth is the highlighted tier", TIERS.growth.highlight === true);
+// No tier is purchasable yet (no Stripe products) — the preview-only guard.
+ok(
+  "no tier purchasable until a Stripe price-id is set",
+  TIER_KEYS.every((k) => isTierPurchasable(TIERS[k]) === false),
 );
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);

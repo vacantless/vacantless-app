@@ -16,6 +16,7 @@ import {
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { TierComparison } from "@/components/tier-comparison";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function BillingPage({
     error?: string;
     pilot?: string;
     deposit?: string;
+    preview?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -396,6 +398,10 @@ export default async function BillingPage({
         Payments are processed by Stripe; Vacantless never sees your card
         details. Prices are in CAD.
       </p>
+
+      {/* Proposed Starter/Growth/Premium ladder — preview only (GTM held; no
+          Stripe products yet). Visit /dashboard/billing?preview=tiers to review. */}
+      {searchParams.preview === "tiers" && <TierComparison />}
     </div>
   );
 }

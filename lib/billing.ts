@@ -64,42 +64,96 @@ export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey
 
 // --- Plan entitlements (feature tier-gating) -------------------------------
 // The platform pivot (S208) turns Vacantless into a Buildium-style PM platform
-// where higher-cost capabilities are tier-gated. S214 banked the first such gate:
-// SMS comms is a metered upgrade (a per-message Twilio hard cost passes through),
-// while EMAIL comms stays free on every tier. This is the entitlement source of
-// truth: a pure plan -> capability map, enforced server-side (never UI-only).
+// where higher-cost capabilities are tier-gated. This is the entitlement source
+// of truth: a pure plan -> capability map, enforced server-side (never UI-only).
+// Every gate in the app reads through `hasEntitlement` / the typed helpers
+// below, so re-pointing the matrix is the ONLY edit needed to re-tier.
 //
-// INTERIM MAPPING — the pricing ladder is being redrawn (Starter/Growth/Premium
-// proposed, NOT yet locked; the live plans are still the leasing-era Core/Plus).
-// So SMS is gated to the UPPER existing paid tier (Plus) + the founder-led Pilot
-// (which gets full product access by design). When the new ladder is locked,
-// re-point PLAN_ENTITLEMENTS — every gate reads through here, so that's the only
-// edit. The default for an unknown/trial plan is NO paid capabilities.
-export type PlanFeature = "sms";
+// S220 generalized this from the S214 SMS-only boolean into a feature × tier
+// MATRIX and introduced the proposed Starter/Growth/Premium ladder (see TIERS
+// below). The matrix is keyed by BOTH the new tier keys AND the legacy
+// leasing-era plan keys (trial/pilot/core/plus) so nothing breaks before the
+// rename + Stripe-product migration lands — a legacy org resolves to the same
+// entitlements it had under S214 (the only LIVE-enforced feature today is `sms`).
+//
+// FEATURES (capabilities that may be gated):
+//   sms             landlord -> tenant SMS (email is ALWAYS free, never gated)
+//   renter_sms      public booking/reminder SMS to renters (the leasing wedge)
+//   rent_collection automated rent rails (Stripe Connect / Rotessa)
+//   tax_export      year-end rent / tax CSV export
+//   accounting      full accounting module (Premium)
+export type PlanFeature =
+  | "sms"
+  | "renter_sms"
+  | "rent_collection"
+  | "tax_export"
+  | "accounting";
 
-export type PlanEntitlements = {
-  sms: boolean; // may send landlord -> tenant SMS (email is always allowed)
-};
+export const PLAN_FEATURES: PlanFeature[] = [
+  "sms",
+  "renter_sms",
+  "rent_collection",
+  "tax_export",
+  "accounting",
+];
 
-export const PLAN_ENTITLEMENTS: Record<PlanKey, PlanEntitlements> = {
-  trial: { sms: false },
-  pilot: { sms: true }, // full product access during the 30-day founder pilot
-  core: { sms: false }, // base paid tier: email only
-  plus: { sms: true }, // upper paid tier: SMS unlocked
+export type PlanEntitlements = Record<PlanFeature, boolean>;
+
+// Every feature off — the safe default and the trial baseline.
+function noEntitlements(): PlanEntitlements {
+  return {
+    sms: false,
+    renter_sms: false,
+    rent_collection: false,
+    tax_export: false,
+    accounting: false,
+  };
+}
+
+// The proposed Starter/Growth/Premium ladder (S220). Tier keys are distinct
+// from the legacy plan keys so both can coexist through the migration.
+export type TierKey = "starter" | "growth" | "premium";
+export const TIER_KEYS: TierKey[] = ["starter", "growth", "premium"];
+
+// Any stored plan string we recognize: the new ladder + the legacy plans.
+export type AnyPlanKey = PlanKey | TierKey;
+
+// THE MATRIX. Legacy keys (trial/pilot/core/plus) keep their S214 `sms` value
+// EXACTLY (trial/core false, plus/pilot true) so the only live-enforced gate is
+// unchanged; their non-`sms` values are forward-looking config, not yet enforced
+// for legacy orgs (which migrate to the new tiers anyway).
+//
+// New ladder (Noam's S220 calls):
+//   Starter  = leasing wedge. Renter-facing booking/reminder SMS INCLUDED (the
+//              wedge needs it to convert viewings); everything else off.
+//   Growth   = + rent collection + landlord<->tenant comms (SMS) + tax export.
+//   Premium  = + accounting module.
+export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
+  // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
+  trial: noEntitlements(),
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
+  // New proposed ladder.
+  starter: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: false },
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: true },
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
 
 // Resolve the entitlements for a stored plan value, defaulting an
-// unknown/missing plan to the trial (no paid capabilities).
+// unknown/missing plan to the trial (no paid capabilities). Looks the plan up
+// directly in the matrix so it covers both legacy keys and new tier keys.
 export function planEntitlements(plan: string | null | undefined): PlanEntitlements {
-  if (plan === "pilot") return PLAN_ENTITLEMENTS.pilot;
-  if (plan === "core") return PLAN_ENTITLEMENTS.core;
-  if (plan === "plus") return PLAN_ENTITLEMENTS.plus;
+  if (plan && Object.prototype.hasOwnProperty.call(PLAN_ENTITLEMENTS, plan)) {
+    return PLAN_ENTITLEMENTS[plan as AnyPlanKey];
+  }
   return TRIAL_ENTITLEMENTS;
 }
 
-// Generic capability check, keyed by feature.
+// Generic capability check, keyed by feature. Every server-side gate funnels
+// through here.
 export function hasEntitlement(
   plan: string | null | undefined,
   feature: PlanFeature,
@@ -107,10 +161,93 @@ export function hasEntitlement(
   return planEntitlements(plan)[feature] === true;
 }
 
-// Whether this plan may send landlord -> tenant SMS. The single gate the
+// Whether this plan may send landlord -> tenant SMS. The gate the
 // sendTenantMessage server action enforces; email needs no entitlement.
 export function canUseSms(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "sms");
+}
+
+// Whether this plan may send renter-facing booking/reminder SMS (the public
+// leasing flow). S220 decision: gated to PAID tiers (Starter and up); trial =
+// email only. DEFINED here now; the live wiring (the book_public_showing RPC
+// surfacing org.plan + the reminders cron joining plan) is the next increment —
+// see NEXT-SESSION. Until wired, renter SMS remains ungated at the call sites.
+export function canUseRenterSms(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "renter_sms");
+}
+
+// Whether this plan may use the automated rent-collection rails (Stripe/Rotessa).
+export function canCollectRentByPlan(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "rent_collection");
+}
+
+// --- Proposed Starter / Growth / Premium ladder (S220) ----------------------
+// Display config for the new 3-tier ladder. PRICES ARE PROPOSED — confirmed in
+// principle with Noam (S220) but NOT yet wired to Stripe products, so the tier
+// comparison renders behind a preview flag only (GTM is HELD). When the ladder
+// is locked: create the Stripe products, add the price-id env vars, set
+// `priceEnv`, then flip the preview gate. Hard/usage costs (Twilio SMS, ad/portal
+// spend, payment processing) always pass through at cost on top — these monthly
+// prices are the platform fee only.
+export type TierInfo = {
+  key: TierKey;
+  name: string;
+  priceCents: number; // CAD / month — PROPOSED platform fee
+  priceEnv: string | null; // Stripe price-id env var (null until the product exists)
+  blurb: string;
+  features: string[]; // customer-facing bullets ("Everything in X, plus…")
+  highlight?: boolean; // the recommended/most-popular tier
+};
+
+export const TIERS: Record<TierKey, TierInfo> = {
+  starter: {
+    key: "starter",
+    name: "Starter",
+    priceCents: 4900,
+    priceEnv: null,
+    blurb: "Fill your rentals — from first inquiry to signed lease.",
+    features: [
+      "Branded inquiry pages + instant replies",
+      "Renters book from your viewing times",
+      "Automatic viewing reminders (email + text)",
+      "Your renters, organized in one list",
+      "Reports by unit and ad source",
+    ],
+  },
+  growth: {
+    key: "growth",
+    name: "Growth",
+    priceCents: 9900,
+    priceEnv: null,
+    blurb: "Everything in Starter, plus collect rent and manage tenants.",
+    highlight: true,
+    features: [
+      "Everything in Starter",
+      "Online rent collection (Stripe / Rotessa)",
+      "Tenant messaging by email and text",
+      "Tenancy records and payment ledger",
+      "Year-end tax / rent export",
+    ],
+  },
+  premium: {
+    key: "premium",
+    name: "Premium",
+    priceCents: 24900,
+    priceEnv: null,
+    blurb: "Everything in Growth, plus full books and operations.",
+    features: [
+      "Everything in Growth",
+      "Full accounting module",
+      "Maintenance / repair dispatch",
+      "Round-robin lead assignment",
+      "Priority support",
+    ],
+  },
+};
+
+// True once a tier has a real Stripe product behind it (safe to offer checkout).
+export function isTierPurchasable(tier: TierInfo): boolean {
+  return tier.priceEnv != null;
 }
 
 // --- Pilot tier (GTM Layer 1) ----------------------------------------------
