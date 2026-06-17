@@ -20,6 +20,10 @@ import {
   normalizeDepositStatus,
   depositStatusLabel,
   DEPOSIT_STATUSES,
+  PLAN_ENTITLEMENTS,
+  planEntitlements,
+  hasEntitlement,
+  canUseSms,
 } from "../lib/billing";
 
 let passed = 0;
@@ -369,6 +373,37 @@ ok("pilot invalid date => not started", pilotStatus("not-a-date").started === fa
   ok("trial: no deposit CTA", v.showDepositCta === false);
   ok("trial: deposit status none", v.depositStatus === "none");
 }
+
+// --- Plan entitlements (S214 SMS tier gate) --------------------------------
+// canUseSms across the plan ladder (interim mapping: SMS on Plus + Pilot only).
+ok("canUseSms: trial false", canUseSms("trial") === false);
+ok("canUseSms: core false (base paid tier, email only)", canUseSms("core") === false);
+ok("canUseSms: plus true (upper paid tier)", canUseSms("plus") === true);
+ok("canUseSms: pilot true (full product access)", canUseSms("pilot") === true);
+// Unknown / missing plan defaults to the trial entitlements (no paid capability).
+ok("canUseSms: unknown plan false", canUseSms("enterprise") === false);
+ok("canUseSms: null false", canUseSms(null) === false);
+ok("canUseSms: undefined false", canUseSms(undefined) === false);
+// planEntitlements normalizes unknown -> trial (same object identity).
+ok("planEntitlements unknown -> trial", planEntitlements("nope") === PLAN_ENTITLEMENTS.trial);
+ok("planEntitlements plus has sms", planEntitlements("plus").sms === true);
+// hasEntitlement is the generic form canUseSms delegates to.
+ok("hasEntitlement(plus, sms) true", hasEntitlement("plus", "sms") === true);
+ok("hasEntitlement(core, sms) false", hasEntitlement("core", "sms") === false);
+ok(
+  "canUseSms mirrors hasEntitlement",
+  ["trial", "pilot", "core", "plus", "x", null].every(
+    (p) => canUseSms(p) === hasEntitlement(p, "sms"),
+  ),
+);
+// Email is NOT entitlement-gated: there is no "email" feature; every plan can
+// always email (the gate only governs SMS). Guard that the map stays SMS-only.
+ok(
+  "entitlements map: only sms key per plan",
+  (Object.keys(PLAN_ENTITLEMENTS) as Array<keyof typeof PLAN_ENTITLEMENTS>).every(
+    (k) => JSON.stringify(Object.keys(PLAN_ENTITLEMENTS[k]).sort()) === '["sms"]',
+  ),
+);
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

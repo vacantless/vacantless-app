@@ -199,6 +199,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   notenants: "Add a tenant with contact details before sending.",
   forbidden: "You don't have permission to message tenants.",
   notfound: "That could not be found.",
+  sms_locked:
+    "Texting tenants is part of a higher plan. Upgrade to send texts, or message by email instead.",
 };
 
 export function commsErrorMessage(code: string | undefined): string | null {
@@ -223,8 +225,9 @@ export type PlannedDelivery = {
   tenantName: string | null;
   channel: DeliveryChannel;
   destination: string | null;
-  // present only when the delivery can't proceed (no address / opted out).
-  skipReason?: "no_email" | "no_phone" | "opted_out";
+  // present only when the delivery can't proceed (no address / opted out /
+  // SMS not included on the org's plan — see applySmsEntitlement).
+  skipReason?: "no_email" | "no_phone" | "opted_out" | "not_on_plan";
 };
 
 /**
@@ -281,6 +284,25 @@ export function planDeliveries(
     }
   }
   return out;
+}
+
+/**
+ * Apply the plan's SMS entitlement to a delivery plan. When the org's plan does
+ * NOT include SMS (see canUseSms in lib/billing), every SMS delivery is marked
+ * skipped with reason "not_on_plan" — the entitlement is the binding constraint,
+ * so it OVERRIDES any other SMS skip reason (no_phone / opted_out). Email
+ * deliveries are never affected (email is free on every tier). Pure; the action
+ * layer calls this right after planDeliveries so the gate is enforced
+ * server-side, not just hidden in the UI.
+ */
+export function applySmsEntitlement(
+  plan: PlannedDelivery[],
+  smsAllowed: boolean,
+): PlannedDelivery[] {
+  if (smsAllowed) return plan;
+  return plan.map((d) =>
+    d.channel === "sms" ? { ...d, skipReason: "not_on_plan" as const } : d,
+  );
 }
 
 /** True if a planned delivery can actually be attempted (no skip reason). */

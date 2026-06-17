@@ -42,6 +42,8 @@ import {
   type PaymentRow,
 } from "@/lib/payments";
 import { channelLabel, commsErrorMessage } from "@/lib/tenant-comms";
+import { getCurrentOrg } from "@/lib/org";
+import { canUseSms } from "@/lib/billing";
 import TenantMessageComposer, {
   type ComposerTenant,
   type ComposerTemplate,
@@ -280,6 +282,12 @@ export default async function TenancyDetailPage({
     .select("id, name, channel, subject, body")
     .order("name", { ascending: true });
   const templates = (templateRows ?? []) as ComposerTemplate[];
+
+  // Plan gate for the composer (S214): SMS is a paid-tier capability. The server
+  // action enforces this regardless; here we mirror it so the composer can hide
+  // the locked channels and show an upgrade nudge instead of a silent skip.
+  const org = await getCurrentOrg();
+  const smsAllowed = canUseSms(org?.plan);
 
   const { data: messageRows } = await supabase
     .from("tenant_messages")
@@ -844,6 +852,7 @@ export default async function TenancyDetailPage({
             tenancyId={t.id}
             tenants={composerTenants}
             templates={templates}
+            smsAllowed={smsAllowed}
             sendAction={sendTenantMessage}
           />
         )}

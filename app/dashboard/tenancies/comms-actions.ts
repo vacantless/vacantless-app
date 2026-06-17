@@ -8,12 +8,14 @@ import { requireCapability } from "@/lib/membership";
 import {
   validateMessageInput,
   planDeliveries,
+  applySmsEntitlement,
   isSendable,
   renderForRecipient,
   buildTenantSmsBody,
   type TenantContact,
   type TokenContext,
 } from "@/lib/tenant-comms";
+import { canUseSms } from "@/lib/billing";
 import { sendTenantMessageEmail } from "@/lib/email";
 import { sendSms } from "@/lib/sms";
 
@@ -92,7 +94,20 @@ export async function sendTenantMessage(formData: FormData) {
   });
   if (!check.ok) redirect(`${tenancyPath(tenancyId)}?msg=${check.code}`);
 
-  const plan = planDeliveries(check.value.channel, tenants, selectedSet);
+  // Plan gate (S214): SMS is a paid-tier capability; email is free on every
+  // tier. Enforced HERE (server-side) — the composer also hides locked channels,
+  // but a hand-crafted POST must still be blocked. An SMS-only send on a plan
+  // without SMS is rejected outright with an upsell; a "both" send proceeds over
+  // email and the SMS legs are skipped below (applySmsEntitlement).
+  const smsAllowed = canUseSms(org.plan);
+  if (check.value.channel === "sms" && !smsAllowed) {
+    redirect(`${tenancyPath(tenancyId)}?msg=sms_locked`);
+  }
+
+  const plan = applySmsEntitlement(
+    planDeliveries(check.value.channel, tenants, selectedSet),
+    smsAllowed,
+  );
 
   const {
     data: { user },

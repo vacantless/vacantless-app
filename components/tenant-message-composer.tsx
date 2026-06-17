@@ -39,11 +39,16 @@ export default function TenantMessageComposer({
   tenancyId,
   tenants,
   templates,
+  smsAllowed = true,
   sendAction,
 }: {
   tenancyId: string;
   tenants: ComposerTenant[];
   templates: ComposerTemplate[];
+  // Whether the org's plan includes SMS (S214 tier gate). When false the SMS /
+  // Email+Text channels are shown locked and an upgrade nudge replaces them; the
+  // server action enforces the same gate, so this is UX, not the security check.
+  smsAllowed?: boolean;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [channel, setChannel] = useState<MessageChannel>("email");
@@ -58,14 +63,20 @@ export default function TenantMessageComposer({
   const usesEmail = channelIncludesEmail(channel);
   const usesSms = channelIncludesSms(channel);
 
+  // A channel is locked when it needs SMS but the plan doesn't include it.
+  function channelLocked(c: MessageChannel): boolean {
+    return !smsAllowed && channelIncludesSms(c);
+  }
+
   function applyTemplate(id: string) {
     setTemplateId(id);
     const tpl = templates.find((t) => t.id === id);
     if (!tpl) return;
-    if (
-      (MESSAGE_CHANNELS as readonly string[]).includes(tpl.channel)
-    ) {
-      setChannel(tpl.channel as MessageChannel);
+    if ((MESSAGE_CHANNELS as readonly string[]).includes(tpl.channel)) {
+      const tplChannel = tpl.channel as MessageChannel;
+      // Don't auto-select a locked channel from a template — fall back to email
+      // (the body/subject still apply). The plan gate stays intact.
+      setChannel(channelLocked(tplChannel) ? "email" : tplChannel);
     }
     setSubject(tpl.subject ?? "");
     setBody(tpl.body);
@@ -134,22 +145,40 @@ export default function TenantMessageComposer({
       <div>
         <label className={labelCls}>Send by</label>
         <div className="flex flex-wrap gap-2">
-          {MESSAGE_CHANNELS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setChannel(c)}
-              className={
-                "rounded-lg border px-3 py-1.5 text-sm font-medium transition " +
-                (channel === c
-                  ? "border-transparent bg-gray-900 text-white"
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50")
-              }
-            >
-              {channelLabel(c)}
-            </button>
-          ))}
+          {MESSAGE_CHANNELS.map((c) => {
+            const locked = channelLocked(c);
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => !locked && setChannel(c)}
+                disabled={locked}
+                aria-disabled={locked}
+                title={locked ? "Texting tenants is part of a higher plan" : undefined}
+                className={
+                  "rounded-lg border px-3 py-1.5 text-sm font-medium transition " +
+                  (locked
+                    ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400"
+                    : channel === c
+                      ? "border-transparent bg-gray-900 text-white"
+                      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50")
+                }
+              >
+                {channelLabel(c)}
+                {locked && " 🔒"}
+              </button>
+            );
+          })}
         </div>
+        {!smsAllowed && (
+          <p className="mt-2 text-xs text-gray-500">
+            Texting tenants is part of a higher plan.{" "}
+            <a href="/dashboard/billing" className="font-medium text-brand hover:underline">
+              Upgrade to enable texts
+            </a>
+            . Email is included on your plan.
+          </p>
+        )}
       </div>
 
       {/* Subject (email only) */}

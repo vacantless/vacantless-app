@@ -16,6 +16,7 @@ import {
   validateMessageInput,
   commsErrorMessage,
   planDeliveries,
+  applySmsEntitlement,
   isSendable,
   tallyDeliveries,
   buildTenantSmsBody,
@@ -175,6 +176,37 @@ const allIds = new Set(["a", "b", "c", "d"]);
 {
   const plan = planDeliveries("email", tenants, new Set(["a"]));
   ok("only selected tenants planned", plan.length === 1 && plan[0].tenantId === "a");
+}
+
+// --- applySmsEntitlement (S214 plan gate) -----------------------------------
+{
+  // smsAllowed = true -> plan is returned unchanged (same reference).
+  const plan = planDeliveries("both", tenants, allIds);
+  ok("entitlement allowed: unchanged reference", applySmsEntitlement(plan, true) === plan);
+}
+{
+  // smsAllowed = false -> every sms delivery becomes not_on_plan; email untouched.
+  const plan = planDeliveries("both", tenants, allIds);
+  const gated = applySmsEntitlement(plan, false);
+  const smsLegs = gated.filter((d) => d.channel === "sms");
+  const emailLegs = gated.filter((d) => d.channel === "email");
+  ok("gated: all sms legs not_on_plan", smsLegs.every((d) => d.skipReason === "not_on_plan"));
+  ok("gated: no sms leg sendable", smsLegs.every((d) => !isSendable(d)));
+  ok(
+    "gated: email legs preserved (a sendable, b/c/d per their own reason)",
+    isSendable(emailLegs.find((d) => d.tenantId === "a")!),
+  );
+  ok(
+    "gated: not_on_plan OVERRIDES opted_out on the same tenant",
+    gated.find((d) => d.tenantId === "d" && d.channel === "sms")!.skipReason === "not_on_plan",
+  );
+}
+{
+  // sms-only plan with the gate off -> nothing sendable (the action redirects
+  // sms_locked before logging, but the pure gate still neutralizes the legs).
+  const plan = planDeliveries("sms", tenants, allIds);
+  const gated = applySmsEntitlement(plan, false);
+  ok("gated sms-only: zero sendable", gated.every((d) => !isSendable(d)));
 }
 
 // --- tallyDeliveries --------------------------------------------------------

@@ -62,6 +62,57 @@ export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey
   return plan === "core" || plan === "plus";
 }
 
+// --- Plan entitlements (feature tier-gating) -------------------------------
+// The platform pivot (S208) turns Vacantless into a Buildium-style PM platform
+// where higher-cost capabilities are tier-gated. S214 banked the first such gate:
+// SMS comms is a metered upgrade (a per-message Twilio hard cost passes through),
+// while EMAIL comms stays free on every tier. This is the entitlement source of
+// truth: a pure plan -> capability map, enforced server-side (never UI-only).
+//
+// INTERIM MAPPING — the pricing ladder is being redrawn (Starter/Growth/Premium
+// proposed, NOT yet locked; the live plans are still the leasing-era Core/Plus).
+// So SMS is gated to the UPPER existing paid tier (Plus) + the founder-led Pilot
+// (which gets full product access by design). When the new ladder is locked,
+// re-point PLAN_ENTITLEMENTS — every gate reads through here, so that's the only
+// edit. The default for an unknown/trial plan is NO paid capabilities.
+export type PlanFeature = "sms";
+
+export type PlanEntitlements = {
+  sms: boolean; // may send landlord -> tenant SMS (email is always allowed)
+};
+
+export const PLAN_ENTITLEMENTS: Record<PlanKey, PlanEntitlements> = {
+  trial: { sms: false },
+  pilot: { sms: true }, // full product access during the 30-day founder pilot
+  core: { sms: false }, // base paid tier: email only
+  plus: { sms: true }, // upper paid tier: SMS unlocked
+};
+
+const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
+
+// Resolve the entitlements for a stored plan value, defaulting an
+// unknown/missing plan to the trial (no paid capabilities).
+export function planEntitlements(plan: string | null | undefined): PlanEntitlements {
+  if (plan === "pilot") return PLAN_ENTITLEMENTS.pilot;
+  if (plan === "core") return PLAN_ENTITLEMENTS.core;
+  if (plan === "plus") return PLAN_ENTITLEMENTS.plus;
+  return TRIAL_ENTITLEMENTS;
+}
+
+// Generic capability check, keyed by feature.
+export function hasEntitlement(
+  plan: string | null | undefined,
+  feature: PlanFeature,
+): boolean {
+  return planEntitlements(plan)[feature] === true;
+}
+
+// Whether this plan may send landlord -> tenant SMS. The single gate the
+// sendTenantMessage server action enforces; email needs no entitlement.
+export function canUseSms(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "sms");
+}
+
 // --- Pilot tier (GTM Layer 1) ----------------------------------------------
 // A self-serve 30-day, founder-led pilot at $0/month with a refundable $200
 // setup deposit (paid in-app via the one-time Stripe deposit Checkout, S199;
