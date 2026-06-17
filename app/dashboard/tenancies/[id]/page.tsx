@@ -27,6 +27,7 @@ import {
 import { createRotessaCustomer, createRotessaSchedule } from "../rotessa-actions";
 import { defaultFirstProcessDate, minProcessDate, formatProcessDate } from "@/lib/rotessa";
 import { recordPayment, deletePayment } from "../payment-actions";
+import { sendTenantMessage } from "../comms-actions";
 import {
   PAYMENT_METHODS,
   paymentMethodLabel,
@@ -36,6 +37,11 @@ import {
   reconcilePayments,
   type PaymentRow,
 } from "@/lib/payments";
+import { channelLabel, commsErrorMessage } from "@/lib/tenant-comms";
+import TenantMessageComposer, {
+  type ComposerTenant,
+  type ComposerTemplate,
+} from "@/components/tenant-message-composer";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +51,7 @@ type Tenant = {
   email: string | null;
   phone: string | null;
   is_primary: boolean;
+  sms_opt_out: boolean;
 };
 type Tenancy = {
   id: string;
@@ -74,6 +81,18 @@ type Payment = {
   period_month: string | null;
   reference: string | null;
   note: string | null;
+};
+
+type TenantMessageRow = {
+  id: string;
+  channel: string;
+  subject: string | null;
+  body: string;
+  recipient_count: number;
+  sent_count: number;
+  failed_count: number;
+  skipped_count: number;
+  created_at: string;
 };
 
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
@@ -133,13 +152,17 @@ export default async function TenancyDetailPage({
     err?: string;
     rotessa?: string;
     paid?: string;
+    msg?: string;
+    s?: string;
+    k?: string;
+    f?: string;
   };
 }) {
   const supabase = createClient();
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -182,6 +205,54 @@ export default async function TenancyDetailPage({
     t.rent_cents,
   );
 
+  // Org-level saved message templates (for the composer's "start from template"
+  // picker) and the send history for this tenancy. RLS scopes both to this org.
+  const { data: templateRows } = await supabase
+    .from("tenant_message_templates")
+    .select("id, name, channel, subject, body")
+    .order("name", { ascending: true });
+  const templates = (templateRows ?? []) as ComposerTemplate[];
+
+  const { data: messageRows } = await supabase
+    .from("tenant_messages")
+    .select(
+      "id, channel, subject, body, recipient_count, sent_count, failed_count, skipped_count, created_at",
+    )
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  const messages = (messageRows ?? []) as TenantMessageRow[];
+
+  const composerTenants: ComposerTenant[] = tenants.map((tn) => ({
+    id: tn.id,
+    name: tn.name,
+    email: tn.email,
+    phone: tn.phone,
+    sms_opt_out: tn.sms_opt_out,
+  }));
+
+  // Tenant-message send outcome (?msg=...). `sent` is success (with counts);
+  // `noone` means everyone selected was skipped; the rest are validation errors.
+  const msgCounts = {
+    s: parseInt(searchParams.s ?? "0", 10) || 0,
+    k: parseInt(searchParams.k ?? "0", 10) || 0,
+    f: parseInt(searchParams.f ?? "0", 10) || 0,
+  };
+  const msgFlash =
+    searchParams.msg === "sent"
+      ? `Message sent to ${msgCounts.s} recipient${msgCounts.s === 1 ? "" : "s"}.` +
+        (msgCounts.k > 0 ? ` ${msgCounts.k} skipped (no contact details or opted out).` : "") +
+        (msgCounts.f > 0 ? ` ${msgCounts.f} failed to send.` : "")
+      : null;
+  const msgError =
+    searchParams.msg === "failed"
+      ? "We couldn't send the message. Check that email/SMS is configured and try again."
+      : searchParams.msg === "noone"
+        ? "Nobody was messaged — the selected tenants have no usable contact details for that channel (or opted out of texts)."
+        : searchParams.msg && searchParams.msg !== "sent"
+          ? commsErrorMessage(searchParams.msg)
+          : null;
+
   const flash =
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created && FLASH.created) ||
@@ -189,13 +260,15 @@ export default async function TenancyDetailPage({
     (searchParams.tenant && TENANT_FLASH[searchParams.tenant]) ||
     (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
     (searchParams.paid && PAYMENT_FLASH[searchParams.paid]) ||
+    msgFlash ||
     null;
   const errMsg =
     tenancyErrorMessage(searchParams.err) ||
     (searchParams.rotessa ? ROTESSA_ERROR[searchParams.rotessa] ?? null : null) ||
     (searchParams.paid && !PAYMENT_FLASH[searchParams.paid]
       ? paymentErrorMessage(searchParams.paid)
-      : null);
+      : null) ||
+    msgError;
 
   return (
     <div>
@@ -671,6 +744,62 @@ export default async function TenancyDetailPage({
             Record payment
           </button>
         </form>
+      </div>
+
+      {/* Tenant messages (email / SMS) ----------------------------------- */}
+      <SectionHeading>Tenant messages</SectionHeading>
+      <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-gray-600">
+          Message the tenants on this tenancy by email and/or text — rent
+          reminders, maintenance notices, or general updates. Messages send under
+          your brand; replies come back to your reply-to address.{" "}
+          <Link href="/dashboard/settings#templates" className="font-medium text-brand hover:underline">
+            Manage saved templates
+          </Link>
+          .
+        </p>
+
+        {tenants.length === 0 ? (
+          <p className="text-sm text-gray-500">Add a tenant above to send a message.</p>
+        ) : (
+          <TenantMessageComposer
+            tenancyId={t.id}
+            tenants={composerTenants}
+            templates={templates}
+            sendAction={sendTenantMessage}
+          />
+        )}
+
+        {/* Message history */}
+        {messages.length > 0 && (
+          <div className="border-t border-gray-100 pt-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Sent history
+            </h3>
+            <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+              {messages.map((m) => (
+                <li key={m.id} className="px-4 py-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="font-medium text-gray-900">
+                        {m.subject || (m.channel === "sms" ? "Text message" : "(no subject)")}
+                      </span>
+                      <span className="ml-2 text-xs text-gray-400">
+                        {channelLabel(m.channel)} · {new Date(m.created_at).toLocaleString()}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs text-gray-500">
+                      {m.sent_count} sent
+                      {m.failed_count > 0 ? `, ${m.failed_count} failed` : ""}
+                      {m.skipped_count > 0 ? `, ${m.skipped_count} skipped` : ""}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-gray-500">{m.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Lifecycle actions ----------------------------------------------- */}

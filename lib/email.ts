@@ -767,6 +767,111 @@ export async function sendTestEmail(p: TestEmailPayload): Promise<SendResult> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tenant message (platform pivot step 3). A landlord-authored one-off / template
+// message to a tenant on a tenancy (rent reminder, maintenance notice, general
+// update). The token substitution + validation live in lib/tenant-comms (pure +
+// tested); this composer wraps the already-rendered plain-text body in the same
+// branded card as the renter mail and sends it under the org's identity (display
+// name + reply-to over the one domain-authed sender — the DMARC-safe pattern).
+// ---------------------------------------------------------------------------
+
+export type TenantMessagePayload = {
+  tenant_email: string; // already validated non-empty by the caller
+  tenant_name: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  subject: string; // already token-rendered
+  body: string; // already token-rendered PLAIN TEXT (we escape + <br> it)
+};
+
+// Render the operator's plain-text body safely into the branded card: escape
+// HTML, then turn newlines into paragraph breaks so their formatting survives.
+function tenantMessageBodyHtml(body: string): string {
+  const paragraphs = body
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((block) =>
+      escapeHtml(block.trim()).replace(/\n/g, "<br/>"),
+    )
+    .filter((b) => b.length > 0);
+  return paragraphs
+    .map((p) => `<p style="margin:0 0 16px;">${p}</p>`)
+    .join("");
+}
+
+function tenantMessageHtml(p: TenantMessagePayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Your property manager");
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      ${tenantMessageBodyHtml(p.body)}
+      <p style="margin:24px 0 0;color:#52525b;">- <strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you are a tenant of ${org}. Reply to this
+      email to reach us.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded tenant message. Never throws; returns { sent:false } if
+ * BREVO_API_KEY is unset or the tenant has no email.
+ */
+export async function sendTenantMessageEmail(
+  p: TenantMessagePayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.tenant_email) return { sent: false, reason: "no_tenant_email" };
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.tenant_email,
+        ...(p.tenant_name ? { name: p.tenant_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject: p.subject,
+    htmlContent: tenantMessageHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject: p.subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 /**
  * Best-effort branded auto-reply. Never throws — callers can ignore the result.
  */
