@@ -26,6 +26,16 @@ import {
 } from "../actions";
 import { createRotessaCustomer, createRotessaSchedule } from "../rotessa-actions";
 import { defaultFirstProcessDate, minProcessDate, formatProcessDate } from "@/lib/rotessa";
+import { recordPayment, deletePayment } from "../payment-actions";
+import {
+  PAYMENT_METHODS,
+  paymentMethodLabel,
+  paymentErrorMessage,
+  formatMoneyCents,
+  formatPeriodMonth,
+  reconcilePayments,
+  type PaymentRow,
+} from "@/lib/payments";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +66,16 @@ type Tenancy = {
   tenants: Tenant[];
 };
 
+type Payment = {
+  id: string;
+  amount_cents: number;
+  method: string;
+  paid_on: string;
+  period_month: string | null;
+  reference: string | null;
+  note: string | null;
+};
+
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 
@@ -72,6 +92,12 @@ const TENANT_FLASH: Record<string, string> = {
   added: "Tenant added.",
   removed: "Tenant removed.",
   primary: "Primary tenant updated.",
+};
+// Manual payment outcomes (?paid=...). `recorded`/`deleted` are success-toned;
+// the rest are validation errors handled by paymentErrorMessage.
+const PAYMENT_FLASH: Record<string, string> = {
+  recorded: "Payment recorded.",
+  deleted: "Payment removed.",
 };
 // Rotessa customer-creation outcomes (?rotessa=...). `created`/`already` are
 // success-toned; the rest are errors.
@@ -106,6 +132,7 @@ export default async function TenancyDetailPage({
     tenant?: string;
     err?: string;
     rotessa?: string;
+    paid?: string;
   };
 }) {
   const supabase = createClient();
@@ -139,6 +166,21 @@ export default async function TenancyDetailPage({
   const todayIso = new Date().toISOString().slice(0, 10);
   const defaultProcessDate = defaultFirstProcessDate(todayIso);
   const minProcDate = minProcessDate(todayIso);
+  const thisMonth = todayIso.slice(0, 7); // "YYYY-MM" for the period <input type="month">
+
+  // Manual rent payments recorded against this tenancy (newest first). RLS
+  // scopes to this org. We reconcile them against the monthly rent below.
+  const { data: paymentRows } = await supabase
+    .from("rent_payments")
+    .select("id, amount_cents, method, paid_on, period_month, reference, note")
+    .eq("tenancy_id", t.id)
+    .order("paid_on", { ascending: false })
+    .order("created_at", { ascending: false });
+  const payments = (paymentRows ?? []) as Payment[];
+  const reconciliation = reconcilePayments(
+    payments.map((p): PaymentRow => ({ amount_cents: p.amount_cents, period_month: p.period_month })),
+    t.rent_cents,
+  );
 
   const flash =
     (searchParams.saved && FLASH.saved) ||
@@ -146,10 +188,14 @@ export default async function TenancyDetailPage({
     (searchParams.ended && FLASH.ended) ||
     (searchParams.tenant && TENANT_FLASH[searchParams.tenant]) ||
     (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
+    (searchParams.paid && PAYMENT_FLASH[searchParams.paid]) ||
     null;
   const errMsg =
     tenancyErrorMessage(searchParams.err) ||
-    (searchParams.rotessa ? ROTESSA_ERROR[searchParams.rotessa] ?? null : null);
+    (searchParams.rotessa ? ROTESSA_ERROR[searchParams.rotessa] ?? null : null) ||
+    (searchParams.paid && !PAYMENT_FLASH[searchParams.paid]
+      ? paymentErrorMessage(searchParams.paid)
+      : null);
 
   return (
     <div>
@@ -461,6 +507,170 @@ export default async function TenancyDetailPage({
             </form>
           </div>
         )}
+      </div>
+
+      {/* Manual payments (e-transfer / cheque / cash) -------------------- */}
+      <SectionHeading>Payments received</SectionHeading>
+      <div className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-gray-600">
+          Record rent you collected manually (e-transfer, cheque, or cash) and
+          reconcile it against the monthly rent. This is a bookkeeping log — no
+          money moves here. For automatic pre-authorized debit, use rent
+          collection above.
+        </p>
+
+        {/* Reconcile summary by rent period */}
+        {payments.length > 0 && (
+          <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Reconciliation
+              </span>
+              <span className="text-sm text-gray-700">
+                Total collected:{" "}
+                <span className="font-semibold text-gray-900">
+                  {formatMoneyCents(reconciliation.totalCollectedCents)}
+                </span>
+              </span>
+            </div>
+            <ul className="divide-y divide-gray-100">
+              {reconciliation.buckets.map((b) => (
+                <li
+                  key={b.period ?? "unassigned"}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-gray-900">{b.label}</span>
+                    {b.status === "paid" && b.expectedCents != null && (
+                      <StatusChip tone="success">Paid</StatusChip>
+                    )}
+                    {b.status === "short" && <StatusChip tone="warn">Short</StatusChip>}
+                    {b.status === "over" && <StatusChip tone="info">Over</StatusChip>}
+                    {b.status === "unassigned" && (
+                      <StatusChip tone="neutral">Unassigned</StatusChip>
+                    )}
+                    <span className="text-xs text-gray-400">
+                      {b.count} payment{b.count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <span className="text-gray-700">
+                    {formatMoneyCents(b.collectedCents)}
+                    {b.expectedCents != null && (
+                      <span className="text-gray-400">
+                        {" / "}
+                        {formatMoneyCents(b.expectedCents)}
+                        {b.balanceCents != null && b.balanceCents !== 0 && (
+                          <span
+                            className={
+                              b.balanceCents < 0 ? "text-amber-600" : "text-blue-600"
+                            }
+                          >
+                            {" ("}
+                            {b.balanceCents < 0 ? "" : "+"}
+                            {formatMoneyCents(b.balanceCents)}
+                            {")"}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Ledger of individual payments */}
+        {payments.length > 0 && (
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+            {payments.map((p) => (
+              <li
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="font-medium text-gray-900">
+                    {formatMoneyCents(p.amount_cents)}
+                  </span>
+                  <span className="ml-2 text-gray-500">
+                    {paymentMethodLabel(p.method)} · {p.paid_on}
+                  </span>
+                  <span className="ml-2 block text-xs text-gray-400">
+                    {formatPeriodMonth(p.period_month)}
+                    {p.reference ? ` · Ref ${p.reference}` : ""}
+                    {p.note ? ` · ${p.note}` : ""}
+                  </span>
+                </span>
+                <form action={deletePayment} className="shrink-0">
+                  <input type="hidden" name="tenancy_id" value={t.id} />
+                  <input type="hidden" name="payment_id" value={p.id} />
+                  <button className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Record-payment form */}
+        <form
+          action={recordPayment}
+          className="flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4"
+        >
+          <input type="hidden" name="tenancy_id" value={t.id} />
+          <div className="w-28">
+            <label className={labelCls}>Amount ($)</label>
+            <input
+              name="amount"
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              defaultValue={dollars(t.rent_cents)}
+              className={inputCls}
+            />
+          </div>
+          <div className="w-36">
+            <label className={labelCls}>Method</label>
+            <select name="method" defaultValue="e_transfer" className={inputCls}>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {paymentMethodLabel(m)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-40">
+            <label className={labelCls}>Date received</label>
+            <input
+              name="paid_on"
+              type="date"
+              required
+              defaultValue={todayIso}
+              className={inputCls}
+            />
+          </div>
+          <div className="w-36">
+            <label className={labelCls}>For month (optional)</label>
+            <input name="period_month" type="month" defaultValue={thisMonth} className={inputCls} />
+          </div>
+          <div className="w-32">
+            <label className={labelCls}>Reference (optional)</label>
+            <input name="reference" placeholder="Cheque #" className={inputCls} />
+          </div>
+          <div className="min-w-[8rem] flex-1">
+            <label className={labelCls}>Note (optional)</label>
+            <input name="note" className={inputCls} />
+          </div>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+          >
+            Record payment
+          </button>
+        </form>
       </div>
 
       {/* Lifecycle actions ----------------------------------------------- */}
