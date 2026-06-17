@@ -90,11 +90,18 @@ async function saveSnapshot(
   );
 }
 
-// Start (or resume) Stripe Connect onboarding. Creates a Standard connected
-// account on first use, requests both rent capabilities (acss_debit + ACH),
-// persists the account id, then creates a single-use Account Link and redirects
-// the landlord to Stripe's hosted onboarding. Returning lands back on Settings,
-// where they hit "Refresh status".
+// Start (or resume) Stripe Connect onboarding. Creates an EXPRESS connected
+// account on first use, requests the rent capabilities, persists the account id,
+// then creates a single-use Account Link and redirects the landlord to Stripe's
+// hosted onboarding. Returning lands back on Settings, where they hit "Refresh
+// status".
+//
+// Why Express (not Standard): Standard accounts force the holder to sign into a
+// FULL Stripe Dashboard account with mandatory 2FA, which made onboarding collide
+// with the operator's existing Stripe login + authenticator at every turn. Express
+// is Stripe-hosted, phone-OTP, test-data-autofill onboarding with no separate
+// dashboard login — far less friction for a landlord. The Account object shape,
+// capabilities, Direct-charge model, and our status logic are unchanged.
 export async function startStripeConnect(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
@@ -111,13 +118,12 @@ export async function startStripeConnect(formData: FormData) {
     const country = normalizeConnectCountry(String(formData.get("country") ?? "CA"));
     try {
       const account = await stripe!.accounts.create({
-        type: "standard",
+        type: "express",
         country,
-        // NOTE: deliberately NOT prefilling the operator's email. Prefilling an
-        // email that already has a Stripe account makes hosted onboarding latch
-        // onto that existing account and demand ITS 2FA (no SMS fallback). Leaving
-        // it blank lets the account holder set up the connected account's own
-        // login during onboarding (and keeps sandbox test run-throughs clean).
+        // NOTE: deliberately NOT prefilling the operator's email — Express
+        // onboarding collects the account holder's own contact details, and
+        // prefilling an email that already has a Stripe account can still attach
+        // the flow to that login.
         capabilities: rentCapabilityRequest(country),
         metadata: { org_id: org.id },
       });

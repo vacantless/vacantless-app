@@ -22,7 +22,7 @@ import { Icons } from "@/components/icons";
 
 // The Stripe Connect rent-collection panel on Settings (platform pivot step 2,
 // ALT provider; S215). Sibling of RotessaSettingsCard. Lets a landlord onboard
-// their OWN Stripe account (Standard + Direct charges) to collect rent by
+// their OWN Stripe account (Express + Direct charges) to collect rent by
 // Canada PAD and/or US ACH. We store only the connected account id + a cached
 // status; we never hold funds or see bank numbers.
 //
