@@ -84,8 +84,9 @@ export async function POST(req: NextRequest) {
     .select("id, organization_id, sms_opt_out")
     .eq("phone_e164", senderE164);
 
+  // NB: do NOT early-return on zero lead matches — the sender may be a TENANT
+  // and not a lead (the tenant block below must still run).
   const matches = leads ?? [];
-  if (matches.length === 0) return twiml();
 
   const optOut = action === "stop";
   const ids = matches
@@ -114,6 +115,32 @@ export async function POST(req: NextRequest) {
           : "Renter texted START — opted back in to SMS",
       }));
     if (rows.length > 0) await admin.from("messages").insert(rows);
+  }
+
+  // Also honor the opt-out across TENANTS whose number resolves to the sender
+  // (platform pivot step 3 — tenant comms). Same SQL match on the normalized
+  // tenants.phone_e164 column (migration 0034), no row cap so a STOP is never
+  // dropped. Tenants have no per-record message timeline, so we just flip the
+  // flag + timestamp; the tenant-message send path already skips opted-out
+  // tenants (lib/tenant-comms planDeliveries).
+  const { data: tenants } = await admin
+    .from("tenants")
+    .select("id, sms_opt_out")
+    .eq("phone_e164", senderE164);
+
+  const tenantMatches = tenants ?? [];
+  const tenantIds = tenantMatches
+    .filter((t: any) => Boolean(t.sms_opt_out) !== optOut) // only those that change
+    .map((t: any) => t.id);
+
+  if (tenantIds.length > 0) {
+    await admin
+      .from("tenants")
+      .update({
+        sms_opt_out: optOut,
+        sms_opt_out_at: optOut ? new Date().toISOString() : null,
+      })
+      .in("id", tenantIds);
   }
 
   // Rely on Twilio's built-in opt-out confirmation; send no second message.

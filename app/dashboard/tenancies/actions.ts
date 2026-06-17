@@ -14,6 +14,7 @@ import {
   validateTenancyInput,
   MAX_TENANTS_PER_TENANCY,
 } from "@/lib/tenancy";
+import { normalizePhoneE164 } from "@/lib/sms";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 
@@ -92,6 +93,8 @@ export async function createTenancy(formData: FormData) {
     name: t.name,
     email: t.email,
     phone: t.phone,
+    // Normalized match key for the inbound-STOP webhook (mirrors leads.phone_e164).
+    phone_e164: normalizePhoneE164(t.phone),
     is_primary: t.is_primary,
   }));
   if (tenantRows.length > 0) {
@@ -213,6 +216,8 @@ export async function addTenant(formData: FormData) {
     name,
     email,
     phone,
+    // Normalized match key for the inbound-STOP webhook (mirrors leads.phone_e164).
+    phone_e164: normalizePhoneE164(phone),
     is_primary: count === 0, // first tenant on the tenancy becomes primary
   });
 
