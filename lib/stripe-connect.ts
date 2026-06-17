@@ -41,15 +41,19 @@ export function capabilityStatusLabel(value: unknown): string {
 }
 
 /**
- * The capabilities object to request when creating a connected account. Both
- * rent rails are requested up front; the connected account agrees to them
- * during Stripe-hosted onboarding.
+ * The capabilities to request when creating a connected account. A connected
+ * account has exactly ONE country, and a bank-debit capability is only valid in
+ * its own country: acss_debit_payments is Canada-only, us_bank_account_ach_payments
+ * is US-only. Requesting the cross-country capability makes accounts.create fail
+ * ("not available for accounts in CA/US"), so we request only the capability that
+ * matches the account's country. "One rail covers CA + US" means the INTEGRATION
+ * supports both — each connected account still only does its own country's method.
+ * Unknown country defaults to CA (the primary market).
  */
-export function rentCapabilityRequest(): Record<string, { requested: true }> {
-  return {
-    [ACSS_CAPABILITY]: { requested: true },
-    [ACH_CAPABILITY]: { requested: true },
-  };
+export function rentCapabilityRequest(country?: unknown): Record<string, { requested: true }> {
+  return normalizeConnectCountry(country) === "US"
+    ? { [ACH_CAPABILITY]: { requested: true } }
+    : { [ACSS_CAPABILITY]: { requested: true } };
 }
 
 // --- Supported countries -----------------------------------------------------

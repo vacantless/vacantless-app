@@ -47,6 +47,7 @@ export default async function SettingsPage({
     logoerr?: string;
     rotessa?: string;
     stripeconnect?: string;
+    reason?: string;
     tpl?: string;
   };
 }) {
@@ -337,6 +338,11 @@ export default async function SettingsPage({
         searchParams.stripeconnect === "norow") && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           Something went wrong setting up Stripe rent collection. Please try again.
+          {typeof searchParams.reason === "string" && searchParams.reason && (
+            <div className="mt-1 font-mono text-xs text-red-700">
+              {searchParams.reason}
+            </div>
+          )}
         </div>
       )}
 

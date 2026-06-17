@@ -25,6 +25,21 @@ import {
 
 const SETTINGS = "/dashboard/settings";
 
+// Pull a short, human-readable reason out of a Stripe (or other) error so the
+// onboarding failure can be surfaced on the Settings page instead of swallowed.
+// Stripe SDK errors carry the API message on `.message` (and `.raw.message`).
+function stripeErrorReason(err: unknown): string {
+  if (err && typeof err === "object") {
+    const e = err as { message?: unknown; raw?: { message?: unknown } | null };
+    const msg =
+      (typeof e.raw?.message === "string" && e.raw.message) ||
+      (typeof e.message === "string" && e.message) ||
+      "";
+    if (msg) return msg.slice(0, 300);
+  }
+  return "unknown_error";
+}
+
 // Public base URL for Stripe onboarding return/refresh redirects. Matches
 // billing/actions.ts; override with NEXT_PUBLIC_APP_URL in Vercel.
 const APP_BASE_URL = (
@@ -104,13 +119,17 @@ export async function startStripeConnect(formData: FormData) {
         type: "standard",
         country,
         email: user?.email || undefined,
-        capabilities: rentCapabilityRequest(),
+        capabilities: rentCapabilityRequest(country),
         metadata: { org_id: org.id },
       });
       accountId = account.id;
       await saveSnapshot(org.id, account.id, account);
-    } catch {
-      redirect(`${SETTINGS}?stripeconnect=createfail#stripe-rent`);
+    } catch (err) {
+      // redirect() throws a digest error — re-throw so Next navigates.
+      if (err && typeof err === "object" && "digest" in err) throw err;
+      const reason = stripeErrorReason(err);
+      console.error("[stripe-connect] accounts.create failed:", reason, err);
+      redirect(`${SETTINGS}?stripeconnect=createfail&reason=${encodeURIComponent(reason)}#stripe-rent`);
     }
   }
 
@@ -128,7 +147,9 @@ export async function startStripeConnect(formData: FormData) {
   } catch (err) {
     // redirect() throws internally; re-throw so Next handles the navigation.
     if (err && typeof err === "object" && "digest" in err) throw err;
-    redirect(`${SETTINGS}?stripeconnect=linkfail#stripe-rent`);
+    const reason = stripeErrorReason(err);
+    console.error("[stripe-connect] accountLinks.create failed:", reason, err);
+    redirect(`${SETTINGS}?stripeconnect=linkfail&reason=${encodeURIComponent(reason)}#stripe-rent`);
   }
 }
 

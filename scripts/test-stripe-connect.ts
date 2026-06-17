@@ -61,10 +61,23 @@ ok("label inactive", capabilityStatusLabel("inactive") === "Not enabled");
 ok("label unrequested", capabilityStatusLabel("nope") === "Not requested");
 
 // --- Capability request body ------------------------------------------------
-ok("request asks for both rails", (() => {
-  const req = rentCapabilityRequest();
-  return req[ACSS_CAPABILITY]?.requested === true && req[ACH_CAPABILITY]?.requested === true;
+// A connected account has ONE country; we request only that country's bank-debit
+// capability (the cross-country one makes accounts.create fail).
+ok("CA requests only ACSS", (() => {
+  const req = rentCapabilityRequest("CA");
+  return req[ACSS_CAPABILITY]?.requested === true && req[ACH_CAPABILITY] === undefined;
 })());
+ok("US requests only ACH", (() => {
+  const req = rentCapabilityRequest("US");
+  return req[ACH_CAPABILITY]?.requested === true && req[ACSS_CAPABILITY] === undefined;
+})());
+ok("default/unknown country -> CA (ACSS only)", (() => {
+  const req = rentCapabilityRequest();
+  const req2 = rentCapabilityRequest("ZZ");
+  return req[ACSS_CAPABILITY]?.requested === true && req[ACH_CAPABILITY] === undefined
+    && req2[ACSS_CAPABILITY]?.requested === true && req2[ACH_CAPABILITY] === undefined;
+})());
+ok("lowercase us normalizes to ACH", rentCapabilityRequest("us")[ACH_CAPABILITY]?.requested === true);
 ok("capability keys are the Stripe names", ACSS_CAPABILITY === "acss_debit_payments" && ACH_CAPABILITY === "us_bank_account_ach_payments");
 
 // --- Countries --------------------------------------------------------------
