@@ -26,6 +26,10 @@ import {
 } from "../actions";
 import { createRotessaCustomer, createRotessaSchedule } from "../rotessa-actions";
 import { defaultFirstProcessDate, minProcessDate, formatProcessDate } from "@/lib/rotessa";
+import TenancyStripeRentSection, {
+  type TenancyStripeRentView,
+} from "@/components/tenancy-stripe-rent-section";
+import { getStripe } from "@/lib/stripe";
 import { recordPayment, deletePayment } from "../payment-actions";
 import { sendTenantMessage } from "../comms-actions";
 import {
@@ -69,6 +73,10 @@ type Tenancy = {
   rotessa_customer_synced_at: string | null;
   rotessa_schedule_id: string | null;
   rotessa_schedule_synced_at: string | null;
+  stripe_customer_id: string | null;
+  stripe_payment_method_id: string | null;
+  stripe_mandate_status: string | null;
+  stripe_rent_synced_at: string | null;
   property: { id: string; address: string } | null;
   tenants: Tenant[];
 };
@@ -138,6 +146,23 @@ const ROTESSA_ERROR: Record<string, string> = {
   baddate: "Pick a first payment date at least 2 business days from today.",
   schedfail: "Rotessa couldn't create the rent schedule. The tenant may still need to authorize their bank in Rotessa. Check Settings and try again.",
 };
+// Stripe Connect rent outcomes (?striperent=...). `synced` is success-toned.
+const STRIPE_RENT_SUCCESS: Record<string, string> = {
+  synced: "Stripe rent status refreshed.",
+};
+const STRIPE_RENT_ERROR: Record<string, string> = {
+  notconfigured: "Payments aren't configured on this deployment yet.",
+  notconnected: "Set up Stripe rent collection in Settings first.",
+  notready: "Finish your Stripe onboarding in Settings — it can't collect payments yet.",
+  noprimary: "This tenancy needs a primary tenant first.",
+  noname: "Give the primary tenant a name before starting Stripe authorization.",
+  noemail: "The primary tenant needs an email — bank mandates and notices are sent there.",
+  nosession: "Start the bank authorization before refreshing.",
+  createfail: "Stripe couldn't start the authorization. Try again.",
+  linkfail: "Stripe couldn't create the authorization link. Try again.",
+  syncfail: "We couldn't refresh the Stripe status just now. Try again.",
+  forbidden: "You don't have permission to manage rent collection.",
+};
 
 export default async function TenancyDetailPage({
   params,
@@ -151,6 +176,7 @@ export default async function TenancyDetailPage({
     tenant?: string;
     err?: string;
     rotessa?: string;
+    striperent?: string;
     paid?: string;
     msg?: string;
     s?: string;
@@ -162,7 +188,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -186,6 +212,28 @@ export default async function TenancyDetailPage({
     | undefined;
   const rotessaConnected = !!rotessaRow?.api_key_encrypted;
   const rotessaStatus = rotessaRow?.connection_status ?? "not_connected";
+
+  // The org's Stripe Connect rent rail state (sibling of Rotessa). RLS scopes
+  // to this org. Drives the Stripe rent-collection section below.
+  const { data: stripeConnectRows } = await supabase
+    .from("stripe_connect_accounts")
+    .select("connected_account_id, country, charges_enabled, onboarding_state")
+    .limit(1);
+  const stripeConnectRow = stripeConnectRows?.[0] as
+    | { connected_account_id: string; country: string | null; charges_enabled: boolean; onboarding_state: string }
+    | undefined;
+  const stripeRentView: TenancyStripeRentView = {
+    tenancyId: t.id,
+    primaryName: primary?.name ?? null,
+    primaryHasEmail: !!primary?.email,
+    country: stripeConnectRow?.country ?? null,
+    connectExists: !!stripeConnectRow?.connected_account_id,
+    connectReady: !!stripeConnectRow?.charges_enabled,
+    mandateStatus: t.stripe_mandate_status ?? "none",
+    paymentMethodId: t.stripe_payment_method_id,
+    syncedAt: t.stripe_rent_synced_at,
+    stripeConfigured: !!getStripe(),
+  };
   const todayIso = new Date().toISOString().slice(0, 10);
   const defaultProcessDate = defaultFirstProcessDate(todayIso);
   const minProcDate = minProcessDate(todayIso);
@@ -259,12 +307,16 @@ export default async function TenancyDetailPage({
     (searchParams.ended && FLASH.ended) ||
     (searchParams.tenant && TENANT_FLASH[searchParams.tenant]) ||
     (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
+    (searchParams.striperent && STRIPE_RENT_SUCCESS[searchParams.striperent]) ||
     (searchParams.paid && PAYMENT_FLASH[searchParams.paid]) ||
     msgFlash ||
     null;
   const errMsg =
     tenancyErrorMessage(searchParams.err) ||
     (searchParams.rotessa ? ROTESSA_ERROR[searchParams.rotessa] ?? null : null) ||
+    (searchParams.striperent && !STRIPE_RENT_SUCCESS[searchParams.striperent]
+      ? STRIPE_RENT_ERROR[searchParams.striperent] ?? null
+      : null) ||
     (searchParams.paid && !PAYMENT_FLASH[searchParams.paid]
       ? paymentErrorMessage(searchParams.paid)
       : null) ||
@@ -581,6 +633,9 @@ export default async function TenancyDetailPage({
           </div>
         )}
       </div>
+
+      {/* Rent collection (Stripe Connect — sibling rail to Rotessa) ------- */}
+      <TenancyStripeRentSection view={stripeRentView} />
 
       {/* Manual payments (e-transfer / cheque / cash) -------------------- */}
       <SectionHeading>Payments received</SectionHeading>

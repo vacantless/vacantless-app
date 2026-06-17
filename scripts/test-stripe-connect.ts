@@ -19,6 +19,14 @@ import {
   canCollectRent,
   onboardingStateLabel,
   type RawConnectAccount,
+  MANDATE_STATUSES,
+  normalizeMandateStatus,
+  mandateStatusLabel,
+  mandateReady,
+  validateStripeTenant,
+  buildCustomerCreateParams,
+  buildSetupSessionParams,
+  parseSetupSession,
 } from "../lib/stripe-connect";
 
 let passed = 0;
@@ -133,6 +141,89 @@ ok("label ready", onboardingStateLabel("ready") === "Ready");
 ok("label incomplete", onboardingStateLabel("incomplete") === "Finish setup");
 ok("label not_started", onboardingStateLabel("not_started") === "Not started");
 ok("label unknown -> Not started", onboardingStateLabel("garbage") === "Not started");
+
+// ===========================================================================
+// Increment 2 — tenant mandate + customer helpers
+// ===========================================================================
+
+// --- mandate status ---------------------------------------------------------
+ok("mandate statuses = none/pending/active/failed", MANDATE_STATUSES.join(",") === "none,pending,active,failed");
+ok("normalize mandate active", normalizeMandateStatus("active") === "active");
+ok("normalize mandate unknown -> none", normalizeMandateStatus("weird") === "none");
+ok("normalize mandate null -> none", normalizeMandateStatus(null) === "none");
+ok("mandate label pending", mandateStatusLabel("pending") === "Awaiting tenant authorization");
+ok("mandate label active", mandateStatusLabel("active") === "Authorized");
+ok("mandate label none", mandateStatusLabel("none") === "Not set up");
+ok("mandateReady only when active", mandateReady("active") && !mandateReady("pending") && !mandateReady("none"));
+
+// --- validateStripeTenant ---------------------------------------------------
+ok("tenant valid with name+email", (() => {
+  const r = validateStripeTenant({ name: "Sam Renter", email: "sam@example.com", phone: "+15195551234" });
+  return r.ok && r.value.name === "Sam Renter" && r.value.email === "sam@example.com";
+})());
+ok("tenant invalid without name", !validateStripeTenant({ name: "  ", email: "sam@example.com", phone: null }).ok);
+ok("tenant invalid without email (mandate emails)", !validateStripeTenant({ name: "Sam", email: "", phone: null }).ok);
+ok("tenant trims + nulls blank phone", (() => {
+  const r = validateStripeTenant({ name: " Sam ", email: " sam@example.com ", phone: "   " });
+  return r.ok && r.value.name === "Sam" && r.value.email === "sam@example.com" && r.value.phone === null;
+})());
+
+// --- buildCustomerCreateParams ----------------------------------------------
+ok("customer params carry name/email/metadata, no bank fields", (() => {
+  const p = buildCustomerCreateParams({ name: "Sam", email: "sam@example.com", phone: "+1519" }, "ten_123") as Record<string, unknown>;
+  const meta = p.metadata as Record<string, unknown>;
+  return p.name === "Sam" && p.email === "sam@example.com" && p.phone === "+1519" && meta.tenancy_id === "ten_123" && !("bank_account" in p) && !("account_number" in p);
+})());
+ok("customer params omit phone when absent", (() => {
+  const p = buildCustomerCreateParams({ name: "Sam", email: "sam@example.com", phone: null }, "ten_1") as Record<string, unknown>;
+  return !("phone" in p);
+})());
+
+// --- buildSetupSessionParams ------------------------------------------------
+ok("CA setup session = acss_debit + cad + mandate_options", (() => {
+  const p = buildSetupSessionParams({ country: "CA", customerId: "cus_1", successUrl: "https://x/ok", cancelUrl: "https://x/no" }) as Record<string, unknown>;
+  const pmt = p.payment_method_types as string[];
+  const pmo = p.payment_method_options as { acss_debit?: { mandate_options?: { payment_schedule?: string; transaction_type?: string } } };
+  return (
+    p.mode === "setup" &&
+    p.customer === "cus_1" &&
+    p.currency === "cad" &&
+    pmt[0] === "acss_debit" &&
+    pmo.acss_debit?.mandate_options?.payment_schedule === "interval" &&
+    pmo.acss_debit?.mandate_options?.transaction_type === "personal"
+  );
+})());
+ok("US setup session = us_bank_account + usd, no acss mandate_options", (() => {
+  const p = buildSetupSessionParams({ country: "US", customerId: "cus_2", successUrl: "https://x/ok", cancelUrl: "https://x/no" }) as Record<string, unknown>;
+  const pmt = p.payment_method_types as string[];
+  return p.currency === "usd" && pmt[0] === "us_bank_account" && !("payment_method_options" in p);
+})());
+ok("unknown country falls back to CA acss", (() => {
+  const p = buildSetupSessionParams({ country: "ZZ", customerId: "cus_3", successUrl: "u", cancelUrl: "v" }) as Record<string, unknown>;
+  return (p.payment_method_types as string[])[0] === "acss_debit";
+})());
+
+// --- parseSetupSession ------------------------------------------------------
+ok("setup complete + pm -> active", (() => {
+  const r = parseSetupSession({ status: "complete", setup_intent: { status: "succeeded", payment_method: "pm_123" } });
+  return r.ok && r.mandateStatus === "active" && r.paymentMethodId === "pm_123";
+})());
+ok("setup complete + expanded pm object -> active", (() => {
+  const r = parseSetupSession({ status: "complete", setup_intent: { payment_method: { id: "pm_obj" } } });
+  return r.ok && r.mandateStatus === "active" && r.paymentMethodId === "pm_obj";
+})());
+ok("setup open -> pending", (() => {
+  const r = parseSetupSession({ status: "open", setup_intent: null });
+  return r.ok && r.mandateStatus === "pending" && r.paymentMethodId === null;
+})());
+ok("setup expired -> failed", (() => {
+  const r = parseSetupSession({ status: "expired", setup_intent: null });
+  return r.ok && r.mandateStatus === "failed";
+})());
+ok("setup null -> pending (safe)", (() => {
+  const r = parseSetupSession(null);
+  return r.ok && r.mandateStatus === "pending";
+})());
 
 console.log(`\nstripe-connect: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

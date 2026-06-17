@@ -168,3 +168,142 @@ export function onboardingStateLabel(value: unknown): string {
     : "not_started";
   return ONBOARDING_STATE_LABELS[s];
 }
+
+// ===========================================================================
+// Increment 2 — collect a tenant PAD/ACH mandate + customer on the connected
+// account. The mandate is collected through a hosted Checkout SETUP session
+// (mode=setup; ACSS/ACH are supported there — only Checkout SUBSCRIPTION mode
+// is not, which is why increment 3 drives the subscription off the saved
+// payment method instead). All Stripe SDK calls live in the action; the params
+// builder, validation, and response parsing are PURE here and unit-tested.
+// ===========================================================================
+
+export const MANDATE_STATUSES = ["none", "pending", "active", "failed"] as const;
+export type MandateStatus = (typeof MANDATE_STATUSES)[number];
+
+export function normalizeMandateStatus(value: unknown): MandateStatus {
+  return typeof value === "string" && (MANDATE_STATUSES as readonly string[]).includes(value)
+    ? (value as MandateStatus)
+    : "none";
+}
+
+const MANDATE_STATUS_LABELS: Record<MandateStatus, string> = {
+  none: "Not set up",
+  pending: "Awaiting tenant authorization",
+  active: "Authorized",
+  failed: "Authorization failed",
+};
+
+export function mandateStatusLabel(value: unknown): string {
+  return MANDATE_STATUS_LABELS[normalizeMandateStatus(value)];
+}
+
+/** Rent can be scheduled (increment 3) only once the mandate is active. Pure. */
+export function mandateReady(value: unknown): boolean {
+  return normalizeMandateStatus(value) === "active";
+}
+
+export type StripeTenantInput = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+};
+
+export type StripeTenantValidation =
+  | { ok: true; value: StripeTenantInput }
+  | { ok: false; error: string };
+
+/**
+ * Validate the primary tenant before creating a Stripe customer + mandate. A
+ * NAME is required; an EMAIL is required too because ACSS/ACH send the mandate
+ * confirmation + debit notifications by email (a network rule). Pure.
+ */
+export function validateStripeTenant(raw: {
+  name: string | null | undefined;
+  email: string | null | undefined;
+  phone: string | null | undefined;
+}): StripeTenantValidation {
+  const name = (raw.name ?? "").trim();
+  if (!name) return { ok: false, error: "The primary tenant needs a name before setting up Stripe rent collection." };
+  const email = (raw.email ?? "").trim() || null;
+  if (!email) return { ok: false, error: "The primary tenant needs an email — bank debit mandates and notices are sent there." };
+  const phone = (raw.phone ?? "").trim() || null;
+  return { ok: true, value: { name, email, phone } };
+}
+
+/** Customer.create params for the connected account (no bank data). Pure. */
+export function buildCustomerCreateParams(input: StripeTenantInput, tenancyId: string): Record<string, unknown> {
+  const params: Record<string, unknown> = {
+    name: input.name,
+    email: input.email ?? undefined,
+    metadata: { tenancy_id: tenancyId },
+  };
+  if (input.phone) params.phone = input.phone;
+  return params;
+}
+
+/**
+ * Build the Checkout SETUP-session params that collect a reusable bank mandate
+ * for the tenancy's country. For CA we add the required ACSS mandate_options
+ * (interval schedule, personal). The session attaches the saved payment method
+ * to `customerId` on completion. Pure — the action passes this straight to
+ * stripe.checkout.sessions.create({...}, { stripeAccount }).
+ */
+export function buildSetupSessionParams(args: {
+  country: unknown;
+  customerId: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Record<string, unknown> {
+  const { method, currency } = rentMethodForCountry(args.country);
+  const base: Record<string, unknown> = {
+    mode: "setup",
+    customer: args.customerId,
+    // setup mode with dynamic payment methods requires a currency
+    currency,
+    payment_method_types: [method],
+    success_url: args.successUrl,
+    cancel_url: args.cancelUrl,
+  };
+  if (method === "acss_debit") {
+    base.payment_method_options = {
+      acss_debit: {
+        currency: "cad",
+        mandate_options: {
+          payment_schedule: "interval",
+          interval_description: "Monthly rent",
+          transaction_type: "personal",
+        },
+      },
+    };
+  }
+  return base;
+}
+
+export type SetupSessionParse =
+  | { ok: true; paymentMethodId: string | null; mandateStatus: MandateStatus }
+  | { ok: false; message: string };
+
+/**
+ * Classify a retrieved Checkout setup Session (with its SetupIntent expanded).
+ * status "complete" + a payment_method => active; "open" => still pending;
+ * "expired" => failed. Pure so it's unit-testable without the SDK.
+ */
+export function parseSetupSession(session: {
+  status?: string | null;
+  setup_intent?: { status?: string | null; payment_method?: string | { id?: string } | null } | null;
+} | null | undefined): SetupSessionParse {
+  const s = session ?? {};
+  const si = s.setup_intent ?? null;
+  const pmRaw = si?.payment_method ?? null;
+  const paymentMethodId = typeof pmRaw === "string" ? pmRaw : (pmRaw && typeof pmRaw === "object" && typeof pmRaw.id === "string" ? pmRaw.id : null);
+
+  if (s.status === "complete" && paymentMethodId) {
+    return { ok: true, paymentMethodId, mandateStatus: "active" };
+  }
+  if (s.status === "expired") {
+    return { ok: true, paymentMethodId: null, mandateStatus: "failed" };
+  }
+  // open / processing / complete-without-pm-yet -> still pending
+  return { ok: true, paymentMethodId, mandateStatus: "pending" };
+}
