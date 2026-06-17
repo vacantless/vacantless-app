@@ -265,8 +265,21 @@ async function reconcileRent(
 
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!stripe || !secret) {
+  // Two webhook surfaces, two destinations, two signing secrets:
+  //   STRIPE_WEBHOOK_SECRET          — the PLATFORM "Your account" destination
+  //                                    (org billing: checkout, subscriptions).
+  //   STRIPE_CONNECT_WEBHOOK_SECRET  — the CONNECTED-accounts destination
+  //                                    (the rent rail: per-landlord acct events).
+  // Stripe signs each destination's payloads with that destination's own secret,
+  // so we try each configured secret in turn (constructEvent throws on a secret
+  // mismatch). Connect secret is OPTIONAL — if unset we behave exactly as before
+  // (platform-only), so this stays backward compatible until the connect
+  // destination is created + its secret added to env.
+  const secrets = [
+    process.env.STRIPE_WEBHOOK_SECRET,
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
+  ].filter((s): s is string => !!s);
+  if (!stripe || secrets.length === 0) {
     // Not configured yet — acknowledge so Stripe doesn't disable the endpoint.
     return NextResponse.json({ ok: false, reason: "not_configured" }, { status: 200 });
   }
@@ -277,12 +290,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: "no_signature" }, { status: 400 });
   }
 
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(body, sig, secret);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "invalid signature";
-    return NextResponse.json({ ok: false, reason: `bad_signature:${message}` }, { status: 400 });
+  let event: Stripe.Event | null = null;
+  let lastError = "invalid signature";
+  for (const secret of secrets) {
+    try {
+      event = stripe.webhooks.constructEvent(body, sig, secret);
+      break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "invalid signature";
+    }
+  }
+  if (!event) {
+    return NextResponse.json({ ok: false, reason: `bad_signature:${lastError}` }, { status: 400 });
   }
 
   const admin = createAdminClient();
