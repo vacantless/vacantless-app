@@ -103,11 +103,6 @@ export async function startStripeConnect(formData: FormData) {
   const stripe = getStripe();
   if (!stripe) redirect(`${SETTINGS}?stripeconnect=notconfigured#stripe-rent`);
 
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   let row = await loadConnectRow(org.id);
   let accountId = row?.connected_account_id ?? null;
 
@@ -118,7 +113,11 @@ export async function startStripeConnect(formData: FormData) {
       const account = await stripe!.accounts.create({
         type: "standard",
         country,
-        email: user?.email || undefined,
+        // NOTE: deliberately NOT prefilling the operator's email. Prefilling an
+        // email that already has a Stripe account makes hosted onboarding latch
+        // onto that existing account and demand ITS 2FA (no SMS fallback). Leaving
+        // it blank lets the account holder set up the connected account's own
+        // login during onboarding (and keeps sandbox test run-throughs clean).
         capabilities: rentCapabilityRequest(country),
         metadata: { org_id: org.id },
       });
