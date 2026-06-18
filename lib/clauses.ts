@@ -304,6 +304,101 @@ export function diffSnapshots(
   };
 }
 
+// --- Resolution + lease variables (the thin glue server actions need) -------
+
+// The lease_clauses columns the resolver needs (snake_case, as the row comes
+// back from supabase).
+export type ClauseRowLike = {
+  id: string;
+  key: string;
+  title: string;
+  applicable_to: ClauseApplicability;
+};
+
+// The lease_clause_versions columns the resolver needs.
+export type ClauseVersionRowLike = ClauseVersionLike & {
+  clause_id: string;
+  body: string;
+};
+
+/**
+ * Resolve each clause to its CURRENT version, producing the ResolvedClause[] the
+ * assembler consumes. Clauses with no current version are skipped. Order is
+ * preserved from the `clauses` input — the caller owns ordering (e.g. sort by
+ * category then key before calling). Pure: the server action does the DB read,
+ * this does the join.
+ */
+export function resolveCurrentClauses(
+  clauses: ClauseRowLike[],
+  versions: ClauseVersionRowLike[],
+): ResolvedClause[] {
+  const currentByClause = new Map<string, ClauseVersionRowLike>();
+  for (const v of versions) {
+    if (v.is_current) currentByClause.set(v.clause_id, v);
+  }
+  const out: ResolvedClause[] = [];
+  for (const c of clauses) {
+    const v = currentByClause.get(c.id);
+    if (!v) continue;
+    out.push({
+      clauseId: c.id,
+      key: c.key,
+      title: c.title,
+      applicableTo: c.applicable_to,
+      versionId: v.id,
+      version: v.version,
+      body: v.body,
+    });
+  }
+  return out;
+}
+
+// The tenancy/unit fields a generated lease draws on. All optional so the
+// caller passes whatever the records hold; empty/missing values are dropped so
+// the assembler leaves the {{token}} visible (a value still owed) rather than
+// substituting an empty string.
+export type LeaseVarSource = {
+  propertyAddress?: string | null;
+  tenantName?: string | null;
+  rent?: string | null;
+  deposit?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  parkingSpaces?: string | null;
+  parkingFee?: string | null;
+  tenantUtilities?: string | null;
+  includedUtilities?: string | null;
+  storageDescription?: string | null;
+};
+
+/**
+ * Build the {{token}} -> value map for assembleClauses from a tenancy/unit
+ * source. Keys are the lowercase token names used in RESIDENTIAL_CLAUSE_SEED.
+ * Empty/whitespace/missing values are OMITTED (not blanked) so an unfilled field
+ * surfaces as an unresolved token the operator can see and complete. Pure.
+ */
+export function buildLeaseVars(src: LeaseVarSource): Record<string, string> {
+  const pairs: [string, string | null | undefined][] = [
+    ["property_address", src.propertyAddress],
+    ["tenant_name", src.tenantName],
+    ["rent", src.rent],
+    ["deposit", src.deposit],
+    ["start_date", src.startDate],
+    ["end_date", src.endDate],
+    ["parking_spaces", src.parkingSpaces],
+    ["parking_fee", src.parkingFee],
+    ["tenant_utilities", src.tenantUtilities],
+    ["included_utilities", src.includedUtilities],
+    ["storage_description", src.storageDescription],
+  ];
+  const out: Record<string, string> = {};
+  for (const [k, v] of pairs) {
+    const val = (v ?? "").trim();
+    if (val) out[k] = val;
+  }
+  return out;
+}
+
 // --- Validation -------------------------------------------------------------
 
 export type ClauseInput = {

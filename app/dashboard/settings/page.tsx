@@ -37,6 +37,8 @@ import {
   channelLabel,
   commsErrorMessage,
 } from "@/lib/tenant-comms";
+import { ClauseLibrary, type ClauseView } from "@/components/clause-library";
+import { clauseErrorMessage, type ClauseApplicability } from "@/lib/clauses";
 
 export const dynamic = "force-dynamic";
 
@@ -48,13 +50,20 @@ export const dynamic = "force-dynamic";
 // lands back where they were.
 function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   const t = sp.tab;
-  if (t === "brand" || t === "comms" || t === "banking" || t === "account") {
+  if (
+    t === "brand" ||
+    t === "comms" ||
+    t === "clauses" ||
+    t === "banking" ||
+    t === "account"
+  ) {
     return t;
   }
   if (sp.rotessa || sp.stripeconnect) return "banking";
   if (sp.test || sp.tpl || sp.tn || sp.sender || sp.renter || sp.sms) {
     return "comms";
   }
+  if (sp.clause) return "clauses";
   // saved / error / logo / logoerr all belong to the brand tab.
   return "brand";
 }
@@ -78,6 +87,8 @@ export default async function SettingsPage({
     sender?: string; // Communications → Email sender flash
     renter?: string; // Communications → Renter messages flash
     sms?: string; // Communications → Text messages flash
+    clause?: string; // Lease Clauses tab flash
+    cn?: string; // post-submit nonce that remounts the clause forms (reset)
   };
 }) {
   const org = await getCurrentOrg();
@@ -195,6 +206,70 @@ export default async function SettingsPage({
   const tplError =
     searchParams.tpl && !["created", "updated", "deleted"].includes(searchParams.tpl)
       ? commsErrorMessage(searchParams.tpl)
+      : null;
+
+  // Lease clause library (#11 slice 2). Fetch clauses + their versions, then
+  // shape into ClauseView[] (versions newest-first). RLS scopes both to this org.
+  const { data: clauseRows } = await supabase
+    .from("lease_clauses")
+    .select("id, key, title, category, applicable_to")
+    .order("category", { ascending: true })
+    .order("key", { ascending: true });
+  const clauseList = (clauseRows ?? []) as {
+    id: string;
+    key: string;
+    title: string;
+    category: string;
+    applicable_to: ClauseApplicability;
+  }[];
+  const { data: versionRows } = await supabase
+    .from("lease_clause_versions")
+    .select("id, clause_id, version, is_current, body, note")
+    .order("version", { ascending: false });
+  const versionList = (versionRows ?? []) as {
+    id: string;
+    clause_id: string;
+    version: number;
+    is_current: boolean;
+    body: string;
+    note: string | null;
+  }[];
+  const clauseViews: ClauseView[] = clauseList.map((c) => ({
+    id: c.id,
+    key: c.key,
+    title: c.title,
+    category: c.category,
+    applicable_to: c.applicable_to,
+    versions: versionList
+      .filter((v) => v.clause_id === c.id)
+      .map((v) => ({
+        id: v.id,
+        version: v.version,
+        is_current: v.is_current,
+        body: v.body,
+        note: v.note,
+      })),
+  }));
+  const CLAUSE_SUCCESS: Record<string, string> = {
+    created: "Clause added.",
+    updated: "Clause details saved.",
+    version_added: "New version saved and made current.",
+    version_current: "Current version updated.",
+    deleted: "Clause deleted.",
+  };
+  const clauseFlash = searchParams.clause
+    ? (CLAUSE_SUCCESS[searchParams.clause] ?? null)
+    : null;
+  const clauseError =
+    searchParams.clause && !CLAUSE_SUCCESS[searchParams.clause]
+      ? searchParams.clause === "forbidden"
+        ? "You don't have permission to manage lease clauses."
+        : searchParams.clause === "key_taken"
+          ? "A clause with that key already exists. Pick a different key."
+          : searchParams.clause === "error"
+            ? "Something went wrong. Please try again."
+            : (clauseErrorMessage(searchParams.clause) ??
+              "Something went wrong. Please try again.")
       : null;
 
   const h = headers();
@@ -860,7 +935,24 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* ================= Tab 3 — Banking & Rent ================= */}
+      {/* ================= Tab 3 — Lease Clauses ================= */}
+      {tab === "clauses" && (
+        <div className="mt-6 space-y-6">
+          {clauseFlash && (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              {clauseFlash}
+            </div>
+          )}
+          {clauseError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {clauseError}
+            </div>
+          )}
+          <ClauseLibrary clauses={clauseViews} />
+        </div>
+      )}
+
+      {/* ================= Tab 4 — Banking & Rent ================= */}
       {tab === "banking" && (
         <div className="mt-6 space-y-6">
           {searchParams.rotessa === "connected" && (

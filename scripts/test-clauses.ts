@@ -20,9 +20,13 @@ import {
   validateClauseInput,
   validateVersionInput,
   clauseErrorMessage,
+  resolveCurrentClauses,
+  buildLeaseVars,
   RESIDENTIAL_CLAUSE_SEED,
   type ResolvedClause,
   type ClauseVersionLike,
+  type ClauseRowLike,
+  type ClauseVersionRowLike,
   type ExecutedClauseRef,
 } from "../lib/clauses";
 
@@ -225,6 +229,64 @@ ok("seed pets clause cites RTA s.14", seedAssembled.clauses[0].rendered.includes
 // commercial lease drops the residential-only seed clauses (pets, utilities)
 const seedCommercial = assembleClauses(seedAsResolved, { leaseType: "commercial", vars: {} });
 ok("seed commercial excludes residential-only clauses", seedCommercial.excluded.map((e) => e.key).sort().join(",") === "pets,utilities");
+
+// --- resolveCurrentClauses (the DB-rows -> ResolvedClause[] join) ------------
+const clauseRows: ClauseRowLike[] = [
+  { id: "c_pets", key: "pets", title: "Pets", applicable_to: "residential" },
+  { id: "c_parking", key: "parking", title: "Parking", applicable_to: "both" },
+  { id: "c_storage", key: "storage", title: "Storage", applicable_to: "both" },
+];
+const versionRows: ClauseVersionRowLike[] = [
+  { id: "pv1", clause_id: "c_pets", version: 1, is_current: false, body: "Pets v1." },
+  { id: "pv2", clause_id: "c_pets", version: 2, is_current: true, body: "Pets v2." },
+  { id: "kv1", clause_id: "c_parking", version: 1, is_current: true, body: "Parking {{parking_fee}}." },
+  // c_storage has versions but NONE current -> must be skipped
+  { id: "sv1", clause_id: "c_storage", version: 1, is_current: false, body: "Storage v1." },
+];
+const resolved = resolveCurrentClauses(clauseRows, versionRows);
+ok("resolve skips clauses with no current version", resolved.map((c) => c.key).join(",") === "pets,parking");
+ok("resolve picks the current version body", resolved[0].body === "Pets v2." && resolved[0].version === 2);
+ok("resolve maps applicable_to -> applicableTo", resolved[1].applicableTo === "both");
+ok("resolve carries versionId + clauseId", resolved[0].versionId === "pv2" && resolved[0].clauseId === "c_pets");
+ok("resolve preserves input clause order", resolveCurrentClauses(
+  [clauseRows[1], clauseRows[0]],
+  versionRows,
+).map((c) => c.key).join(",") === "parking,pets");
+ok("resolve empty when no current versions", resolveCurrentClauses(clauseRows, [
+  { id: "x", clause_id: "c_pets", version: 1, is_current: false, body: "x" },
+]).length === 0);
+
+// the resolved current versions assemble + snapshot end to end
+const resolvedAssembled = assembleClauses(resolved, { leaseType: "residential", vars: { parking_fee: "$60" } });
+ok("resolved clauses assemble", resolvedAssembled.text === "Pets v2.\n\nParking $60.");
+ok("resolved snapshot pins the current versions", buildExecutedSnapshot(resolvedAssembled).map((c) => `${c.key}@${c.version}`).join(",") === "pets@2,parking@1");
+
+// --- buildLeaseVars (tenancy/unit -> token map) -----------------------------
+const vars = buildLeaseVars({
+  propertyAddress: " 833 Pillette Rd ",
+  parkingSpaces: "1",
+  parkingFee: "$50",
+  tenantUtilities: "hydro",
+  includedUtilities: "",        // blank -> omitted
+  storageDescription: null,      // null -> omitted
+  rent: "1250",
+});
+ok("buildLeaseVars trims values", vars.property_address === "833 Pillette Rd");
+ok("buildLeaseVars maps camelCase source -> snake token", vars.parking_spaces === "1" && vars.parking_fee === "$50");
+ok("buildLeaseVars omits blank values", !("included_utilities" in vars));
+ok("buildLeaseVars omits null values", !("storage_description" in vars));
+ok("buildLeaseVars keeps provided rent", vars.rent === "1250");
+ok("buildLeaseVars empty source -> empty map", Object.keys(buildLeaseVars({})).length === 0);
+// the seed's residential token set is satisfiable by buildLeaseVars keys
+const seedTokenVars = buildLeaseVars({
+  propertyAddress: "1 Test St",
+  parkingSpaces: "1",
+  parkingFee: "$50",
+  tenantUtilities: "hydro",
+  includedUtilities: "water and heat",
+  storageDescription: "one locker",
+});
+ok("buildLeaseVars resolves the residential seed cleanly", assembleClauses(seedAsResolved, { leaseType: "residential", vars: seedTokenVars }).unresolved.length === 0);
 
 // ----------------------------------------------------------------------------
 console.log(`clauses: ${passed} passed, ${failed} failed`);

@@ -48,6 +48,11 @@ import TenantMessageComposer, {
   type ComposerTenant,
   type ComposerTemplate,
 } from "@/components/tenant-message-composer";
+import {
+  TenancyLeaseSection,
+  type LeaseDocView,
+} from "@/components/tenancy-lease-section";
+import type { ExecutedClauseRef } from "@/lib/clauses";
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +123,18 @@ const FLASH: Record<string, string> = {
   saved: "Tenancy saved.",
   created: "Tenancy created.",
   ended: "Tenancy marked ended.",
+};
+// Lease-document outcomes (?lease=...). `generated`/`deleted` are success-toned;
+// the rest are errors handled below.
+const LEASE_SUCCESS: Record<string, string> = {
+  generated: "Lease generated from your current clause library.",
+  deleted: "Lease document deleted.",
+};
+const LEASE_ERROR: Record<string, string> = {
+  noclauses:
+    "Add at least one clause in Settings → Lease Clauses before generating a lease.",
+  notfound: "That tenancy could no longer be found.",
+  error: "Something went wrong generating the lease. Please try again.",
 };
 const TENANT_FLASH: Record<string, string> = {
   added: "Tenant added.",
@@ -197,6 +214,7 @@ export default async function TenancyDetailPage({
     s?: string;
     k?: string;
     f?: string;
+    lease?: string;
   };
 }) {
   const supabase = createClient();
@@ -299,6 +317,31 @@ export default async function TenancyDetailPage({
     .limit(20);
   const messages = (messageRows ?? []) as TenantMessageRow[];
 
+  // Generated lease documents for this tenancy (newest first). RLS scopes to
+  // this org. The two most recent power the renewal diff (#11 slice 2).
+  const { data: leaseRows } = await supabase
+    .from("lease_documents")
+    .select("id, title, status, assembled_body, executed_clause_versions, created_at")
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false });
+  const leaseDocs = ((leaseRows ?? []) as {
+    id: string;
+    title: string;
+    status: string;
+    assembled_body: string | null;
+    executed_clause_versions: ExecutedClauseRef[] | null;
+    created_at: string;
+  }[]).map(
+    (d): LeaseDocView => ({
+      id: d.id,
+      title: d.title,
+      status: d.status,
+      assembled_body: d.assembled_body,
+      executed_clause_versions: d.executed_clause_versions ?? [],
+      created_at: d.created_at,
+    }),
+  );
+
   const composerTenants: ComposerTenant[] = tenants.map((tn) => ({
     id: tn.id,
     name: tn.name,
@@ -337,6 +380,7 @@ export default async function TenancyDetailPage({
     (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
     (searchParams.striperent && STRIPE_RENT_SUCCESS[searchParams.striperent]) ||
     (searchParams.paid && PAYMENT_FLASH[searchParams.paid]) ||
+    (searchParams.lease && LEASE_SUCCESS[searchParams.lease]) ||
     msgFlash ||
     null;
   const errMsg =
@@ -350,6 +394,9 @@ export default async function TenancyDetailPage({
       : null) ||
     (searchParams.paid && !PAYMENT_FLASH[searchParams.paid]
       ? paymentErrorMessage(searchParams.paid)
+      : null) ||
+    (searchParams.lease && !LEASE_SUCCESS[searchParams.lease]
+      ? (LEASE_ERROR[searchParams.lease] ?? null)
       : null) ||
     msgError;
 
@@ -527,6 +574,9 @@ export default async function TenancyDetailPage({
           Save changes
         </button>
       </form>
+
+      {/* Lease document (clause library + renewal diff) ------------------- */}
+      <TenancyLeaseSection tenancyId={t.id} leaseDocs={leaseDocs} />
 
       {/* Rent collection (Rotessa) --------------------------------------- */}
       <SectionHeading>Rent collection</SectionHeading>

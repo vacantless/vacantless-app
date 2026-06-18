@@ -7,7 +7,7 @@ import { Icons } from "@/components/icons";
 // horizontally (a segmented row that still reads as tabs) rather than nesting
 // a second nav. The active tab is server-driven via the ?tab= param so it
 // survives the redirect-based saves each section uses.
-export type SettingsTab = "brand" | "comms" | "banking" | "account";
+export type SettingsTab = "brand" | "comms" | "clauses" | "banking" | "account";
 
 const TABS: {
   key: SettingsTab;
@@ -16,6 +16,7 @@ const TABS: {
 }[] = [
   { key: "brand", label: "Public Page & Brand", icon: "page" },
   { key: "comms", label: "Communications", icon: "mail" },
+  { key: "clauses", label: "Lease Clauses", icon: "list" },
   { key: "banking", label: "Banking & Rent", icon: "card" },
   { key: "account", label: "Account & Plan", icon: "key" },
 ];
