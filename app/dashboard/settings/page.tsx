@@ -59,9 +59,14 @@ export default async function SettingsPage({
   // see exactly what renters get from the shared intake URL, for ANY listing
   // (F2 fix, S225: this used to surface only the newest property).
   const supabase = createClient();
+  // Only listings that actually render a public /r page belong in the picker.
+  // get_public_listing 404s 'draft' + 'off_market' (migration 0020), so a draft
+  // (e.g. a freshly duplicated rental) would lead to a 404 - exclude both here.
+  // 'paused'/'leased' still load a "no longer available" page, fine to preview.
   const { data: propertyRows } = await supabase
     .from("properties")
     .select("id, address")
+    .not("status", "in", "(draft,off_market)")
     .order("created_at", { ascending: false });
   const renterPageProperties = (propertyRows ?? []) as {
     id: string;

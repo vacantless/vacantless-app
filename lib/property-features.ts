@@ -128,7 +128,13 @@ export function buildSpecLine(
   if (f.baths != null) out.push(`${f.baths} bath${f.baths === 1 ? "" : "s"}`);
   const sq = formatSqft(f.sqft);
   if (sq) out.push(sq);
-  if (f.floor && f.floor.trim()) out.push(`${f.floor.trim()} floor`);
+  if (f.floor && f.floor.trim()) {
+    const floor = f.floor.trim();
+    // The field holds a level like "2nd" or "Main" and we render "<level> floor".
+    // But operators often type "Main floor"/"2nd floor" already, so don't double
+    // the word (the "Main floor floor" bug from the S225 QA audit).
+    out.push(/floor$/i.test(floor) ? floor : `${floor} floor`);
+  }
   if (f.parking && f.parking.trim()) out.push(`Parking: ${f.parking.trim()}`);
   return out;
 }
