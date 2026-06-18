@@ -184,7 +184,14 @@ export default async function PropertyDetailPage({
   const proto = h.get("x-forwarded-proto") ?? "https";
   const publicUrl = host ? `${proto}://${host}/r/${p.id}` : `/r/${p.id}`;
 
+  // Is the public /r page actually reachable? Draft + off_market 404, so the
+  // link is broken and must NOT be handed out anywhere (QA blocker #1).
+  const linkIsLive = isPubliclyVisible(p.status);
+
   // Ready-to-paste per-channel listing copy, built from this unit's real fields.
+  // Omit the public link entirely for a non-live rental so the generated copy
+  // never embeds a URL that 404s; the copy falls back to "Contact us to book a
+  // viewing." until the rental goes Live.
   const org = await getCurrentOrg();
   const copyTabs = buildAllListingCopy({
     businessName: org?.name ?? null,
@@ -193,7 +200,7 @@ export default async function PropertyDetailPage({
     beds: p.beds,
     baths: p.baths,
     description: p.description,
-    publicUrl,
+    publicUrl: linkIsLive ? publicUrl : null,
     features: {
       available_date: p.available_date,
       sqft: p.sqft,
@@ -348,8 +355,9 @@ export default async function PropertyDetailPage({
           </h3>
         </div>
         <p className="mb-3 text-xs text-gray-500">
-          Share this branded page on Kijiji, Facebook, and email. Inquiries
-          land straight in your renter list.
+          {linkIsLive
+            ? "Share this branded page on Kijiji, Facebook, and email. Inquiries land straight in your renter list."
+            : "Once this rental is Live, its branded page can be shared on Kijiji, Facebook, and email and inquiries land straight in your renter list."}
         </p>
         {shareNotice && (
           <p
@@ -362,7 +370,10 @@ export default async function PropertyDetailPage({
             {shareNotice.text}
           </p>
         )}
-        <CopyLink url={publicUrl} />
+        {/* Only expose Copy / Open when the link actually resolves. For a Draft
+            or off-market rental the /r page 404s, so we show the warning above
+            instead of a broken link (QA blocker #1). */}
+        {linkIsLive && <CopyLink url={publicUrl} />}
       </div>
 
       {/* --- Listing copy for each channel --- */}
@@ -1103,7 +1114,11 @@ export default async function PropertyDetailPage({
         <EmptyState
           icon={<Icons.users />}
           title="No inquiries yet"
-          description="Share the public listing link above to start collecting inquiries."
+          description={
+            linkIsLive
+              ? "Share the public listing link above to start collecting inquiries."
+              : "Set this rental to Live (in the form above) to share its public link and start collecting inquiries."
+          }
         />
       ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">

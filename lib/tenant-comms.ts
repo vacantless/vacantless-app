@@ -199,6 +199,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   notenants: "Add a tenant with contact details before sending.",
   forbidden: "You don't have permission to message tenants.",
   notfound: "That could not be found.",
+  savefailed: "Sorry, the template didn't save. Please try again.",
   sms_locked:
     "Texting tenants is part of a higher plan. Upgrade to send texts, or message by email instead.",
 };

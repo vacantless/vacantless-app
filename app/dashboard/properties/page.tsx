@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { propertyStatusLabel } from "@/lib/pipeline";
+import { isPubliclyVisible } from "@/lib/listing-state";
 import {
   StatusChip,
   propertyStatusTone,
@@ -61,7 +62,7 @@ export default async function PropertiesPage({
         icon={<Icons.building />}
         eyebrow="Portfolio"
         title="Rentals"
-        subtitle="Your rental portfolio. Each rental has its own public inquiry page and lead tracking."
+        subtitle="Your rental portfolio. Each rental has its own public inquiry page and renter inquiry tracking."
       />
 
       {searchParams.added && (
@@ -106,7 +107,15 @@ export default async function PropertiesPage({
                 <StatusChip tone={propertyStatusTone(p.status)}>
                   {propertyStatusLabel(p.status)}
                 </StatusChip>
-                <CopyIntakeButton url={intakeUrl(p.id)} />
+                {isPubliclyVisible(p.status) ? (
+                  <CopyIntakeButton url={intakeUrl(p.id)} />
+                ) : (
+                  // Draft / off-market: the public /r link 404s, so don't offer
+                  // a Copy button that hands out a broken link (QA blocker #1).
+                  <span className="text-xs text-gray-400">
+                    Set Live to share
+                  </span>
+                )}
                 <Link
                   href={`/dashboard/properties/${p.id}`}
                   className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"

@@ -42,17 +42,22 @@ export async function saveMessageTemplate(formData: FormData) {
     body: check.value.body,
   };
 
-  if (id) {
-    // RLS scopes the update to this org; .eq("id") targets the one row.
-    await supabase
-      .from("tenant_message_templates")
-      .update({ ...fields, updated_at: new Date().toISOString() })
-      .eq("id", id);
-  } else {
-    await supabase
-      .from("tenant_message_templates")
-      .insert({ organization_id: org.id, ...fields });
-  }
+  // Surface a DB failure instead of swallowing it. Without this, a failed
+  // insert/update (RLS, grant, or constraint) would still fall through to the
+  // "created"/"updated" success redirect below — a false success with no saved
+  // row, exactly the confusing silent failure the QA review flagged. On error
+  // we redirect with a visible message and the form keeps its typed values.
+  const { error } = id
+    ? // RLS scopes the update to this org; .eq("id") targets the one row.
+      await supabase
+        .from("tenant_message_templates")
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq("id", id)
+    : await supabase
+        .from("tenant_message_templates")
+        .insert({ organization_id: org.id, ...fields });
+
+  if (error) redirect(`${SETTINGS}?tpl=savefailed#templates`);
 
   revalidatePath(SETTINGS);
   // `tn` is a fresh nonce so the create-template form REMOUNTS and its

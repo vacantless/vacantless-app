@@ -13,6 +13,8 @@ import {
   channelLabel,
   channelIncludesEmail,
   channelIncludesSms,
+  renderForRecipient,
+  buildTenantSmsBody,
   type MessageChannel,
 } from "@/lib/tenant-comms";
 import { FeatureLockedNotice } from "@/components/feature-locked-notice";
@@ -41,6 +43,9 @@ export default function TenantMessageComposer({
   tenants,
   templates,
   smsAllowed = true,
+  orgName,
+  propertyAddress,
+  rentCents,
   sendAction,
 }: {
   tenancyId: string;
@@ -50,6 +55,12 @@ export default function TenantMessageComposer({
   // Email+Text channels are shown locked and an upgrade nudge replaces them; the
   // server action enforces the same gate, so this is UX, not the security check.
   smsAllowed?: boolean;
+  // Context used to RESOLVE {{tokens}} in the live preview, so the operator sees
+  // the real outgoing message before sending (QA blocker #3). Mirrors the
+  // server's tokenVarsFor inputs exactly via the shared pure renderForRecipient.
+  orgName: string | null;
+  propertyAddress: string | null;
+  rentCents: number | null;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [channel, setChannel] = useState<MessageChannel>("email");
@@ -117,6 +128,35 @@ export default function TenantMessageComposer({
     () => tenants.filter((t) => selected.has(t.id)).length,
     [tenants, selected],
   );
+
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Resolve {{tokens}} per selected recipient using the SAME pure renderer the
+  // server uses, so "what the operator previews" === "what the tenant gets".
+  // For texts we also fold in the auto-appended opt-out line via buildTenantSmsBody.
+  const previews = useMemo(() => {
+    return tenants
+      .filter((t) => selected.has(t.id))
+      .map((t) => {
+        const ctx = {
+          tenantName: t.name,
+          orgName,
+          propertyAddress,
+          rentCents,
+        };
+        const emailBody = renderForRecipient(body, ctx);
+        return {
+          id: t.id,
+          name: t.name || "Unnamed tenant",
+          subject: usesEmail ? renderForRecipient(subject, ctx) : null,
+          emailBody: usesEmail ? emailBody : null,
+          smsBody: usesSms ? buildTenantSmsBody(emailBody, orgName) : null,
+        };
+      });
+  }, [tenants, selected, body, subject, usesEmail, usesSms, orgName, propertyAddress, rentCents]);
+
+  const hasContent =
+    body.trim().length > 0 || (usesEmail && subject.trim().length > 0);
 
   return (
     <form action={sendAction} className="space-y-4">
@@ -249,6 +289,82 @@ export default function TenantMessageComposer({
             );
           })}
         </ul>
+      </div>
+
+      {/* Resolved preview — shows the real outgoing message (tokens filled in)
+          per selected recipient before sending (QA blocker #3). */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          disabled={!hasContent || selectedCount === 0}
+          className="text-sm font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:text-gray-300 disabled:no-underline"
+        >
+          {showPreview ? "Hide preview" : "Preview message"}
+        </button>
+        {!hasContent && (
+          <span className="ml-2 text-xs text-gray-400">
+            Write a message to preview it.
+          </span>
+        )}
+        {hasContent && selectedCount === 0 && (
+          <span className="ml-2 text-xs text-gray-400">
+            Select a recipient to preview.
+          </span>
+        )}
+
+        {showPreview && hasContent && selectedCount > 0 && (
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-gray-500">
+              This is exactly what each tenant will receive, with their details
+              filled in.
+            </p>
+            {previews.map((pv) => (
+              <div
+                key={pv.id}
+                className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+              >
+                <p className="mb-2 text-xs font-semibold text-gray-700">
+                  To {pv.name}
+                </p>
+                {pv.emailBody != null && (
+                  <div className="mb-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Email
+                    </p>
+                    {pv.subject != null && (
+                      <p className="text-sm text-gray-900">
+                        <span className="text-gray-500">Subject: </span>
+                        {pv.subject || (
+                          <span className="italic text-gray-400">
+                            (no subject)
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+                      {pv.emailBody || (
+                        <span className="italic text-gray-400">
+                          (empty message)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {pv.smsBody != null && (
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                      Text
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+                      {pv.smsBody}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <button

@@ -1007,6 +1007,9 @@ export default async function TenancyDetailPage({
             tenants={composerTenants}
             templates={templates}
             smsAllowed={smsAllowed}
+            orgName={org?.name ?? null}
+            propertyAddress={t.property?.address ?? null}
+            rentCents={t.rent_cents}
             sendAction={sendTenantMessage}
           />
         )}
