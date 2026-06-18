@@ -9,6 +9,8 @@ import {
   propertyStatusLabel,
   propertyStatusHelp,
   propertyStatusBadge,
+  isPublicBookable,
+  isPubliclyVisible,
 } from "@/lib/listing-state";
 import {
   PageHeader,
@@ -124,6 +126,7 @@ export default async function PropertyDetailPage({
     saved?: string;
     blasted?: string;
     post?: string;
+    pn?: string; // post-submit nonce that remounts the add-post form (form reset)
     posterr?: string;
     photos?: string;
     photoerr?: string;
@@ -210,6 +213,28 @@ export default async function PropertyDetailPage({
     title: c.title,
     body: c.body,
   }));
+
+  // Status-aware guardrail for the share tools (S226 QA-audit): warn the
+  // operator before they hand out a link that won't behave the way they expect.
+  //   available           -> fully live, no notice
+  //   paused / leased      -> /r LOADS but says "not available" (caution)
+  //   draft / off_market   -> /r 404s, the link is broken (warning)
+  const shareNotice = isPublicBookable(p.status)
+    ? null
+    : isPubliclyVisible(p.status)
+      ? {
+          tone: "caution" as const,
+          text:
+            p.status === "leased"
+              ? "This rental is marked Leased. The link still works, but anyone who opens it is told the unit is no longer available — they can't inquire or book a viewing."
+              : "This rental is Paused. The link still works, but anyone who opens it is told the unit isn't currently available — they can't inquire or book a viewing.",
+        }
+      : {
+          tone: "warning" as const,
+          text: `This rental is a ${propertyStatusLabel(
+            p.status,
+          )}. Its public page isn't live yet — anyone you share the link with will hit a "not found" page. Set it to Live (below) before sharing.`,
+        };
 
   return (
     <div>
@@ -325,6 +350,17 @@ export default async function PropertyDetailPage({
           Share this branded page on Kijiji, Facebook, and email. Inquiries
           land straight in your renter list.
         </p>
+        {shareNotice && (
+          <p
+            className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
+              shareNotice.tone === "warning"
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+          >
+            {shareNotice.text}
+          </p>
+        )}
         <CopyLink url={publicUrl} />
       </div>
 
@@ -660,6 +696,9 @@ export default async function PropertyDetailPage({
             + Add a post
           </summary>
           <form
+            // Keyed on the post-submit nonce so a successful add REMOUNTS this
+            // form and clears its uncontrolled inputs (S226 QA-audit form-reset).
+            key={`add-post-${searchParams.pn ?? "new"}`}
             action={addListingPost}
             className="mt-3 space-y-3 border-t border-gray-100 pt-3"
           >

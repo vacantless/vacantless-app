@@ -50,6 +50,7 @@ export default async function SettingsPage({
     stripeconnect?: string;
     reason?: string;
     tpl?: string;
+    tn?: string; // post-submit nonce that remounts the new-template form (reset)
   };
 }) {
   const org = await getCurrentOrg();
@@ -774,7 +775,13 @@ export default async function SettingsPage({
         )}
 
         {/* Create new template */}
-        <form action={saveMessageTemplate} className="mt-5 space-y-3 border-t border-gray-100 pt-5">
+        <form
+          // Keyed on the post-submit nonce so a successful create REMOUNTS this
+          // form and clears its uncontrolled inputs (S226 QA-audit form-reset).
+          key={`new-tpl-${searchParams.tn ?? "new"}`}
+          action={saveMessageTemplate}
+          className="mt-5 space-y-3 border-t border-gray-100 pt-5"
+        >
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             New template
           </h4>

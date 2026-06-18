@@ -9,10 +9,16 @@ import {
 import { PageHeader, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { createTenancy } from "../actions";
+import { isPubliclyVisible } from "@/lib/listing-state";
 
 export const dynamic = "force-dynamic";
 
-type PropertyOpt = { id: string; address: string; rent_cents: number | null };
+type PropertyOpt = {
+  id: string;
+  address: string;
+  rent_cents: number | null;
+  status: string;
+};
 type LeadPrefill = {
   id: string;
   name: string | null;
@@ -35,9 +41,9 @@ export default async function NewTenancyPage({
 
   const { data: propData } = await supabase
     .from("properties")
-    .select("id, address, rent_cents")
+    .select("id, address, rent_cents, status")
     .order("address", { ascending: true });
-  const properties = (propData ?? []) as PropertyOpt[];
+  const allProperties = (propData ?? []) as PropertyOpt[];
 
   // Convert flow: prefill from a leased lead.
   let lead: LeadPrefill | null = null;
@@ -52,6 +58,16 @@ export default async function NewTenancyPage({
 
   const isConvert = lead != null;
   const defaultPropertyId = lead?.property_id ?? "";
+
+  // A tenancy attaches to a real, in-use unit, so Draft and Off-market rentals
+  // (e.g. a freshly duplicated "Copy of …" draft) don't belong in the picker —
+  // listing them invited attaching a lease to a placeholder (S226 QA-audit).
+  // Exception: keep the convert-flow lead's own unit even if it's not visible,
+  // so the prefilled selection still resolves.
+  const properties = allProperties.filter(
+    (p) => isPubliclyVisible(p.status) || p.id === defaultPropertyId,
+  );
+
   const leadProperty = properties.find((p) => p.id === defaultPropertyId);
   const defaultRent =
     leadProperty?.rent_cents != null

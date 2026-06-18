@@ -238,7 +238,7 @@ export default async function LeadDetailPage({
           external
         />
         <Field
-          label="Property"
+          label="Rental"
           value={l.property?.address ?? null}
           href={
             l.property ? `/dashboard/properties/${l.property.id}` : undefined

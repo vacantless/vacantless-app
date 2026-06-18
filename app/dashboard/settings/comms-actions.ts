@@ -55,7 +55,12 @@ export async function saveMessageTemplate(formData: FormData) {
   }
 
   revalidatePath(SETTINGS);
-  redirect(`${SETTINGS}?tpl=${id ? "updated" : "created"}#templates`);
+  // `tn` is a fresh nonce so the create-template form REMOUNTS and its
+  // uncontrolled inputs clear on a soft-nav redirect — otherwise a just-created
+  // template's values linger and invite a duplicate (S226 QA-audit form-reset).
+  redirect(
+    `${SETTINGS}?tpl=${id ? "updated" : "created"}&tn=${Date.now().toString(36)}#templates`,
+  );
 }
 
 export async function deleteMessageTemplate(formData: FormData) {

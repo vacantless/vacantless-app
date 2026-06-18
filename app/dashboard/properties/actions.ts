@@ -87,8 +87,12 @@ export async function addProperty(formData: FormData) {
   revalidatePath("/dashboard");
   // Redirect (not just revalidate) so the add form REMOUNTS and its uncontrolled
   // inputs clear — otherwise the typed values linger and invite a duplicate
-  // unit on the next submit (live QA finding S192).
-  redirect("/dashboard/properties?added=1");
+  // unit on the next submit (live QA finding S192). The `added` value is a fresh
+  // NONCE each time: redirecting to the same route is a soft navigation, so React
+  // reuses the form DOM and a CONSTANT flag (?added=1) would NOT reset the
+  // uncontrolled inputs. The page keys the form on this value to force a remount
+  // (S226 QA-audit fix: "Add rental form still retains submitted values").
+  redirect(`/dashboard/properties?added=${Date.now().toString(36)}`);
 }
 
 export async function updateProperty(formData: FormData) {
@@ -395,7 +399,11 @@ export async function addListingPost(formData: FormData) {
   });
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
-  redirect(`/dashboard/properties/${propertyId}?post=added`);
+  // `pn` is a fresh nonce so the add-post form REMOUNTS and its uncontrolled
+  // inputs clear on a soft-nav redirect (S226 QA-audit form-reset fix). The
+  // `post=added` flag is kept separate so the existing success banner logic is
+  // untouched.
+  redirect(`/dashboard/properties/${propertyId}?post=added&pn=${Date.now().toString(36)}`);
 }
 
 export async function updateListingPost(formData: FormData) {

@@ -129,6 +129,10 @@ export default async function PropertiesPage({
 
       <SectionHeading>Add a rental</SectionHeading>
       <form
+        // Keyed on the post-submit nonce so a successful add REMOUNTS this form
+        // and clears its uncontrolled inputs (soft-nav reuse would otherwise keep
+        // the typed values — S226 QA-audit form-reset fix).
+        key={`add-rental-${searchParams.added ?? "new"}`}
         action={addProperty}
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
