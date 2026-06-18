@@ -51,6 +51,7 @@ import TenantMessageComposer, {
 import {
   TenancyLeaseSection,
   type LeaseDocView,
+  type LeaseSignerView,
 } from "@/components/tenancy-lease-section";
 import type { ExecutedClauseRef } from "@/lib/clauses";
 
@@ -129,12 +130,19 @@ const FLASH: Record<string, string> = {
 const LEASE_SUCCESS: Record<string, string> = {
   generated: "Lease generated from your current clause library.",
   deleted: "Lease document deleted.",
+  sent: "Lease sent for signature. Each signer has a private signing link.",
+  withdrawn: "Lease withdrawn back to draft. You can edit and resend it.",
 };
 const LEASE_ERROR: Record<string, string> = {
   noclauses:
     "Add at least one clause in Settings → Lease Clauses before generating a lease.",
   notfound: "That tenancy could no longer be found.",
   error: "Something went wrong generating the lease. Please try again.",
+  notdraft: "That lease was already sent. Refresh to see its signing status.",
+  incomplete:
+    "Fill every {{value}} in the lease before sending it for signature.",
+  cannotwithdraw:
+    "This lease can't be withdrawn — someone has already signed it. Generate a new version to make changes.",
 };
 const TENANT_FLASH: Record<string, string> = {
   added: "Tenant added.",
@@ -324,6 +332,25 @@ export default async function TenancyDetailPage({
     .select("id, title, status, assembled_body, executed_clause_versions, created_at")
     .eq("tenancy_id", t.id)
     .order("created_at", { ascending: false });
+  // Signers across all of this tenancy's leases (one query; grouped in code).
+  // RLS scopes to this org. Powers the per-signer status + magic-link UI.
+  const { data: signerRows } = await supabase
+    .from("lease_signers")
+    .select("id, lease_document_id, role, name, status, token, sign_order")
+    .eq("organization_id", org?.id ?? "")
+    .order("sign_order", { ascending: true });
+  const signersByLease = new Map<string, LeaseSignerView[]>();
+  for (const r of (signerRows ?? []) as {
+    lease_document_id: string;
+    role: string;
+    name: string | null;
+    status: string;
+    token: string;
+  }[]) {
+    const arr = signersByLease.get(r.lease_document_id) ?? [];
+    arr.push({ role: r.role, name: r.name, status: r.status, token: r.token });
+    signersByLease.set(r.lease_document_id, arr);
+  }
   const leaseDocs = ((leaseRows ?? []) as {
     id: string;
     title: string;
@@ -339,6 +366,7 @@ export default async function TenancyDetailPage({
       assembled_body: d.assembled_body,
       executed_clause_versions: d.executed_clause_versions ?? [],
       created_at: d.created_at,
+      signers: signersByLease.get(d.id) ?? [],
     }),
   );
 

@@ -872,6 +872,112 @@ export async function sendTenantMessageEmail(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Lease signature request (lease vault #11, slice 4). Sent to a signer (tenant
+// or landlord) when the operator sends a generated lease out for signature.
+// Links to the public /sign/{token} magic-link page (no account needed — the
+// Tenon10/SkySlope pattern). Best-effort + degrades gracefully like the rest.
+// ---------------------------------------------------------------------------
+
+export type LeaseSignaturePayload = {
+  signer_email: string; // already validated non-empty by the caller
+  signer_name: string | null;
+  token: string;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+};
+
+function signUrl(token: string): string {
+  return `${APP_BASE_URL}/sign/${encodeURIComponent(token)}`;
+}
+
+function leaseSignatureHtml(p: LeaseSignaturePayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Your property manager");
+  const hi = escapeHtml(firstName(p.signer_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "your new home";
+  const url = escapeHtml(signUrl(p.token));
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">Your lease for <strong>${addr}</strong> is ready for your signature. Please review the full document and sign electronically — it only takes a minute, and no account is needed.</p>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Review &amp; sign your lease</a>
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or paste this link into your browser:<br/><span style="color:#52525b;">${url}</span></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because ${org} prepared a lease for you to sign. This link is unique to you — please don't forward it.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded lease-signature request. Never throws; returns
+ * { sent:false } if BREVO_API_KEY is unset or the signer has no email.
+ */
+export async function sendLeaseSignatureRequest(
+  p: LeaseSignaturePayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.signer_email) return { sent: false, reason: "no_signer_email" };
+
+  const subject = p.property_address
+    ? `Please sign your lease for ${p.property_address}`
+    : "Please sign your lease";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.signer_email,
+        ...(p.signer_name ? { name: p.signer_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: leaseSignatureHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 /**
  * Best-effort branded auto-reply. Never throws — callers can ignore the result.
  */
