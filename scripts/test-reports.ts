@@ -9,6 +9,8 @@ import {
   buildFunnel,
   buildChannelReport,
   buildPropertyReport,
+  isReportableRental,
+  filterReportableProperties,
   buildShowingReport,
   buildLeaseTiming,
   buildFeedbackReport,
@@ -164,6 +166,38 @@ eq("p1 leased", propRows[0].leased, 1);
 eq("p1 showings", propRows[0].showings, 2);
 eq("p2 showings", propRows[1].showings, 1);
 eq("p2 leads", propRows[1].leads, 1);
+
+// --- reportable filter (drafts hidden from By-rental) ---
+const reportRow = (over: Partial<(typeof propRows)[number]>) => ({
+  id: "x",
+  address: "X",
+  status: "available",
+  rentCents: 100000,
+  leads: 0,
+  showings: 0,
+  booked: 0,
+  leased: 0,
+  ...over,
+});
+// Live / Paused / Leased are publicly visible -> always reportable, even empty.
+eq("reportable: live empty", isReportableRental(reportRow({ status: "available" })), true);
+eq("reportable: paused empty", isReportableRental(reportRow({ status: "paused" })), true);
+eq("reportable: leased empty", isReportableRental(reportRow({ status: "leased" })), true);
+// Draft / off_market with no activity -> hidden.
+eq("reportable: draft empty hidden", isReportableRental(reportRow({ status: "draft" })), false);
+eq("reportable: off_market empty hidden", isReportableRental(reportRow({ status: "off_market" })), false);
+// ...but a private rental that gathered activity is kept (never hide real numbers).
+eq("reportable: draft w/ leads kept", isReportableRental(reportRow({ status: "draft", leads: 2 })), true);
+eq("reportable: draft w/ showings kept", isReportableRental(reportRow({ status: "draft", showings: 1 })), true);
+// filterReportableProperties drops only the inactive private rows.
+const mixedRows = [
+  reportRow({ id: "live", status: "available" }),
+  reportRow({ id: "draftEmpty", status: "draft" }),
+  reportRow({ id: "draftActive", status: "draft", leads: 1 }),
+  reportRow({ id: "offEmpty", status: "off_market" }),
+];
+const kept = filterReportableProperties(mixedRows).map((r) => r.id);
+eq("filterReportable keeps live + active draft only", kept, ["live", "draftActive"]);
 
 // --- showing report ---
 const showRep = buildShowingReport(propShowings, NOW);

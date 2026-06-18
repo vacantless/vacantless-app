@@ -48,6 +48,15 @@ export function isLeadStatus(value: string): value is LeadStatus {
   return (PIPELINE_STAGES as readonly string[]).includes(value);
 }
 
+/**
+ * A lead "needs a reply" when it's brand new — it has inquired but nobody has
+ * responded yet. Once any response goes out (Replied) or further, it no longer
+ * needs the operator's first touch. Drives the dashboard "Needs reply" cue.
+ */
+export function needsReply(status: string): boolean {
+  return status === "new";
+}
+
 export const SHOWING_OUTCOMES = [
   "scheduled",
   "attended",

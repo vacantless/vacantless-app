@@ -7,6 +7,7 @@ import {
   buildFunnel,
   buildChannelReport,
   buildPropertyReport,
+  filterReportableProperties,
   buildShowingReport,
   buildLeaseTiming,
   buildFeedbackReport,
@@ -70,7 +71,9 @@ export default async function ReportsPage({
 
   const funnel = buildFunnel(leads);
   const channels = buildChannelReport(leads);
-  const propertyRows = buildPropertyReport(properties, leads, showings);
+  const propertyRows = filterReportableProperties(
+    buildPropertyReport(properties, leads, showings),
+  );
   const showRep = buildShowingReport(showings, nowMs);
   const timing = buildLeaseTiming(leads);
   const feedbackRep = buildFeedbackReport(feedback);
@@ -215,7 +218,7 @@ export default async function ReportsPage({
       {/* By rental */}
       <Section
         title="By rental"
-        subtitle="Viewings counts actual viewings on the calendar; Booked and Leased count inquiries that reached that stage."
+        subtitle="Viewings counts actual viewings on the calendar; Booked and Leased count inquiries that reached that stage. Draft rentals you haven't published yet are hidden here until they go live or gather activity."
       >
         {propertyRows.length === 0 ? (
           <Empty>

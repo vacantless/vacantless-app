@@ -35,15 +35,30 @@ type PortalProfile = {
   plainText: boolean;
   // Put the inquiry link on its own line (Facebook strips/garbles inline links).
   linkOnOwnLine: boolean;
+  // Portal-appropriate call-to-action that precedes the inquiry link. Facebook
+  // Marketplace mangles clickable links (and breaks them outright inside DMs),
+  // so its CTA tells the renter to message or paste the link rather than tap it.
+  cta: string;
 };
 
+// Default CTA shared by every portal whose links render normally.
+const DEFAULT_CTA = "Book a viewing or send an inquiry:";
+
 const PORTAL_PROFILES: Record<CopyPortalKey, PortalProfile> = {
-  generic: { label: "Master copy", maxTitle: 120, plainText: true, linkOnOwnLine: true },
-  kijiji: { label: "Kijiji", maxTitle: 64, plainText: true, linkOnOwnLine: false },
-  facebook: { label: "Facebook Marketplace", maxTitle: 100, plainText: true, linkOnOwnLine: true },
-  rentals_ca: { label: "Rentals.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false },
-  zumper: { label: "Zumper", maxTitle: 100, plainText: true, linkOnOwnLine: false },
-  viewit: { label: "Viewit.ca", maxTitle: 90, plainText: true, linkOnOwnLine: false },
+  generic: { label: "Master copy", maxTitle: 120, plainText: true, linkOnOwnLine: true, cta: DEFAULT_CTA },
+  kijiji: { label: "Kijiji", maxTitle: 64, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
+  facebook: {
+    label: "Facebook Marketplace",
+    maxTitle: 100,
+    plainText: true,
+    linkOnOwnLine: true,
+    // Marketplace strips inline links and breaks them in Messenger, so point the
+    // renter at messaging us or copying the link into a browser instead.
+    cta: "Message us to book a viewing, or copy this link into your browser:",
+  },
+  rentals_ca: { label: "Rentals.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
+  zumper: { label: "Zumper", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
+  viewit: { label: "Viewit.ca", maxTitle: 90, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
 };
 
 export const COPY_PORTALS: ReadonlyArray<{ key: CopyPortalKey; label: string }> =
@@ -196,10 +211,11 @@ export function buildListingCopy(
   const desc = (input.description ?? "").trim();
   if (desc) lines.push(desc);
 
-  // Call to action + inquiry link.
+  // Call to action + inquiry link. The CTA is portal-specific (Facebook gets a
+  // message/paste-the-link variant because Marketplace breaks tappable links).
   const url = (input.publicUrl ?? "").trim();
   if (url) {
-    const cta = "Book a viewing or send an inquiry:";
+    const cta = profile.cta;
     if (profile.linkOnOwnLine) {
       lines.push(cta);
       lines.push(url);

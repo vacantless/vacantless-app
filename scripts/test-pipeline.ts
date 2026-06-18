@@ -5,6 +5,7 @@ import {
   statusLabel,
   statusDescription,
   isLeadStatus,
+  needsReply,
   SHOWING_OUTCOMES,
   showingOutcomeLabel,
   isShowingOutcome,
@@ -51,6 +52,14 @@ ok(
   "contacted mentions connecting",
   /connect/i.test(statusDescription("contacted")),
 );
+
+// --- needsReply (dashboard "Needs reply" cue) ------------------------------
+ok("needsReply: new -> true", needsReply("new") === true);
+ok(
+  "needsReply: every non-new stage -> false",
+  PIPELINE_STAGES.filter((s) => s !== "new").every((s) => needsReply(s) === false),
+);
+ok("needsReply: junk -> false", needsReply("zzz") === false);
 
 // --- outcomes --------------------------------------------------------------
 ok("4 showing outcomes", SHOWING_OUTCOMES.length === 4);

@@ -130,9 +130,34 @@ ok("copy: no em dashes anywhere", !/[–—]/.test(generic.body) && !/[–—]/.
 const kijiji = buildListingCopy(fullInput, "kijiji");
 ok("copy: kijiji title <= 64", kijiji.title.length <= 64);
 
-// Facebook puts the link on its own line.
+// Facebook puts the link on its own line, under a Marketplace-specific CTA
+// (links break in DMs / get stripped inline, so it says message-or-paste).
 const fb = buildListingCopy(fullInput, "facebook");
-ok("copy: facebook link on own line", fb.body.includes("inquiry:\n\nhttps://"));
+ok("copy: facebook link on own line", fb.body.includes("browser:\n\nhttps://"));
+ok(
+  "copy: facebook CTA tells renter to message us",
+  /message us/i.test(fb.body),
+);
+ok(
+  "copy: facebook CTA mentions copying the link into a browser",
+  /copy this link into your browser/i.test(fb.body),
+);
+
+// Per-portal CTA differs (the "tuned for each site" claim is real): every
+// non-Facebook portal uses the default book-or-inquire CTA; Facebook does not.
+const kijijiCopy = buildListingCopy(fullInput, "kijiji");
+ok(
+  "copy: kijiji uses default CTA",
+  kijijiCopy.body.includes("Book a viewing or send an inquiry:"),
+);
+ok(
+  "copy: facebook does NOT use the default CTA",
+  !fb.body.includes("Book a viewing or send an inquiry:"),
+);
+ok(
+  "copy: generic uses default CTA",
+  generic.body.includes("Book a viewing or send an inquiry:"),
+);
 
 // Sparse unit still renders cleanly.
 const sparse = buildListingCopy(

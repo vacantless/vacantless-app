@@ -45,9 +45,10 @@ export function ListingCopyCard({ tabs }: { tabs: CopyTab[] }) {
         Listing copy for each channel
       </h3>
       <p className="mb-4 text-xs text-gray-500">
-        Ready-to-paste wording built from this rental&apos;s details, tuned for
-        each site. Pick a channel, copy, and paste it into your ad. Edit the
-        rental above and this updates automatically.
+        Ready-to-paste wording built from this rental&apos;s details, formatted
+        for each site - the title length, link placement, and call-to-action are
+        adjusted per platform. Pick a channel, copy, and paste it into your ad.
+        Edit the rental above and this updates automatically.
       </p>
 
       <div className="mb-4 flex flex-wrap gap-1.5">

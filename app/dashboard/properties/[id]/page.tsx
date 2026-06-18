@@ -41,6 +41,7 @@ import {
   copyPortalLabel,
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
+import { buildShareReadiness } from "@/lib/share-readiness";
 import {
   MAX_PHOTOS_PER_PROPERTY,
   sortPhotos,
@@ -170,6 +171,12 @@ export default async function PropertyDetailPage({
   const photoRows = sortPhotos((photos ?? []) as PhotoRow[]);
   const atPhotoLimit = photoRows.length >= MAX_PHOTOS_PER_PROPERTY;
 
+  // Org-wide weekly viewing windows — one signal in the share-readiness check
+  // below ("can a renter actually self-book a viewing once they land?").
+  const { count: availabilityCount } = await supabase
+    .from("availability_rules")
+    .select("id", { count: "exact", head: true });
+
   const eligibleCount = countEligible(leadRows, p.rent_cents);
   const showBlastCard = blastOfferable(
     p.price_drop_pending_cents,
@@ -221,6 +228,23 @@ export default async function PropertyDetailPage({
     title: c.title,
     body: c.body,
   }));
+
+  // Share-readiness checklist (QA Should-Fix #5): before the operator pastes
+  // the public link onto Kijiji/Facebook, surface what's in place and what's
+  // still missing. Shown for the states where you'd be prepping/sharing a unit
+  // (Draft / Live / Paused); a retired (Off market) or Leased unit is past this.
+  const showReadiness =
+    p.status === "draft" || p.status === "available" || p.status === "paused";
+  const readiness = buildShareReadiness({
+    status: p.status,
+    rentCents: p.rent_cents,
+    beds: p.beds,
+    baths: p.baths,
+    address: p.address,
+    photoCount: photoRows.length,
+    availabilityWindowCount: availabilityCount ?? 0,
+    replyToEmail: org?.reply_to_email ?? null,
+  });
 
   // Status-aware guardrail for the share tools (S226 QA-audit): warn the
   // operator before they hand out a link that won't behave the way they expect.
@@ -374,6 +398,62 @@ export default async function PropertyDetailPage({
             or off-market rental the /r page 404s, so we show the warning above
             instead of a broken link (QA blocker #1). */}
         {linkIsLive && <CopyLink url={publicUrl} />}
+
+        {showReadiness && (
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Before you share
+              </h4>
+              {readiness.readyToShare ? (
+                <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                  Ready to share
+                </span>
+              ) : (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  {readiness.requiredOutstanding}{" "}
+                  {readiness.requiredOutstanding === 1 ? "thing" : "things"} to
+                  finish
+                </span>
+              )}
+            </div>
+            <ul className="space-y-1.5">
+              {readiness.checks.map((c) => (
+                <li key={c.key} className="flex items-start gap-2 text-xs">
+                  <span
+                    aria-hidden
+                    className={`mt-px font-semibold ${
+                      c.ok
+                        ? "text-green-600"
+                        : c.required
+                          ? "text-amber-600"
+                          : "text-gray-300"
+                    }`}
+                  >
+                    {c.ok ? "✓" : "○"}
+                  </span>
+                  <span className="min-w-0">
+                    <span
+                      className={
+                        c.ok ? "text-gray-600" : "font-medium text-gray-900"
+                      }
+                    >
+                      {c.label}
+                    </span>
+                    {!c.required && (
+                      <span className="text-gray-400"> · recommended</span>
+                    )}
+                    {!c.ok && (
+                      <span className="mt-0.5 block text-gray-500">
+                        {c.hint}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* --- Listing copy for each channel --- */}

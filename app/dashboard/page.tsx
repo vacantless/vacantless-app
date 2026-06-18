@@ -4,6 +4,7 @@ import { getCurrentOrg } from "@/lib/org";
 import {
   PIPELINE_STAGES,
   statusLabel,
+  needsReply,
   type LeadStatus,
 } from "@/lib/pipeline";
 import {
@@ -32,6 +33,7 @@ type LeadRow = {
   status: LeadStatus;
   created_at: string;
   property_id: string | null;
+  property: { address: string } | null;
 };
 
 const OPEN_STATUSES: LeadStatus[] = [
@@ -57,7 +59,9 @@ export default async function OverviewPage() {
   ] = await Promise.all([
     supabase
       .from("leads")
-      .select("id, name, email, source, status, created_at, property_id")
+      .select(
+        "id, name, email, source, status, created_at, property_id, property:properties(address)",
+      )
       .order("created_at", { ascending: false }),
     // Most-recent property id + total count — the id deep-links the "test your
     // intake page" checklist step straight to a real public /r page.
@@ -87,7 +91,10 @@ export default async function OverviewPage() {
     property: { address: string } | null;
   }[];
 
-  const allLeads = (leads ?? []) as LeadRow[];
+  // PostgREST types the embedded `property` as an array; it's a to-one relation
+  // so the runtime value is a single object (or null). Cast through unknown,
+  // matching the upcomingShowings projection above.
+  const allLeads = (leads ?? []) as unknown as LeadRow[];
   const openLeads = allLeads.filter((l) => OPEN_STATUSES.includes(l.status));
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const newThisWeek = allLeads.filter(
@@ -231,17 +238,29 @@ export default async function OverviewPage() {
                 href={`/dashboard/leads/${l.id}`}
                 className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50"
               >
-                <span className="min-w-0 truncate text-gray-900">
+                <span className="min-w-0 flex-1 truncate text-gray-900">
                   {l.name || l.email || "Unnamed renter"}
+                  {l.property?.address && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      {l.property.address}
+                    </span>
+                  )}
                   {l.source && (
                     <span className="ml-2 text-xs text-gray-400">
                       via {l.source}
                     </span>
                   )}
                 </span>
-                <StatusChip tone={leadStatusTone(l.status)}>
-                  {statusLabel(l.status)}
-                </StatusChip>
+                <span className="flex shrink-0 items-center gap-2">
+                  {needsReply(l.status) && (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      Needs reply
+                    </span>
+                  )}
+                  <StatusChip tone={leadStatusTone(l.status)}>
+                    {statusLabel(l.status)}
+                  </StatusChip>
+                </span>
               </Link>
             </li>
           ))}

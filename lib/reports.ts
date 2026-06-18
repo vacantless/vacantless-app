@@ -2,6 +2,7 @@
 // No DB calls here — callers fetch org-scoped rows (RLS) and pass them in,
 // which keeps every function trivially unit-testable.
 import { type LeadStatus } from "@/lib/pipeline";
+import { isPubliclyVisible } from "@/lib/listing-state";
 
 // ---------------------------------------------------------------------------
 // Input row shapes (the lean projections the page selects).
@@ -226,6 +227,23 @@ export function buildPropertyReport(
   });
   rows.sort((a, b) => b.leads - a.leads || a.address.localeCompare(b.address));
   return rows;
+}
+
+/**
+ * Whether a rental belongs in the "By rental" performance table. Never-public
+ * rentals (Draft / Off market) with no activity in the window are dropped so an
+ * operator's in-progress drafts don't clutter the report. A private rental that
+ * DID gather activity (inquiries or viewings) is kept — real numbers are never
+ * hidden. Publicly-visible rentals (Live / Paused / Leased) always qualify.
+ */
+export function isReportableRental(row: PropertyRow): boolean {
+  if (isPubliclyVisible(row.status)) return true;
+  return row.leads > 0 || row.showings > 0;
+}
+
+/** Drop inactive never-public rentals from a built By-rental report. */
+export function filterReportableProperties(rows: PropertyRow[]): PropertyRow[] {
+  return rows.filter(isReportableRental);
 }
 
 // ---------------------------------------------------------------------------
