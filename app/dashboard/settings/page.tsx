@@ -16,6 +16,7 @@ import {
 } from "./actions";
 import { logoUploadErrorMessage } from "@/lib/logo";
 import BrandColorField from "@/components/brand-color-field";
+import { RenterPagePreview } from "@/components/renter-page-preview";
 import { PageHeader, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import RotessaSettingsCard, {
@@ -54,15 +55,18 @@ export default async function SettingsPage({
   const org = await getCurrentOrg();
   if (!org) return null;
 
-  // Most-recent property (if any) powers the "View public renter page" link —
-  // a one-click way to see exactly what renters get from the shared intake URL.
+  // Properties power the "View public renter page" picker — a one-click way to
+  // see exactly what renters get from the shared intake URL, for ANY listing
+  // (F2 fix, S225: this used to surface only the newest property).
   const supabase = createClient();
   const { data: propertyRows } = await supabase
     .from("properties")
-    .select("id")
-    .order("created_at", { ascending: false })
-    .limit(1);
-  const firstPropertyId = (propertyRows as { id: string }[] | null)?.[0]?.id;
+    .select("id, address")
+    .order("created_at", { ascending: false });
+  const renterPageProperties = (propertyRows ?? []) as {
+    id: string;
+    address: string;
+  }[];
 
   // The signed-in operator's own email prefills the test-send recipient — the
   // common case is "send it to me so I can see what renters get".
@@ -163,11 +167,8 @@ export default async function SettingsPage({
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
   const proto = h.get("x-forwarded-proto") ?? "https";
-  const renterPageUrl = firstPropertyId
-    ? host
-      ? `${proto}://${host}/r/${firstPropertyId}`
-      : `/r/${firstPropertyId}`
-    : null;
+  // Absolute origin for the renter-page picker (empty -> relative path).
+  const renterPageBaseUrl = host ? `${proto}://${host}` : "";
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
   // The preview mirrors what renters actually see: the dashboard header and
@@ -639,6 +640,11 @@ export default async function SettingsPage({
           branding (name, color, logo, and reply-to) so you can see exactly what
           renters receive before you share your listing link.
         </p>
+        <p className="mt-2 text-xs text-gray-400">
+          Emails always send from Vacantless&apos;s secure address, shown under
+          your business name with your reply-to, so they pass spam checks and
+          replies reach you. Renters never see a personal email address.
+        </p>
         <form
           action={sendTestEmailAction}
           className="mt-4 flex flex-wrap items-end gap-3"
@@ -694,6 +700,13 @@ export default async function SettingsPage({
           <code className="rounded bg-gray-100 px-1 text-xs">{"{{property_address}}"}</code>,{" "}
           <code className="rounded bg-gray-100 px-1 text-xs">{"{{rent}}"}</code> — they fill
           in per tenant when you send.
+        </p>
+        <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          Saved here, used over in{" "}
+          <Link href="/dashboard/tenancies" className="font-semibold underline">
+            Tenancies
+          </Link>
+          : open a tenancy, start a message, and pick a template to fill it in. ↗
         </p>
 
         {tplFlash && (
@@ -799,20 +812,10 @@ export default async function SettingsPage({
               Account
             </h3>
           </div>
-          {renterPageUrl ? (
-            <Link
-              href={renterPageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              View public renter page ↗
-            </Link>
-          ) : (
-            <span className="text-xs text-gray-400">
-              Add a property to preview your public renter page.
-            </span>
-          )}
+          <RenterPagePreview
+            properties={renterPageProperties}
+            baseUrl={renterPageBaseUrl}
+          />
         </div>
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
           <div>
