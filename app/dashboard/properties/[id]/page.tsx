@@ -23,6 +23,7 @@ import {
   SECONDARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { DescriptionGuide } from "@/components/description-guide";
 import {
   updateProperty,
   duplicateProperty,
@@ -921,18 +922,26 @@ export default async function PropertyDetailPage({
             ))}
           </ul>
         </details>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
-            Description
-          </label>
-          <textarea
-            name="description"
-            rows={4}
-            defaultValue={p.description ?? ""}
-            placeholder="Bright 2-bedroom with in-suite laundry, close to transit…"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
+        <DescriptionGuide
+          defaultValue={p.description ?? ""}
+          facts={{
+            beds: p.beds,
+            baths: p.baths,
+            sqft: p.sqft,
+            floor: p.floor,
+            parking: p.parking,
+            laundry: p.laundry,
+            air_conditioning: p.air_conditioning,
+            balcony: p.balcony,
+            furnished: p.furnished,
+            pet_friendly: p.pet_friendly,
+            heat_included: p.heat_included,
+            hydro_included: p.hydro_included,
+            water_included: p.water_included,
+            available_date: p.available_date,
+            rent_cents: p.rent_cents,
+          }}
+        />
 
         {/* --- Unit details --- */}
         <fieldset className="border-t border-gray-100 pt-4">
