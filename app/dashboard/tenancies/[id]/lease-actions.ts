@@ -28,6 +28,7 @@ import {
   canWithdraw,
 } from "@/lib/lease-signing";
 import { sendLeaseSignatureRequest } from "@/lib/email";
+import { normalizeEmail } from "@/lib/persons";
 
 // Generate a lease document for a tenancy from the operator's clause SELECTION
 // (lease vault #11, slice 7 — the conversion wizard). The wizard submits the
@@ -182,7 +183,7 @@ export async function sendLeaseForSignature(formData: FormData) {
   const { data: tenancyRow } = await supabase
     .from("tenancies")
     .select(
-      "id, rent_cents, deposit_cents, start_date, end_date, term_months, property:properties(address), tenants(name, email, is_primary)",
+      "id, rent_cents, deposit_cents, start_date, end_date, term_months, property:properties(address), tenants(name, email, is_primary, person_id)",
     )
     .eq("id", tenancyId)
     .maybeSingle();
@@ -194,8 +195,31 @@ export async function sendLeaseForSignature(formData: FormData) {
     end_date: string | null;
     term_months: number | null;
     property: { address: string } | null;
-    tenants: { name: string | null; email: string | null; is_primary: boolean }[];
+    tenants: {
+      name: string | null;
+      email: string | null;
+      is_primary: boolean;
+      person_id: string | null;
+    }[];
   };
+
+  // Resolve which person each tenant signer IS, so the executed document files
+  // to that person's cross-tenancy vault (the per-person vault primitive). Match
+  // a signer to a tenant by normalized email first, then by name.
+  const tenantRoster = tenancy.tenants ?? [];
+  function personForSigner(name: string | null, email: string | null): string | null {
+    const e = normalizeEmail(email);
+    if (e) {
+      const byEmail = tenantRoster.find((t) => normalizeEmail(t.email) === e);
+      if (byEmail?.person_id) return byEmail.person_id;
+    }
+    const n = (name ?? "").trim().toLowerCase();
+    if (n) {
+      const byName = tenantRoster.find((t) => (t.name ?? "").trim().toLowerCase() === n);
+      if (byName?.person_id) return byName.person_id;
+    }
+    return null;
+  }
 
   const tenantNames = (tenancy.tenants ?? [])
     .slice()
@@ -233,6 +257,8 @@ export async function sendLeaseForSignature(formData: FormData) {
     sign_order: sp.sign_order,
     token: generateSignToken(),
     status: "pending",
+    // file tenant signatures to the cross-tenancy person vault (landlord left null).
+    person_id: sp.role === "tenant" ? personForSigner(sp.name, sp.email) : null,
   }));
 
   const { error: signerErr } = await supabase.from("lease_signers").insert(signerRows);

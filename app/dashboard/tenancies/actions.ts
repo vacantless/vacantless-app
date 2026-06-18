@@ -15,6 +15,7 @@ import {
   MAX_TENANTS_PER_TENANCY,
 } from "@/lib/tenancy";
 import { normalizePhoneE164 } from "@/lib/sms";
+import { resolvePersonId } from "@/lib/persons-server";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 
@@ -86,17 +87,30 @@ export async function createTenancy(formData: FormData) {
   if (!tenancyId) redirect("/dashboard/tenancies");
 
   // Insert the co-tenant child rows (buildTenantList guarantees exactly one
-  // primary among them — the future Rotessa payer).
-  const tenantRows = tenants.map((t) => ({
-    organization_id: org.id,
-    tenancy_id: tenancyId,
-    name: t.name,
-    email: t.email,
-    phone: t.phone,
-    // Normalized match key for the inbound-STOP webhook (mirrors leads.phone_e164).
-    phone_e164: normalizePhoneE164(t.phone),
-    is_primary: t.is_primary,
-  }));
+  // primary among them — the future Rotessa payer). Each is resolved to a
+  // durable per-org person (the cross-tenancy vault identity) — sequentially so
+  // two co-tenants sharing a contact key collapse to one person, not a race.
+  const tenantRows: Array<Record<string, unknown>> = [];
+  for (const t of tenants) {
+    const phone_e164 = normalizePhoneE164(t.phone);
+    const personId = await resolvePersonId(supabase, org.id, {
+      name: t.name,
+      email: t.email,
+      phone: t.phone,
+      phone_e164,
+    });
+    tenantRows.push({
+      organization_id: org.id,
+      tenancy_id: tenancyId,
+      name: t.name,
+      email: t.email,
+      phone: t.phone,
+      // Normalized match key for the inbound-STOP webhook (mirrors leads.phone_e164).
+      phone_e164,
+      is_primary: t.is_primary,
+      person_id: personId,
+    });
+  }
   if (tenantRows.length > 0) {
     await supabase.from("tenants").insert(tenantRows);
   }
@@ -210,6 +224,14 @@ export async function addTenant(formData: FormData) {
     redirect(`/dashboard/tenancies/${tenancyId}?err=max`);
   }
 
+  const phoneE164 = normalizePhoneE164(phone);
+  const personId = await resolvePersonId(supabase, org.id, {
+    name,
+    email,
+    phone,
+    phone_e164: phoneE164,
+  });
+
   await supabase.from("tenants").insert({
     organization_id: org.id,
     tenancy_id: tenancyId,
@@ -217,8 +239,9 @@ export async function addTenant(formData: FormData) {
     email,
     phone,
     // Normalized match key for the inbound-STOP webhook (mirrors leads.phone_e164).
-    phone_e164: normalizePhoneE164(phone),
+    phone_e164: phoneE164,
     is_primary: count === 0, // first tenant on the tenancy becomes primary
+    person_id: personId,
   });
 
   revalidatePath(`/dashboard/tenancies/${tenancyId}`);

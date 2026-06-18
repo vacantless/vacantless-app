@@ -9,6 +9,7 @@ const LINKS: [string, string][] = [
   ["/dashboard/properties", "Rentals"],
   ["/dashboard/leads", "Inquiries"],
   ["/dashboard/tenancies", "Tenancies"],
+  ["/dashboard/people", "People"],
   ["/dashboard/showings", "Viewings"],
   ["/dashboard/availability", "Viewing Times"],
   ["/dashboard/reports", "Reports"],
