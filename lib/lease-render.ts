@@ -38,6 +38,26 @@ export type LeaseRenderModel = {
   termMonths: number | null;
   // The assembled, interpolated clause block (lease_documents.assembled_body).
   clauseBody: string;
+  // Captured signatures stamped into the executed document (slice 5). Optional so
+  // a frozen pre-slice-5 snapshot still renders; the print route fills these from
+  // lease_signers for a sent/executed lease. A draft has none (blank sign lines).
+  // landlordSignature → the Landlord block; tenantSignatures aligns by index to
+  // tenantNames (null = that party has not signed yet → blank line).
+  landlordSignature?: CapturedSignature | null;
+  tenantSignatures?: (CapturedSignature | null)[];
+};
+
+// A signature captured from a signer (lease_signers). Only signed signers are
+// passed in; the renderer stamps the mark onto that party's signature line.
+export type CapturedSignature = {
+  // "typed" | "drawn" — how the signature was made.
+  signatureKind: string | null;
+  // typed: the typed signature string; drawn: a PNG data: URL from the canvas.
+  signatureData: string | null;
+  // the printed legal name the signer attested (their identity statement).
+  signedName: string | null;
+  // when they signed (ISO); shown beneath the signature line.
+  signedAtIso: string | null;
 };
 
 export function escapeHtml(s: string): string {
@@ -59,11 +79,57 @@ function row(label: string, value: string | null): string {
   return `<tr><th>${escapeHtml(label)}</th><td>${v}</td></tr>`;
 }
 
-// A signature block: signing line + printed-name line + date line. Names are
-// pre-filled (printed) but the signature/date lines stay blank for signing —
-// this is the deterministic-vs-editable split the rail will tag onto.
-function signatureBlock(role: string, name: string | null): string {
+// Only a base64 PNG data URL may reach an <img src>. Signature data is signer
+// input; without this guard a drawn payload of data:text/html, javascript:, or an
+// SVG with onload could execute in the operator's tab. A failed check falls back
+// to rendering the attested name as text — never the raw payload.
+export function isSafePngDataUrl(s: string): boolean {
+  return /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(s.trim());
+}
+
+function signedDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
+}
+
+// A signature block: signing line + printed-name line + date line. Unsigned, the
+// signature/date lines stay blank (the deterministic-vs-editable split). Once a
+// signature is captured (slice 5), the mark is stamped onto the line: a drawn PNG
+// as an <img>, or the typed text in a script face, with the signed date filled in.
+function signatureBlock(
+  role: string,
+  name: string | null,
+  captured?: CapturedSignature | null,
+): string {
   const printed = name && name.trim() ? escapeHtml(name) : "&nbsp;";
+  const data = captured?.signatureData?.trim();
+
+  if (captured && data) {
+    let mark: string;
+    if (captured.signatureKind === "drawn" && isSafePngDataUrl(data)) {
+      mark = `<img class="sig-img" src="${data}" alt="${escapeHtml(role)} signature" />`;
+    } else {
+      // typed, OR a drawn payload that failed the safety check: render as text.
+      const text =
+        captured.signatureKind === "drawn"
+          ? captured.signedName || ""
+          : data;
+      mark = `<span class="sig-typed">${escapeHtml(text)}</span>`;
+    }
+    const date = signedDate(captured.signedAtIso);
+    const attested =
+      captured.signedName && captured.signedName.trim()
+        ? escapeHtml(captured.signedName)
+        : printed;
+    return `<div class="sig">
+      <div class="sig-line signed">${mark}</div>
+      <div class="sig-meta"><span>${escapeHtml(role)} signature</span><span>${date ? escapeHtml(date) : "Date"}</span></div>
+      <div class="sig-name">${attested}</div>
+      <div class="sig-note">Signed electronically${date ? " on " + escapeHtml(date) : ""}.</div>
+    </div>`;
+  }
+
   return `<div class="sig">
       <div class="sig-line">&nbsp;</div>
       <div class="sig-meta"><span>${escapeHtml(role)} signature</span><span>Date</span></div>
@@ -89,6 +155,11 @@ export function renderLeaseDocumentHtml(model: LeaseRenderModel): string {
     ? `<div class="banner draft">DRAFT &mdash; for review only, not for signature.</div>`
     : "";
 
+  const executedBanner =
+    model.status === "executed"
+      ? `<div class="banner executed">EXECUTED &mdash; all parties have signed electronically. See the certificate of completion for the full audit record.</div>`
+      : "";
+
   const tokenWarning =
     owed.length > 0
       ? `<div class="banner warn">Unfilled values remain in this lease: ${owed
@@ -96,8 +167,11 @@ export function renderLeaseDocumentHtml(model: LeaseRenderModel): string {
           .join(", ")}. Complete them before sending for signature.</div>`
       : "";
 
+  const tenantSigs = model.tenantSignatures ?? [];
   const tenantBlocks = model.tenantNames.length
-    ? model.tenantNames.map((n) => signatureBlock("Tenant", n)).join("\n")
+    ? model.tenantNames
+        .map((n, i) => signatureBlock("Tenant", n, tenantSigs[i] ?? null))
+        .join("\n")
     : signatureBlock("Tenant", null);
 
   // pre-wrap preserves the clause block's paragraph breaks faithfully.
@@ -128,14 +202,20 @@ export function renderLeaseDocumentHtml(model: LeaseRenderModel): string {
   .banner { border-radius: 6px; padding: 8px 12px; font-family: Arial, sans-serif;
     font-size: 12px; margin: 0 0 14px; }
   .banner.draft { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; font-weight: bold; }
+  .banner.executed { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; font-weight: bold; }
   .banner.warn { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
   .banner code { background: rgba(0,0,0,0.05); padding: 0 3px; border-radius: 3px; }
   .sigs { display: flex; flex-wrap: wrap; gap: 28px 40px; margin-top: 14px; }
   .sig { flex: 1 1 240px; min-width: 220px; }
   .sig-line { border-bottom: 1px solid var(--ink); height: 26px; }
+  .sig-line.signed { display: flex; align-items: flex-end; height: 52px; overflow: hidden; }
+  .sig-typed { font-family: "Brush Script MT", "Segoe Script", "Snell Roundhand", cursive;
+    font-size: 26px; line-height: 1.1; padding-bottom: 2px; white-space: nowrap; }
+  .sig-img { max-height: 50px; max-width: 100%; object-fit: contain; }
   .sig-meta { display: flex; justify-content: space-between; font-family: Arial, sans-serif;
     font-size: 11px; color: var(--muted); margin-top: 3px; }
   .sig-name { font-size: 13px; margin-top: 6px; }
+  .sig-note { font-family: Arial, sans-serif; font-size: 10px; color: var(--muted); margin-top: 2px; }
   .foot { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 10px;
     font-family: Arial, sans-serif; font-size: 11px; color: var(--muted); }
   .print-btn { position: fixed; top: 14px; right: 14px; font-family: Arial, sans-serif;
@@ -157,6 +237,7 @@ export function renderLeaseDocumentHtml(model: LeaseRenderModel): string {
   <p class="sub">${model.propertyAddress ? escapeHtml(model.propertyAddress) : "Premises not set"}</p>
 
   ${draftBanner}
+  ${executedBanner}
   ${tokenWarning}
 
   <h2>Parties &amp; Premises</h2>
@@ -180,7 +261,7 @@ export function renderLeaseDocumentHtml(model: LeaseRenderModel): string {
 
   <h2>Signatures</h2>
   <div class="sigs">
-    ${signatureBlock("Landlord", model.landlordName)}
+    ${signatureBlock("Landlord", model.landlordName, model.landlordSignature ?? null)}
     ${tenantBlocks}
   </div>
 

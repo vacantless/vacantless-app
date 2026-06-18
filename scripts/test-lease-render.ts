@@ -2,8 +2,10 @@
 // Run: npx tsx scripts/test-lease-render.ts
 import {
   escapeHtml,
+  isSafePngDataUrl,
   renderLeaseDocumentHtml,
   type LeaseRenderModel,
+  type CapturedSignature,
 } from "../lib/lease-render";
 
 let passed = 0;
@@ -105,6 +107,114 @@ assert(!evil.includes("<b>Land</b>"), "landlord name is HTML-escaped");
 // --- generatedAt fallback ----------------------------------------------------
 const badDate = renderLeaseDocumentHtml(baseModel({ generatedAtIso: "not-a-date" }));
 assert(badDate.includes("not-a-date"), "invalid generatedAt falls back to the raw string");
+
+// --- isSafePngDataUrl guard --------------------------------------------------
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+assert(isSafePngDataUrl(PNG), "a real base64 PNG data URL passes the guard");
+assert(isSafePngDataUrl("  " + PNG + "  "), "guard trims surrounding whitespace");
+assert(!isSafePngDataUrl("data:text/html;base64,PHNjcmlwdD4="), "non-image data URL rejected");
+assert(!isSafePngDataUrl("data:image/svg+xml;base64,abc"), "SVG data URL rejected");
+assert(!isSafePngDataUrl("javascript:alert(1)"), "javascript: URL rejected");
+assert(!isSafePngDataUrl("data:image/png;base64,<img onerror=alert(1)>"), "non-base64 chars rejected");
+
+// --- signature stamping: helpers --------------------------------------------
+function cap(over: Partial<CapturedSignature> = {}): CapturedSignature {
+  return {
+    signatureKind: "typed",
+    signatureData: "Dana Tenant",
+    signedName: "Dana Tenant",
+    signedAtIso: "2026-06-18T15:30:00.000Z",
+    ...over,
+  };
+}
+
+// Unsigned executed/sent doc: lines stay blank, no stamp, no "Signed electronically".
+const unsignedExec = renderLeaseDocumentHtml(baseModel({ status: "sent" }));
+assert(!unsignedExec.includes("Signed electronically"), "no captured sig => no signed note");
+assert(!unsignedExec.includes('class="sig-typed"'), "no captured sig => no typed stamp");
+assert(!unsignedExec.includes("DRAFT &mdash;"), "a sent lease shows no DRAFT banner");
+
+// Typed signature stamped for landlord + one tenant.
+const typedDoc = renderLeaseDocumentHtml(
+  baseModel({
+    status: "executed",
+    tenantNames: ["Dana Tenant", "Sam Cotenant"],
+    landlordSignature: cap({ signatureData: "Agile Owner", signedName: "Agile Owner" }),
+    tenantSignatures: [cap(), null],
+  }),
+);
+assert(typedDoc.includes('class="sig-typed">Agile Owner<'), "landlord typed signature stamped");
+assert(typedDoc.includes('class="sig-typed">Dana Tenant<'), "tenant 1 typed signature stamped");
+assert(
+  (typedDoc.match(/Signed electronically on 2026-06-18/g) ?? []).length === 2,
+  "signed date shown once per signed party (landlord + tenant 1)",
+);
+// Tenant 2 has a null signature => still a blank line, not a stamp.
+assert(typedDoc.includes('class="sig-line">&nbsp;'), "unsigned co-tenant keeps a blank line");
+
+// Executed banner.
+assert(typedDoc.includes("banner executed"), "executed status renders the executed banner");
+assert(
+  !renderLeaseDocumentHtml(baseModel({ status: "sent" })).includes("banner executed"),
+  "a merely-sent lease shows no executed banner",
+);
+
+// Drawn signature with a SAFE PNG => <img>, not text.
+const drawnDoc = renderLeaseDocumentHtml(
+  baseModel({
+    status: "executed",
+    tenantNames: ["Dana Tenant"],
+    landlordSignature: null,
+    tenantSignatures: [cap({ signatureKind: "drawn", signatureData: PNG })],
+  }),
+);
+assert(drawnDoc.includes(`<img class="sig-img" src="${PNG}"`), "safe PNG drawn sig renders as <img>");
+
+// Drawn signature with an UNSAFE payload => never reaches src; falls back to name text.
+const evilDrawn = renderLeaseDocumentHtml(
+  baseModel({
+    status: "executed",
+    tenantNames: ["Dana Tenant"],
+    landlordSignature: null,
+    tenantSignatures: [
+      cap({
+        signatureKind: "drawn",
+        signatureData: "data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==",
+        signedName: "Dana Tenant",
+      }),
+    ],
+  }),
+);
+assert(!evilDrawn.includes("data:text/html"), "unsafe drawn payload never reaches the document");
+assert(!evilDrawn.includes("<img"), "unsafe drawn payload does not render an <img>");
+assert(evilDrawn.includes('class="sig-typed">Dana Tenant<'), "unsafe drawn falls back to attested name");
+
+// XSS in a typed signature is escaped.
+const xssSig = renderLeaseDocumentHtml(
+  baseModel({
+    status: "executed",
+    tenantNames: ["Dana Tenant"],
+    landlordSignature: null,
+    tenantSignatures: [cap({ signatureData: "<script>alert(1)</script>", signedName: "<b>x</b>" })],
+  }),
+);
+assert(!xssSig.includes("<script>alert(1)</script>"), "typed signature data is HTML-escaped");
+assert(!xssSig.includes("<b>x</b>"), "signed name is HTML-escaped in the name line");
+
+// Invalid signedAt falls back gracefully (raw string, no crash).
+const badSigDate = renderLeaseDocumentHtml(
+  baseModel({
+    status: "executed",
+    tenantNames: ["Dana Tenant"],
+    landlordSignature: null,
+    tenantSignatures: [cap({ signedAtIso: "nope" })],
+  }),
+);
+assert(badSigDate.includes("Signed electronically on nope"), "invalid signedAt falls back to raw string");
+
+// A pre-slice-5 snapshot (no signature fields) still renders without throwing.
+const legacy = renderLeaseDocumentHtml(baseModel({ status: "executed" }));
+assert(legacy.includes("Signatures"), "executed lease without signature fields still renders");
 
 if (failed > 0) {
   console.error(`\nlease-render: ${failed} FAILED, ${passed} passed`);
