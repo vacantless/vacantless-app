@@ -138,13 +138,23 @@ export function TenancyLeaseSection({
                         {new Date(d.created_at).toLocaleString()}
                       </span>
                     </span>
-                    <form action={deleteLeaseDocument} className="shrink-0">
-                      <input type="hidden" name="tenancy_id" value={tenancyId} />
-                      <input type="hidden" name="lease_id" value={d.id} />
-                      <button className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                        Delete
-                      </button>
-                    </form>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <a
+                        href={`/dashboard/tenancies/${tenancyId}/lease/${d.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        View / print
+                      </a>
+                      <form action={deleteLeaseDocument}>
+                        <input type="hidden" name="tenancy_id" value={tenancyId} />
+                        <input type="hidden" name="lease_id" value={d.id} />
+                        <button className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                          Delete
+                        </button>
+                      </form>
+                    </span>
                   </div>
                   {owed.length > 0 && (
                     <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
