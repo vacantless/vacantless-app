@@ -535,6 +535,94 @@ export function recommendClauses(facts: RecommendationFacts): ClauseRecommendati
   return deduped;
 }
 
+// --- Clause-selection wizard glue (slice 7) ---------------------------------
+
+// The {{token}}s the tenancy record itself supplies, so the conversion wizard
+// fills them automatically and never asks the operator to type them. Everything
+// else in a clause body is an operator-filled placeholder. Single source of
+// truth shared by the wizard (which tokens to show inputs for) and the server
+// action (which tokens it derives from the record vs. accepts from the form).
+export const CANONICAL_LEASE_TOKENS = [
+  "property_address",
+  "tenant_name",
+  "rent",
+  "deposit",
+  "start_date",
+  "end_date",
+] as const;
+
+/** True iff `token` is one the tenancy record supplies automatically. */
+export function isCanonicalLeaseToken(token: string): boolean {
+  return (CANONICAL_LEASE_TOKENS as readonly string[]).includes(
+    token.toLowerCase(),
+  );
+}
+
+// A library clause annotated with whether it's recommended for a given tenancy
+// and the reason — what the wizard renders (recommended ones pre-checked, with
+// the reason shown beside them).
+export type AnnotatedClause<T extends { key: string } = ResolvedClause> = T & {
+  recommended: boolean;
+  recommendReason: string | null;
+};
+
+/**
+ * Annotate the org's resolved clause library with the recommendations for a
+ * tenancy: mark which clauses `recommendClauses` flagged and carry the reason.
+ * A recommended key the org doesn't have (deleted clause) simply doesn't appear
+ * — recommendations are intersected with the real library here, not displayed
+ * on their own. Order is preserved from `clauses` (the caller's category sort).
+ * Pure.
+ */
+export function annotateRecommendations<T extends { key: string }>(
+  clauses: T[],
+  recommendations: ClauseRecommendation[],
+): AnnotatedClause<T>[] {
+  const reasonByKey = new Map(recommendations.map((r) => [r.key, r.reason]));
+  return clauses.map((c) => ({
+    ...c,
+    recommended: reasonByKey.has(c.key),
+    recommendReason: reasonByKey.get(c.key) ?? null,
+  }));
+}
+
+/**
+ * Pick the clauses the operator chose, by clause id, preserving the order of
+ * the resolved library (NOT the order ids arrive in). Unknown ids are dropped —
+ * so a forged/stale id in the submitted form can never assemble a clause that
+ * isn't in the org's current library. Pure; the server action re-resolves the
+ * library first, then calls this.
+ */
+export function selectClausesById<T extends { clauseId: string }>(
+  resolved: T[],
+  selectedIds: string[],
+): T[] {
+  const want = new Set(selectedIds);
+  return resolved.filter((c) => want.has(c.clauseId));
+}
+
+/**
+ * Collect operator-supplied placeholder values from submitted form entries:
+ * every field named `${prefix}<token>` becomes `<token> -> value`. Token names
+ * are lowercased; empty/whitespace values are dropped (so an untouched input
+ * leaves the {{token}} visible rather than blanking it — same contract as
+ * buildLeaseVars). Pure; takes plain [name, value] pairs so it's testable
+ * without a FormData.
+ */
+export function collectVarFields(
+  entries: Iterable<[string, string]>,
+  prefix = "var_",
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of entries) {
+    if (!k.startsWith(prefix)) continue;
+    const token = k.slice(prefix.length).trim().toLowerCase();
+    const val = (v ?? "").trim();
+    if (token && val) out[token] = val;
+  }
+  return out;
+}
+
 // --- Validation -------------------------------------------------------------
 
 export type ClauseInput = {

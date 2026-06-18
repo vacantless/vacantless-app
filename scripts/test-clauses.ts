@@ -30,6 +30,11 @@ import {
   isJurisdiction,
   categoryOrder,
   recommendClauses,
+  CANONICAL_LEASE_TOKENS,
+  isCanonicalLeaseToken,
+  annotateRecommendations,
+  selectClausesById,
+  collectVarFields,
   type ResolvedClause,
   type ClauseVersionLike,
   type ClauseRowLike,
@@ -354,6 +359,58 @@ const seedTokenVars = buildLeaseVars({
 const recordDerivableKeys = ["parking", "storage", "utilities", "pets"];
 const recordDerivable = seedAsResolved.filter((c) => recordDerivableKeys.includes(c.key));
 ok("buildLeaseVars resolves the record-derivable seed clauses cleanly", assembleClauses(recordDerivable, { leaseType: "residential", vars: seedTokenVars }).unresolved.length === 0);
+
+// --- Clause-selection wizard glue (slice 7) ---------------------------------
+
+// CANONICAL_LEASE_TOKENS / isCanonicalLeaseToken
+ok("canonical tokens include the record-derived set", CANONICAL_LEASE_TOKENS.includes("rent") && CANONICAL_LEASE_TOKENS.includes("property_address"));
+ok("isCanonicalLeaseToken true for a record token (any case)", isCanonicalLeaseToken("Start_Date"));
+ok("isCanonicalLeaseToken false for an operator token", !isCanonicalLeaseToken("parking_fee"));
+
+// annotateRecommendations: marks recommended clauses + carries the reason, in
+// library order, and drops recommendations whose key the org doesn't have.
+const recs = recommendClauses({ hasParking: true, hasStorage: true });
+const annotated = annotateRecommendations(seedAsResolved, recs);
+ok("annotateRecommendations preserves library order + count", annotated.length === seedAsResolved.length && annotated[0].key === seedAsResolved[0].key);
+ok("annotateRecommendations flags a recommended clause with its reason", (() => { const p = annotated.find((c) => c.key === "parking"); return !!p && p.recommended && !!p.recommendReason; })());
+ok("annotateRecommendations leaves a non-recommended clause unflagged", (() => { const a = annotated.find((c) => c.key === "alterations"); return !!a && !a.recommended && a.recommendReason === null; })());
+ok("annotateRecommendations drops a recommended key absent from the library", (() => {
+  const tiny = seedAsResolved.filter((c) => c.key === "smoking"); // baseline recs incl. utilities/tenant_insurance not present here
+  const ann = annotateRecommendations(tiny, recommendClauses({}));
+  return ann.length === 1 && ann[0].key === "smoking" && ann[0].recommended; // smoking IS a baseline rec
+})());
+
+// selectClausesById: keeps library order, filters to chosen, drops forged ids.
+const picked = selectClausesById(seedAsResolved, [seedAsResolved[3].clauseId, seedAsResolved[1].clauseId, "forged-id"]);
+ok("selectClausesById keeps only chosen ids", picked.length === 2);
+ok("selectClausesById preserves library order (not arg order)", picked[0].clauseId === seedAsResolved[1].clauseId && picked[1].clauseId === seedAsResolved[3].clauseId);
+ok("selectClausesById drops a forged id", !picked.some((c) => c.clauseId === "forged-id"));
+ok("selectClausesById empty selection -> empty", selectClausesById(seedAsResolved, []).length === 0);
+
+// collectVarFields: prefix strip, lowercase, empty-drop.
+const collected = collectVarFields([
+  ["var_parking_fee", " $50 "],
+  ["var_KEY_DEPOSIT", "100"],
+  ["var_blank", "   "],
+  ["tenancy_id", "abc"], // no prefix -> ignored
+  ["var_", "x"], // empty token -> ignored
+]);
+ok("collectVarFields strips the prefix", collected.parking_fee === "$50");
+ok("collectVarFields lowercases the token", collected.key_deposit === "100");
+ok("collectVarFields drops blank values", !("blank" in collected));
+ok("collectVarFields ignores unprefixed fields", !("tenancy_id" in collected));
+ok("collectVarFields ignores an empty token", Object.keys(collected).length === 2);
+
+// End-to-end glue: record vars + collected vars assemble the chosen clauses.
+const wizRecordVars = buildLeaseVars({ propertyAddress: "1 Test St", tenantName: "Pat", rent: "1250" });
+const wizChosen = selectClausesById(seedAsResolved, [
+  seedAsResolved.find((c) => c.key === "parking")!.clauseId,
+  seedAsResolved.find((c) => c.key === "utilities")!.clauseId,
+]);
+const wizVars = { ...collectVarFields([["var_parking_spaces", "1"], ["var_parking_fee", "$50"], ["var_tenant_utilities", "hydro"], ["var_included_utilities", "water and heat"]]), ...wizRecordVars };
+const wizAssembled = assembleClauses(wizChosen, { leaseType: "residential", vars: wizVars });
+ok("wizard glue assembles exactly the chosen clauses", wizAssembled.clauses.length === 2);
+ok("wizard glue resolves operator-filled + record tokens together", wizAssembled.unresolved.length === 0);
 
 // ----------------------------------------------------------------------------
 console.log(`clauses: ${passed} passed, ${failed} failed`);

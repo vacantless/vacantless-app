@@ -11,6 +11,8 @@ import {
   buildLeaseVars,
   assembleClauses,
   buildExecutedSnapshot,
+  selectClausesById,
+  collectVarFields,
   tokensInBody,
   type ClauseRowLike,
   type ClauseVersionRowLike,
@@ -27,17 +29,21 @@ import {
 } from "@/lib/lease-signing";
 import { sendLeaseSignatureRequest } from "@/lib/email";
 
-// Generate a lease document for a tenancy (lease vault #11, slice 2). Assembles
-// the org's CURRENT clause versions for a residential lease, interpolates the
-// tenancy/unit values, and writes a lease_documents row that SNAPSHOTS exactly
-// which clause version was in force — the anchor the renewal diff reads against.
-// Guarded on manage_tenancies (it acts on a specific tenancy). Redirect-based.
+// Generate a lease document for a tenancy from the operator's clause SELECTION
+// (lease vault #11, slice 7 — the conversion wizard). The wizard submits the
+// clause ids the operator chose (recommendation-driven, include/exclude) plus a
+// var_<token> field per placeholder it asked them to fill. This re-resolves the
+// org's current clause library server-side, intersects it with the submitted
+// ids (so a forged/stale id can't assemble a clause outside the org's library),
+// fills the record-derived tokens itself, and writes a lease_documents row that
+// SNAPSHOTS exactly which clause version was in force — the anchor the renewal
+// diff reads against. Guarded on manage_tenancies. Redirect-based.
 
 function s(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
 
-export async function generateLease(formData: FormData) {
+export async function generateLeaseFromSelection(formData: FormData) {
   await requireCapability(
     "manage_tenancies",
     "/dashboard/tenancies?forbidden=1",
@@ -90,7 +96,16 @@ export async function generateLease(formData: FormData) {
   );
   if (resolved.length === 0) redirect(`${back}?lease=noclauses`);
 
-  const vars = buildLeaseVars({
+  // Only the clauses the operator chose, intersected with the live library and
+  // kept in library order (forged/stale ids drop out).
+  const selectedIds = formData.getAll("clause_id").map((v) => String(v));
+  const selected = selectClausesById(resolved, selectedIds);
+  if (selected.length === 0) redirect(`${back}?lease=noselection`);
+
+  // Record-derived tokens fill automatically; operator-supplied placeholders
+  // come from the var_<token> fields. The record values win on the canonical
+  // tokens so the lease always reflects the true tenancy record.
+  const recordVars = buildLeaseVars({
     propertyAddress: tenancy.property?.address ?? null,
     tenantName: primary?.name ?? null,
     rent: tenancy.rent_cents != null ? formatRentCents(tenancy.rent_cents) : null,
@@ -98,16 +113,13 @@ export async function generateLease(formData: FormData) {
       tenancy.deposit_cents != null ? formatRentCents(tenancy.deposit_cents) : null,
     startDate: tenancy.start_date,
     endDate: tenancy.end_date,
-    // Operator-supplied per-tenancy fields (optional; unfilled ones stay visible
-    // as {{token}} in the draft so nothing is silently blanked).
-    parkingSpaces: s(formData, "parking_spaces") || null,
-    parkingFee: s(formData, "parking_fee") || null,
-    tenantUtilities: s(formData, "tenant_utilities") || null,
-    includedUtilities: s(formData, "included_utilities") || null,
-    storageDescription: s(formData, "storage_description") || null,
   });
+  const operatorVars = collectVarFields(
+    [...formData.entries()].map(([k, v]) => [k, String(v)] as [string, string]),
+  );
+  const vars = { ...operatorVars, ...recordVars };
 
-  const result = assembleClauses(resolved, { leaseType: "residential", vars });
+  const result = assembleClauses(selected, { leaseType: "residential", vars });
   const snapshot = buildExecutedSnapshot(result);
 
   const { error } = await supabase.from("lease_documents").insert({

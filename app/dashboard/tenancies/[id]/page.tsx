@@ -53,7 +53,15 @@ import {
   type LeaseDocView,
   type LeaseSignerView,
 } from "@/components/tenancy-lease-section";
-import type { ExecutedClauseRef } from "@/lib/clauses";
+import type { WizardClause } from "@/components/lease-clause-wizard";
+import {
+  resolveCurrentClauses,
+  buildLeaseVars,
+  type ExecutedClauseRef,
+  type ClauseRowLike,
+  type ClauseVersionRowLike,
+  type RiskLevel,
+} from "@/lib/clauses";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +144,8 @@ const LEASE_SUCCESS: Record<string, string> = {
 const LEASE_ERROR: Record<string, string> = {
   noclauses:
     "Add at least one clause in Settings → Lease Clauses before generating a lease.",
+  noselection:
+    "Select at least one clause to include before generating the lease.",
   notfound: "That tenancy could no longer be found.",
   error: "Something went wrong generating the lease. Please try again.",
   notdraft: "That lease was already sent. Refresh to see its signing status.",
@@ -370,6 +380,65 @@ export default async function TenancyDetailPage({
     }),
   );
 
+  // The org clause library powers the clause-selection wizard (#11 slice 7).
+  // RLS scopes both reads to this org. We resolve each clause to its current
+  // version and enrich with the slice-6 display metadata (category / risk /
+  // landlord note) the wizard renders.
+  const { data: clauseRows } = await supabase
+    .from("lease_clauses")
+    .select("id, key, title, applicable_to, category, risk_level, notes_for_landlord")
+    .order("category", { ascending: true })
+    .order("key", { ascending: true });
+  const { data: clauseVersionRows } = await supabase
+    .from("lease_clause_versions")
+    .select("id, clause_id, version, is_current, body");
+  const clauseMeta = new Map(
+    ((clauseRows ?? []) as {
+      id: string;
+      category: string | null;
+      risk_level: RiskLevel | null;
+      notes_for_landlord: string | null;
+    }[]).map((r) => [r.id, r]),
+  );
+  const wizardClauses: WizardClause[] = resolveCurrentClauses(
+    (clauseRows ?? []) as ClauseRowLike[],
+    (clauseVersionRows ?? []) as ClauseVersionRowLike[],
+  ).map((c) => {
+    const meta = clauseMeta.get(c.clauseId);
+    return {
+      clauseId: c.clauseId,
+      key: c.key,
+      title: c.title,
+      applicableTo: c.applicableTo,
+      versionId: c.versionId,
+      version: c.version,
+      body: c.body,
+      category: meta?.category ?? "Other",
+      riskLevel: meta?.risk_level ?? "standard",
+      notesForLandlord: meta?.notes_for_landlord ?? null,
+    };
+  });
+  // Canonical tokens the wizard fills automatically (preview only; the server
+  // re-derives them) + the read-only "filled from this tenancy" summary.
+  const recordVars = buildLeaseVars({
+    propertyAddress: t.property?.address ?? null,
+    tenantName: primary?.name ?? null,
+    rent: t.rent_cents != null ? formatRentCents(t.rent_cents) : null,
+    deposit: t.deposit_cents != null ? formatRentCents(t.deposit_cents) : null,
+    startDate: t.start_date,
+    endDate: t.end_date,
+  });
+  const recordSummary = [
+    { label: "Property", value: t.property?.address ?? "" },
+    { label: "Primary tenant", value: primary?.name ?? "" },
+    { label: "Rent", value: t.rent_cents != null ? formatRentCents(t.rent_cents) : "" },
+    { label: "Deposit", value: t.deposit_cents != null ? formatRentCents(t.deposit_cents) : "" },
+    { label: "Start", value: t.start_date ?? "" },
+    { label: "End", value: t.end_date ?? "" },
+  ].filter((r) => r.value);
+  // Suggest the prorated-rent fact when the lease starts mid-month.
+  const proratedDefault = !!t.start_date && Number(t.start_date.slice(8, 10)) !== 1;
+
   const composerTenants: ComposerTenant[] = tenants.map((tn) => ({
     id: tn.id,
     name: tn.name,
@@ -603,8 +672,15 @@ export default async function TenancyDetailPage({
         </button>
       </form>
 
-      {/* Lease document (clause library + renewal diff) ------------------- */}
-      <TenancyLeaseSection tenancyId={t.id} leaseDocs={leaseDocs} />
+      {/* Lease document (clause-selection wizard + renewal diff) ---------- */}
+      <TenancyLeaseSection
+        tenancyId={t.id}
+        leaseDocs={leaseDocs}
+        wizardClauses={wizardClauses}
+        recordVars={recordVars}
+        recordSummary={recordSummary}
+        proratedDefault={proratedDefault}
+      />
 
       {/* Rent collection (Rotessa) --------------------------------------- */}
       <SectionHeading>Rent collection</SectionHeading>

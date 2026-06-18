@@ -1,22 +1,27 @@
 import { SectionHeading, StatusChip } from "@/components/ui";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import LeaseClauseWizard, {
+  type WizardClause,
+} from "@/components/lease-clause-wizard";
 import {
   diffSnapshots,
   tokensInBody,
   type ExecutedClauseRef,
 } from "@/lib/clauses";
 import {
-  generateLease,
+  generateLeaseFromSelection,
   deleteLeaseDocument,
   sendLeaseForSignature,
   withdrawLeaseSignature,
 } from "@/app/dashboard/tenancies/[id]/lease-actions";
 
 // Lease documents section on the tenancy detail page (lease vault #11, slices
-// 2-4). Server component: a generate form, the list of generated drafts, the
-// renewal diff (the differentiator), and — slice 4 — the homegrown ECA-2000
-// signing rail: send a draft for signature, per-signer status + magic-links,
-// withdraw-while-unsigned, and the certificate of completion once executed.
+// 2-7). Server component: the clause-selection conversion WIZARD (slice 7 —
+// recommendation-driven include/exclude + placeholder fill + live preview), the
+// list of generated drafts, the renewal diff (the differentiator), and — slice
+// 4/5 — the homegrown ECA-2000 signing rail: send a draft for signature,
+// per-signer status + magic-links, withdraw-while-unsigned, and the certificate
+// of completion once executed.
 
 export type LeaseSignerView = {
   role: string;
@@ -35,9 +40,6 @@ export type LeaseDocView = {
   signers: LeaseSignerView[];
 };
 
-const labelCls = "mb-1 block text-xs font-medium text-gray-600";
-const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
-
 const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warn"> = {
   draft: "neutral",
   sent: "info",
@@ -48,9 +50,17 @@ const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warn"> = {
 export function TenancyLeaseSection({
   tenancyId,
   leaseDocs,
+  wizardClauses,
+  recordVars,
+  recordSummary,
+  proratedDefault,
 }: {
   tenancyId: string;
   leaseDocs: LeaseDocView[];
+  wizardClauses: WizardClause[];
+  recordVars: Record<string, string>;
+  recordSummary: { label: string; value: string }[];
+  proratedDefault: boolean;
 }) {
   // Renewal diff: newest [0] vs the one before it [1] (both newest-first).
   const diff =
@@ -276,47 +286,16 @@ export function TenancyLeaseSection({
           </ul>
         )}
 
-        {/* Generate form */}
-        <form action={generateLease} className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-          <input type="hidden" name="tenancy_id" value={tenancyId} />
-          <p className="text-sm font-medium text-gray-700">
-            {leaseDocs.length > 0 ? "Generate a renewal / new draft" : "Generate the lease"}
-          </p>
-          <p className="text-xs text-gray-500">
-            Property, tenant, rent and dates fill in automatically. The fields
-            below cover the starter clauses; leave any blank and the value stays
-            visible in the draft to fill later.
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={labelCls}>Parking spaces</label>
-              <input name="parking_spaces" placeholder="e.g. 1" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Parking fee</label>
-              <input name="parking_fee" placeholder="e.g. $50" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Utilities the tenant pays</label>
-              <input name="tenant_utilities" placeholder="e.g. hydro" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Utilities included in rent</label>
-              <input name="included_utilities" placeholder="e.g. water and heat" className={inputCls} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Storage provided</label>
-              <input name="storage_description" placeholder="e.g. one locker" className={inputCls} />
-            </div>
-          </div>
-          <button
-            type="submit"
-            className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-            style={{ background: "var(--brand-gradient, var(--brand-color))" }}
-          >
-            Generate lease
-          </button>
-        </form>
+        {/* Clause-selection wizard (slice 7) */}
+        <LeaseClauseWizard
+          tenancyId={tenancyId}
+          clauses={wizardClauses}
+          recordVars={recordVars}
+          recordSummary={recordSummary}
+          proratedDefault={proratedDefault}
+          isRenewal={leaseDocs.length > 0}
+          generateAction={generateLeaseFromSelection}
+        />
       </div>
     </>
   );
