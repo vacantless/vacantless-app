@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { validateBranding } from "@/lib/branding";
+import {
+  validateBrandIdentity,
+  validateReplyToEmail,
+  validateFeedbackDelayHours,
+} from "@/lib/branding";
 import { validateTestRecipient } from "@/lib/test-email";
 import { sendTestEmail } from "@/lib/email";
 import {
@@ -15,36 +19,36 @@ import {
 
 const LOGO_BUCKET = "org-logos";
 
-// Save the owner-editable branding fields (name, brand color, logo URL) onto
-// the org row. RLS scopes the update to the caller's own organization.
-//
-// NOTE: this uses a redirect (not revalidatePath only) on purpose. Revalidate-
-// only server actions intermittently 503 at the Vercel edge and the page does
-// not refresh even though the write commits (the S170 WATCH). A redirect-based
-// action follows the redirect and is unaffected.
-export async function updateBranding(formData: FormData) {
+// ===========================================================================
+// Per-tab settings saves (S227 Settings restructure). The old single
+// `updateBranding` form was split into four focused actions, each owning one
+// tab/section's fields and redirecting back to the tab it lives on. All four
+// require manage_settings and are redirect-based for the same reason the old
+// action was: revalidate-only server actions intermittently 503 at the Vercel
+// edge and the page does not refresh even though the write commits (S170 WATCH);
+// a redirect-based action follows the redirect and is unaffected.
+// ===========================================================================
+
+// Shared guard: settings are admin/operator only (locked seat model) — a
+// showing helper can't touch account settings.
+async function requireSettingsOrg() {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
-  // Org settings + branding are admin/operator only (locked seat model): a
-  // showing helper can't touch account settings.
   await requireCapability("manage_settings", "/dashboard/settings?forbidden=1");
+  return org;
+}
 
-  const result = validateBranding({
+// Tab 1 — Public Page & Brand: business name + brand color(s).
+export async function updateBrandIdentity(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const result = validateBrandIdentity({
     name: String(formData.get("name") ?? ""),
     brand_color: String(formData.get("brand_color") ?? ""),
     brand_color_secondary: String(formData.get("brand_color_secondary") ?? ""),
-    // The logo is now managed by its own upload action (uploadOrgLogo /
-    // removeOrgLogo), not this form — preserve whatever is stored.
-    logo_url: org.logo_url ?? "",
-    reply_to_email: String(formData.get("reply_to_email") ?? ""),
-    feedback_enabled: formData.get("feedback_enabled") != null,
-    feedback_delay_hours: String(formData.get("feedback_delay_hours") ?? ""),
-    nurture_enabled: formData.get("nurture_enabled") != null,
-    sms_enabled: formData.get("sms_enabled") != null,
   });
-
   if (!result.ok) {
-    redirect("/dashboard/settings?error=1");
+    redirect("/dashboard/settings?tab=brand&error=1");
   }
 
   const supabase = createClient();
@@ -52,12 +56,77 @@ export async function updateBranding(formData: FormData) {
     .from("organizations")
     .update(result.values)
     .eq("id", org.id);
-
   if (error) {
-    redirect("/dashboard/settings?error=save");
+    redirect("/dashboard/settings?tab=brand&error=save");
   }
 
-  redirect("/dashboard/settings?saved=1");
+  redirect("/dashboard/settings?tab=brand&saved=1");
+}
+
+// Tab 2 / Email sender — reply-to address renter emails are delivered to.
+export async function updateEmailSender(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const replyTo = validateReplyToEmail(String(formData.get("reply_to_email") ?? ""));
+  if (!replyTo.ok) {
+    redirect("/dashboard/settings?tab=comms&sender=invalid");
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ reply_to_email: replyTo.value })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=comms&sender=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&sender=saved");
+}
+
+// Tab 2 / Renter messages — post-viewing feedback + automatic follow-up.
+export async function updateRenterMessages(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const delay = validateFeedbackDelayHours(
+    String(formData.get("feedback_delay_hours") ?? ""),
+  );
+  if (!delay.ok) {
+    redirect("/dashboard/settings?tab=comms&renter=invalid");
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({
+      // Both are checkboxes that always submit with this form, so absence means
+      // unchecked = off (no opt-in/opt-out ambiguity once the field is in-form).
+      feedback_enabled: formData.get("feedback_enabled") != null,
+      feedback_delay_hours: delay.value,
+      nurture_enabled: formData.get("nurture_enabled") != null,
+    })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=comms&renter=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&renter=saved");
+}
+
+// Tab 2 / Text messages — SMS reminders (OPT-IN: off unless explicitly turned on).
+export async function updateTextMessages(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ sms_enabled: formData.get("sms_enabled") != null })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=comms&sms=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&sms=saved");
 }
 
 // Send the operator a copy of their branded renter auto-reply so they can
@@ -73,7 +142,7 @@ export async function sendTestEmailAction(formData: FormData) {
 
   const recipient = validateTestRecipient(String(formData.get("test_email") ?? ""));
   if (!recipient.ok) {
-    redirect("/dashboard/settings?test=invalid");
+    redirect("/dashboard/settings?tab=comms&test=invalid");
   }
 
   const result = await sendTestEmail({
@@ -89,13 +158,13 @@ export async function sendTestEmailAction(formData: FormData) {
     // operator knows whether it's a config gap or something to retry.
     redirect(
       result.reason === "no_api_key"
-        ? "/dashboard/settings?test=nokey"
-        : "/dashboard/settings?test=failed",
+        ? "/dashboard/settings?tab=comms&test=nokey"
+        : "/dashboard/settings?tab=comms&test=failed",
     );
   }
 
   redirect(
-    `/dashboard/settings?test=sent&to=${encodeURIComponent(recipient.value)}`,
+    `/dashboard/settings?tab=comms&test=sent&to=${encodeURIComponent(recipient.value)}`,
   );
 }
 
@@ -158,12 +227,12 @@ export async function uploadOrgLogo(formData: FormData) {
       : null;
 
   if (!file || file.size === 0) {
-    redirect("/dashboard/settings?logoerr=empty");
+    redirect("/dashboard/settings?tab=brand&logoerr=empty");
   }
 
   const v = validateLogoUpload({ type: file.type, size: file.size });
   if (!v.ok) {
-    redirect(`/dashboard/settings?logoerr=${v.reason}`);
+    redirect(`/dashboard/settings?tab=brand&logoerr=${v.reason}`);
   }
 
   const supabase = createClient();
@@ -178,7 +247,7 @@ export async function uploadOrgLogo(formData: FormData) {
     .from(LOGO_BUCKET)
     .upload(path, file, { contentType: file.type, upsert: false });
   if (upErr) {
-    redirect("/dashboard/settings?logoerr=failed");
+    redirect("/dashboard/settings?tab=brand&logoerr=failed");
   }
 
   const {
@@ -200,10 +269,10 @@ export async function uploadOrgLogo(formData: FormData) {
         error: rbErr.message,
       });
     }
-    redirect("/dashboard/settings?logoerr=failed");
+    redirect("/dashboard/settings?tab=brand&logoerr=failed");
   }
 
-  redirect("/dashboard/settings?logo=saved");
+  redirect("/dashboard/settings?tab=brand&logo=saved");
 }
 
 export async function removeOrgLogo() {
@@ -222,5 +291,5 @@ export async function removeOrgLogo() {
     .update({ logo_url: null })
     .eq("id", org.id);
 
-  redirect("/dashboard/settings?logo=removed");
+  redirect("/dashboard/settings?tab=brand&logo=removed");
 }

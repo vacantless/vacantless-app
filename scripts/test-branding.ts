@@ -6,6 +6,7 @@ import {
   validateReplyToEmail,
   validateFeedbackDelayHours,
   validateBranding,
+  validateBrandIdentity,
   MAX_NAME_LEN,
   DEFAULT_FEEDBACK_DELAY_HOURS,
   MAX_FEEDBACK_DELAY_HOURS,
@@ -251,6 +252,35 @@ eq("delay garbage rejected", validateFeedbackDelayHours("soon"), { ok: false });
   eq("branding sms default off", off.ok === true && off.values.sms_enabled, false);
   const on = validateBranding({ name: "OK", brand_color: "#0e8c8c", logo_url: "", sms_enabled: true });
   eq("branding sms enabled persisted", on.ok === true && on.values.sms_enabled, true);
+}
+
+// --- validateBrandIdentity (S227 Public Page & Brand tab) ---
+eq(
+  "brand-identity all valid normalizes",
+  validateBrandIdentity({ name: " Vacantless ", brand_color: "0E8C8C" }),
+  { ok: true, values: { name: "Vacantless", brand_color: "#0e8c8c", brand_color_secondary: null } },
+);
+{
+  const r = validateBrandIdentity({ name: "OK", brand_color: "#4f46e5", brand_color_secondary: "14B8A6" });
+  eq("brand-identity distinct ombre kept", r.ok === true && r.values.brand_color_secondary, "#14b8a6");
+}
+{
+  const r = validateBrandIdentity({ name: "OK", brand_color: "#4f46e5", brand_color_secondary: "#4F46E5" });
+  eq("brand-identity equal secondary collapses to null", r.ok === true && r.values.brand_color_secondary, null);
+}
+{
+  const r = validateBrandIdentity({ name: "OK", brand_color: "#4f46e5", brand_color_secondary: "  " });
+  eq("brand-identity blank secondary -> null", r.ok === true && r.values.brand_color_secondary, null);
+}
+{
+  const r = validateBrandIdentity({ name: "", brand_color: "nope" });
+  eq("brand-identity name+color invalid not ok", r.ok, false);
+  eq("brand-identity reports 2 errors", r.ok === false && r.errors.length, 2);
+}
+{
+  const r = validateBrandIdentity({ name: "OK", brand_color: "#0e8c8c", brand_color_secondary: "not-a-color" });
+  eq("brand-identity invalid secondary not ok", r.ok, false);
+  eq("brand-identity invalid secondary 1 error", r.ok === false && r.errors.length, 1);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

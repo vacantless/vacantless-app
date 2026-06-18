@@ -110,6 +110,73 @@ export function validateFeedbackDelayHours(
   return { ok: true, value: n };
 }
 
+// ---------------------------------------------------------------------------
+// Per-tab brand identity (S227 Settings restructure): the "Public Page & Brand"
+// tab only owns the name + brand colors. Reply-to, feedback, follow-up, and SMS
+// moved to the Communications tab and are validated/persisted by their own
+// focused server actions, so this validates just these three fields together.
+// validateBranding (below) is retained unchanged for its existing tests.
+// ---------------------------------------------------------------------------
+export type BrandIdentityUpdate = {
+  name: string;
+  brand_color: string;
+  brand_color_secondary: string | null;
+};
+
+export type BrandIdentityValidation =
+  | { ok: true; values: BrandIdentityUpdate }
+  | { ok: false; errors: string[] };
+
+/**
+ * Validate the brand-identity fields (business name + brand color + optional
+ * ombre second stop). Mirrors the name/color/secondary rules in validateBranding:
+ * a blank/absent second stop, or one equal to the primary, collapses to null
+ * (a solid). All fields are validated together so every problem surfaces at once.
+ */
+export function validateBrandIdentity(input: {
+  name?: string | null;
+  brand_color?: string | null;
+  brand_color_secondary?: string | null;
+}): BrandIdentityValidation {
+  const errors: string[] = [];
+
+  const name = validateOrgName(input.name);
+  if (!name.ok) {
+    errors.push(`Business name is required and must be ${MAX_NAME_LEN} characters or fewer.`);
+  }
+
+  const color = normalizeHexColor(input.brand_color);
+  if (color == null) {
+    errors.push("Brand color must be a valid hex color (e.g. #0e8c8c).");
+  }
+
+  const secondaryRaw = (input.brand_color_secondary ?? "").trim();
+  let secondary: string | null = null;
+  let secondaryOk = true;
+  if (secondaryRaw !== "") {
+    const s = normalizeHexColor(secondaryRaw);
+    if (s == null) {
+      secondaryOk = false;
+      errors.push("Second brand color must be a valid hex color, or left blank.");
+    } else {
+      secondary = color != null && s === color ? null : s;
+    }
+  }
+
+  if (errors.length > 0 || !name.ok || color == null || !secondaryOk) {
+    return { ok: false, errors };
+  }
+
+  return {
+    ok: true,
+    values: {
+      name: name.value,
+      brand_color: color,
+      brand_color_secondary: secondary,
+    },
+  };
+}
+
 export type BrandingInput = {
   name?: string | null;
   brand_color?: string | null;
