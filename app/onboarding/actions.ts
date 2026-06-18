@@ -27,6 +27,9 @@ async function seedClauseLibrary(
         title: c.title,
         category: c.category,
         applicable_to: c.applicableTo,
+        risk_level: c.riskLevel,
+        jurisdiction: c.jurisdiction,
+        notes_for_landlord: c.notesForLandlord,
       })),
     )
     .select("id, key");

@@ -33,6 +33,64 @@ export function isLeaseType(v: string): v is LeaseType {
   return (LEASE_TYPES as readonly string[]).includes(v);
 }
 
+// --- Risk level (the Ontario guardrail badge) -------------------------------
+
+// Every clause carries a visible risk level (Noam's clause review, 2026-06-18).
+// It drives the UI badge and the caution / legal-review warning shown beside the
+// clause. The point is to stop the tool quietly encouraging void terms: Ontario's
+// Standard Lease says additional terms can't remove RTA rights, and the riskier a
+// clause's subject (pets, deposits, penalties, guest limits) the louder we warn.
+//   standard      — common, low-risk (parking, utilities, appliances, insurance).
+//   caution       — valid but needs careful wording (pets, smoking, key deposits,
+//                   flat charges, access rules).
+//   legal_review  — review recommended (penalties, guest/roommate limits, damage
+//                   deposits, tenant-paid repairs, anything unusual/custom).
+export const RISK_LEVELS = ["standard", "caution", "legal_review"] as const;
+export type RiskLevel = (typeof RISK_LEVELS)[number];
+
+export function isRiskLevel(v: string): v is RiskLevel {
+  return (RISK_LEVELS as readonly string[]).includes(v);
+}
+
+// --- Jurisdiction -----------------------------------------------------------
+
+// The legal context a clause's wording was authored for. Vacantless ships seed
+// law for Ontario only today; 'canada' and 'custom' exist so an org can label
+// its own clauses honestly rather than implying an Ontario basis they don't have.
+export const JURISDICTIONS = ["ontario", "canada", "custom"] as const;
+export type Jurisdiction = (typeof JURISDICTIONS)[number];
+
+export function isJurisdiction(v: string): v is Jurisdiction {
+  return (JURISDICTIONS as readonly string[]).includes(v);
+}
+
+// --- Categories (the practical, landlord-facing grouping) -------------------
+
+// The six plain-language buckets Noam specified — categories landlords think in,
+// not legal jargon. `category` stays free text in the DB (migration 0039's
+// choice, so an org can add its own), but the seed uses these labels and the
+// library UI groups + orders by this list, with anything unrecognized falling
+// into a trailing "Other" group.
+export const CLAUSE_CATEGORIES = [
+  "Rent & Deposits",
+  "Utilities & Services",
+  "Use of Unit",
+  "Move-In / Move-Out",
+  "Maintenance / Access",
+  "Property-Specific",
+] as const;
+export type ClauseCategory = (typeof CLAUSE_CATEGORIES)[number];
+
+/**
+ * Sort index for a category — its position in CLAUSE_CATEGORIES, or a large
+ * number (so it sorts last, under "Other") for anything unrecognized. Lets the
+ * UI render groups in the intended order without hard-coding it in the view.
+ */
+export function categoryOrder(category: string): number {
+  const i = (CLAUSE_CATEGORIES as readonly string[]).indexOf(category);
+  return i === -1 ? CLAUSE_CATEGORIES.length : i;
+}
+
 /**
  * Whether a clause scoped `applicableTo` belongs in a lease of type `target`.
  * A 'both' clause applies to every lease type; otherwise it must match exactly.
@@ -313,6 +371,11 @@ export type ClauseRowLike = {
   key: string;
   title: string;
   applicable_to: ClauseApplicability;
+  // metadata added in slice 6 (migration 0041). Optional so the resolver and
+  // existing callers that select only the core columns keep compiling.
+  risk_level?: RiskLevel;
+  jurisdiction?: Jurisdiction;
+  notes_for_landlord?: string | null;
 };
 
 // The lease_clause_versions columns the resolver needs.
@@ -399,6 +462,79 @@ export function buildLeaseVars(src: LeaseVarSource): Record<string, string> {
   return out;
 }
 
+// --- Smart clause recommendations -------------------------------------------
+
+// The unit / tenancy facts that drive a recommendation. All optional so the
+// caller passes whatever the records hold; a missing fact just means "don't
+// recommend on that basis". Booleans derived from the tenancy/unit record by the
+// caller (e.g. parkingSpaces > 0 -> hasParking).
+export type RecommendationFacts = {
+  hasParking?: boolean; // a parking space is assigned
+  parkingAtExtraCost?: boolean; // parking carries a monthly fee
+  gasFlatFee?: boolean; // a flat gas amount is folded into rent
+  tenantPaysHydro?: boolean; // hydro is a tenant-paid utility
+  hasStorage?: boolean; // a locker / storage area is provided
+  hasOutdoorSpace?: boolean; // balcony / terrace / yard
+  petsRestricted?: boolean; // the pets field carries rules / notes
+  hasEarlyAccess?: boolean; // an early-access date exists
+  hasProratedRent?: boolean; // a partial first month applies
+  appliancesIncluded?: boolean; // appliances come with the unit
+  propertySpecific?: boolean; // special equipment / valves / building rules
+};
+
+export type ClauseRecommendation = { key: string; reason: string };
+
+// Clauses worth surfacing on almost every residential tenancy regardless of the
+// facts (the "Recommended for this tenancy" defaults Noam's UI sketch shows).
+const BASELINE_RECOMMENDATIONS: ClauseRecommendation[] = [
+  { key: "utilities", reason: "Set out who pays which utilities." },
+  { key: "tenant_insurance", reason: "Standard on most tenancies; the Landlord's insurance won't cover the Tenant." },
+  { key: "smoking", reason: "Record the smoking and vaping rules for the unit." },
+];
+
+/**
+ * Recommend clause keys from unit/tenancy facts (Noam's smart-recommendation
+ * spec). Returns a baseline set always worth showing, then fact-driven additions,
+ * de-duplicated by key (first reason wins) and in a stable order. Pure: the
+ * caller maps records -> facts and intersects the result with the org's actual
+ * clause library before display (a recommended key the org has deleted is just
+ * dropped). Recommends only keys that exist in RESIDENTIAL_CLAUSE_SEED.
+ */
+export function recommendClauses(facts: RecommendationFacts): ClauseRecommendation[] {
+  const out: ClauseRecommendation[] = [...BASELINE_RECOMMENDATIONS];
+  const add = (key: string, reason: string) => out.push({ key, reason });
+
+  if (facts.hasParking) add("parking", "A parking space is assigned to this tenancy.");
+  if (facts.parkingAtExtraCost)
+    add("flat_monthly_charges", "Parking carries a monthly fee - confirm how it sits in the rent.");
+  if (facts.gasFlatFee)
+    add("flat_monthly_charges", "A flat gas amount is folded into the rent.");
+  if (facts.tenantPaysHydro)
+    add("utility_account_setup", "The Tenant pays hydro and must set up the account.");
+  if (facts.hasStorage) add("storage", "A locker or storage area is provided.");
+  if (facts.hasOutdoorSpace) add("outdoor_space", "The unit has a private balcony, terrace, or yard.");
+  if (facts.petsRestricted)
+    add("pets", "The pets field has rules - use the RTA-safe conduct clause (caution).");
+  if (facts.hasEarlyAccess) {
+    add("early_access", "An early-access date is set before the lease start.");
+    add("tenant_insurance", "Confirm insurance covers the early-access period.");
+  }
+  if (facts.hasProratedRent) add("prorated_rent", "A partial first month applies.");
+  if (facts.appliancesIncluded) add("appliances", "Appliances are included - list them to avoid disputes.");
+  if (facts.propertySpecific)
+    add("custom_property", "This property has special terms (equipment, valves, building rules).");
+
+  // De-dup by key, first reason wins, order preserved.
+  const seen = new Set<string>();
+  const deduped: ClauseRecommendation[] = [];
+  for (const r of out) {
+    if (seen.has(r.key)) continue;
+    seen.add(r.key);
+    deduped.push(r);
+  }
+  return deduped;
+}
+
 // --- Validation -------------------------------------------------------------
 
 export type ClauseInput = {
@@ -406,6 +542,9 @@ export type ClauseInput = {
   title: string;
   category?: string;
   applicableTo: string;
+  riskLevel?: string;
+  jurisdiction?: string;
+  notesForLandlord?: string | null;
 };
 export type ClauseValidation =
   | {
@@ -415,6 +554,9 @@ export type ClauseValidation =
         title: string;
         category: string;
         applicableTo: ClauseApplicability;
+        riskLevel: RiskLevel;
+        jurisdiction: Jurisdiction;
+        notesForLandlord: string | null;
       };
     }
   | { ok: false; code: string };
@@ -423,19 +565,43 @@ export type ClauseValidation =
 // assembler's select-by-key identifier and as a diff match key.
 const CLAUSE_KEY_RE = /^[a-z0-9_]+$/;
 
-/** Validate a new-clause submission. */
+/**
+ * Validate a new-clause submission. risk_level / jurisdiction default to the
+ * safe values ('standard' / 'ontario') when blank so an older form post or a
+ * minimal create still produces a valid row; an explicitly-supplied but unknown
+ * value is rejected rather than silently coerced.
+ */
 export function validateClauseInput(v: ClauseInput): ClauseValidation {
   const key = (v.key ?? "").trim().toLowerCase();
   const title = (v.title ?? "").trim();
   const category = (v.category ?? "general").trim() || "general";
   const applicableTo = (v.applicableTo ?? "").trim();
+  const riskRaw = (v.riskLevel ?? "").trim();
+  const jurisRaw = (v.jurisdiction ?? "").trim();
+  const notes = (v.notesForLandlord ?? "").trim();
 
   if (!key) return { ok: false, code: "key_required" };
   if (!CLAUSE_KEY_RE.test(key)) return { ok: false, code: "key_invalid" };
   if (!title) return { ok: false, code: "title_required" };
   if (!isClauseApplicability(applicableTo)) return { ok: false, code: "applicable_to_invalid" };
 
-  return { ok: true, value: { key, title, category, applicableTo } };
+  const riskLevel: RiskLevel = riskRaw === "" ? "standard" : (riskRaw as RiskLevel);
+  if (!isRiskLevel(riskLevel)) return { ok: false, code: "risk_level_invalid" };
+  const jurisdiction: Jurisdiction = jurisRaw === "" ? "ontario" : (jurisRaw as Jurisdiction);
+  if (!isJurisdiction(jurisdiction)) return { ok: false, code: "jurisdiction_invalid" };
+
+  return {
+    ok: true,
+    value: {
+      key,
+      title,
+      category,
+      applicableTo,
+      riskLevel,
+      jurisdiction,
+      notesForLandlord: notes || null,
+    },
+  };
 }
 
 export type VersionInput = { body: string; note?: string | null };
@@ -456,6 +622,8 @@ const CLAUSE_ERROR_MESSAGES: Record<string, string> = {
   key_invalid: "The key can use only lowercase letters, numbers, and underscores.",
   title_required: "Give the clause a title.",
   applicable_to_invalid: "Choose where this clause applies (residential, commercial, or both).",
+  risk_level_invalid: "Choose a risk level (standard, caution, or legal review).",
+  jurisdiction_invalid: "Choose a jurisdiction (Ontario, Canada, or custom).",
   body_required: "The clause text can’t be empty.",
   not_found: "That clause version no longer exists.",
 };
@@ -481,50 +649,201 @@ export function clauseErrorMessage(code: string | undefined): string | null {
 export type SeedClause = {
   key: string;
   title: string;
-  category: string;
+  category: ClauseCategory;
   applicableTo: ClauseApplicability;
+  riskLevel: RiskLevel;
+  jurisdiction: Jurisdiction;
+  notesForLandlord: string;
   body: string;
 };
 
+// The 15 starter clauses Noam specified in the clause-section review (seed.rtf /
+// seed1.rtf, 2026-06-18). Enough to be useful immediately without turning
+// Vacantless into a legal-drafting platform. Bodies carry {{token}} placeholders
+// the assembler fills per tenancy; tokens the tenancy record can't supply (e.g.
+// {{key_deposit}}, {{insurance_deadline}}) stay visible at generation so the
+// operator fills them deliberately. Where an Ontario RTA rule constrains the
+// wording, the default body states it accurately rather than offering a clause
+// that would be void (e.g. a blanket no-pets prohibition is void under RTA s.14).
+// Hyphens, not em dashes, in clause text (Noam's drafted-content rule).
 export const RESIDENTIAL_CLAUSE_SEED: SeedClause[] = [
-  {
-    key: "pets",
-    title: "Pets",
-    category: "occupancy",
-    applicableTo: "residential",
-    body:
-      "Pets: The Tenant may keep a pet in the rental unit. Under section 14 of the Residential Tenancies Act, 2006, any provision prohibiting pets is void; this clause governs conduct only. The Tenant agrees to keep any pet under control, to promptly remedy any damage caused by the pet at {{property_address}}, and to comply with the rules of the residential complex and any applicable condominium declaration.",
-  },
   {
     key: "parking",
     title: "Parking",
-    category: "amenities",
+    category: "Utilities & Services",
     applicableTo: "both",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use when parking is included or available. Set the spaces and any monthly fee per tenancy.",
     body:
-      "Parking: The Tenant is assigned {{parking_spaces}} parking space(s) at the residential complex for one licensed, operable vehicle per space, at a monthly fee of {{parking_fee}} payable with the rent. Assigned spaces are for the Tenant’s use only and may not be assigned, sublet, or used for storage or repairs.",
-  },
-  {
-    key: "smoking",
-    title: "Smoking and Vaping",
-    category: "conduct",
-    applicableTo: "both",
-    body:
-      "Smoking and Vaping: Smoking or vaping of any substance, including tobacco and cannabis, is not permitted inside the rental unit or in any indoor common area of the residential complex. Smoke damage or persistent odour caused by a breach of this clause may be charged to the Tenant as damage beyond normal wear and tear.",
-  },
-  {
-    key: "utilities",
-    title: "Utilities",
-    category: "financial",
-    applicableTo: "residential",
-    body:
-      "Utilities: The following utilities are the responsibility of the Tenant and are not included in the rent: {{tenant_utilities}}. The following utilities are included and paid by the Landlord: {{included_utilities}}. The Tenant agrees to keep all tenant-paid utility accounts active for the full term of the tenancy.",
+      "Parking: The Tenant is assigned {{parking_spaces}} parking space(s) at the residential complex for one licensed, operable vehicle per space, at a monthly fee of {{parking_fee}} payable with the rent. Assigned spaces are for the Tenant's use only and may not be assigned, sublet, or used for storage or repairs.",
   },
   {
     key: "storage",
     title: "Storage",
-    category: "amenities",
+    category: "Utilities & Services",
     applicableTo: "both",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use when a locker or storage area is provided. Describe the space and note the Landlord isn't responsible for stored items.",
     body:
       "Storage: The Tenant is provided {{storage_description}} for personal storage at the residential complex. The Landlord is not responsible for loss of or damage to stored items. No flammable, hazardous, or perishable materials may be stored, and storage areas must be kept clean and accessible.",
+  },
+  {
+    key: "utilities",
+    title: "Utilities",
+    category: "Utilities & Services",
+    applicableTo: "residential",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Set out which utilities the Tenant pays and which are included. One of the most important clauses to get right.",
+    body:
+      "Utilities: The following utilities are the responsibility of the Tenant and are not included in the rent: {{tenant_utilities}}. The following utilities are included and paid by the Landlord: {{included_utilities}}. The Tenant agrees to keep all tenant-paid utility accounts active for the full term of the tenancy.",
+  },
+  {
+    key: "utility_account_setup",
+    title: "Utility Account Setup",
+    category: "Move-In / Move-Out",
+    applicableTo: "residential",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use when the Tenant must open hydro, gas, or internet accounts before moving in.",
+    body:
+      "Utility Account Setup: The Tenant agrees to arrange and pay for any required utility account ({{utility_provider}}) effective as of the commencement of the tenancy or any earlier possession date, and to provide proof of setup upon request.",
+  },
+  {
+    key: "flat_monthly_charges",
+    title: "Flat Monthly Charges",
+    category: "Rent & Deposits",
+    applicableTo: "residential",
+    riskLevel: "caution",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use for a flat monthly amount (e.g. gas, snow/gardening) included in lawful rent. Word it carefully so it does not conflict with the lawful rent structure.",
+    body:
+      "Flat Monthly Charges: A monthly amount of {{charge_amount}} for {{charge_name}} is included as part of the lawful rent payable under this tenancy. This amount is not a separate fee and is included in the rent figure set out in the lease.",
+  },
+  {
+    key: "tenant_insurance",
+    title: "Tenant Insurance",
+    category: "Move-In / Move-Out",
+    applicableTo: "both",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Standard and widely used. The Landlord's insurance does not cover the Tenant's belongings or liability.",
+    body:
+      "Tenant Insurance: The Tenant agrees to obtain and maintain tenant insurance, including liability coverage and coverage for the Tenant's personal belongings, throughout the tenancy, and to provide proof of coverage upon request. The Landlord's insurance does not cover the Tenant's property or liability.",
+  },
+  {
+    key: "smoking",
+    title: "Smoking and Vaping",
+    category: "Use of Unit",
+    applicableTo: "both",
+    riskLevel: "caution",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Valid in Ontario but must be worded with care and still respect the Human Rights Code.",
+    body:
+      "Smoking and Vaping: Smoking or vaping of any substance, including tobacco and cannabis, is not permitted inside the rental unit or in any indoor common area of the residential complex, and cannabis cultivation is not permitted in or around the premises. Smoke damage or persistent odour caused by a breach of this clause may be charged to the Tenant as damage beyond normal wear and tear.",
+  },
+  {
+    key: "pets",
+    title: "Pets / Condo or Building Rules",
+    category: "Use of Unit",
+    applicableTo: "residential",
+    riskLevel: "caution",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Do not use a blanket no-pets clause in Ontario - it is void under RTA s.14. This clause governs conduct and condo rules only.",
+    body:
+      "Pets / Condo or Building Rules: The Tenant may keep a pet in the rental unit. Under section 14 of the Residential Tenancies Act, 2006, any provision prohibiting pets is void; this clause governs conduct only. The Tenant is responsible for ensuring that any pet does not cause damage, unreasonable noise, safety concerns, or interference with other residents, must promptly remedy any pet-related damage at {{property_address}}, and must comply with any applicable condominium or building rules.",
+  },
+  {
+    key: "appliances",
+    title: "Appliances",
+    category: "Maintenance / Access",
+    applicableTo: "both",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Useful to avoid move-in disputes. List the specific appliances included.",
+    body:
+      "Appliances: The following appliances are included with the rental unit and will be in good working order at commencement: {{appliances_included}}. The Tenant is responsible for the ordinary cleanliness and proper use of these appliances.",
+  },
+  {
+    key: "alterations",
+    title: "Alterations / Decorating",
+    category: "Maintenance / Access",
+    applicableTo: "both",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Common and useful. Sets expectations on painting, fixtures, and wall anchors before move-out.",
+    body:
+      "Alterations / Decorating: The Tenant shall not paint, wallpaper, alter, or install fixtures in the rental unit without the Landlord's prior written consent. Artwork and window coverings are permitted using reasonable fasteners; any permitted wall anchors or screws must be properly patched and sanded before the end of the tenancy, and no adhesives may be applied to walls or ceilings.",
+  },
+  {
+    key: "keys_locks",
+    title: "Keys, Fobs and Locks",
+    category: "Move-In / Move-Out",
+    applicableTo: "both",
+    riskLevel: "caution",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Be careful with deposits: in Ontario a key deposit must not exceed the expected replacement cost.",
+    body:
+      "Keys, Fobs and Locks: The Tenant is provided {{keys_provided}}. Any refundable key or access-device deposit ({{key_deposit}}) must not exceed the expected replacement cost and is returned when the devices are returned. The Tenant shall not change or install locks or access devices without the Landlord's prior written consent.",
+  },
+  {
+    key: "early_access",
+    title: "Early Access",
+    category: "Move-In / Move-Out",
+    applicableTo: "both",
+    riskLevel: "caution",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use when the Tenant moves in before the official lease start. Make clear it does not change the start date.",
+    body:
+      "Early Access: The Landlord may provide early access to the rental unit on {{early_access_date}} for move-in purposes only. Early access does not change the official tenancy start date of {{start_date}} unless expressly agreed in writing. Tenant insurance and any tenant-paid utilities must be in effect for the early-access period.",
+  },
+  {
+    key: "prorated_rent",
+    title: "Prorated Rent",
+    category: "Rent & Deposits",
+    applicableTo: "both",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use for a partial first month. Stands alone or pairs with the Early Access clause.",
+    body:
+      "Prorated Rent: The Tenant shall pay prorated rent of {{prorated_rent}} for the period from {{prorated_period_start}} to {{prorated_period_end}}. Full monthly rent begins on {{full_rent_start_date}}.",
+  },
+  {
+    key: "outdoor_space",
+    title: "Balcony / Terrace / Outdoor Space",
+    category: "Use of Unit",
+    applicableTo: "residential",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use when the unit has a private balcony, terrace, or yard. Covers cleanliness, safe use, and access for equipment.",
+    body:
+      "Balcony / Terrace / Outdoor Space: The Tenant is responsible for the ordinary cleanliness and proper use of {{outdoor_space_description}}, subject to applicable building rules and the Landlord's reasonable right of access for repairs or equipment. No unsafe storage and no alterations are permitted in the outdoor area.",
+  },
+  {
+    key: "custom_property",
+    title: "Custom Property-Specific Clause",
+    category: "Property-Specific",
+    applicableTo: "both",
+    riskLevel: "legal_review",
+    jurisdiction: "custom",
+    notesForLandlord:
+      "For unique property terms (valve access, shared equipment, building rules). Custom clauses may affect legal rights - consider legal review before use.",
+    body: "{{custom_clause_text}}",
   },
 ];

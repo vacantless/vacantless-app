@@ -23,6 +23,13 @@ import {
   resolveCurrentClauses,
   buildLeaseVars,
   RESIDENTIAL_CLAUSE_SEED,
+  RISK_LEVELS,
+  JURISDICTIONS,
+  CLAUSE_CATEGORIES,
+  isRiskLevel,
+  isJurisdiction,
+  categoryOrder,
+  recommendClauses,
   type ResolvedClause,
   type ClauseVersionLike,
   type ClauseRowLike,
@@ -195,13 +202,44 @@ ok("clauseErrorMessage known", typeof clauseErrorMessage("key_required") === "st
 ok("clauseErrorMessage unknown -> null", clauseErrorMessage("zzz") === null);
 ok("clauseErrorMessage undefined -> null", clauseErrorMessage(undefined) === null);
 
-// --- Residential seed integrity ---------------------------------------------
-ok("seed has the 5 expected clauses", RESIDENTIAL_CLAUSE_SEED.map((c) => c.key).sort().join(",") === "parking,pets,smoking,storage,utilities");
+// --- Risk level / jurisdiction guards ---------------------------------------
+ok("RISK_LEVELS has the 3 expected", RISK_LEVELS.join(",") === "standard,caution,legal_review");
+ok("isRiskLevel accepts known", isRiskLevel("caution") && isRiskLevel("legal_review"));
+ok("isRiskLevel rejects unknown", !isRiskLevel("high") && !isRiskLevel(""));
+ok("JURISDICTIONS has the 3 expected", JURISDICTIONS.join(",") === "ontario,canada,custom");
+ok("isJurisdiction accepts known", isJurisdiction("ontario") && isJurisdiction("custom"));
+ok("isJurisdiction rejects unknown", !isJurisdiction("quebec") && !isJurisdiction(""));
+ok("categoryOrder ranks known in order", categoryOrder("Rent & Deposits") === 0 && categoryOrder("Property-Specific") === 5);
+ok("categoryOrder sorts unknown last", categoryOrder("Whatever") === CLAUSE_CATEGORIES.length);
+
+// --- Residential seed integrity (15 clauses) --------------------------------
+ok("seed has 15 clauses", RESIDENTIAL_CLAUSE_SEED.length === 15);
+ok("seed has the 15 expected keys", RESIDENTIAL_CLAUSE_SEED.map((c) => c.key).sort().join(",") === [
+  "alterations","appliances","custom_property","early_access","flat_monthly_charges",
+  "keys_locks","outdoor_space","parking","pets","prorated_rent","smoking","storage",
+  "tenant_insurance","utilities","utility_account_setup",
+].join(","));
 ok("seed keys are unique", new Set(RESIDENTIAL_CLAUSE_SEED.map((c) => c.key)).size === RESIDENTIAL_CLAUSE_SEED.length);
 ok("seed keys are valid identifiers", RESIDENTIAL_CLAUSE_SEED.every((c) => /^[a-z0-9_]+$/.test(c.key)));
 ok("seed applicabilities are valid", RESIDENTIAL_CLAUSE_SEED.every((c) => isClauseApplicability(c.applicableTo)));
+ok("seed risk levels are valid", RESIDENTIAL_CLAUSE_SEED.every((c) => isRiskLevel(c.riskLevel)));
+ok("seed jurisdictions are valid", RESIDENTIAL_CLAUSE_SEED.every((c) => isJurisdiction(c.jurisdiction)));
+ok("seed categories are all from the 6 practical buckets", RESIDENTIAL_CLAUSE_SEED.every((c) => categoryOrder(c.category) < CLAUSE_CATEGORIES.length));
+ok("seed notes_for_landlord all present", RESIDENTIAL_CLAUSE_SEED.every((c) => c.notesForLandlord.trim().length > 0));
 ok("seed bodies non-empty", RESIDENTIAL_CLAUSE_SEED.every((c) => c.body.trim().length > 0));
 ok("seed validates through validateClauseInput", RESIDENTIAL_CLAUSE_SEED.every((c) => validateClauseInput(c).ok));
+// Ontario guardrails baked into the seed
+const petsSeed = RESIDENTIAL_CLAUSE_SEED.find((c) => c.key === "pets")!;
+ok("seed pets is renamed to Pets / Condo or Building Rules", petsSeed.title === "Pets / Condo or Building Rules");
+ok("seed pets cites RTA s.14 (never a void no-pets clause)", petsSeed.body.includes("section 14") && !/no pets/i.test(petsSeed.body));
+ok("seed pets is flagged caution", petsSeed.riskLevel === "caution");
+ok("seed custom clause is flagged legal_review + custom jurisdiction", (() => {
+  const cp = RESIDENTIAL_CLAUSE_SEED.find((c) => c.key === "custom_property")!;
+  return cp.riskLevel === "legal_review" && cp.jurisdiction === "custom";
+})());
+ok("seed flat_monthly_charges + smoking + keys flagged caution", ["flat_monthly_charges","smoking","keys_locks"].every((k) => RESIDENTIAL_CLAUSE_SEED.find((c) => c.key === k)!.riskLevel === "caution"));
+ok("seed bodies use hyphens not em dashes", RESIDENTIAL_CLAUSE_SEED.every((c) => !c.body.includes("—")));
+
 // the seed must assemble cleanly for a residential lease once turned into versions
 const seedAsResolved: ResolvedClause[] = RESIDENTIAL_CLAUSE_SEED.map((c, i) => ({
   clauseId: "c" + i,
@@ -212,23 +250,46 @@ const seedAsResolved: ResolvedClause[] = RESIDENTIAL_CLAUSE_SEED.map((c, i) => (
   version: 1,
   body: c.body,
 }));
-const seedAssembled = assembleClauses(seedAsResolved, {
-  leaseType: "residential",
-  vars: {
-    property_address: "833 Pillette Rd",
-    parking_spaces: "1",
-    parking_fee: "$50",
-    tenant_utilities: "hydro",
-    included_utilities: "water and heat",
-    storage_description: "one locker",
-  },
-});
-ok("seed assembles all 5 for residential", seedAssembled.clauses.length === 5);
-ok("seed assembly fully resolved with realistic vars", seedAssembled.unresolved.length === 0);
-ok("seed pets clause cites RTA s.14", seedAssembled.clauses[0].rendered.includes("section 14"));
-// commercial lease drops the residential-only seed clauses (pets, utilities)
+// build a vars map covering every token referenced across the seed bodies, so a
+// fully-filled assembly leaves nothing unresolved (catches a typo'd token).
+const allSeedTokens = Array.from(
+  new Set(RESIDENTIAL_CLAUSE_SEED.flatMap((c) => tokensInBody(c.body))),
+);
+const fullSeedVars: Record<string, string> = {};
+for (const t of allSeedTokens) fullSeedVars[t] = "[" + t + "]";
+const seedAssembled = assembleClauses(seedAsResolved, { leaseType: "residential", vars: fullSeedVars });
+const residentialSeedCount = RESIDENTIAL_CLAUSE_SEED.filter((c) => c.applicableTo !== "commercial").length;
+ok("seed assembles every residential-applicable clause", seedAssembled.clauses.length === residentialSeedCount);
+ok("seed assembly fully resolved when every token is supplied", seedAssembled.unresolved.length === 0);
+ok("seed pets clause cites RTA s.14 in assembly", seedAssembled.clauses.find((c) => c.key === "pets")!.rendered.includes("section 14"));
+// commercial lease drops the residential-only seed clauses
 const seedCommercial = assembleClauses(seedAsResolved, { leaseType: "commercial", vars: {} });
-ok("seed commercial excludes residential-only clauses", seedCommercial.excluded.map((e) => e.key).sort().join(",") === "pets,utilities");
+ok("seed commercial excludes residential-only clauses", seedCommercial.excluded.map((e) => e.key).sort().join(",") === "flat_monthly_charges,outdoor_space,pets,utilities,utility_account_setup");
+
+// --- recommendClauses (smart recommendations) -------------------------------
+const recBaseline = recommendClauses({});
+ok("recommend baseline includes utilities + insurance + smoking", ["utilities","tenant_insurance","smoking"].every((k) => recBaseline.some((r) => r.key === k)));
+ok("recommend parking when hasParking", recommendClauses({ hasParking: true }).some((r) => r.key === "parking"));
+ok("recommend storage when hasStorage", recommendClauses({ hasStorage: true }).some((r) => r.key === "storage"));
+ok("recommend outdoor_space when hasOutdoorSpace", recommendClauses({ hasOutdoorSpace: true }).some((r) => r.key === "outdoor_space"));
+ok("recommend pets when petsRestricted", recommendClauses({ petsRestricted: true }).some((r) => r.key === "pets"));
+ok("recommend utility_account_setup when tenantPaysHydro", recommendClauses({ tenantPaysHydro: true }).some((r) => r.key === "utility_account_setup"));
+ok("recommend early_access pairs with tenant_insurance", (() => {
+  const r = recommendClauses({ hasEarlyAccess: true });
+  return r.some((x) => x.key === "early_access") && r.some((x) => x.key === "tenant_insurance");
+})());
+ok("recommend prorated_rent when hasProratedRent", recommendClauses({ hasProratedRent: true }).some((r) => r.key === "prorated_rent"));
+ok("recommend appliances when appliancesIncluded", recommendClauses({ appliancesIncluded: true }).some((r) => r.key === "appliances"));
+ok("recommend custom_property when propertySpecific", recommendClauses({ propertySpecific: true }).some((r) => r.key === "custom_property"));
+ok("recommend de-dupes keys", (() => {
+  const r = recommendClauses({ hasEarlyAccess: true }); // tenant_insurance both baseline + early-access
+  return r.filter((x) => x.key === "tenant_insurance").length === 1;
+})());
+ok("recommend keys all exist in the seed", recommendClauses({
+  hasParking: true, parkingAtExtraCost: true, gasFlatFee: true, tenantPaysHydro: true,
+  hasStorage: true, hasOutdoorSpace: true, petsRestricted: true, hasEarlyAccess: true,
+  hasProratedRent: true, appliancesIncluded: true, propertySpecific: true,
+}).every((r) => RESIDENTIAL_CLAUSE_SEED.some((c) => c.key === r.key)));
 
 // --- resolveCurrentClauses (the DB-rows -> ResolvedClause[] join) ------------
 const clauseRows: ClauseRowLike[] = [
@@ -277,7 +338,11 @@ ok("buildLeaseVars omits blank values", !("included_utilities" in vars));
 ok("buildLeaseVars omits null values", !("storage_description" in vars));
 ok("buildLeaseVars keeps provided rent", vars.rent === "1250");
 ok("buildLeaseVars empty source -> empty map", Object.keys(buildLeaseVars({})).length === 0);
-// the seed's residential token set is satisfiable by buildLeaseVars keys
+// buildLeaseVars supplies the record-derivable tokens, so the clauses whose
+// tokens are ALL record-derivable (parking, storage, utilities, pets) resolve
+// cleanly from the tenancy record alone; the rest (e.g. key_deposit,
+// insurance amounts, prorated values) are operator-filled at generation by
+// design and stay visible as unresolved tokens until the operator supplies them.
 const seedTokenVars = buildLeaseVars({
   propertyAddress: "1 Test St",
   parkingSpaces: "1",
@@ -286,7 +351,9 @@ const seedTokenVars = buildLeaseVars({
   includedUtilities: "water and heat",
   storageDescription: "one locker",
 });
-ok("buildLeaseVars resolves the residential seed cleanly", assembleClauses(seedAsResolved, { leaseType: "residential", vars: seedTokenVars }).unresolved.length === 0);
+const recordDerivableKeys = ["parking", "storage", "utilities", "pets"];
+const recordDerivable = seedAsResolved.filter((c) => recordDerivableKeys.includes(c.key));
+ok("buildLeaseVars resolves the record-derivable seed clauses cleanly", assembleClauses(recordDerivable, { leaseType: "residential", vars: seedTokenVars }).unresolved.length === 0);
 
 // ----------------------------------------------------------------------------
 console.log(`clauses: ${passed} passed, ${failed} failed`);

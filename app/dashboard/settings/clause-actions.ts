@@ -44,6 +44,9 @@ export async function saveClause(formData: FormData) {
     title: s(formData, "title"),
     category: s(formData, "category"),
     applicableTo: s(formData, "applicable_to"),
+    riskLevel: s(formData, "risk_level"),
+    jurisdiction: s(formData, "jurisdiction"),
+    notesForLandlord: s(formData, "notes_for_landlord"),
   });
   if (!check.ok) redirect(`${CLAUSES_TAB}&clause=${check.code}`);
 
@@ -57,6 +60,9 @@ export async function saveClause(formData: FormData) {
         title: check.value.title,
         category: check.value.category,
         applicable_to: check.value.applicableTo,
+        risk_level: check.value.riskLevel,
+        jurisdiction: check.value.jurisdiction,
+        notes_for_landlord: check.value.notesForLandlord,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -77,6 +83,9 @@ export async function saveClause(formData: FormData) {
       title: check.value.title,
       category: check.value.category,
       applicable_to: check.value.applicableTo,
+      risk_level: check.value.riskLevel,
+      jurisdiction: check.value.jurisdiction,
+      notes_for_landlord: check.value.notesForLandlord,
     })
     .select("id")
     .single();

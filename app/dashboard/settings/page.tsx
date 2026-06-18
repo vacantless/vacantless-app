@@ -38,7 +38,12 @@ import {
   commsErrorMessage,
 } from "@/lib/tenant-comms";
 import { ClauseLibrary, type ClauseView } from "@/components/clause-library";
-import { clauseErrorMessage, type ClauseApplicability } from "@/lib/clauses";
+import {
+  clauseErrorMessage,
+  type ClauseApplicability,
+  type RiskLevel,
+  type Jurisdiction,
+} from "@/lib/clauses";
 
 export const dynamic = "force-dynamic";
 
@@ -212,7 +217,7 @@ export default async function SettingsPage({
   // shape into ClauseView[] (versions newest-first). RLS scopes both to this org.
   const { data: clauseRows } = await supabase
     .from("lease_clauses")
-    .select("id, key, title, category, applicable_to")
+    .select("id, key, title, category, applicable_to, risk_level, jurisdiction, notes_for_landlord")
     .order("category", { ascending: true })
     .order("key", { ascending: true });
   const clauseList = (clauseRows ?? []) as {
@@ -221,6 +226,9 @@ export default async function SettingsPage({
     title: string;
     category: string;
     applicable_to: ClauseApplicability;
+    risk_level: RiskLevel;
+    jurisdiction: Jurisdiction;
+    notes_for_landlord: string | null;
   }[];
   const { data: versionRows } = await supabase
     .from("lease_clause_versions")
@@ -240,6 +248,9 @@ export default async function SettingsPage({
     title: c.title,
     category: c.category,
     applicable_to: c.applicable_to,
+    risk_level: c.risk_level ?? "standard",
+    jurisdiction: c.jurisdiction ?? "ontario",
+    notes_for_landlord: c.notes_for_landlord ?? null,
     versions: versionList
       .filter((v) => v.clause_id === c.id)
       .map((v) => ({
