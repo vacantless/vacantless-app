@@ -254,3 +254,34 @@ export function matchesScreenFilter(
   if (filter === "ok") return qualifiedOut === false;
   return true;
 }
+
+// --- public affordability hint (S252) ---------------------------------------
+// A SOFT, renter-facing affordability guideline shown next to the income
+// question on the public inquiry form, so a renter can self-assess fit before
+// inquiring (fewer obvious mismatches for the operator to triage).
+//
+// CRITICAL fair-housing + privacy design: this is computed from the PUBLIC rent
+// alone, using a generic, well-known rule of thumb (~3x monthly rent) — it does
+// NOT read, and must never expose, the org's configured screening_income_multiple
+// (that value is operator-private and is intentionally absent from
+// get_public_listing). So the figure is a general budgeting guideline, not this
+// landlord's actual threshold, and it is rendered as non-binding ("not a strict
+// requirement"). In Ontario a rent-to-income ratio cannot be a sole rejection
+// criterion (O.Reg 290/98), so the hint is guidance only and never gates the form.
+export const AFFORDABILITY_INCOME_RATIO = 3;
+
+/**
+ * Suggested monthly household income (in cents) for a rental, rounded to the
+ * nearest $100 so it reads as a soft guideline rather than a precise gate.
+ * Returns null when the rent is unknown or non-positive (nothing to suggest).
+ * Uses only the public rent and the generic ratio above — never the org's
+ * configured multiple.
+ */
+export function affordabilityHintIncomeCents(
+  rentCents: number | null | undefined,
+): number | null {
+  if (rentCents == null || rentCents <= 0) return null;
+  const raw = rentCents * AFFORDABILITY_INCOME_RATIO;
+  // Round to the nearest $100 (10,000 cents).
+  return Math.round(raw / 10_000) * 10_000;
+}

@@ -7,6 +7,8 @@ import {
   parseCount,
   isScreenFilter,
   matchesScreenFilter,
+  affordabilityHintIncomeCents,
+  AFFORDABILITY_INCOME_RATIO,
   SCREENING_REASON,
   type OrgScreeningConfig,
   type ScreeningContext,
@@ -313,6 +315,59 @@ const goodAnswers: ScreeningAnswers = {
     const inOk = matchesScreenFilter(q, "ok");
     ok(`partition q=${q}: exactly one of out/ok`, inOut !== inOk);
   }
+}
+
+// --- affordabilityHintIncomeCents (public income hint, S252) ----------------
+{
+  // $2,000/mo rent -> 3x = $6,000/mo (already a round $100).
+  ok(
+    "hint: $2000 rent -> $6000",
+    affordabilityHintIncomeCents(200_000) === 600_000,
+  );
+  // Uses the generic ratio constant, not an org multiple.
+  ok("hint ratio is 3", AFFORDABILITY_INCOME_RATIO === 3);
+  ok(
+    "hint: matches ratio * rent (rounded)",
+    affordabilityHintIncomeCents(200_000) ===
+      200_000 * AFFORDABILITY_INCOME_RATIO,
+  );
+  // $1,250/mo rent -> 3x = $3,750/mo, which is exactly a half-hundred and
+  // rounds up to $3,800 at $100 granularity.
+  ok(
+    "hint: $1250 rent -> $3800 ($3750 rounds up)",
+    affordabilityHintIncomeCents(125_000) === 380_000,
+  );
+  // Rounds to the nearest $100: $1,675/mo -> 3x = $5,025 -> $5,000.
+  ok(
+    "hint: $1675 rent rounds to $5000",
+    affordabilityHintIncomeCents(167_500) === 500_000,
+  );
+  // $1,683.33/mo -> 3x = $5,049.99 -> rounds to $5,000.
+  ok(
+    "hint: $1683.33 rent rounds to $5000",
+    affordabilityHintIncomeCents(168_333) === 500_000,
+  );
+  // Rounds up at the half-hundred boundary: $1,685/mo -> 3x = $5,055 -> $5,100.
+  ok(
+    "hint: $1685 rent rounds to $5100",
+    affordabilityHintIncomeCents(168_500) === 510_000,
+  );
+  // Result is always a whole-$100 multiple.
+  for (const rent of [99_900, 123_400, 200_001, 333_333]) {
+    const h = affordabilityHintIncomeCents(rent);
+    ok(`hint: ${rent} cents -> whole $100`, h !== null && h % 10_000 === 0);
+  }
+  // No rent -> no suggestion.
+  ok("hint: null rent -> null", affordabilityHintIncomeCents(null) === null);
+  ok(
+    "hint: undefined rent -> null",
+    affordabilityHintIncomeCents(undefined) === null,
+  );
+  ok("hint: 0 rent -> null", affordabilityHintIncomeCents(0) === null);
+  ok(
+    "hint: negative rent -> null",
+    affordabilityHintIncomeCents(-100_000) === null,
+  );
 }
 
 console.log(`\nscreening: ${passed} passed, ${failed} failed`);

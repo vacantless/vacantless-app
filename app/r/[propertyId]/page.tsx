@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { submitLead } from "./actions";
 import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
+import { affordabilityHintIncomeCents } from "@/lib/screening";
 import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { Icons } from "@/components/icons";
 import {
@@ -91,6 +92,13 @@ export default async function PublicListingPage({
   const availability = formatAvailability(l.available_date);
   // Photos come pre-ordered from the RPC (cover first, then sort order).
   const photos = Array.isArray(l.photos) ? l.photos : [];
+
+  // Soft, non-binding affordability guideline shown next to the screening
+  // income question. Computed from the PUBLIC rent + a generic ~3x rule of
+  // thumb — never the org's private screening_income_multiple (not exposed by
+  // the RPC). Null when rent is unknown, so the tip simply doesn't render.
+  const incomeHintCents = affordabilityHintIncomeCents(l.rent_cents);
+  const rentMonthly = l.rent_cents ? Math.round(l.rent_cents / 100) : null;
 
   const booked = searchParams.submitted === "booked";
   // The renter's chosen time was taken before we could book it (audit B1). Their
@@ -329,6 +337,14 @@ export default async function PublicListingPage({
                           Helps us confirm the home fits your budget. Combined
                           household, before tax.
                         </span>
+                        {incomeHintCents != null && rentMonthly != null && (
+                          <span className="mt-1 block text-xs text-gray-500">
+                            Tip: for a ${rentMonthly.toLocaleString()}/mo home,
+                            renters often have a household income around $
+                            {(incomeHintCents / 100).toLocaleString()}/mo. This
+                            is a general guideline, not a strict requirement.
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
