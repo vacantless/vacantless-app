@@ -53,7 +53,12 @@ import {
   blastOfferable,
   formatRentLabel,
 } from "@/lib/price-drop";
-import { LAUNDRY_OPTIONS, laundryLabel } from "@/lib/property-features";
+import {
+  LAUNDRY_OPTIONS,
+  laundryLabel,
+  DOG_SIZE_OPTIONS,
+  dogSizeLabel,
+} from "@/lib/property-features";
 import {
   PORTALS,
   LISTING_POST_STATUSES,
@@ -86,6 +91,10 @@ type Property = {
   balcony: boolean;
   furnished: boolean;
   pet_friendly: boolean;
+  pets_cats: boolean;
+  pets_dogs: boolean;
+  pets_dog_size: string | null;
+  pets_notes: string | null;
   heat_included: boolean;
   hydro_included: boolean;
   water_included: boolean;
@@ -139,7 +148,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, heat_included, hydro_included, water_included, photos_ready",
+      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -218,6 +227,10 @@ export default async function PropertyDetailPage({
       balcony: p.balcony,
       furnished: p.furnished,
       pet_friendly: p.pet_friendly,
+      pets_cats: p.pets_cats,
+      pets_dogs: p.pets_dogs,
+      pets_dog_size: p.pets_dog_size,
+      pets_notes: p.pets_notes,
       heat_included: p.heat_included,
       hydro_included: p.hydro_included,
       water_included: p.water_included,
@@ -1026,6 +1039,10 @@ export default async function PropertyDetailPage({
             balcony: p.balcony,
             furnished: p.furnished,
             pet_friendly: p.pet_friendly,
+            pets_cats: p.pets_cats,
+            pets_dogs: p.pets_dogs,
+            pets_dog_size: p.pets_dog_size,
+            pets_notes: p.pets_notes,
             heat_included: p.heat_included,
             hydro_included: p.hydro_included,
             water_included: p.water_included,
@@ -1108,7 +1125,6 @@ export default async function PropertyDetailPage({
                 ["air_conditioning", "Air conditioning", p.air_conditioning],
                 ["balcony", "Balcony", p.balcony],
                 ["furnished", "Furnished", p.furnished],
-                ["pet_friendly", "Pet friendly", p.pet_friendly],
               ] as const
             ).map(([name, label, checked]) => (
               <label
@@ -1124,6 +1140,58 @@ export default async function PropertyDetailPage({
                 {label}
               </label>
             ))}
+          </div>
+
+          {/* --- Pets (structured policy, migration 0045) --- */}
+          <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+            <p className="mb-2 text-xs font-medium text-gray-600">Pets welcome</p>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              {(
+                [
+                  ["pets_cats", "Cats", p.pets_cats],
+                  ["pets_dogs", "Dogs", p.pets_dogs],
+                ] as const
+              ).map(([name, label, checked]) => (
+                <label
+                  key={name}
+                  className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"
+                >
+                  <input
+                    type="checkbox"
+                    name={name}
+                    defaultChecked={checked}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  {label}
+                </label>
+              ))}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Dog size limit</label>
+                <select
+                  name="pets_dog_size"
+                  defaultValue={p.pets_dog_size ?? ""}
+                  className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">No limit</option>
+                  {DOG_SIZE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {dogSizeLabel(opt)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <input
+              name="pets_notes"
+              defaultValue={p.pets_notes ?? ""}
+              placeholder="Pet notes (optional), e.g. 1 pet max, no aggressive breeds"
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Advertised pet preference for the listing and feed. In Ontario a
+              &ldquo;no pets&rdquo; lease clause is void (RTA s.14) — this is a
+              listing/screening field, not an enforceable rule.
+            </p>
           </div>
         </fieldset>
 

@@ -8,7 +8,7 @@ import { requireCapability } from "@/lib/membership";
 import { PROPERTY_STATUSES } from "@/lib/pipeline";
 import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
-import { normalizeLaundry } from "@/lib/property-features";
+import { normalizeLaundry, normalizeDogSize } from "@/lib/property-features";
 import {
   normalizePortal,
   normalizeListingStatus,
@@ -124,6 +124,14 @@ export async function updateProperty(formData: FormData) {
       ?.price_drop_pending_cents ?? null;
   const nextPending = pendingDropFrom(oldRent, newRent, existingPending);
 
+  // Structured pet policy (0045). pet_friendly is the DERIVED master (= cats OR
+  // dogs) the public RPCs + S240 screening read — keep it in lockstep here so it
+  // can never contradict the structured fields. Dog size only applies to dogs.
+  const petsCats = parseCheckbox(formData, "pets_cats");
+  const petsDogs = parseCheckbox(formData, "pets_dogs");
+  const petsDogSize = petsDogs ? normalizeDogSize(formData.get("pets_dog_size")) : null;
+  const petsNotes = String(formData.get("pets_notes") ?? "").trim() || null;
+
   // RLS scopes the update to the caller's org; .eq("id") targets one row.
   await supabase
     .from("properties")
@@ -144,7 +152,11 @@ export async function updateProperty(formData: FormData) {
       air_conditioning: parseCheckbox(formData, "air_conditioning"),
       balcony: parseCheckbox(formData, "balcony"),
       furnished: parseCheckbox(formData, "furnished"),
-      pet_friendly: parseCheckbox(formData, "pet_friendly"),
+      pet_friendly: petsCats || petsDogs,
+      pets_cats: petsCats,
+      pets_dogs: petsDogs,
+      pets_dog_size: petsDogSize,
+      pets_notes: petsNotes,
       heat_included: parseCheckbox(formData, "heat_included"),
       hydro_included: parseCheckbox(formData, "hydro_included"),
       water_included: parseCheckbox(formData, "water_included"),
@@ -183,7 +195,7 @@ export async function duplicateProperty(formData: FormData) {
   const { data: source } = await supabase
     .from("properties")
     .select(
-      "address, rent_cents, beds, baths, parking, description, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, heat_included, hydro_included, water_included, photos_ready",
+      "address, rent_cents, beds, baths, parking, description, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
     )
     .eq("id", id)
     .maybeSingle();
@@ -204,6 +216,10 @@ export async function duplicateProperty(formData: FormData) {
     balcony: boolean;
     furnished: boolean;
     pet_friendly: boolean;
+    pets_cats: boolean;
+    pets_dogs: boolean;
+    pets_dog_size: string | null;
+    pets_notes: string | null;
     heat_included: boolean;
     hydro_included: boolean;
     water_included: boolean;
@@ -229,6 +245,10 @@ export async function duplicateProperty(formData: FormData) {
       balcony: s.balcony,
       furnished: s.furnished,
       pet_friendly: s.pet_friendly,
+      pets_cats: s.pets_cats,
+      pets_dogs: s.pets_dogs,
+      pets_dog_size: s.pets_dog_size,
+      pets_notes: s.pets_notes,
       heat_included: s.heat_included,
       hydro_included: s.hydro_included,
       water_included: s.water_included,

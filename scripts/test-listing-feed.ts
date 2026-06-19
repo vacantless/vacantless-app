@@ -110,7 +110,9 @@ const fullListing: FeedListingInput = {
   air_conditioning: true,
   balcony: true,
   furnished: false,
-  pet_friendly: true,
+  pets_cats: true,
+  pets_dogs: true,
+  pets_dog_size: "medium",
   heat_included: true,
   hydro_included: false,
   water_included: true,
@@ -171,6 +173,12 @@ ok("item available_date", item.includes("<available_date>2026-07-01</available_d
 ok("item property_type", item.includes("<property_type>apartment</property_type>"));
 ok("item status active", item.includes("<status>active</status>"));
 ok("item pets_allowed true", item.includes("<pets_allowed>true</pets_allowed>"));
+ok("item cats_allowed true", item.includes("<cats_allowed>true</cats_allowed>"));
+ok("item dogs_allowed true", item.includes("<dogs_allowed>true</dogs_allowed>"));
+ok(
+  "item dog_size_limit medium",
+  item.includes("<dog_size_limit>medium</dog_size_limit>"),
+);
 ok("item furnished false", item.includes("<furnished>false</furnished>"));
 ok("item utilities heat", item.includes("<utility>Heat</utility>"));
 ok("item utilities water", item.includes("<utility>Water</utility>"));
@@ -180,6 +188,23 @@ ok("item amenity balcony", item.includes("<amenity>Balcony</amenity>"));
 ok("item photos block", item.includes('<photo order="1">https://cdn/x/cover.jpg</photo>'));
 ok("item photo order 2", item.includes('<photo order="2">https://cdn/x/2.jpg</photo>'));
 ok("item country", item.includes("<country>CA</country>"));
+
+// Pets: no pets -> all false, no dog_size_limit element.
+const noPets = buildListingItemXml(
+  { ...fullListing, pets_cats: false, pets_dogs: false, pets_dog_size: null },
+  { baseUrl: "https://x.test", propertyType: "apartment", country: "CA" },
+);
+ok("no-pets pets_allowed false", noPets.includes("<pets_allowed>false</pets_allowed>"));
+ok("no-pets cats_allowed false", noPets.includes("<cats_allowed>false</cats_allowed>"));
+ok("no-pets dogs_allowed false", noPets.includes("<dogs_allowed>false</dogs_allowed>"));
+ok("no-pets omits dog_size_limit", !noPets.includes("<dog_size_limit>"));
+// Dogs with size 'any' -> no dog_size_limit element (no real limit).
+const anyDog = buildListingItemXml(
+  { ...fullListing, pets_cats: false, pets_dogs: true, pets_dog_size: "any" },
+  { baseUrl: "https://x.test", propertyType: "apartment", country: "CA" },
+);
+ok("dog size 'any' omits dog_size_limit", !anyDog.includes("<dog_size_limit>"));
+ok("dog size 'any' dogs_allowed true", anyDog.includes("<dogs_allowed>true</dogs_allowed>"));
 
 // XSS / injection: a malicious address must be escaped, not break the doc.
 const evil = buildListingItemXml(

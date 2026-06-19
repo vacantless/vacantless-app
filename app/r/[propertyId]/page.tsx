@@ -31,6 +31,10 @@ type Listing = {
   balcony: boolean;
   furnished: boolean;
   pet_friendly: boolean;
+  pets_cats: boolean;
+  pets_dogs: boolean;
+  pets_dog_size: string | null;
+  pets_notes: string | null;
   heat_included: boolean;
   hydro_included: boolean;
   water_included: boolean;
@@ -158,6 +162,11 @@ export default async function PublicListingPage({
           )}
           {utilities && (
             <p className="mt-3 text-sm font-medium text-gray-700">{utilities}</p>
+          )}
+          {l.pets_notes && l.pets_notes.trim() && (
+            <p className="mt-2 text-sm text-gray-600">
+              Pets: {l.pets_notes.trim()}
+            </p>
           )}
         </div>
 

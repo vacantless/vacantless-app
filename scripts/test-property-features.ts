@@ -12,6 +12,12 @@ import {
   buildUtilitiesIncluded,
   utilitiesSummary,
   hasAnyFeature,
+  DOG_SIZE_OPTIONS,
+  isDogSize,
+  normalizeDogSize,
+  dogSizeLabel,
+  derivePetFriendly,
+  petPolicyLabel,
 } from "../lib/property-features";
 
 let passed = 0;
@@ -101,7 +107,8 @@ ok(
       balcony: true,
       laundry: "in_suite",
       furnished: true,
-      pet_friendly: true,
+      pets_cats: true,
+      pets_dogs: true,
     }),
   ) ===
     JSON.stringify([
@@ -109,7 +116,7 @@ ok(
       "Balcony",
       "In-suite laundry",
       "Furnished",
-      "Pet friendly",
+      "Cats & dogs welcome",
     ]),
 );
 ok("chips: empty when none", buildAmenityChips({}).length === 0);
@@ -124,6 +131,61 @@ ok(
 ok(
   "chips: false booleans excluded",
   buildAmenityChips({ air_conditioning: false, balcony: false }).length === 0,
+);
+
+// --- pets (structured policy, 0045) ----------------------------------------
+ok("DOG_SIZE_OPTIONS has 4", DOG_SIZE_OPTIONS.length === 4);
+ok("isDogSize: small", isDogSize("small"));
+ok("isDogSize: rejects junk", !isDogSize("tiny"));
+ok("isDogSize: rejects non-string", !isDogSize(2));
+ok("normalizeDogSize: trims + accepts", normalizeDogSize(" large ") === "large");
+ok("normalizeDogSize: blank -> null", normalizeDogSize("") === null);
+ok("normalizeDogSize: junk -> null", normalizeDogSize("huge") === null);
+ok("dogSizeLabel: any -> any size", dogSizeLabel("any") === "any size");
+ok("dogSizeLabel: junk -> null", dogSizeLabel("nope") === null);
+
+ok("derive: cats only -> true", derivePetFriendly({ pets_cats: true }) === true);
+ok("derive: dogs only -> true", derivePetFriendly({ pets_dogs: true }) === true);
+ok("derive: neither -> false", derivePetFriendly({}) === false);
+ok(
+  "derive: ignores legacy pet_friendly without structured",
+  derivePetFriendly({ pet_friendly: true }) === false,
+);
+
+ok("petPolicy: none -> null", petPolicyLabel({}) === null);
+ok(
+  "petPolicy: cats only",
+  petPolicyLabel({ pets_cats: true }) === "Cats welcome",
+);
+ok(
+  "petPolicy: dogs only",
+  petPolicyLabel({ pets_dogs: true }) === "Dogs welcome",
+);
+ok(
+  "petPolicy: cats & dogs",
+  petPolicyLabel({ pets_cats: true, pets_dogs: true }) === "Cats & dogs welcome",
+);
+ok(
+  "petPolicy: dogs with size limit",
+  petPolicyLabel({ pets_dogs: true, pets_dog_size: "small" }) ===
+    "Dogs welcome (small dogs)",
+);
+ok(
+  "petPolicy: cats & dogs with size limit",
+  petPolicyLabel({ pets_cats: true, pets_dogs: true, pets_dog_size: "medium" }) ===
+    "Cats & dogs welcome (medium dogs)",
+);
+ok(
+  "petPolicy: size 'any' shows no parenthetical",
+  petPolicyLabel({ pets_dogs: true, pets_dog_size: "any" }) === "Dogs welcome",
+);
+ok(
+  "petPolicy: size on cats-only is ignored",
+  petPolicyLabel({ pets_cats: true, pets_dog_size: "small" }) === "Cats welcome",
+);
+ok(
+  "petPolicy: legacy fallback when no structured data",
+  petPolicyLabel({ pet_friendly: true }) === "Pets welcome",
 );
 
 // --- utilities -------------------------------------------------------------

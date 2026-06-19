@@ -21,7 +21,9 @@
 import {
   buildAmenityChips,
   buildUtilitiesIncluded,
+  derivePetFriendly,
   isAvailableNow,
+  isDogSize,
   type UnitFeatures,
 } from "./property-features";
 
@@ -280,9 +282,14 @@ export function buildListingItemXml(
     `    <available_now>${isAvailableNow(listing.available_date) ? "true" : "false"}</available_now>`,
   );
   parts.push(`    <furnished>${listing.furnished ? "true" : "false"}</furnished>`);
-  parts.push(
-    `    <pets_allowed>${listing.pet_friendly ? "true" : "false"}</pets_allowed>`,
-  );
+  // Pet policy: the derived master + the structured detail (aggregators map the
+  // booleans; an unknown element is ignored by ingesters that don't read it).
+  const petsAllowed = derivePetFriendly(listing);
+  parts.push(`    <pets_allowed>${petsAllowed ? "true" : "false"}</pets_allowed>`);
+  parts.push(`    <cats_allowed>${listing.pets_cats ? "true" : "false"}</cats_allowed>`);
+  parts.push(`    <dogs_allowed>${listing.pets_dogs ? "true" : "false"}</dogs_allowed>`);
+  if (listing.pets_dogs && isDogSize(listing.pets_dog_size) && listing.pets_dog_size !== "any")
+    parts.push(`    ${tag("dog_size_limit", listing.pets_dog_size)}`);
   if (listing.parking && String(listing.parking).trim())
     parts.push(`    ${tag("parking", String(listing.parking).trim())}`);
 
