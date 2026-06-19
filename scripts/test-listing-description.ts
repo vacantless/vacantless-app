@@ -7,6 +7,7 @@ import {
   buildDescriptionScaffold,
   isDescriptionBlank,
   buildDescriptionDraft,
+  neighbourhoodSentence,
   flagDiscriminatoryLanguage,
   flagAnswers,
   type CapturedInput,
@@ -175,6 +176,30 @@ ok(
   flagAnswers({ renter_lifestyle_notes: "mature tenants only", layout_and_light_notes: "bright" }).length >= 1,
 );
 ok("flagAnswers clean", flagAnswers({ layout_and_light_notes: "open concept, bright" }).length === 0);
+
+// --- neighbourhood "Close to" de-doubling (S250) ----------------------------
+ok("hood: plain note gets 'Close to' prefix",
+  neighbourhoodSentence("the lake and downtown") === "Close to the lake and downtown.");
+ok("hood: 'Steps to ...' not double-prefixed",
+  neighbourhoodSentence("Steps to transit, grocery, and cafes") === "Steps to transit, grocery, and cafes.");
+ok("hood: 'Walking distance ...' kept verbatim",
+  neighbourhoodSentence("Walking distance to the subway") === "Walking distance to the subway.");
+ok("hood: 'Minutes from ...' kept verbatim",
+  neighbourhoodSentence("Minutes from the highway") === "Minutes from the highway.");
+ok("hood: 'Near ...' kept verbatim",
+  neighbourhoodSentence("Near parks and trails") === "Near parks and trails.");
+ok("hood: already 'Close to ...' not doubled",
+  neighbourhoodSentence("Close to everything") === "Close to everything.");
+ok("hood: 'Across from ...' kept verbatim",
+  neighbourhoodSentence("Across from the park") === "Across from the park.");
+{
+  const draft = buildDescriptionDraft(
+    { beds: 1, unit_type: "unit" } as DraftFacts,
+    { neighbourhood_notes: "Steps to transit, grocery, and cafes" },
+  );
+  ok("draft: no 'Close to Steps to' doubling", !/Close to Steps to/i.test(draft));
+  ok("draft: keeps the operator's proximity phrase", /Steps to transit/i.test(draft));
+}
 
 // ----------------------------------------------------------------------------
 console.log(`listing-description: ${passed} passed, ${failed} failed`);

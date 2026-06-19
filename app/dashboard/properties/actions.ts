@@ -26,9 +26,16 @@ import {
   reorder,
   coverAfterDelete,
   planPhotoClone,
+  MAX_PHOTO_BYTES,
   type PhotoLike,
   type SourcePhoto,
 } from "@/lib/photos";
+import {
+  parseImageUrls,
+  validateImageUrl,
+  isBlockedAddress,
+  sniffImageType,
+} from "@/lib/image-url-import";
 import { photoCapForPlan } from "@/lib/billing";
 
 const PHOTO_BUCKET = "property-photos";
@@ -725,6 +732,223 @@ export async function uploadPropertyPhotos(formData: FormData) {
   revalidatePath(`/dashboard/properties/${propertyId}`);
   if (uploaded === 0) redirect(`/dashboard/properties/${propertyId}?photoerr=failed`);
   redirect(`/dashboard/properties/${propertyId}?photos=${uploaded}`);
+}
+
+// ---------------------------------------------------------------------------
+// Import photos from operator-pasted direct image links (REAL-WORLD-INTAKE
+// item Q, Phase 1). The realtor-onboarding path (paste MLS -> prefill -> copy)
+// always leaves photos as the one manual step; this lets an operator paste
+// direct image links instead of saving + re-selecting files.
+//
+// SSRF posture: a server fetch of an operator-supplied URL must not be steerable
+// at internal/cloud-metadata addresses. The pure lib/image-url-import module
+// holds the rules (scheme/host/IP-range checks + magic-byte sniffing); the
+// helper below adds the impure parts: it RESOLVES the hostname and rejects if
+// ANY resolved address is private/reserved, follows redirects MANUALLY and
+// re-validates every hop, and caps both response size and time. We trust the
+// bytes (magic-byte sniff), never the Content-Type header, for the stored type.
+// ---------------------------------------------------------------------------
+
+const IMPORT_FETCH_TIMEOUT_MS = 10_000;
+const IMPORT_MAX_REDIRECTS = 3;
+
+/** Resolve a hostname and confirm EVERY address it maps to is public. */
+async function hostResolvesToPublicOnly(host: string): Promise<boolean> {
+  try {
+    const dns = await import("node:dns/promises");
+    const addrs = await dns.lookup(host, { all: true });
+    if (addrs.length === 0) return false;
+    return addrs.every((a) => !isBlockedAddress(a.address));
+  } catch {
+    return false;
+  }
+}
+
+type FetchedImage = { bytes: Uint8Array; type: string };
+
+/**
+ * Fetch one image URL safely, or return null on any failure (best-effort per
+ * link). Validates scheme/host, resolves + re-checks the IP, follows redirects
+ * manually re-validating each hop, caps size + time, and confirms the bytes are
+ * a supported image via magic-byte sniff.
+ */
+async function fetchImageFromUrl(rawUrl: string): Promise<FetchedImage | null> {
+  let current = rawUrl;
+  for (let hop = 0; hop <= IMPORT_MAX_REDIRECTS; hop++) {
+    const v = validateImageUrl(current);
+    if (!v.ok) return null;
+    if (!(await hostResolvesToPublicOnly(v.host))) return null;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), IMPORT_FETCH_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(v.url, {
+        redirect: "manual",
+        signal: controller.signal,
+        headers: { "User-Agent": "VacantlessImporter/1.0", Accept: "image/*" },
+      });
+    } catch {
+      clearTimeout(timer);
+      return null;
+    }
+
+    // Manual redirect: re-validate the next hop's URL rather than letting fetch
+    // follow it (a redirect could otherwise point back at an internal address).
+    if (res.status >= 300 && res.status < 400) {
+      clearTimeout(timer);
+      const loc = res.headers.get("location");
+      if (!loc) return null;
+      try {
+        current = new URL(loc, v.url).href;
+      } catch {
+        return null;
+      }
+      continue;
+    }
+
+    if (!res.ok || !res.body) {
+      clearTimeout(timer);
+      return null;
+    }
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_PHOTO_BYTES) {
+      clearTimeout(timer);
+      return null;
+    }
+
+    // Stream with a hard size cap so a server that omits/lies about
+    // Content-Length still can't make us buffer an unbounded body.
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          total += value.length;
+          if (total > MAX_PHOTO_BYTES) {
+            await reader.cancel();
+            clearTimeout(timer);
+            return null;
+          }
+          chunks.push(value);
+        }
+      }
+    } catch {
+      clearTimeout(timer);
+      return null;
+    }
+    clearTimeout(timer);
+
+    if (total <= 0) return null;
+    const bytes = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) {
+      bytes.set(c, off);
+      off += c.length;
+    }
+    const type = sniffImageType(bytes);
+    if (!type) return null;
+    return { bytes, type };
+  }
+  return null; // too many redirects
+}
+
+export async function importPropertyPhotosFromUrls(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const fail = (reason: string) =>
+    redirect(`/dashboard/properties/${propertyId}?photoerr=${reason}`);
+
+  const urls = parseImageUrls(String(formData.get("photo_urls") ?? ""));
+  if (urls.length === 0) fail("urlnone");
+
+  const supabase = createClient();
+
+  const { data: existing } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover")
+    .eq("property_id", propertyId);
+  const existingRows = (existing ?? []) as PhotoLike[];
+
+  // Same plan-scoped cap the file uploader enforces.
+  const remaining = photoCapForPlan(org.plan) - existingRows.length;
+  if (remaining <= 0) fail("urlmax");
+
+  let order = nextSortOrder(existingRows);
+  let firstEver = existingRows.length === 0;
+  let added = 0;
+  let skipped = 0;
+
+  for (const raw of urls) {
+    if (added >= remaining) {
+      skipped += 1; // over the cap — count the rest as skipped
+      continue;
+    }
+    const img = await fetchImageFromUrl(raw);
+    if (!img) {
+      skipped += 1;
+      continue;
+    }
+
+    const photoId = crypto.randomUUID();
+    const path = photoStoragePath(org.id, propertyId, photoId, extForType(img.type));
+
+    const { error: upErr } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .upload(path, img.bytes, {
+        contentType: img.type,
+        upsert: false,
+      });
+    if (upErr) {
+      skipped += 1;
+      continue;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+
+    const { error: insErr } = await supabase.from("property_photos").insert({
+      id: photoId,
+      organization_id: org.id,
+      property_id: propertyId,
+      storage_path: path,
+      url: publicUrl,
+      sort_order: order,
+      is_cover: firstEver,
+    });
+    if (insErr) {
+      // Roll back the orphaned object so Storage and the table stay in sync.
+      const { error: rbErr } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .remove([path]);
+      if (rbErr) {
+        console.error("importPhotosFromUrls: rollback remove failed", {
+          path,
+          error: rbErr.message,
+        });
+      }
+      skipped += 1;
+      continue;
+    }
+
+    order += 1;
+    firstEver = false;
+    added += 1;
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  if (added === 0) fail("urlfailed");
+  const skip = skipped > 0 ? `&photoskipped=${skipped}` : "";
+  redirect(`/dashboard/properties/${propertyId}?photos=${added}${skip}`);
 }
 
 export async function setCoverPhoto(formData: FormData) {

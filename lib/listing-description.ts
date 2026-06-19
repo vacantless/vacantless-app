@@ -270,6 +270,19 @@ function joinList(items: string[]): string {
   return `${x.slice(0, -1).join(", ")}, and ${x[x.length - 1]}`;
 }
 
+// The neighbourhood note is normally prefixed with "Close to ...", but that
+// reads wrong when the operator's own text already opens with a proximity phrase
+// ("Steps to transit" would become "Close to Steps to transit"). When it does,
+// use their phrasing verbatim.
+const LOCATIONAL_LEAD_IN =
+  /^(close to|near(by)?|steps?\s+(to|from|away)|walk(ing)?\s+(distance|to)|minutes?\s+(to|from|away)|across\s+from|next\s+to|short\s+walk|easy\s+access|surrounded\s+by|right\s+(by|next)|moments?\s+from|a\s+short\s+(walk|drive))\b/i;
+
+/** Turn a neighbourhood note into a sentence, avoiding a doubled proximity lead-in. */
+export function neighbourhoodSentence(hood: string): string {
+  const t = hood.trim();
+  return LOCATIONAL_LEAD_IN.test(t) ? toSentence(t) : toSentence(`Close to ${t}`);
+}
+
 /**
  * Build a starter description. Returns "" only when there is genuinely nothing
  * to say (no answers and no structured facts). Paragraphs are separated by a
@@ -328,7 +341,7 @@ export function buildDescriptionDraft(
   const hood = a("neighbourhood_notes");
   const lifestyle = a("renter_lifestyle_notes");
   if (building) placeBits.push(toSentence(building));
-  if (hood) placeBits.push(toSentence(`Close to ${hood}`));
+  if (hood) placeBits.push(neighbourhoodSentence(hood));
   if (lifestyle) placeBits.push(toSentence(`Well-suited to ${lifestyle}`));
   const placeSentence = placeBits.join(" ");
 

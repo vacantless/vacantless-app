@@ -32,6 +32,7 @@ import {
   updateListingPost,
   removeListingPost,
   uploadPropertyPhotos,
+  importPropertyPhotosFromUrls,
   setCoverPhoto,
   movePhoto,
   deletePhoto,
@@ -46,6 +47,7 @@ import {
   sortPhotos,
   uploadErrorMessage,
 } from "@/lib/photos";
+import { importUrlErrorMessage } from "@/lib/image-url-import";
 import { photoCapForPlan, storageUpsellNote } from "@/lib/billing";
 import { CopyLink } from "./copy-link";
 import {
@@ -140,6 +142,7 @@ export default async function PropertyDetailPage({
     pn?: string; // post-submit nonce that remounts the add-post form (form reset)
     posterr?: string;
     photos?: string;
+    photoskipped?: string;
     photoerr?: string;
     duplicated?: string;
     imported?: string;
@@ -384,7 +387,12 @@ export default async function PropertyDetailPage({
                 ? "Photo removed."
                 : `${searchParams.photos} ${
                     searchParams.photos === "1" ? "photo" : "photos"
-                  } uploaded.`}
+                  } added.`}
+          {searchParams.photoskipped && Number(searchParams.photoskipped) > 0
+            ? ` ${searchParams.photoskipped} ${
+                searchParams.photoskipped === "1" ? "link" : "links"
+              } couldn't be imported — make sure each is a direct, public image link.`
+            : ""}
         </p>
       )}
 
@@ -394,11 +402,13 @@ export default async function PropertyDetailPage({
           searchParams.photoerr === "size" ||
           searchParams.photoerr === "empty"
             ? uploadErrorMessage(searchParams.photoerr)
-            : searchParams.photoerr === "max"
-              ? `You can add up to ${photoCap} photos per rental.`
-              : searchParams.photoerr === "none"
-                ? "Please choose at least one photo to upload."
-                : "Sorry, the upload didn't go through. Please try again."}
+            : searchParams.photoerr.startsWith("url")
+              ? importUrlErrorMessage(searchParams.photoerr)
+              : searchParams.photoerr === "max"
+                ? `You can add up to ${photoCap} photos per rental.`
+                : searchParams.photoerr === "none"
+                  ? "Please choose at least one photo to upload."
+                  : "Sorry, the upload didn't go through. Please try again."}
         </p>
       )}
 
@@ -657,27 +667,63 @@ export default async function PropertyDetailPage({
             one to add another.
           </p>
         ) : (
-          <form
-            action={uploadPropertyPhotos}
-            className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3"
-          >
-            <input type="hidden" name="property_id" value={p.id} />
-            <input
-              type="file"
-              name="photos"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              multiple
-              required
-              className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
-            />
-            <button
-              type="submit"
-              className={PRIMARY_ACTION_CLASS}
-              style={{ backgroundColor: "var(--brand-color)" }}
+          <div className="border-t border-gray-100 pt-3">
+            <form
+              action={uploadPropertyPhotos}
+              className="flex flex-wrap items-center gap-3"
             >
-              Upload photos
-            </button>
-          </form>
+              <input type="hidden" name="property_id" value={p.id} />
+              <input
+                type="file"
+                name="photos"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                required
+                className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+              />
+              <button
+                type="submit"
+                className={PRIMARY_ACTION_CLASS}
+                style={{ backgroundColor: "var(--brand-color)" }}
+              >
+                Upload photos
+              </button>
+            </form>
+
+            {/* Import from direct image links (item Q). After an MLS/realtor.ca
+                paste, photos are the one step the text couldn't carry — so an
+                operator who already has the images hosted somewhere can paste
+                the links instead of saving + re-selecting files. We fetch each
+                server-side (SSRF-guarded) and store it like an upload. */}
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-medium text-brand">
+                Or import from image links
+              </summary>
+              <form action={importPropertyPhotosFromUrls} className="mt-2">
+                <input type="hidden" name="property_id" value={p.id} />
+                <p className="mb-2 text-xs text-gray-500">
+                  Paste one <strong>direct image link</strong> per line (each
+                  should open the image itself — ending in .jpg, .png, .webp, or
+                  .gif). Gallery pages and login-protected links won&apos;t work.
+                </p>
+                <textarea
+                  name="photo_urls"
+                  rows={4}
+                  required
+                  placeholder={
+                    "https://example.com/photos/living-room.jpg\nhttps://example.com/photos/kitchen.jpg"
+                  }
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                />
+                <button
+                  type="submit"
+                  className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Import from links
+                </button>
+              </form>
+            </details>
+          </div>
         )}
       </div>
 
