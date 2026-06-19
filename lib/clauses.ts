@@ -939,6 +939,18 @@ export const RESIDENTIAL_CLAUSE_SEED: SeedClause[] = [
       "Balcony / Terrace / Outdoor Space: The Tenant is responsible for the ordinary cleanliness and proper use of {{outdoor_space_description}}, subject to applicable building rules and the Landlord's reasonable right of access for repairs or equipment. No unsafe storage and no alterations are permitted in the outdoor area.",
   },
   {
+    key: "shared_responsibility",
+    title: "Shared Responsibilities (Voluntary)",
+    category: "Property-Specific",
+    applicableTo: "residential",
+    riskLevel: "legal_review",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Voluntary-cooperation wording only. Under RTA s.20 the Landlord is responsible for maintaining the residential complex; a lease clause that shifts common-area maintenance (snow, lawn, shared garbage) to a tenant is void (Montgomery v. Van, 2009 ONCA 808), even if signed. To make a task genuinely enforceable, use a SEPARATE compensation agreement, not this clause. Have it reviewed before relying on it.",
+    body:
+      "Shared Responsibilities (Voluntary): For the mutual convenience of all residents, the Tenant agrees to cooperate in a voluntary rotation for {{shared_task_name}} ({{shared_task_scope}}) on the following schedule: {{shared_task_schedule}}, rotating as {{shared_task_rotation}}. This arrangement is a community conduct guideline only. It does not shift the Landlord's statutory maintenance obligations under the Residential Tenancies Act, 2006, and the Landlord remains responsible for maintaining the residential complex.",
+  },
+  {
     key: "custom_property",
     title: "Custom Property-Specific Clause",
     category: "Property-Specific",

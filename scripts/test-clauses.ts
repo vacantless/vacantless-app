@@ -217,12 +217,12 @@ ok("isJurisdiction rejects unknown", !isJurisdiction("quebec") && !isJurisdictio
 ok("categoryOrder ranks known in order", categoryOrder("Rent & Deposits") === 0 && categoryOrder("Property-Specific") === 5);
 ok("categoryOrder sorts unknown last", categoryOrder("Whatever") === CLAUSE_CATEGORIES.length);
 
-// --- Residential seed integrity (16 clauses) --------------------------------
-ok("seed has 16 clauses", RESIDENTIAL_CLAUSE_SEED.length === 16);
-ok("seed has the 16 expected keys", RESIDENTIAL_CLAUSE_SEED.map((c) => c.key).sort().join(",") === [
+// --- Residential seed integrity (17 clauses) --------------------------------
+ok("seed has 17 clauses", RESIDENTIAL_CLAUSE_SEED.length === 17);
+ok("seed has the 17 expected keys", RESIDENTIAL_CLAUSE_SEED.map((c) => c.key).sort().join(",") === [
   "alterations","appliances","custom_property","early_access","flat_monthly_charges",
-  "keys_locks","outdoor_space","parking","pets","prorated_rent","seasonal_ac","smoking",
-  "storage","tenant_insurance","utilities","utility_account_setup",
+  "keys_locks","outdoor_space","parking","pets","prorated_rent","seasonal_ac",
+  "shared_responsibility","smoking","storage","tenant_insurance","utilities","utility_account_setup",
 ].join(","));
 ok("seed keys are unique", new Set(RESIDENTIAL_CLAUSE_SEED.map((c) => c.key)).size === RESIDENTIAL_CLAUSE_SEED.length);
 ok("seed keys are valid identifiers", RESIDENTIAL_CLAUSE_SEED.every((c) => /^[a-z0-9_]+$/.test(c.key)));
@@ -252,6 +252,14 @@ ok("seed seasonal_ac filed under Maintenance / Access", acSeed.category === "Mai
 ok("seed seasonal_ac body covers supply-on-request + tenant install/remove", /on the Tenant's request/i.test(acSeed.body) && /install/i.test(acSeed.body) && /remov/i.test(acSeed.body));
 ok("seed seasonal_ac covers window or portable (not wall-mounted)", /window or portable/i.test(acSeed.body) && /window or portable/i.test(acSeed.notesForLandlord));
 ok("seed seasonal_ac body carries no unfilled tokens", tokensInBody(acSeed.body).length === 0);
+// Shared Responsibilities (Carousel item L, Option A) — voluntary conduct, RTA-safe.
+const sharedSeed = RESIDENTIAL_CLAUSE_SEED.find((c) => c.key === "shared_responsibility")!;
+ok("seed shared_responsibility present + titled", sharedSeed.title === "Shared Responsibilities (Voluntary)");
+ok("seed shared_responsibility flagged legal_review (High Risk)", sharedSeed.riskLevel === "legal_review");
+ok("seed shared_responsibility is residential + Property-Specific", sharedSeed.applicableTo === "residential" && sharedSeed.category === "Property-Specific");
+ok("seed shared_responsibility body is voluntary + does NOT shift the duty", /voluntary/i.test(sharedSeed.body) && /does not shift/i.test(sharedSeed.body) && /Residential Tenancies Act/i.test(sharedSeed.body));
+ok("seed shared_responsibility note cites s.20 + Montgomery v. Van + separate agreement", /s\.20/i.test(sharedSeed.notesForLandlord) && /Montgomery v\. Van/i.test(sharedSeed.notesForLandlord) && /separate/i.test(sharedSeed.notesForLandlord));
+ok("seed shared_responsibility carries the structured task tokens", ["shared_task_name","shared_task_schedule","shared_task_rotation","shared_task_scope"].every((t) => tokensInBody(sharedSeed.body).includes(t)));
 
 // the seed must assemble cleanly for a residential lease once turned into versions
 const seedAsResolved: ResolvedClause[] = RESIDENTIAL_CLAUSE_SEED.map((c, i) => ({
@@ -277,7 +285,7 @@ ok("seed assembly fully resolved when every token is supplied", seedAssembled.un
 ok("seed pets clause cites RTA s.14 in assembly", seedAssembled.clauses.find((c) => c.key === "pets")!.rendered.includes("section 14"));
 // commercial lease drops the residential-only seed clauses
 const seedCommercial = assembleClauses(seedAsResolved, { leaseType: "commercial", vars: {} });
-ok("seed commercial excludes residential-only clauses", seedCommercial.excluded.map((e) => e.key).sort().join(",") === "flat_monthly_charges,outdoor_space,pets,seasonal_ac,utilities,utility_account_setup");
+ok("seed commercial excludes residential-only clauses", seedCommercial.excluded.map((e) => e.key).sort().join(",") === "flat_monthly_charges,outdoor_space,pets,seasonal_ac,shared_responsibility,utilities,utility_account_setup");
 
 // --- recommendClauses (smart recommendations) -------------------------------
 const recBaseline = recommendClauses({});
