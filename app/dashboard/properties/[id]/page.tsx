@@ -33,6 +33,7 @@ import {
   removeListingPost,
   uploadPropertyPhotos,
   importPropertyPhotosFromUrls,
+  importPropertyPhotosFromDropboxFolder,
   setCoverPhoto,
   movePhoto,
   deletePhoto,
@@ -48,6 +49,7 @@ import {
   uploadErrorMessage,
 } from "@/lib/photos";
 import { importUrlErrorMessage } from "@/lib/image-url-import";
+import { dropboxImportErrorMessage } from "@/lib/dropbox-import";
 import { photoCapForPlan, storageUpsellNote } from "@/lib/billing";
 import { CopyLink } from "./copy-link";
 import {
@@ -390,8 +392,8 @@ export default async function PropertyDetailPage({
                   } added.`}
           {searchParams.photoskipped && Number(searchParams.photoskipped) > 0
             ? ` ${searchParams.photoskipped} ${
-                searchParams.photoskipped === "1" ? "link" : "links"
-              } couldn't be imported — make sure each is a direct, public image link.`
+                searchParams.photoskipped === "1" ? "item" : "items"
+              } couldn't be imported — make sure links are direct, public images and any Dropbox folder is shared so anyone with the link can view.`
             : ""}
         </p>
       )}
@@ -404,6 +406,8 @@ export default async function PropertyDetailPage({
             ? uploadErrorMessage(searchParams.photoerr)
             : searchParams.photoerr.startsWith("url")
               ? importUrlErrorMessage(searchParams.photoerr)
+              : searchParams.photoerr.startsWith("dropbox")
+              ? dropboxImportErrorMessage(searchParams.photoerr)
               : searchParams.photoerr === "max"
                 ? `You can add up to ${photoCap} photos per rental.`
                 : searchParams.photoerr === "none"
@@ -720,6 +724,40 @@ export default async function PropertyDetailPage({
                   className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Import from links
+                </button>
+              </form>
+            </details>
+
+            {/* Import a whole gallery from a Dropbox shared folder (item Q,
+                Phase 2). Operators file every photo/tour-vendor delivery into
+                Dropbox, so a shared gallery/ folder link is the one source that
+                works across all listings. We enumerate it server-side and pull
+                each image — no Dropbox login needed on the operator's side. */}
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-medium text-brand">
+                Or import from a Dropbox folder
+              </summary>
+              <form action={importPropertyPhotosFromDropboxFolder} className="mt-2">
+                <input type="hidden" name="property_id" value={p.id} />
+                <p className="mb-2 text-xs text-gray-500">
+                  In Dropbox, open the folder of photos, choose{" "}
+                  <strong>Share</strong> → <strong>Copy link</strong> (set so
+                  anyone with the link can view), and paste it here. Point at the
+                  exact gallery folder — for a multi-unit building, share one
+                  unit&apos;s folder at a time.
+                </p>
+                <input
+                  type="url"
+                  name="dropbox_url"
+                  required
+                  placeholder="https://www.dropbox.com/scl/fo/…?rlkey=…"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                />
+                <button
+                  type="submit"
+                  className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Import from Dropbox
                 </button>
               </form>
             </details>

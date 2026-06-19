@@ -36,6 +36,13 @@ import {
   isBlockedAddress,
   sniffImageType,
 } from "@/lib/image-url-import";
+import {
+  parseDropboxFolderUrl,
+  filterImageEntries,
+  sortGalleryEntries,
+  subfolderNames,
+  type DropboxEntry,
+} from "@/lib/dropbox-import";
 import { photoCapForPlan } from "@/lib/billing";
 
 const PHOTO_BUCKET = "property-photos";
@@ -947,6 +954,303 @@ export async function importPropertyPhotosFromUrls(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   if (added === 0) fail("urlfailed");
+  const skip = skipped > 0 ? `&photoskipped=${skipped}` : "";
+  redirect(`/dashboard/properties/${propertyId}?photos=${added}${skip}`);
+}
+
+// ---------------------------------------------------------------------------
+// Import photos from a Dropbox shared-folder link (REAL-WORLD-INTAKE item Q,
+// Phase 2). Photo/tour vendors deliver in many shapes, but operators file every
+// delivery into Dropbox — so a shared gallery/ folder link is the vendor-
+// agnostic source. We enumerate it via the Dropbox API and download each image
+// server-side, reusing the Phase-1 validate (magic-byte sniff) + store path.
+//
+// Auth posture: the Dropbox token is OUR service account's — it only READS the
+// public shared link the operator pasted (no per-landlord OAuth). The pure
+// lib/dropbox-import module holds the rules (URL validation, image filter, sort,
+// nested detection); the helpers below add the impure parts: the token, the
+// list_folder enumeration (+ pagination), and the size/time-capped byte fetch.
+// ---------------------------------------------------------------------------
+
+const DROPBOX_API = "https://api.dropboxapi.com/2";
+const DROPBOX_CONTENT_API = "https://content.dropboxapi.com/2";
+
+/** Escape non-ASCII so a file name is safe inside the Dropbox-API-Arg header. */
+function dropboxApiArg(obj: unknown): string {
+  return JSON.stringify(obj).replace(/[\u0080-\uffff]/g, (c) =>
+    "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
+  );
+}
+
+/**
+ * Resolve a Dropbox access token for OUR service account. Prefers a long-lived
+ * OAuth refresh token (DROPBOX_REFRESH_TOKEN + DROPBOX_APP_KEY/SECRET) exchanged
+ * server-side for a short-lived access token; falls back to a directly-supplied
+ * DROPBOX_ACCESS_TOKEN (the App-Console token used for the first prove-out).
+ * Returns null when unconfigured so the action shows a clean "not set up" note.
+ */
+async function getDropboxAccessToken(): Promise<string | null> {
+  const refresh = process.env.DROPBOX_REFRESH_TOKEN;
+  const key = process.env.DROPBOX_APP_KEY;
+  const secret = process.env.DROPBOX_APP_SECRET;
+  if (refresh && key && secret) {
+    try {
+      const auth = Buffer.from(`${key}:${secret}`).toString("base64");
+      const res = await fetch("https://api.dropbox.com/oauth2/token", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: refresh,
+        }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as { access_token?: string };
+      return json.access_token ?? null;
+    } catch {
+      return null;
+    }
+  }
+  const direct = process.env.DROPBOX_ACCESS_TOKEN;
+  return direct && direct.trim() ? direct.trim() : null;
+}
+
+type DropboxApiEntry = {
+  ".tag"?: string;
+  name?: string;
+  path_lower?: string;
+  size?: number;
+};
+type DropboxListResponse = {
+  entries?: DropboxApiEntry[];
+  cursor?: string;
+  has_more?: boolean;
+};
+
+function collectDropboxEntries(
+  json: DropboxListResponse,
+  out: DropboxEntry[],
+): void {
+  for (const e of json.entries ?? []) {
+    if (typeof e.name !== "string") continue;
+    out.push({
+      tag: typeof e[".tag"] === "string" ? (e[".tag"] as string) : "",
+      name: e.name,
+      path_lower: e.path_lower,
+      size: e.size,
+    });
+  }
+}
+
+/**
+ * Enumerate the entries at the root of a Dropbox shared folder (files +
+ * folders, so the action can detect the multi-unit/nested case). Non-recursive
+ * — the operator shares the exact folder of photos. Paginates via
+ * list_folder/continue for very large folders. Returns null on any API error.
+ */
+async function dropboxListSharedFolder(
+  token: string,
+  shareUrl: string,
+): Promise<DropboxEntry[] | null> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  const entries: DropboxEntry[] = [];
+  try {
+    let res = await fetch(`${DROPBOX_API}/files/list_folder`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ path: "", shared_link: { url: shareUrl } }),
+    });
+    if (!res.ok) return null;
+    let json = (await res.json()) as DropboxListResponse;
+    collectDropboxEntries(json, entries);
+    let guard = 0;
+    while (json.has_more && json.cursor && guard < 50) {
+      guard += 1;
+      res = await fetch(`${DROPBOX_API}/files/list_folder/continue`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ cursor: json.cursor }),
+      });
+      if (!res.ok) return null;
+      json = (await res.json()) as DropboxListResponse;
+      collectDropboxEntries(json, entries);
+    }
+  } catch {
+    return null;
+  }
+  return entries;
+}
+
+/**
+ * Download one file from under the shared link by name (the entries are direct
+ * children of the shared folder root). Streams with the same size + timeout caps
+ * as the URL importer, then confirms the bytes are a supported image via the
+ * magic-byte sniff. Returns null on any failure (best-effort per file).
+ */
+async function fetchDropboxSharedFile(
+  token: string,
+  shareUrl: string,
+  name: string,
+): Promise<FetchedImage | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMPORT_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      `${DROPBOX_CONTENT_API}/sharing/get_shared_link_file`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Dropbox-API-Arg": dropboxApiArg({ url: shareUrl, path: `/${name}` }),
+        },
+        signal: controller.signal,
+      },
+    );
+    if (!res.ok || !res.body) {
+      clearTimeout(timer);
+      return null;
+    }
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.length;
+        if (total > MAX_PHOTO_BYTES) {
+          await reader.cancel();
+          clearTimeout(timer);
+          return null;
+        }
+        chunks.push(value);
+      }
+    }
+    clearTimeout(timer);
+    if (total <= 0) return null;
+    const bytes = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) {
+      bytes.set(c, off);
+      off += c.length;
+    }
+    const type = sniffImageType(bytes);
+    if (!type) return null;
+    return { bytes, type };
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
+export async function importPropertyPhotosFromDropboxFolder(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const fail = (reason: string): never =>
+    redirect(`/dashboard/properties/${propertyId}?photoerr=${reason}`);
+
+  const parsed = parseDropboxFolderUrl(String(formData.get("dropbox_url") ?? ""));
+  if (!parsed.ok) return fail("dropboxurl");
+  const shareUrl = parsed.url;
+
+  const token = await getDropboxAccessToken();
+  if (!token) return fail("dropboxauth");
+
+  const rawEntries = await dropboxListSharedFolder(token, shareUrl);
+  if (rawEntries === null) return fail("dropboxfailed");
+
+  const images = sortGalleryEntries(filterImageEntries(rawEntries));
+  if (images.length === 0) {
+    // A building share is one subfolder per unit (+ "Outside & Common Areas") —
+    // distinguish that from a genuinely empty folder so the message is useful.
+    if (subfolderNames(rawEntries).length > 0) return fail("dropboxnested");
+    return fail("dropboxempty");
+  }
+
+  const supabase = createClient();
+
+  const { data: existing } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover")
+    .eq("property_id", propertyId);
+  const existingRows = (existing ?? []) as PhotoLike[];
+
+  const remaining = photoCapForPlan(org.plan) - existingRows.length;
+  if (remaining <= 0) fail("dropboxmax");
+
+  let order = nextSortOrder(existingRows);
+  let firstEver = existingRows.length === 0;
+  let added = 0;
+  let skipped = 0;
+
+  for (const entry of images) {
+    if (added >= remaining) {
+      skipped += 1; // over the cap — count the rest as skipped
+      continue;
+    }
+    const img = await fetchDropboxSharedFile(token, shareUrl, entry.name);
+    if (!img) {
+      skipped += 1;
+      continue;
+    }
+
+    const photoId = crypto.randomUUID();
+    const path = photoStoragePath(org.id, propertyId, photoId, extForType(img.type));
+
+    const { error: upErr } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .upload(path, img.bytes, { contentType: img.type, upsert: false });
+    if (upErr) {
+      skipped += 1;
+      continue;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+
+    const { error: insErr } = await supabase.from("property_photos").insert({
+      id: photoId,
+      organization_id: org.id,
+      property_id: propertyId,
+      storage_path: path,
+      url: publicUrl,
+      sort_order: order,
+      is_cover: firstEver,
+    });
+    if (insErr) {
+      // Roll back the orphaned object so Storage and the table stay in sync.
+      const { error: rbErr } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .remove([path]);
+      if (rbErr) {
+        console.error("importPhotosFromDropbox: rollback remove failed", {
+          path,
+          error: rbErr.message,
+        });
+      }
+      skipped += 1;
+      continue;
+    }
+
+    order += 1;
+    firstEver = false;
+    added += 1;
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  if (added === 0) fail("dropboxfailed");
   const skip = skipped > 0 ? `&photoskipped=${skipped}` : "";
   redirect(`/dashboard/properties/${propertyId}?photos=${added}${skip}`);
 }
