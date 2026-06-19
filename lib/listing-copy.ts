@@ -150,17 +150,141 @@ export function truncateTitle(s: string, max: number): string {
 
 // --- title + body -----------------------------------------------------------
 
+// Curated, FACTUAL lead descriptors. A title only uses one of these when the
+// word actually appears in the operator's description - we never invent a
+// quality the listing didn't claim. Priority order (most evocative first); the
+// headline takes up to two distinct labels. Hyphen/space variants are matched
+// explicitly so "open concept" and "open-concept" both resolve.
+const LEAD_DESCRIPTORS: Array<{ re: RegExp; label: string }> = [
+  { re: /\bbright\b/i, label: "Bright" },
+  { re: /\bsunny\b/i, label: "Sunny" },
+  { re: /\bspacious\b/i, label: "Spacious" },
+  { re: /\b(?:newly|recently|fully)\s+renovated\b/i, label: "Renovated" },
+  { re: /\brenovated\b/i, label: "Renovated" },
+  { re: /\b(?:newly|recently|fully)\s+updated\b/i, label: "Updated" },
+  { re: /\bupdated\b/i, label: "Updated" },
+  { re: /\bmodern\b/i, label: "Modern" },
+  { re: /\bopen[-\s]?concept\b/i, label: "Open-Concept" },
+  { re: /\bcorner\b/i, label: "Corner" },
+  { re: /\bmain[-\s]?floor\b/i, label: "Main-Floor" },
+  { re: /\bground[-\s]?floor\b/i, label: "Ground-Floor" },
+  { re: /\btop[-\s]?floor\b/i, label: "Top-Floor" },
+  { re: /\bpenthouse\b/i, label: "Penthouse" },
+  { re: /\bfreshly\s+painted\b/i, label: "Freshly Painted" },
+  { re: /\bcharming\b/i, label: "Charming" },
+  { re: /\bcozy\b/i, label: "Cozy" },
+  { re: /\bquiet\b/i, label: "Quiet" },
+  { re: /\bclean\b/i, label: "Clean" },
+  { re: /\bbeautiful\b/i, label: "Beautiful" },
+  { re: /\bspotless\b/i, label: "Spotless" },
+];
+
 /**
- * Headline before truncation: "<beds/baths> for rent - <address>" with the
- * rent appended when there's room. Hyphen separator (never em dash).
+ * Pull up to `max` factual lead adjectives FROM the operator's own description
+ * (so the title can read "Bright Main-Floor 1-Bedroom..." instead of a field
+ * dump). Returns [] when the description is empty or carries none - the headline
+ * then falls back to structured facts. Never invents a descriptor.
+ */
+export function extractLeadDescriptors(
+  description: string | null | undefined,
+  max = 2,
+): string[] {
+  if (typeof description !== "string" || !description.trim()) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const { re, label } of LEAD_DESCRIPTORS) {
+    if (out.length >= max) break;
+    if (seen.has(label)) continue;
+    if (re.test(description)) {
+      out.push(label);
+      seen.add(label);
+    }
+  }
+  return out;
+}
+
+/** Title-cased bedroom phrase: "Studio" / "1-Bedroom" / "3-Bedroom", or null. */
+export function bedroomPhrase(beds: number | null | undefined): string | null {
+  if (beds == null || !Number.isFinite(beds)) return null;
+  if (beds <= 0) return "Studio";
+  return `${beds}-Bedroom`;
+}
+
+/**
+ * Trim a unit/suite designator off an address so a title reads as a place, not a
+ * mailing line: "506 Manning Avenue unit - main" -> "506 Manning Avenue". Keeps
+ * the street suffix (no invention/over-shortening). Returns "" for a blank input.
+ */
+export function shortenAddressForTitle(
+  address: string | null | undefined,
+): string {
+  const a = (address ?? "").replace(/\s+/g, " ").trim();
+  if (!a) return "";
+  // Drop a unit/suite/apt keyword and everything after it (incl. a trailing
+  // "- main" that rode along with "unit").
+  let s = a.replace(/[,]?\s*(?:unit|suite|apt|apartment|ste|#)\b.*$/i, "").trim();
+  // Drop a trailing "- <unit label>" segment when no keyword was present.
+  s = s
+    .replace(
+      /\s*[-–—]\s*(?:main|basement|bsmt|upper|lower|ground|rear|front|main\s+floor|lower\s+level|upper\s+level)\b.*$/i,
+      "",
+    )
+    .trim();
+  // A dangling separator/comma after stripping reads badly; clean it up.
+  return s.replace(/[\s,;:-]+$/, "").trim();
+}
+
+/**
+ * Up to two TRUE structured features for a headline tail ("With Air Conditioning
+ * and Parking"). Only emitted when the description carried no descriptors, so the
+ * title still has a hook without over-stuffing. Facts only - nothing assumed.
+ */
+function featureTail(features?: UnitFeatures): string | null {
+  if (!features) return null;
+  const t: string[] = [];
+  if (features.air_conditioning) t.push("Air Conditioning");
+  const parking = features.parking != null ? String(features.parking).trim() : "";
+  if (parking && !/^(?:no|none|n\/a|0)$/i.test(parking)) t.push("Parking");
+  if (features.laundry === "in_suite") t.push("In-Suite Laundry");
+  if (t.length === 0 && features.balcony) t.push("a Balcony");
+  const top = t.slice(0, 2);
+  if (top.length === 0) return null;
+  return top.length === 1 ? top[0] : `${top[0]} and ${top[1]}`;
+}
+
+/**
+ * Persuasive headline before truncation. Leads with factual descriptors pulled
+ * from the description ("Bright Main-Floor 1-Bedroom at 506 Manning Avenue");
+ * with none, falls back to "1-Bedroom Rental at <address>" plus a true-feature
+ * tail ("... With Air Conditioning"). Never includes a quality the listing
+ * didn't state. Hyphens only (never em dash); rent stays in the body.
  */
 export function buildHeadline(input: ListingCopyInput): string {
-  const bb = bedsBathsSummary(input.beds, input.baths);
-  const lead = bb ? `${bb} for rent` : "Rental for rent";
-  const addr = (input.address ?? "").trim();
-  const base = addr ? `${lead} - ${addr}` : lead;
-  const rent = formatRent(input.rentCents);
-  return rent ? `${base} - ${rent}` : base;
+  const descriptors = extractLeadDescriptors(input.description);
+  const bedPhrase = bedroomPhrase(input.beds);
+  const shortAddr = shortenAddressForTitle(input.address);
+
+  const leadParts = [...descriptors];
+  if (bedPhrase) leadParts.push(bedPhrase);
+  const lead = leadParts.join(" ") || "Rental";
+
+  // With no descriptor carrying the appeal, give a bare "1-Bedroom" the "Rental"
+  // noun so it reads as an ad rather than a spec.
+  const needsNoun = descriptors.length === 0 && lead !== "Rental";
+
+  let headline: string;
+  if (shortAddr) {
+    headline = `${lead}${needsNoun ? " Rental" : ""} at ${shortAddr}`;
+  } else {
+    headline = needsNoun ? `${lead} Rental` : lead;
+  }
+
+  if (descriptors.length === 0) {
+    const tail = featureTail(input.features);
+    if (tail) headline += ` With ${tail}`;
+  }
+
+  return stripEmDashes(headline.replace(/\s+/g, " ").trim());
 }
 
 /**
@@ -179,11 +303,20 @@ export function buildListingCopy(
 
   const lines: string[] = [];
 
-  // Opening line: business name + what it is.
+  // The operator's description is the PERSUASIVE SPINE: when present it LEADS the
+  // copy (a renter decides on feel/light/layout before specs), and the basics
+  // below become a supporting block. With no description we fall back to a plain
+  // "<beds/baths> rental at <address>" opener so the copy still stands up - the
+  // Builder UI nudges the operator to write one via the Description Helper.
+  const desc = (input.description ?? "").trim();
   const bb = bedsBathsSummary(input.beds, input.baths);
-  const opener = bb ? `${bb} rental` : "Rental";
   const addr = (input.address ?? "").trim();
-  lines.push(addr ? `${opener} at ${addr}.` : `${opener}.`);
+  if (desc) {
+    lines.push(desc);
+  } else {
+    const opener = bb ? `${bb} rental` : "Rental";
+    lines.push(addr ? `${opener} at ${addr}.` : `${opener}.`);
+  }
 
   // Price + availability.
   const rent = formatRent(input.rentCents);
@@ -207,9 +340,7 @@ export function buildListingCopy(
   const utils = utilitiesSummary(features);
   if (utils) lines.push(`${utils} in rent.`);
 
-  // Operator's own description.
-  const desc = (input.description ?? "").trim();
-  if (desc) lines.push(desc);
+  // (The description already led the copy above when present.)
 
   // Call to action + inquiry link. The CTA is portal-specific (Facebook gets a
   // message/paste-the-link variant because Marketplace breaks tappable links).

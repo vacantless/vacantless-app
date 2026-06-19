@@ -12,6 +12,9 @@ import {
   buildListingCopy,
   buildAllListingCopy,
   stripEmDashes,
+  extractLeadDescriptors,
+  bedroomPhrase,
+  shortenAddressForTitle,
   type ListingCopyInput,
 } from "../lib/listing-copy";
 
@@ -69,25 +72,102 @@ ok(
   !/[\s,.;:-]$/.test(truncateTitle("one two three, four five", 14)),
 );
 
-// --- buildHeadline ---------------------------------------------------------
-const headInput: ListingCopyInput = {
-  address: "123 Main St, Unit 4",
-  rentCents: 185000,
-  beds: 2,
-  baths: 1,
-};
+// --- extractLeadDescriptors ------------------------------------------------
+ok("descriptors: empty -> []", extractLeadDescriptors("").length === 0);
+ok("descriptors: null -> []", extractLeadDescriptors(null).length === 0);
 ok(
-  "headline: has beds/baths + address + rent",
-  buildHeadline(headInput) === "2 bed, 1 bath for rent - 123 Main St, Unit 4 - $1,850/month",
+  "descriptors: pulls bright + corner in priority order",
+  JSON.stringify(extractLeadDescriptors("Corner unit, very bright and clean")) ===
+    JSON.stringify(["Bright", "Corner"]),
 );
 ok(
-  "headline: no rent gracefully",
-  buildHeadline({ address: "5 Oak Ave", beds: 1, baths: 1 }) ===
-    "1 bed, 1 bath for rent - 5 Oak Ave",
+  "descriptors: caps at 2 by default",
+  extractLeadDescriptors("bright sunny spacious modern corner").length === 2,
+);
+ok(
+  "descriptors: matches hyphen + space variants (main-floor / open concept)",
+  JSON.stringify(extractLeadDescriptors("Bright main floor open-concept")) ===
+    JSON.stringify(["Bright", "Open-Concept"]),
+);
+ok(
+  "descriptors: 'renovated' variants collapse to one label",
+  JSON.stringify(extractLeadDescriptors("newly renovated and renovated again")) ===
+    JSON.stringify(["Renovated"]),
+);
+ok(
+  "descriptors: no false invention from plain text",
+  extractLeadDescriptors("A place to live near the store").length === 0,
+);
+
+// --- bedroomPhrase ---------------------------------------------------------
+ok("bedroomPhrase: studio", bedroomPhrase(0) === "Studio");
+ok("bedroomPhrase: 1 -> 1-Bedroom", bedroomPhrase(1) === "1-Bedroom");
+ok("bedroomPhrase: 3 -> 3-Bedroom", bedroomPhrase(3) === "3-Bedroom");
+ok("bedroomPhrase: null -> null", bedroomPhrase(null) === null);
+
+// --- shortenAddressForTitle ------------------------------------------------
+ok(
+  "shortAddr: strips 'unit - main' tail",
+  shortenAddressForTitle("506 Manning Avenue unit - main") === "506 Manning Avenue",
+);
+ok(
+  "shortAddr: strips Unit N",
+  shortenAddressForTitle("123 Main St, Unit 4") === "123 Main St",
+);
+ok(
+  "shortAddr: strips bare '- basement' label",
+  shortenAddressForTitle("88 King St - basement") === "88 King St",
+);
+ok("shortAddr: keeps a clean address", shortenAddressForTitle("5 Oak Ave") === "5 Oak Ave");
+ok("shortAddr: blank -> ''", shortenAddressForTitle(null) === "");
+
+// --- buildHeadline (persuasive) --------------------------------------------
+ok(
+  "headline: leads with description descriptors + bedroom + short address",
+  buildHeadline({
+    address: "506 Manning Avenue unit - main",
+    beds: 1,
+    baths: 1,
+    description: "Bright corner one-bedroom with great light.",
+  }) === "Bright Corner 1-Bedroom at 506 Manning Avenue",
+);
+ok(
+  "headline: no descriptors -> bedroom + Rental noun + address + true feature tail",
+  buildHeadline({
+    address: "5 Oak Ave",
+    beds: 1,
+    baths: 1,
+    features: { air_conditioning: true },
+  }) === "1-Bedroom Rental at 5 Oak Ave With Air Conditioning",
+);
+ok(
+  "headline: never invents a feature the unit lacks",
+  !/Air Conditioning|Parking|Laundry/.test(
+    buildHeadline({ address: "5 Oak Ave", beds: 2, baths: 1 }),
+  ),
+);
+ok(
+  "headline: studio with no address",
+  buildHeadline({ address: "", beds: 0, baths: 1 }) === "Studio Rental",
+);
+ok(
+  "headline: two true features join with 'and'",
+  buildHeadline({
+    address: "5 Oak Ave",
+    beds: 2,
+    baths: 1,
+    features: { air_conditioning: true, parking: "1 spot" },
+  }) === "2-Bedroom Rental at 5 Oak Ave With Air Conditioning and Parking",
+);
+ok(
+  "headline: rent is NOT in the title (lives in the body)",
+  !buildHeadline({ address: "5 Oak Ave", beds: 1, baths: 1, rentCents: 185000 }).includes("$"),
 );
 ok(
   "headline: uses hyphen not em dash",
-  !/[–—]/.test(buildHeadline(headInput)),
+  !/[–—]/.test(
+    buildHeadline({ address: "123 Main St", beds: 2, baths: 1, description: "open—concept" }),
+  ),
 );
 
 // --- buildListingCopy ------------------------------------------------------
@@ -122,6 +202,14 @@ ok("copy: body includes sqft", generic.body.includes("850 sq ft"));
 ok("copy: body includes amenity", generic.body.includes("Air conditioning"));
 ok("copy: body includes utilities derived", generic.body.includes("Heat & water included in rent."));
 ok("copy: body includes description", generic.body.includes("Bright corner suite"));
+ok(
+  "copy: description LEADS the body (persuasive spine first)",
+  generic.body.startsWith("Bright corner suite with great light."),
+);
+ok(
+  "copy: with a description the field-summary opener is dropped",
+  !/^(?:Studio|\d bed)[^\n]*rental at/i.test(generic.body),
+);
 ok("copy: body includes link", generic.body.includes("https://vacantless-app.vercel.app/r/abc123"));
 ok("copy: body signs off with business", generic.body.includes("- Maple Door Rentals"));
 ok("copy: no em dashes anywhere", !/[–—]/.test(generic.body) && !/[–—]/.test(generic.title));
@@ -165,6 +253,10 @@ const sparse = buildListingCopy(
   "kijiji",
 );
 ok("copy: sparse has title", sparse.title.length > 0);
+ok(
+  "copy: no-description body falls back to the field-summary opener",
+  sparse.body.startsWith("1 bed, 1 bath rental at 9 Elm."),
+);
 ok("copy: sparse falls back to contact CTA", sparse.body.includes("Contact us to book a viewing."));
 ok("copy: sparse no available-date still says Available now", sparse.body.includes("Available now"));
 

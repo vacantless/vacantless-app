@@ -246,6 +246,10 @@ export default async function PropertyDetailPage({
     title: c.title,
     body: c.body,
   }));
+  // The channel copy is only as good as the description it's built from. Flag a
+  // thin/empty one so the card can nudge the operator into the Description Helper
+  // instead of shipping a field-summary ad.
+  const descriptionThin = (p.description ?? "").trim().length < 40;
 
   // Share-readiness checklist (QA Should-Fix #5): before the operator pastes
   // the public link onto Kijiji/Facebook, surface what's in place and what's
@@ -521,7 +525,7 @@ export default async function PropertyDetailPage({
       </div>
 
       {/* --- Listing copy for each channel --- */}
-      <ListingCopyCard tabs={copyTabs} />
+      <ListingCopyCard tabs={copyTabs} descriptionThin={descriptionThin} />
 
       {/* --- Photos for this rental --- */}
       <div
@@ -1098,6 +1102,7 @@ export default async function PropertyDetailPage({
             ))}
           </ul>
         </details>
+        <div id="listing-description" className="scroll-mt-6">
         <DescriptionGuide
           defaultValue={p.description ?? ""}
           facts={{
@@ -1122,6 +1127,7 @@ export default async function PropertyDetailPage({
             rent_cents: p.rent_cents,
           }}
         />
+        </div>
 
         {/* --- Unit details --- */}
         <fieldset className="border-t border-gray-100 pt-4">

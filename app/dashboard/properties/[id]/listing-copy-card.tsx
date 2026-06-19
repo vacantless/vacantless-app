@@ -17,7 +17,16 @@ export type CopyTab = {
   body: string;
 };
 
-export function ListingCopyCard({ tabs }: { tabs: CopyTab[] }) {
+export function ListingCopyCard({
+  tabs,
+  descriptionThin = false,
+}: {
+  tabs: CopyTab[];
+  // True when the saved description is empty/very short. The channel copy below
+  // is built from the description, so a thin one yields a field-summary ad -
+  // surface a nudge into the Description Helper instead of letting it ship flat.
+  descriptionThin?: boolean;
+}) {
   const [active, setActive] = useState(tabs[0]?.key ?? "generic");
   // Which field was most recently copied, so we can flash "Copied!" on it.
   const [copied, setCopied] = useState<string | null>(null);
@@ -50,6 +59,21 @@ export function ListingCopyCard({ tabs }: { tabs: CopyTab[] }) {
         adjusted per platform. Pick a channel, copy, and paste it into your ad.
         Edit the rental above and this updates automatically.
       </p>
+
+      {descriptionThin && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          <span className="font-medium">Want a stronger listing?</span> The copy
+          below is built from your description, and right now it&apos;s mostly
+          just the basics. Add a few details about layout, light, special
+          features, and what&apos;s nearby and this turns into a real ad.{" "}
+          <a
+            href="#listing-description"
+            className="font-medium text-amber-900 underline hover:no-underline"
+          >
+            Help me write this -&gt;
+          </a>
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-1.5">
         {tabs.map((t) => (
