@@ -680,6 +680,8 @@ export default async function TenancyDetailPage({
         recordVars={recordVars}
         recordSummary={recordSummary}
         proratedDefault={proratedDefault}
+        rentCents={t.rent_cents}
+        startDate={t.start_date ?? null}
       />
 
       {/* Rent collection (Rotessa) --------------------------------------- */}

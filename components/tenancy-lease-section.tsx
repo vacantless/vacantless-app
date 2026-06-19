@@ -54,6 +54,8 @@ export function TenancyLeaseSection({
   recordVars,
   recordSummary,
   proratedDefault,
+  rentCents,
+  startDate,
 }: {
   tenancyId: string;
   leaseDocs: LeaseDocView[];
@@ -61,6 +63,8 @@ export function TenancyLeaseSection({
   recordVars: Record<string, string>;
   recordSummary: { label: string; value: string }[];
   proratedDefault: boolean;
+  rentCents: number | null;
+  startDate: string | null;
 }) {
   // Renewal diff: newest [0] vs the one before it [1] (both newest-first).
   const diff =
@@ -293,6 +297,8 @@ export function TenancyLeaseSection({
           recordVars={recordVars}
           recordSummary={recordSummary}
           proratedDefault={proratedDefault}
+          rentCents={rentCents}
+          startDate={startDate}
           isRenewal={leaseDocs.length > 0}
           generateAction={generateLeaseFromSelection}
         />
