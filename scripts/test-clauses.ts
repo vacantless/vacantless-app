@@ -35,6 +35,7 @@ import {
   annotateRecommendations,
   selectClausesById,
   collectVarFields,
+  seedSelectionFromSnapshot,
   type ResolvedClause,
   type ClauseVersionLike,
   type ClauseRowLike,
@@ -429,6 +430,47 @@ const wizVars = { ...collectVarFields([["var_parking_spaces", "1"], ["var_parkin
 const wizAssembled = assembleClauses(wizChosen, { leaseType: "residential", vars: wizVars });
 ok("wizard glue assembles exactly the chosen clauses", wizAssembled.clauses.length === 2);
 ok("wizard glue resolves operator-filled + record tokens together", wizAssembled.unresolved.length === 0);
+
+// --- seedSelectionFromSnapshot (start-from-last-signed) ---------------------
+const seedLibrary = [
+  { clauseId: "c_parking", key: "parking" },
+  { clauseId: "c_utilities", key: "utilities" },
+  { clauseId: "c_smoking", key: "smoking" },
+  { clauseId: "c_storage", key: "storage" },
+];
+// A prior executed snapshot — arrives in a DIFFERENT order, carries the old
+// pinned versions, and includes a key the library no longer has (appliances).
+const priorSnapshot: { key: string; version: number }[] = [
+  { key: "smoking", version: 1 },
+  { key: "appliances", version: 3 }, // deleted from the library since signing
+  { key: "parking", version: 2 },
+];
+const seedSel = seedSelectionFromSnapshot(seedLibrary, priorSnapshot);
+ok("seed maps matched keys to the CURRENT library clauseIds", seedSel.clauseIds.join(",") === "c_parking,c_smoking");
+ok("seed selection follows LIBRARY order, not snapshot order", seedSel.matchedKeys.join(",") === "parking,smoking");
+ok("seed ignores the old pinned version (matches by key only)", (() => {
+  // even though the snapshot pinned parking@2, the seed returns the library's
+  // current clauseId for 'parking' — version is irrelevant to the match.
+  return seedSel.clauseIds.includes("c_parking");
+})());
+ok("seed reports a since-deleted key as missing", seedSel.missingKeys.join(",") === "appliances");
+ok("seed missingKeys follow snapshot order", seedSelectionFromSnapshot(
+  [{ clauseId: "c_a", key: "a" }],
+  [{ key: "z" }, { key: "a" }, { key: "m" }],
+).missingKeys.join(",") === "z,m");
+ok("seed de-dupes repeated snapshot keys", (() => {
+  const s = seedSelectionFromSnapshot(seedLibrary, [{ key: "parking" }, { key: "parking" }]);
+  return s.clauseIds.join(",") === "c_parking" && s.matchedKeys.join(",") === "parking";
+})());
+ok("seed empty snapshot -> empty selection", seedSelectionFromSnapshot(seedLibrary, []).clauseIds.length === 0);
+ok("seed empty library -> every distinct snapshot key missing", seedSelectionFromSnapshot([], priorSnapshot).missingKeys.length === 3);
+ok("seed works against the real residential seed shape", (() => {
+  // the Mercer executed lease's 6 keys against the full seed library.
+  const snap = ["parking", "prorated_rent", "smoking", "storage", "tenant_insurance", "utilities"].map((key) => ({ key }));
+  const s = seedSelectionFromSnapshot(seedAsResolved, snap);
+  return s.clauseIds.length === 6 && s.missingKeys.length === 0 &&
+    s.matchedKeys.slice().sort().join(",") === snap.map((x) => x.key).sort().join(",");
+})());
 
 // ----------------------------------------------------------------------------
 console.log(`clauses: ${passed} passed, ${failed} failed`);

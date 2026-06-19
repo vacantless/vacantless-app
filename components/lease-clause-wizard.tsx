@@ -39,6 +39,22 @@ import {
   type ProrationMethod,
 } from "@/lib/proration";
 
+// "Start from my last signed lease" seed (REAL-WORLD-INTAKE item J). The page
+// resolves the org's most recently SIGNED lease into the current-library
+// clauseIds to pre-select (seedSelectionFromSnapshot), plus the source label so
+// the operator knows what they're seeding from. Null when the org has no signed
+// lease yet (the affordance is hidden).
+export type LeaseSeedInfo = {
+  // current-library clauseIds to pre-select when the seed button is clicked.
+  clauseIds: string[];
+  // how many clauses from that lease no longer exist in the library (deleted).
+  missingCount: number;
+  // address of the unit that lease was for (may be this tenancy or another).
+  sourceAddress: string | null;
+  // when it was signed (ISO) — for the source caption.
+  signedAt: string;
+};
+
 // The library clause shape the wizard renders — a resolved current clause plus
 // the slice-6 display metadata (category / risk / landlord note).
 export type WizardClause = {
@@ -93,6 +109,7 @@ export default function LeaseClauseWizard({
   rentCents = null,
   startDate = null,
   isRenewal = false,
+  seed = null,
   generateAction,
 }: {
   tenancyId: string;
@@ -109,6 +126,9 @@ export default function LeaseClauseWizard({
   rentCents?: number | null;
   startDate?: string | null;
   isRenewal?: boolean;
+  // The org's last signed lease, resolved to current-library clauseIds, or null
+  // if the org hasn't signed one yet. Drives the "Start from last signed" button.
+  seed?: LeaseSeedInfo | null;
   generateAction: (formData: FormData) => void | Promise<void>;
 }) {
   // Residential lease — commercial-only clauses aren't offered here.
@@ -204,6 +224,24 @@ export default function LeaseClauseWizard({
     return residential.filter((c) => recKeys.has(c.key)).map((c) => c.clauseId);
   }, [residential, recommendations]);
 
+  // The seed (org's last signed lease), intersected with the residential library
+  // actually rendered here — a commercial-only or since-deleted clause can't be
+  // pre-checked. Empty when there's nothing to seed from.
+  const seedClauseIds = useMemo(() => {
+    if (!seed) return [];
+    const have = new Set(residential.map((c) => c.clauseId));
+    return seed.clauseIds.filter((id) => have.has(id));
+  }, [seed, residential]);
+  // The " (2419 Mercer Street, signed 6/18/2026)" source aside — built in JS so a
+  // missing address or date never leaves a stray comma/paren in the caption.
+  const seedSource = useMemo(() => {
+    if (!seed) return "";
+    const parts: string[] = [];
+    if (seed.sourceAddress) parts.push(seed.sourceAddress);
+    parts.push(`signed ${new Date(seed.signedAt).toLocaleDateString()}`);
+    return ` (${parts.join(", ")})`;
+  }, [seed]);
+
   // Categories in the intended order, each with its clauses.
   const groups = useMemo(() => {
     const byCat = new Map<string, typeof annotated>();
@@ -230,6 +268,11 @@ export default function LeaseClauseWizard({
   }
   function selectRecommended() {
     setIncluded(new Set(recommendedClauseIds));
+  }
+  // Replace the selection with exactly the clauses from the org's last signed
+  // lease (current versions). "Start from" = replace, like Select recommended.
+  function startFromLastSigned() {
+    setIncluded(new Set(seedClauseIds));
   }
   function setVar(token: string, value: string) {
     setVars((v) => ({ ...v, [token]: value }));
@@ -393,14 +436,33 @@ export default function LeaseClauseWizard({
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               Clauses · {selectedCount} selected
             </span>
-            <button
-              type="button"
-              onClick={selectRecommended}
-              className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Select recommended ({recommendedClauseIds.length})
-            </button>
+            <span className="flex flex-wrap items-center gap-2">
+              {seedClauseIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={startFromLastSigned}
+                  className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand/10"
+                >
+                  Start from last signed lease ({seedClauseIds.length})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={selectRecommended}
+                className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Select recommended ({recommendedClauseIds.length})
+              </button>
+            </span>
           </div>
+          {seedClauseIds.length > 0 && seed && (
+            <p className="mb-2 text-xs text-gray-500">
+              Reuse the exact clauses from your last signed lease{seedSource} at
+              their current versions.
+              {seed.missingCount > 0 &&
+                ` ${seed.missingCount} clause${seed.missingCount === 1 ? "" : "s"} from that lease ${seed.missingCount === 1 ? "is" : "are"} no longer in your library and won't be added.`}
+            </p>
+          )}
 
           <div className="space-y-4">
             {groups.map(([category, items]) => (

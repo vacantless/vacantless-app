@@ -2,6 +2,7 @@ import { SectionHeading, StatusChip } from "@/components/ui";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import LeaseClauseWizard, {
   type WizardClause,
+  type LeaseSeedInfo,
 } from "@/components/lease-clause-wizard";
 import {
   diffSnapshots,
@@ -56,6 +57,7 @@ export function TenancyLeaseSection({
   proratedDefault,
   rentCents,
   startDate,
+  seed,
 }: {
   tenancyId: string;
   leaseDocs: LeaseDocView[];
@@ -65,6 +67,7 @@ export function TenancyLeaseSection({
   proratedDefault: boolean;
   rentCents: number | null;
   startDate: string | null;
+  seed: LeaseSeedInfo | null;
 }) {
   // Renewal diff: newest [0] vs the one before it [1] (both newest-first).
   const diff =
@@ -300,6 +303,7 @@ export function TenancyLeaseSection({
           rentCents={rentCents}
           startDate={startDate}
           isRenewal={leaseDocs.length > 0}
+          seed={seed}
           generateAction={generateLeaseFromSelection}
         />
       </div>

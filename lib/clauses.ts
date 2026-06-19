@@ -362,6 +362,60 @@ export function diffSnapshots(
   };
 }
 
+// --- Seed a new lease from the last signed one (start-from-last-signed) ------
+
+export type SeedSelection = {
+  // current-library clauseIds to pre-select in the wizard — the keys present in
+  // the source snapshot that STILL exist in the library, each mapped to that
+  // clause's CURRENT clauseId (in library order).
+  clauseIds: string[];
+  // the source-snapshot keys matched to a current library clause (library order).
+  matchedKeys: string[];
+  // source-snapshot keys with no current library clause (deleted/renamed since),
+  // in snapshot order — surfaced so the operator knows the seed can't fully
+  // reproduce the old lease rather than silently dropping clauses.
+  missingKeys: string[];
+};
+
+/**
+ * Map a previously executed lease snapshot to the clauses a NEW lease's wizard
+ * should pre-select ("start from my last signed lease" — REAL-WORLD-INTAKE
+ * item J). Matches by KEY (the same identity `diffSnapshots` uses) and resolves
+ * each match to the library clause's CURRENT clauseId, so the new lease always
+ * assembles the current wording — never a stale pinned version from the old
+ * snapshot. Keys absent from the current library are reported in `missingKeys`,
+ * not silently dropped. Order follows `library` for the selection (so the wizard
+ * pre-checks in its own order) and the snapshot for `missingKeys`. Snapshot keys
+ * are de-duplicated. Pure: the caller does the DB reads.
+ */
+export function seedSelectionFromSnapshot<
+  T extends { clauseId: string; key: string },
+>(library: T[], snapshot: { key: string }[]): SeedSelection {
+  // De-dup the snapshot keys, preserving first-appearance order.
+  const seen = new Set<string>();
+  const snapKeys: string[] = [];
+  for (const c of snapshot) {
+    if (!seen.has(c.key)) {
+      seen.add(c.key);
+      snapKeys.push(c.key);
+    }
+  }
+  const want = new Set(snapKeys);
+
+  const clauseIds: string[] = [];
+  const matchedKeys: string[] = [];
+  const matched = new Set<string>();
+  for (const c of library) {
+    if (want.has(c.key)) {
+      clauseIds.push(c.clauseId);
+      matchedKeys.push(c.key);
+      matched.add(c.key);
+    }
+  }
+  const missingKeys = snapKeys.filter((k) => !matched.has(k));
+  return { clauseIds, matchedKeys, missingKeys };
+}
+
 // --- Resolution + lease variables (the thin glue server actions need) -------
 
 // The lease_clauses columns the resolver needs (snake_case, as the row comes

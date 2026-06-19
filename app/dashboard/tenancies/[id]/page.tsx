@@ -53,10 +53,14 @@ import {
   type LeaseDocView,
   type LeaseSignerView,
 } from "@/components/tenancy-lease-section";
-import type { WizardClause } from "@/components/lease-clause-wizard";
+import type {
+  WizardClause,
+  LeaseSeedInfo,
+} from "@/components/lease-clause-wizard";
 import {
   resolveCurrentClauses,
   buildLeaseVars,
+  seedSelectionFromSnapshot,
   type ExecutedClauseRef,
   type ClauseRowLike,
   type ClauseVersionRowLike,
@@ -439,6 +443,47 @@ export default async function TenancyDetailPage({
   // Suggest the prorated-rent fact when the lease starts mid-month.
   const proratedDefault = !!t.start_date && Number(t.start_date.slice(8, 10)) !== 1;
 
+  // "Start from last signed lease" (REAL-WORLD-INTAKE item J): the org's most
+  // recently SIGNED lease seeds a new lease's clause selection. Org-wide (not
+  // just this tenancy) so it works for a brand-new unit, not only a renewal. We
+  // read that snapshot + the unit/date for the affordance label; the pure
+  // seedSelectionFromSnapshot maps it to the CURRENT library clauseIds (so the
+  // new lease assembles current wording, never the old pinned version). RLS
+  // scopes the read to this org.
+  const { data: lastSignedRow } = await supabase
+    .from("lease_documents")
+    .select(
+      "id, executed_at, created_at, executed_clause_versions, tenancy:tenancies(property:properties(address))",
+    )
+    .eq("organization_id", org?.id ?? "")
+    .eq("status", "executed")
+    .order("executed_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const lastSigned = lastSignedRow as unknown as {
+    id: string;
+    executed_at: string | null;
+    created_at: string;
+    executed_clause_versions: ExecutedClauseRef[] | null;
+    tenancy: { property: { address: string } | null } | null;
+  } | null;
+  let leaseSeed: LeaseSeedInfo | null = null;
+  if (lastSigned) {
+    const sel = seedSelectionFromSnapshot(
+      wizardClauses,
+      lastSigned.executed_clause_versions ?? [],
+    );
+    if (sel.clauseIds.length > 0) {
+      leaseSeed = {
+        clauseIds: sel.clauseIds,
+        missingCount: sel.missingKeys.length,
+        sourceAddress: lastSigned.tenancy?.property?.address ?? null,
+        signedAt: lastSigned.executed_at ?? lastSigned.created_at,
+      };
+    }
+  }
+
   const composerTenants: ComposerTenant[] = tenants.map((tn) => ({
     id: tn.id,
     name: tn.name,
@@ -682,6 +727,7 @@ export default async function TenancyDetailPage({
         proratedDefault={proratedDefault}
         rentCents={t.rent_cents}
         startDate={t.start_date ?? null}
+        seed={leaseSeed}
       />
 
       {/* Rent collection (Rotessa) --------------------------------------- */}
