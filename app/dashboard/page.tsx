@@ -33,6 +33,7 @@ type LeadRow = {
   status: LeadStatus;
   created_at: string;
   property_id: string | null;
+  qualified_out: boolean;
   property: { address: string } | null;
 };
 
@@ -60,7 +61,7 @@ export default async function OverviewPage() {
     supabase
       .from("leads")
       .select(
-        "id, name, email, source, status, created_at, property_id, property:properties(address)",
+        "id, name, email, source, status, created_at, property_id, qualified_out, property:properties(address)",
       )
       .order("created_at", { ascending: false }),
     // Most-recent property id + total count — the id deep-links the "test your
@@ -252,6 +253,11 @@ export default async function OverviewPage() {
                   )}
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
+                  {l.qualified_out && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                      Possible mismatch
+                    </span>
+                  )}
                   {needsReply(l.status) && (
                     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                       Needs reply

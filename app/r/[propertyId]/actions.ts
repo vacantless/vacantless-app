@@ -9,6 +9,7 @@ import {
 } from "@/lib/email";
 import { sendSms, bookingConfirmationSms } from "@/lib/sms";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
+import { parseIncomeToCents, parseCount } from "@/lib/screening";
 
 // Public, unauthenticated lead submission. Calls a SECURITY DEFINER RPC that
 // resolves the org from the property and inserts the lead — the renter can
@@ -32,6 +33,22 @@ export async function submitLead(formData: FormData) {
   // source; an absent/foreign value safely falls back to 'website'.
   const listingPostId = String(formData.get("listing_post_id") ?? "").trim();
 
+  // Candidate pre-screening answers (only present when the org enabled it).
+  // Parsed defensively; the RPC computes the authoritative qualify-out snapshot.
+  const incomeCents = parseIncomeToCents(
+    String(formData.get("screen_income") ?? ""),
+  );
+  const occupants = parseCount(String(formData.get("screen_occupants") ?? ""));
+  const petsDetail = String(formData.get("screen_pets_detail") ?? "").trim();
+  // The screening fieldset only renders when the org enabled it; detect that
+  // via the always-present income field so non-screening leads keep pets = null
+  // (unknown) rather than a misleading "no".
+  const screeningShown = formData.has("screen_income");
+  // A pet is indicated by the checkbox OR by typing pet details.
+  const hasPets = screeningShown
+    ? formData.get("screen_has_pets") != null || petsDetail.length > 0
+    : null;
+
   const supabase = createClient();
   const { data, error } = await supabase.rpc("submit_public_lead", {
     p_property_id: propertyId,
@@ -41,6 +58,10 @@ export async function submitLead(formData: FormData) {
     p_move_in: moveInRaw || null,
     p_notes: notes || null,
     p_listing_post_id: listingPostId || null,
+    p_income_cents: incomeCents,
+    p_occupants: occupants,
+    p_has_pets: hasPets,
+    p_pets_detail: petsDetail || null,
   });
 
   if (error) {

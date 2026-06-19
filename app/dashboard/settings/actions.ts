@@ -10,6 +10,7 @@ import {
   validateFeedbackDelayHours,
 } from "@/lib/branding";
 import { validateTestRecipient } from "@/lib/test-email";
+import { validateScreeningSettings } from "@/lib/screening";
 import { sendTestEmail } from "@/lib/email";
 import {
   validateLogoUpload,
@@ -61,6 +62,33 @@ export async function updateBrandIdentity(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=brand&saved=1");
+}
+
+// Tab 1 — Public Page & Brand: candidate pre-screening. Governs the qualifying
+// questions on the public inquiry form + the auto qualify-out flag. Default off.
+export async function updateScreening(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const result = validateScreeningSettings({
+    enabled: formData.get("screening_enabled") != null,
+    income_multiple: String(formData.get("screening_income_multiple") ?? ""),
+    max_movein_days: String(formData.get("screening_max_movein_days") ?? ""),
+    flag_pets: formData.get("screening_flag_pets") != null,
+  });
+  if (!result.ok) {
+    redirect(`/dashboard/settings?tab=brand&screening=${result.reason}`);
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update(result.values)
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=brand&screening=error");
+  }
+
+  redirect("/dashboard/settings?tab=brand&screening=saved");
 }
 
 // Tab 2 / Email sender — reply-to address renter emails are delivered to.

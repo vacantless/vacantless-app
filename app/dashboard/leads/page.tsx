@@ -28,6 +28,7 @@ type LeadRow = {
   status: LeadStatus;
   created_at: string;
   next_action_at: string | null;
+  qualified_out: boolean;
   property: { address: string } | null;
 };
 
@@ -46,7 +47,7 @@ export default async function LeadsPage({
   const { data } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, status, created_at, next_action_at, property:properties(address)",
+      "id, name, email, phone, source, status, created_at, next_action_at, qualified_out, property:properties(address)",
     )
     .order("created_at", { ascending: false });
 
@@ -127,12 +128,19 @@ export default async function LeadsPage({
                   className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <Link
-                      href={`/dashboard/leads/${l.id}`}
-                      className="font-semibold text-gray-900 hover:text-brand"
-                    >
-                      {l.name || l.email || "Unnamed renter"}
-                    </Link>
+                    <span className="min-w-0">
+                      <Link
+                        href={`/dashboard/leads/${l.id}`}
+                        className="font-semibold text-gray-900 hover:text-brand"
+                      >
+                        {l.name || l.email || "Unnamed renter"}
+                      </Link>
+                      {l.qualified_out && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                          Possible mismatch
+                        </span>
+                      )}
+                    </span>
                     {fStatus !== "none" && (
                       <span
                         className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${FOLLOW_CHIP[fStatus]}`}
@@ -193,6 +201,11 @@ export default async function LeadsPage({
                       >
                         {l.name || l.email || "Unnamed renter"}
                       </Link>
+                      {l.qualified_out && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                          Possible mismatch
+                        </span>
+                      )}
                       {fStatus !== "none" && (
                         <span
                           className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${FOLLOW_CHIP[fStatus]}`}

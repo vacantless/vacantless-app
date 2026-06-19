@@ -37,6 +37,12 @@ type Lead = {
   next_action_at: string | null;
   next_action_note: string | null;
   created_at: string;
+  screen_income_cents: number | null;
+  screen_occupants: number | null;
+  screen_has_pets: boolean | null;
+  screen_pets_detail: string | null;
+  qualified_out: boolean;
+  qualify_out_reasons: string[] | null;
   property: { id: string; address: string } | null;
   listing_post: ListingPost;
 };
@@ -64,7 +70,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, status, notes, move_in, next_action_at, next_action_note, created_at, property:properties(id, address), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, property:properties(id, address), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -181,6 +187,26 @@ export default async function LeadDetailPage({
         </div>
       )}
 
+      {/* Pre-screening flag. A SOFT signal — the lead is never hidden; the
+          operator decides. Reasons are the snapshot stored at intake. */}
+      {l.qualified_out && (l.qualify_out_reasons?.length ?? 0) > 0 && (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+              Possible mismatch
+            </span>
+            <span className="text-xs text-gray-500">
+              Based on your screening criteria — review before deciding.
+            </span>
+          </div>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-amber-900">
+            {l.qualify_out_reasons!.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Follow-up reminder. */}
       <FollowUp
         leadId={l.id}
@@ -248,6 +274,27 @@ export default async function LeadDetailPage({
           label="Desired move-in"
           value={l.move_in ? new Date(l.move_in).toLocaleDateString("en-CA", { timeZone: "UTC" }) : null}
         />
+        {l.screen_income_cents != null && (
+          <Field
+            label="Stated monthly income"
+            value={`$${(l.screen_income_cents / 100).toLocaleString("en-CA")}`}
+          />
+        )}
+        {l.screen_occupants != null && (
+          <Field label="Occupants" value={String(l.screen_occupants)} />
+        )}
+        {(l.screen_has_pets != null || l.screen_pets_detail) && (
+          <Field
+            label="Pets"
+            value={
+              l.screen_pets_detail
+                ? l.screen_pets_detail
+                : l.screen_has_pets
+                  ? "Yes"
+                  : "No"
+            }
+          />
+        )}
       </div>
 
       {l.notes && (

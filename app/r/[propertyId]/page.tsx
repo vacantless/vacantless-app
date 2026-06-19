@@ -38,6 +38,7 @@ type Listing = {
   brand_color: string;
   brand_color_secondary: string | null;
   logo_url: string | null;
+  screening_enabled: boolean;
   photos: string[];
 };
 
@@ -293,6 +294,69 @@ export default async function PublicListingPage({
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
+                  {l.screening_enabled && (
+                    <fieldset className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+                      <legend className="px-1 text-sm font-medium text-gray-700">
+                        A few quick questions
+                      </legend>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                          Approximate monthly household income{" "}
+                          <span className="font-normal text-gray-400">(optional)</span>
+                        </label>
+                        <div className="relative">
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                            $
+                          </span>
+                          <input
+                            name="screen_income"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="4,500"
+                            className="w-full rounded-lg border border-gray-300 py-2 pl-7 pr-3 text-sm"
+                          />
+                        </div>
+                        <span className="mt-1 block text-xs text-gray-400">
+                          Helps us confirm the home fits your budget. Combined
+                          household, before tax.
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                            How many people would live here?
+                          </label>
+                          <input
+                            name="screen_occupants"
+                            type="number"
+                            min={1}
+                            max={20}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                            Pets?
+                          </label>
+                          <input
+                            name="screen_pets_detail"
+                            type="text"
+                            placeholder="e.g. 1 cat — or leave blank"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                          <label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                            <input
+                              name="screen_has_pets"
+                              type="checkbox"
+                              value="1"
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            I have a pet
+                          </label>
+                        </div>
+                      </div>
+                    </fieldset>
+                  )}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">
                       Anything else?
@@ -300,7 +364,11 @@ export default async function PublicListingPage({
                     <textarea
                       name="notes"
                       rows={3}
-                      placeholder="Number of occupants, pets, questions…"
+                      placeholder={
+                        l.screening_enabled
+                          ? "Questions, or anything you'd like us to know…"
+                          : "Number of occupants, pets, questions…"
+                      }
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>

@@ -10,6 +10,7 @@ import {
 } from "@/lib/brand-theme";
 import {
   updateBrandIdentity,
+  updateScreening,
   updateEmailSender,
   updateRenterMessages,
   updateTextMessages,
@@ -94,6 +95,7 @@ export default async function SettingsPage({
     sms?: string; // Communications → Text messages flash
     clause?: string; // Lease Clauses tab flash
     cn?: string; // post-submit nonce that remounts the clause forms (reset)
+    screening?: string; // Public Page & Brand → screening flash
   };
 }) {
   const org = await getCurrentOrg();
@@ -540,6 +542,132 @@ export default async function SettingsPage({
               any listing to preview its branded inquiry and booking page.
             </p>
           </div>
+
+          {/* --- Renter pre-screening --- */}
+          <form
+            action={updateScreening}
+            className="rounded-2xl border border-gray-200 bg-white p-5"
+          >
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.users className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Renter pre-screening
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Ask a few qualifying questions on your inquiry form and
+              automatically flag renters who likely don&apos;t fit — so you can
+              focus your time on the ones who do. Flagged inquiries are never
+              hidden or rejected; you always decide.
+            </p>
+
+            {searchParams.screening === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Pre-screening settings saved.
+              </div>
+            )}
+            {searchParams.screening === "income_multiple" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                The income multiple must be a positive number (e.g. 3 for 3x rent).
+              </div>
+            )}
+            {searchParams.screening === "max_movein_days" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                The move-in window must be a whole number of days.
+              </div>
+            )}
+            {searchParams.screening === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving these settings. Please try again.
+              </div>
+            )}
+
+            <label className="mt-5 flex items-start gap-3">
+              <input
+                name="screening_enabled"
+                type="checkbox"
+                defaultChecked={org.screening_enabled}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-gray-700">
+                  Ask qualifying questions on the inquiry form
+                </span>
+                <span className="block text-xs text-gray-400">
+                  Adds optional income, household size, and pet questions to your
+                  public renter page. Off by default.
+                </span>
+              </span>
+            </label>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Required income (multiple of rent)
+                </span>
+                <input
+                  name="screening_income_multiple"
+                  type="number"
+                  min={1}
+                  max={20}
+                  step={0.5}
+                  defaultValue={org.screening_income_multiple ?? ""}
+                  placeholder="e.g. 3"
+                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Flags renters whose stated monthly income is below this multiple
+                  of the rent. Leave blank to skip.
+                </span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Latest move-in (days out)
+                </span>
+                <input
+                  name="screening_max_movein_days"
+                  type="number"
+                  min={1}
+                  max={3650}
+                  step={1}
+                  defaultValue={org.screening_max_movein_days ?? ""}
+                  placeholder="e.g. 90"
+                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Flags renters who want to move in further out than this. Leave
+                  blank to skip.
+                </span>
+              </label>
+            </div>
+
+            <label className="mt-5 flex items-start gap-3">
+              <input
+                name="screening_flag_pets"
+                type="checkbox"
+                defaultChecked={org.screening_flag_pets}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-gray-700">
+                  Flag renters with pets on rentals that aren&apos;t pet-friendly
+                </span>
+                <span className="block text-xs text-gray-400">
+                  Only applies to a rental whose &ldquo;pet-friendly&rdquo; toggle
+                  is off.
+                </span>
+              </span>
+            </label>
+
+            <p className="mt-5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              Screening uses only ability to pay, timing, and pets — never
+              factors like family size, background, or any protected group.
+            </p>
+
+            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+              Save pre-screening
+            </button>
+          </form>
         </div>
       )}
 
