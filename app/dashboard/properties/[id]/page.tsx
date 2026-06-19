@@ -142,6 +142,7 @@ export default async function PropertyDetailPage({
     photos?: string;
     photoerr?: string;
     duplicated?: string;
+    imported?: string;
   };
 }) {
   const supabase = createClient();
@@ -301,6 +302,20 @@ export default async function PropertyDetailPage({
           Copied from another rental. Update the address and rent below, then set
           it Live when you&apos;re ready. It&apos;s saved as a Draft for now, so
           renters can&apos;t see it.
+        </p>
+      )}
+
+      {searchParams.imported && (
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Prefilled{" "}
+          {Number(searchParams.imported) > 0
+            ? `${searchParams.imported} ${
+                Number(searchParams.imported) === 1 ? "field" : "fields"
+              } `
+            : ""}
+          from your pasted listing. Review everything below — especially the
+          address, rent, and pet policy — then set it Live when it&apos;s right.
+          It&apos;s saved as a Draft for now, so renters can&apos;t see it yet.
         </p>
       )}
 

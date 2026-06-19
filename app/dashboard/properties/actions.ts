@@ -9,6 +9,7 @@ import { PROPERTY_STATUSES } from "@/lib/pipeline";
 import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
 import { normalizeLaundry, normalizeDogSize } from "@/lib/property-features";
+import { parseMlsListing } from "@/lib/mls-import";
 import {
   normalizePortal,
   normalizeListingStatus,
@@ -93,6 +94,77 @@ export async function addProperty(formData: FormData) {
   // uncontrolled inputs. The page keys the form on this value to force a remount
   // (S226 QA-audit fix: "Add rental form still retains submitted values").
   redirect(`/dashboard/properties?added=${Date.now().toString(36)}`);
+}
+
+/**
+ * Realtor onboarding wedge (REAL-WORLD-INTAKE item M, S245): create a rental by
+ * PASTING an existing MLS / realtor.ca listing instead of re-keying every field.
+ *
+ * Posture: the text comes from the OPERATOR (their own listing) and is parsed
+ * locally by the PURE `parseMlsListing` — no scrape, no network call (same ToS
+ * discipline as the syndication feed; the automated CREA/DDF pull is a separate
+ * later increment). The import always lands as a DRAFT so nothing goes public
+ * until the operator reviews the prefilled edit form and sets it Live. We carry
+ * the count of prefilled fields forward as a review banner.
+ *
+ * Pets are deliberately NOT imported (the parser has no pet output): pets are an
+ * RTA s.14 operator decision (S241), never inferred from listing prose.
+ */
+export async function importPropertyFromMls(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const pasted = String(formData.get("mls_text") ?? "");
+
+  const parsed = parseMlsListing(pasted);
+  // Nothing usable parsed out — send the operator back with a hint rather than
+  // creating an empty draft they have to delete.
+  if (parsed.foundFields.length === 0) {
+    redirect("/dashboard/properties?import=empty");
+  }
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+  // organization_id is the caller's own org; RLS WITH CHECK re-enforces it.
+  // status='draft' = private until reviewed. Address may be missing from the
+  // paste; use a clear placeholder so the required column is satisfied and the
+  // operator knows to fill it in on the review screen.
+  const { data: inserted } = await supabase
+    .from("properties")
+    .insert({
+      organization_id: org.id,
+      status: "draft",
+      address: parsed.address ?? "New rental — add the address",
+      rent_cents: parsed.rentCents,
+      beds: parsed.beds,
+      baths: parsed.baths,
+      sqft: parsed.sqft,
+      parking: parsed.parking,
+      description: parsed.description,
+      available_date: parsed.availableDate,
+      air_conditioning: parsed.airConditioning,
+      balcony: parsed.balcony,
+      furnished: parsed.furnished,
+      laundry: parsed.laundry,
+      heat_included: parsed.heatIncluded,
+      hydro_included: parsed.hydroIncluded,
+      water_included: parsed.waterIncluded,
+    })
+    .select("id")
+    .single();
+
+  revalidatePath("/dashboard/properties");
+  revalidatePath("/dashboard");
+
+  if (!inserted) {
+    // Insert failed (e.g. an RLS/permission edge) — don't 500, send a message.
+    redirect("/dashboard/properties?import=failed");
+  }
+  const id = (inserted as { id: string }).id;
+  // Land on the edit page (the review surface) with the prefilled-field count.
+  redirect(
+    `/dashboard/properties/${id}?imported=${parsed.foundFields.length}`,
+  );
 }
 
 export async function updateProperty(formData: FormData) {
