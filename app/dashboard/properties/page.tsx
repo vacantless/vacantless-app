@@ -169,9 +169,11 @@ export default async function PropertiesPage({
         </label>
         <p className="mb-2 text-xs text-gray-500">
           Copy the listing text (address, rent, beds/baths, square footage,
-          remarks) and paste it here. We&apos;ll create a Draft with the details
-          filled in for you to review — nothing goes public until you set it
-          Live. Your own listing text only; we don&apos;t pull from MLS.
+          remarks) — selecting the whole realtor.ca page is fine — and paste it
+          here. We&apos;ll create a Draft with the details filled in for you to
+          review; nothing goes public until you set it Live. Photos don&apos;t
+          come across, so you&apos;ll add those after. Your own listing text
+          only; we don&apos;t pull from MLS.
         </p>
         <textarea
           id="mls_text"

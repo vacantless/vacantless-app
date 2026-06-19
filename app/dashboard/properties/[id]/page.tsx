@@ -319,6 +319,21 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {/* Close the onboarding loop (S247): a paste from MLS / realtor.ca brings
+          the text but never the photos, and portals like Kijiji and Facebook
+          need photos to perform. Right after an import, point the operator
+          straight at the photo uploader. */}
+      {searchParams.imported && photoRows.length === 0 && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <strong>Next: add photos.</strong> Your pasted listing didn&apos;t
+          include any — and listings with photos get far more inquiries on
+          Kijiji, Facebook, and Zumper.{" "}
+          <a href="#property-photos" className="font-medium underline">
+            Add photos →
+          </a>
+        </p>
+      )}
+
       {blastedCount != null && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           {blastedCount > 0
@@ -474,6 +489,17 @@ export default async function PropertyDetailPage({
                     {!c.ok && (
                       <span className="mt-0.5 block text-gray-500">
                         {c.hint}
+                        {c.key === "photos" && (
+                          <>
+                            {" "}
+                            <a
+                              href="#property-photos"
+                              className="font-medium text-brand underline"
+                            >
+                              Add photos →
+                            </a>
+                          </>
+                        )}
                       </span>
                     )}
                   </span>
@@ -488,7 +514,10 @@ export default async function PropertyDetailPage({
       <ListingCopyCard tabs={copyTabs} />
 
       {/* --- Photos for this rental --- */}
-      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div
+        id="property-photos"
+        className="mb-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+      >
         <div className="mb-3 flex items-center gap-2.5">
           <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
           <h3 className="text-sm font-semibold text-gray-900">

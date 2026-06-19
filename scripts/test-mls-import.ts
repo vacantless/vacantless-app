@@ -93,6 +93,56 @@ ok("realtor.ca sqft range -> lower bound 1500", rc.sqft === 1500);
 ok("realtor.ca description fallback (no label)", (rc.description ?? "").startsWith("Welcome to this beautifully"));
 ok("realtor.ca 'Available immediately' -> no concrete date", rc.availableDate === null);
 
+// --- a realtor.ca FULL-PAGE copy (stacked: label on its own line) -----------
+// Copying the whole realtor.ca property page yields label/value on SEPARATE
+// lines, not "Label: value". The parser must read the value from the next line.
+const REALTOR_CA_STACKED = `
+$2,650 / Monthly
+For Rent
+55 Mercer Street, Unit 1204
+Toronto, ON M5V 0W4
+Bedrooms
+2 + 1
+Bathrooms
+2
+Square Footage
+1,100
+Parking Type
+Underground
+Available
+August 1, 2026
+Property Type
+Single Family
+Inclusions
+Heat, Water
+`;
+const st = parseMlsListing(REALTOR_CA_STACKED);
+ok("stacked rent $2,650 -> 265000", st.rentCents === 265000);
+ok("stacked address (street-suffix heuristic)", st.address === "55 Mercer Street, Unit 1204");
+ok("stacked beds 'Bedrooms / 2 + 1' -> 3", st.beds === 3);
+ok("stacked baths 'Bathrooms / 2' -> 2", st.baths === 2);
+ok("stacked sqft 'Square Footage / 1,100' -> 1100", st.sqft === 1100);
+ok("stacked parking 'Parking Type / Underground'", st.parking === "Underground");
+ok("stacked available 'Available / August 1, 2026' -> 2026-08-01", st.availableDate === "2026-08-01");
+ok("stacked inclusions 'Inclusions / Heat, Water'", st.heatIncluded === true && st.waterIncluded === true);
+ok("stacked hydro NOT included", st.hydroIncluded === false);
+
+// stacked lookahead must NOT swallow a following label when a value is blank.
+{
+  const r = parseMlsListing("Bedrooms\nBathrooms\n2\nSquare Footage\n900");
+  ok("stacked: blank Bedrooms doesn't grab 'Bathrooms' as a value", r.beds === null);
+  ok("stacked: 'Bathrooms / 2' still reads baths=2", r.baths === 2);
+  ok("stacked: 'Square Footage / 900' still reads sqft=900", r.sqft === 900);
+}
+// a stacked label whose next line is itself a known label yields nothing for it.
+ok(
+  "stacked: 'Parking Type / Property Type' -> parking null (next line is a label)",
+  parseMlsListing("Parking Type\nProperty Type\nSingle Family").parking === null,
+);
+// inline form still works after enabling the lookahead (no regression).
+ok("inline 'Bedrooms: 2' still works", parseMlsListing("Bedrooms: 2").beds === 2);
+ok("inline 'Square Footage: 1200' still works", parseMlsListing("Square Footage: 1200").sqft === 1200);
+
 // --- negation / false-positive guards ---------------------------------------
 ok("'A/C: None' -> AC false", parseMlsListing("Air Conditioning: None").airConditioning === false);
 ok("'No balcony' -> balcony false", parseMlsListing("No balcony in this unit.").balcony === false);

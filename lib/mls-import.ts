@@ -22,6 +22,12 @@
 // screening decision the operator makes explicitly (S241) — auto-guessing
 // "pets allowed" from listing prose is exactly the kind of false positive that
 // would mislead a renter, so the parser never touches the pet fields.
+//
+// FORMAT COVERAGE: handles both the "Label: value" agent-printout form AND the
+// STACKED form a realtor.ca full-page copy produces, where the label sits on
+// its own line and the value lands on the next line ("Bedrooms" \n "2"). The
+// stacked lookahead is guarded (see isPlausibleStackedValue) so a label whose
+// value is blank never bleeds into the next field.
 // ============================================================================
 
 import { type Laundry } from "./property-features";
@@ -80,21 +86,74 @@ function toLines(text: string): string[] {
 }
 
 /**
+ * Every field label we recognize, lowercased. Used as a STOP SET for the
+ * stacked-value lookahead below: when a label sits on its own line, we only
+ * accept the NEXT line as its value if that next line is not itself another
+ * known label (so two labels in a row — a realtor.ca row whose value is blank —
+ * never bleeds one field's header into another field's value).
+ */
+const ALL_KNOWN_LABELS = new Set(
+  [
+    "list price", "lease price", "listing price", "price", "rent",
+    "monthly rent", "lease", "lease rate", "monthly",
+    "bedrooms", "bedroom", "beds", "bed", "br", "bdrms",
+    "bathrooms", "bathroom", "baths", "bath", "washrooms", "washroom", "ba",
+    "square footage", "approximate square footage", "approx square footage",
+    "square feet", "sq ft", "sqft", "sq. ft.", "size", "living area",
+    "parking", "parking spaces", "parking type", "garage", "garage type",
+    "total parking spaces",
+    "available", "available date", "availability", "possession",
+    "possession date", "occupancy", "date available",
+    "address", "property address", "location",
+    "property type", "building type", "type", "storeys", "land size",
+    "lease includes", "includes", "utilities included", "included utilities",
+    "rent includes", "inclusions",
+  ].map((s) => s.toLowerCase()),
+);
+
+/**
+ * Is `line` plausibly the VALUE of a stacked "label on its own line" row (the
+ * realtor.ca full-page copy pattern)? Reject another known label, an obvious
+ * header line (ends with a colon), and over-long prose.
+ */
+function isPlausibleStackedValue(line: string): boolean {
+  const t = line.trim();
+  if (!t || t.length > 80) return false;
+  if (/:\s*$/.test(t)) return false;
+  if (ALL_KNOWN_LABELS.has(t.toLowerCase())) return false;
+  return true;
+}
+
+/**
  * Find the value for a "Label: value" line. Accepts a list of label aliases
  * (case-insensitive), tolerates an optional trailing colon, and returns the
  * text after the first colon (or the rest of the line for label-only matches).
  * Returns the FIRST match in document order.
+ *
+ * When `opts.allowNextLine` is set, also handles the STACKED form that a
+ * realtor.ca full-page copy produces — the label alone on one line and its
+ * value on the following non-empty line ("Bedrooms" \n "2") — guarded by
+ * `isPlausibleStackedValue` so it never swallows the next field's label.
  */
-function labelValue(lines: string[], aliases: string[]): string | null {
+function labelValue(
+  lines: string[],
+  aliases: string[],
+  opts: { allowNextLine?: boolean } = {},
+): string | null {
   const alt = aliases
     .map((a) => a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
-  const re = new RegExp(`^\\s*(?:${alt})\\s*[:\\-]\\s*(.+)$`, "i");
-  for (const line of lines) {
-    const m = re.exec(line);
+  const inlineRe = new RegExp(`^\\s*(?:${alt})\\s*[:\\-]\\s*(.+)$`, "i");
+  const bareRe = new RegExp(`^\\s*(?:${alt})\\s*[:\\-]?\\s*$`, "i");
+  for (let i = 0; i < lines.length; i++) {
+    const m = inlineRe.exec(lines[i]);
     if (m) {
       const v = m[1].trim();
       if (v) return v;
+    }
+    if (opts.allowNextLine && bareRe.test(lines[i])) {
+      const next = lines[i + 1];
+      if (next && isPlausibleStackedValue(next)) return next.trim();
     }
   }
   return null;
@@ -131,17 +190,21 @@ function parseMoneyToCents(raw: string): number | null {
 
 function extractRentCents(lines: string[], rawText: string): number | null {
   // (a) explicit label.
-  const labelled = labelValue(lines, [
-    "List Price",
-    "Lease Price",
-    "Listing Price",
-    "Price",
-    "Rent",
-    "Monthly Rent",
-    "Lease",
-    "Lease Rate",
-    "Monthly",
-  ]);
+  const labelled = labelValue(
+    lines,
+    [
+      "List Price",
+      "Lease Price",
+      "Listing Price",
+      "Price",
+      "Rent",
+      "Monthly Rent",
+      "Lease",
+      "Lease Rate",
+      "Monthly",
+    ],
+    { allowNextLine: true },
+  );
   if (labelled) {
     const cents = parseMoneyToCents(labelled);
     if (cents && cents <= MAX_PLAUSIBLE_RENT_CENTS) return cents;
@@ -167,14 +230,11 @@ function extractRentCents(lines: string[], rawText: string): number | null {
  * "3 + 1" convention (main + additional = SUMMED to total usable bedrooms).
  */
 function extractBeds(lines: string[], rawText: string): number | null {
-  const labelled = labelValue(lines, [
-    "Bedrooms",
-    "Bedroom",
-    "Beds",
-    "Bed",
-    "Br",
-    "Bdrms",
-  ]);
+  const labelled = labelValue(
+    lines,
+    ["Bedrooms", "Bedroom", "Beds", "Bed", "Br", "Bdrms"],
+    { allowNextLine: true },
+  );
   const source = labelled ?? rawText;
 
   // "3 + 1" / "3+1" -> 4.
@@ -201,15 +261,11 @@ function extractBeds(lines: string[], rawText: string): number | null {
  * "1.5 baths". MLS "Washrooms" piece-counts are read as a plain count.
  */
 function extractBaths(lines: string[], rawText: string): number | null {
-  const labelled = labelValue(lines, [
-    "Bathrooms",
-    "Bathroom",
-    "Baths",
-    "Bath",
-    "Washrooms",
-    "Washroom",
-    "Ba",
-  ]);
+  const labelled = labelValue(
+    lines,
+    ["Bathrooms", "Bathroom", "Baths", "Bath", "Washrooms", "Washroom", "Ba"],
+    { allowNextLine: true },
+  );
   if (labelled) {
     const m = /(\d+(?:\.\d)?)/.exec(labelled);
     if (m) {
@@ -233,17 +289,21 @@ function extractBaths(lines: string[], rawText: string): number | null {
  * outside a plausible 100–20000 sq ft band.
  */
 function extractSqft(lines: string[], rawText: string): number | null {
-  const labelled = labelValue(lines, [
-    "Square Footage",
-    "Approximate Square Footage",
-    "Approx Square Footage",
-    "Square Feet",
-    "Sq Ft",
-    "SqFt",
-    "Sq. Ft.",
-    "Size",
-    "Living Area",
-  ]);
+  const labelled = labelValue(
+    lines,
+    [
+      "Square Footage",
+      "Approximate Square Footage",
+      "Approx Square Footage",
+      "Square Feet",
+      "Sq Ft",
+      "SqFt",
+      "Sq. Ft.",
+      "Size",
+      "Living Area",
+    ],
+    { allowNextLine: true },
+  );
   const fromLabel = labelled != null ? firstInt(labelled) : null;
   if (fromLabel != null && fromLabel >= 100 && fromLabel <= 20000)
     return fromLabel;
@@ -267,14 +327,18 @@ function extractSqft(lines: string[], rawText: string): number | null {
  * operator then has to clear.
  */
 function extractParking(lines: string[]): string | null {
-  const v = labelValue(lines, [
-    "Parking",
-    "Parking Spaces",
-    "Parking Type",
-    "Garage",
-    "Garage Type",
-    "Total Parking Spaces",
-  ]);
+  const v = labelValue(
+    lines,
+    [
+      "Parking",
+      "Parking Spaces",
+      "Parking Type",
+      "Garage",
+      "Garage Type",
+      "Total Parking Spaces",
+    ],
+    { allowNextLine: true },
+  );
   if (!v) return null;
   const trimmed = v.trim();
   if (/^(none|no|0|n\/a|na)\b/i.test(trimmed)) return null;
@@ -340,15 +404,19 @@ export function parseAvailableDate(raw: string | null): string | null {
 }
 
 function extractAvailableDate(lines: string[]): string | null {
-  const v = labelValue(lines, [
-    "Available",
-    "Available Date",
-    "Availability",
-    "Possession",
-    "Possession Date",
-    "Occupancy",
-    "Date Available",
-  ]);
+  const v = labelValue(
+    lines,
+    [
+      "Available",
+      "Available Date",
+      "Availability",
+      "Possession",
+      "Possession Date",
+      "Occupancy",
+      "Date Available",
+    ],
+    { allowNextLine: true },
+  );
   return parseAvailableDate(v);
 }
 
@@ -424,7 +492,11 @@ function looksLikeAddress(line: string): boolean {
 }
 
 function extractAddress(lines: string[]): string | null {
-  const labelled = labelValue(lines, ["Address", "Property Address", "Location"]);
+  const labelled = labelValue(
+    lines,
+    ["Address", "Property Address", "Location"],
+    { allowNextLine: true },
+  );
   if (labelled && labelled.length <= 160) return labelled.slice(0, 160);
 
   for (const line of lines) {
@@ -475,14 +547,18 @@ function extractUtilities(lines: string[], rawText: string): {
   water: boolean;
 } {
   const out = { heat: false, hydro: false, water: false };
-  const includesVal = labelValue(lines, [
-    "Lease Includes",
-    "Includes",
-    "Utilities Included",
-    "Included Utilities",
-    "Rent Includes",
-    "Inclusions",
-  ]);
+  const includesVal = labelValue(
+    lines,
+    [
+      "Lease Includes",
+      "Includes",
+      "Utilities Included",
+      "Included Utilities",
+      "Rent Includes",
+      "Inclusions",
+    ],
+    { allowNextLine: true },
+  );
   const scan = (s: string) => {
     const t = s.toLowerCase();
     if (/\b(heat|heating)\b/.test(t)) out.heat = true;
