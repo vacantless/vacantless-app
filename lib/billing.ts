@@ -181,6 +181,49 @@ export function canCollectRentByPlan(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "rent_collection");
 }
 
+// --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------
+// Photos are the heaviest stored asset per rental, so the per-rental photo cap
+// is a natural paid lever. BASE_PHOTO_CAP must equal MAX_PHOTOS_PER_PROPERTY in
+// lib/photos (a test asserts this) — it's the allowance every CURRENT plan gets;
+// only Premium raises it. Because no live org is on Premium today, wiring this
+// into the uploader changes ZERO live behavior (the same config-only discipline
+// as the SMS gate, S220): the cap is the entitlement source of truth, enforced
+// server-side, and re-tiering is a one-line edit here.
+export const BASE_PHOTO_CAP = 24;
+export const PREMIUM_PHOTO_CAP = 60;
+
+// The per-rental photo allowance for a plan. Everything below Premium gets the
+// base; Premium gets more. Unknown/missing plan -> base (never less).
+export function photoCapForPlan(plan: string | null | undefined): number {
+  return plan === "premium" ? PREMIUM_PHOTO_CAP : BASE_PHOTO_CAP;
+}
+
+// Soft, non-blocking upsell for the Photos card. "Show, don't block" (the
+// two-axis visibility rule): we never stop an operator from managing photos —
+// we only point out that a higher plan has more room, and only when they're at
+// or near their current cap AND a higher tier actually offers more.
+export type StorageUpsell = {
+  cap: number; // this plan's per-rental allowance
+  used: number; // photos currently on the rental
+  remaining: number; // cap - used, floored at 0
+  atCap: boolean; // used >= cap
+  showUpsell: boolean; // near/at cap AND a higher tier offers more room
+};
+
+export function storageUpsellNote(
+  plan: string | null | undefined,
+  photoCount: number,
+): StorageUpsell {
+  const cap = photoCapForPlan(plan);
+  const used = Math.max(0, Math.floor(photoCount));
+  const remaining = Math.max(0, cap - used);
+  const atCap = used >= cap;
+  const higherCapAvailable = cap < PREMIUM_PHOTO_CAP;
+  // Surface within 4 of the cap (or at it), but only if more room exists above.
+  const showUpsell = higherCapAvailable && remaining <= 4;
+  return { cap, used, remaining, atCap, showUpsell };
+}
+
 // --- Proposed Starter / Growth / Premium ladder (S220) ----------------------
 // Display config for the new 3-tier ladder. PRICES ARE PROPOSED — confirmed in
 // principle with Noam (S220) but NOT yet wired to Stripe products, so the tier

@@ -118,6 +118,19 @@ export function photoStoragePath(
   return `${orgId}/${propertyId}/${photoId}.${ext}`;
 }
 
+/**
+ * The file extension encoded in a stored object path (e.g. ".../abc.jpg" -> "jpg").
+ * Used when cloning a photo into a new property so the copied object keeps the
+ * source's extension. Falls back to "bin" for a path with no usable extension.
+ */
+export function extFromStoragePath(path: string): string {
+  const slash = path.lastIndexOf("/");
+  const name = slash === -1 ? path : path.slice(slash + 1);
+  const dot = name.lastIndexOf(".");
+  if (dot === -1 || dot === name.length - 1) return "bin";
+  return name.slice(dot + 1).toLowerCase();
+}
+
 // ---------------------------------------------------------------------------
 // Ordering + cover rules (operated on the minimal shape we read back)
 // ---------------------------------------------------------------------------
@@ -207,4 +220,51 @@ export function coverAfterDelete(
     remaining.map((p) => ({ ...p, is_cover: false })),
   )[0];
   return first.id;
+}
+
+// ---------------------------------------------------------------------------
+// Cloning photos to a new property (duplicate-a-listing carries its photos)
+// ---------------------------------------------------------------------------
+
+/** A source photo row, with enough to copy the storage object + re-insert. */
+export type SourcePhoto = {
+  id: string;
+  storage_path: string;
+  sort_order: number;
+  is_cover: boolean;
+};
+
+/** One planned clone: the storage copy to perform + the new row to insert. */
+export type ClonedPhotoPlan = {
+  newId: string;
+  fromPath: string; // existing object path to copy from
+  toPath: string; // new object path under the destination property
+  sort_order: number; // preserved from the source
+  is_cover: boolean; // preserved from the source
+};
+
+/**
+ * Plan the clone of a property's photos into a NEW property. Pure: it allocates
+ * a fresh id + destination path for each source photo and PRESERVES display
+ * order and the cover flag, so the duplicated listing looks identical. The
+ * caller performs the storage copy + row insert. `genId` is injected so this is
+ * deterministic under test. Output is in stable display order (cover first).
+ */
+export function planPhotoClone(
+  sources: SourcePhoto[],
+  orgId: string,
+  newPropertyId: string,
+  genId: () => string,
+): ClonedPhotoPlan[] {
+  return sortPhotos(sources).map((src) => {
+    const newId = genId();
+    const ext = extFromStoragePath(src.storage_path);
+    return {
+      newId,
+      fromPath: src.storage_path,
+      toPath: photoStoragePath(orgId, newPropertyId, newId, ext),
+      sort_order: src.sort_order,
+      is_cover: src.is_cover,
+    };
+  });
 }

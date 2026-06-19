@@ -30,7 +30,12 @@ import {
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
+  BASE_PHOTO_CAP,
+  PREMIUM_PHOTO_CAP,
+  photoCapForPlan,
+  storageUpsellNote,
 } from "../lib/billing";
+import { MAX_PHOTOS_PER_PROPERTY } from "../lib/photos";
 
 let passed = 0;
 let failed = 0;
@@ -450,6 +455,59 @@ ok(
   "no tier purchasable until a Stripe price-id is set",
   TIER_KEYS.every((k) => isTierPurchasable(TIERS[k]) === false),
 );
+
+// --- Photo storage allowance (per-tier) ------------------------------------
+// The base cap MUST equal the photos-module constant the uploader validates
+// against, or the display and enforcement would disagree.
+ok(
+  "BASE_PHOTO_CAP matches MAX_PHOTOS_PER_PROPERTY",
+  BASE_PHOTO_CAP === MAX_PHOTOS_PER_PROPERTY,
+);
+ok("Premium cap is higher than base", PREMIUM_PHOTO_CAP > BASE_PHOTO_CAP);
+
+// Every CURRENT plan resolves to the base cap -> wiring this changes no live
+// behavior (no live org is on premium). Only premium gets more.
+ok("photoCapForPlan trial -> base", photoCapForPlan("trial") === BASE_PHOTO_CAP);
+ok("photoCapForPlan core -> base", photoCapForPlan("core") === BASE_PHOTO_CAP);
+ok("photoCapForPlan plus -> base", photoCapForPlan("plus") === BASE_PHOTO_CAP);
+ok("photoCapForPlan pilot -> base", photoCapForPlan("pilot") === BASE_PHOTO_CAP);
+ok("photoCapForPlan starter -> base", photoCapForPlan("starter") === BASE_PHOTO_CAP);
+ok("photoCapForPlan growth -> base", photoCapForPlan("growth") === BASE_PHOTO_CAP);
+ok("photoCapForPlan null -> base", photoCapForPlan(null) === BASE_PHOTO_CAP);
+ok("photoCapForPlan unknown -> base", photoCapForPlan("zzz") === BASE_PHOTO_CAP);
+ok("photoCapForPlan premium -> premium cap", photoCapForPlan("premium") === PREMIUM_PHOTO_CAP);
+
+// --- storageUpsellNote ------------------------------------------------------
+{
+  // Well under the base cap on a non-premium plan: no nudge.
+  const low = storageUpsellNote("starter", 3);
+  ok("storageUpsell: low count cap = base", low.cap === BASE_PHOTO_CAP);
+  ok("storageUpsell: low count remaining", low.remaining === BASE_PHOTO_CAP - 3);
+  ok("storageUpsell: low count not at cap", low.atCap === false);
+  ok("storageUpsell: low count hidden", low.showUpsell === false);
+
+  // Within 4 of the base cap on a non-premium plan: nudge shows.
+  const near = storageUpsellNote("core", BASE_PHOTO_CAP - 2);
+  ok("storageUpsell: near cap remaining 2", near.remaining === 2);
+  ok("storageUpsell: near cap not at cap", near.atCap === false);
+  ok("storageUpsell: near cap shows", near.showUpsell === true);
+
+  // At the base cap on a non-premium plan: nudge shows + atCap.
+  const at = storageUpsellNote("plus", BASE_PHOTO_CAP);
+  ok("storageUpsell: at cap remaining 0", at.remaining === 0);
+  ok("storageUpsell: at cap true", at.atCap === true);
+  ok("storageUpsell: at cap shows", at.showUpsell === true);
+
+  // Premium has no higher tier above it -> never nudged, even at its cap.
+  const premiumAt = storageUpsellNote("premium", PREMIUM_PHOTO_CAP);
+  ok("storageUpsell: premium at cap is atCap", premiumAt.atCap === true);
+  ok("storageUpsell: premium never nudged", premiumAt.showUpsell === false);
+
+  // Negative/garbage count floors to 0 used.
+  const neg = storageUpsellNote("starter", -5);
+  ok("storageUpsell: negative count -> used 0", neg.used === 0);
+  ok("storageUpsell: negative count remaining = cap", neg.remaining === BASE_PHOTO_CAP);
+}
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

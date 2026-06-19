@@ -9,13 +9,16 @@ import {
   validatePhotoUpload,
   uploadErrorMessage,
   extForType,
+  extFromStoragePath,
   photoStoragePath,
+  planPhotoClone,
   sortPhotos,
   nextSortOrder,
   reorder,
   withCover,
   coverAfterDelete,
   type PhotoLike,
+  type SourcePhoto,
 } from "../lib/photos";
 
 let passed = 0;
@@ -179,6 +182,63 @@ ok(
     coverAfterDelete([{ id: "a", sort_order: 0, is_cover: true }], "a") === null,
   );
   ok("coverAfterDelete: missing id -> null", coverAfterDelete(photos, "zzz") === null);
+}
+
+// --- extFromStoragePath ----------------------------------------------------
+{
+  ok("extFromStoragePath: jpg", extFromStoragePath("org/prop/abc.jpg") === "jpg");
+  ok("extFromStoragePath: png", extFromStoragePath("org/prop/abc.png") === "png");
+  ok(
+    "extFromStoragePath: lowercases",
+    extFromStoragePath("org/prop/abc.JPG") === "jpg",
+  );
+  ok(
+    "extFromStoragePath: no extension -> bin",
+    extFromStoragePath("org/prop/abc") === "bin",
+  );
+  ok(
+    "extFromStoragePath: trailing dot -> bin",
+    extFromStoragePath("org/prop/abc.") === "bin",
+  );
+  ok(
+    "extFromStoragePath: dotted folder, no file ext -> bin",
+    extFromStoragePath("a.b/c/file") === "bin",
+  );
+}
+
+// --- planPhotoClone --------------------------------------------------------
+{
+  const sources: SourcePhoto[] = [
+    { id: "p2", storage_path: "org1/src/p2.png", sort_order: 1, is_cover: false },
+    { id: "p1", storage_path: "org1/src/p1.jpg", sort_order: 0, is_cover: true },
+    { id: "p3", storage_path: "org1/src/p3.webp", sort_order: 2, is_cover: false },
+  ];
+  let n = 0;
+  const ids = ["new1", "new2", "new3"];
+  const plan = planPhotoClone(sources, "org1", "dst", () => ids[n++]);
+
+  ok("planPhotoClone: clones all", plan.length === 3);
+  // sortPhotos puts the cover first, then ascending sort_order.
+  ok("planPhotoClone: cover first in plan", plan[0].is_cover === true);
+  ok("planPhotoClone: cover fromPath is p1", plan[0].fromPath === "org1/src/p1.jpg");
+  ok(
+    "planPhotoClone: dest path uses new id + org + dest property + ext",
+    plan[0].toPath === "org1/dst/new1.jpg",
+  );
+  ok("planPhotoClone: preserves sort_order", plan[0].sort_order === 0);
+  ok(
+    "planPhotoClone: preserves png ext on second",
+    plan[1].toPath === "org1/dst/new2.png" && plan[1].sort_order === 1,
+  );
+  ok(
+    "planPhotoClone: webp third, not cover",
+    plan[2].toPath === "org1/dst/new3.webp" && plan[2].is_cover === false,
+  );
+  ok(
+    "planPhotoClone: exactly one cover preserved",
+    plan.filter((c) => c.is_cover).length === 1,
+  );
+  ok("planPhotoClone: empty source -> empty plan", planPhotoClone([], "o", "d", () => "x").length === 0);
 }
 
 // --- summary ---------------------------------------------------------------

@@ -43,10 +43,10 @@ import {
 import { ListingCopyCard } from "./listing-copy-card";
 import { buildShareReadiness } from "@/lib/share-readiness";
 import {
-  MAX_PHOTOS_PER_PROPERTY,
   sortPhotos,
   uploadErrorMessage,
 } from "@/lib/photos";
+import { photoCapForPlan, storageUpsellNote } from "@/lib/billing";
 import { CopyLink } from "./copy-link";
 import {
   countEligible,
@@ -179,7 +179,6 @@ export default async function PropertyDetailPage({
     .select("id, url, sort_order, is_cover")
     .eq("property_id", p.id);
   const photoRows = sortPhotos((photos ?? []) as PhotoRow[]);
-  const atPhotoLimit = photoRows.length >= MAX_PHOTOS_PER_PROPERTY;
 
   // Org-wide weekly viewing windows — one signal in the share-readiness check
   // below ("can a renter actually self-book a viewing once they land?").
@@ -210,6 +209,11 @@ export default async function PropertyDetailPage({
   // never embeds a URL that 404s; the copy falls back to "Contact us to book a
   // viewing." until the rental goes Live.
   const org = await getCurrentOrg();
+  // The per-rental photo allowance is plan-scoped (Premium gets more); the
+  // upsell note drives the soft "more room on a higher plan" badge.
+  const photoCap = photoCapForPlan(org?.plan ?? null);
+  const atPhotoLimit = photoRows.length >= photoCap;
+  const storageUpsell = storageUpsellNote(org?.plan ?? null, photoRows.length);
   const copyTabs = buildAllListingCopy({
     businessName: org?.name ?? null,
     address: p.address,
@@ -299,9 +303,15 @@ export default async function PropertyDetailPage({
 
       {searchParams.duplicated && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          Copied from another rental. Update the address and rent below, then set
-          it Live when you&apos;re ready. It&apos;s saved as a Draft for now, so
-          renters can&apos;t see it.
+          Copied from another rental
+          {Number(searchParams.duplicated) > 0
+            ? `, including ${searchParams.duplicated} ${
+                Number(searchParams.duplicated) === 1 ? "photo" : "photos"
+              }`
+            : ""}
+          . Update the address and rent below, then set it Live when
+          you&apos;re ready. It&apos;s saved as a Draft for now, so renters
+          can&apos;t see it.
         </p>
       )}
 
@@ -381,7 +391,7 @@ export default async function PropertyDetailPage({
           searchParams.photoerr === "empty"
             ? uploadErrorMessage(searchParams.photoerr)
             : searchParams.photoerr === "max"
-              ? `You can add up to ${MAX_PHOTOS_PER_PROPERTY} photos per rental.`
+              ? `You can add up to ${photoCap} photos per rental.`
               : searchParams.photoerr === "none"
                 ? "Please choose at least one photo to upload."
                 : "Sorry, the upload didn't go through. Please try again."}
@@ -528,7 +538,7 @@ export default async function PropertyDetailPage({
           Add photos renters will see on your listing page. The{" "}
           <strong>cover photo</strong> shows first. Drag isn&apos;t needed, just
           use the arrows to reorder. JPG, PNG, WebP, or GIF, up to 10&nbsp;MB each
-          ({photoRows.length}/{MAX_PHOTOS_PER_PROPERTY}).
+          ({photoRows.length}/{photoCap}).
         </p>
 
         {photoRows.length === 0 ? (
@@ -619,9 +629,27 @@ export default async function PropertyDetailPage({
           </ul>
         )}
 
+        {/* Storage upsell (S248): a soft, non-blocking nudge once an operator is
+            at or near their plan's photo allowance. We never block photo
+            management here — we only point out that a higher plan has more room
+            (two-axis visibility: show, don't block). Hidden on the top tier. */}
+        {storageUpsell.showUpsell && (
+          <p className="mb-3 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-xs text-gray-600">
+            {storageUpsell.atCap
+              ? `You're at your plan's ${storageUpsell.cap}-photo limit for this rental.`
+              : `${storageUpsell.remaining} of ${storageUpsell.cap} photo slots left on this rental.`}{" "}
+            <Link
+              href="/dashboard/billing"
+              className="font-medium text-brand underline"
+            >
+              Higher plans add more photos per rental →
+            </Link>
+          </p>
+        )}
+
         {atPhotoLimit ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            You&apos;ve reached the {MAX_PHOTOS_PER_PROPERTY}-photo limit. Delete
+            You&apos;ve reached the {photoCap}-photo limit. Delete
             one to add another.
           </p>
         ) : (

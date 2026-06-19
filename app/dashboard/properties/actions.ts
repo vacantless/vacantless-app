@@ -25,9 +25,11 @@ import {
   nextSortOrder,
   reorder,
   coverAfterDelete,
-  MAX_PHOTOS_PER_PROPERTY,
+  planPhotoClone,
   type PhotoLike,
+  type SourcePhoto,
 } from "@/lib/photos";
+import { photoCapForPlan } from "@/lib/billing";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -324,19 +326,89 @@ export async function duplicateProperty(formData: FormData) {
       heat_included: s.heat_included,
       hydro_included: s.hydro_included,
       water_included: s.water_included,
-      // Photos are not copied, so the clone has none ready yet.
+      // photos_ready is reconciled below once we know how many photos copied.
       photos_ready: false,
     })
     .select("id")
     .maybeSingle();
 
+  const newId = (inserted as { id: string } | null)?.id;
+  if (!newId) {
+    revalidatePath("/dashboard/properties");
+    revalidatePath("/dashboard");
+    redirect("/dashboard/properties");
+  }
+
+  // Carry the source listing's photos onto the clone. A duplicated rental is
+  // almost always a near-identical unit in the same building (the realtor ICP's
+  // common case), so re-uploading the same photo set is pure friction. We COPY
+  // the storage objects server-side (no download) and re-insert rows, preserving
+  // display order and the cover. RLS scopes the read to the caller's org.
+  const { data: srcPhotos } = await supabase
+    .from("property_photos")
+    .select("id, storage_path, sort_order, is_cover")
+    .eq("property_id", id);
+  const sourcePhotos = (srcPhotos ?? []) as SourcePhoto[];
+
+  let clonedCount = 0;
+  if (sourcePhotos.length > 0) {
+    const plan = planPhotoClone(
+      sourcePhotos,
+      org.id,
+      newId,
+      () => crypto.randomUUID(),
+    );
+    for (const c of plan) {
+      const { error: copyErr } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .copy(c.fromPath, c.toPath);
+      if (copyErr) continue; // best-effort: skip a failed copy, keep going
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(c.toPath);
+
+      const { error: insErr } = await supabase.from("property_photos").insert({
+        id: c.newId,
+        organization_id: org.id,
+        property_id: newId,
+        storage_path: c.toPath,
+        url: publicUrl,
+        sort_order: c.sort_order,
+        is_cover: c.is_cover,
+      });
+      if (insErr) {
+        // Roll back the orphaned copy so Storage and the table stay in sync.
+        const { error: rbErr } = await supabase.storage
+          .from(PHOTO_BUCKET)
+          .remove([c.toPath]);
+        if (rbErr) {
+          console.error("duplicateProperty: rollback remove failed", {
+            path: c.toPath,
+            error: rbErr.message,
+          });
+        }
+        continue;
+      }
+      clonedCount += 1;
+    }
+
+    // Inherit the source's photos-ready flag only if EVERY photo came across —
+    // a partial copy leaves the clone unverified, so the operator re-confirms.
+    if (clonedCount > 0 && clonedCount === sourcePhotos.length && s.photos_ready) {
+      await supabase
+        .from("properties")
+        .update({ photos_ready: true })
+        .eq("id", newId);
+    }
+  }
+
   revalidatePath("/dashboard/properties");
   revalidatePath("/dashboard");
 
-  const newId = (inserted as { id: string } | null)?.id;
-  if (!newId) redirect("/dashboard/properties");
-  // Land the operator on the clone's edit page so they fix the address + rent.
-  redirect(`/dashboard/properties/${newId}?duplicated=1`);
+  // Land the operator on the clone's edit page so they fix the address + rent;
+  // the count drives the banner ("…including N photos").
+  redirect(`/dashboard/properties/${newId}?duplicated=${clonedCount}`);
 }
 
 /**
@@ -587,7 +659,9 @@ export async function uploadPropertyPhotos(formData: FormData) {
     .eq("property_id", propertyId);
   const existingRows = (existing ?? []) as PhotoLike[];
 
-  if (existingRows.length + files.length > MAX_PHOTOS_PER_PROPERTY) {
+  // The per-rental photo allowance is plan-scoped (Premium gets more). Every
+  // current plan resolves to the base cap, so this is behavior-identical today.
+  if (existingRows.length + files.length > photoCapForPlan(org.plan)) {
     fail("max");
   }
 
