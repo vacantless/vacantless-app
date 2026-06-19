@@ -864,6 +864,18 @@ export const RESIDENTIAL_CLAUSE_SEED: SeedClause[] = [
       "Appliances: The following appliances are included with the rental unit and will be in good working order at commencement: {{appliances_included}}. The Tenant is responsible for the ordinary cleanliness and proper use of these appliances.",
   },
   {
+    key: "seasonal_ac",
+    title: "Seasonal Air Conditioner",
+    category: "Maintenance / Access",
+    applicableTo: "residential",
+    riskLevel: "standard",
+    jurisdiction: "ontario",
+    notesForLandlord:
+      "Use when the unit has no installed air conditioning but you will supply a window unit on request. The Tenant installs, removes, and stores it each season and is responsible for safe installation.",
+    body:
+      "Seasonal Air Conditioner: The rental unit is not supplied with air conditioning. On the Tenant's request, the Landlord will provide one window air-conditioning unit for the Tenant's seasonal use. The Tenant is responsible for installing the unit safely at the start of each cooling season and for removing and storing it at the end of each season; the Landlord is not responsible for installing, removing, or storing the unit. The Tenant is responsible for safe installation and for any damage resulting from the installation, use, removal, or storage of the unit, beyond normal wear and tear.",
+  },
+  {
     key: "alterations",
     title: "Alterations / Decorating",
     category: "Maintenance / Access",

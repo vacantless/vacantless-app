@@ -217,12 +217,12 @@ ok("isJurisdiction rejects unknown", !isJurisdiction("quebec") && !isJurisdictio
 ok("categoryOrder ranks known in order", categoryOrder("Rent & Deposits") === 0 && categoryOrder("Property-Specific") === 5);
 ok("categoryOrder sorts unknown last", categoryOrder("Whatever") === CLAUSE_CATEGORIES.length);
 
-// --- Residential seed integrity (15 clauses) --------------------------------
-ok("seed has 15 clauses", RESIDENTIAL_CLAUSE_SEED.length === 15);
-ok("seed has the 15 expected keys", RESIDENTIAL_CLAUSE_SEED.map((c) => c.key).sort().join(",") === [
+// --- Residential seed integrity (16 clauses) --------------------------------
+ok("seed has 16 clauses", RESIDENTIAL_CLAUSE_SEED.length === 16);
+ok("seed has the 16 expected keys", RESIDENTIAL_CLAUSE_SEED.map((c) => c.key).sort().join(",") === [
   "alterations","appliances","custom_property","early_access","flat_monthly_charges",
-  "keys_locks","outdoor_space","parking","pets","prorated_rent","smoking","storage",
-  "tenant_insurance","utilities","utility_account_setup",
+  "keys_locks","outdoor_space","parking","pets","prorated_rent","seasonal_ac","smoking",
+  "storage","tenant_insurance","utilities","utility_account_setup",
 ].join(","));
 ok("seed keys are unique", new Set(RESIDENTIAL_CLAUSE_SEED.map((c) => c.key)).size === RESIDENTIAL_CLAUSE_SEED.length);
 ok("seed keys are valid identifiers", RESIDENTIAL_CLAUSE_SEED.every((c) => /^[a-z0-9_]+$/.test(c.key)));
@@ -244,6 +244,13 @@ ok("seed custom clause is flagged legal_review + custom jurisdiction", (() => {
 })());
 ok("seed flat_monthly_charges + smoking + keys flagged caution", ["flat_monthly_charges","smoking","keys_locks"].every((k) => RESIDENTIAL_CLAUSE_SEED.find((c) => c.key === k)!.riskLevel === "caution"));
 ok("seed bodies use hyphens not em dashes", RESIDENTIAL_CLAUSE_SEED.every((c) => !c.body.includes("—")));
+// Seasonal AC (intake item B) — a legitimate, enforceable seasonal install clause.
+const acSeed = RESIDENTIAL_CLAUSE_SEED.find((c) => c.key === "seasonal_ac")!;
+ok("seed seasonal_ac present + titled", acSeed.title === "Seasonal Air Conditioner");
+ok("seed seasonal_ac is residential + standard risk", acSeed.applicableTo === "residential" && acSeed.riskLevel === "standard");
+ok("seed seasonal_ac filed under Maintenance / Access", acSeed.category === "Maintenance / Access");
+ok("seed seasonal_ac body covers supply-on-request + tenant install/remove", /on the Tenant's request/i.test(acSeed.body) && /install/i.test(acSeed.body) && /remov/i.test(acSeed.body));
+ok("seed seasonal_ac body carries no unfilled tokens", tokensInBody(acSeed.body).length === 0);
 
 // the seed must assemble cleanly for a residential lease once turned into versions
 const seedAsResolved: ResolvedClause[] = RESIDENTIAL_CLAUSE_SEED.map((c, i) => ({
@@ -269,7 +276,7 @@ ok("seed assembly fully resolved when every token is supplied", seedAssembled.un
 ok("seed pets clause cites RTA s.14 in assembly", seedAssembled.clauses.find((c) => c.key === "pets")!.rendered.includes("section 14"));
 // commercial lease drops the residential-only seed clauses
 const seedCommercial = assembleClauses(seedAsResolved, { leaseType: "commercial", vars: {} });
-ok("seed commercial excludes residential-only clauses", seedCommercial.excluded.map((e) => e.key).sort().join(",") === "flat_monthly_charges,outdoor_space,pets,utilities,utility_account_setup");
+ok("seed commercial excludes residential-only clauses", seedCommercial.excluded.map((e) => e.key).sort().join(",") === "flat_monthly_charges,outdoor_space,pets,seasonal_ac,utilities,utility_account_setup");
 
 // --- recommendClauses (smart recommendations) -------------------------------
 const recBaseline = recommendClauses({});
