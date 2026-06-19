@@ -156,6 +156,70 @@ ok("'Parking: None' -> parking null", parseMlsListing("Parking: None").parking =
 ok("bare sale price w/o monthly marker ignored", parseMlsListing("Asking $450,000 for this property.").rentCents === null);
 ok("implausibly high 'rent' rejected", parseMlsListing("Rent: $90,000").rentCents === null);
 
+// --- a DENSE TRREB agent data-sheet (Y/N inclusion columns) -----------------
+// The signature of a TRREB agent print/export (distinct from a realtor.ca page):
+// yes/no inclusion COLUMNS, often several on one line, plus "/Mth" rent and
+// "A/C: ..." / "Furnished: ..." flags. An explicit "N" must NOT read as
+// included/furnished.
+const TRREB_DATASHEET = `
+123 Spadina Ave, Unit 808, Toronto, Ontario M5V 2K4
+Toronto C01  Waterfront Communities
+For Lease  $2,800 /Mth
+MLS#: C9876543
+Rms: 5
+Bedrooms: 2 + 1
+Washrooms: 2
+Apx Sqft: 900-1099
+Heat: Forced Air   Heat Incl: Y   Hydro Incl: N   Water Incl: Y   CAC Incl: Y
+A/C: Central Air   Furnished: N
+Gar/Gar Spaces: Underground/1   Parking Spaces: 1
+Possession: 2026-09-01
+Client Remks: Spacious corner suite with floor-to-ceiling windows, in-suite laundry, and a large balcony with lake views. Walking distance to the waterfront and transit.
+Extras: Fridge, stove, dishwasher, washer, dryer.
+`;
+const ds = parseMlsListing(TRREB_DATASHEET);
+ok("datasheet address heuristic", (ds.address ?? "").startsWith("123 Spadina Ave"));
+ok("datasheet rent '$2,800 /Mth' -> 280000", ds.rentCents === 280000);
+ok("datasheet beds 2+1 -> 3", ds.beds === 3);
+ok("datasheet washrooms -> baths 2", ds.baths === 2);
+ok("datasheet 'Apx Sqft: 900-1099' -> 900", ds.sqft === 900);
+ok("datasheet available 2026-09-01", ds.availableDate === "2026-09-01");
+ok("datasheet 'Heat Incl: Y' -> heat included", ds.heatIncluded === true);
+ok("datasheet 'Hydro Incl: N' -> hydro NOT included", ds.hydroIncluded === false);
+ok("datasheet 'Water Incl: Y' -> water included", ds.waterIncluded === true);
+ok("datasheet 'CAC Incl: Y' / 'A/C: Central Air' -> A/C true", ds.airConditioning === true);
+ok("datasheet 'Furnished: N' -> furnished FALSE", ds.furnished === false);
+ok("datasheet balcony from remarks", ds.balcony === true);
+ok("datasheet in-suite laundry from remarks", ds.laundry === "in_suite");
+ok("datasheet 'Client Remks' description captured", (ds.description ?? "").startsWith("Spacious corner suite"));
+
+// --- TRREB Y/N inclusion-flag micro-tests -----------------------------------
+ok("'Heat Incl: Y' -> heat included", parseMlsListing("Heat Incl: Y").heatIncluded === true);
+ok("'Hydro Incl: N' -> hydro NOT included", parseMlsListing("Hydro Incl: N").hydroIncluded === false);
+ok("'Water Incl: Yes' -> water included", parseMlsListing("Water Incl: Yes").waterIncluded === true);
+{
+  const r = parseMlsListing("Heat Incl: Y   Hydro Incl: N   Water Incl: Y");
+  ok("combined inclusion line: heat T / hydro F / water T", r.heatIncluded === true && r.hydroIncluded === false && r.waterIncluded === true);
+}
+ok("'Heat: Forced Air' (type, not inclusion) -> heat NOT included", parseMlsListing("Heat: Forced Air").heatIncluded === false);
+ok("'Water: Municipal' (source, not inclusion) -> water NOT included", parseMlsListing("Water: Municipal").waterIncluded === false);
+// An explicit N column overrides a looser positive elsewhere in the text.
+ok(
+  "'Hydro included' prose but 'Hydro Incl: N' column -> column wins (false)",
+  parseMlsListing("Hydro included? Hydro Incl: N").hydroIncluded === false,
+);
+
+// --- A/C and Furnished Y/N flags --------------------------------------------
+ok("'A/C: Y' -> AC true", parseMlsListing("A/C: Y").airConditioning === true);
+ok("'A/C: N' -> AC FALSE (was a false positive before)", parseMlsListing("A/C: N").airConditioning === false);
+ok("'CAC Incl: Y' -> AC true", parseMlsListing("CAC Incl: Y").airConditioning === true);
+ok("'A/C: Central Air' -> AC true (defers to keyword)", parseMlsListing("A/C: Central Air").airConditioning === true);
+ok("'Central Air: N' -> AC false", parseMlsListing("Central Air: N").airConditioning === false);
+ok("'Furnished: Y' -> furnished true", parseMlsListing("Furnished: Y").furnished === true);
+ok("'Furnished: N' -> furnished FALSE (was a false positive before)", parseMlsListing("Furnished: N").furnished === false);
+ok("'fully furnished' prose still true (no flag)", parseMlsListing("This suite is fully furnished.").furnished === true);
+ok("'/Mth' rent marker: '$3,100/Mth' -> 310000", parseMlsListing("$3,100/Mth").rentCents === 310000);
+
 // --- bed/bath inline forms --------------------------------------------------
 ok("'2 bd' inline", parseMlsListing("Cozy 2 bd 1 ba apartment").beds === 2);
 ok("'1.5 baths' inline", parseMlsListing("3 bedroom, 1.5 baths").baths === 1.5);

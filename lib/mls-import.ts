@@ -23,11 +23,20 @@
 // "pets allowed" from listing prose is exactly the kind of false positive that
 // would mislead a renter, so the parser never touches the pet fields.
 //
-// FORMAT COVERAGE: handles both the "Label: value" agent-printout form AND the
-// STACKED form a realtor.ca full-page copy produces, where the label sits on
-// its own line and the value lands on the next line ("Bedrooms" \n "2"). The
-// stacked lookahead is guarded (see isPlausibleStackedValue) so a label whose
-// value is blank never bleeds into the next field.
+// FORMAT COVERAGE: handles three paste shapes:
+//   1. "Label: value" agent-printout form.
+//   2. The STACKED form a realtor.ca full-page copy produces, where the label
+//      sits on its own line and the value lands on the next line ("Bedrooms" \n
+//      "2"). The stacked lookahead is guarded (see isPlausibleStackedValue) so a
+//      label whose value is blank never bleeds into the next field.
+//   3. The dense TRREB agent DATA-SHEET, whose hallmark is yes/no inclusion
+//      COLUMNS ("Heat Incl: Y  Hydro Incl: N  Water Incl: Y  CAC Incl: Y"),
+//      "A/C: N" / "Furnished: N" flags, and "/Mth" rent. These are read by
+//      scanFlag (see below): an explicit "Y" sets the feature, an explicit "N"
+//      forces it false even over a looser positive, and a non-yes/no value
+//      ("Heat: Forced Air", "A/C: Central Air") carries no verdict and defers to
+//      the keyword scan. Critically, "Hydro Incl: N" / "Furnished: N" must NOT
+//      read as included/furnished — the column is authoritative.
 // ============================================================================
 
 import { type Laundry } from "./property-features";
@@ -100,6 +109,7 @@ const ALL_KNOWN_LABELS = new Set(
     "bathrooms", "bathroom", "baths", "bath", "washrooms", "washroom", "ba",
     "square footage", "approximate square footage", "approx square footage",
     "square feet", "sq ft", "sqft", "sq. ft.", "size", "living area",
+    "approx sqft", "apx sqft", "aprx sqft",
     "parking", "parking spaces", "parking type", "garage", "garage type",
     "total parking spaces",
     "available", "available date", "availability", "possession",
@@ -211,9 +221,9 @@ function extractRentCents(lines: string[], rawText: string): number | null {
   }
 
   // (b) money adjacent to a per-month marker, e.g. "$2,400/Monthly",
-  // "$2,400 per month", "$2,400/mo".
+  // "$2,400 per month", "$2,400/mo", and the TRREB "/Mth" / "Mthly" forms.
   const perMonth =
-    /\$\s*([\d][\d,]*(?:\.\d{1,2})?)\s*(?:\/|\bper\b)?\s*(?:mo\b|month|monthly)/i.exec(
+    /\$\s*([\d][\d,]*(?:\.\d{1,2})?)\s*(?:\/|\bper\b)?\s*(?:mo|mth|mthly|month|monthly)\b/i.exec(
       rawText,
     );
   if (perMonth) {
@@ -295,6 +305,9 @@ function extractSqft(lines: string[], rawText: string): number | null {
       "Square Footage",
       "Approximate Square Footage",
       "Approx Square Footage",
+      "Approx Sqft",
+      "Apx Sqft",
+      "Aprx Sqft",
       "Square Feet",
       "Sq Ft",
       "SqFt",
@@ -433,6 +446,11 @@ const REMARKS_LABELS = [
   "Client Remarks",
   "Realtor Remarks",
   "Remarks for Clients",
+  // TRREB data-sheets abbreviate these as "Remks".
+  "Client Remks",
+  "Realtor Remks",
+  "Public Remks",
+  "Remks",
   "Remarks",
   "Description",
   "Property Description",
@@ -525,6 +543,29 @@ function hasPositive(text: string, terms: RegExp): boolean {
   return true;
 }
 
+/**
+ * TRREB agent data-sheets express many features as a yes/no COLUMN rather than
+ * prose: "Heat Incl: Y", "Hydro Incl: N", "Water Incl: Y", "CAC Incl: Y",
+ * "A/C: N", "Furnished: N" — often several on one line. Scan `rawText` for any
+ * of the given label aliases followed (after an optional "Incl"/"Included") by a
+ * yes/no token, and return true (Y/Yes/Incl), false (N/No/None/N-A), or null
+ * (label absent, or its value isn't a yes/no token — e.g. "Heat: Forced Air"
+ * or "A/C: Central Air", which carry no inclusion verdict and should defer to
+ * the keyword/utility scans). Conservative by design: a non-yes/no value never
+ * sets a flag, so a "Water: Municipal" source field can't read as included.
+ */
+function scanFlag(rawText: string, labelAlts: string): boolean | null {
+  const re = new RegExp(
+    `\\b(?:${labelAlts})\\s*(?:incl(?:uded|usive)?\\.?)?\\s*[:\\-]\\s*(yes|no|y|n|none|incl(?:uded)?|n\\/a)\\b`,
+    "i",
+  );
+  const m = re.exec(rawText);
+  if (!m) return null;
+  const t = m[1].toLowerCase();
+  if (t === "y" || t === "yes" || t.startsWith("incl")) return true;
+  return false; // n / no / none / n/a
+}
+
 function extractLaundry(text: string): Laundry | null {
   const t = text.toLowerCase();
   if (/\b(ensuite laundry|in[- ]suite laundry|in[- ]unit laundry|laundry in[- ]?suite|laundry in[- ]?unit|washer\/dryer|washer and dryer|in-suite washer)\b/.test(t))
@@ -573,6 +614,16 @@ function extractUtilities(lines: string[], rawText: string): {
   if (/\bheat\s+(?:is\s+)?included\b/.test(all)) out.heat = true;
   if (/\b(hydro|electricity)\s+(?:is\s+)?included\b/.test(all)) out.hydro = true;
   if (/\bwater\s+(?:is\s+)?included\b/.test(all)) out.water = true;
+
+  // TRREB Y/N inclusion COLUMNS ("Heat Incl: Y", "Hydro Incl: N", "Water Incl:
+  // Y"). The explicit column is authoritative: a "Y" sets included AND an
+  // explicit "N" forces it back to false even if a looser signal set it true.
+  const heatFlag = scanFlag(rawText, "heat");
+  const hydroFlag = scanFlag(rawText, "hydro|electric(?:ity)?|electrical");
+  const waterFlag = scanFlag(rawText, "water");
+  if (heatFlag !== null) out.heat = heatFlag;
+  if (hydroFlag !== null) out.hydro = hydroFlag;
+  if (waterFlag !== null) out.water = waterFlag;
   return out;
 }
 
@@ -617,14 +668,27 @@ export function parseMlsListing(text: string): ParsedListing {
   out.description = extractDescription(lines);
   out.availableDate = extractAvailableDate(lines);
 
-  out.airConditioning = hasPositive(
-    raw,
-    /\b(central air|air[- ]conditioning|air conditioner|\ba\/c\b|\bac\b)/i,
-  );
+  // A/C: a TRREB explicit Y/N flag ("A/C: N", "CAC Incl: Y", "Central Air: Y")
+  // is authoritative; otherwise fall back to the keyword scan (so "A/C: Central
+  // Air" or prose "central air conditioning" still reads true).
+  const acFlag = scanFlag(raw, "a\\/c|air\\s*cond(?:itioning)?|central\\s*air|cac");
+  out.airConditioning =
+    acFlag !== null
+      ? acFlag
+      : hasPositive(
+          raw,
+          /\b(central air|air[- ]conditioning|air conditioner|\ba\/c\b|\bac\b)/i,
+        );
   out.balcony = hasPositive(raw, /\b(balcony|balconies|terrace|juliet balcony)\b/i);
+  // Furnished: a TRREB "Furnished: Y/N" flag is authoritative (fixes the false
+  // positive where "Furnished: N" would otherwise read as furnished); otherwise
+  // the prose keyword scan applies.
+  const furnishedFlag = scanFlag(raw, "furnished");
   out.furnished =
-    hasPositive(raw, /\bfully furnished\b/i) ||
-    (hasPositive(raw, /\bfurnished\b/i) && !/\bunfurnished\b/i.test(raw));
+    furnishedFlag !== null
+      ? furnishedFlag
+      : hasPositive(raw, /\bfully furnished\b/i) ||
+        (hasPositive(raw, /\bfurnished\b/i) && !/\bunfurnished\b/i.test(raw));
   out.laundry = extractLaundry(raw);
 
   const util = extractUtilities(lines, raw);
