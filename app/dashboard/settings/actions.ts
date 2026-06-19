@@ -11,6 +11,7 @@ import {
 } from "@/lib/branding";
 import { validateTestRecipient } from "@/lib/test-email";
 import { validateScreeningSettings } from "@/lib/screening";
+import { validatePublicContact } from "@/lib/public-contact";
 import { sendTestEmail } from "@/lib/email";
 import {
   validateLogoUpload,
@@ -89,6 +90,32 @@ export async function updateScreening(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=brand&screening=saved");
+}
+
+// Tab 1 — Public Page & Brand: public contact details for the syndication feed.
+// The phone is the aggregator-required account contact (Rentsync/Zumper); the
+// email is optional (feed falls back to reply-to). Both blank is valid = unset.
+export async function updatePublicContact(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const result = validatePublicContact({
+    phone: String(formData.get("public_contact_phone") ?? ""),
+    email: String(formData.get("public_contact_email") ?? ""),
+  });
+  if (!result.ok) {
+    redirect(`/dashboard/settings?tab=brand&feed=${result.field}`);
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update(result.values)
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=brand&feed=error");
+  }
+
+  redirect("/dashboard/settings?tab=brand&feed=saved");
 }
 
 // Tab 2 / Email sender — reply-to address renter emails are delivered to.

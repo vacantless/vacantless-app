@@ -11,6 +11,7 @@ import {
 import {
   updateBrandIdentity,
   updateScreening,
+  updatePublicContact,
   updateEmailSender,
   updateRenterMessages,
   updateTextMessages,
@@ -18,6 +19,12 @@ import {
   uploadOrgLogo,
   removeOrgLogo,
 } from "./actions";
+import { CopyLinkButton } from "@/components/copy-link-button";
+import {
+  summarizeFeed,
+  type FeedListingInput,
+  type FeedMissingField,
+} from "@/lib/listing-feed";
 import { logoUploadErrorMessage } from "@/lib/logo";
 import BrandColorField from "@/components/brand-color-field";
 import { RenterPagePreview } from "@/components/renter-page-preview";
@@ -96,6 +103,7 @@ export default async function SettingsPage({
     clause?: string; // Lease Clauses tab flash
     cn?: string; // post-submit nonce that remounts the clause forms (reset)
     screening?: string; // Public Page & Brand → screening flash
+    feed?: string; // Public Page & Brand → syndication contact flash
   };
 }) {
   const org = await getCurrentOrg();
@@ -290,6 +298,37 @@ export default async function SettingsPage({
   const proto = h.get("x-forwarded-proto") ?? "https";
   // Absolute origin for the renter-page picker (empty -> relative path).
   const renterPageBaseUrl = host ? `${proto}://${host}` : "";
+
+  // Listing syndication feed readiness (S242 feed completeness + operator
+  // surface). Call the SAME anon get_org_listing_feed RPC the public /api/feed
+  // route serves, so the readiness numbers match the live feed exactly
+  // (available listings only; photos joined from property_photos).
+  const { data: feedData } = await supabase.rpc("get_org_listing_feed", {
+    p_org_slug: org.slug,
+  });
+  const feedListingsRaw =
+    feedData && typeof feedData === "object" && "listings" in feedData
+      ? (feedData as { listings?: unknown }).listings
+      : [];
+  const feedListings = (
+    Array.isArray(feedListingsRaw) ? feedListingsRaw : []
+  ) as FeedListingInput[];
+  const feedSummary = summarizeFeed(
+    {
+      name: org.name,
+      slug: org.slug,
+      contact_phone: org.public_contact_phone,
+      contact_email: org.public_contact_email,
+    },
+    feedListings,
+  );
+  const feedUrl = `${renterPageBaseUrl}/api/feed/${org.slug}`;
+  const FEED_MISSING_LABEL: Record<FeedMissingField, string> = {
+    price: "monthly rent",
+    photo: "at least one photo",
+    description: "a description",
+    address: "the address",
+  };
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
   // The preview mirrors what renters actually see: the dashboard header and
@@ -541,6 +580,178 @@ export default async function SettingsPage({
               Open the live page renters see when you share a listing link — pick
               any listing to preview its branded inquiry and booking page.
             </p>
+          </div>
+
+          {/* --- Listing syndication feed (S242) --- */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Listing syndication feed
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Your Live listings are published as a single feed a rental
+              aggregator (like Zumper, PadMapper, or Rentsync) can pull from to
+              syndicate them. Add a contact phone below, then send the feed link
+              to the aggregator to get listed.
+            </p>
+
+            {searchParams.feed === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Contact details saved. Your feed now includes them.
+              </div>
+            )}
+            {searchParams.feed === "phone" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                That phone number didn&apos;t look valid. Use a format like
+                226-773-7555, or leave it blank.
+              </div>
+            )}
+            {searchParams.feed === "email" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                The contact email must be a valid email address, or left blank.
+              </div>
+            )}
+            {searchParams.feed === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving your contact details. Please try again.
+              </div>
+            )}
+
+            {/* Public contact details (the feed's account-level contact block) */}
+            <form
+              action={updatePublicContact}
+              className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2"
+            >
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Contact phone
+                </span>
+                <input
+                  name="public_contact_phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="226-773-7555"
+                  defaultValue={org.public_contact_phone ?? ""}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Required by aggregators. Shown on syndicated listings so renters
+                  can reach you.
+                </span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Contact email <span className="text-gray-400">(optional)</span>
+                </span>
+                <input
+                  name="public_contact_email"
+                  type="email"
+                  inputMode="email"
+                  placeholder="leasing@yourcompany.com"
+                  defaultValue={org.public_contact_email ?? ""}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Leave blank to use your reply-to email.
+                </span>
+              </label>
+              <div className="sm:col-span-2">
+                <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+                  Save contact details
+                </button>
+              </div>
+            </form>
+
+            {/* Copyable feed URL */}
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Your feed link
+              </h4>
+              <p className="mt-1 text-sm text-gray-500">
+                Send this URL to an aggregator to syndicate your Live listings. It
+                updates automatically as your listings change.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <code className="flex-1 min-w-[16rem] overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                  {feedUrl}
+                </code>
+                <CopyLinkButton
+                  path={`/api/feed/${org.slug}`}
+                  label="Copy feed URL"
+                />
+                <a
+                  href={`/api/feed/${org.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Open feed ↗
+                </a>
+              </div>
+            </div>
+
+            {/* Feed readiness — what syndicates vs what's skipped and why */}
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Feed readiness
+              </h4>
+
+              {feedSummary.orgPhoneMissing && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  Add a contact phone above — aggregators require one before they
+                  accept your feed.
+                </div>
+              )}
+
+              {feedSummary.total === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">
+                  No Live listings yet. Set a listing to Live and it will appear
+                  here once it has a rent, a photo, a description, and an address.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-3 text-sm text-gray-700">
+                    <span className="font-semibold text-gray-900">
+                      {feedSummary.readyCount} of {feedSummary.total}
+                    </span>{" "}
+                    Live {feedSummary.total === 1 ? "listing is" : "listings are"}{" "}
+                    ready to syndicate.
+                  </p>
+                  {feedSummary.skippedCount > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-gray-500">
+                        Skipped until complete:
+                      </p>
+                      <ul className="mt-2 space-y-2">
+                        {feedSummary.skipped.map((s) => (
+                          <li
+                            key={s.id}
+                            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                          >
+                            <span className="font-medium text-gray-800">
+                              {s.address?.trim() || "Untitled listing"}
+                            </span>
+                            <span className="block text-xs text-gray-500">
+                              Needs:{" "}
+                              {s.missing
+                                .map((m) => FEED_MISSING_LABEL[m])
+                                .join(", ")}
+                              .
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+              <p className="mt-3 text-xs text-gray-400">
+                Only Live listings syndicate. Drafts, paused, and leased listings
+                are never included.
+              </p>
+            </div>
           </div>
 
           {/* --- Renter pre-screening --- */}
