@@ -9,6 +9,7 @@ import {
   formatMoneyCents,
   computeProration,
   prorationVarValues,
+  ordinalDay,
 } from "../lib/proration";
 
 let passed = 0;
@@ -125,6 +126,20 @@ const flatVals = prorationVarValues(july, "thirty_day");
 ok("varValues 30-day amount differs", flatVals.prorated_rent === "$583.33");
 ok("varValues dates are method-independent", flatVals.prorated_period_end === calVals.prorated_period_end);
 ok("varValues defaults to calendar", prorationVarValues(july).prorated_rent === "$604.84");
+
+// --- ordinalDay (anniversary note) ------------------------------------------
+ok("ordinalDay 1 -> 1st", ordinalDay(1) === "1st");
+ok("ordinalDay 2 -> 2nd", ordinalDay(2) === "2nd");
+ok("ordinalDay 3 -> 3rd", ordinalDay(3) === "3rd");
+ok("ordinalDay 4 -> 4th", ordinalDay(4) === "4th");
+ok("ordinalDay 11 -> 11th (teen)", ordinalDay(11) === "11th");
+ok("ordinalDay 12 -> 12th (teen)", ordinalDay(12) === "12th");
+ok("ordinalDay 13 -> 13th (teen)", ordinalDay(13) === "13th");
+ok("ordinalDay 17 -> 17th", ordinalDay(17) === "17th");
+ok("ordinalDay 21 -> 21st", ordinalDay(21) === "21st");
+ok("ordinalDay 22 -> 22nd", ordinalDay(22) === "22nd");
+ok("ordinalDay 23 -> 23rd", ordinalDay(23) === "23rd");
+ok("ordinalDay 31 -> 31st", ordinalDay(31) === "31st");
 
 console.log(`proration: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

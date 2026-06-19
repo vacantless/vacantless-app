@@ -250,6 +250,7 @@ ok("seed seasonal_ac present + titled", acSeed.title === "Seasonal Air Condition
 ok("seed seasonal_ac is residential + standard risk", acSeed.applicableTo === "residential" && acSeed.riskLevel === "standard");
 ok("seed seasonal_ac filed under Maintenance / Access", acSeed.category === "Maintenance / Access");
 ok("seed seasonal_ac body covers supply-on-request + tenant install/remove", /on the Tenant's request/i.test(acSeed.body) && /install/i.test(acSeed.body) && /remov/i.test(acSeed.body));
+ok("seed seasonal_ac covers window or portable (not wall-mounted)", /window or portable/i.test(acSeed.body) && /window or portable/i.test(acSeed.notesForLandlord));
 ok("seed seasonal_ac body carries no unfilled tokens", tokensInBody(acSeed.body).length === 0);
 
 // the seed must assemble cleanly for a residential lease once turned into versions
@@ -292,6 +293,8 @@ ok("recommend early_access pairs with tenant_insurance", (() => {
 })());
 ok("recommend prorated_rent when hasProratedRent", recommendClauses({ hasProratedRent: true }).some((r) => r.key === "prorated_rent"));
 ok("recommend appliances when appliancesIncluded", recommendClauses({ appliancesIncluded: true }).some((r) => r.key === "appliances"));
+ok("recommend seasonal_ac when acWindowOnRequest", recommendClauses({ acWindowOnRequest: true }).some((r) => r.key === "seasonal_ac"));
+ok("seasonal_ac NOT recommended by default", !recommendClauses({}).some((r) => r.key === "seasonal_ac"));
 ok("recommend custom_property when propertySpecific", recommendClauses({ propertySpecific: true }).some((r) => r.key === "custom_property"));
 ok("recommend de-dupes keys", (() => {
   const r = recommendClauses({ hasEarlyAccess: true }); // tenant_insurance both baseline + early-access
@@ -300,7 +303,7 @@ ok("recommend de-dupes keys", (() => {
 ok("recommend keys all exist in the seed", recommendClauses({
   hasParking: true, parkingAtExtraCost: true, gasFlatFee: true, tenantPaysHydro: true,
   hasStorage: true, hasOutdoorSpace: true, petsRestricted: true, hasEarlyAccess: true,
-  hasProratedRent: true, appliancesIncluded: true, propertySpecific: true,
+  hasProratedRent: true, appliancesIncluded: true, acWindowOnRequest: true, propertySpecific: true,
 }).every((r) => RESIDENTIAL_CLAUSE_SEED.some((c) => c.key === r.key)));
 
 // --- resolveCurrentClauses (the DB-rows -> ResolvedClause[] join) ------------

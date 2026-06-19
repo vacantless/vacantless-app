@@ -479,6 +479,7 @@ export type RecommendationFacts = {
   hasEarlyAccess?: boolean; // an early-access date exists
   hasProratedRent?: boolean; // a partial first month applies
   appliancesIncluded?: boolean; // appliances come with the unit
+  acWindowOnRequest?: boolean; // landlord supplies a seasonal window AC on request
   propertySpecific?: boolean; // special equipment / valves / building rules
 };
 
@@ -521,6 +522,8 @@ export function recommendClauses(facts: RecommendationFacts): ClauseRecommendati
   }
   if (facts.hasProratedRent) add("prorated_rent", "A partial first month applies.");
   if (facts.appliancesIncluded) add("appliances", "Appliances are included - list them to avoid disputes.");
+  if (facts.acWindowOnRequest)
+    add("seasonal_ac", "You supply a seasonal window or portable AC on request - set the install and removal terms.");
   if (facts.propertySpecific)
     add("custom_property", "This property has special terms (equipment, valves, building rules).");
 
@@ -871,9 +874,9 @@ export const RESIDENTIAL_CLAUSE_SEED: SeedClause[] = [
     riskLevel: "standard",
     jurisdiction: "ontario",
     notesForLandlord:
-      "Use when the unit has no installed air conditioning but you will supply a window unit on request. The Tenant installs, removes, and stores it each season and is responsible for safe installation.",
+      "Use when you supply a seasonal window or portable air-conditioning unit on request (not a permanent wall-mounted unit). The Tenant installs, removes, and stores it each season and is responsible for safe installation.",
     body:
-      "Seasonal Air Conditioner: The rental unit is not supplied with air conditioning. On the Tenant's request, the Landlord will provide one window air-conditioning unit for the Tenant's seasonal use. The Tenant is responsible for installing the unit safely at the start of each cooling season and for removing and storing it at the end of each season; the Landlord is not responsible for installing, removing, or storing the unit. The Tenant is responsible for safe installation and for any damage resulting from the installation, use, removal, or storage of the unit, beyond normal wear and tear.",
+      "Seasonal Air Conditioner: The rental unit is not supplied with air conditioning. On the Tenant's request, the Landlord will provide one window or portable air-conditioning unit for the Tenant's seasonal use. The Tenant is responsible for installing the unit safely at the start of each cooling season and for removing and storing it at the end of each season; the Landlord is not responsible for installing, removing, or storing the unit. The Tenant is responsible for safe installation and for any damage resulting from the installation, use, removal, or storage of the unit, beyond normal wear and tear.",
   },
   {
     key: "alterations",

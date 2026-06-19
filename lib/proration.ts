@@ -39,6 +39,18 @@ export function isProrationToken(token: string): token is ProrationToken {
   return (Object.values(PRORATION_TOKENS) as string[]).includes(token.toLowerCase());
 }
 
+/**
+ * Ordinal form of a day-of-month ("1st", "2nd", "17th", "21st"). Used by the
+ * anniversary rent-cycle note ("rent runs from the 17th of each month"). The
+ * 11th-13th teens always take "th".
+ */
+export function ordinalDay(day: number): string {
+  const v = day % 100;
+  const suffix =
+    v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][day % 10] ?? "th";
+  return `${day}${suffix}`;
+}
+
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function isLeapYear(year: number): boolean {

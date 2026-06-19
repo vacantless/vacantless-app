@@ -33,6 +33,8 @@ import {
 import {
   computeProration,
   prorationVarValues,
+  ordinalDay,
+  parseISODate,
   PRORATION_TOKENS,
   type ProrationMethod,
 } from "@/lib/proration";
@@ -64,6 +66,7 @@ const FACT_FIELDS: { key: keyof RecommendationFacts; label: string }[] = [
   { key: "hasStorage", label: "Storage / locker provided" },
   { key: "hasOutdoorSpace", label: "Has balcony, terrace, or yard" },
   { key: "appliancesIncluded", label: "Appliances included" },
+  { key: "acWindowOnRequest", label: "Seasonal AC supplied on request (window or portable)" },
   { key: "petsRestricted", label: "Pets allowed with rules" },
   { key: "hasEarlyAccess", label: "Early access before lease start" },
   { key: "hasProratedRent", label: "Partial first month (prorated)" },
@@ -159,13 +162,33 @@ export default function LeaseClauseWizard({
     [selected, vars, recordVars],
   );
 
-  // Prorated-rent suggestion from the tenancy's rent + start date. Null when the
-  // rent/date are missing or the lease starts on the 1st (no proration needed),
-  // so the suggestion chips only appear when proration is actually in play.
-  const proration = useMemo(() => {
-    const comp = computeProration(rentCents, startDate);
-    return comp && comp.applicable ? comp : null;
-  }, [rentCents, startDate]);
+  // How rent recurs. "first_of_month" (the default) prorates a mid-month first
+  // month; "anniversary" means rent runs from the start day each month, so no
+  // proration is needed (the operator's edge case — e.g. a 17th-to-17th cycle).
+  const [rentCycle, setRentCycle] = useState<"first_of_month" | "anniversary">(
+    "first_of_month",
+  );
+
+  // The raw proration math (independent of the chosen cycle). `applicable` is
+  // true only for a valid rent + a mid-month start — i.e. proration is possible.
+  const rawProration = useMemo(
+    () => computeProration(rentCents, startDate),
+    [rentCents, startDate],
+  );
+  const prorationPossible = rawProration?.applicable ?? false;
+  // The start day-of-month, for the anniversary-cycle label.
+  const startDay = useMemo(() => parseISODate(startDate ?? "")?.day ?? null, [startDate]);
+
+  // The ACTIVE suggestion: only offered on the first-of-month cycle. Switching to
+  // an anniversary cycle suppresses the banner + chips (no proration needed).
+  const proration =
+    rentCycle === "first_of_month" && prorationPossible ? rawProration : null;
+
+  // The prorated-rent clause id, so toggling the cycle can include/drop it.
+  const proratedClauseId = useMemo(
+    () => residential.find((c) => c.key === "prorated_rent")?.clauseId ?? null,
+    [residential],
+  );
 
   // Show the one-click banner only when a prorated-rent token is actually being
   // asked for (the prorated clause is selected) and we have a suggestion.
@@ -210,6 +233,22 @@ export default function LeaseClauseWizard({
   }
   function setVar(token: string, value: string) {
     setVars((v) => ({ ...v, [token]: value }));
+  }
+  // Switching to an anniversary cycle means no proration: drop the prorated-rent
+  // clause + fact; switching back to first-of-month re-adds them. Only the
+  // prorated clause is touched — every other selection stays as the operator set it.
+  function changeRentCycle(next: "first_of_month" | "anniversary") {
+    setRentCycle(next);
+    const anniversary = next === "anniversary";
+    setFacts((f) => ({ ...f, hasProratedRent: !anniversary }));
+    if (proratedClauseId) {
+      setIncluded((prev) => {
+        const s = new Set(prev);
+        if (anniversary) s.delete(proratedClauseId);
+        else s.add(proratedClauseId);
+        return s;
+      });
+    }
   }
   // Fill all four prorated-rent inputs at once for the chosen method (the dates
   // are method-independent; only the amount differs between calendar/30-day).
@@ -301,6 +340,49 @@ export default function LeaseClauseWizard({
           ))}
         </div>
       </fieldset>
+
+      {/* Rent cycle — only relevant when the lease starts mid-month. Lets the
+          operator say rent runs from the 1st (prorate) vs. the start day (no
+          proration), which collapses the proration suggestion below. */}
+      {prorationPossible && startDay != null && (
+        <fieldset className="rounded-lg border border-gray-200 p-3">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Rent cycle
+          </legend>
+          <div className="space-y-1.5">
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="radio"
+                name="rent_cycle_ui"
+                checked={rentCycle === "first_of_month"}
+                onChange={() => changeRentCycle("first_of_month")}
+                className="mt-0.5 h-4 w-4 border-gray-300"
+              />
+              <span>
+                Full rent on the 1st of each month
+                <span className="block text-xs text-gray-500">
+                  Prorate the partial first month.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="radio"
+                name="rent_cycle_ui"
+                checked={rentCycle === "anniversary"}
+                onChange={() => changeRentCycle("anniversary")}
+                className="mt-0.5 h-4 w-4 border-gray-300"
+              />
+              <span>
+                Rent runs from the {ordinalDay(startDay)} of each month
+                <span className="block text-xs text-gray-500">
+                  No proration needed — full cycles from the {ordinalDay(startDay)}.
+                </span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+      )}
 
       <form action={generateAction} className="space-y-5">
         <input type="hidden" name="tenancy_id" value={tenancyId} />
