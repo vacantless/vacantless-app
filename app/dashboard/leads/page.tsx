@@ -9,6 +9,11 @@ import {
   type LeadStatus,
 } from "@/lib/pipeline";
 import {
+  isScreenFilter,
+  matchesScreenFilter,
+  type ScreenFilter,
+} from "@/lib/screening";
+import {
   followUpStatus,
   followUpLabel,
   type FollowUpStatus,
@@ -41,7 +46,7 @@ const FOLLOW_CHIP: Record<Exclude<FollowUpStatus, "none">, string> = {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: { status?: string; screen?: string };
 }) {
   const supabase = createClient();
   const { data } = await supabase
@@ -59,7 +64,21 @@ export default async function LeadsPage({
     searchParams.status && isLeadStatus(searchParams.status)
       ? searchParams.status
       : null;
-  const rows = filter ? all.filter((l) => l.status === filter) : all;
+  const screen: ScreenFilter | null = isScreenFilter(searchParams.screen)
+    ? searchParams.screen
+    : null;
+  // Stage and screening filters are orthogonal — apply both.
+  const rows = all.filter(
+    (l) =>
+      (filter ? l.status === filter : true) &&
+      matchesScreenFilter(l.qualified_out, screen),
+  );
+
+  // The screening filter row only appears once an org actually has flagged
+  // leads — orgs that never enabled screening never see the cue.
+  const mismatchCount = all.filter((l) => l.qualified_out).length;
+  const fitCount = all.length - mismatchCount;
+  const showScreenFilter = mismatchCount > 0;
 
   return (
     <div>
@@ -70,20 +89,47 @@ export default async function LeadsPage({
         subtitle="Every renter who has reached out about one of your rentals."
       />
 
-      <div className="mb-5 flex flex-wrap gap-2 text-sm">
-        <FilterChip label={`All (${all.length})`} href="/dashboard/leads" active={!filter} />
+      <div className="mb-3 flex flex-wrap gap-2 text-sm">
+        <FilterChip
+          label={`All (${all.length})`}
+          href={leadsHref(null, screen)}
+          active={!filter}
+        />
         {PIPELINE_STAGES.map((s) => {
           const n = all.filter((l) => l.status === s).length;
           return (
             <FilterChip
               key={s}
               label={`${statusLabel(s)} (${n})`}
-              href={`/dashboard/leads?status=${s}`}
+              href={leadsHref(s, screen)}
               active={filter === s}
             />
           );
         })}
       </div>
+
+      {showScreenFilter && (
+        <div className="mb-5 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
+            Screening
+          </span>
+          <FilterChip
+            label="All fits"
+            href={leadsHref(filter, null)}
+            active={!screen}
+          />
+          <FilterChip
+            label={`Good fits (${fitCount})`}
+            href={leadsHref(filter, "ok")}
+            active={screen === "ok"}
+          />
+          <FilterChip
+            label={`Possible mismatch (${mismatchCount})`}
+            href={leadsHref(filter, "out")}
+            active={screen === "out"}
+          />
+        </div>
+      )}
 
       <details className="mb-5 text-sm">
         <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
@@ -112,8 +158,8 @@ export default async function LeadsPage({
         ) : (
           <EmptyState
             icon={<Icons.chat />}
-            title="No inquiries in this stage"
-            description="Try another stage filter above, or clear it to see every inquiry."
+            title="No inquiries match these filters"
+            description="Try another filter above, or clear them to see every inquiry."
           />
         )
       ) : (
@@ -234,6 +280,22 @@ export default async function LeadsPage({
       )}
     </div>
   );
+}
+
+/**
+ * Build a /dashboard/leads URL preserving whichever of the two orthogonal
+ * filters (stage + screening) you are NOT currently changing, so clicking a
+ * screening chip keeps the active stage and vice-versa.
+ */
+function leadsHref(
+  status: LeadStatus | null,
+  screen: ScreenFilter | null,
+): string {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (screen) params.set("screen", screen);
+  const qs = params.toString();
+  return qs ? `/dashboard/leads?${qs}` : "/dashboard/leads";
 }
 
 function FilterChip({

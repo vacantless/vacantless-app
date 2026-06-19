@@ -220,3 +220,37 @@ export function parseCount(raw: string | null | undefined): number | null {
   if (!Number.isInteger(n) || n < 0 || n > 99) return null;
   return n;
 }
+
+// --- inquiries-list screening filter (S245) ---------------------------------
+// The qualify-out flag is a SNAPSHOT (leads.qualified_out). On the Inquiries
+// list the operator wants to triage by it: focus on good fits, or pull up the
+// possible mismatches to review. This filter is orthogonal to the stage filter
+// (both can be active at once) and lives in the URL as ?screen=ok|out.
+//
+//   "out" = only the qualified-out (possible mismatch) leads
+//   "ok"  = only the leads that did NOT qualify out (everything else)
+//   null  = no screening filter (show all)
+//
+// Pure so the list page stays a thin render over it.
+export type ScreenFilter = "out" | "ok";
+
+export function isScreenFilter(
+  value: string | null | undefined,
+): value is ScreenFilter {
+  return value === "out" || value === "ok";
+}
+
+/**
+ * Does a lead's qualify-out snapshot match the active screening filter? A null
+ * filter matches everything. Note "ok" deliberately includes leads that were
+ * never screened (qualified_out = false), so an org that has never enabled
+ * screening sees all of its leads under "Good fits".
+ */
+export function matchesScreenFilter(
+  qualifiedOut: boolean,
+  filter: ScreenFilter | null,
+): boolean {
+  if (filter === "out") return qualifiedOut === true;
+  if (filter === "ok") return qualifiedOut === false;
+  return true;
+}

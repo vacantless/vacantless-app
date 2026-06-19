@@ -5,6 +5,8 @@ import {
   validateScreeningSettings,
   parseIncomeToCents,
   parseCount,
+  isScreenFilter,
+  matchesScreenFilter,
   SCREENING_REASON,
   type OrgScreeningConfig,
   type ScreeningContext,
@@ -282,6 +284,35 @@ const goodAnswers: ScreeningAnswers = {
   ok("count 0 -> 0", parseCount("0") === 0);
   ok("count 2.5 -> null", parseCount("2.5") === null);
   ok("count 100 -> null (cap)", parseCount("100") === null);
+}
+
+// --- isScreenFilter (inquiries-list URL param guard) -----------------------
+{
+  ok("isScreenFilter: out", isScreenFilter("out") === true);
+  ok("isScreenFilter: ok", isScreenFilter("ok") === true);
+  ok("isScreenFilter: junk -> false", isScreenFilter("mismatch") === false);
+  ok("isScreenFilter: empty -> false", isScreenFilter("") === false);
+  ok("isScreenFilter: null -> false", isScreenFilter(null) === false);
+  ok("isScreenFilter: undefined -> false", isScreenFilter(undefined) === false);
+}
+
+// --- matchesScreenFilter ----------------------------------------------------
+{
+  // null filter = show everything
+  ok("null filter: flagged matches", matchesScreenFilter(true, null) === true);
+  ok("null filter: unflagged matches", matchesScreenFilter(false, null) === true);
+  // "out" = only the qualified-out
+  ok('"out": flagged matches', matchesScreenFilter(true, "out") === true);
+  ok('"out": unflagged excluded', matchesScreenFilter(false, "out") === false);
+  // "ok" = only the not-qualified-out (incl never-screened)
+  ok('"ok": unflagged matches', matchesScreenFilter(false, "ok") === true);
+  ok('"ok": flagged excluded', matchesScreenFilter(true, "ok") === false);
+  // partition: every lead lands in exactly one of out/ok
+  for (const q of [true, false]) {
+    const inOut = matchesScreenFilter(q, "out");
+    const inOk = matchesScreenFilter(q, "ok");
+    ok(`partition q=${q}: exactly one of out/ok`, inOut !== inOk);
+  }
 }
 
 console.log(`\nscreening: ${passed} passed, ${failed} failed`);
