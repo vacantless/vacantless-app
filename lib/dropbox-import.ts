@@ -175,6 +175,69 @@ export function groupByFirstSubfolder(
 }
 
 // ---------------------------------------------------------------------------
+// Multi-unit subfolder selection (a building share is one subfolder per unit).
+// When the operator points at the BUILDING folder rather than a single unit's
+// gallery, slice-1 used to dead-end with "share the unit folder instead". The
+// follow-on lets them pick a unit: enumerate the subfolders, the operator
+// chooses one, and we import THAT subfolder into this rental. These helpers keep
+// the Dropbox path-building deterministic and confirm a chosen unit against the
+// folders actually present (so a stale/typo choice can't drive an API call).
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve an operator's chosen unit subfolder against the folders actually
+ * listed under the share root. Matches case-insensitively but RETURNS the
+ * server-side spelling (Dropbox paths are case-preserving), so the import uses
+ * the canonical name. Returns null when the choice is empty or not present —
+ * the caller rejects it rather than guessing.
+ */
+export function normalizeSubfolderChoice(
+  choice: string | null | undefined,
+  allowed: string[],
+): string | null {
+  if (typeof choice !== "string") return null;
+  const want = choice.trim().toLowerCase();
+  if (!want) return null;
+  for (const name of allowed) {
+    if (typeof name === "string" && name.trim().toLowerCase() === want) {
+      return name;
+    }
+  }
+  return null;
+}
+
+/**
+ * The `path` argument for a Dropbox list_folder call scoped to a shared link:
+ * "" for the share root, or "/<subfolder>" for one unit's folder. The subfolder
+ * is expected to be an already-resolved single segment (via
+ * normalizeSubfolderChoice); a leading slash and surrounding whitespace are
+ * tolerated and any trailing slash is dropped.
+ */
+export function dropboxListPath(subfolder?: string | null): string {
+  if (typeof subfolder !== "string") return "";
+  const seg = subfolder.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  return seg ? `/${seg}` : "";
+}
+
+/**
+ * The `path` for a get_shared_link_file fetch: "/<name>" for a file at the share
+ * root, or "/<subfolder>/<name>" when importing from a unit subfolder. Both
+ * segments come from Dropbox's own listing by this point, so this only joins
+ * them into a clean, slash-normalized path.
+ */
+export function dropboxFilePath(
+  subfolder: string | null | undefined,
+  name: string,
+): string {
+  const file = String(name).trim().replace(/^\/+/, "");
+  const seg =
+    typeof subfolder === "string"
+      ? subfolder.trim().replace(/^\/+/, "").replace(/\/+$/, "")
+      : "";
+  return seg ? `/${seg}/${file}` : `/${file}`;
+}
+
+// ---------------------------------------------------------------------------
 // Result messaging
 // ---------------------------------------------------------------------------
 
@@ -183,6 +246,7 @@ export type DropboxImportError =
   | "dropboxauth"
   | "dropboxempty"
   | "dropboxnested"
+  | "dropboxbadunit"
   | "dropboxmax"
   | "dropboxfailed";
 
@@ -196,7 +260,9 @@ export function dropboxImportErrorMessage(reason: string): string {
     case "dropboxempty":
       return "No photos were found in that Dropbox folder. Make sure the link points at the folder of images (not a single file or a parent folder).";
     case "dropboxnested":
-      return "That folder contains sub-folders rather than photos (for example one folder per unit). Open the specific folder of photos in Dropbox and share that link instead.";
+      return "That folder contains sub-folders rather than photos (for example one folder per unit). Choose the unit whose photos belong on this rental, or open that unit's folder in Dropbox and share its link.";
+    case "dropboxbadunit":
+      return "That unit folder couldn't be found in the shared link. Re-open the building folder and pick a unit from the list.";
     case "dropboxmax":
       return "That would go over this rental's photo limit. The folder has more photos than the remaining slots.";
     case "dropboxfailed":

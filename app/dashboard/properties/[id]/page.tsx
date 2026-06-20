@@ -33,7 +33,6 @@ import {
   removeListingPost,
   uploadPropertyPhotos,
   importPropertyPhotosFromUrls,
-  importPropertyPhotosFromDropboxFolder,
   setCoverPhoto,
   movePhoto,
   deletePhoto,
@@ -43,6 +42,7 @@ import {
   copyPortalLabel,
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
+import { DropboxFolderImport } from "./dropbox-folder-import";
 import { buildShareReadiness } from "@/lib/share-readiness";
 import {
   sortPhotos,
@@ -737,29 +737,7 @@ export default async function PropertyDetailPage({
               <summary className="cursor-pointer text-xs font-medium text-brand">
                 Or import from a Dropbox folder
               </summary>
-              <form action={importPropertyPhotosFromDropboxFolder} className="mt-2">
-                <input type="hidden" name="property_id" value={p.id} />
-                <p className="mb-2 text-xs text-gray-500">
-                  In Dropbox, open the folder of photos, choose{" "}
-                  <strong>Share</strong> → <strong>Copy link</strong> (set so
-                  anyone with the link can view), and paste it here. Point at the
-                  exact gallery folder — for a multi-unit building, share one
-                  unit&apos;s folder at a time.
-                </p>
-                <input
-                  type="url"
-                  name="dropbox_url"
-                  required
-                  placeholder="https://www.dropbox.com/scl/fo/…?rlkey=…"
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-                />
-                <button
-                  type="submit"
-                  className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Import from Dropbox
-                </button>
-              </form>
+              <DropboxFolderImport propertyId={p.id} />
             </details>
           </div>
         )}

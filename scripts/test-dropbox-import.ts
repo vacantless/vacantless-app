@@ -9,6 +9,9 @@ import {
   galleryOrderNum,
   sortGalleryEntries,
   groupByFirstSubfolder,
+  normalizeSubfolderChoice,
+  dropboxListPath,
+  dropboxFilePath,
   dropboxImportErrorMessage,
   DROPBOX_IMAGE_EXTENSIONS,
   type DropboxEntry,
@@ -193,9 +196,45 @@ ok("group: respects a non-empty root path_lower",
     return g.size === 2 && g.has("unit 1") && g.has("unit 2");
   })());
 
+// --- normalizeSubfolderChoice (multi-unit pick) -----------------------------
+const units = ["Unit 22", "Unit 27", "Outside & Common Areas"];
+ok("pick: exact match returns the server-side name",
+  normalizeSubfolderChoice("Unit 22", units) === "Unit 22");
+ok("pick: case-insensitive match returns canonical casing",
+  normalizeSubfolderChoice("unit 22", units) === "Unit 22");
+ok("pick: surrounding whitespace tolerated",
+  normalizeSubfolderChoice("  Unit 27 ", units) === "Unit 27");
+ok("pick: a unit not in the list is rejected",
+  normalizeSubfolderChoice("Unit 99", units) === null);
+ok("pick: empty / nullish rejected",
+  normalizeSubfolderChoice("", units) === null &&
+    normalizeSubfolderChoice(null, units) === null &&
+    normalizeSubfolderChoice(undefined, units) === null);
+ok("pick: a path-traversal-ish choice never matches a real single segment",
+  normalizeSubfolderChoice("../secret", units) === null);
+
+// --- dropboxListPath --------------------------------------------------------
+ok("listpath: no subfolder -> share root ''",
+  dropboxListPath() === "" && dropboxListPath(null) === "" &&
+    dropboxListPath("") === "");
+ok("listpath: a unit -> /Unit 22", dropboxListPath("Unit 22") === "/Unit 22");
+ok("listpath: tolerates a leading/trailing slash",
+  dropboxListPath("/Unit 22/") === "/Unit 22");
+
+// --- dropboxFilePath --------------------------------------------------------
+ok("filepath: root file -> /name",
+  dropboxFilePath(null, "001-highres.jpg") === "/001-highres.jpg");
+ok("filepath: subfolder file -> /Unit 22/name",
+  dropboxFilePath("Unit 22", "001-highres.jpg") === "/Unit 22/001-highres.jpg");
+ok("filepath: joins cleanly without doubled slashes",
+  dropboxFilePath("/Unit 22/", "/001.jpg") === "/Unit 22/001.jpg");
+ok("filepath: empty subfolder behaves like root",
+  dropboxFilePath("", "002.jpg") === "/002.jpg");
+
 // --- dropboxImportErrorMessage ----------------------------------------------
 ok("msg: dropboxurl mentions Dropbox + Share", /dropbox/i.test(dropboxImportErrorMessage("dropboxurl")) && /share/i.test(dropboxImportErrorMessage("dropboxurl")));
 ok("msg: dropboxnested explains sub-folders", /sub-folder|unit/i.test(dropboxImportErrorMessage("dropboxnested")));
+ok("msg: dropboxbadunit mentions the unit folder", /unit folder/i.test(dropboxImportErrorMessage("dropboxbadunit")));
 ok("msg: dropboxempty mentions no photos found", /no photos/i.test(dropboxImportErrorMessage("dropboxempty")));
 ok("msg: dropboxauth mentions not set up", /set up/i.test(dropboxImportErrorMessage("dropboxauth")));
 ok("msg: dropboxmax mentions limit", /limit/i.test(dropboxImportErrorMessage("dropboxmax")));

@@ -41,6 +41,9 @@ import {
   filterImageEntries,
   sortGalleryEntries,
   subfolderNames,
+  normalizeSubfolderChoice,
+  dropboxListPath,
+  dropboxFilePath,
   type DropboxEntry,
 } from "@/lib/dropbox-import";
 import { photoCapForPlan } from "@/lib/billing";
@@ -1046,14 +1049,16 @@ function collectDropboxEntries(
 }
 
 /**
- * Enumerate the entries at the root of a Dropbox shared folder (files +
- * folders, so the action can detect the multi-unit/nested case). Non-recursive
- * — the operator shares the exact folder of photos. Paginates via
- * list_folder/continue for very large folders. Returns null on any API error.
+ * Enumerate the entries of a Dropbox shared folder (files + folders, so the
+ * action can detect the multi-unit/nested case). Non-recursive — `path` is ""
+ * for the share root or "/<unit>" for one unit's subfolder (multi-unit pick).
+ * Paginates via list_folder/continue for very large folders. Returns null on
+ * any API error.
  */
 async function dropboxListSharedFolder(
   token: string,
   shareUrl: string,
+  path = "",
 ): Promise<DropboxEntry[] | null> {
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -1064,7 +1069,7 @@ async function dropboxListSharedFolder(
     let res = await fetch(`${DROPBOX_API}/files/list_folder`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ path: "", shared_link: { url: shareUrl } }),
+      body: JSON.stringify({ path, shared_link: { url: shareUrl } }),
     });
     if (!res.ok) return null;
     let json = (await res.json()) as DropboxListResponse;
@@ -1088,15 +1093,16 @@ async function dropboxListSharedFolder(
 }
 
 /**
- * Download one file from under the shared link by name (the entries are direct
- * children of the shared folder root). Streams with the same size + timeout caps
- * as the URL importer, then confirms the bytes are a supported image via the
- * magic-byte sniff. Returns null on any failure (best-effort per file).
+ * Download one file from under the shared link by its path relative to the share
+ * root ("/<name>" for a root file, "/<unit>/<name>" for a unit subfolder).
+ * Streams with the same size + timeout caps as the URL importer, then confirms
+ * the bytes are a supported image via the magic-byte sniff. Returns null on any
+ * failure (best-effort per file).
  */
 async function fetchDropboxSharedFile(
   token: string,
   shareUrl: string,
-  name: string,
+  filePath: string,
 ): Promise<FetchedImage | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), IMPORT_FETCH_TIMEOUT_MS);
@@ -1107,7 +1113,7 @@ async function fetchDropboxSharedFile(
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          "Dropbox-API-Arg": dropboxApiArg({ url: shareUrl, path: `/${name}` }),
+          "Dropbox-API-Arg": dropboxApiArg({ url: shareUrl, path: filePath }),
         },
         signal: controller.signal,
       },
@@ -1149,6 +1155,45 @@ async function fetchDropboxSharedFile(
   }
 }
 
+// The shape inspectDropboxFolder hands back to the client island so it can show
+// the right next step: import a flat gallery straight away, or — when the link
+// points at a building folder — let the operator pick which unit's photos this
+// rental should get. Serializable (it crosses the server-action boundary).
+export type DropboxInspectResult =
+  | { kind: "flat"; count: number }
+  | { kind: "units"; subfolders: string[] }
+  | { kind: "error"; reason: string };
+
+/**
+ * Read-only probe of a pasted Dropbox shared-folder link (no writes, no
+ * redirect). Returns "flat" when the folder holds the gallery directly,
+ * "units" with the subfolder names when it's a building (one folder per unit),
+ * or "error" with a reason. The client island uses this to decide whether to
+ * import immediately or surface the unit picker.
+ */
+export async function inspectDropboxFolder(
+  rawUrl: string,
+): Promise<DropboxInspectResult> {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+
+  const parsed = parseDropboxFolderUrl(rawUrl);
+  if (!parsed.ok) return { kind: "error", reason: "dropboxurl" };
+
+  const token = await getDropboxAccessToken();
+  if (!token) return { kind: "error", reason: "dropboxauth" };
+
+  const rawEntries = await dropboxListSharedFolder(token, parsed.url);
+  if (rawEntries === null) return { kind: "error", reason: "dropboxfailed" };
+
+  const images = filterImageEntries(rawEntries);
+  if (images.length > 0) return { kind: "flat", count: images.length };
+
+  const subs = subfolderNames(rawEntries);
+  if (subs.length > 0) return { kind: "units", subfolders: subs };
+
+  return { kind: "error", reason: "dropboxempty" };
+}
+
 export async function importPropertyPhotosFromDropboxFolder(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
@@ -1167,14 +1212,36 @@ export async function importPropertyPhotosFromDropboxFolder(formData: FormData) 
   const token = await getDropboxAccessToken();
   if (!token) return fail("dropboxauth");
 
-  const rawEntries = await dropboxListSharedFolder(token, shareUrl);
+  // Optional multi-unit pick: when the operator pasted a building folder, the
+  // island lets them choose one unit's subfolder. We re-list the root and
+  // confirm the choice against the folders actually present (canonical casing,
+  // and no acting on a stale/typo'd value) before listing that subfolder.
+  const subfolderRaw = String(formData.get("subfolder") ?? "").trim();
+  let subfolder: string | null = null;
+  let rawEntries: DropboxEntry[] | null;
+  if (subfolderRaw) {
+    const rootEntries = await dropboxListSharedFolder(token, shareUrl);
+    if (rootEntries === null) return fail("dropboxfailed");
+    subfolder = normalizeSubfolderChoice(subfolderRaw, subfolderNames(rootEntries));
+    if (!subfolder) return fail("dropboxbadunit");
+    rawEntries = await dropboxListSharedFolder(
+      token,
+      shareUrl,
+      dropboxListPath(subfolder),
+    );
+  } else {
+    rawEntries = await dropboxListSharedFolder(token, shareUrl);
+  }
   if (rawEntries === null) return fail("dropboxfailed");
 
   const images = sortGalleryEntries(filterImageEntries(rawEntries));
   if (images.length === 0) {
     // A building share is one subfolder per unit (+ "Outside & Common Areas") —
     // distinguish that from a genuinely empty folder so the message is useful.
-    if (subfolderNames(rawEntries).length > 0) return fail("dropboxnested");
+    // (Only at the root; a picked unit folder with no images is just empty.)
+    if (!subfolder && subfolderNames(rawEntries).length > 0) {
+      return fail("dropboxnested");
+    }
     return fail("dropboxempty");
   }
 
@@ -1199,7 +1266,11 @@ export async function importPropertyPhotosFromDropboxFolder(formData: FormData) 
       skipped += 1; // over the cap — count the rest as skipped
       continue;
     }
-    const img = await fetchDropboxSharedFile(token, shareUrl, entry.name);
+    const img = await fetchDropboxSharedFile(
+      token,
+      shareUrl,
+      dropboxFilePath(subfolder, entry.name),
+    );
     if (!img) {
       skipped += 1;
       continue;
