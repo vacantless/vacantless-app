@@ -36,6 +36,7 @@ import {
   buildUtilitiesIncluded,
   formatAvailability,
   formatSqft,
+  petPolicyLabel,
 } from "./property-features";
 
 // Where a field's value comes from — drives both the UI affordance and the
@@ -156,6 +157,29 @@ export function bathroomsField(baths: number | null | undefined): string | null 
 export function sqftField(sqft: number | null | undefined): string | null {
   const formatted = formatSqft(sqft); // "850 sq ft" or null
   return formatted ? formatted.replace(/\s*sq\s*ft$/i, "") : null;
+}
+
+/**
+ * Conservative bed-count-keyed square-footage fallback (S269, Noam-approved) for
+ * portals that make Size a REQUIRED numeric field (Zumper), so an unknown-size
+ * unit doesn't block the operator mid-wizard. The bias is LOW on purpose — an
+ * under-estimate is the safe direction; over-stating size is the misrepresentation
+ * risk. A den is real floor area and a selling feature (~75-150 sq ft), so a
+ * 1-bed+den sits a notch above a plain 1-bed while staying conservative. Returns
+ * null for missing/non-finite beds (the caller then leaves the field for the
+ * operator). Pure + reusable on any portal with a required size field. Numbers
+ * are tunable starting points for the Windsor stock.
+ */
+export function sqftEstimate(
+  beds: number | null | undefined,
+  hasDen = false,
+): number | null {
+  if (beds == null || !Number.isFinite(beds)) return null;
+  const b = Math.max(0, Math.round(beds));
+  if (b <= 0) return 400; // Bachelor / Studio
+  if (b === 1) return hasDen ? 625 : 550; // 1 bed (+ den)
+  if (b === 2) return 650; // 2 bed
+  return 900; // 3+ bed
 }
 
 /** Yes/No for a boolean flag; null when the flag is unset (don't assume "No"). */
@@ -612,47 +636,159 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
   ];
 }
 
+// Zumper posting is a 5-step wizard (S269 live walk): Address / Listing (itself
+// 5 sub-steps) / Pricing / Media / Review. Its form order is NOT our flat field
+// order, so — exactly like Rentals.ca — each field carries the step it lives on
+// (the UI groups them by step header). The v3 flat 6-field sheet drastically
+// under-modeled this (KI427); this v4 mirrors the real wizard.
+const ZUMPER_STEP = {
+  address: "Step 1 · Address",
+  listing: "Step 2 · Listing details",
+  pricing: "Step 3 · Pricing",
+  media: "Step 4 · Media",
+  review: "Step 5 · Review & publish",
+} as const;
+
 function zumperFields(input: FillSheetInput, _title: string, body: string): FillField[] {
+  const { street, unit } = splitAddressUnit(input.address);
+  // Size is a REQUIRED Zumper field. Use the unit's real sqft if we have it,
+  // else fall back to the conservative bed-count estimate (S269) so the operator
+  // isn't blocked mid-wizard — and disclose the estimate in the description,
+  // since the numeric field can't say "approximate".
+  const realSqft = sqftField(input.features?.sqft);
+  const estSqft = realSqft == null ? sqftEstimate(input.beds) : null;
+  const sqftValue = realSqft ?? (estSqft != null ? String(estSqft) : null);
+  const sqftIsEstimate = realSqft == null && estSqft != null;
+  const sqftSource: FillFieldSource =
+    realSqft != null ? "listing" : estSqft != null ? "preset" : "manual";
+  const baseBody = textOrNull(body);
+  const description = sqftIsEstimate && baseBody
+    ? `${baseBody}\n\nApproximate square footage.`
+    : baseBody;
+  const unitFeatures = unitFeaturesHint(input);
+  const buildingFeatures = buildingFeaturesHint(input);
+  const petPolicy = petPolicyLabel(input.features ?? {});
   return [
+    // --- Step 1: Address ---
+    {
+      id: "zumper-property-type",
+      label: "Property Type",
+      value: "Apartment",
+      source: "preset",
+      step: ZUMPER_STEP.address,
+      hint: "Required native select — change from Apartment to match (Condo, Single Family Home, Townhouse, Room, Multifamily, Loft, Co-Op, etc.; 13 options).",
+    },
     {
       id: "zumper-address",
-      label: "Address",
-      value: textOrNull(input.address),
+      label: "Street Address",
+      value: street,
       source: "listing",
+      step: ZUMPER_STEP.address,
+      hint: "Street only (the unit goes in the separate field below). Pick the Google autocomplete match — a typed-in address is rejected with a \"valid zip code\" error.",
+      guardrailId: "zumper-address-autocomplete",
     },
     {
-      id: "zumper-price",
-      label: "Price (monthly)",
-      value: formatPriceField(input.rentCents),
+      id: "zumper-unit",
+      label: "Apt / Unit #",
+      value: unit,
       source: "listing",
-      hint: "Type your real rent over Zumper's higher suggested figure.",
-      guardrailId: "zumper-rent-override",
+      step: ZUMPER_STEP.address,
+      hint: "The unit / suite number, split out of the address. Leave blank if the address has no unit.",
     },
+    // --- Step 2: Listing details (Zumper's 5 sub-steps) ---
     {
       id: "zumper-bedrooms",
       label: "Bedrooms",
       value: bedroomsField(input.beds),
       source: "listing",
+      step: ZUMPER_STEP.listing,
+      hint: "Stepper — 0 renders as \"Studio\".",
     },
     {
       id: "zumper-bathrooms",
       label: "Bathrooms",
       value: bathroomsField(input.baths),
       source: "listing",
+      step: ZUMPER_STEP.listing,
+    },
+    {
+      id: "zumper-half-baths",
+      label: "Half-Bathrooms",
+      value: null,
+      source: "manual",
+      step: ZUMPER_STEP.listing,
+      hint: "Optional stepper — set only if the unit has a half-bath (toilet + sink, no shower/tub).",
+    },
+    {
+      id: "zumper-sqft",
+      label: "Square footage",
+      value: sqftValue,
+      source: sqftSource,
+      step: ZUMPER_STEP.listing,
+      hint: sqftIsEstimate
+        ? "Required — Zumper blocks the next sub-step without it. This is an estimate from the bed count; replace it with the actual size if you know it (we've added \"approximate square footage\" to the description so it isn't overstated)."
+        : "Required — Zumper won't let you past Listing details without a size.",
+      guardrailId: "zumper-sqft-required",
     },
     {
       id: "zumper-description",
       label: "Description",
-      value: body,
+      value: description,
       source: "listing",
+      step: ZUMPER_STEP.listing,
       hint: "Zumper strips URL punctuation — don't rely on a booking link here; the phone number survives.",
       guardrailId: "zumper-url-strip",
     },
+    {
+      id: "zumper-unit-amenities",
+      label: "In-unit amenities",
+      value: unitFeatures,
+      source: unitFeatures ? "listing" : "manual",
+      step: ZUMPER_STEP.listing,
+      hint: "Tick these in the In-unit amenities sub-step, plus anything else that applies we don't track (flooring, appliances, dishwasher).",
+    },
+    {
+      id: "zumper-building-amenities",
+      label: "Building amenities",
+      value: buildingFeatures,
+      source: buildingFeatures ? "listing" : "manual",
+      step: ZUMPER_STEP.listing,
+      hint: "Tick these in the Building amenities sub-step, plus anything else that applies (elevator, secured entry, on-site management).",
+    },
+    {
+      id: "zumper-pet-policy",
+      label: "Pet policy",
+      value: petPolicy,
+      source: petPolicy ? "listing" : "manual",
+      step: ZUMPER_STEP.listing,
+      hint: "Zumper has a dedicated pet-policy sub-step — set it to match your actual policy. (Ontario RTA s.14 makes no-pet clauses unenforceable, so don't advertise a hard no-pets rule.)",
+    },
+    // --- Step 3: Pricing ---
+    {
+      id: "zumper-price",
+      label: "Price (monthly)",
+      value: formatPriceField(input.rentCents),
+      source: "listing",
+      step: ZUMPER_STEP.pricing,
+      hint: "Type your real rent over Zumper's higher suggested figure.",
+      guardrailId: "zumper-rent-override",
+    },
+    // --- Step 4: Media ---
+    {
+      id: "zumper-photos",
+      label: "Photos",
+      value: null,
+      source: "manual",
+      step: ZUMPER_STEP.media,
+      hint: "Upload the unit's photos on the Media step. Like Rentals.ca, expect a photo gate before you can publish.",
+    },
+    // --- Step 5: Review & publish ---
     {
       id: "zumper-boost",
       label: "Boost upsell",
       value: "Continue without Boost",
       source: "preset",
+      step: ZUMPER_STEP.review,
       hint: "The free tier already reaches Zumper + PadMapper.",
       guardrailId: "zumper-boost-upsell",
     },

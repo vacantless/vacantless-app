@@ -11,6 +11,7 @@ import {
   bedroomsField,
   bathroomsField,
   sqftField,
+  sqftEstimate,
   yesNoField,
   splitAddressUnit,
   stripLeadingListMarkers,
@@ -48,6 +49,19 @@ ok("bathrooms: null", bathroomsField(undefined) === null);
 ok("sqft: strips unit", sqftField(850) === "850");
 ok("sqft: null", sqftField(null) === null);
 ok("sqft: null when zero", sqftField(0) === null);
+
+// --- sqftEstimate fallback (S269, Noam-approved table) ---------------------
+ok("sqftEstimate: 0 bed -> 400 (bachelor)", sqftEstimate(0) === 400);
+ok("sqftEstimate: 1 bed -> 550", sqftEstimate(1) === 550);
+ok("sqftEstimate: 1 bed + den -> 625", sqftEstimate(1, true) === 625);
+ok("sqftEstimate: 2 bed -> 650", sqftEstimate(2) === 650);
+ok("sqftEstimate: 3 bed -> 900", sqftEstimate(3) === 900);
+ok("sqftEstimate: 4+ bed -> 900 (conservative cap)", sqftEstimate(4) === 900);
+ok("sqftEstimate: null beds -> null", sqftEstimate(null) === null);
+ok("sqftEstimate: undefined beds -> null", sqftEstimate(undefined) === null);
+ok("sqftEstimate: NaN -> null", sqftEstimate(NaN) === null);
+ok("sqftEstimate: 1+den (625) sits above plain 1 bed (550)", (sqftEstimate(1, true) ?? 0) > (sqftEstimate(1, false) ?? 0));
+ok("sqftEstimate: den ignored on a 2 bed", sqftEstimate(2, true) === 650);
 
 ok("yesNo: true", yesNoField(true) === "Yes");
 ok("yesNo: false", yesNoField(false) === "No");
@@ -529,6 +543,186 @@ ok("strip: null in -> null", stripLeadingListMarkers(null) === null);
   const tour = r.fields.find((f) => f.id.endsWith("-virtual-tour"));
   ok("rentals tour: present", !!tour);
   ok("rentals tour: inherits description step", !!tour?.step && tour?.step === desc?.step);
+}
+
+// --- Zumper fill sheet v4 (S269 5-step wizard, KI427) ----------------------
+{
+  const z = buildFillSheet(
+    { ...FULL, address: "833 Pillette Road, Unit 20, Windsor, ON" },
+    "zumper",
+  );
+  const byId = (id: string) => z.fields.find((f) => f.id === id);
+  const ids = z.fields.map((f) => f.id);
+
+  // address splits into Street Address + Apt/Unit #
+  ok(
+    "zumper v4: address field is street only",
+    byId("zumper-address")?.value === "833 Pillette Road, Windsor, ON",
+  );
+  ok("zumper v4: unit split out", byId("zumper-unit")?.value === "20");
+  ok(
+    "zumper v4: address carries the geocode guardrail",
+    byId("zumper-address")?.guardrailId === "zumper-address-autocomplete",
+  );
+
+  // property type preset
+  ok(
+    "zumper v4: property type preset Apartment",
+    byId("zumper-property-type")?.value === "Apartment" &&
+      byId("zumper-property-type")?.source === "preset",
+  );
+
+  // real sqft -> listing source, no estimate disclosure appended
+  ok(
+    "zumper v4: real sqft used (listing source)",
+    byId("zumper-sqft")?.value === "850" && byId("zumper-sqft")?.source === "listing",
+  );
+  ok(
+    "zumper v4: sqft carries the required guardrail",
+    byId("zumper-sqft")?.guardrailId === "zumper-sqft-required",
+  );
+  ok(
+    "zumper v4: real-sqft description is NOT estimate-disclosed",
+    !/approximate square footage/i.test(byId("zumper-description")?.value ?? ""),
+  );
+
+  // half-baths is an optional manual field
+  ok(
+    "zumper v4: half-baths is a manual optional field",
+    byId("zumper-half-baths")?.source === "manual" &&
+      byId("zumper-half-baths")?.value === null,
+  );
+
+  // amenities + pet policy map from flags (A/C set on FULL)
+  ok(
+    "zumper v4: in-unit amenities mapped from flags",
+    byId("zumper-unit-amenities")?.value === "Air Conditioning" &&
+      byId("zumper-unit-amenities")?.source === "listing",
+  );
+  ok("zumper v4: building amenities field present", !!byId("zumper-building-amenities"));
+  ok("zumper v4: pet-policy field present", !!byId("zumper-pet-policy"));
+
+  // photos is a manual gate on the Media step
+  ok(
+    "zumper v4: photos is a manual gate",
+    byId("zumper-photos")?.source === "manual" &&
+      byId("zumper-photos")?.value === null,
+  );
+
+  // boost preset stays
+  ok(
+    "zumper v4: boost preset on review step",
+    byId("zumper-boost")?.value === "Continue without Boost" &&
+      byId("zumper-boost")?.source === "preset",
+  );
+
+  // price keeps the rent-override guardrail
+  ok(
+    "zumper v4: price keeps rent-override guardrail",
+    byId("zumper-price")?.guardrailId === "zumper-rent-override",
+  );
+
+  // every field is tagged with a wizard step, in non-decreasing step order
+  ok("zumper v4: every field has a step", z.fields.every((f) => !!f.step));
+  const ZSTEP_ORDER = [
+    "Step 1 · Address",
+    "Step 2 · Listing details",
+    "Step 3 · Pricing",
+    "Step 4 · Media",
+    "Step 5 · Review & publish",
+  ];
+  ok(
+    "zumper v4: steps are non-decreasing in field order",
+    (() => {
+      let maxSeen = -1;
+      for (const f of z.fields) {
+        const rank = ZSTEP_ORDER.indexOf(f.step ?? "");
+        if (rank < 0) return false;
+        if (rank < maxSeen) return false;
+        maxSeen = Math.max(maxSeen, rank);
+      }
+      return true;
+    })(),
+  );
+  // wizard skeleton in order: address before listing before pricing before media
+  ok(
+    "zumper v4: address < sqft < price < photos < boost",
+    ids.indexOf("zumper-address") < ids.indexOf("zumper-sqft") &&
+      ids.indexOf("zumper-sqft") < ids.indexOf("zumper-price") &&
+      ids.indexOf("zumper-price") < ids.indexOf("zumper-photos") &&
+      ids.indexOf("zumper-photos") < ids.indexOf("zumper-boost"),
+  );
+
+  // all field guardrailIds resolve against the portal's guardrail list
+  const zgids = new Set(guardrailsForPortal("zumper").map((g) => g.id));
+  ok(
+    "zumper v4: all field guardrailIds resolve",
+    z.fields.every((f) => !f.guardrailId || zgids.has(f.guardrailId)),
+  );
+  ok(
+    "zumper v4: new guardrails exist (geocode + required sqft)",
+    zgids.has("zumper-address-autocomplete") && zgids.has("zumper-sqft-required"),
+  );
+}
+
+// --- Zumper v4: required-sqft estimate fallback (no real size) --------------
+{
+  const z = buildFillSheet(
+    { ...FULL, beds: 2, features: { ...FULL.features, sqft: null } },
+    "zumper",
+  );
+  const byId = (id: string) => z.fields.find((f) => f.id === id);
+  ok(
+    "zumper v4: missing sqft -> 2-bed estimate (650) as preset",
+    byId("zumper-sqft")?.value === "650" && byId("zumper-sqft")?.source === "preset",
+  );
+  ok(
+    "zumper v4: estimate disclosed in the description",
+    /approximate square footage/i.test(byId("zumper-description")?.value ?? ""),
+  );
+  ok(
+    "zumper v4: estimate hint flags it as replaceable",
+    /estimate/i.test(byId("zumper-sqft")?.hint ?? ""),
+  );
+}
+
+// --- Zumper v4: no sqft + no beds -> sqft is a manual field -----------------
+{
+  const z = buildFillSheet(SPARSE, "zumper");
+  const byId = (id: string) => z.fields.find((f) => f.id === id);
+  ok(
+    "zumper v4 sparse: no beds + no sqft -> manual sqft (null)",
+    byId("zumper-sqft")?.source === "manual" && byId("zumper-sqft")?.value === null,
+  );
+  ok(
+    "zumper v4 sparse: no estimate disclosure when nothing to estimate",
+    !/approximate square footage/i.test(byId("zumper-description")?.value ?? "") ||
+      byId("zumper-description")?.value === null,
+  );
+  ok(
+    "zumper v4 sparse: amenities fall back to manual",
+    byId("zumper-unit-amenities")?.source === "manual" &&
+      byId("zumper-unit-amenities")?.value === null,
+  );
+  ok(
+    "zumper v4 sparse: property-type preset still present",
+    byId("zumper-property-type")?.value === "Apartment",
+  );
+}
+
+// --- Zumper v4: tour field still inserts after the description --------------
+{
+  const z = buildFillSheet(
+    { ...FULL, virtualTourUrl: "https://youriguide.com/833_pillette/" },
+    "zumper",
+  );
+  const desc = z.fields.find((f) => f.id === "zumper-description");
+  const tour = z.fields.find((f) => f.id === "zumper-virtual-tour");
+  ok("zumper v4 tour: present", !!tour);
+  ok(
+    "zumper v4 tour: inherits the description step",
+    !!tour?.step && tour?.step === desc?.step,
+  );
 }
 
 // --- summary ---------------------------------------------------------------

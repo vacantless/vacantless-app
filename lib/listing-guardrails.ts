@@ -154,6 +154,20 @@ const ZUMPER: Guardrail[] = [
       "A new Zumper account must upgrade to Manage, verify a phone by SMS, and pass Persona ID + selfie verification before it can list. These gates are one-time per account and have to be done by a person.",
   },
   {
+    id: "zumper-address-autocomplete",
+    severity: "warning",
+    title: "Pick the Google autocomplete suggestion for the Street Address.",
+    detail:
+      "Zumper geocodes off the autocomplete pick — typing a bare address and moving on throws \"This address does not include a valid zip code\" and blocks Step 1. Click the field, type, and select the dropdown match. The unit/suite goes in the separate Apt/Unit # field.",
+  },
+  {
+    id: "zumper-sqft-required",
+    severity: "warning",
+    title: "Square footage is required — Zumper won't advance without it.",
+    detail:
+      "Unlike most portals, Zumper makes Size a required numeric field on the Listing details step, so an unknown-size unit blocks you mid-wizard. When the unit has no real size, the fill sheet drops in a conservative bed-count estimate (biased low so it's never overstated) and adds \"approximate square footage\" to the description — replace it with the actual size whenever you know it.",
+  },
+  {
     id: "zumper-boost-upsell",
     severity: "tip",
     title: "Click \"Continue without Boost\" — the free tier still reaches PadMapper.",
