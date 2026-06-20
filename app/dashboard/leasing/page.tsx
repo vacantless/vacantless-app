@@ -1,0 +1,80 @@
+import Link from "next/link";
+import { BrandBanner, Card, IconTile } from "@/components/ui";
+import { Icons } from "@/components/icons";
+
+export const dynamic = "force-dynamic";
+
+// ============================================================================
+// Leasing hub (IA Step 1, S274) — the cross-unit "front door" for everything
+// about converting an interested renter. A thin landing that routes into the
+// existing pages (Inquiries / Viewings / Availability); it does NOT duplicate
+// their lists. The richer cross-unit queue view comes in a later step.
+//
+// Per the IA rule: these are cross-unit queues that link INTO a unit's work —
+// not parallel editors. The nav highlights "Leasing" while you're on any child
+// route (see dashboard-nav `match`).
+// ============================================================================
+
+type Section = {
+  href: string;
+  title: string;
+  desc: string;
+  icon: keyof typeof Icons;
+};
+
+const SECTIONS: Section[] = [
+  {
+    href: "/dashboard/leads",
+    title: "Inquiries",
+    desc: "Every renter inquiry across all your rentals — reply, qualify, and move them through the pipeline.",
+    icon: "chat",
+  },
+  {
+    href: "/dashboard/showings",
+    title: "Viewings",
+    desc: "Booked viewings and their outcomes, across all units.",
+    icon: "calendar",
+  },
+  {
+    href: "/dashboard/availability",
+    title: "Availability",
+    desc: "Set the viewing times renters can book — this is the setup behind Viewings.",
+    icon: "clock",
+  },
+];
+
+export default function LeasingHubPage() {
+  return (
+    <div>
+      <BrandBanner
+        eyebrow="Leasing"
+        title="Convert your inquiries"
+        subtitle="Everything that needs you across all your rentals — inquiries, viewings, and the times renters can book. Open any rental to work a single unit end-to-end."
+        icon={<Icons.key className="h-6 w-6" />}
+      />
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        {SECTIONS.map((s) => {
+          const Icon = Icons[s.icon];
+          return (
+            <Link key={s.href} href={s.href} className="block">
+              <Card hover className="h-full">
+                <div className="flex items-start gap-3.5">
+                  <IconTile>
+                    <Icon className="h-5 w-5" />
+                  </IconTile>
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-gray-900">{s.title}</h2>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                      {s.desc}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
