@@ -475,7 +475,7 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
       value: parkingType,
       source: parkingType ? "listing" : "manual",
       step: RENTALSCA_STEP.details,
-      hint: "Pick the matching Parking Type (Outdoor / Driveway / Garage / Underground / Street / Covered). Leave it as No Parking only if there genuinely is none.",
+      hint: "Pick the matching Parking Type (Outdoor / Driveway / Garage / Underground / Street / Indoor / Covered / Electric / Valet). Leave it as No Parking only if there genuinely is none. The same block also has a per-type Monthly Fee box and Visitor / Tandem / Parallel toggles + an Other Parking Details field — leave those off unless they apply.",
     },
     {
       id: "rentalsca-parking-included",
@@ -492,7 +492,7 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
       value: null,
       source: "manual",
       step: RENTALSCA_STEP.details,
-      hint: "Optional “+” stepper — leave it unset unless you're assigning a specific number of spots.",
+      hint: "Optional preset button group (0 / 1 / 2 / 3 / 4 / Custom), not a +/- stepper — leave it unset unless you're assigning a specific number of spots.",
     },
     // --- Step 3: Floor Plan + Photos + Description ---
     {

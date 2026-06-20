@@ -440,7 +440,7 @@ ok("strip: null in -> null", stripLeadingListMarkers(null) === null);
       byId("rentalsca-parking-included")?.guardrailId === "rentalsca-parking-included",
   );
   ok(
-    "rentals v3: parking spots is a manual stepper (null)",
+    "rentals v3: parking spots is a manual button-group field (null)",
     byId("rentalsca-parking-spots")?.source === "manual" &&
       byId("rentalsca-parking-spots")?.value === null,
   );
