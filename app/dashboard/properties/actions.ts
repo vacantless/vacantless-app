@@ -38,13 +38,13 @@ import {
 } from "@/lib/image-url-import";
 import {
   parseDropboxFolderUrl,
-  filterImageEntries,
   sortGalleryEntries,
-  subfolderNames,
-  normalizeSubfolderChoice,
-  dropboxListPath,
+  groupImagesByParentPath,
+  leafFolderSummaries,
+  normalizeFolderChoice,
   dropboxFilePath,
   type DropboxEntry,
+  type DropboxLeafFolder,
 } from "@/lib/dropbox-import";
 import { photoCapForPlan } from "@/lib/billing";
 
@@ -1025,6 +1025,7 @@ type DropboxApiEntry = {
   ".tag"?: string;
   name?: string;
   path_lower?: string;
+  path_display?: string;
   size?: number;
 };
 type DropboxListResponse = {
@@ -1043,22 +1044,27 @@ function collectDropboxEntries(
       tag: typeof e[".tag"] === "string" ? (e[".tag"] as string) : "",
       name: e.name,
       path_lower: e.path_lower,
+      path_display: e.path_display,
       size: e.size,
     });
   }
 }
 
+// Cap how many entries we'll pull from one share so an operator who pastes a
+// huge top-level folder can't make us page forever. A real listing archive is
+// well under this even across many years.
+const DROPBOX_MAX_ENTRIES = 5000;
+
 /**
- * Enumerate the entries of a Dropbox shared folder (files + folders, so the
- * action can detect the multi-unit/nested case). Non-recursive — `path` is ""
- * for the share root or "/<unit>" for one unit's subfolder (multi-unit pick).
- * Paginates via list_folder/continue for very large folders. Returns null on
- * any API error.
+ * Enumerate the entries of a Dropbox shared folder. With `recursive: true` it
+ * walks the whole tree (so we can find galleries nested several levels deep);
+ * otherwise just the named level. Paginates via list_folder/continue and stops
+ * at DROPBOX_MAX_ENTRIES. Returns null on any API error.
  */
 async function dropboxListSharedFolder(
   token: string,
   shareUrl: string,
-  path = "",
+  recursive = false,
 ): Promise<DropboxEntry[] | null> {
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -1069,13 +1075,18 @@ async function dropboxListSharedFolder(
     let res = await fetch(`${DROPBOX_API}/files/list_folder`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ path, shared_link: { url: shareUrl } }),
+      body: JSON.stringify({ path: "", shared_link: { url: shareUrl }, recursive }),
     });
     if (!res.ok) return null;
     let json = (await res.json()) as DropboxListResponse;
     collectDropboxEntries(json, entries);
     let guard = 0;
-    while (json.has_more && json.cursor && guard < 50) {
+    while (
+      json.has_more &&
+      json.cursor &&
+      guard < 50 &&
+      entries.length < DROPBOX_MAX_ENTRIES
+    ) {
       guard += 1;
       res = await fetch(`${DROPBOX_API}/files/list_folder/continue`, {
         method: "POST",
@@ -1155,21 +1166,21 @@ async function fetchDropboxSharedFile(
   }
 }
 
-// The shape inspectDropboxFolder hands back to the client island so it can show
-// the right next step: import a flat gallery straight away, or — when the link
-// points at a building folder — let the operator pick which unit's photos this
-// rental should get. Serializable (it crosses the server-action boundary).
+// The shape inspectDropboxFolder hands back to the client island. Real archives
+// nest photos by year/purpose several levels deep, so we recurse the whole share
+// and report the folders that actually hold images: "flat" when there's exactly
+// one (import straight away), "folders" with a path+count pick list when there
+// are several, or "error". Serializable (it crosses the server-action boundary).
 export type DropboxInspectResult =
-  | { kind: "flat"; count: number }
-  | { kind: "units"; subfolders: string[] }
+  | { kind: "flat"; count: number; folder: string }
+  | { kind: "folders"; folders: DropboxLeafFolder[] }
   | { kind: "error"; reason: string };
 
 /**
  * Read-only probe of a pasted Dropbox shared-folder link (no writes, no
- * redirect). Returns "flat" when the folder holds the gallery directly,
- * "units" with the subfolder names when it's a building (one folder per unit),
- * or "error" with a reason. The client island uses this to decide whether to
- * import immediately or surface the unit picker.
+ * redirect). Recursively enumerates the share and groups images by the folder
+ * that directly contains them. The client uses the result to import immediately
+ * (one gallery) or show the folder picker (several).
  */
 export async function inspectDropboxFolder(
   rawUrl: string,
@@ -1182,16 +1193,19 @@ export async function inspectDropboxFolder(
   const token = await getDropboxAccessToken();
   if (!token) return { kind: "error", reason: "dropboxauth" };
 
-  const rawEntries = await dropboxListSharedFolder(token, parsed.url);
+  const rawEntries = await dropboxListSharedFolder(token, parsed.url, true);
   if (rawEntries === null) return { kind: "error", reason: "dropboxfailed" };
 
-  const images = filterImageEntries(rawEntries);
-  if (images.length > 0) return { kind: "flat", count: images.length };
-
-  const subs = subfolderNames(rawEntries);
-  if (subs.length > 0) return { kind: "units", subfolders: subs };
-
-  return { kind: "error", reason: "dropboxempty" };
+  const groups = groupImagesByParentPath(rawEntries);
+  if (groups.size === 0) {
+    const hasFolders = rawEntries.some((e) => e.tag === "folder");
+    return { kind: "error", reason: hasFolders ? "dropboxnested" : "dropboxempty" };
+  }
+  if (groups.size === 1) {
+    const [folder, list] = [...groups][0];
+    return { kind: "flat", count: list.length, folder };
+  }
+  return { kind: "folders", folders: leafFolderSummaries(groups) };
 }
 
 export async function importPropertyPhotosFromDropboxFolder(formData: FormData) {
@@ -1212,38 +1226,31 @@ export async function importPropertyPhotosFromDropboxFolder(formData: FormData) 
   const token = await getDropboxAccessToken();
   if (!token) return fail("dropboxauth");
 
-  // Optional multi-unit pick: when the operator pasted a building folder, the
-  // island lets them choose one unit's subfolder. We re-list the root and
-  // confirm the choice against the folders actually present (canonical casing,
-  // and no acting on a stale/typo'd value) before listing that subfolder.
-  const subfolderRaw = String(formData.get("subfolder") ?? "").trim();
-  let subfolder: string | null = null;
-  let rawEntries: DropboxEntry[] | null;
-  if (subfolderRaw) {
-    const rootEntries = await dropboxListSharedFolder(token, shareUrl);
-    if (rootEntries === null) return fail("dropboxfailed");
-    subfolder = normalizeSubfolderChoice(subfolderRaw, subfolderNames(rootEntries));
-    if (!subfolder) return fail("dropboxbadunit");
-    rawEntries = await dropboxListSharedFolder(
-      token,
-      shareUrl,
-      dropboxListPath(subfolder),
-    );
-  } else {
-    rawEntries = await dropboxListSharedFolder(token, shareUrl);
-  }
+  // Recurse the share and group images by the folder that holds them, then take
+  // the folder the operator chose. The chosen path is re-confirmed against what
+  // we actually found (no acting on a stale/typo'd value); when there's only one
+  // gallery a choice isn't required.
+  const rawEntries = await dropboxListSharedFolder(token, shareUrl, true);
   if (rawEntries === null) return fail("dropboxfailed");
 
-  const images = sortGalleryEntries(filterImageEntries(rawEntries));
-  if (images.length === 0) {
-    // A building share is one subfolder per unit (+ "Outside & Common Areas") —
-    // distinguish that from a genuinely empty folder so the message is useful.
-    // (Only at the root; a picked unit folder with no images is just empty.)
-    if (!subfolder && subfolderNames(rawEntries).length > 0) {
-      return fail("dropboxnested");
-    }
-    return fail("dropboxempty");
+  const groups = groupImagesByParentPath(rawEntries);
+  if (groups.size === 0) {
+    return fail(rawEntries.some((e) => e.tag === "folder") ? "dropboxnested" : "dropboxempty");
   }
+
+  const keys = [...groups.keys()];
+  let chosen: string | null;
+  if (formData.has("folder")) {
+    chosen = normalizeFolderChoice(String(formData.get("folder") ?? ""), keys);
+    if (chosen === null) return fail("dropboxbadfolder");
+  } else if (groups.size === 1) {
+    chosen = keys[0];
+  } else {
+    return fail("dropboxnested"); // several galleries — the operator must pick
+  }
+
+  const images = sortGalleryEntries(groups.get(chosen) ?? []);
+  if (images.length === 0) return fail("dropboxempty");
 
   const supabase = createClient();
 
@@ -1266,11 +1273,10 @@ export async function importPropertyPhotosFromDropboxFolder(formData: FormData) 
       skipped += 1; // over the cap — count the rest as skipped
       continue;
     }
-    const img = await fetchDropboxSharedFile(
-      token,
-      shareUrl,
-      dropboxFilePath(subfolder, entry.name),
-    );
+    // A recursive entry carries its own path relative to the share root; prefer
+    // it (canonical case, full depth) over rebuilding from the chosen folder.
+    const filePath = entry.path_display ?? dropboxFilePath(chosen, entry.name);
+    const img = await fetchDropboxSharedFile(token, shareUrl, filePath);
     if (!img) {
       skipped += 1;
       continue;

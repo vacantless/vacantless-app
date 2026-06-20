@@ -91,6 +91,10 @@ export type DropboxEntry = {
   // Lowercased full path within the shared link, e.g. "/001-highres_001.jpg"
   // or, when recursive, "/unit 1/003-....jpg". Present on every entry.
   path_lower?: string;
+  // Original-case path within the shared link. We use this both for display
+  // (the folder picker) and as the get_shared_link_file `path` for download, so
+  // we never have to rebuild a path and risk a casing mismatch.
+  path_display?: string;
   size?: number;
 };
 
@@ -175,64 +179,119 @@ export function groupByFirstSubfolder(
 }
 
 // ---------------------------------------------------------------------------
-// Multi-unit subfolder selection (a building share is one subfolder per unit).
-// When the operator points at the BUILDING folder rather than a single unit's
-// gallery, slice-1 used to dead-end with "share the unit folder instead". The
-// follow-on lets them pick a unit: enumerate the subfolders, the operator
-// chooses one, and we import THAT subfolder into this rental. These helpers keep
-// the Dropbox path-building deterministic and confirm a chosen unit against the
-// folders actually present (so a stale/typo choice can't drive an API call).
+// Folder selection for a recursively-listed share.
+//
+// Real photo archives don't fit a clean "one subfolder per unit" model: an
+// operator's listing folder is typically organized by YEAR and PURPOSE and runs
+// several levels deep, e.g.
+//   506 Manning Ave > Unit 1 > mls photos unit 1 / photos-print_… / 2019 > …
+//   <listing> > updated 2019 / 2022 - unit 1 / 2023 / … > gallery
+// So instead of asking "which unit?", we list the share RECURSIVELY, find every
+// folder that DIRECTLY contains images, and let the operator pick that exact
+// folder (shown with its path + photo count). These helpers do the grouping and
+// confirm a chosen folder against the ones actually found.
 // ---------------------------------------------------------------------------
 
+/** The parent folder path of a relative file path ("" when it's at the root). */
+export function imageParentPath(relPath: string): string {
+  const p = String(relPath).replace(/^\/+/, "");
+  const i = p.lastIndexOf("/");
+  return i === -1 ? "" : p.slice(0, i);
+}
+
 /**
- * Resolve an operator's chosen unit subfolder against the folders actually
- * listed under the share root. Matches case-insensitively but RETURNS the
- * server-side spelling (Dropbox paths are case-preserving), so the import uses
- * the canonical name. Returns null when the choice is empty or not present —
- * the caller rejects it rather than guessing.
+ * Group image files by the folder that DIRECTLY contains them (their immediate
+ * parent), keyed by the original-case path relative to the share root ("" for
+ * files at the root). `rootPathLower` is the list root's path ("" for a share
+ * root). Folders that hold only other folders (no images of their own) never
+ * appear — only leaf galleries do. Preserves first-seen order.
  */
-export function normalizeSubfolderChoice(
+export function groupImagesByParentPath(
+  entries: DropboxEntry[],
+  rootPathLower = "",
+): Map<string, DropboxEntry[]> {
+  const root = rootPathLower.toLowerCase().replace(/\/+$/, "");
+  const out = new Map<string, DropboxEntry[]>();
+  for (const e of entries) {
+    if (e.tag !== "file" || !isDropboxImageName(e.name)) continue;
+    const disp = e.path_display ?? e.path_lower ?? e.name;
+    let rel = disp;
+    if (root && disp.toLowerCase().startsWith(root + "/")) {
+      rel = disp.slice(root.length);
+    }
+    rel = rel.replace(/^\/+/, "");
+    const key = imageParentPath(rel);
+    const list = out.get(key);
+    if (list) list.push(e);
+    else out.set(key, [e]);
+  }
+  return out;
+}
+
+// One pickable gallery: a folder that directly holds images.
+export type DropboxLeafFolder = {
+  // original-case path relative to the share root ("" = the shared folder itself)
+  path: string;
+  // human label for the picker (slashes spaced out; "" shown as a top-level note)
+  label: string;
+  count: number;
+};
+
+/**
+ * Summarise grouped images into a pick list for the UI: one entry per folder
+ * that holds photos, with a readable label and count. Sorted by count
+ * descending (the main gallery floats to the top), then by path.
+ */
+export function leafFolderSummaries(
+  groups: Map<string, DropboxEntry[]>,
+): DropboxLeafFolder[] {
+  const out: DropboxLeafFolder[] = [];
+  for (const [path, list] of groups) {
+    out.push({
+      path,
+      label: path === "" ? "Top level of this folder" : path.split("/").join(" / "),
+      count: list.length,
+    });
+  }
+  out.sort((a, b) =>
+    b.count - a.count || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+  );
+  return out;
+}
+
+/**
+ * Resolve an operator's chosen folder against the folders actually found.
+ * Matches case-insensitively (ignoring surrounding/duplicate slashes) and
+ * RETURNS the canonical server-side path. "" (the share root) is a valid choice.
+ * Returns null when the choice isn't among the found folders.
+ */
+export function normalizeFolderChoice(
   choice: string | null | undefined,
   allowed: string[],
 ): string | null {
   if (typeof choice !== "string") return null;
-  const want = choice.trim().toLowerCase();
-  if (!want) return null;
-  for (const name of allowed) {
-    if (typeof name === "string" && name.trim().toLowerCase() === want) {
-      return name;
-    }
+  const norm = (s: string) =>
+    s.trim().replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+  const want = norm(choice);
+  for (const p of allowed) {
+    if (typeof p === "string" && norm(p) === want) return p;
   }
   return null;
 }
 
 /**
- * The `path` argument for a Dropbox list_folder call scoped to a shared link:
- * "" for the share root, or "/<subfolder>" for one unit's folder. The subfolder
- * is expected to be an already-resolved single segment (via
- * normalizeSubfolderChoice); a leading slash and surrounding whitespace are
- * tolerated and any trailing slash is dropped.
- */
-export function dropboxListPath(subfolder?: string | null): string {
-  if (typeof subfolder !== "string") return "";
-  const seg = subfolder.trim().replace(/^\/+/, "").replace(/\/+$/, "");
-  return seg ? `/${seg}` : "";
-}
-
-/**
- * The `path` for a get_shared_link_file fetch: "/<name>" for a file at the share
- * root, or "/<subfolder>/<name>" when importing from a unit subfolder. Both
- * segments come from Dropbox's own listing by this point, so this only joins
- * them into a clean, slash-normalized path.
+ * The `path` for a get_shared_link_file fetch when we must build it ourselves
+ * (a recursive entry already carries path_display, which we prefer). Joins a
+ * folder + name into a clean slash-normalized path relative to the share root.
  */
 export function dropboxFilePath(
-  subfolder: string | null | undefined,
+  folder: string | null | undefined,
   name: string,
 ): string {
   const file = String(name).trim().replace(/^\/+/, "");
   const seg =
-    typeof subfolder === "string"
-      ? subfolder.trim().replace(/^\/+/, "").replace(/\/+$/, "")
+    typeof folder === "string"
+      ? folder.trim().replace(/^\/+/, "").replace(/\/+$/, "")
       : "";
   return seg ? `/${seg}/${file}` : `/${file}`;
 }
@@ -246,7 +305,7 @@ export type DropboxImportError =
   | "dropboxauth"
   | "dropboxempty"
   | "dropboxnested"
-  | "dropboxbadunit"
+  | "dropboxbadfolder"
   | "dropboxmax"
   | "dropboxfailed";
 
@@ -260,9 +319,9 @@ export function dropboxImportErrorMessage(reason: string): string {
     case "dropboxempty":
       return "No photos were found in that Dropbox folder. Make sure the link points at the folder of images (not a single file or a parent folder).";
     case "dropboxnested":
-      return "That folder contains sub-folders rather than photos (for example one folder per unit). Choose the unit whose photos belong on this rental, or open that unit's folder in Dropbox and share its link.";
-    case "dropboxbadunit":
-      return "That unit folder couldn't be found in the shared link. Re-open the building folder and pick a unit from the list.";
+      return "That folder contains sub-folders rather than photos. Pick the folder that holds this rental's photos from the list, or open it in Dropbox and share its link directly.";
+    case "dropboxbadfolder":
+      return "That photo folder couldn't be found in the shared link. Re-check the folder and pick one from the list.";
     case "dropboxmax":
       return "That would go over this rental's photo limit. The folder has more photos than the remaining slots.";
     case "dropboxfailed":

@@ -1,19 +1,19 @@
 "use client";
 
 // Import a whole gallery from a Dropbox shared folder (REAL-WORLD-INTAKE item Q,
-// Phase 2) — with the multi-unit follow-on. Operators file every photo/tour-
-// vendor delivery into Dropbox, so a shared folder link is the one source that
-// works across all listings. Two shapes show up:
+// Phase 2) — with deep-nesting support. Operators file every photo/tour-vendor
+// delivery into Dropbox, so a shared folder link is the one source that works
+// across all listings. But real archives don't fit a clean "one folder per
+// unit" model — they nest by YEAR and PURPOSE several levels deep, e.g.
 //
-//   • a single unit's gallery/  -> a flat folder of 0NN-….jpg images
-//   • a whole building          -> one subfolder per unit (+ "Outside & Common
-//                                  Areas"); the 833 Pillette shape
+//   <listing> > updated 2019 / 2022 - unit 1 / 2023 > … > gallery / mls photos
+//   506 Manning Ave > Unit 1 > mls photos unit 1 / photos-print_… / 2019 > …
 //
-// So the operator pastes the link and we CHECK it first (read-only inspect): a
-// flat folder offers a one-click "Import N photos"; a building folder offers a
-// unit picker, and the chosen unit's photos import onto THIS rental. The real
-// validation/enumeration lives server-side (inspectDropboxFolder +
-// importPropertyPhotosFromDropboxFolder); this island is UX/state only and is
+// So the operator pastes the link and we CHECK it (read-only recursive inspect):
+// one gallery imports in a click; several galleries become a pick list showing
+// each folder's path + photo count, and the chosen folder imports onto THIS
+// rental. The real enumeration/validation lives server-side (inspectDropboxFolder
+// + importPropertyPhotosFromDropboxFolder); this island is UX/state only and is
 // never the trust boundary — the import action re-lists + re-confirms the choice.
 
 import { useState } from "react";
@@ -32,7 +32,8 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
   const [url, setUrl] = useState("");
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<DropboxInspectResult | null>(null);
-  const [unit, setUnit] = useState("");
+  // null = nothing picked yet; "" is itself a valid choice (top-level folder).
+  const [folder, setFolder] = useState<string | null>(null);
 
   const trimmed = url.trim();
 
@@ -40,7 +41,7 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
     if (!trimmed || checking) return;
     setChecking(true);
     setResult(null);
-    setUnit("");
+    setFolder(null);
     try {
       setResult(await inspectDropboxFolder(trimmed));
     } catch {
@@ -57,8 +58,8 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
       <p className="mb-2 text-xs text-gray-500">
         In Dropbox, open the folder, choose <strong>Share</strong> →{" "}
         <strong>Copy link</strong> (set so anyone with the link can view), and
-        paste it here. You can point at one unit&apos;s gallery folder, or at a
-        whole building folder and pick the unit below.
+        paste it here. You can point at a gallery folder, or at a higher-level
+        listing folder and pick the photo set below.
       </p>
       <input
         type="url"
@@ -66,7 +67,7 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
         onChange={(e) => {
           setUrl(e.target.value);
           setResult(null); // a changed link must be re-checked
-          setUnit("");
+          setFolder(null);
         }}
         placeholder="https://www.dropbox.com/scl/fo/…?rlkey=…"
         className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
@@ -89,6 +90,7 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
         >
           <input type="hidden" name="property_id" value={propertyId} />
           <input type="hidden" name="dropbox_url" value={trimmed} />
+          <input type="hidden" name="folder" value={result.folder} />
           <p className="mb-2 text-xs text-gray-600">
             Found {result.count}{" "}
             {result.count === 1 ? "photo" : "photos"} in this folder.
@@ -99,7 +101,7 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
         </form>
       )}
 
-      {result?.kind === "units" && (
+      {result?.kind === "folders" && (
         <form
           action={importPropertyPhotosFromDropboxFolder}
           className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3"
@@ -107,33 +109,38 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
           <input type="hidden" name="property_id" value={propertyId} />
           <input type="hidden" name="dropbox_url" value={trimmed} />
           <p className="mb-2 text-xs text-gray-600">
-            This looks like a building folder. Choose the unit whose photos
-            belong on this rental:
+            This link has photos in several folders. Pick the set for this
+            rental:
           </p>
-          <div className="mb-3 space-y-1.5">
-            {result.subfolders.map((s) => (
+          <div className="mb-3 max-h-64 space-y-1.5 overflow-auto">
+            {result.folders.map((f) => (
               <label
-                key={s}
-                className="flex items-center gap-2 text-sm text-gray-700"
+                key={f.path}
+                className="flex items-start gap-2 text-sm text-gray-700"
               >
                 <input
                   type="radio"
-                  name="subfolder"
-                  value={s}
-                  checked={unit === s}
-                  onChange={() => setUnit(s)}
-                  className="h-4 w-4 accent-[var(--brand-color)]"
+                  name="folder"
+                  value={f.path}
+                  checked={folder === f.path}
+                  onChange={() => setFolder(f.path)}
+                  className="mt-0.5 h-4 w-4 accent-[var(--brand-color)]"
                 />
-                <span>{s}</span>
+                <span>
+                  {f.label}{" "}
+                  <span className="text-gray-400">
+                    — {f.count} {f.count === 1 ? "photo" : "photos"}
+                  </span>
+                </span>
               </label>
             ))}
           </div>
           <SubmitButton
             className={SECONDARY_BTN}
             pendingLabel="Importing…"
-            disabled={!unit}
+            disabled={folder === null}
           >
-            Import this unit&apos;s photos
+            Import these photos
           </SubmitButton>
         </form>
       )}
