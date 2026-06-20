@@ -30,6 +30,9 @@ export type Org = {
   screening_income_multiple: number | null;
   screening_max_movein_days: number | null;
   screening_flag_pets: boolean;
+  screening_reason_income: string | null;
+  screening_reason_movein: string | null;
+  screening_reason_pets: string | null;
   public_contact_phone: string | null;
   public_contact_email: string | null;
 };
@@ -41,7 +44,7 @@ export async function getCurrentOrg(): Promise<Org | null> {
   const { data } = await supabase
     .from("organizations")
     .select(
-      "id, name, slug, brand_color, brand_color_secondary, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, public_contact_phone, public_contact_email",
+      "id, name, slug, brand_color, brand_color_secondary, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_reason_income, screening_reason_movein, screening_reason_pets, public_contact_phone, public_contact_email",
     )
     .limit(1);
   return (data?.[0] as Org) ?? null;

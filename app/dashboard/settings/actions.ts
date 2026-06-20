@@ -75,6 +75,9 @@ export async function updateScreening(formData: FormData) {
     income_multiple: String(formData.get("screening_income_multiple") ?? ""),
     max_movein_days: String(formData.get("screening_max_movein_days") ?? ""),
     flag_pets: formData.get("screening_flag_pets") != null,
+    reason_income: String(formData.get("screening_reason_income") ?? ""),
+    reason_movein: String(formData.get("screening_reason_movein") ?? ""),
+    reason_pets: String(formData.get("screening_reason_pets") ?? ""),
   });
   if (!result.ok) {
     redirect(`/dashboard/settings?tab=brand&screening=${result.reason}`);

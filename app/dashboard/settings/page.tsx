@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
+import { SCREENING_REASON } from "@/lib/screening";
 import {
   accessibleBrand,
   isBrandColorTooLight,
@@ -869,6 +870,65 @@ export default async function SettingsPage({
                 </span>
               </span>
             </label>
+
+            {/* Operator-tunable reason copy (S257). Blank keeps the default
+                wording shown on a flagged inquiry. Only the operator sees these
+                labels — renters never do. */}
+            <details className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                Customize the wording shown on flagged inquiries
+              </summary>
+              <p className="mt-2 text-xs text-gray-400">
+                When an inquiry is flagged, you see a short reason. Reword it to
+                match your voice, or leave blank to use the default. Only you see
+                these — renters never do.
+              </p>
+              <div className="mt-4 space-y-4">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">
+                    Income reason
+                  </span>
+                  <input
+                    name="screening_reason_income"
+                    type="text"
+                    maxLength={120}
+                    defaultValue={org.screening_reason_income ?? ""}
+                    placeholder={SCREENING_REASON.income}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">
+                    Move-in timing reason
+                  </span>
+                  <input
+                    name="screening_reason_movein"
+                    type="text"
+                    maxLength={120}
+                    defaultValue={org.screening_reason_movein ?? ""}
+                    placeholder={SCREENING_REASON.moveIn}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">
+                    Pets reason
+                  </span>
+                  <input
+                    name="screening_reason_pets"
+                    type="text"
+                    maxLength={120}
+                    defaultValue={org.screening_reason_pets ?? ""}
+                    placeholder={SCREENING_REASON.pets}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+              <p className="mt-3 text-xs text-gray-400">
+                The wording is saved with each inquiry as it comes in, so editing
+                it later won&apos;t change inquiries you already received.
+              </p>
+            </details>
 
             <p className="mt-5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
               Screening uses only ability to pay, timing, and pets — never

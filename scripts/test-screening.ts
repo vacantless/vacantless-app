@@ -10,6 +10,9 @@ import {
   affordabilityHintIncomeCents,
   AFFORDABILITY_INCOME_RATIO,
   SCREENING_REASON,
+  resolveScreeningReason,
+  cleanScreeningReason,
+  MAX_SCREENING_REASON_LEN,
   type OrgScreeningConfig,
   type ScreeningContext,
   type ScreeningAnswers,
@@ -35,6 +38,9 @@ const fullConfig: OrgScreeningConfig = {
   screening_income_multiple: 3,
   screening_max_movein_days: 90,
   screening_flag_pets: true,
+  screening_reason_income: null,
+  screening_reason_movein: null,
+  screening_reason_pets: null,
 };
 
 // $2,000/mo rental, not pet-friendly.
@@ -266,6 +272,83 @@ const goodAnswers: ScreeningAnswers = {
     flag_pets: true,
   });
   ok("settings days 30.5: rejected", badDays.ok === false && badDays.reason === "max_movein_days");
+
+  // Reason copy: omitted -> null (keep defaults).
+  if (ok1.ok) {
+    ok("settings no reason copy: income null", ok1.values.screening_reason_income === null);
+    ok("settings no reason copy: movein null", ok1.values.screening_reason_movein === null);
+    ok("settings no reason copy: pets null", ok1.values.screening_reason_pets === null);
+  }
+
+  // Reason copy: provided -> trimmed/normalized; blank -> null.
+  const withCopy = validateScreeningSettings({
+    enabled: true,
+    income_multiple: "3",
+    max_movein_days: "",
+    flag_pets: true,
+    reason_income: "  Income doesn't meet our 3x guideline  ",
+    reason_movein: "   ",
+    reason_pets: "No pets on this unit\n(strict)",
+  });
+  ok("settings reason copy: ok", withCopy.ok === true);
+  if (withCopy.ok) {
+    ok(
+      "settings reason copy: income trimmed",
+      withCopy.values.screening_reason_income === "Income doesn't meet our 3x guideline",
+    );
+    ok("settings reason copy: blank -> null", withCopy.values.screening_reason_movein === null);
+    ok(
+      "settings reason copy: newlines collapsed",
+      withCopy.values.screening_reason_pets === "No pets on this unit (strict)",
+    );
+  }
+
+  // cleanScreeningReason: clamps to MAX length.
+  const long = "x".repeat(MAX_SCREENING_REASON_LEN + 50);
+  ok(
+    "cleanScreeningReason clamps length",
+    (cleanScreeningReason(long) ?? "").length === MAX_SCREENING_REASON_LEN,
+  );
+  ok("cleanScreeningReason blank -> null", cleanScreeningReason("   ") === null);
+  ok("cleanScreeningReason null -> null", cleanScreeningReason(null) === null);
+}
+
+// --- resolveScreeningReason + custom copy in evaluateScreening ---------------
+{
+  ok("resolve: null -> default", resolveScreeningReason(null, SCREENING_REASON.income) === SCREENING_REASON.income);
+  ok("resolve: blank -> default", resolveScreeningReason("  ", SCREENING_REASON.pets) === SCREENING_REASON.pets);
+  ok("resolve: custom -> trimmed custom", resolveScreeningReason("  Custom  ", SCREENING_REASON.moveIn) === "Custom");
+
+  // A flagged inquiry under an org with custom copy surfaces the custom strings.
+  const customConfig: OrgScreeningConfig = {
+    ...fullConfig,
+    screening_reason_income: "Below our 3x income line",
+    screening_reason_movein: "Wants in too late",
+    screening_reason_pets: "Pets, but this unit is pet-free",
+  };
+  const allFail: ScreeningAnswers = {
+    income_cents: 100000, // 1x rent on a $2,000 unit -> income fails
+    has_pets: true, // not pet-friendly -> pets fails
+    move_in: "2026-12-31", // far past the 90-day window -> move-in fails
+  };
+  const r = evaluateScreening(customConfig, ctx, allFail, TODAY);
+  ok("custom copy: 3 reasons", r.reasons.length === 3);
+  ok("custom copy: income string", r.reasons.includes("Below our 3x income line"));
+  ok("custom copy: movein string", r.reasons.includes("Wants in too late"));
+  ok("custom copy: pets string", r.reasons.includes("Pets, but this unit is pet-free"));
+  ok("custom copy: no defaults leaked", !r.reasons.includes(SCREENING_REASON.income));
+
+  // A null custom field on one criterion still falls back to its default.
+  const mixed: OrgScreeningConfig = {
+    ...fullConfig,
+    screening_reason_income: "Below our 3x income line",
+    screening_reason_movein: null,
+    screening_reason_pets: null,
+  };
+  const r2 = evaluateScreening(mixed, ctx, allFail, TODAY);
+  ok("mixed copy: custom income", r2.reasons.includes("Below our 3x income line"));
+  ok("mixed copy: default movein", r2.reasons.includes(SCREENING_REASON.moveIn));
+  ok("mixed copy: default pets", r2.reasons.includes(SCREENING_REASON.pets));
 }
 
 // --- parseIncomeToCents -----------------------------------------------------

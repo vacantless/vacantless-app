@@ -35,6 +35,24 @@ export const SCREENING_REASON = {
 export type ScreeningReason =
   (typeof SCREENING_REASON)[keyof typeof SCREENING_REASON];
 
+// Operator-tunable reason copy (S257). An org may override the wording shown on
+// a flagged inquiry per criterion (e.g. soften it, or match its own voice). A
+// null/blank override falls back to the canonical default above. The override is
+// a SNAPSHOT at intake just like the rest of the qualify-out result, so editing
+// the copy later never silently rewrites the wording on an already-filed lead.
+// Max length keeps the labels short (they render as a bullet list, not prose).
+export const MAX_SCREENING_REASON_LEN = 120;
+
+/** A trimmed, non-empty custom label, else the canonical default. */
+export function resolveScreeningReason(
+  custom: string | null | undefined,
+  fallback: ScreeningReason,
+): string {
+  if (custom == null) return fallback;
+  const t = custom.trim();
+  return t === "" ? fallback : t;
+}
+
 // --- org-level configuration (organizations.*) ------------------------------
 export type OrgScreeningConfig = {
   /** Master switch. When false, nothing is asked and nothing is flagged. */
@@ -55,6 +73,13 @@ export type OrgScreeningConfig = {
    * pet-friendly. (A pet-friendly unit is never flagged.)
    */
   screening_flag_pets: boolean;
+  /**
+   * Operator-custom wording for each qualify-out reason. null/blank = use the
+   * canonical default (SCREENING_REASON). Snapshotted into the lead at intake.
+   */
+  screening_reason_income: string | null;
+  screening_reason_movein: string | null;
+  screening_reason_pets: string | null;
 };
 
 // --- the rental's relevant facts -------------------------------------------
@@ -120,14 +145,18 @@ export function evaluateScreening(
     ctx.rent_cents > 0 &&
     answers.income_cents < config.screening_income_multiple * ctx.rent_cents
   ) {
-    reasons.push(SCREENING_REASON.income);
+    reasons.push(
+      resolveScreeningReason(config.screening_reason_income, SCREENING_REASON.income),
+    );
   }
 
   // Move-in timing: desired move-in further out than the configured window.
   if (config.screening_max_movein_days != null) {
     const diff = daysUntil(answers.move_in, today);
     if (diff != null && diff > config.screening_max_movein_days) {
-      reasons.push(SCREENING_REASON.moveIn);
+      reasons.push(
+        resolveScreeningReason(config.screening_reason_movein, SCREENING_REASON.moveIn),
+      );
     }
   }
 
@@ -137,7 +166,9 @@ export function evaluateScreening(
     !ctx.pet_friendly &&
     answers.has_pets === true
   ) {
-    reasons.push(SCREENING_REASON.pets);
+    reasons.push(
+      resolveScreeningReason(config.screening_reason_pets, SCREENING_REASON.pets),
+    );
   }
 
   return { qualifiedOut: reasons.length > 0, reasons };
@@ -150,7 +181,22 @@ export type ScreeningSettingsInput = {
   income_multiple: string;
   max_movein_days: string;
   flag_pets: boolean;
+  // Operator-custom reason copy (optional; blank = keep the default wording).
+  reason_income?: string;
+  reason_movein?: string;
+  reason_pets?: string;
 };
+
+/**
+ * Normalize a custom reason label: collapse whitespace (drops stray newlines),
+ * trim, clamp to MAX_SCREENING_REASON_LEN. Blank -> null (= use the default).
+ */
+export function cleanScreeningReason(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const t = raw.replace(/\s+/g, " ").trim();
+  if (t === "") return null;
+  return t.slice(0, MAX_SCREENING_REASON_LEN);
+}
 
 export type ScreeningSettingsResult =
   | { ok: true; values: OrgScreeningConfig }
@@ -193,6 +239,9 @@ export function validateScreeningSettings(
       screening_income_multiple: income_multiple,
       screening_max_movein_days: max_movein_days,
       screening_flag_pets: input.flag_pets,
+      screening_reason_income: cleanScreeningReason(input.reason_income),
+      screening_reason_movein: cleanScreeningReason(input.reason_movein),
+      screening_reason_pets: cleanScreeningReason(input.reason_pets),
     },
   };
 }
