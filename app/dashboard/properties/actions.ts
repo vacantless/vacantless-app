@@ -1050,21 +1050,23 @@ function collectDropboxEntries(
   }
 }
 
-// Cap how many entries we'll pull from one share so an operator who pastes a
-// huge top-level folder can't make us page forever. A real listing archive is
-// well under this even across many years.
+// Caps so an operator who pastes a huge top-level folder can't make us walk
+// forever. A real single-listing archive is well under both, even across years.
 const DROPBOX_MAX_ENTRIES = 5000;
+const DROPBOX_MAX_FOLDERS = 200; // how many subfolders the tree walk will visit
+const DROPBOX_WALK_CONCURRENCY = 8; // sibling folders listed at once
 
 /**
- * Enumerate the entries of a Dropbox shared folder. With `recursive: true` it
- * walks the whole tree (so we can find galleries nested several levels deep);
- * otherwise just the named level. Paginates via list_folder/continue and stops
- * at DROPBOX_MAX_ENTRIES. Returns null on any API error.
+ * Enumerate the entries directly under one level of a Dropbox shared folder
+ * (NON-recursive — `path` is "" for the share root or "/a/b" for a subfolder).
+ * Dropbox does not allow `recursive: true` together with a `shared_link`, so the
+ * deep walk is done by dropboxListSharedTree calling this per folder. Paginates
+ * via list_folder/continue and stops at DROPBOX_MAX_ENTRIES. Null on API error.
  */
 async function dropboxListSharedFolder(
   token: string,
   shareUrl: string,
-  recursive = false,
+  path = "",
 ): Promise<DropboxEntry[] | null> {
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -1075,7 +1077,7 @@ async function dropboxListSharedFolder(
     let res = await fetch(`${DROPBOX_API}/files/list_folder`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ path: "", shared_link: { url: shareUrl }, recursive }),
+      body: JSON.stringify({ path, shared_link: { url: shareUrl } }),
     });
     if (!res.ok) return null;
     let json = (await res.json()) as DropboxListResponse;
@@ -1101,6 +1103,55 @@ async function dropboxListSharedFolder(
     return null;
   }
   return entries;
+}
+
+/**
+ * Walk a whole Dropbox shared folder breadth-first using the per-level lister
+ * above (since Dropbox blocks recursive listing on shared links). Returns every
+ * entry found across the tree — files (with their full path_display) and the
+ * folders we descended — so the caller can group images by their parent folder.
+ * Bounded by DROPBOX_MAX_FOLDERS / DROPBOX_MAX_ENTRIES; sibling folders are
+ * listed DROPBOX_WALK_CONCURRENCY at a time to keep wall-time low. Null only
+ * when the ROOT listing fails (a private/expired link); a single subfolder that
+ * errors mid-walk is skipped best-effort.
+ */
+async function dropboxListSharedTree(
+  token: string,
+  shareUrl: string,
+): Promise<DropboxEntry[] | null> {
+  const root = await dropboxListSharedFolder(token, shareUrl, "");
+  if (root === null) return null;
+
+  const all: DropboxEntry[] = [...root];
+  let frontier = root
+    .filter((e) => e.tag === "folder" && e.path_display)
+    .map((e) => e.path_display as string);
+  let visited = 0;
+
+  while (
+    frontier.length > 0 &&
+    visited < DROPBOX_MAX_FOLDERS &&
+    all.length < DROPBOX_MAX_ENTRIES
+  ) {
+    const batch = frontier.slice(0, DROPBOX_MAX_FOLDERS - visited);
+    visited += batch.length;
+    const next: string[] = [];
+    for (let i = 0; i < batch.length; i += DROPBOX_WALK_CONCURRENCY) {
+      const chunk = batch.slice(i, i + DROPBOX_WALK_CONCURRENCY);
+      const results = await Promise.all(
+        chunk.map((p) => dropboxListSharedFolder(token, shareUrl, p)),
+      );
+      for (const entries of results) {
+        if (!entries) continue; // best-effort: skip a folder that errors
+        for (const e of entries) {
+          all.push(e);
+          if (e.tag === "folder" && e.path_display) next.push(e.path_display);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return all;
 }
 
 /**
@@ -1193,7 +1244,7 @@ export async function inspectDropboxFolder(
   const token = await getDropboxAccessToken();
   if (!token) return { kind: "error", reason: "dropboxauth" };
 
-  const rawEntries = await dropboxListSharedFolder(token, parsed.url, true);
+  const rawEntries = await dropboxListSharedTree(token, parsed.url);
   if (rawEntries === null) return { kind: "error", reason: "dropboxfailed" };
 
   const groups = groupImagesByParentPath(rawEntries);
@@ -1230,7 +1281,7 @@ export async function importPropertyPhotosFromDropboxFolder(formData: FormData) 
   // the folder the operator chose. The chosen path is re-confirmed against what
   // we actually found (no acting on a stale/typo'd value); when there's only one
   // gallery a choice isn't required.
-  const rawEntries = await dropboxListSharedFolder(token, shareUrl, true);
+  const rawEntries = await dropboxListSharedTree(token, shareUrl);
   if (rawEntries === null) return fail("dropboxfailed");
 
   const groups = groupImagesByParentPath(rawEntries);
