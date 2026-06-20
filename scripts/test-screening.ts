@@ -9,6 +9,7 @@ import {
   matchesScreenFilter,
   affordabilityHintIncomeCents,
   AFFORDABILITY_INCOME_RATIO,
+  incomeRequirementMagnitude,
   SCREENING_REASON,
   resolveScreeningReason,
   cleanScreeningReason,
@@ -451,6 +452,70 @@ const goodAnswers: ScreeningAnswers = {
     "hint: negative rent -> null",
     affordabilityHintIncomeCents(-100_000) === null,
   );
+}
+
+// --- incomeRequirementMagnitude (S258) --------------------------------------
+{
+  // Below requirement: reported $5,200 vs 3x $2,800 = $8,400 -> short $3,200.
+  const below = incomeRequirementMagnitude(520_000, 280_000, 3);
+  ok("mag: below returns a result", below !== null);
+  ok("mag: required = 3x rent ($8,400)", below?.requiredCents === 840_000);
+  ok("mag: reported snapshot preserved", below?.reportedCents === 520_000);
+  ok("mag: multiple echoed", below?.multiple === 3);
+  ok("mag: below -> meetsRequirement false", below?.meetsRequirement === false);
+  ok("mag: shortfall = $3,200", below?.shortfallCents === 320_000);
+  ok("mag: below -> surplus 0", below?.surplusCents === 0);
+
+  // Above requirement: reported $9,000 vs $8,400 -> surplus $600, meets.
+  const above = incomeRequirementMagnitude(900_000, 280_000, 3);
+  ok("mag: above -> meetsRequirement true", above?.meetsRequirement === true);
+  ok("mag: above -> shortfall 0", above?.shortfallCents === 0);
+  ok("mag: surplus = $600", above?.surplusCents === 60_000);
+
+  // Exactly at requirement counts as meeting (mirrors the < test in the evaluator).
+  const exact = incomeRequirementMagnitude(840_000, 280_000, 3);
+  ok("mag: exactly at requirement meets", exact?.meetsRequirement === true);
+  ok("mag: exact -> shortfall 0", exact?.shortfallCents === 0);
+  ok("mag: exact -> surplus 0", exact?.surplusCents === 0);
+
+  // meetsRequirement uses the UNROUNDED product (boundary one cent below fails,
+  // even though requiredCents rounds to the same displayed figure).
+  const justUnder = incomeRequirementMagnitude(839_999, 280_000, 3);
+  ok("mag: one cent under -> fails", justUnder?.meetsRequirement === false);
+  ok("mag: one cent under -> shortfall 1", justUnder?.shortfallCents === 1);
+
+  // Fractional multiple: 2.5x $2,800 = $7,000.
+  const frac = incomeRequirementMagnitude(600_000, 280_000, 2.5);
+  ok("mag: 2.5x -> required $7,000", frac?.requiredCents === 700_000);
+  ok("mag: 2.5x -> shortfall $1,000", frac?.shortfallCents === 100_000);
+
+  // Non-integer cents product is rounded for display but the boolean is exact.
+  // 3 x $1,683.33 = $5,049.99 -> requiredCents rounds to 504999 (already whole).
+  const oddRent = incomeRequirementMagnitude(500_000, 168_333, 3);
+  ok("mag: odd rent required rounds", oddRent?.requiredCents === 504_999);
+  ok("mag: odd rent -> below", oddRent?.meetsRequirement === false);
+
+  // Null / unconfigured inputs -> null (nothing to show).
+  ok("mag: no income -> null", incomeRequirementMagnitude(null, 280_000, 3) === null);
+  ok("mag: no rent -> null", incomeRequirementMagnitude(520_000, null, 3) === null);
+  ok(
+    "mag: income screening off (null multiple) -> null",
+    incomeRequirementMagnitude(520_000, 280_000, null) === null,
+  );
+  ok("mag: zero rent -> null", incomeRequirementMagnitude(520_000, 0, 3) === null);
+  ok(
+    "mag: zero multiple -> null",
+    incomeRequirementMagnitude(520_000, 280_000, 0) === null,
+  );
+  ok(
+    "mag: negative income -> null",
+    incomeRequirementMagnitude(-1, 280_000, 3) === null,
+  );
+  // Zero reported income is valid (a renter who entered $0): far below.
+  const zeroIncome = incomeRequirementMagnitude(0, 280_000, 3);
+  ok("mag: $0 income is a result", zeroIncome !== null);
+  ok("mag: $0 income -> shortfall = full requirement", zeroIncome?.shortfallCents === 840_000);
+  ok("mag: $0 income -> does not meet", zeroIncome?.meetsRequirement === false);
 }
 
 console.log(`\nscreening: ${passed} passed, ${failed} failed`);

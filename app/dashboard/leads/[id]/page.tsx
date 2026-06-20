@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
+import { incomeRequirementMagnitude } from "@/lib/screening";
 import {
   resolveLeadSource,
   followUpStatus,
@@ -17,6 +18,11 @@ import { addNote, setNextAction, clearNextAction, updateLeadStatus } from "../ac
 import { OutcomeSelect } from "../../showings/outcome-select";
 
 export const dynamic = "force-dynamic";
+
+/** Whole-dollar money for the operator's screening context (e.g. "$8,400"). */
+function money(cents: number): string {
+  return "$" + Math.round(cents / 100).toLocaleString("en-CA");
+}
 
 type ListingPost = {
   portal: string | null;
@@ -43,7 +49,7 @@ type Lead = {
   screen_pets_detail: string | null;
   qualified_out: boolean;
   qualify_out_reasons: string[] | null;
-  property: { id: string; address: string } | null;
+  property: { id: string; address: string; rent_cents: number | null } | null;
   listing_post: ListingPost;
 };
 
@@ -70,7 +76,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, property:properties(id, address), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, property:properties(id, address, rent_cents), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -115,6 +121,20 @@ export default async function LeadDetailPage({
   const followStatus = followUpStatus(l.next_action_at, today);
   const followText = followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
+
+  // Operator-only income magnitude for the qualify-out flag (S258): how far the
+  // renter's reported income sits from THIS org's requirement (multiple x rent).
+  // Computed live from current criteria + current rent; the reported figure is
+  // the intake snapshot. Never rendered on a renter-facing surface, so the
+  // private multiple stays private. Null when income screening is off/unconfigured
+  // or the lead/rental lacks the figures.
+  const incomeMagnitude = org?.screening_enabled
+    ? incomeRequirementMagnitude(
+        l.screen_income_cents,
+        l.property?.rent_cents,
+        org.screening_income_multiple,
+      )
+    : null;
 
   return (
     <div>
@@ -204,6 +224,35 @@ export default async function LeadDetailPage({
               <li key={r}>{r}</li>
             ))}
           </ul>
+          {/* Income magnitude (S258): how far off, not just that it's off.
+              Operator-only context computed from current criteria. */}
+          {incomeMagnitude && (
+            <p className="mt-2 border-t border-amber-200 pt-2 text-sm text-amber-900">
+              {incomeMagnitude.meetsRequirement ? (
+                <>
+                  Reported income{" "}
+                  <span className="font-semibold">
+                    {money(incomeMagnitude.reportedCents)}/mo
+                  </span>{" "}
+                  meets your {incomeMagnitude.multiple}× guideline (~
+                  {money(incomeMagnitude.requiredCents)}/mo).
+                </>
+              ) : (
+                <>
+                  Reported income{" "}
+                  <span className="font-semibold">
+                    {money(incomeMagnitude.reportedCents)}/mo
+                  </span>
+                  {" — "}
+                  <span className="font-semibold">
+                    {money(incomeMagnitude.shortfallCents)}/mo below
+                  </span>{" "}
+                  your {incomeMagnitude.multiple}× guideline (~
+                  {money(incomeMagnitude.requiredCents)}/mo).
+                </>
+              )}
+            </p>
+          )}
         </div>
       )}
 

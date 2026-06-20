@@ -334,3 +334,61 @@ export function affordabilityHintIncomeCents(
   // Round to the nearest $100 (10,000 cents).
   return Math.round(raw / 10_000) * 10_000;
 }
+
+// --- operator-facing income magnitude (S258) --------------------------------
+// On the qualify-out flag the operator sees WHY a lead was flagged, but for
+// income not HOW FAR off it is. The magnitude is the difference between a
+// marginal miss (reported $5,200/mo against a $5,400/mo requirement) and a large
+// one ($2,000 against $5,400) — exactly what lets an operator decide whether a
+// flagged inquiry is still worth a conversation. This derives that gap from the
+// lead's reported income and the org's income requirement (multiple x rent).
+//
+// OPERATOR-ONLY. Unlike the public affordability hint above (which deliberately
+// never reads the org's private screening_income_multiple), this DOES use the
+// configured multiple — it renders only on the operator's own dashboard, never
+// on a renter-facing surface, so no private threshold leaks. The requirement is
+// computed LIVE from the org's current criteria + the rental's current rent
+// (the reported income is the intake snapshot); it is decision context for the
+// operator, not a re-statement of the intake evaluation. `meetsRequirement`
+// mirrors evaluateScreening's income test (compares against the UNROUNDED
+// product); only the displayed figures are rounded to whole cents.
+export type IncomeMagnitude = {
+  /** What the renter reported at intake (snapshot), in cents. */
+  reportedCents: number;
+  /** multiple x rent, the operator's current requirement, in cents. */
+  requiredCents: number;
+  /** The org's configured income multiple (e.g. 3 = 3x rent). */
+  multiple: number;
+  /** reported >= requirement (matches the income criterion in evaluateScreening). */
+  meetsRequirement: boolean;
+  /** How far BELOW the requirement (required - reported), clamped at 0. */
+  shortfallCents: number;
+  /** How far ABOVE the requirement (reported - required), clamped at 0. */
+  surplusCents: number;
+};
+
+/**
+ * Size of the income vs requirement gap for the operator's flag, or null when
+ * it can't be computed (no reported income, no rent, or income screening off /
+ * unconfigured). Pure; rounding never affects `meetsRequirement` (it compares
+ * the exact product, mirroring evaluateScreening's income test).
+ */
+export function incomeRequirementMagnitude(
+  reportedIncomeCents: number | null | undefined,
+  rentCents: number | null | undefined,
+  incomeMultiple: number | null | undefined,
+): IncomeMagnitude | null {
+  if (reportedIncomeCents == null || reportedIncomeCents < 0) return null;
+  if (rentCents == null || rentCents <= 0) return null;
+  if (incomeMultiple == null || incomeMultiple <= 0) return null;
+  const requiredExact = incomeMultiple * rentCents;
+  const meetsRequirement = reportedIncomeCents >= requiredExact;
+  return {
+    reportedCents: reportedIncomeCents,
+    requiredCents: Math.round(requiredExact),
+    multiple: incomeMultiple,
+    meetsRequirement,
+    shortfallCents: Math.max(0, Math.round(requiredExact - reportedIncomeCents)),
+    surplusCents: Math.max(0, Math.round(reportedIncomeCents - requiredExact)),
+  };
+}
