@@ -63,7 +63,7 @@ export default async function DashboardLayout({
         style={{ background: brandGradient }}
       />
       <header
-        className="relative z-10 text-white shadow-md"
+        className="relative z-30 text-white shadow-md"
         style={{ background: brandGradient }}
       >
         {/* subtle top sheen so the band reads as dimensional, not flat */}
