@@ -10,6 +10,7 @@ import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
 import { normalizeLaundry, normalizeDogSize } from "@/lib/property-features";
 import { parseMlsListing } from "@/lib/mls-import";
+import { normalizeVirtualTourUrl } from "@/lib/virtual-tour";
 import {
   normalizePortal,
   normalizeListingStatus,
@@ -161,6 +162,7 @@ export async function importPropertyFromMls(formData: FormData) {
       parking: parsed.parking,
       description: parsed.description,
       available_date: parsed.availableDate,
+      virtual_tour_url: parsed.virtualTourUrl,
       air_conditioning: parsed.airConditioning,
       balcony: parsed.balcony,
       furnished: parsed.furnished,
@@ -223,6 +225,14 @@ export async function updateProperty(formData: FormData) {
   const petsDogSize = petsDogs ? normalizeDogSize(formData.get("pets_dog_size")) : null;
   const petsNotes = String(formData.get("pets_notes") ?? "").trim() || null;
 
+  // Virtual tour / video URL (item S). Validate against the host allow-list
+  // (lib/virtual-tour) before storing; a blank clears it, a non-tour-host link
+  // is rejected (stored as the prior value left untouched would surprise — we
+  // store null and flag it so the operator sees why it didn't take).
+  const tourRaw = String(formData.get("virtual_tour_url") ?? "").trim();
+  const virtualTourUrl = tourRaw ? normalizeVirtualTourUrl(tourRaw) : null;
+  const tourRejected = tourRaw !== "" && virtualTourUrl === null;
+
   // RLS scopes the update to the caller's org; .eq("id") targets one row.
   await supabase
     .from("properties")
@@ -237,6 +247,7 @@ export async function updateProperty(formData: FormData) {
       price_drop_pending_cents: nextPending,
       // Unit-level fields
       available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),
+      virtual_tour_url: virtualTourUrl,
       sqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
       floor: String(formData.get("floor") ?? "").trim() || null,
       laundry: normalizeLaundry(formData.get("laundry")),
@@ -257,7 +268,9 @@ export async function updateProperty(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
-  redirect(`/dashboard/properties/${id}?saved=1`);
+  redirect(
+    `/dashboard/properties/${id}?saved=1${tourRejected ? "&tourerr=host" : ""}`,
+  );
 }
 
 /**
@@ -286,7 +299,7 @@ export async function duplicateProperty(formData: FormData) {
   const { data: source } = await supabase
     .from("properties")
     .select(
-      "address, rent_cents, beds, baths, parking, description, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
+      "address, rent_cents, beds, baths, parking, description, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
     )
     .eq("id", id)
     .maybeSingle();
@@ -300,6 +313,7 @@ export async function duplicateProperty(formData: FormData) {
     parking: string | null;
     description: string | null;
     available_date: string | null;
+    virtual_tour_url: string | null;
     sqft: number | null;
     floor: string | null;
     laundry: string | null;
@@ -329,6 +343,7 @@ export async function duplicateProperty(formData: FormData) {
       description: s.description,
       status: "draft", // a real private Draft until the operator sets it Live
       available_date: s.available_date,
+      virtual_tour_url: s.virtual_tour_url,
       sqft: s.sqft,
       floor: s.floor,
       laundry: s.laundry,

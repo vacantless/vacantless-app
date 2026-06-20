@@ -91,6 +91,7 @@ type Property = {
   status: string;
   price_drop_pending_cents: number | null;
   available_date: string | null;
+  virtual_tour_url: string | null;
   sqft: number | null;
   floor: string | null;
   laundry: string | null;
@@ -151,13 +152,14 @@ export default async function PropertyDetailPage({
     photoerr?: string;
     duplicated?: string;
     imported?: string;
+    tourerr?: string;
   };
 }) {
   const supabase = createClient();
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
+      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -273,6 +275,7 @@ export default async function PropertyDetailPage({
     publicUrl: linkIsLive ? publicUrl : null,
     leadContactEmail: org?.public_contact_email ?? org?.reply_to_email ?? null,
     leadContactPhone: org?.public_contact_phone ?? null,
+    virtualTourUrl: p.virtual_tour_url,
     features: {
       available_date: p.available_date,
       sqft: p.sqft,
@@ -1235,6 +1238,39 @@ export default async function PropertyDetailPage({
             rent_cents: p.rent_cents,
           }}
         />
+        </div>
+
+        {/* --- Virtual tour / video link (item S) --- */}
+        <div className="border-t border-gray-100 pt-4">
+          <label
+            htmlFor="virtual_tour_url"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500"
+          >
+            Virtual tour / video URL{" "}
+            <span className="font-normal normal-case tracking-normal text-gray-400">
+              (optional)
+            </span>
+          </label>
+          <input
+            id="virtual_tour_url"
+            name="virtual_tour_url"
+            type="url"
+            inputMode="url"
+            defaultValue={p.virtual_tour_url ?? ""}
+            placeholder="https://youriguide.com/… · YouTube · Vimeo · Matterport"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          {searchParams.tourerr === "host" ? (
+            <p className="mt-1 text-xs text-amber-700">
+              That link isn&apos;t from a supported tour host, so it wasn&apos;t
+              saved. Use an iGUIDE, Matterport, YouTube, or Vimeo link.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-gray-400">
+              Paste an iGUIDE, Matterport, YouTube, or Vimeo link. It embeds on
+              your listing page and rides along to the portals.
+            </p>
+          )}
         </div>
 
         {/* --- Unit details --- */}

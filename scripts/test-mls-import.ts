@@ -253,5 +253,36 @@ ok("no street-suffix line -> address null", parseMlsListing("Bedrooms: 2\nBathro
   ok("explicit Address label wins over heuristic", r.address === "5 King St W, Toronto");
 }
 
+// --- virtual tour URL (item S) ----------------------------------------------
+{
+  const r = parseMlsListing("Address: 5 King St W\nVirtual Tour: https://youriguide.com/5_king_st_w/");
+  ok("tour: labelled iGUIDE captured", r.virtualTourUrl === "https://youriguide.com/5_king_st_w/");
+  ok("tour: found-fields includes Virtual tour", r.foundFields.includes("Virtual tour"));
+}
+{
+  const r = parseMlsListing("Bedrooms: 2\nMultimedia: https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  ok(
+    "tour: YouTube via Multimedia label -> canonical href",
+    r.virtualTourUrl === "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  );
+}
+{
+  const r = parseMlsListing("Great unit. Tour here: youriguide.com/abc/ — book now.");
+  ok("tour: bare-host inline (no scheme) captured", r.virtualTourUrl === "https://youriguide.com/abc/");
+}
+{
+  const r = parseMlsListing("See more at https://www.google.com/maps and https://vimeo.com/123456789");
+  ok("tour: skips non-tour link, takes Vimeo", r.virtualTourUrl === "https://vimeo.com/123456789");
+}
+{
+  const r = parseMlsListing("Listed at https://www.realtor.ca/real-estate/123/5-king-st");
+  ok("tour: realtor.ca self-link is NOT a tour", r.virtualTourUrl === null);
+}
+{
+  const r = parseMlsListing("Bedrooms: 2\nBathrooms: 1");
+  ok("tour: absent -> null", r.virtualTourUrl === null);
+  ok("tour: absent not in found-fields", !r.foundFields.includes("Virtual tour"));
+}
+
 console.log(`\nmls-import: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

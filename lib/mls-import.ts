@@ -40,6 +40,7 @@
 // ============================================================================
 
 import { type Laundry } from "./property-features";
+import { normalizeVirtualTourUrl } from "./virtual-tour";
 
 export interface ParsedListing {
   address: string | null;
@@ -51,6 +52,13 @@ export interface ParsedListing {
   description: string | null;
   /** ISO "YYYY-MM-DD" or null. */
   availableDate: string | null;
+  /**
+   * Virtual tour / listing video URL (REAL-WORLD-INTAKE item S). The MLS data
+   * sheet / realtor.ca page carries a tour link the operator otherwise re-keys;
+   * we lift it from the paste, but only when it points at an allow-listed tour
+   * host (YouTube / Vimeo / iGUIDE / Matterport) — see lib/virtual-tour.
+   */
+  virtualTourUrl: string | null;
   airConditioning: boolean;
   balcony: boolean;
   furnished: boolean;
@@ -73,6 +81,7 @@ export function emptyParsedListing(): ParsedListing {
     parking: null,
     description: null,
     availableDate: null,
+    virtualTourUrl: null,
     airConditioning: false,
     balcony: false,
     furnished: false,
@@ -433,6 +442,67 @@ function extractAvailableDate(lines: string[]): string | null {
   return parseAvailableDate(v);
 }
 
+// --- virtual tour / video link ----------------------------------------------
+
+// A URL-ish token: an http(s) link, a "www." link, OR a bare (scheme-less,
+// www-less) link to a KNOWN tour host the data sheet sometimes prints inline
+// ("Tour here: youriguide.com/abc/"). The bare branch is restricted to the
+// allow-listed tour hosts so it can't grab arbitrary domains. Trailing sentence
+// punctuation is trimmed before validation.
+const URL_TOKEN_RE =
+  /(?:https?:\/\/|www\.)[^\s)>"'\]]+|(?:[a-z0-9-]+\.)*(?:youriguide\.com|iguide\.com|youtu\.be|youtube\.com|youtube-nocookie\.com|vimeo\.com|matterport\.com)\/[^\s)>"'\]]*/gi;
+
+function stripTrailingUrlPunct(s: string): string {
+  return s.replace(/[.,;:!?)\]}>'"]+$/, "");
+}
+
+/**
+ * The virtual-tour / video URL, or null. Prefers an explicit tour/multimedia
+ * label value; otherwise scans the whole paste for the FIRST URL whose host is
+ * an allow-listed tour host (YouTube / Vimeo / iGUIDE / Matterport). Conservative
+ * by construction: a non-tour link (the listing's own realtor.ca page, a
+ * brokerage site, a Google Maps link) never validates, so it is never imported.
+ */
+function extractVirtualTourUrl(lines: string[], rawText: string): string | null {
+  const labelled = labelValue(
+    lines,
+    [
+      "Virtual Tour",
+      "Virtual Tour URL",
+      "Virtual Tour Link",
+      "Tour",
+      "Tour URL",
+      "Tour Link",
+      "Video Tour",
+      "Video",
+      "Video Link",
+      "Multimedia",
+      "Multimedia URL",
+      "iGuide",
+      "iGUIDE",
+      "3D Tour",
+      "Matterport",
+    ],
+    { allowNextLine: true },
+  );
+
+  // Try the labelled value first, then fall back to the whole paste.
+  for (const text of [labelled, rawText]) {
+    if (!text) continue;
+    const matches = text.match(URL_TOKEN_RE);
+    if (!matches) continue;
+    for (const m of matches) {
+      const cleaned = stripTrailingUrlPunct(m);
+      const withScheme = /^https?:\/\//i.test(cleaned)
+        ? cleaned
+        : `https://${cleaned}`;
+      const normalized = normalizeVirtualTourUrl(withScheme);
+      if (normalized) return normalized;
+    }
+  }
+  return null;
+}
+
 // --- description ------------------------------------------------------------
 
 /**
@@ -638,6 +708,7 @@ const FIELD_LABELS: Record<keyof Omit<ParsedListing, "foundFields">, string> = {
   parking: "Parking",
   description: "Description",
   availableDate: "Available date",
+  virtualTourUrl: "Virtual tour",
   airConditioning: "Air conditioning",
   balcony: "Balcony",
   furnished: "Furnished",
@@ -667,6 +738,7 @@ export function parseMlsListing(text: string): ParsedListing {
   out.parking = extractParking(lines);
   out.description = extractDescription(lines);
   out.availableDate = extractAvailableDate(lines);
+  out.virtualTourUrl = extractVirtualTourUrl(lines, raw);
 
   // A/C: a TRREB explicit Y/N flag ("A/C: N", "CAC Incl: Y", "Central Air: Y")
   // is authoritative; otherwise fall back to the keyword scan (so "A/C: Central
@@ -699,8 +771,9 @@ export function parseMlsListing(text: string): ParsedListing {
   // Build the found-fields list in a stable, display order.
   const order: (keyof Omit<ParsedListing, "foundFields">)[] = [
     "address", "rentCents", "beds", "baths", "sqft", "parking",
-    "description", "availableDate", "airConditioning", "balcony",
-    "furnished", "laundry", "heatIncluded", "hydroIncluded", "waterIncluded",
+    "description", "availableDate", "virtualTourUrl", "airConditioning",
+    "balcony", "furnished", "laundry", "heatIncluded", "hydroIncluded",
+    "waterIncluded",
   ];
   for (const key of order) {
     const v = out[key];

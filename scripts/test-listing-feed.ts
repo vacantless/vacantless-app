@@ -264,5 +264,42 @@ for (const name of ["rental_listings", "listing", "address", "photos", "contact"
 }
 
 // ----------------------------------------------------------------------------
+// --- virtual tour (item S) --------------------------------------------------
+{
+  const withTour = buildListingItemXml(
+    { ...fullListing, virtual_tour_url: "https://youriguide.com/123_main/" },
+    { baseUrl: "https://app.example.com", propertyType: "apartment", country: "CA" },
+  );
+  ok(
+    "feed emits virtual_tour for an allow-listed host",
+    withTour.includes("<virtual_tour>https://youriguide.com/123_main/</virtual_tour>"),
+  );
+}
+{
+  const ytTour = buildListingItemXml(
+    { ...fullListing, virtual_tour_url: "https://youtu.be/dQw4w9WgXcQ" },
+    { baseUrl: "https://app.example.com", propertyType: "apartment", country: "CA" },
+  );
+  ok(
+    "feed normalizes YouTube to canonical href",
+    ytTour.includes("<virtual_tour>https://www.youtube.com/watch?v=dQw4w9WgXcQ</virtual_tour>"),
+  );
+}
+{
+  const badTour = buildListingItemXml(
+    { ...fullListing, virtual_tour_url: "https://evil.com/iframe" },
+    { baseUrl: "https://app.example.com", propertyType: "apartment", country: "CA" },
+  );
+  ok("feed drops a non-allow-listed tour URL", !badTour.includes("<virtual_tour>"));
+}
+{
+  const noTour = buildListingItemXml(fullListing, {
+    baseUrl: "https://app.example.com",
+    propertyType: "apartment",
+    country: "CA",
+  });
+  ok("feed has no virtual_tour when unset", !noTour.includes("<virtual_tour>"));
+}
+
 console.log(`listing-feed: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

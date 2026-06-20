@@ -72,10 +72,32 @@ export type FillSheet = {
 };
 
 // The fill sheet needs everything the copy needs, plus the inquiry contact a
-// couple of portals make you re-enter per listing (Rentals.ca's Lead Contact).
+// couple of portals make you re-enter per listing (Rentals.ca's Lead Contact)
+// and the optional virtual-tour URL (item S) the portals with a tour/video
+// field accept.
 export type FillSheetInput = ListingCopyInput & {
   leadContactEmail?: string | null;
   leadContactPhone?: string | null;
+  virtualTourUrl?: string | null;
+};
+
+// Portals whose posting form has a virtual-tour / video LINK field (item S). We
+// only surface the tour field for these, and only when the unit actually has a
+// tour URL — Facebook Marketplace (photo/video upload, no link field) and
+// Realtor.ca (DDF only) are deliberately excluded.
+const TOUR_FIELD_PORTALS: ReadonlySet<PortalKey> = new Set([
+  "kijiji",
+  "rentals_ca",
+  "zumper",
+  "viewit",
+]);
+
+// The field-id prefix each builder uses, so the inserted tour field keys match.
+const PORTAL_FIELD_PREFIX: Partial<Record<PortalKey, string>> = {
+  kijiji: "kijiji",
+  rentals_ca: "rentalsca",
+  zumper: "zumper",
+  viewit: "viewit",
 };
 
 // Portals we produce a sheet for — the guardrail/distribution taxonomy minus
@@ -152,6 +174,39 @@ function textOrNull(s: string | null | undefined): string | null {
 function copyPortalFor(portal: PortalKey): CopyPortalKey {
   // listing-copy has no realtor_ca/other profile; fall back to the master copy.
   return isCopyPortalKey(portal) ? portal : "generic";
+}
+
+/** The virtual-tour field for a portal, or null when the unit has no tour URL. */
+function virtualTourField(
+  input: FillSheetInput,
+  prefix: string,
+): FillField | null {
+  const url = textOrNull(input.virtualTourUrl);
+  if (!url) return null;
+  return {
+    id: `${prefix}-virtual-tour`,
+    label: "Virtual tour / video URL",
+    value: url,
+    source: "listing",
+    hint: "Paste into the portal's virtual tour / video link field, if it has one — it boosts engagement and most renters expect it.",
+  };
+}
+
+/**
+ * Insert the virtual-tour field right after the portal's Description field (or
+ * at the end if there isn't one). A no-op when the unit has no tour URL, so a
+ * tour-less unit's sheet is unchanged.
+ */
+function withVirtualTour(
+  fields: FillField[],
+  input: FillSheetInput,
+  prefix: string,
+): FillField[] {
+  const tour = virtualTourField(input, prefix);
+  if (!tour) return fields;
+  const idx = fields.findIndex((f) => f.id.endsWith("-description"));
+  if (idx === -1) return [...fields, tour];
+  return [...fields.slice(0, idx + 1), tour, ...fields.slice(idx + 1)];
 }
 
 function kijijiFields(input: FillSheetInput, title: string, body: string): FillField[] {
@@ -488,11 +543,17 @@ export function buildFillSheet(
 ): FillSheet {
   const key: PortalKey = isPortalKey(portal) ? portal : "other";
   const copy = buildListingCopy(input, copyPortalFor(key));
-  const fields = (FIELD_BUILDERS[key] ?? FIELD_BUILDERS.other)(
+  let fields = (FIELD_BUILDERS[key] ?? FIELD_BUILDERS.other)(
     input,
     copy.title,
     copy.body,
   );
+  // Add the virtual-tour field for portals with a tour/video link field, only
+  // when the unit has a tour URL (item S).
+  const prefix = PORTAL_FIELD_PREFIX[key];
+  if (TOUR_FIELD_PORTALS.has(key) && prefix) {
+    fields = withVirtualTour(fields, input, prefix);
+  }
   return {
     portal: key,
     label: portalLabel(key),

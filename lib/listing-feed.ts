@@ -26,6 +26,7 @@ import {
   isDogSize,
   type UnitFeatures,
 } from "./property-features";
+import { virtualTourFor } from "./virtual-tour";
 
 // Only ACTIVE (advertised + vacant) units syndicate. draft/paused/leased/
 // off_market never appear in the feed. Mirrors the WHERE in get_org_listing_feed.
@@ -57,6 +58,7 @@ export type FeedListingInput = UnitFeatures & {
   baths: number | string | null;
   description: string | null;
   photos: string[] | null;
+  virtual_tour_url?: string | null;
 };
 
 export type FeedOrgInput = {
@@ -300,6 +302,13 @@ export function buildListingItemXml(
 
   const desc = clampDescription(listing.description);
   if (desc) parts.push(`    ${tag("description", desc)}`);
+
+  // Virtual tour / video URL (item S). Validated against the same host
+  // allow-list the public page uses, so the feed never emits a junk or hostile
+  // link; we send the canonical href (aggregators that read it map it, others
+  // ignore the unknown element).
+  const tour = virtualTourFor(listing.virtual_tour_url);
+  if (tour) parts.push(`    ${tag("virtual_tour", tour.href)}`);
 
   const photoEls = photos
     .filter((u) => typeof u === "string" && u.trim())

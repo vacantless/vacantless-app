@@ -12,6 +12,7 @@ import {
   formatAvailability,
   utilitiesSummary,
 } from "@/lib/property-features";
+import { virtualTourFor } from "@/lib/virtual-tour";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ type Listing = {
   heat_included: boolean;
   hydro_included: boolean;
   water_included: boolean;
+  virtual_tour_url: string | null;
   org_name: string;
   brand_color: string;
   brand_color_secondary: string | null;
@@ -92,6 +94,11 @@ export default async function PublicListingPage({
   const availability = formatAvailability(l.available_date);
   // Photos come pre-ordered from the RPC (cover first, then sort order).
   const photos = Array.isArray(l.photos) ? l.photos : [];
+
+  // Virtual tour / video (item S). Re-validated here against the host allow-list
+  // so a value that somehow slipped past the write path can never inject an
+  // arbitrary iframe; embeddable hosts get an <iframe>, others a plain link.
+  const tour = virtualTourFor(l.virtual_tour_url);
 
   // Soft, non-binding affordability guideline shown next to the screening
   // income question. Computed from the PUBLIC rent + a generic ~3x rule of
@@ -179,6 +186,38 @@ export default async function PublicListingPage({
         </div>
 
         <PhotoGallery address={l.address} photos={photos} />
+
+        {tour && (
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 px-2 text-sm font-semibold text-gray-700">
+              Virtual tour
+            </h2>
+            {tour.embedUrl ? (
+              <div className="overflow-hidden rounded-xl bg-gray-100">
+                <iframe
+                  src={tour.embedUrl}
+                  title={`Virtual tour of ${l.address}`}
+                  className="aspect-video w-full"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; xr-spatial-tracking; fullscreen; vr"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
+                />
+              </div>
+            ) : (
+              <a
+                href={tour.href}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="mx-2 inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
+                style={{ background: brandBg }}
+              >
+                View the {tour.label}
+              </a>
+            )}
+          </div>
+        )}
 
         {l.description && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">

@@ -253,6 +253,38 @@ ok(
   FILL_SHEET_PORTALS.every((p) => (PORTAL_KEYS as readonly string[]).includes(p)),
 );
 
+// --- virtual tour field (item S) -------------------------------------------
+const WITH_TOUR: FillSheetInput = {
+  ...FULL,
+  virtualTourUrl: "https://youriguide.com/833_pillette/",
+};
+for (const portal of ["kijiji", "rentals_ca", "zumper", "viewit"] as const) {
+  const sheet = buildFillSheet(WITH_TOUR, portal);
+  const tour = sheet.fields.find((f) => f.id.endsWith("-virtual-tour"));
+  ok(`${portal}: tour field present when URL set`, !!tour);
+  ok(`${portal}: tour value is the URL`, tour?.value === "https://youriguide.com/833_pillette/");
+  ok(`${portal}: tour source is listing`, tour?.source === "listing");
+  // tour field sits right after the description field
+  const ids = sheet.fields.map((f) => f.id);
+  const di = ids.findIndex((i) => i.endsWith("-description"));
+  ok(`${portal}: tour follows description`, di >= 0 && ids[di + 1].endsWith("-virtual-tour"));
+}
+// Excluded portals never grow a tour field.
+for (const portal of ["facebook", "realtor_ca"] as const) {
+  const sheet = buildFillSheet(WITH_TOUR, portal);
+  ok(`${portal}: no tour field`, !sheet.fields.some((f) => f.id.endsWith("-virtual-tour")));
+}
+// No tour URL -> tour-less sheet is unchanged.
+for (const portal of FILL_SHEET_PORTALS) {
+  const sheet = buildFillSheet(FULL, portal);
+  ok(`${portal}: no tour field when URL absent`, !sheet.fields.some((f) => f.id.endsWith("-virtual-tour")));
+}
+// An invalid/unsupported URL would have been nulled upstream; a null leaves no field.
+{
+  const sheet = buildFillSheet({ ...FULL, virtualTourUrl: null }, "rentals_ca");
+  ok("null tour -> no field", !sheet.fields.some((f) => f.id.endsWith("-virtual-tour")));
+}
+
 // --- summary ---------------------------------------------------------------
 console.log(`\nlisting-fill-sheet: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
