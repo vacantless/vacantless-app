@@ -43,6 +43,8 @@ import {
   copyPortalLabel,
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
+import { buildAllFillSheets } from "@/lib/listing-fill-sheet";
+import { FillSheetCard } from "./fill-sheet-card";
 import { DropboxFolderImport } from "./dropbox-folder-import";
 import { buildShareReadiness } from "@/lib/share-readiness";
 import {
@@ -256,6 +258,40 @@ export default async function PropertyDetailPage({
   // thin/empty one so the card can nudge the operator into the Description Helper
   // instead of shipping a field-summary ad.
   const descriptionThin = (p.description ?? "").trim().length < 40;
+
+  // Field-by-field "fill sheet" per portal (S262, syndication step 2). Same
+  // listing input as the channel copy (title + body are reused from it), plus
+  // the inquiry contact a couple of portals make you re-enter per listing
+  // (Rentals.ca's Lead Contact). Built server-side; the card is presentational.
+  const fillSheets = buildAllFillSheets({
+    businessName: org?.name ?? null,
+    address: p.address,
+    rentCents: p.rent_cents,
+    beds: p.beds,
+    baths: p.baths,
+    description: p.description,
+    publicUrl: linkIsLive ? publicUrl : null,
+    leadContactEmail: org?.public_contact_email ?? org?.reply_to_email ?? null,
+    leadContactPhone: org?.public_contact_phone ?? null,
+    features: {
+      available_date: p.available_date,
+      sqft: p.sqft,
+      floor: p.floor,
+      parking: p.parking,
+      laundry: p.laundry,
+      air_conditioning: p.air_conditioning,
+      balcony: p.balcony,
+      furnished: p.furnished,
+      pet_friendly: p.pet_friendly,
+      pets_cats: p.pets_cats,
+      pets_dogs: p.pets_dogs,
+      pets_dog_size: p.pets_dog_size,
+      pets_notes: p.pets_notes,
+      heat_included: p.heat_included,
+      hydro_included: p.hydro_included,
+      water_included: p.water_included,
+    },
+  });
 
   // Share-readiness checklist (QA Should-Fix #5): before the operator pastes
   // the public link onto Kijiji/Facebook, surface what's in place and what's
@@ -762,6 +798,11 @@ export default async function PropertyDetailPage({
         {/* Per-portal "before you post" gotcha checklist (S260). Content, not
             automation — the operator still posts by hand. */}
         <BeforeYouPost />
+
+        {/* Per-portal field-by-field fill sheet (S262). The values to paste into
+            each portal's form, resolved from this rental, with the gotcha on
+            each field. Still a reference — nothing is submitted. */}
+        <FillSheetCard sheets={fillSheets} />
 
         {postRows.length === 0 ? (
           <div className="mb-4">
