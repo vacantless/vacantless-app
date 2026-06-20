@@ -1119,12 +1119,26 @@ async function dropboxListSharedTree(
   token: string,
   shareUrl: string,
 ): Promise<DropboxEntry[] | null> {
-  const root = await dropboxListSharedFolder(token, shareUrl, "");
+  // List one level and stamp every entry with a path we KNOW is relative to the
+  // share root, built from the parent's relative path + the entry name. Dropbox's
+  // own path_display is unreliable for a shared link we don't own (it can be the
+  // owner's absolute account path), so we never trust it for descent/download —
+  // we overwrite it with our computed value and use that everywhere downstream.
+  const visit = async (relParent: string): Promise<DropboxEntry[] | null> => {
+    const entries = await dropboxListSharedFolder(token, shareUrl, relParent);
+    if (entries === null) return null;
+    for (const e of entries) {
+      e.path_display = `${relParent}/${e.name}`; // relParent is "" at the root
+    }
+    return entries;
+  };
+
+  const root = await visit("");
   if (root === null) return null;
 
   const all: DropboxEntry[] = [...root];
   let frontier = root
-    .filter((e) => e.tag === "folder" && e.path_display)
+    .filter((e) => e.tag === "folder")
     .map((e) => e.path_display as string);
   let visited = 0;
 
@@ -1138,14 +1152,12 @@ async function dropboxListSharedTree(
     const next: string[] = [];
     for (let i = 0; i < batch.length; i += DROPBOX_WALK_CONCURRENCY) {
       const chunk = batch.slice(i, i + DROPBOX_WALK_CONCURRENCY);
-      const results = await Promise.all(
-        chunk.map((p) => dropboxListSharedFolder(token, shareUrl, p)),
-      );
+      const results = await Promise.all(chunk.map((p) => visit(p)));
       for (const entries of results) {
         if (!entries) continue; // best-effort: skip a folder that errors
         for (const e of entries) {
           all.push(e);
-          if (e.tag === "folder" && e.path_display) next.push(e.path_display);
+          if (e.tag === "folder") next.push(e.path_display as string);
         }
       }
     }
