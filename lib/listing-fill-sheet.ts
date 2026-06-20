@@ -32,7 +32,11 @@ import {
   type ListingCopyInput,
 } from "./listing-copy";
 import { guardrailsForPortal, type Guardrail } from "./listing-guardrails";
-import { formatAvailability, formatSqft } from "./property-features";
+import {
+  buildUtilitiesIncluded,
+  formatAvailability,
+  formatSqft,
+} from "./property-features";
 
 // Where a field's value comes from — drives both the UI affordance and the
 // honesty of the sheet:
@@ -58,6 +62,14 @@ export type FillField = {
   hint?: string;
   /** Ties this field to a guardrailsForPortal() entry so the UI shows the why. */
   guardrailId?: string;
+  /**
+   * Optional wizard-step grouping label (e.g. "Step 1 · Type & location"). Set
+   * only by portals whose posting form is a multi-step wizard (Rentals.ca), so
+   * the UI can group the fields the way the form actually presents them — the
+   * fill-sheet field order is NOT the form's step order (S264 finding #1). Left
+   * undefined by single-page portals; the UI just renders those flat.
+   */
+  step?: string;
 };
 
 export type FillSheet = {
@@ -167,6 +179,63 @@ function textOrNull(s: string | null | undefined): string | null {
   return v || null;
 }
 
+/**
+ * Split a combined address string into the street address and a separate unit /
+ * suite number (S264 finding #2: Rentals.ca has distinct Address + Unit fields,
+ * but our `address` is one string). Recognizes "Unit 808", "Suite 12B",
+ * "Apt 4", "Apartment 4", "Ste 9", and "#808" anywhere in the string, strips
+ * that segment (and its adjoining comma) out of the street value, and tidies the
+ * leftover comma/space artifacts. When no unit token is present the street is
+ * returned unchanged and unit is null (a genuinely unit-less address).
+ */
+export function splitAddressUnit(address: string | null | undefined): {
+  street: string | null;
+  unit: string | null;
+} {
+  const raw = textOrNull(address);
+  if (!raw) return { street: null, unit: null };
+  // Match an optional leading comma/space, then a unit designator, then the
+  // unit token. `unit|suite|ste|apt|apartment` need word boundaries; `#` is
+  // punctuation so it stands alone.
+  const re =
+    /[,\s]*(?:\b(?:unit|suite|ste|apt|apartment)\b\.?|#)\s*([A-Za-z0-9-]+)/i;
+  const m = re.exec(raw);
+  if (!m) return { street: raw, unit: null };
+  const unit = m[1];
+  let street = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim();
+  street = street
+    .replace(/\s*,(?:\s*,)+\s*/g, ", ") // collapse doubled commas
+    .replace(/^\s*,\s*/, "") // strip a leading comma
+    .replace(/\s*,\s*$/, "") // strip a trailing comma
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return { street: street || null, unit };
+}
+
+/**
+ * Strip a leading list marker ("- ", "– ", "— ", "• ", "* ") from each line
+ * (S264 finding #8: the Rentals.ca description editor auto-bullets any line that
+ * starts with a dash, so our sign-off "- Agile Real Estate Group" became a
+ * bullet). Returns null when the result is empty so a body-less unit stays null.
+ */
+export function stripLeadingListMarkers(
+  body: string | null | undefined,
+): string | null {
+  const raw = textOrNull(body);
+  if (!raw) return null;
+  const cleaned = raw
+    .split("\n")
+    .map((line) => line.replace(/^(\s*)(?:[-–—•*])\s+/, "$1"))
+    .join("\n");
+  return textOrNull(cleaned);
+}
+
+/** Utilities-included multi-select value, e.g. "Heat, Water"; null when none set. */
+function utilitiesField(input: FillSheetInput): string | null {
+  const items = buildUtilitiesIncluded(input.features ?? {});
+  return items.length ? items.join(", ") : null;
+}
+
 // --- per-portal field builders ----------------------------------------------
 // Each returns the fields in the order the portal's form presents them. Title +
 // body always come from buildListingCopy (never re-derived here).
@@ -206,7 +275,10 @@ function withVirtualTour(
   if (!tour) return fields;
   const idx = fields.findIndex((f) => f.id.endsWith("-description"));
   if (idx === -1) return [...fields, tour];
-  return [...fields.slice(0, idx + 1), tour, ...fields.slice(idx + 1)];
+  // Inherit the description field's wizard step (if any) so the tour groups with
+  // the description on a stepped portal (Rentals.ca) instead of orphaning.
+  const placed: FillField = { ...tour, step: fields[idx].step };
+  return [...fields.slice(0, idx + 1), placed, ...fields.slice(idx + 1)];
 }
 
 function kijijiFields(input: FillSheetInput, title: string, body: string): FillField[] {
@@ -297,55 +369,136 @@ function kijijiFields(input: FillSheetInput, title: string, body: string): FillF
   ];
 }
 
+// Rentals.ca posting is a 4-step wizard and its step order is NOT the order our
+// other portals list fields in (S264 finding #1). We tag each field with the
+// step it actually lives on so the operator/assist fills them in form order.
+const RENTALSCA_STEP = {
+  location: "Step 1 · Type & location",
+  details: "Step 2 · Property details",
+  floorPlan: "Step 3 · Floor plan, photos & description",
+  plan: "Step 4 · Plan & contact (after the photo gate)",
+} as const;
+
 function rentalsCaFields(input: FillSheetInput, _title: string, body: string): FillField[] {
+  const { street, unit } = splitAddressUnit(input.address);
   return [
+    // --- Step 1: Property Type + Location ---
     {
-      id: "rentalsca-plan",
-      label: "Plan",
-      value: "Limited ($0)",
+      id: "rentalsca-property-type",
+      label: "Property Type",
+      value: "Apartment",
       source: "preset",
-      hint: "Click \"See other pricing options\" → Limited $0; the form defaults to a paid Promoted plan.",
-      guardrailId: "rentalsca-paid-default",
+      step: RENTALSCA_STEP.location,
+      hint: "Required. Pick the type + sub-type that match — change from Apartment for a house, condo, townhouse, etc.",
     },
     {
       id: "rentalsca-address",
       label: "Address",
-      value: textOrNull(input.address),
+      value: street,
       source: "listing",
-      hint: "Pick the Google autocomplete match so it geocodes correctly.",
+      step: RENTALSCA_STEP.location,
+      hint: "Street address only (the unit goes in the separate field below). Pick the Google autocomplete match so it geocodes correctly.",
       guardrailId: "rentalsca-address-autocomplete",
     },
     {
-      id: "rentalsca-price",
-      label: "Price (monthly)",
-      value: formatPriceField(input.rentCents),
+      id: "rentalsca-unit",
+      label: "Unit",
+      value: unit,
       source: "listing",
+      step: RENTALSCA_STEP.location,
+      hint: "The unit / suite number, split out of the address. Verify it — leave blank if the address has no unit.",
     },
+    // --- Step 2: Property Details ---
+    {
+      id: "rentalsca-utilities",
+      label: "Utilities Included",
+      value: utilitiesField(input),
+      source: "listing",
+      step: RENTALSCA_STEP.details,
+      hint: "Required structured multi-select — tick each utility included in rent (Heat / Hydro / Water).",
+    },
+    {
+      id: "rentalsca-lease-term",
+      label: "Lease Term",
+      value: "1 Year",
+      source: "preset",
+      step: RENTALSCA_STEP.details,
+      hint: "Required. The form defaults to 1 Year — change it if your term differs.",
+    },
+    {
+      id: "rentalsca-pets",
+      label: "Pet Friendly?",
+      value: null,
+      source: "manual",
+      step: RENTALSCA_STEP.details,
+      hint: "The form defaults this to Yes — set it to match your actual policy. (Ontario RTA s.14 makes no-pet clauses unenforceable, so don't advertise a hard no-pets rule.)",
+    },
+    // --- Step 3: Floor Plan + Photos + Description ---
     {
       id: "rentalsca-bedrooms",
       label: "Bedrooms",
       value: bedroomsField(input.beds),
       source: "listing",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Under the Floor Plan row — a 0.5-step “+” stepper, not a text box (each click adds 0.5).",
     },
     {
       id: "rentalsca-bathrooms",
       label: "Bathrooms",
       value: bathroomsField(input.baths),
       source: "listing",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Under the Floor Plan row — a 0.5-step “+” stepper, not a text box (each click adds 0.5).",
+    },
+    {
+      id: "rentalsca-price",
+      label: "Price (monthly)",
+      value: formatPriceField(input.rentCents),
+      source: "listing",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Free-text Rent field under the Floor Plan row.",
+    },
+    {
+      id: "rentalsca-size",
+      label: "Size (sq ft)",
+      value: sqftField(input.features?.sqft),
+      source: "listing",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Free-text Unit Size field under the Floor Plan row.",
+    },
+    {
+      id: "rentalsca-photos",
+      label: "Photos",
+      value: null,
+      source: "manual",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Upload at least 2 — Rentals.ca won't let you reach the Plan & contact step (below) until you do.",
     },
     {
       id: "rentalsca-description",
       label: "Description",
-      value: body,
+      value: stripLeadingListMarkers(body),
       source: "listing",
+      step: RENTALSCA_STEP.floorPlan,
       hint: "The editor auto-bullets each line — write flowing sentences, not dashed lines.",
       guardrailId: "rentalsca-description-bullets",
+    },
+    // --- Step 4: Plan & Addons (after the photo gate) ---
+    {
+      id: "rentalsca-plan",
+      label: "Plan",
+      value: "Limited ($0)",
+      source: "preset",
+      step: RENTALSCA_STEP.plan,
+      hint: "Click \"See other pricing options\" → Limited $0; the form defaults to a paid Promoted plan.",
+      guardrailId: "rentalsca-paid-default",
     },
     {
       id: "rentalsca-contact-email",
       label: "Lead Contact — email",
       value: textOrNull(input.leadContactEmail),
       source: "listing",
+      step: RENTALSCA_STEP.plan,
       hint: "The per-listing Lead Contact defaults wrong — set it before publishing.",
       guardrailId: "rentalsca-lead-contact-revert",
     },
@@ -354,6 +507,7 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
       label: "Lead Contact — phone",
       value: textOrNull(input.leadContactPhone),
       source: "listing",
+      step: RENTALSCA_STEP.plan,
       guardrailId: "rentalsca-lead-contact-revert",
     },
     {
@@ -361,6 +515,7 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
       label: "After posting: Enable the listing",
       value: null,
       source: "manual",
+      step: RENTALSCA_STEP.plan,
       hint: "New listings save as Disabled. Open Manage Listings, click Enable, confirm the badge turns green.",
       guardrailId: "rentalsca-disabled-default",
     },

@@ -12,6 +12,8 @@ import {
   bathroomsField,
   sqftField,
   yesNoField,
+  splitAddressUnit,
+  stripLeadingListMarkers,
   type FillSheetInput,
 } from "../lib/listing-fill-sheet";
 import { buildListingCopy } from "../lib/listing-copy";
@@ -68,6 +70,8 @@ const FULL: FillSheetInput = {
     parking: "1 driveway spot",
     furnished: false,
     air_conditioning: true,
+    heat_included: true,
+    water_included: true,
   },
   now: new Date("2026-06-20T12:00:00Z"),
 };
@@ -283,6 +287,151 @@ for (const portal of FILL_SHEET_PORTALS) {
 {
   const sheet = buildFillSheet({ ...FULL, virtualTourUrl: null }, "rentals_ca");
   ok("null tour -> no field", !sheet.fields.some((f) => f.id.endsWith("-virtual-tour")));
+}
+
+// --- splitAddressUnit (S264 finding #2) ------------------------------------
+{
+  const a = splitAddressUnit("123 Spadina Ave, Unit 808, Toronto, Ontario M5V 2K4");
+  ok("split: unit extracted", a.unit === "808");
+  ok(
+    "split: street drops the unit segment + tidies commas",
+    a.street === "123 Spadina Ave, Toronto, Ontario M5V 2K4",
+  );
+}
+ok("split: 'Suite 12B'", splitAddressUnit("5 King St, Suite 12B").unit === "12B");
+ok("split: 'Apt 4'", splitAddressUnit("5 King St Apt 4").unit === "4");
+ok("split: 'Apartment 9'", splitAddressUnit("5 King St, Apartment 9").unit === "9");
+ok("split: '#808'", splitAddressUnit("123 Spadina Ave #808").unit === "808");
+{
+  const a = splitAddressUnit("833 Pillette Road, Windsor, ON");
+  ok("split: no unit -> street unchanged", a.street === "833 Pillette Road, Windsor, ON");
+  ok("split: no unit -> unit null", a.unit === null);
+}
+{
+  const a = splitAddressUnit(null);
+  ok("split: null in -> both null", a.street === null && a.unit === null);
+}
+
+// --- stripLeadingListMarkers (S264 finding #8) -----------------------------
+ok(
+  "strip: leading dash on a line removed",
+  stripLeadingListMarkers("Bright suite.\n- Agile Real Estate Group") ===
+    "Bright suite.\nAgile Real Estate Group",
+);
+ok(
+  "strip: bullet + asterisk markers removed",
+  stripLeadingListMarkers("• one\n* two") === "one\ntwo",
+);
+ok(
+  "strip: a hyphenated word mid-line is untouched",
+  stripLeadingListMarkers("In-suite laundry and A/C") === "In-suite laundry and A/C",
+);
+ok("strip: null in -> null", stripLeadingListMarkers(null) === null);
+
+// --- Rentals.ca fill sheet v2 (S264 findings) ------------------------------
+{
+  const r = buildFillSheet(
+    { ...FULL, address: "123 Spadina Ave, Unit 808, Toronto, Ontario M5V 2K4" },
+    "rentals_ca",
+  );
+  const byId = (id: string) => r.fields.find((f) => f.id === id);
+
+  // address splits into Address (street) + Unit
+  ok(
+    "rentals v2: address field is street only",
+    byId("rentalsca-address")?.value === "123 Spadina Ave, Toronto, Ontario M5V 2K4",
+  );
+  ok("rentals v2: unit field split out", byId("rentalsca-unit")?.value === "808");
+
+  // new required fields
+  ok(
+    "rentals v2: property type preset Apartment",
+    byId("rentalsca-property-type")?.value === "Apartment" &&
+      byId("rentalsca-property-type")?.source === "preset",
+  );
+  ok(
+    "rentals v2: utilities mapped from flags",
+    byId("rentalsca-utilities")?.value === "Heat, Water",
+  );
+  ok(
+    "rentals v2: lease term preset 1 Year",
+    byId("rentalsca-lease-term")?.value === "1 Year" &&
+      byId("rentalsca-lease-term")?.source === "preset",
+  );
+  ok("rentals v2: size field present", byId("rentalsca-size")?.value === "850");
+
+  // pet-friendly verify is a manual flag (form defaults Yes; we never assert pets)
+  ok(
+    "rentals v2: pets is a manual verify field (null value)",
+    byId("rentalsca-pets")?.source === "manual" && byId("rentalsca-pets")?.value === null,
+  );
+
+  // photo gate is a manual field that precedes Plan + Lead Contact
+  ok(
+    "rentals v2: photos is a manual gate field",
+    byId("rentalsca-photos")?.source === "manual" && byId("rentalsca-photos")?.value === null,
+  );
+  const ids = r.fields.map((f) => f.id);
+  ok(
+    "rentals v2: photo gate precedes Plan + Lead Contact",
+    ids.indexOf("rentalsca-photos") < ids.indexOf("rentalsca-plan") &&
+      ids.indexOf("rentalsca-photos") < ids.indexOf("rentalsca-contact-email"),
+  );
+
+  // description has leading dashes stripped (won't auto-bullet)
+  ok(
+    "rentals v2: description dash-stripped",
+    byId("rentalsca-description")?.value ===
+      stripLeadingListMarkers(buildListingCopy(FULL, "rentals_ca").body),
+  );
+  ok(
+    "rentals v2: description still carries the bullet guardrail",
+    byId("rentalsca-description")?.guardrailId === "rentalsca-description-bullets",
+  );
+
+  // every field is tagged with a wizard step, and they appear in step order
+  ok("rentals v2: every field has a step", r.fields.every((f) => !!f.step));
+  const STEP_ORDER = [
+    "Step 1 · Type & location",
+    "Step 2 · Property details",
+    "Step 3 · Floor plan, photos & description",
+    "Step 4 · Plan & contact (after the photo gate)",
+  ];
+  ok(
+    "rentals v2: steps are non-decreasing in field order",
+    (() => {
+      let maxSeen = -1;
+      for (const f of r.fields) {
+        const rank = STEP_ORDER.indexOf(f.step ?? "");
+        if (rank < maxSeen) return false;
+        maxSeen = Math.max(maxSeen, rank);
+      }
+      return true;
+    })(),
+  );
+  ok(
+    "rentals v2: lead contact lives on step 4",
+    byId("rentalsca-contact-email")?.step === "Step 4 · Plan & contact (after the photo gate)",
+  );
+
+  // guardrailIds still all resolve after the rebuild
+  const gids = new Set(guardrailsForPortal("rentals_ca").map((g) => g.id));
+  ok(
+    "rentals v2: all field guardrailIds resolve",
+    r.fields.every((f) => !f.guardrailId || gids.has(f.guardrailId)),
+  );
+}
+
+// --- tour field inherits the description step on Rentals.ca ----------------
+{
+  const r = buildFillSheet(
+    { ...FULL, virtualTourUrl: "https://youriguide.com/833_pillette/" },
+    "rentals_ca",
+  );
+  const desc = r.fields.find((f) => f.id === "rentalsca-description");
+  const tour = r.fields.find((f) => f.id.endsWith("-virtual-tour"));
+  ok("rentals tour: present", !!tour);
+  ok("rentals tour: inherits description step", !!tour?.step && tour?.step === desc?.step);
 }
 
 // --- summary ---------------------------------------------------------------

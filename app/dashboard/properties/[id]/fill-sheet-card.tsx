@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type {
   FillSheet,
   FillField,
@@ -102,15 +102,28 @@ export function FillSheetCard({ sheets }: { sheets: FillSheet[] }) {
           </p>
         ) : (
           <ol className="space-y-2">
-            {sheet.fields.map((f) => (
-              <FillRow
-                key={f.id}
-                field={f}
-                copied={copied === f.id}
-                onCopy={() => f.value != null && copy(f.value, f.id)}
-                why={f.guardrailId ? guardrailById.get(f.guardrailId) : undefined}
-              />
-            ))}
+            {sheet.fields.map((f, i) => {
+              // On stepped portals (Rentals.ca) show a step header whenever the
+              // step changes; flat for single-page portals (step undefined).
+              const showStep = !!f.step && f.step !== sheet.fields[i - 1]?.step;
+              return (
+                <Fragment key={f.id}>
+                  {showStep && (
+                    <li className="list-none px-1 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-gray-500 first:pt-0">
+                      {f.step}
+                    </li>
+                  )}
+                  <FillRow
+                    field={f}
+                    copied={copied === f.id}
+                    onCopy={() => f.value != null && copy(f.value, f.id)}
+                    why={
+                      f.guardrailId ? guardrailById.get(f.guardrailId) : undefined
+                    }
+                  />
+                </Fragment>
+              );
+            })}
           </ol>
         )}
 
