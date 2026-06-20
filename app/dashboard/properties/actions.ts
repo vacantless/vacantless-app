@@ -8,7 +8,13 @@ import { requireCapability } from "@/lib/membership";
 import { PROPERTY_STATUSES } from "@/lib/pipeline";
 import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
-import { normalizeLaundry, normalizeDogSize } from "@/lib/property-features";
+import {
+  normalizeLaundry,
+  normalizeDogSize,
+  normalizeLeaseTerm,
+  normalizeSmoking,
+  normalizeAcType,
+} from "@/lib/property-features";
 import { parseMlsListing } from "@/lib/mls-import";
 import { normalizeVirtualTourUrl } from "@/lib/virtual-tour";
 import {
@@ -75,6 +81,18 @@ function parseFloatOrNull(raw: string): number | null {
 /** A checkbox is present in FormData (value "on") only when checked. */
 function parseCheckbox(formData: FormData, name: string): boolean {
   return formData.get(name) != null;
+}
+
+/**
+ * A tri-state select: "true" -> true, "false" -> false, anything else (incl.
+ * the empty "Inherit" option) -> null. Used by the standard-policy override
+ * fields (0048) where null UNAMBIGUOUSLY means "inherit the org profile".
+ */
+function parseTriStateBool(formData: FormData, name: string): boolean | null {
+  const raw = String(formData.get(name) ?? "").trim();
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  return null;
 }
 
 /** Normalize an HTML date input ("YYYY-MM-DD") to a value or null. */
@@ -263,6 +281,11 @@ export async function updateProperty(formData: FormData) {
       hydro_included: parseCheckbox(formData, "hydro_included"),
       water_included: parseCheckbox(formData, "water_included"),
       photos_ready: parseCheckbox(formData, "photos_ready"),
+      // Standard-policy per-unit overrides (0048); null = inherit org profile.
+      lease_term: normalizeLeaseTerm(formData.get("lease_term")),
+      smoking: normalizeSmoking(formData.get("smoking")),
+      ac_type: normalizeAcType(formData.get("ac_type")),
+      on_site_management: parseTriStateBool(formData, "on_site_management"),
     })
     .eq("id", id);
 
@@ -299,7 +322,7 @@ export async function duplicateProperty(formData: FormData) {
   const { data: source } = await supabase
     .from("properties")
     .select(
-      "address, rent_cents, beds, baths, parking, description, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
+      "address, rent_cents, beds, baths, parking, description, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management",
     )
     .eq("id", id)
     .maybeSingle();
@@ -329,6 +352,10 @@ export async function duplicateProperty(formData: FormData) {
     hydro_included: boolean;
     water_included: boolean;
     photos_ready: boolean;
+    lease_term: string | null;
+    smoking: string | null;
+    ac_type: string | null;
+    on_site_management: boolean | null;
   };
 
   const { data: inserted } = await supabase
@@ -358,6 +385,12 @@ export async function duplicateProperty(formData: FormData) {
       heat_included: s.heat_included,
       hydro_included: s.hydro_included,
       water_included: s.water_included,
+      // Carry the per-unit policy overrides too — a duplicate is almost always a
+      // same-building unit, so its standard-policy exceptions (if any) match.
+      lease_term: s.lease_term,
+      smoking: s.smoking,
+      ac_type: s.ac_type,
+      on_site_management: s.on_site_management,
       // photos_ready is reconciled below once we know how many photos copied.
       photos_ready: false,
     })

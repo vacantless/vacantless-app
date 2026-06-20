@@ -70,6 +70,106 @@ export function dogSizeLabel(value: unknown): string | null {
   return isDogSize(value) ? DOG_SIZE_LABELS[value] : null;
 }
 
+// --- Standard-policy fields (migration 0048) -------------------------------
+// Building-constant policy attributes that live on the org-level profile and
+// are inherited by every unit unless the unit overrides them. The VALUE vocab +
+// labels live here (the base module); the profile merge lives in
+// lib/policy-profile (resolveEffectiveFeatures). All renter-facing.
+
+export const AC_TYPE_OPTIONS = [
+  "none",
+  "window",
+  "portable",
+  "sleeve",
+  "central",
+] as const;
+export type AcType = (typeof AC_TYPE_OPTIONS)[number];
+
+export function isAcType(value: unknown): value is AcType {
+  return (
+    typeof value === "string" &&
+    (AC_TYPE_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+export function normalizeAcType(raw: unknown): AcType | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return isAcType(v) ? v : null;
+}
+
+// Renter-facing A/C-type label (operator settings use these too). "none" → null
+// (no A/C to advertise). The descriptor is parenthetical so buildAmenityChips
+// can render "Air conditioning (wall/sleeve)".
+const AC_TYPE_LABELS: Record<AcType, string | null> = {
+  none: null,
+  window: "window",
+  portable: "portable",
+  sleeve: "wall/sleeve",
+  central: "central air",
+};
+
+export function acTypeLabel(value: unknown): string | null {
+  return isAcType(value) ? AC_TYPE_LABELS[value] : null;
+}
+
+export const SMOKING_OPTIONS = ["non_smoking", "smoking_permitted"] as const;
+export type Smoking = (typeof SMOKING_OPTIONS)[number];
+
+export function isSmoking(value: unknown): value is Smoking {
+  return (
+    typeof value === "string" &&
+    (SMOKING_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+export function normalizeSmoking(raw: unknown): Smoking | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return isSmoking(v) ? v : null;
+}
+
+const SMOKING_LABELS: Record<Smoking, string> = {
+  non_smoking: "Non-smoking",
+  smoking_permitted: "Smoking permitted",
+};
+
+export function smokingLabel(value: unknown): string | null {
+  return isSmoking(value) ? SMOKING_LABELS[value] : null;
+}
+
+export const LEASE_TERM_OPTIONS = [
+  "month_to_month",
+  "6_month",
+  "1_year",
+  "2_year",
+] as const;
+export type LeaseTerm = (typeof LEASE_TERM_OPTIONS)[number];
+
+export function isLeaseTerm(value: unknown): value is LeaseTerm {
+  return (
+    typeof value === "string" &&
+    (LEASE_TERM_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+export function normalizeLeaseTerm(raw: unknown): LeaseTerm | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return isLeaseTerm(v) ? v : null;
+}
+
+const LEASE_TERM_LABELS: Record<LeaseTerm, string> = {
+  month_to_month: "Month-to-month",
+  "6_month": "6-month lease",
+  "1_year": "1-year lease",
+  "2_year": "2-year lease",
+};
+
+export function leaseTermLabel(value: unknown): string | null {
+  return isLeaseTerm(value) ? LEASE_TERM_LABELS[value] : null;
+}
+
 /**
  * The renter-facing unit fields. All optional/nullable so a partially-filled
  * property still renders cleanly.
@@ -92,6 +192,14 @@ export type UnitFeatures = {
   heat_included?: boolean | null;
   hydro_included?: boolean | null;
   water_included?: boolean | null;
+  // Standard-policy fields (0048). On a UnitFeatures these are the RESOLVED
+  // EFFECTIVE values (unit override ?? org profile default), produced by
+  // lib/policy-profile resolveEffectiveFeatures. The bare air_conditioning
+  // boolean above stays the back-compat A/C fallback when ac_type is null.
+  ac_type?: AcType | string | null;
+  smoking?: Smoking | string | null;
+  lease_term?: LeaseTerm | string | null;
+  on_site_management?: boolean | null;
 };
 
 // --- Availability -----------------------------------------------------------
@@ -208,16 +316,37 @@ export function petPolicyLabel(f: UnitFeatures): string | null {
 }
 
 /**
+ * The A/C amenity chip, A/C-type-aware. When an effective ac_type is set it
+ * wins ("Air conditioning (wall/sleeve)"); ac_type "none" means no A/C even if
+ * the legacy boolean is on; otherwise the bare air_conditioning boolean is the
+ * back-compat fallback. Null = no A/C to advertise. This is the one place the
+ * "ac_type beats the boolean" rule lives (the Unit 20 fix, S273).
+ */
+export function acAmenityLabel(f: UnitFeatures): string | null {
+  if (isAcType(f.ac_type)) {
+    if (f.ac_type === "none") return null;
+    const desc = acTypeLabel(f.ac_type);
+    return desc ? `Air conditioning (${desc})` : "Air conditioning";
+  }
+  return f.air_conditioning ? "Air conditioning" : null;
+}
+
+/**
  * Boolean amenities + laundry as a chip list (only the present ones).
  * Order is stable for predictable rendering + tests.
  */
 export function buildAmenityChips(f: UnitFeatures): string[] {
   const chips: string[] = [];
-  if (f.air_conditioning) chips.push("Air conditioning");
+  const ac = acAmenityLabel(f);
+  if (ac) chips.push(ac);
   if (f.balcony) chips.push("Balcony");
   const laundry = laundryLabel(f.laundry);
   if (laundry && f.laundry !== "none") chips.push(laundry);
   if (f.furnished) chips.push("Furnished");
+  // Non-smoking is a genuine selling point; "smoking permitted" is not surfaced
+  // as an amenity (absence is the norm, advertising it adds no value).
+  if (f.smoking === "non_smoking") chips.push("Non-smoking");
+  if (f.on_site_management) chips.push("On-site management");
   const pets = petPolicyLabel(f);
   if (pets) chips.push(pets);
   return chips;

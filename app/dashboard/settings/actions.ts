@@ -12,6 +12,7 @@ import {
 import { validateTestRecipient } from "@/lib/test-email";
 import { validateScreeningSettings } from "@/lib/screening";
 import { validatePublicContact } from "@/lib/public-contact";
+import { validatePolicyProfileSettings } from "@/lib/policy-profile";
 import { sendTestEmail } from "@/lib/email";
 import {
   validateLogoUpload,
@@ -119,6 +120,33 @@ export async function updatePublicContact(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=brand&feed=saved");
+}
+
+// Tab 1 — Public Page & Brand: building STANDARD POLICY profile (0048). The
+// org-level defaults (lease term / smoking / A/C type / on-site management)
+// every unit inherits unless it overrides them. Set once here; the per-unit
+// property form shows the inherited value with an "override for this unit"
+// affordance.
+export async function updatePolicyProfile(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const result = validatePolicyProfileSettings({
+    lease_term: String(formData.get("policy_lease_term") ?? ""),
+    smoking: String(formData.get("policy_smoking") ?? ""),
+    ac_type: String(formData.get("policy_ac_type") ?? ""),
+    on_site_management: String(formData.get("policy_on_site_management") ?? ""),
+  });
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update(result.values)
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=brand&policy=error");
+  }
+
+  redirect("/dashboard/settings?tab=brand&policy=saved");
 }
 
 // Tab 2 / Email sender — reply-to address renter emails are delivered to.

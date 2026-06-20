@@ -18,6 +18,19 @@ import {
   dogSizeLabel,
   derivePetFriendly,
   petPolicyLabel,
+  AC_TYPE_OPTIONS,
+  isAcType,
+  normalizeAcType,
+  acTypeLabel,
+  acAmenityLabel,
+  SMOKING_OPTIONS,
+  isSmoking,
+  normalizeSmoking,
+  smokingLabel,
+  LEASE_TERM_OPTIONS,
+  isLeaseTerm,
+  normalizeLeaseTerm,
+  leaseTermLabel,
 } from "../lib/property-features";
 
 let passed = 0;
@@ -229,6 +242,69 @@ ok("hasAnyFeature: blank floor -> false", !hasAnyFeature({ floor: "  " }));
 ok(
   "hasAnyFeature: available_date alone -> false (shown separately)",
   !hasAnyFeature({ available_date: "2026-07-01" }),
+);
+
+// --- standard-policy field vocab (0048) ------------------------------------
+ok("AC_TYPE_OPTIONS has 5", AC_TYPE_OPTIONS.length === 5);
+ok("isAcType: sleeve", isAcType("sleeve"));
+ok("isAcType: rejects junk", !isAcType("swamp"));
+ok("normalizeAcType: trims", normalizeAcType(" central ") === "central");
+ok("normalizeAcType: junk -> null", normalizeAcType("nope") === null);
+ok("acTypeLabel: sleeve -> wall/sleeve", acTypeLabel("sleeve") === "wall/sleeve");
+ok("acTypeLabel: central -> central air", acTypeLabel("central") === "central air");
+ok("acTypeLabel: none -> null", acTypeLabel("none") === null);
+
+ok("SMOKING_OPTIONS has 2", SMOKING_OPTIONS.length === 2);
+ok("isSmoking: non_smoking", isSmoking("non_smoking"));
+ok("isSmoking: rejects junk", !isSmoking("vaping"));
+ok("normalizeSmoking: trims", normalizeSmoking(" smoking_permitted ") === "smoking_permitted");
+ok("smokingLabel: non_smoking", smokingLabel("non_smoking") === "Non-smoking");
+ok("smokingLabel: junk -> null", smokingLabel("x") === null);
+
+ok("LEASE_TERM_OPTIONS has 4", LEASE_TERM_OPTIONS.length === 4);
+ok("isLeaseTerm: 1_year", isLeaseTerm("1_year"));
+ok("isLeaseTerm: rejects junk", !isLeaseTerm("3_year"));
+ok("normalizeLeaseTerm: trims", normalizeLeaseTerm(" month_to_month ") === "month_to_month");
+ok("leaseTermLabel: 1_year", leaseTermLabel("1_year") === "1-year lease");
+ok("leaseTermLabel: month_to_month", leaseTermLabel("month_to_month") === "Month-to-month");
+
+// --- acAmenityLabel (the ac_type-beats-boolean rule, Unit 20 fix) ----------
+ok("ac: ac_type wins -> sleeve label", acAmenityLabel({ ac_type: "sleeve" }) === "Air conditioning (wall/sleeve)");
+ok("ac: ac_type central", acAmenityLabel({ ac_type: "central" }) === "Air conditioning (central air)");
+ok("ac: ac_type none -> null even if boolean true", acAmenityLabel({ ac_type: "none", air_conditioning: true }) === null);
+ok("ac: no ac_type, boolean true -> plain label", acAmenityLabel({ air_conditioning: true }) === "Air conditioning");
+ok("ac: no ac_type, boolean false -> null", acAmenityLabel({ air_conditioning: false }) === null);
+ok("ac: nothing -> null", acAmenityLabel({}) === null);
+
+// --- amenity chips with policy fields --------------------------------------
+ok(
+  "chips: A/C type + non-smoking + on-site in order",
+  JSON.stringify(
+    buildAmenityChips({
+      ac_type: "sleeve",
+      balcony: true,
+      furnished: true,
+      smoking: "non_smoking",
+      on_site_management: true,
+      pets_cats: true,
+    }),
+  ) ===
+    JSON.stringify([
+      "Air conditioning (wall/sleeve)",
+      "Balcony",
+      "Furnished",
+      "Non-smoking",
+      "On-site management",
+      "Cats welcome",
+    ]),
+);
+ok(
+  "chips: smoking_permitted is NOT a chip",
+  buildAmenityChips({ smoking: "smoking_permitted" }).length === 0,
+);
+ok(
+  "chips: ac_type none suppresses A/C even with boolean",
+  buildAmenityChips({ ac_type: "none", air_conditioning: true }).length === 0,
 );
 
 // ---------------------------------------------------------------------------

@@ -762,6 +762,76 @@ ok("strip: null in -> null", stripLeadingListMarkers(null) === null);
   );
 }
 
+// --- standard-policy profile inheritance (0048, S273) ----------------------
+{
+  // A unit that inherits the building lease term + sleeve A/C from the profile.
+  const input: FillSheetInput = {
+    address: "833 Pillette Rd, Unit 27",
+    rentCents: 125000,
+    beds: 1,
+    baths: 1,
+    features: {
+      lease_term: "month_to_month", // effective (resolved upstream)
+      ac_type: "sleeve",
+      smoking: "non_smoking",
+      on_site_management: true,
+    },
+    inheritedPolicyFields: ["lease_term", "ac_type", "smoking", "on_site_management"],
+  };
+  const rentals = buildFillSheet(input, "rentals_ca");
+  const zumper = buildFillSheet(input, "zumper");
+  const rId = (id: string) => rentals.fields.find((f) => f.id === id);
+  const zId = (id: string) => zumper.fields.find((f) => f.id === id);
+
+  ok(
+    "policy: rentalsca lease-term uses effective term + provenance note",
+    rId("rentalsca-lease-term")?.value === "Month-to-month" &&
+      rId("rentalsca-lease-term")?.source === "preset" &&
+      (rId("rentalsca-lease-term")?.hint ?? "").includes("building standard policy"),
+  );
+  ok(
+    "policy: zumper lease-length uses effective term",
+    zId("zumper-lease-length")?.value === "Month-to-month",
+  );
+  ok(
+    "policy: rentalsca unit features ticks A/C from ac_type (no boolean set)",
+    (rId("rentalsca-unit-features")?.value ?? "").includes("Air Conditioning"),
+  );
+  ok(
+    "policy: rentalsca building features includes On-Site Management",
+    (rId("rentalsca-building-features")?.value ?? "").includes("On-Site Management"),
+  );
+}
+{
+  // A unit that OVERRIDES the lease term (not inherited) -> source listing, no note.
+  const input: FillSheetInput = {
+    address: "1 King St, Unit 2",
+    rentCents: 200000,
+    beds: 2,
+    baths: 1,
+    features: { lease_term: "2_year" },
+    inheritedPolicyFields: [], // unit-set, not inherited
+  };
+  const z = buildFillSheet(input, "zumper").fields.find((f) => f.id === "zumper-lease-length");
+  ok(
+    "policy: unit-set lease term -> listing source, no provenance note",
+    z?.value === "2-year lease" && z?.source === "listing" && !(z?.hint ?? "").includes("building standard policy"),
+  );
+}
+{
+  // No policy at all -> falls back to the long-standing "1 Year" preset.
+  const z = buildFillSheet(
+    {
+      address: "9 Bay St",
+      rentCents: 150000,
+      beds: 1,
+      baths: 1,
+    },
+    "zumper",
+  ).fields.find((f) => f.id === "zumper-lease-length");
+  ok("policy: no lease term -> 1 Year preset fallback", z?.value === "1 Year" && z?.source === "preset");
+}
+
 // --- summary ---------------------------------------------------------------
 console.log(`\nlisting-fill-sheet: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

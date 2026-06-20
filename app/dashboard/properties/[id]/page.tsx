@@ -65,7 +65,17 @@ import {
   laundryLabel,
   DOG_SIZE_OPTIONS,
   dogSizeLabel,
+  AC_TYPE_OPTIONS,
+  acTypeLabel,
+  SMOKING_OPTIONS,
+  smokingLabel,
+  LEASE_TERM_OPTIONS,
+  leaseTermLabel,
 } from "@/lib/property-features";
+import {
+  resolveEffectiveFeatures,
+  type PolicyProfile,
+} from "@/lib/policy-profile";
 import {
   PORTALS,
   LISTING_POST_STATUSES,
@@ -107,6 +117,11 @@ type Property = {
   hydro_included: boolean;
   water_included: boolean;
   photos_ready: boolean;
+  // Standard-policy per-unit overrides (0048); null = inherit org profile.
+  lease_term: string | null;
+  smoking: string | null;
+  ac_type: string | null;
+  on_site_management: boolean | null;
 };
 
 type LeadRow = {
@@ -159,7 +174,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready",
+      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -219,6 +234,49 @@ export default async function PropertyDetailPage({
   // never embeds a URL that 404s; the copy falls back to "Contact us to book a
   // viewing." until the rental goes Live.
   const org = await getCurrentOrg();
+
+  // Standard-policy profile (0048): merge the org-level building defaults UNDER
+  // this unit's own values so the listing copy + per-portal fill sheets inherit
+  // lease term / smoking / A/C type / on-site management without re-keying. The
+  // public /r page + syndication feed apply the SAME merge server-side in
+  // get_public_listing / get_org_listing_feed. `inheritedPolicy` records which
+  // fields came from the profile (vs the unit) so the fill sheet labels them.
+  const policyProfile: PolicyProfile | null = org
+    ? {
+        lease_term: org.policy_lease_term,
+        smoking: org.policy_smoking,
+        ac_type: org.policy_ac_type,
+        on_site_management: org.policy_on_site_management,
+      }
+    : null;
+  const { features: effectiveFeatures, inherited: inheritedPolicy } =
+    resolveEffectiveFeatures(
+      {
+        available_date: p.available_date,
+        sqft: p.sqft,
+        floor: p.floor,
+        parking: p.parking,
+        laundry: p.laundry,
+        air_conditioning: p.air_conditioning,
+        balcony: p.balcony,
+        furnished: p.furnished,
+        pet_friendly: p.pet_friendly,
+        pets_cats: p.pets_cats,
+        pets_dogs: p.pets_dogs,
+        pets_dog_size: p.pets_dog_size,
+        pets_notes: p.pets_notes,
+        heat_included: p.heat_included,
+        hydro_included: p.hydro_included,
+        water_included: p.water_included,
+        lease_term: p.lease_term,
+        smoking: p.smoking,
+        ac_type: p.ac_type,
+        on_site_management: p.on_site_management,
+      },
+      policyProfile,
+    );
+  const inheritedPolicyFields = [...inheritedPolicy];
+
   // The per-rental photo allowance is plan-scoped (Premium gets more); the
   // upsell note drives the soft "more room on a higher plan" badge.
   const photoCap = photoCapForPlan(org?.plan ?? null);
@@ -232,24 +290,7 @@ export default async function PropertyDetailPage({
     baths: p.baths,
     description: p.description,
     publicUrl: linkIsLive ? publicUrl : null,
-    features: {
-      available_date: p.available_date,
-      sqft: p.sqft,
-      floor: p.floor,
-      parking: p.parking,
-      laundry: p.laundry,
-      air_conditioning: p.air_conditioning,
-      balcony: p.balcony,
-      furnished: p.furnished,
-      pet_friendly: p.pet_friendly,
-      pets_cats: p.pets_cats,
-      pets_dogs: p.pets_dogs,
-      pets_dog_size: p.pets_dog_size,
-      pets_notes: p.pets_notes,
-      heat_included: p.heat_included,
-      hydro_included: p.hydro_included,
-      water_included: p.water_included,
-    },
+    features: effectiveFeatures,
   }).map((c) => ({
     key: c.portal,
     label: copyPortalLabel(c.portal),
@@ -276,24 +317,8 @@ export default async function PropertyDetailPage({
     leadContactEmail: org?.public_contact_email ?? org?.reply_to_email ?? null,
     leadContactPhone: org?.public_contact_phone ?? null,
     virtualTourUrl: p.virtual_tour_url,
-    features: {
-      available_date: p.available_date,
-      sqft: p.sqft,
-      floor: p.floor,
-      parking: p.parking,
-      laundry: p.laundry,
-      air_conditioning: p.air_conditioning,
-      balcony: p.balcony,
-      furnished: p.furnished,
-      pet_friendly: p.pet_friendly,
-      pets_cats: p.pets_cats,
-      pets_dogs: p.pets_dogs,
-      pets_dog_size: p.pets_dog_size,
-      pets_notes: p.pets_notes,
-      heat_included: p.heat_included,
-      hydro_included: p.hydro_included,
-      water_included: p.water_included,
-    },
+    features: effectiveFeatures,
+    inheritedPolicyFields,
   });
 
   // Share-readiness checklist (QA Should-Fix #5): before the operator pastes
@@ -1446,6 +1471,116 @@ export default async function PropertyDetailPage({
                 {label}
               </label>
             ))}
+          </div>
+        </fieldset>
+
+        {/* --- Standard policy (0048) — inherited from the building profile --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Standard policy
+          </legend>
+          <p className="mb-3 text-xs text-gray-400">
+            These default to your building&apos;s standard policy (set in{" "}
+            <Link
+              href="/dashboard/settings?tab=brand"
+              className="underline hover:text-gray-600"
+            >
+              Settings
+            </Link>
+            ) and inherit automatically. Only change one here if THIS unit differs.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                Lease term
+              </span>
+              <select
+                name="lease_term"
+                defaultValue={p.lease_term ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit ({leaseTermLabel(org?.policy_lease_term) ?? "1-year lease"})
+                </option>
+                {LEASE_TERM_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {leaseTermLabel(opt)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                Air conditioning
+              </span>
+              <select
+                name="ac_type"
+                defaultValue={p.ac_type ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit (
+                  {acTypeLabel(org?.policy_ac_type)
+                    ? acTypeLabel(org?.policy_ac_type)
+                    : org?.policy_ac_type === "none"
+                      ? "no A/C"
+                      : "not set"}
+                  )
+                </option>
+                {AC_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt === "none" ? "No air conditioning" : `A/C: ${acTypeLabel(opt)}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                Smoking
+              </span>
+              <select
+                name="smoking"
+                defaultValue={p.smoking ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit ({smokingLabel(org?.policy_smoking) ?? "not set"})
+                </option>
+                {SMOKING_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {smokingLabel(opt)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                On-site management
+              </span>
+              <select
+                name="on_site_management"
+                defaultValue={
+                  p.on_site_management == null
+                    ? ""
+                    : p.on_site_management
+                      ? "true"
+                      : "false"
+                }
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit (
+                  {org?.policy_on_site_management == null
+                    ? "not set"
+                    : org.policy_on_site_management
+                      ? "Yes"
+                      : "No"}
+                  )
+                </option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </label>
           </div>
         </fieldset>
 

@@ -37,6 +37,8 @@ import {
   formatAvailability,
   formatSqft,
   petPolicyLabel,
+  acAmenityLabel,
+  leaseTermLabel,
 } from "./property-features";
 
 // Where a field's value comes from — drives both the UI affordance and the
@@ -92,7 +94,22 @@ export type FillSheetInput = ListingCopyInput & {
   leadContactEmail?: string | null;
   leadContactPhone?: string | null;
   virtualTourUrl?: string | null;
+  // Standard-policy fields (0048) that were INHERITED from the org building
+  // profile rather than set on the unit, so the sheet can label provenance
+  // ("from your building standard policy"). `features` already carries the
+  // RESOLVED effective values; this just records which ones came from the
+  // profile. Names match the policy field keys (lease_term / smoking / ac_type
+  // / on_site_management).
+  inheritedPolicyFields?: readonly string[];
 };
+
+/** True when a policy field's effective value was inherited from the profile. */
+function policyInherited(input: FillSheetInput, field: string): boolean {
+  return (input.inheritedPolicyFields ?? []).includes(field);
+}
+
+const POLICY_PROVENANCE_NOTE =
+  " Pulled from your building standard policy — change it if this unit differs.";
 
 // Portals whose posting form has a virtual-tour / video LINK field (item S). We
 // only surface the tour field for these, and only when the unit actually has a
@@ -270,7 +287,10 @@ function utilitiesField(input: FillSheetInput): string | null {
 function unitFeaturesHint(input: FillSheetInput): string | null {
   const f = input.features ?? {};
   const out: string[] = [];
-  if (f.air_conditioning) out.push("Air Conditioning");
+  // A/C presence is now ac_type-aware (acAmenityLabel resolves type-beats-boolean
+  // and treats ac_type "none" as no A/C). The portal option is still the plain
+  // "Air Conditioning" tick; the type rides along in the field hint.
+  if (acAmenityLabel(f)) out.push("Air Conditioning");
   if (f.balcony) out.push("Balcony");
   if (f.furnished) out.push("Furnished");
   if (f.laundry === "in_suite") out.push("In-Suite Laundry");
@@ -288,7 +308,29 @@ function buildingFeaturesHint(input: FillSheetInput): string | null {
   if (f.laundry === "in_building" || f.laundry === "shared") {
     out.push("Laundry Facilities");
   }
+  if (f.on_site_management) out.push("On-Site Management");
   return out.length ? out.join(", ") : null;
+}
+
+/**
+ * The Lease Term field value + provenance, shared by the portals that take a
+ * lease term (Rentals.ca, Zumper). Reads the EFFECTIVE lease_term (unit override
+ * or inherited org-profile default); falls back to the long-standing "1 Year"
+ * preset when neither is set. Marks it inherited so the hint can say so.
+ */
+function leaseTermField(
+  input: FillSheetInput,
+): { value: string; source: FillFieldSource; note: string } {
+  const label = leaseTermLabel(input.features?.lease_term);
+  if (!label) {
+    return { value: "1 Year", source: "preset", note: "" };
+  }
+  const inherited = policyInherited(input, "lease_term");
+  return {
+    value: label,
+    source: inherited ? "preset" : "listing",
+    note: inherited ? POLICY_PROVENANCE_NOTE : "",
+  };
 }
 
 // --- per-portal field builders ----------------------------------------------
@@ -478,10 +520,12 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
     {
       id: "rentalsca-lease-term",
       label: "Lease Term",
-      value: "1 Year",
-      source: "preset",
+      value: leaseTermField(input).value,
+      source: leaseTermField(input).source,
       step: RENTALSCA_STEP.details,
-      hint: "Required. The form defaults to 1 Year — change it if your term differs.",
+      hint:
+        "Required. The form defaults to 1 Year — change it if your term differs." +
+        leaseTermField(input).note,
     },
     {
       id: "rentalsca-pets",
@@ -788,10 +832,12 @@ function zumperFields(input: FillSheetInput, _title: string, body: string): Fill
     {
       id: "zumper-lease-length",
       label: "Lease length",
-      value: "1 Year",
-      source: "preset",
+      value: leaseTermField(input).value,
+      source: leaseTermField(input).source,
       step: ZUMPER_STEP.pricing,
-      hint: "In the Lease details sub-step — defaults shown as 1 Year; change it if your term differs (e.g. month-to-month).",
+      hint:
+        "In the Lease details sub-step — defaults shown as 1 Year; change it if your term differs (e.g. month-to-month)." +
+        leaseTermField(input).note,
     },
     // --- Step 4: Media ---
     {

@@ -13,6 +13,7 @@ import {
   updateBrandIdentity,
   updateScreening,
   updatePublicContact,
+  updatePolicyProfile,
   updateEmailSender,
   updateRenterMessages,
   updateTextMessages,
@@ -30,6 +31,14 @@ import { logoUploadErrorMessage } from "@/lib/logo";
 import BrandColorField from "@/components/brand-color-field";
 import { RenterPagePreview } from "@/components/renter-page-preview";
 import { SettingsTabs, type SettingsTab } from "@/components/settings-tabs";
+import {
+  LEASE_TERM_OPTIONS,
+  leaseTermLabel,
+  SMOKING_OPTIONS,
+  smokingLabel,
+  AC_TYPE_OPTIONS,
+  acTypeLabel,
+} from "@/lib/property-features";
 import { PageHeader, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import RotessaSettingsCard, {
@@ -105,6 +114,7 @@ export default async function SettingsPage({
     cn?: string; // post-submit nonce that remounts the clause forms (reset)
     screening?: string; // Public Page & Brand → screening flash
     feed?: string; // Public Page & Brand → syndication contact flash
+    policy?: string; // Public Page & Brand → standard policy flash
   };
 }) {
   const org = await getCurrentOrg();
@@ -937,6 +947,121 @@ export default async function SettingsPage({
 
             <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
               Save pre-screening
+            </button>
+          </form>
+
+          {/* --- Building standard policy (0048) --- */}
+          <form
+            action={updatePolicyProfile}
+            className="rounded-2xl border border-gray-200 bg-white p-5"
+          >
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Building standard policy
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Set your building&apos;s standard policy once. Every unit inherits
+              these on its listings, copy, and syndication feed — so you only
+              re-enter a value on a unit that genuinely differs. (You can override
+              any of these per unit on the unit&apos;s own page.)
+            </p>
+
+            {searchParams.policy === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Standard policy saved.
+              </div>
+            )}
+            {searchParams.policy === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving these settings. Please try again.
+              </div>
+            )}
+
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Standard lease term
+                </span>
+                <select
+                  name="policy_lease_term"
+                  defaultValue={org.policy_lease_term ?? "1_year"}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  {LEASE_TERM_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {leaseTermLabel(opt)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Air conditioning
+                </span>
+                <select
+                  name="policy_ac_type"
+                  defaultValue={org.policy_ac_type ?? ""}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">Not set</option>
+                  {AC_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt === "none"
+                        ? "No air conditioning"
+                        : `A/C: ${acTypeLabel(opt)}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Smoking
+                </span>
+                <select
+                  name="policy_smoking"
+                  defaultValue={org.policy_smoking ?? ""}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">Not set</option>
+                  {SMOKING_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {smokingLabel(opt)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  On-site management
+                </span>
+                <select
+                  name="policy_on_site_management"
+                  defaultValue={
+                    org.policy_on_site_management == null
+                      ? ""
+                      : org.policy_on_site_management
+                        ? "true"
+                        : "false"
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">Not set</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="mt-5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              Pet policy and included utilities stay on each unit for now — those
+              vary more per suite. This profile covers the building-constant
+              fields that were otherwise re-typed for every unit and portal.
+            </p>
+
+            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+              Save standard policy
             </button>
           </form>
         </div>
