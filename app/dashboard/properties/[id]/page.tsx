@@ -24,6 +24,7 @@ import {
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { DescriptionGuide } from "@/components/description-guide";
+import { BeforeYouPost } from "@/components/before-you-post";
 import {
   updateProperty,
   duplicateProperty,
@@ -757,6 +758,10 @@ export default async function PropertyDetailPage({
           inquiry through it is tagged with the channel it came from, so your
           reports show what&apos;s actually working.
         </p>
+
+        {/* Per-portal "before you post" gotcha checklist (S260). Content, not
+            automation — the operator still posts by hand. */}
+        <BeforeYouPost />
 
         {postRows.length === 0 ? (
           <div className="mb-4">
