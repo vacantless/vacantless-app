@@ -236,6 +236,37 @@ function utilitiesField(input: FillSheetInput): string | null {
   return items.length ? items.join(", ") : null;
 }
 
+/**
+ * Rentals.ca "Unit Features" amenity hint (S267/KI425 finding C): the unit-level
+ * amenities we can map from THIS unit's flags, for the operator to tick in the
+ * Unit Features multi-select. Only what we genuinely track — flooring/appliances
+ * aren't in our schema, so the field's hint asks for those by hand (never
+ * invent). null when nothing maps.
+ */
+function unitFeaturesHint(input: FillSheetInput): string | null {
+  const f = input.features ?? {};
+  const out: string[] = [];
+  if (f.air_conditioning) out.push("Air Conditioning");
+  if (f.balcony) out.push("Balcony");
+  if (f.furnished) out.push("Furnished");
+  if (f.laundry === "in_suite") out.push("In-Suite Laundry");
+  return out.length ? out.join(", ") : null;
+}
+
+/**
+ * Rentals.ca "Building Features" amenity hint (S267/KI425 finding C): the
+ * building-level amenities we can map (shared/in-building laundry). null when
+ * nothing maps.
+ */
+function buildingFeaturesHint(input: FillSheetInput): string | null {
+  const f = input.features ?? {};
+  const out: string[] = [];
+  if (f.laundry === "in_building" || f.laundry === "shared") {
+    out.push("Laundry Facilities");
+  }
+  return out.length ? out.join(", ") : null;
+}
+
 // --- per-portal field builders ----------------------------------------------
 // Each returns the fields in the order the portal's form presents them. Title +
 // body always come from buildListingCopy (never re-derived here).
@@ -375,12 +406,15 @@ function kijijiFields(input: FillSheetInput, title: string, body: string): FillF
 const RENTALSCA_STEP = {
   location: "Step 1 · Type & location",
   details: "Step 2 · Property details",
-  floorPlan: "Step 3 · Floor plan, photos & description",
-  plan: "Step 4 · Plan & contact (after the photo gate)",
+  floorPlan: "Step 3 · Floor plan, features, photos & contact",
+  plan: "Step 4 · Plan & add-ons (after the photo gate)",
 } as const;
 
 function rentalsCaFields(input: FillSheetInput, _title: string, body: string): FillField[] {
   const { street, unit } = splitAddressUnit(input.address);
+  const parkingType = textOrNull(input.features?.parking);
+  const unitFeatures = unitFeaturesHint(input);
+  const buildingFeatures = buildingFeaturesHint(input);
   return [
     // --- Step 1: Property Type + Location ---
     {
@@ -433,6 +467,33 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
       step: RENTALSCA_STEP.details,
       hint: "The form defaults this to Yes — set it to match your actual policy. (Ontario RTA s.14 makes no-pet clauses unenforceable, so don't advertise a hard no-pets rule.)",
     },
+    // Parking block (S267/KI425 finding B) — a whole Step-2 sub-section the v2
+    // sheet omitted: Type + per-type Monthly Fee + Spots + Included? toggle.
+    {
+      id: "rentalsca-parking-type",
+      label: "Parking Type",
+      value: parkingType,
+      source: parkingType ? "listing" : "manual",
+      step: RENTALSCA_STEP.details,
+      hint: "Pick the matching Parking Type (Outdoor / Driveway / Garage / Underground / Street / Covered). Leave it as No Parking only if there genuinely is none.",
+    },
+    {
+      id: "rentalsca-parking-included",
+      label: "Parking Included?",
+      value: "No",
+      source: "preset",
+      step: RENTALSCA_STEP.details,
+      hint: "Defaults to No on purpose. Only set Yes if parking is genuinely included in the rent — advertising it as included is a commitment that's hard to walk back. Offer it as a per-unit add-on instead.",
+      guardrailId: "rentalsca-parking-included",
+    },
+    {
+      id: "rentalsca-parking-spots",
+      label: "Parking Spots",
+      value: null,
+      source: "manual",
+      step: RENTALSCA_STEP.details,
+      hint: "Optional “+” stepper — leave it unset unless you're assigning a specific number of spots.",
+    },
     // --- Step 3: Floor Plan + Photos + Description ---
     {
       id: "rentalsca-bedrooms",
@@ -483,23 +544,42 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
       hint: "The editor auto-bullets each line — write flowing sentences, not dashed lines.",
       guardrailId: "rentalsca-description-bullets",
     },
-    // --- Step 4: Plan & Addons (after the photo gate) ---
+    // Features/Amenities (S267/KI425 finding C) — Step-3 multi-selects the v2
+    // sheet omitted. We pre-fill only what the unit's flags map to and ask the
+    // operator to tick the rest (flooring/appliances we don't track).
     {
-      id: "rentalsca-plan",
-      label: "Plan",
-      value: "Limited ($0)",
-      source: "preset",
-      step: RENTALSCA_STEP.plan,
-      hint: "Click \"See other pricing options\" → Limited $0; the form defaults to a paid Promoted plan.",
-      guardrailId: "rentalsca-paid-default",
+      id: "rentalsca-unit-features",
+      label: "Unit Features",
+      value: unitFeatures,
+      source: unitFeatures ? "listing" : "manual",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Tick these in the Unit Features multi-select, plus anything else that applies we don't track (flooring type, fridge/stove, dishwasher).",
     },
+    {
+      id: "rentalsca-building-features",
+      label: "Building Features",
+      value: buildingFeatures,
+      source: buildingFeatures ? "listing" : "manual",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Tick these in the Building Features multi-select, plus anything else that applies (on-site management, elevator, secured entry).",
+    },
+    {
+      id: "rentalsca-promotion",
+      label: "Promotion / Open House (optional)",
+      value: null,
+      source: "manual",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "Optional Step-3 sections — add a Rent Special / Move-In Gift or an Open House date only if you're actually running one. Otherwise skip both.",
+    },
+    // Lead Contact lives on STEP 3 (below Promotion / Open House), NOT Step 4
+    // (S267/KI425 finding A — corrects the v2 step tag).
     {
       id: "rentalsca-contact-email",
       label: "Lead Contact — email",
       value: textOrNull(input.leadContactEmail),
       source: "listing",
-      step: RENTALSCA_STEP.plan,
-      hint: "The per-listing Lead Contact defaults wrong — set it before publishing.",
+      step: RENTALSCA_STEP.floorPlan,
+      hint: "The per-listing Lead Contact is on this step (below Promotion / Open House) and defaults wrong — set it before you continue.",
       guardrailId: "rentalsca-lead-contact-revert",
     },
     {
@@ -507,8 +587,18 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
       label: "Lead Contact — phone",
       value: textOrNull(input.leadContactPhone),
       source: "listing",
-      step: RENTALSCA_STEP.plan,
+      step: RENTALSCA_STEP.floorPlan,
       guardrailId: "rentalsca-lead-contact-revert",
+    },
+    // --- Step 4: Plan & Add-ons (after the photo gate) ---
+    {
+      id: "rentalsca-plan",
+      label: "Plan",
+      value: "Limited ($0)",
+      source: "preset",
+      step: RENTALSCA_STEP.plan,
+      hint: "Click \"See other pricing options\" → Limited $0; the form defaults to a paid Promoted plan. If you do pick a paid plan, uncheck the +$20 Credit Report add-on (it's pre-checked).",
+      guardrailId: "rentalsca-paid-default",
     },
     {
       id: "rentalsca-enable",

@@ -394,8 +394,8 @@ ok("strip: null in -> null", stripLeadingListMarkers(null) === null);
   const STEP_ORDER = [
     "Step 1 · Type & location",
     "Step 2 · Property details",
-    "Step 3 · Floor plan, photos & description",
-    "Step 4 · Plan & contact (after the photo gate)",
+    "Step 3 · Floor plan, features, photos & contact",
+    "Step 4 · Plan & add-ons (after the photo gate)",
   ];
   ok(
     "rentals v2: steps are non-decreasing in field order",
@@ -409,16 +409,113 @@ ok("strip: null in -> null", stripLeadingListMarkers(null) === null);
       return true;
     })(),
   );
+  // v3 (S267/KI425 finding A): Lead Contact lives on STEP 3, not Step 4.
   ok(
-    "rentals v2: lead contact lives on step 4",
-    byId("rentalsca-contact-email")?.step === "Step 4 · Plan & contact (after the photo gate)",
+    "rentals v3: lead contact lives on step 3 (not step 4)",
+    byId("rentalsca-contact-email")?.step ===
+      "Step 3 · Floor plan, features, photos & contact" &&
+      byId("rentalsca-contact-phone")?.step ===
+        "Step 3 · Floor plan, features, photos & contact",
+  );
+  ok(
+    "rentals v3: lead contact sits after the description on step 3",
+    ids.indexOf("rentalsca-contact-email") > ids.indexOf("rentalsca-description"),
+  );
+  ok(
+    "rentals v3: lead contact comes before the Plan step",
+    ids.indexOf("rentalsca-contact-email") < ids.indexOf("rentalsca-plan"),
   );
 
-  // guardrailIds still all resolve after the rebuild
+  // v3 finding B: a Step-2 Parking block (Type + Included? + Spots).
+  ok(
+    "rentals v3: parking type maps from features.parking",
+    byId("rentalsca-parking-type")?.value === "1 driveway spot" &&
+      byId("rentalsca-parking-type")?.source === "listing" &&
+      byId("rentalsca-parking-type")?.step === "Step 2 · Property details",
+  );
+  ok(
+    "rentals v3: parking-included defaults to No (preset, never over-promise)",
+    byId("rentalsca-parking-included")?.value === "No" &&
+      byId("rentalsca-parking-included")?.source === "preset" &&
+      byId("rentalsca-parking-included")?.guardrailId === "rentalsca-parking-included",
+  );
+  ok(
+    "rentals v3: parking spots is a manual stepper (null)",
+    byId("rentalsca-parking-spots")?.source === "manual" &&
+      byId("rentalsca-parking-spots")?.value === null,
+  );
+  ok(
+    "rentals v3: parking block sits on step 2 after pets, before floor plan",
+    ids.indexOf("rentalsca-pets") < ids.indexOf("rentalsca-parking-type") &&
+      ids.indexOf("rentalsca-parking-type") < ids.indexOf("rentalsca-bedrooms"),
+  );
+
+  // v3 finding C: Step-3 Features/Amenities + Promotion/Open House.
+  ok(
+    "rentals v3: unit features mapped from flags (A/C set on FULL)",
+    byId("rentalsca-unit-features")?.value === "Air Conditioning" &&
+      byId("rentalsca-unit-features")?.source === "listing" &&
+      byId("rentalsca-unit-features")?.step ===
+        "Step 3 · Floor plan, features, photos & contact",
+  );
+  ok(
+    "rentals v3: building features present (manual when nothing maps)",
+    !!byId("rentalsca-building-features"),
+  );
+  ok(
+    "rentals v3: promotion / open house is an optional manual reminder",
+    byId("rentalsca-promotion")?.source === "manual" &&
+      byId("rentalsca-promotion")?.value === null,
+  );
+
+  // v3 finding E: the +$20 Credit Report uncheck is surfaced on the Plan field.
+  ok(
+    "rentals v3: plan hint flags the +$20 Credit Report add-on",
+    /credit report/i.test(byId("rentalsca-plan")?.hint ?? ""),
+  );
+
+  // guardrailIds still all resolve after the rebuild (incl. new parking-included)
   const gids = new Set(guardrailsForPortal("rentals_ca").map((g) => g.id));
   ok(
-    "rentals v2: all field guardrailIds resolve",
+    "rentals v3: all field guardrailIds resolve",
     r.fields.every((f) => !f.guardrailId || gids.has(f.guardrailId)),
+  );
+  ok(
+    "rentals v3: new economics guardrails exist (parking + 21-day expiry)",
+    gids.has("rentalsca-parking-included") && gids.has("rentalsca-free-expiry"),
+  );
+}
+
+// --- v3: building features map from in-building/shared laundry -------------
+{
+  const r = buildFillSheet(
+    { ...FULL, features: { ...FULL.features, laundry: "in_building" } },
+    "rentals_ca",
+  );
+  const bf = r.fields.find((f) => f.id === "rentalsca-building-features");
+  ok(
+    "rentals v3: in-building laundry -> Laundry Facilities (listing)",
+    bf?.value === "Laundry Facilities" && bf?.source === "listing",
+  );
+}
+
+// --- v3: a SPARSE unit leaves the new feature/parking fields honest --------
+{
+  const r = buildFillSheet(SPARSE, "rentals_ca");
+  const byId = (id: string) => r.fields.find((f) => f.id === id);
+  ok(
+    "rentals v3 sparse: parking type falls back to manual when unknown",
+    byId("rentalsca-parking-type")?.source === "manual" &&
+      byId("rentalsca-parking-type")?.value === null,
+  );
+  ok(
+    "rentals v3 sparse: unit features manual when nothing maps",
+    byId("rentalsca-unit-features")?.source === "manual" &&
+      byId("rentalsca-unit-features")?.value === null,
+  );
+  ok(
+    "rentals v3 sparse: parking-included preset No still present",
+    byId("rentalsca-parking-included")?.value === "No",
   );
 }
 

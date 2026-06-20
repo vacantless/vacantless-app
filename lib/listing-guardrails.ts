@@ -99,14 +99,28 @@ const RENTALS_CA: Guardrail[] = [
     severity: "warning",
     title: "Check you have a free slot — the Limited plan caps at 3 active listings.",
     detail:
-      "The free Limited plan allows only 3 active listings at a time. Check Manage Listings › Active before you start so you're not blocked at the end.",
+      "The free Limited plan allows only 3 active listings at a time. The $0 card still shows on a 4th listing, but it won't publish. If you're already at 3, open Manage Listings › Active and Disable one first to free a slot (Disable is reversible — Enable restores it; it is NOT a delete). Check this before you start so you're not blocked at the end.",
   },
   {
     id: "rentalsca-paid-default",
     severity: "warning",
     title: "Click \"See other pricing options\" → Limited $0 to stay free.",
     detail:
-      "The plan step defaults to paid Promoted plans ($35-89) with a +$20 credit report pre-checked. Choose the free Limited $0 plan unless you actually mean to pay.",
+      "The plan step defaults to paid Promoted plans ($35-89) with a +$20 Credit Report add-on pre-checked. Choose the free Limited $0 plan unless you actually mean to pay — and if you do pick a paid plan, uncheck the +$20 Credit Report first.",
+  },
+  {
+    id: "rentalsca-parking-included",
+    severity: "warning",
+    title: "Set Parking Included = No unless it's truly in the rent.",
+    detail:
+      "Step 2 has a Parking block with an Included? toggle. Default it to No: advertising parking as included in rent is a commitment that's hard to walk back, and you usually want to offer a spot as a per-unit add-on instead. Set the Parking Type, but leave Included off unless every tenant genuinely gets a spot in the base rent.",
+  },
+  {
+    id: "rentalsca-free-expiry",
+    severity: "tip",
+    title: "Free Limited listings expire after 21 days — rotate them.",
+    detail:
+      "A free Limited listing drops off after 21 days (paid Promoted plans run 15 / 30 / 60 days). Re-post or rotate your free listings roughly every 3 weeks — this is also the natural moment to swap in a held unit so the slot keeps working.",
   },
   {
     id: "rentalsca-address-autocomplete",
