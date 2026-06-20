@@ -663,6 +663,43 @@ ok("strip: null in -> null", stripLeadingListMarkers(null) === null);
     "zumper v4: new guardrails exist (geocode + required sqft)",
     zgids.has("zumper-address-autocomplete") && zgids.has("zumper-sqft-required"),
   );
+
+  // v5 (S271 live-post finding): Pricing → Lease details sub-step fields.
+  ok(
+    "zumper v5: available-date field present on the Pricing step (listing source)",
+    byId("zumper-available-date")?.step === "Step 3 · Pricing" &&
+      byId("zumper-available-date")?.source === "listing",
+  );
+  ok(
+    "zumper v5: lease-length preset 1 Year on the Pricing step",
+    byId("zumper-lease-length")?.value === "1 Year" &&
+      byId("zumper-lease-length")?.source === "preset" &&
+      byId("zumper-lease-length")?.step === "Step 3 · Pricing",
+  );
+  // Lease-details fields sit with price on the Pricing step, before Media.
+  ok(
+    "zumper v5: price < available-date < lease-length < photos",
+    ids.indexOf("zumper-price") < ids.indexOf("zumper-available-date") &&
+      ids.indexOf("zumper-available-date") < ids.indexOf("zumper-lease-length") &&
+      ids.indexOf("zumper-lease-length") < ids.indexOf("zumper-photos"),
+  );
+}
+
+// --- Zumper v5: available-date resolves from the unit's available_date -------
+{
+  const z = buildFillSheet(
+    {
+      ...FULL,
+      now: new Date("2026-06-20T00:00:00Z"),
+      features: { ...FULL.features, available_date: "2026-08-01" },
+    },
+    "zumper",
+  );
+  const byId = (id: string) => z.fields.find((f) => f.id === id);
+  ok(
+    "zumper v5: future available_date renders the dated label",
+    byId("zumper-available-date")?.value === "Available Aug 1",
+  );
 }
 
 // --- Zumper v4: required-sqft estimate fallback (no real size) --------------

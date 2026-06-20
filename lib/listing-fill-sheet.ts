@@ -640,7 +640,9 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
 // 5 sub-steps) / Pricing / Media / Review. Its form order is NOT our flat field
 // order, so — exactly like Rentals.ca — each field carries the step it lives on
 // (the UI groups them by step header). The v3 flat 6-field sheet drastically
-// under-modeled this (KI427); this v4 mirrors the real wizard.
+// under-modeled this (KI427); v4 mirrors the real wizard, and v5 (S271 live-post
+// finding) adds the Pricing → Lease details sub-step (available date + lease
+// length) that were filled by hand on the live Unit 20 post.
 const ZUMPER_STEP = {
   address: "Step 1 · Address",
   listing: "Step 2 · Listing details",
@@ -763,7 +765,7 @@ function zumperFields(input: FillSheetInput, _title: string, body: string): Fill
       step: ZUMPER_STEP.listing,
       hint: "Zumper has a dedicated pet-policy sub-step — set it to match your actual policy. (Ontario RTA s.14 makes no-pet clauses unenforceable, so don't advertise a hard no-pets rule.)",
     },
-    // --- Step 3: Pricing ---
+    // --- Step 3: Pricing (incl. the Lease details sub-step) ---
     {
       id: "zumper-price",
       label: "Price (monthly)",
@@ -772,6 +774,24 @@ function zumperFields(input: FillSheetInput, _title: string, body: string): Fill
       step: ZUMPER_STEP.pricing,
       hint: "Type your real rent over Zumper's higher suggested figure.",
       guardrailId: "zumper-rent-override",
+    },
+    // Lease details sub-step (S271 finding #1) — v4 omitted these and they were
+    // filled by hand on the live Unit 20 post.
+    {
+      id: "zumper-available-date",
+      label: "Available date",
+      value: availabilityField(input.features?.available_date, input.now),
+      source: "listing",
+      step: ZUMPER_STEP.pricing,
+      hint: "In the Lease details sub-step — pick the move-in date. \"Available now\" means pick today.",
+    },
+    {
+      id: "zumper-lease-length",
+      label: "Lease length",
+      value: "1 Year",
+      source: "preset",
+      step: ZUMPER_STEP.pricing,
+      hint: "In the Lease details sub-step — defaults shown as 1 Year; change it if your term differs (e.g. month-to-month).",
     },
     // --- Step 4: Media ---
     {
