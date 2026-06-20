@@ -21,8 +21,13 @@ import {
 // enforced by the clear-then-set rule planned in lib/clauses.planSetCurrent and
 // the partial-unique index in migration 0039.
 
-const SETTINGS = "/dashboard/settings";
-const CLAUSES_TAB = `${SETTINGS}?tab=clauses`;
+// IA Step 3 (S275): the clause library moved out of a Settings tab to its
+// point-of-use under Tenants. The CRUD actions redirect back to that page;
+// revalidate it (not Settings) so the list refreshes after a write. The actions
+// otherwise stay identical (org-level asset, manage_settings-gated, redirect-
+// based for the S170 edge-503 reason).
+const CLAUSES_PAGE = "/dashboard/tenants/lease-clauses";
+const CLAUSES_TAB = CLAUSES_PAGE;
 
 function s(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
@@ -34,7 +39,7 @@ function s(formData: FormData, name: string): string {
 // and the assembler match on it). On edit, only title/category/applicable_to
 // change.
 export async function saveClause(formData: FormData) {
-  await requireCapability("manage_settings", `${CLAUSES_TAB}&clause=forbidden`);
+  await requireCapability("manage_settings", `${CLAUSES_TAB}?clause=forbidden`);
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
@@ -48,7 +53,7 @@ export async function saveClause(formData: FormData) {
     jurisdiction: s(formData, "jurisdiction"),
     notesForLandlord: s(formData, "notes_for_landlord"),
   });
-  if (!check.ok) redirect(`${CLAUSES_TAB}&clause=${check.code}`);
+  if (!check.ok) redirect(`${CLAUSES_TAB}?clause=${check.code}`);
 
   const supabase = createClient();
 
@@ -66,14 +71,14 @@ export async function saveClause(formData: FormData) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
-    if (error) redirect(`${CLAUSES_TAB}&clause=error`);
-    revalidatePath(SETTINGS);
-    redirect(`${CLAUSES_TAB}&clause=updated`);
+    if (error) redirect(`${CLAUSES_TAB}?clause=error`);
+    revalidatePath(CLAUSES_PAGE);
+    redirect(`${CLAUSES_TAB}?clause=updated`);
   }
 
   // Create: a body is required so the new clause has a version-1 current.
   const body = validateVersionInput({ body: s(formData, "body") });
-  if (!body.ok) redirect(`${CLAUSES_TAB}&clause=${body.code}`);
+  if (!body.ok) redirect(`${CLAUSES_TAB}?clause=${body.code}`);
 
   const { data: created, error } = await supabase
     .from("lease_clauses")
@@ -92,7 +97,7 @@ export async function saveClause(formData: FormData) {
   if (error || !created) {
     // The unique(org, key) index rejects a duplicate key with code 23505.
     redirect(
-      `${CLAUSES_TAB}&clause=${error?.code === "23505" ? "key_taken" : "error"}`,
+      `${CLAUSES_TAB}?clause=${error?.code === "23505" ? "key_taken" : "error"}`,
     );
   }
 
@@ -104,28 +109,28 @@ export async function saveClause(formData: FormData) {
     note: body.value.note,
     is_current: true,
   });
-  if (vErr) redirect(`${CLAUSES_TAB}&clause=error`);
+  if (vErr) redirect(`${CLAUSES_TAB}?clause=error`);
 
-  revalidatePath(SETTINGS);
-  redirect(`${CLAUSES_TAB}&clause=created&cn=${Date.now().toString(36)}`);
+  revalidatePath(CLAUSES_PAGE);
+  redirect(`${CLAUSES_TAB}?clause=created&cn=${Date.now().toString(36)}`);
 }
 
 // Add a new version of an existing clause and make it current. The version
 // number is max+1; the current flag flips via clear-then-set (never one UPDATE)
 // so the partial-unique is_current index is never momentarily violated.
 export async function saveClauseVersion(formData: FormData) {
-  await requireCapability("manage_settings", `${CLAUSES_TAB}&clause=forbidden`);
+  await requireCapability("manage_settings", `${CLAUSES_TAB}?clause=forbidden`);
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
   const clauseId = s(formData, "clause_id");
-  if (!clauseId) redirect(`${CLAUSES_TAB}&clause=error`);
+  if (!clauseId) redirect(`${CLAUSES_TAB}?clause=error`);
 
   const check = validateVersionInput({
     body: s(formData, "body"),
     note: s(formData, "note") || null,
   });
-  if (!check.ok) redirect(`${CLAUSES_TAB}&clause=${check.code}`);
+  if (!check.ok) redirect(`${CLAUSES_TAB}?clause=${check.code}`);
 
   const supabase = createClient();
   const { data: existing } = await supabase
@@ -142,7 +147,7 @@ export async function saveClauseVersion(formData: FormData) {
       .from("lease_clause_versions")
       .update({ is_current: false })
       .eq("id", current.id);
-    if (clearErr) redirect(`${CLAUSES_TAB}&clause=error`);
+    if (clearErr) redirect(`${CLAUSES_TAB}?clause=error`);
   }
 
   const { error } = await supabase.from("lease_clause_versions").insert({
@@ -153,22 +158,22 @@ export async function saveClauseVersion(formData: FormData) {
     note: check.value.note,
     is_current: true,
   });
-  if (error) redirect(`${CLAUSES_TAB}&clause=error`);
+  if (error) redirect(`${CLAUSES_TAB}?clause=error`);
 
-  revalidatePath(SETTINGS);
-  redirect(`${CLAUSES_TAB}&clause=version_added&cn=${Date.now().toString(36)}`);
+  revalidatePath(CLAUSES_PAGE);
+  redirect(`${CLAUSES_TAB}?clause=version_added&cn=${Date.now().toString(36)}`);
 }
 
 // Re-activate an older version as the current one (e.g. roll back a change).
 // Plans the clear-then-set with lib/clauses.planSetCurrent, then applies it.
 export async function setCurrentClauseVersion(formData: FormData) {
-  await requireCapability("manage_settings", `${CLAUSES_TAB}&clause=forbidden`);
+  await requireCapability("manage_settings", `${CLAUSES_TAB}?clause=forbidden`);
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
   const clauseId = s(formData, "clause_id");
   const versionId = s(formData, "version_id");
-  if (!clauseId || !versionId) redirect(`${CLAUSES_TAB}&clause=error`);
+  if (!clauseId || !versionId) redirect(`${CLAUSES_TAB}?clause=error`);
 
   const supabase = createClient();
   const { data: existing } = await supabase
@@ -178,8 +183,8 @@ export async function setCurrentClauseVersion(formData: FormData) {
   const versions = (existing ?? []) as ClauseVersionLike[];
 
   const plan = planSetCurrent(versions, versionId);
-  if (!plan.ok) redirect(`${CLAUSES_TAB}&clause=${plan.code}`);
-  if (plan.noop) redirect(`${CLAUSES_TAB}&clause=version_current`);
+  if (!plan.ok) redirect(`${CLAUSES_TAB}?clause=${plan.code}`);
+  if (plan.noop) redirect(`${CLAUSES_TAB}?clause=version_current`);
 
   // Clear the others first, then set the target current (two writes).
   if (plan.clear.length > 0) {
@@ -187,30 +192,30 @@ export async function setCurrentClauseVersion(formData: FormData) {
       .from("lease_clause_versions")
       .update({ is_current: false })
       .in("id", plan.clear);
-    if (clearErr) redirect(`${CLAUSES_TAB}&clause=error`);
+    if (clearErr) redirect(`${CLAUSES_TAB}?clause=error`);
   }
   const { error } = await supabase
     .from("lease_clause_versions")
     .update({ is_current: true })
     .eq("id", plan.set);
-  if (error) redirect(`${CLAUSES_TAB}&clause=error`);
+  if (error) redirect(`${CLAUSES_TAB}?clause=error`);
 
-  revalidatePath(SETTINGS);
-  redirect(`${CLAUSES_TAB}&clause=version_current`);
+  revalidatePath(CLAUSES_PAGE);
+  redirect(`${CLAUSES_TAB}?clause=version_current`);
 }
 
 // Delete a clause and its whole version history (the cascade). Executed leases
 // keep their snapshot independently (lease_documents.executed_clause_versions is
 // a jsonb copy), so deleting a clause never alters what a tenant already signed.
 export async function deleteClause(formData: FormData) {
-  await requireCapability("manage_settings", `${CLAUSES_TAB}&clause=forbidden`);
+  await requireCapability("manage_settings", `${CLAUSES_TAB}?clause=forbidden`);
   const id = s(formData, "id");
   if (!id) redirect(CLAUSES_TAB);
 
   const supabase = createClient();
   const { error } = await supabase.from("lease_clauses").delete().eq("id", id);
-  if (error) redirect(`${CLAUSES_TAB}&clause=error`);
+  if (error) redirect(`${CLAUSES_TAB}?clause=error`);
 
-  revalidatePath(SETTINGS);
-  redirect(`${CLAUSES_TAB}&clause=deleted`);
+  revalidatePath(CLAUSES_PAGE);
+  redirect(`${CLAUSES_TAB}?clause=deleted`);
 }

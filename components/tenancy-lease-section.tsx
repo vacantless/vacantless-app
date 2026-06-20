@@ -85,7 +85,7 @@ export function TenancyLeaseSection({
         <p className="text-sm text-gray-600">
           Generate a lease from your{" "}
           <a
-            href="/dashboard/settings?tab=clauses"
+            href="/dashboard/tenants/lease-clauses"
             className="font-medium text-brand hover:underline"
           >
             clause library

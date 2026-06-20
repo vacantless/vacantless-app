@@ -337,10 +337,10 @@ export default function LeaseClauseWizard({
       <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         Add at least one clause in{" "}
         <a
-          href="/dashboard/settings?tab=clauses"
+          href="/dashboard/tenants/lease-clauses"
           className="font-medium underline"
         >
-          Settings → Lease Clauses
+          Tenants → Lease clauses
         </a>{" "}
         before generating a lease.
       </p>

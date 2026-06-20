@@ -85,6 +85,26 @@ export default async function PropertiesPage({
         </p>
       )}
 
+      {/* Building standard policy entry point (S275 IA Step 3): the org-level
+          defaults every unit inherits live here, with the portfolio they
+          govern — relocated from Settings (G6/G7). */}
+      <Link
+        href="/dashboard/properties/standard-policy"
+        className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
+      >
+        <span className="flex items-center gap-2.5 text-gray-700">
+          <Icons.building className="h-4 w-4 text-gray-400" />
+          <span>
+            <span className="font-medium text-gray-900">
+              Building standard policy
+            </span>{" "}
+            — set lease term, A/C, smoking, and on-site management once; every
+            unit inherits it.
+          </span>
+        </span>
+        <span className="shrink-0 font-medium text-brand">Manage →</span>
+      </Link>
+
       {rows.length > 0 ? (
         <ul className="mb-8 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {rows.map((p) => (

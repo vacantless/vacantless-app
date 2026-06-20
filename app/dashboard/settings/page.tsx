@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
-import { SCREENING_REASON } from "@/lib/screening";
 import {
   accessibleBrand,
   isBrandColorTooLight,
@@ -11,9 +10,7 @@ import {
 } from "@/lib/brand-theme";
 import {
   updateBrandIdentity,
-  updateScreening,
   updatePublicContact,
-  updatePolicyProfile,
   updateEmailSender,
   updateRenterMessages,
   updateTextMessages,
@@ -31,14 +28,6 @@ import { logoUploadErrorMessage } from "@/lib/logo";
 import BrandColorField from "@/components/brand-color-field";
 import { RenterPagePreview } from "@/components/renter-page-preview";
 import { SettingsTabs, type SettingsTab } from "@/components/settings-tabs";
-import {
-  LEASE_TERM_OPTIONS,
-  leaseTermLabel,
-  SMOKING_OPTIONS,
-  smokingLabel,
-  AC_TYPE_OPTIONS,
-  acTypeLabel,
-} from "@/lib/property-features";
 import { PageHeader, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import RotessaSettingsCard, {
@@ -55,38 +44,26 @@ import {
   channelLabel,
   commsErrorMessage,
 } from "@/lib/tenant-comms";
-import { ClauseLibrary, type ClauseView } from "@/components/clause-library";
-import {
-  clauseErrorMessage,
-  type ClauseApplicability,
-  type RiskLevel,
-  type Jurisdiction,
-} from "@/lib/clauses";
 
 export const dynamic = "force-dynamic";
 
-// Settings is grouped into 4 top tabs (S227 restructure; IA locked in
-// VACANTLESS-SETTINGS-USABILITY-AUDIT-2026-06-17.md Section 8). The active tab
+// Settings is grouped into top tabs (S227 restructure; IA locked in
+// VACANTLESS-SETTINGS-USABILITY-AUDIT-2026-06-17.md Section 8). S275 IA Step 3
+// slimmed it: screening + building policy + the Lease Clauses tab moved to
+// their point-of-use, leaving brand / comms / banking / account. The active tab
 // comes from ?tab=, but each section's redirect-based save also carries the
 // right tab; for the few flash params that don't (legacy rotessa/stripe/tpl
 // redirects), we infer the tab from which flash is present so the user always
 // lands back where they were.
 function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   const t = sp.tab;
-  if (
-    t === "brand" ||
-    t === "comms" ||
-    t === "clauses" ||
-    t === "banking" ||
-    t === "account"
-  ) {
+  if (t === "brand" || t === "comms" || t === "banking" || t === "account") {
     return t;
   }
   if (sp.rotessa || sp.stripeconnect) return "banking";
   if (sp.test || sp.tpl || sp.tn || sp.sender || sp.renter || sp.sms) {
     return "comms";
   }
-  if (sp.clause) return "clauses";
   // saved / error / logo / logoerr all belong to the brand tab.
   return "brand";
 }
@@ -110,11 +87,7 @@ export default async function SettingsPage({
     sender?: string; // Communications → Email sender flash
     renter?: string; // Communications → Renter messages flash
     sms?: string; // Communications → Text messages flash
-    clause?: string; // Lease Clauses tab flash
-    cn?: string; // post-submit nonce that remounts the clause forms (reset)
-    screening?: string; // Public Page & Brand → screening flash
     feed?: string; // Public Page & Brand → syndication contact flash
-    policy?: string; // Public Page & Brand → standard policy flash
   };
 }) {
   const org = await getCurrentOrg();
@@ -234,75 +207,8 @@ export default async function SettingsPage({
       ? commsErrorMessage(searchParams.tpl)
       : null;
 
-  // Lease clause library (#11 slice 2). Fetch clauses + their versions, then
-  // shape into ClauseView[] (versions newest-first). RLS scopes both to this org.
-  const { data: clauseRows } = await supabase
-    .from("lease_clauses")
-    .select("id, key, title, category, applicable_to, risk_level, jurisdiction, notes_for_landlord")
-    .order("category", { ascending: true })
-    .order("key", { ascending: true });
-  const clauseList = (clauseRows ?? []) as {
-    id: string;
-    key: string;
-    title: string;
-    category: string;
-    applicable_to: ClauseApplicability;
-    risk_level: RiskLevel;
-    jurisdiction: Jurisdiction;
-    notes_for_landlord: string | null;
-  }[];
-  const { data: versionRows } = await supabase
-    .from("lease_clause_versions")
-    .select("id, clause_id, version, is_current, body, note")
-    .order("version", { ascending: false });
-  const versionList = (versionRows ?? []) as {
-    id: string;
-    clause_id: string;
-    version: number;
-    is_current: boolean;
-    body: string;
-    note: string | null;
-  }[];
-  const clauseViews: ClauseView[] = clauseList.map((c) => ({
-    id: c.id,
-    key: c.key,
-    title: c.title,
-    category: c.category,
-    applicable_to: c.applicable_to,
-    risk_level: c.risk_level ?? "standard",
-    jurisdiction: c.jurisdiction ?? "ontario",
-    notes_for_landlord: c.notes_for_landlord ?? null,
-    versions: versionList
-      .filter((v) => v.clause_id === c.id)
-      .map((v) => ({
-        id: v.id,
-        version: v.version,
-        is_current: v.is_current,
-        body: v.body,
-        note: v.note,
-      })),
-  }));
-  const CLAUSE_SUCCESS: Record<string, string> = {
-    created: "Clause added.",
-    updated: "Clause details saved.",
-    version_added: "New version saved and made current.",
-    version_current: "Current version updated.",
-    deleted: "Clause deleted.",
-  };
-  const clauseFlash = searchParams.clause
-    ? (CLAUSE_SUCCESS[searchParams.clause] ?? null)
-    : null;
-  const clauseError =
-    searchParams.clause && !CLAUSE_SUCCESS[searchParams.clause]
-      ? searchParams.clause === "forbidden"
-        ? "You don't have permission to manage lease clauses."
-        : searchParams.clause === "key_taken"
-          ? "A clause with that key already exists. Pick a different key."
-          : searchParams.clause === "error"
-            ? "Something went wrong. Please try again."
-            : (clauseErrorMessage(searchParams.clause) ??
-              "Something went wrong. Please try again.")
-      : null;
+  // IA Step 3 (S275): the lease clause library moved to /dashboard/tenants/
+  // lease-clauses. Its fetch + flash handling live on that page now.
 
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
@@ -765,305 +671,42 @@ export default async function SettingsPage({
             </div>
           </div>
 
-          {/* --- Renter pre-screening --- */}
-          <form
-            action={updateScreening}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm"><Icons.users className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Renter pre-screening
-              </h3>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
-              Ask a few qualifying questions on your inquiry form and
-              automatically flag renters who likely don&apos;t fit — so you can
-              focus your time on the ones who do. Flagged inquiries are never
-              hidden or rejected; you always decide.
-            </p>
-
-            {searchParams.screening === "saved" && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Pre-screening settings saved.
+          {/* IA Step 3 (S275): Renter pre-screening + Building standard policy
+              MOVED OUT of this tab to their point-of-use (the brand tab was
+              doing 7 jobs — G6). They live where the operator actually uses
+              them; these are the bridges (G7 fix). The editors are unchanged. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Link href="/dashboard/leasing/screening" className="block">
+              <div className="flex h-full items-start gap-3.5 rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-gray-300 hover:bg-gray-100">
+                <IconTile size="sm"><Icons.users className="h-4 w-4" /></IconTile>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Renter pre-screening{" "}
+                    <span className="font-normal text-brand">→ Leasing</span>
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Qualifying questions and auto-flagging now live in Leasing,
+                    where you work your inquiries. Open to manage.
+                  </p>
+                </div>
               </div>
-            )}
-            {searchParams.screening === "income_multiple" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                The income multiple must be a positive number (e.g. 3 for 3x rent).
+            </Link>
+            <Link href="/dashboard/properties/standard-policy" className="block">
+              <div className="flex h-full items-start gap-3.5 rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-gray-300 hover:bg-gray-100">
+                <IconTile size="sm"><Icons.building className="h-4 w-4" /></IconTile>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Building standard policy{" "}
+                    <span className="font-normal text-brand">→ Rentals</span>
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Your building defaults (lease term, A/C, smoking, on-site
+                    management) now live with your Rentals. Open to manage.
+                  </p>
+                </div>
               </div>
-            )}
-            {searchParams.screening === "max_movein_days" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                The move-in window must be a whole number of days.
-              </div>
-            )}
-            {searchParams.screening === "error" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Something went wrong saving these settings. Please try again.
-              </div>
-            )}
-
-            <label className="mt-5 flex items-start gap-3">
-              <input
-                name="screening_enabled"
-                type="checkbox"
-                defaultChecked={org.screening_enabled}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300"
-              />
-              <span className="text-sm">
-                <span className="block font-medium text-gray-700">
-                  Ask qualifying questions on the inquiry form
-                </span>
-                <span className="block text-xs text-gray-400">
-                  Adds optional income, household size, and pet questions to your
-                  public renter page. Off by default.
-                </span>
-              </span>
-            </label>
-
-            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Required income (multiple of rent)
-                </span>
-                <input
-                  name="screening_income_multiple"
-                  type="number"
-                  min={1}
-                  max={20}
-                  step={0.5}
-                  defaultValue={org.screening_income_multiple ?? ""}
-                  placeholder="e.g. 3"
-                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <span className="mt-1 block text-xs text-gray-400">
-                  Flags renters whose stated monthly income is below this multiple
-                  of the rent. Leave blank to skip.
-                </span>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Latest move-in (days out)
-                </span>
-                <input
-                  name="screening_max_movein_days"
-                  type="number"
-                  min={1}
-                  max={3650}
-                  step={1}
-                  defaultValue={org.screening_max_movein_days ?? ""}
-                  placeholder="e.g. 90"
-                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <span className="mt-1 block text-xs text-gray-400">
-                  Flags renters who want to move in further out than this. Leave
-                  blank to skip.
-                </span>
-              </label>
-            </div>
-
-            <label className="mt-5 flex items-start gap-3">
-              <input
-                name="screening_flag_pets"
-                type="checkbox"
-                defaultChecked={org.screening_flag_pets}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300"
-              />
-              <span className="text-sm">
-                <span className="block font-medium text-gray-700">
-                  Flag renters with pets on rentals that aren&apos;t pet-friendly
-                </span>
-                <span className="block text-xs text-gray-400">
-                  Only applies to a rental whose &ldquo;pet-friendly&rdquo; toggle
-                  is off.
-                </span>
-              </span>
-            </label>
-
-            {/* Operator-tunable reason copy (S257). Blank keeps the default
-                wording shown on a flagged inquiry. Only the operator sees these
-                labels — renters never do. */}
-            <details className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <summary className="cursor-pointer text-sm font-medium text-gray-700">
-                Customize the wording shown on flagged inquiries
-              </summary>
-              <p className="mt-2 text-xs text-gray-400">
-                When an inquiry is flagged, you see a short reason. Reword it to
-                match your voice, or leave blank to use the default. Only you see
-                these — renters never do.
-              </p>
-              <div className="mt-4 space-y-4">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">
-                    Income reason
-                  </span>
-                  <input
-                    name="screening_reason_income"
-                    type="text"
-                    maxLength={120}
-                    defaultValue={org.screening_reason_income ?? ""}
-                    placeholder={SCREENING_REASON.income}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">
-                    Move-in timing reason
-                  </span>
-                  <input
-                    name="screening_reason_movein"
-                    type="text"
-                    maxLength={120}
-                    defaultValue={org.screening_reason_movein ?? ""}
-                    placeholder={SCREENING_REASON.moveIn}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">
-                    Pets reason
-                  </span>
-                  <input
-                    name="screening_reason_pets"
-                    type="text"
-                    maxLength={120}
-                    defaultValue={org.screening_reason_pets ?? ""}
-                    placeholder={SCREENING_REASON.pets}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                </label>
-              </div>
-              <p className="mt-3 text-xs text-gray-400">
-                The wording is saved with each inquiry as it comes in, so editing
-                it later won&apos;t change inquiries you already received.
-              </p>
-            </details>
-
-            <p className="mt-5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              Screening uses only ability to pay, timing, and pets — never
-              factors like family size, background, or any protected group.
-            </p>
-
-            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-              Save pre-screening
-            </button>
-          </form>
-
-          {/* --- Building standard policy (0048) --- */}
-          <form
-            action={updatePolicyProfile}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Building standard policy
-              </h3>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
-              Set your building&apos;s standard policy once. Every unit inherits
-              these on its listings, copy, and syndication feed — so you only
-              re-enter a value on a unit that genuinely differs. (You can override
-              any of these per unit on the unit&apos;s own page.)
-            </p>
-
-            {searchParams.policy === "saved" && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Standard policy saved.
-              </div>
-            )}
-            {searchParams.policy === "error" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Something went wrong saving these settings. Please try again.
-              </div>
-            )}
-
-            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Standard lease term
-                </span>
-                <select
-                  name="policy_lease_term"
-                  defaultValue={org.policy_lease_term ?? "1_year"}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  {LEASE_TERM_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {leaseTermLabel(opt)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Air conditioning
-                </span>
-                <select
-                  name="policy_ac_type"
-                  defaultValue={org.policy_ac_type ?? ""}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Not set</option>
-                  {AC_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt === "none"
-                        ? "No air conditioning"
-                        : `A/C: ${acTypeLabel(opt)}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Smoking
-                </span>
-                <select
-                  name="policy_smoking"
-                  defaultValue={org.policy_smoking ?? ""}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Not set</option>
-                  {SMOKING_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {smokingLabel(opt)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  On-site management
-                </span>
-                <select
-                  name="policy_on_site_management"
-                  defaultValue={
-                    org.policy_on_site_management == null
-                      ? ""
-                      : org.policy_on_site_management
-                        ? "true"
-                        : "false"
-                  }
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Not set</option>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </label>
-            </div>
-
-            <p className="mt-5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              Pet policy and included utilities stay on each unit for now — those
-              vary more per suite. This profile covers the building-constant
-              fields that were otherwise re-typed for every unit and portal.
-            </p>
-
-            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-              Save standard policy
-            </button>
-          </form>
+            </Link>
+          </div>
         </div>
       )}
 
@@ -1470,24 +1113,11 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* ================= Tab 3 — Lease Clauses ================= */}
-      {tab === "clauses" && (
-        <div className="mt-6 space-y-6">
-          {clauseFlash && (
-            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-              {clauseFlash}
-            </div>
-          )}
-          {clauseError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-              {clauseError}
-            </div>
-          )}
-          <ClauseLibrary clauses={clauseViews} />
-        </div>
-      )}
+      {/* IA Step 3 (S275): the Lease Clauses tab MOVED OUT of Settings to its
+          point-of-use under Tenants → Lease clauses (set where you use them,
+          G7). The clause CRUD + data fetch live on that page now. */}
 
-      {/* ================= Tab 4 — Banking & Rent ================= */}
+      {/* ================= Tab — Banking & Rent ================= */}
       {tab === "banking" && (
         <div className="mt-6 space-y-6">
           {searchParams.rotessa === "connected" && (

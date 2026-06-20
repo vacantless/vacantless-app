@@ -34,6 +34,14 @@ const SECTIONS: Section[] = [
     desc: "Everyone you've leased to, across tenancies — the contact record behind each tenant.",
     icon: "users",
   },
+  {
+    // S275 IA Step 3: clause library relocated here from its own Settings tab —
+    // set clauses where you use them (when preparing a lease).
+    href: "/dashboard/tenants/lease-clauses",
+    title: "Lease clauses",
+    desc: "Your reusable clause library. Build it once; pull clauses in when you prepare a lease.",
+    icon: "list",
+  },
 ];
 
 export default function TenantsHubPage() {
@@ -85,7 +93,36 @@ export default function TenantsHubPage() {
               <Link href="/dashboard/tenancies" className="font-medium text-brand underline">
                 Tenancies
               </Link>{" "}
-              to prepare or view its lease.
+              to prepare or view its lease. Build your reusable{" "}
+              <Link href="/dashboard/tenants/lease-clauses" className="font-medium text-brand underline">
+                clause library
+              </Link>{" "}
+              first.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Message templates bridge (S275 IA Step 3, G7): tenant message templates
+          are set in Settings but used here when you message tenants. Point to
+          where they're edited rather than leaving the link buried. */}
+      <Card className="mt-4 bg-gray-50">
+        <div className="flex items-start gap-3.5">
+          <IconTile>
+            <Icons.mail className="h-5 w-5" />
+          </IconTile>
+          <div className="min-w-0">
+            <h2 className="font-semibold text-gray-900">Message templates</h2>
+            <p className="mt-1 text-sm leading-relaxed text-gray-600">
+              Save reusable email and text templates for tenant messages. Manage
+              them in{" "}
+              <Link
+                href="/dashboard/settings?tab=comms"
+                className="font-medium text-brand underline"
+              >
+                Settings → Communications
+              </Link>
+              .
             </p>
           </div>
         </div>

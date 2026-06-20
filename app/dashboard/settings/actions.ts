@@ -66,8 +66,10 @@ export async function updateBrandIdentity(formData: FormData) {
   redirect("/dashboard/settings?tab=brand&saved=1");
 }
 
-// Tab 1 — Public Page & Brand: candidate pre-screening. Governs the qualifying
-// questions on the public inquiry form + the auto qualify-out flag. Default off.
+// Renter pre-screening. Governs the qualifying questions on the public inquiry
+// form + the auto qualify-out flag. Default off. IA Step 3 (S275): the editor
+// moved to its point-of-use — /dashboard/leasing/screening — so the redirects
+// land there, not back on Settings.
 export async function updateScreening(formData: FormData) {
   const org = await requireSettingsOrg();
 
@@ -81,7 +83,7 @@ export async function updateScreening(formData: FormData) {
     reason_pets: String(formData.get("screening_reason_pets") ?? ""),
   });
   if (!result.ok) {
-    redirect(`/dashboard/settings?tab=brand&screening=${result.reason}`);
+    redirect(`/dashboard/leasing/screening?screening=${result.reason}`);
   }
 
   const supabase = createClient();
@@ -90,10 +92,10 @@ export async function updateScreening(formData: FormData) {
     .update(result.values)
     .eq("id", org.id);
   if (error) {
-    redirect("/dashboard/settings?tab=brand&screening=error");
+    redirect("/dashboard/leasing/screening?screening=error");
   }
 
-  redirect("/dashboard/settings?tab=brand&screening=saved");
+  redirect("/dashboard/leasing/screening?screening=saved");
 }
 
 // Tab 1 — Public Page & Brand: public contact details for the syndication feed.
@@ -122,11 +124,12 @@ export async function updatePublicContact(formData: FormData) {
   redirect("/dashboard/settings?tab=brand&feed=saved");
 }
 
-// Tab 1 — Public Page & Brand: building STANDARD POLICY profile (0048). The
-// org-level defaults (lease term / smoking / A/C type / on-site management)
-// every unit inherits unless it overrides them. Set once here; the per-unit
-// property form shows the inherited value with an "override for this unit"
-// affordance.
+// Building STANDARD POLICY profile (0048). The org-level defaults (lease term /
+// smoking / A/C type / on-site management) every unit inherits unless it
+// overrides them. IA Step 3 (S275): the editor moved to its point-of-use —
+// /dashboard/properties/standard-policy (the Rentals/building context) — so the
+// redirects land there. The per-unit property form still shows the inherited
+// value with an "override for this unit" affordance.
 export async function updatePolicyProfile(formData: FormData) {
   const org = await requireSettingsOrg();
 
@@ -143,10 +146,10 @@ export async function updatePolicyProfile(formData: FormData) {
     .update(result.values)
     .eq("id", org.id);
   if (error) {
-    redirect("/dashboard/settings?tab=brand&policy=error");
+    redirect("/dashboard/properties/standard-policy?policy=error");
   }
 
-  redirect("/dashboard/settings?tab=brand&policy=saved");
+  redirect("/dashboard/properties/standard-policy?policy=saved");
 }
 
 // Tab 2 / Email sender — reply-to address renter emails are delivered to.

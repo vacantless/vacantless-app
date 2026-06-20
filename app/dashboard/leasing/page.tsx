@@ -41,6 +41,14 @@ const SECTIONS: Section[] = [
     desc: "Set the viewing times renters can book — this is the setup behind Viewings.",
     icon: "clock",
   },
+  {
+    // S275 IA Step 3: pre-screening relocated here from Settings — it's a
+    // pipeline rule, so it lives where you work inquiries.
+    href: "/dashboard/leasing/screening",
+    title: "Pre-screening",
+    desc: "Add qualifying questions to your inquiry form and auto-flag renters who likely don't fit. You always decide.",
+    icon: "users",
+  },
 ];
 
 export default function LeasingHubPage() {
