@@ -141,6 +141,13 @@ export async function updatePolicyProfile(formData: FormData) {
     smoking: String(formData.get("policy_smoking") ?? ""),
     ac_type: String(formData.get("policy_ac_type") ?? ""),
     on_site_management: String(formData.get("policy_on_site_management") ?? ""),
+    // Utilities + pets defaults (0050).
+    heat_included: String(formData.get("policy_heat_included") ?? ""),
+    hydro_included: String(formData.get("policy_hydro_included") ?? ""),
+    water_included: String(formData.get("policy_water_included") ?? ""),
+    pets_cats: String(formData.get("policy_pets_cats") ?? ""),
+    pets_dogs: String(formData.get("policy_pets_dogs") ?? ""),
+    pets_dog_size: String(formData.get("policy_pets_dog_size") ?? ""),
   });
 
   const supabase = createClient();
@@ -175,6 +182,13 @@ export async function updateBuildingPolicy(formData: FormData) {
     smoking: String(formData.get("policy_smoking") ?? ""),
     ac_type: String(formData.get("policy_ac_type") ?? ""),
     on_site_management: String(formData.get("policy_on_site_management") ?? ""),
+    // Utilities + pets overrides (0050).
+    heat_included: String(formData.get("policy_heat_included") ?? ""),
+    hydro_included: String(formData.get("policy_hydro_included") ?? ""),
+    water_included: String(formData.get("policy_water_included") ?? ""),
+    pets_cats: String(formData.get("policy_pets_cats") ?? ""),
+    pets_dogs: String(formData.get("policy_pets_dogs") ?? ""),
+    pets_dog_size: String(formData.get("policy_pets_dog_size") ?? ""),
   });
 
   const supabase = createClient();

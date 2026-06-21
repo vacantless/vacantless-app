@@ -235,13 +235,24 @@ export async function updateProperty(formData: FormData) {
       ?.price_drop_pending_cents ?? null;
   const nextPending = pendingDropFrom(oldRent, newRent, existingPending);
 
-  // Structured pet policy (0045). pet_friendly is the DERIVED master (= cats OR
-  // dogs) the public RPCs + S240 screening read — keep it in lockstep here so it
-  // can never contradict the structured fields. Dog size only applies to dogs.
-  const petsCats = parseCheckbox(formData, "pets_cats");
-  const petsDogs = parseCheckbox(formData, "pets_dogs");
-  const petsDogSize = petsDogs ? normalizeDogSize(formData.get("pets_dog_size")) : null;
+  // Structured pet policy (0045), now inheritable (0050): cats/dogs are tri-state
+  // (true / false / null = inherit the building/org standard policy). The stored
+  // pet_friendly master is written best-effort here, but is NO LONGER the
+  // authoritative read — the public RPCs + S240 screening RESOLVE it from the
+  // effective (inherited) cats/dogs (coalesce unit > building > org). Dog size is
+  // its own inheritable field (null = inherit).
+  const petsCats = parseTriStateBool(formData, "pets_cats");
+  const petsDogs = parseTriStateBool(formData, "pets_dogs");
+  const petsDogSize = normalizeDogSize(formData.get("pets_dog_size"));
   const petsNotes = String(formData.get("pets_notes") ?? "").trim() || null;
+  // Best-effort stored master: a definite yes if either is explicitly welcome, a
+  // definite no if both are explicitly not, else null (inherit) — resolved at read.
+  const petFriendly =
+    petsCats === true || petsDogs === true
+      ? true
+      : petsCats === false && petsDogs === false
+        ? false
+        : null;
 
   // Virtual tour / video URL (item S). Validate against the host allow-list
   // (lib/virtual-tour) before storing; a blank clears it, a non-tour-host link
@@ -272,14 +283,15 @@ export async function updateProperty(formData: FormData) {
       air_conditioning: parseCheckbox(formData, "air_conditioning"),
       balcony: parseCheckbox(formData, "balcony"),
       furnished: parseCheckbox(formData, "furnished"),
-      pet_friendly: petsCats || petsDogs,
+      pet_friendly: petFriendly,
       pets_cats: petsCats,
       pets_dogs: petsDogs,
       pets_dog_size: petsDogSize,
       pets_notes: petsNotes,
-      heat_included: parseCheckbox(formData, "heat_included"),
-      hydro_included: parseCheckbox(formData, "hydro_included"),
-      water_included: parseCheckbox(formData, "water_included"),
+      // Utilities tri-state (0050): true / false / null = inherit.
+      heat_included: parseTriStateBool(formData, "heat_included"),
+      hydro_included: parseTriStateBool(formData, "hydro_included"),
+      water_included: parseTriStateBool(formData, "water_included"),
       photos_ready: parseCheckbox(formData, "photos_ready"),
       // Standard-policy per-unit overrides (0048); null = inherit org profile.
       lease_term: normalizeLeaseTerm(formData.get("lease_term")),
@@ -343,14 +355,15 @@ export async function duplicateProperty(formData: FormData) {
     air_conditioning: boolean;
     balcony: boolean;
     furnished: boolean;
-    pet_friendly: boolean;
-    pets_cats: boolean;
-    pets_dogs: boolean;
+    // Utilities + pets are inheritable (0050); null = inherit, carried as-is.
+    pet_friendly: boolean | null;
+    pets_cats: boolean | null;
+    pets_dogs: boolean | null;
     pets_dog_size: string | null;
     pets_notes: string | null;
-    heat_included: boolean;
-    hydro_included: boolean;
-    water_included: boolean;
+    heat_included: boolean | null;
+    hydro_included: boolean | null;
+    water_included: boolean | null;
     photos_ready: boolean;
     lease_term: string | null;
     smoking: string | null;

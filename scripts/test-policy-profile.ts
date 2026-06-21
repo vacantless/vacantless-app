@@ -2,12 +2,25 @@
 // Run: npx tsx scripts/test-policy-profile.ts
 import {
   POLICY_FIELDS,
+  FEATURE_POLICY_FIELDS,
   resolveEffectivePolicy,
   resolveEffectiveFeatures,
   resolveBuildingProfile,
   validateBuildingPolicySettings,
+  validatePolicyProfileSettings,
   type PolicyProfile,
 } from "../lib/policy-profile";
+
+// Blank utilities/pets form input — the slice-2b (0050) fields default to
+// "inherit" so existing slice-1/2 validator cases keep their meaning.
+const BLANK_FEAT = {
+  heat_included: "",
+  hydro_included: "",
+  water_included: "",
+  pets_cats: "",
+  pets_dogs: "",
+  pets_dog_size: "",
+};
 
 let passed = 0;
 let failed = 0;
@@ -180,6 +193,7 @@ const ORG_DEFAULT: PolicyProfile = {
     smoking: "",
     ac_type: "",
     on_site_management: "",
+    ...BLANK_FEAT,
   });
   ok("all-blank -> all null (no 1_year floor at building level)", r.values.policy_lease_term === null && r.values.policy_smoking === null && r.values.policy_ac_type === null && r.values.policy_on_site_management === null);
   ok("all-blank -> allInherit true (caller deletes the row)", r.allInherit === true);
@@ -190,6 +204,7 @@ const ORG_DEFAULT: PolicyProfile = {
     smoking: "non_smoking",
     ac_type: "sleeve",
     on_site_management: "false",
+    ...BLANK_FEAT,
   });
   ok("valid values pass through", r.values.policy_lease_term === "2_year" && r.values.policy_smoking === "non_smoking" && r.values.policy_ac_type === "sleeve" && r.values.policy_on_site_management === false);
   ok("any field set -> allInherit false", r.allInherit === false);
@@ -200,9 +215,138 @@ const ORG_DEFAULT: PolicyProfile = {
     smoking: "nope",
     ac_type: "bogus",
     on_site_management: "maybe",
+    ...BLANK_FEAT,
   });
   ok("invalid values normalize to null (inherit)", r.values.policy_lease_term === null && r.values.policy_smoking === null && r.values.policy_ac_type === null && r.values.policy_on_site_management === null);
   ok("all-invalid -> allInherit true", r.allInherit === true);
+}
+
+// ===========================================================================
+// Slice 2b (0050): utilities (heat/hydro/water) + pets (cats/dogs/dog-size)
+// extend the SAME unit > building > org inheritance. null = inherit.
+// ===========================================================================
+
+ok("FEATURE_POLICY_FIELDS has 6", FEATURE_POLICY_FIELDS.length === 6);
+
+// A Pillette-style profile WITH utilities + pets: heat+water in, hydro out,
+// cats + small dogs.
+const PILLETTE_FULL: PolicyProfile = {
+  ...PILLETTE,
+  heat_included: true,
+  hydro_included: false,
+  water_included: true,
+  pets_cats: true,
+  pets_dogs: true,
+  pets_dog_size: "small",
+};
+
+// --- resolveEffectiveFeatures: utilities/pets inherit + pet_friendly derived -
+{
+  const { features } = resolveEffectiveFeatures(
+    { beds: 1, heat_included: null, pets_cats: null, pets_dogs: null } as never,
+    PILLETTE_FULL,
+  );
+  ok("inherits heat_included=true", features.heat_included === true);
+  ok("inherits hydro_included=false", features.hydro_included === false);
+  ok("inherits water_included=true", features.water_included === true);
+  ok("inherits pets_cats=true", features.pets_cats === true);
+  ok("inherits pets_dogs=true", features.pets_dogs === true);
+  ok("inherits pets_dog_size=small", features.pets_dog_size === "small");
+  ok("pet_friendly re-derived from inherited cats/dogs", features.pet_friendly === true);
+}
+
+// --- a unit's explicit false beats an inherited true (no clobber) -----------
+{
+  const { features } = resolveEffectiveFeatures(
+    { heat_included: false, pets_dogs: false } as never,
+    PILLETTE_FULL,
+  );
+  ok("unit heat_included=false overrides profile true", features.heat_included === false);
+  ok("unit pets_dogs=false overrides profile true", features.pets_dogs === false);
+  ok("water still inherits true (not overridden)", features.water_included === true);
+  ok("cats still inherits true; pet_friendly stays true", features.pets_cats === true && features.pet_friendly === true);
+}
+
+// --- no profile + no pets -> pet_friendly false ------------------------------
+{
+  const { features } = resolveEffectiveFeatures(
+    { pets_cats: false, pets_dogs: false } as never,
+    null,
+  );
+  ok("no cats/dogs -> pet_friendly false", features.pet_friendly === false);
+  ok("utilities unset + null profile stay null (inherit)", features.heat_included === null);
+}
+
+// --- resolveBuildingProfile resolves utilities/pets building-over-org --------
+{
+  const org: PolicyProfile = {
+    heat_included: false,
+    water_included: false,
+    pets_cats: false,
+    pets_dogs: false,
+    pets_dog_size: null,
+  };
+  const building: PolicyProfile = {
+    heat_included: true, // building override
+    // water_included null -> inherit org false
+    pets_cats: true, // building override
+    pets_dog_size: "medium",
+  };
+  const merged = resolveBuildingProfile(building, org);
+  ok("building heat true beats org false", merged.heat_included === true);
+  ok("building water null inherits org false", merged.water_included === false);
+  ok("building cats true beats org false", merged.pets_cats === true);
+  ok("building dogs null inherits org false", merged.pets_dogs === false);
+  ok("building dog_size medium beats org null", merged.pets_dog_size === "medium");
+}
+
+// --- end-to-end unit > building > org for a utility -------------------------
+{
+  const org: PolicyProfile = { heat_included: false };
+  const building: PolicyProfile = { heat_included: true };
+  const merged = resolveBuildingProfile(building, org);
+  const inheritUnit = resolveEffectiveFeatures({} as never, merged);
+  ok("unit unset inherits building heat=true through org", inheritUnit.features.heat_included === true);
+  const overrideUnit = resolveEffectiveFeatures({ heat_included: false } as never, merged);
+  ok("unit heat=false beats building true", overrideUnit.features.heat_included === false);
+}
+
+// --- validators parse the utilities/pets fields ------------------------------
+{
+  const r = validatePolicyProfileSettings({
+    lease_term: "",
+    smoking: "",
+    ac_type: "",
+    on_site_management: "",
+    heat_included: "true",
+    hydro_included: "false",
+    water_included: "",
+    pets_cats: "true",
+    pets_dogs: "",
+    pets_dog_size: "small",
+  });
+  ok("org validator: lease_term floors to 1_year", r.values.policy_lease_term === "1_year");
+  ok("org validator: heat true parsed", r.values.policy_heat_included === true);
+  ok("org validator: hydro false parsed", r.values.policy_hydro_included === false);
+  ok("org validator: water blank -> null", r.values.policy_water_included === null);
+  ok("org validator: cats true parsed", r.values.policy_pets_cats === true);
+  ok("org validator: dog_size small parsed", r.values.policy_pets_dog_size === "small");
+  ok("org validator: bad dog_size ignored", validatePolicyProfileSettings({ lease_term: "", smoking: "", ac_type: "", on_site_management: "", ...BLANK_FEAT, pets_dog_size: "huge" }).values.policy_pets_dog_size === null);
+}
+
+// --- allInherit accounts for the feature fields ------------------------------
+{
+  // Only a utility overridden, all four core fields blank: NOT allInherit.
+  const r = validateBuildingPolicySettings({
+    lease_term: "",
+    smoking: "",
+    ac_type: "",
+    on_site_management: "",
+    ...BLANK_FEAT,
+    heat_included: "true",
+  });
+  ok("a building overriding only a utility is NOT allInherit", r.allInherit === false);
+  ok("its heat override parsed true", r.values.policy_heat_included === true);
 }
 
 console.log(`\npolicy-profile: ${passed} passed, ${failed} failed`);

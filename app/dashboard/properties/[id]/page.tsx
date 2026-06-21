@@ -91,6 +91,18 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// Inherit-hint helpers for the per-unit tri-state utilities/pets selects (0050).
+// The empty option reads "Inherit (<building-effective value>)".
+function boolToSelect(v: boolean | null | undefined): string {
+  return v == null ? "" : v ? "true" : "false";
+}
+function utilInheritWord(v: boolean | null | undefined): string {
+  return v == null ? "not set" : v ? "included" : "tenant pays";
+}
+function petInheritWord(v: boolean | null | undefined): string {
+  return v == null ? "not set" : v ? "welcome" : "not welcome";
+}
+
 type Property = {
   id: string;
   address: string;
@@ -109,14 +121,15 @@ type Property = {
   air_conditioning: boolean;
   balcony: boolean;
   furnished: boolean;
-  pet_friendly: boolean;
-  pets_cats: boolean;
-  pets_dogs: boolean;
+  // Utilities + pets are now inheritable (0050); null = inherit building/org.
+  pet_friendly: boolean | null;
+  pets_cats: boolean | null;
+  pets_dogs: boolean | null;
   pets_dog_size: string | null;
   pets_notes: string | null;
-  heat_included: boolean;
-  hydro_included: boolean;
-  water_included: boolean;
+  heat_included: boolean | null;
+  hydro_included: boolean | null;
+  water_included: boolean | null;
   photos_ready: boolean;
   // Standard-policy per-unit overrides (0048); null = inherit org profile.
   lease_term: string | null;
@@ -252,6 +265,12 @@ export default async function PropertyDetailPage({
         smoking: org.policy_smoking,
         ac_type: org.policy_ac_type,
         on_site_management: org.policy_on_site_management,
+        heat_included: org.policy_heat_included,
+        hydro_included: org.policy_hydro_included,
+        water_included: org.policy_water_included,
+        pets_cats: org.policy_pets_cats,
+        pets_dogs: org.policy_pets_dogs,
+        pets_dog_size: org.policy_pets_dog_size,
       }
     : null;
   let buildingProfile: PolicyProfile | null = null;
@@ -259,7 +278,7 @@ export default async function PropertyDetailPage({
     const { data: bp } = await supabase
       .from("org_building_policies")
       .select(
-        "policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management",
+        "policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size",
       )
       .eq("organization_id", org.id)
       .eq("building_key", p.building_key)
@@ -270,6 +289,12 @@ export default async function PropertyDetailPage({
         smoking: bp.policy_smoking,
         ac_type: bp.policy_ac_type,
         on_site_management: bp.policy_on_site_management,
+        heat_included: bp.policy_heat_included,
+        hydro_included: bp.policy_hydro_included,
+        water_included: bp.policy_water_included,
+        pets_cats: bp.policy_pets_cats,
+        pets_dogs: bp.policy_pets_dogs,
+        pets_dog_size: bp.policy_pets_dog_size,
       };
     }
   }
@@ -1280,14 +1305,16 @@ export default async function PropertyDetailPage({
             air_conditioning: p.air_conditioning,
             balcony: p.balcony,
             furnished: p.furnished,
-            pet_friendly: p.pet_friendly,
-            pets_cats: p.pets_cats,
-            pets_dogs: p.pets_dogs,
-            pets_dog_size: p.pets_dog_size,
+            // Effective (inherited) utilities/pets so the description helper
+            // reflects the unit's resolved policy, not a bare unset.
+            pet_friendly: effectiveFeatures.pet_friendly,
+            pets_cats: effectiveFeatures.pets_cats,
+            pets_dogs: effectiveFeatures.pets_dogs,
+            pets_dog_size: effectiveFeatures.pets_dog_size,
             pets_notes: p.pets_notes,
-            heat_included: p.heat_included,
-            hydro_included: p.hydro_included,
-            water_included: p.water_included,
+            heat_included: effectiveFeatures.heat_included,
+            hydro_included: effectiveFeatures.hydro_included,
+            water_included: effectiveFeatures.water_included,
             available_date: p.available_date,
             rent_cents: p.rent_cents,
           }}
@@ -1418,50 +1445,73 @@ export default async function PropertyDetailPage({
             ))}
           </div>
 
-          {/* --- Pets (structured policy, migration 0045) --- */}
+          {/* --- Pets (structured policy 0045; inheritable 0050) --- */}
           <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
             <p className="mb-2 text-xs font-medium text-gray-600">Pets welcome</p>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              {(
-                [
-                  ["pets_cats", "Cats", p.pets_cats],
-                  ["pets_dogs", "Dogs", p.pets_dogs],
-                ] as const
-              ).map(([name, label, checked]) => (
-                <label
-                  key={name}
-                  className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"
+            <p className="mb-3 text-xs text-gray-400">
+              Leave a field on &ldquo;Inherit&rdquo; to use your{" "}
+              <Link
+                href="/dashboard/properties/standard-policy"
+                className="underline hover:text-gray-600"
+              >
+                standard pet policy
+              </Link>
+              ; set one here only if this unit differs.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-1 block text-sm text-gray-600">Cats</span>
+                <select
+                  name="pets_cats"
+                  defaultValue={boolToSelect(p.pets_cats)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
                 >
-                  <input
-                    type="checkbox"
-                    name={name}
-                    defaultChecked={checked}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  {label}
-                </label>
-              ))}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-gray-600">Dog size limit</label>
+                  <option value="">
+                    Inherit ({petInheritWord(policyProfile?.pets_cats)})
+                  </option>
+                  <option value="true">Welcome</option>
+                  <option value="false">Not welcome</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-gray-600">Dogs</span>
+                <select
+                  name="pets_dogs"
+                  defaultValue={boolToSelect(p.pets_dogs)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">
+                    Inherit ({petInheritWord(policyProfile?.pets_dogs)})
+                  </option>
+                  <option value="true">Welcome</option>
+                  <option value="false">Not welcome</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-gray-600">
+                  Dog size limit
+                </span>
                 <select
                   name="pets_dog_size"
                   defaultValue={p.pets_dog_size ?? ""}
-                  className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
                 >
-                  <option value="">No limit</option>
+                  <option value="">
+                    Inherit ({dogSizeLabel(policyProfile?.pets_dog_size) ?? "no limit"})
+                  </option>
                   {DOG_SIZE_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
                       {dogSizeLabel(opt)}
                     </option>
                   ))}
                 </select>
-              </div>
+              </label>
             </div>
             <input
               name="pets_notes"
               defaultValue={p.pets_notes ?? ""}
               placeholder="Pet notes (optional), e.g. 1 pet max, no aggressive breeds"
-              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
             <p className="mt-1 text-xs text-gray-400">
               Advertised pet preference for the listing and feed. In Ontario a
@@ -1471,33 +1521,42 @@ export default async function PropertyDetailPage({
           </div>
         </fieldset>
 
-        {/* --- Utilities included in rent --- */}
+        {/* --- Utilities included in rent (inheritable 0050) --- */}
         <fieldset className="border-t border-gray-100 pt-4">
           <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
             Utilities included in rent
           </legend>
           <p className="mb-3 text-xs text-gray-400">
-            Leave a utility unchecked if the tenant pays it.
+            Leave a utility on &ldquo;Inherit&rdquo; to use your{" "}
+            <Link
+              href="/dashboard/properties/standard-policy"
+              className="underline hover:text-gray-600"
+            >
+              standard policy
+            </Link>
+            ; pick &ldquo;Tenant pays&rdquo; only where this unit differs.
           </p>
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {(
               [
-                ["heat_included", "Heat", p.heat_included],
-                ["hydro_included", "Hydro", p.hydro_included],
-                ["water_included", "Water", p.water_included],
+                ["heat_included", "Heat", p.heat_included, policyProfile?.heat_included],
+                ["hydro_included", "Hydro", p.hydro_included, policyProfile?.hydro_included],
+                ["water_included", "Water", p.water_included, policyProfile?.water_included],
               ] as const
-            ).map(([name, label, checked]) => (
-              <label
-                key={name}
-                className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"
-              >
-                <input
-                  type="checkbox"
+            ).map(([name, label, value, inherited]) => (
+              <label key={name} className="block">
+                <span className="mb-1 block text-sm text-gray-600">{label}</span>
+                <select
                   name={name}
-                  defaultChecked={checked}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                {label}
+                  defaultValue={boolToSelect(value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">
+                    Inherit ({utilInheritWord(inherited)})
+                  </option>
+                  <option value="true">Included</option>
+                  <option value="false">Tenant pays</option>
+                </select>
               </label>
             ))}
           </div>

@@ -12,6 +12,8 @@ import {
   smokingLabel,
   AC_TYPE_OPTIONS,
   acTypeLabel,
+  DOG_SIZE_OPTIONS,
+  dogSizeLabel,
 } from "@/lib/property-features";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { BrandBanner, IconTile } from "@/components/ui";
@@ -31,8 +33,10 @@ export const dynamic = "force-dynamic";
 //     value unless the unit's own page overrides it.
 //
 // A "building" = the units that share a normalized street address
-// (properties.building_key, a generated column). Pet policy + included utilities
-// still live per-unit (a separate follow-up slice extends inheritance to them).
+// (properties.building_key, a generated column). Slice 2b (S277, migration 0050)
+// extended inheritance to included utilities (heat/hydro/water) + the pet policy
+// (cats/dogs/dog-size); they now appear at BOTH the org and per-building levels
+// and resolve unit > building > org like the four original fields.
 // ============================================================================
 
 // A/C "Inherit" hint label — handles the "none" sentinel + the unset case.
@@ -46,12 +50,156 @@ function onSiteInheritLabel(value: boolean | null | undefined): string {
   return value == null ? "not set" : value ? "yes" : "no";
 }
 
+// Utilities/pets standard-policy fields (0050). These share one render helper
+// across the org-defaults form and each per-building form. `base` is null on the
+// org form (empty option reads "Not set") and the resolved org values on a
+// building form (empty option reads "Inherit (<org value>)").
+type FeaturePolicy = {
+  policy_heat_included: boolean | null;
+  policy_hydro_included: boolean | null;
+  policy_water_included: boolean | null;
+  policy_pets_cats: boolean | null;
+  policy_pets_dogs: boolean | null;
+  policy_pets_dog_size: string | null;
+};
+
+function boolToSelect(v: boolean | null | undefined): string {
+  return v == null ? "" : v ? "true" : "false";
+}
+function utilInheritWord(v: boolean | null | undefined): string {
+  return v == null ? "not set" : v ? "included" : "tenant pays";
+}
+function petInheritWord(v: boolean | null | undefined): string {
+  return v == null ? "not set" : v ? "welcome" : "not welcome";
+}
+
+function FeatureTriSelect({
+  name,
+  value,
+  base,
+  trueLabel,
+  falseLabel,
+  emptyWord,
+}: {
+  name: string;
+  value: boolean | null;
+  base: boolean | null | undefined;
+  trueLabel: string;
+  falseLabel: string;
+  emptyWord: (v: boolean | null | undefined) => string;
+}) {
+  const isBuilding = base !== undefined;
+  return (
+    <select name={name} defaultValue={boolToSelect(value)} className={SELECT_CLASS}>
+      <option value="">
+        {isBuilding ? `Inherit (${emptyWord(base)})` : "Not set"}
+      </option>
+      <option value="true">{trueLabel}</option>
+      <option value="false">{falseLabel}</option>
+    </select>
+  );
+}
+
+function FeaturePolicyFields({
+  values,
+  base,
+}: {
+  values: FeaturePolicy;
+  base: FeaturePolicy | null;
+}) {
+  const isBuilding = base !== null;
+  return (
+    <div className="mt-5 border-t border-gray-100 pt-5">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        Utilities included in rent
+      </p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {(
+          [
+            ["policy_heat_included", "Heat", "heat"],
+            ["policy_hydro_included", "Hydro", "hydro"],
+            ["policy_water_included", "Water", "water"],
+          ] as const
+        ).map(([name, label, k]) => (
+          <label key={name} className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">
+              {label}
+            </span>
+            <FeatureTriSelect
+              name={name}
+              value={values[name]}
+              base={isBuilding ? base![name] : undefined}
+              trueLabel="Included"
+              falseLabel="Tenant pays"
+              emptyWord={utilInheritWord}
+            />
+          </label>
+        ))}
+      </div>
+
+      <p className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        Pet policy
+      </p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Cats</span>
+          <FeatureTriSelect
+            name="policy_pets_cats"
+            value={values.policy_pets_cats}
+            base={isBuilding ? base!.policy_pets_cats : undefined}
+            trueLabel="Welcome"
+            falseLabel="Not welcome"
+            emptyWord={petInheritWord}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Dogs</span>
+          <FeatureTriSelect
+            name="policy_pets_dogs"
+            value={values.policy_pets_dogs}
+            base={isBuilding ? base!.policy_pets_dogs : undefined}
+            trueLabel="Welcome"
+            falseLabel="Not welcome"
+            emptyWord={petInheritWord}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">
+            Dog size limit
+          </span>
+          <select
+            name="policy_pets_dog_size"
+            defaultValue={values.policy_pets_dog_size ?? ""}
+            className={SELECT_CLASS}
+          >
+            <option value="">
+              {isBuilding
+                ? `Inherit (${dogSizeLabel(base!.policy_pets_dog_size) ?? "no limit"})`
+                : "Not set"}
+            </option>
+            {DOG_SIZE_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {dogSizeLabel(opt)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="mt-3 text-xs text-gray-400">
+        Applies to dogs when they&apos;re welcome. In Ontario a &ldquo;no
+        pets&rdquo; lease clause is void (RTA s.14) — this is a listing/screening
+        preference, not an enforceable rule.
+      </p>
+    </div>
+  );
+}
+
 type BuildingOverride = {
   policy_lease_term: string | null;
   policy_smoking: string | null;
   policy_ac_type: string | null;
   policy_on_site_management: boolean | null;
-};
+} & FeaturePolicy;
 
 type BuildingRow = {
   key: string;
@@ -84,7 +232,7 @@ export default async function StandardPolicyPage({
     supabase
       .from("org_building_policies")
       .select(
-        "building_key, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management",
+        "building_key, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size",
       )
       .eq("organization_id", org.id),
   ]);
@@ -96,8 +244,26 @@ export default async function StandardPolicyPage({
       policy_smoking: r.policy_smoking,
       policy_ac_type: r.policy_ac_type,
       policy_on_site_management: r.policy_on_site_management,
+      policy_heat_included: r.policy_heat_included,
+      policy_hydro_included: r.policy_hydro_included,
+      policy_water_included: r.policy_water_included,
+      policy_pets_cats: r.policy_pets_cats,
+      policy_pets_dogs: r.policy_pets_dogs,
+      policy_pets_dog_size: r.policy_pets_dog_size,
     });
   }
+
+  // The org-level utilities/pets defaults, in the shared FeaturePolicy shape
+  // (used both to render the org form and as the "Inherit (...)" base for each
+  // building form).
+  const orgFeatureDefaults: FeaturePolicy = {
+    policy_heat_included: org.policy_heat_included,
+    policy_hydro_included: org.policy_hydro_included,
+    policy_water_included: org.policy_water_included,
+    policy_pets_cats: org.policy_pets_cats,
+    policy_pets_dogs: org.policy_pets_dogs,
+    policy_pets_dog_size: org.policy_pets_dog_size,
+  };
 
   // Group units into buildings; keep the first address seen as the display
   // label (street portion, unit stripped). Sort by label.
@@ -238,11 +404,7 @@ export default async function StandardPolicyPage({
             </label>
           </div>
 
-          <p className="mt-5 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Pet policy and included utilities stay on each unit for now — those
-            vary more per suite. This profile covers the building-constant fields
-            that were otherwise re-typed for every unit and portal.
-          </p>
+          <FeaturePolicyFields values={orgFeatureDefaults} base={null} />
 
           <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
             Save organization defaults
@@ -385,6 +547,19 @@ export default async function StandardPolicyPage({
                           </select>
                         </label>
                       </div>
+                      <FeaturePolicyFields
+                        values={
+                          ov ?? {
+                            policy_heat_included: null,
+                            policy_hydro_included: null,
+                            policy_water_included: null,
+                            policy_pets_cats: null,
+                            policy_pets_dogs: null,
+                            policy_pets_dog_size: null,
+                          }
+                        }
+                        base={orgFeatureDefaults}
+                      />
                       <button className="mt-4 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
                         Save this building
                       </button>
