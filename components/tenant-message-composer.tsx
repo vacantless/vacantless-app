@@ -7,7 +7,7 @@
 // logic — fan-out, recipient resolution, token substitution — is server-side in
 // lib/tenant-comms; this is just the form state.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   MESSAGE_CHANNELS,
   channelLabel,
@@ -37,6 +37,17 @@ export type ComposerTemplate = {
 
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
+
+// Friendly, click-to-insert personalization fields (S283). Each chip drops the
+// underlying {{token}} at the cursor so the operator never has to type curly
+// braces — the tokens still resolve per-tenant server-side via tokenVarsFor.
+const TOKEN_CHIPS: { token: string; label: string }[] = [
+  { token: "first_name", label: "First name" },
+  { token: "full_name", label: "Full name" },
+  { token: "property_address", label: "Property address" },
+  { token: "org_name", label: "Your business name" },
+  { token: "rent", label: "Rent amount" },
+];
 
 export default function TenantMessageComposer({
   tenancyId,
@@ -70,6 +81,31 @@ export default function TenantMessageComposer({
     () => new Set(tenants.map((t) => t.id)),
   );
   const [templateId, setTemplateId] = useState("");
+
+  // Token chip insertion — drop {{token}} at the cursor of whichever field the
+  // operator last touched (defaults to the body), then restore focus + caret.
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const [lastFocused, setLastFocused] = useState<"subject" | "body">("body");
+
+  function insertToken(tok: string) {
+    const snippet = `{{${tok}}}`;
+    const intoSubject = lastFocused === "subject" && channelIncludesEmail(channel);
+    const target = intoSubject ? subjectRef.current : bodyRef.current;
+    const current = intoSubject ? subject : body;
+    const setValue = intoSubject ? setSubject : setBody;
+    const start = target?.selectionStart ?? current.length;
+    const end = target?.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + snippet + current.slice(end);
+    setValue(next);
+    requestAnimationFrame(() => {
+      const el = intoSubject ? subjectRef.current : bodyRef.current;
+      if (!el) return;
+      el.focus();
+      const pos = start + snippet.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
 
   const showSubject = channelIncludesEmail(channel);
   const usesEmail = channelIncludesEmail(channel);
@@ -227,10 +263,12 @@ export default function TenantMessageComposer({
         <div>
           <label className={labelCls}>Subject</label>
           <input
+            ref={subjectRef}
             name="subject"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="e.g. Rent reminder for {{property_address}}"
+            onFocus={() => setLastFocused("subject")}
+            placeholder="e.g. Rent reminder for your home"
             className={inputCls}
           />
         </div>
@@ -240,18 +278,37 @@ export default function TenantMessageComposer({
       <div>
         <label className={labelCls}>Message</label>
         <textarea
+          ref={bodyRef}
           name="body"
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          onFocus={() => setLastFocused("body")}
           rows={5}
-          placeholder={"Hi {{first_name}},\n\n..."}
+          placeholder={"Hi there,\n\n..."}
           className={inputCls}
         />
-        <span className="mt-1 block text-xs text-gray-400">
-          Tokens: {"{{first_name}}"}, {"{{full_name}}"}, {"{{property_address}}"},{" "}
-          {"{{org_name}}"}, {"{{rent}}"} — filled in per tenant.
-          {usesSms && " Texts add a 'Reply STOP to opt out' line automatically."}
-        </span>
+        <div className="mt-2">
+          <span className="mb-1 block text-xs text-gray-500">
+            Insert a detail (fills in automatically for each tenant):
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {TOKEN_CHIPS.map((chip) => (
+              <button
+                key={chip.token}
+                type="button"
+                onClick={() => insertToken(chip.token)}
+                className="rounded-md border border-brand/40 bg-white px-2 py-0.5 text-xs font-medium text-brand transition hover:bg-brand/5"
+              >
+                + {chip.label}
+              </button>
+            ))}
+          </div>
+          {usesSms && (
+            <span className="mt-1 block text-xs text-gray-400">
+              Texts add a &ldquo;Reply STOP to opt out&rdquo; line automatically.
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Recipients */}
