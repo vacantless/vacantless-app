@@ -91,6 +91,8 @@ import {
 } from "@/lib/listing-distribution";
 import { deriveRentalLifecycle } from "@/lib/rental-lifecycle";
 import { LifecycleRail } from "./lifecycle-rail";
+import { deriveNextAction } from "@/lib/rental-next-action";
+import { NextActionCard } from "./next-action-card";
 
 export const dynamic = "force-dynamic";
 
@@ -428,6 +430,67 @@ export default async function PropertyDetailPage({
     leadStatuses: leadRows.map((l) => l.status),
   });
 
+  // Forward-derivation (IA Step 4 slice 3): the PRE-FILLED next action for the
+  // current step. The setup/market cascade reflects which fields were inherited
+  // from the building/org policy profile — the four 0048/0049 fields come from
+  // resolveEffectiveFeatures' inherited set; the 0050 utilities/pets fields it
+  // doesn't track, so derive their provenance here (unit value unset + an
+  // effective value present = inherited). Pure logic in lib/rental-next-action.
+  const inheritedNext = new Set<string>(inheritedPolicyFields);
+  const markInherit = (
+    key: string,
+    unitVal: boolean | null | undefined,
+    effVal: boolean | null | undefined,
+  ) => {
+    if (
+      (unitVal === null || unitVal === undefined) &&
+      effVal !== null &&
+      effVal !== undefined
+    )
+      inheritedNext.add(key);
+  };
+  markInherit("heat_included", p.heat_included, effectiveFeatures.heat_included);
+  markInherit("hydro_included", p.hydro_included, effectiveFeatures.hydro_included);
+  markInherit("water_included", p.water_included, effectiveFeatures.water_included);
+  const catsInherited =
+    (p.pets_cats === null || p.pets_cats === undefined) &&
+    effectiveFeatures.pets_cats != null;
+  const dogsInherited =
+    (p.pets_dogs === null || p.pets_dogs === undefined) &&
+    effectiveFeatures.pets_dogs != null;
+  if (catsInherited || dogsInherited) inheritedNext.add("pets");
+
+  const nextAction = deriveNextAction({
+    propertyId: p.id,
+    currentStep: lifecycle.currentStep,
+    hasRent: (p.rent_cents ?? 0) > 0,
+    bedsSet: p.beds != null,
+    bathsSet: p.baths != null,
+    effective: {
+      lease_term: effectiveFeatures.lease_term,
+      smoking: effectiveFeatures.smoking,
+      ac_type: effectiveFeatures.ac_type,
+      on_site_management: effectiveFeatures.on_site_management,
+      heat_included: effectiveFeatures.heat_included,
+      hydro_included: effectiveFeatures.hydro_included,
+      water_included: effectiveFeatures.water_included,
+      pets_cats: effectiveFeatures.pets_cats,
+      pets_dogs: effectiveFeatures.pets_dogs,
+    },
+    inherited: inheritedNext,
+    isLive: linkIsLive,
+    photoCount: photoRows.length,
+    channelCount: copyTabs.length,
+    linkIsLive,
+    listingPostCount: postRows.length,
+    hasAvailability: (availabilityCount ?? 0) > 0,
+    openInquiryCount: leadRows.filter(
+      (l) =>
+        l.status === "new" || l.status === "replied" || l.status === "contacted",
+    ).length,
+    applicantCount: leadRows.filter((l) => l.status === "applied").length,
+  });
+
   return (
     <div>
       <Link
@@ -577,7 +640,12 @@ export default async function PropertyDetailPage({
 
       <LifecycleRail lifecycle={lifecycle} />
 
-      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      {nextAction && <NextActionCard action={nextAction} />}
+
+      <div
+        id="share"
+        className="mb-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+      >
         <div className="mb-3 flex items-center gap-2.5">
           <IconTile size="sm"><Icons.link className="h-4 w-4" /></IconTile>
           <h3 className="text-sm font-semibold text-gray-900">
