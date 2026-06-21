@@ -10,6 +10,8 @@ import {
   computeProration,
   prorationVarValues,
   ordinalDay,
+  clampRentDay,
+  rentDayInMonth,
 } from "../lib/proration";
 
 let passed = 0;
@@ -140,6 +142,83 @@ ok("ordinalDay 21 -> 21st", ordinalDay(21) === "21st");
 ok("ordinalDay 22 -> 22nd", ordinalDay(22) === "22nd");
 ok("ordinalDay 23 -> 23rd", ordinalDay(23) === "23rd");
 ok("ordinalDay 31 -> 31st", ordinalDay(31) === "31st");
+
+// --- clampRentDay -----------------------------------------------------------
+ok("clampRentDay passes valid day", clampRentDay(15) === 15);
+ok("clampRentDay floors below 1 to 1", clampRentDay(0) === 1 && clampRentDay(-5) === 1);
+ok("clampRentDay caps above 31 to 31", clampRentDay(99) === 31);
+ok("clampRentDay null/undefined -> 1", clampRentDay(null) === 1 && clampRentDay(undefined) === 1);
+ok("clampRentDay NaN -> 1", clampRentDay(NaN) === 1);
+ok("clampRentDay truncates fractions", clampRentDay(15.7) === 15);
+
+// --- rentDayInMonth (end-of-month clamp) ------------------------------------
+ok("rentDayInMonth 31st in Feb 2026 -> 28", rentDayInMonth(2026, 2, 31) === 28);
+ok("rentDayInMonth 31st in Feb 2024 (leap) -> 29", rentDayInMonth(2024, 2, 31) === 29);
+ok("rentDayInMonth 31st in April -> 30", rentDayInMonth(2026, 4, 31) === 30);
+ok("rentDayInMonth 15th in June -> 15", rentDayInMonth(2026, 6, 15) === 15);
+
+// --- rentDay default reproduces the day-1 path ------------------------------
+const juneDefault = computeProration(125000, "2026-06-17", 1)!;
+ok("explicit rentDay=1 matches default rentDay field", juneDefault.rentDay === 1);
+ok("explicit rentDay=1 same amount as omitted", juneDefault.calendar.formatted === june.calendar.formatted);
+ok("omitted rentDay reports rentDay=1", june.rentDay === 1);
+ok("explicit rentDay=1 same fullRentStart", juneDefault.fullRentStart === "2026-07-01");
+
+// --- custom rent day, same-month stub (rent on the 15th, start June 10) -----
+const r15a = computeProration(125000, "2026-06-10", 15)!;
+ok("r15a applicable", r15a.applicable === true);
+ok("r15a rentDay = 15", r15a.rentDay === 15);
+ok("r15a periodStart = start", r15a.periodStart === "2026-06-10");
+ok("r15a periodEnd = day before rent day", r15a.periodEnd === "2026-06-14");
+ok("r15a fullRentStart = this month's 15th", r15a.fullRentStart === "2026-06-15");
+ok("r15a calendar charges 5 days", r15a.calendar.daysCharged === 5);
+ok("r15a cycle length = 31 (May15->Jun15)", r15a.daysInMonth === 31);
+ok("r15a calendar amount = $201.61", r15a.calendar.formatted === "$201.61");
+ok("r15a 30-day charges 4 days = $166.67", r15a.thirtyDay.daysCharged === 4 && r15a.thirtyDay.formatted === "$166.67");
+ok("r15a methods disagree", r15a.methodsAgree === false);
+
+// --- custom rent day, cross-month stub (rent on the 15th, start June 20) ----
+const r15b = computeProration(125000, "2026-06-20", 15)!;
+ok("r15b periodStart = start", r15b.periodStart === "2026-06-20");
+ok("r15b periodEnd = next 14th", r15b.periodEnd === "2026-07-14");
+ok("r15b fullRentStart = next month's 15th", r15b.fullRentStart === "2026-07-15");
+ok("r15b calendar charges 25 days", r15b.calendar.daysCharged === 25);
+ok("r15b cycle length = 30 (Jun15->Jul15)", r15b.daysInMonth === 30);
+ok("r15b calendar amount = $1,041.67", r15b.calendar.formatted === "$1,041.67");
+ok("r15b methods agree (30-day cycle)", r15b.methodsAgree === true);
+
+// --- anniversary collapse (rent day == start day) ---------------------------
+const anniv = computeProration(125000, "2026-06-17", 17)!;
+ok("anniversary not applicable", anniv.applicable === false);
+ok("anniversary fullRentStart = next 17th", anniv.fullRentStart === "2026-07-17");
+ok("anniversary calendar = full month", anniv.calendar.cents === 125000 && anniv.calendar.formatted === "$1,250.00");
+
+// --- end-of-month clamp (rent on the 31st, start Feb 10 2026) ---------------
+const r31 = computeProration(125000, "2026-02-10", 31)!;
+ok("r31 applicable", r31.applicable === true);
+ok("r31 fullRentStart clamps to Feb 28", r31.fullRentStart === "2026-02-28");
+ok("r31 periodEnd = Feb 27", r31.periodEnd === "2026-02-27");
+ok("r31 calendar charges 18 days = $803.57", r31.calendar.daysCharged === 18 && r31.calendar.formatted === "$803.57");
+const r31on = computeProration(125000, "2026-01-31", 31)!;
+ok("start on a clamped rent day still no proration", r31on.applicable === false && r31on.fullRentStart === "2026-02-28");
+
+// --- year roll forward (rent on the 15th, start Dec 20 2026) ----------------
+const decRoll = computeProration(125000, "2026-12-20", 15)!;
+ok("decRoll fullRentStart rolls year = 2027-01-15", decRoll.fullRentStart === "2027-01-15");
+ok("decRoll periodEnd = 2027-01-14", decRoll.periodEnd === "2027-01-14");
+ok("decRoll calendar amount = $1,048.39", decRoll.calendar.formatted === "$1,048.39");
+
+// --- year roll backward for the previous anchor (start Jan 10 2026, day 15) --
+const janRoll = computeProration(125000, "2026-01-10", 15)!;
+ok("janRoll fullRentStart = 2026-01-15", janRoll.fullRentStart === "2026-01-15");
+ok("janRoll periodEnd = 2026-01-14", janRoll.periodEnd === "2026-01-14");
+ok("janRoll cycle = 31 (Dec15 2025 -> Jan15 2026)", janRoll.daysInMonth === 31);
+
+// --- prorationVarValues flows custom dates ----------------------------------
+const r15bVals = prorationVarValues(r15b, "calendar");
+ok("custom varValues period start", r15bVals.prorated_period_start === "2026-06-20");
+ok("custom varValues full rent start", r15bVals.full_rent_start_date === "2026-07-15");
+ok("custom varValues amount", r15bVals.prorated_rent === "$1,041.67");
 
 console.log(`proration: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

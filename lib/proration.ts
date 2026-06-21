@@ -64,6 +64,75 @@ export function daysInMonth(year: number, month: number): number {
   return lengths[month - 1];
 }
 
+// A point in time as integer y/m/d, used internally for cycle-anchor math.
+type Ymd = { year: number; month: number; day: number };
+
+// Days since the civil epoch (1970-01-01) — Howard Hinnant's days_from_civil.
+// Pure integer arithmetic, valid for any proleptic-Gregorian date, no `Date`
+// and so no timezone drift. We only need the DIFFERENCE between two dates, so
+// the epoch choice is immaterial.
+function daysFromCivil({ year, month, day }: Ymd): number {
+  const y = year - (month <= 2 ? 1 : 0);
+  const era = Math.floor((y >= 0 ? y : y - 399) / 400);
+  const yoe = y - era * 400;
+  const doy = Math.floor((153 * (month + (month > 2 ? -3 : 9)) + 2) / 5) + day - 1;
+  const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+  return era * 146097 + doe - 719468;
+}
+
+// Inverse of daysFromCivil — turn a day-serial back into a y/m/d. Lets us
+// subtract a day from an anchor (period end = next anchor − 1) without
+// special-casing month/year boundaries.
+function civilFromDays(z0: number): Ymd {
+  const z = z0 + 719468;
+  const era = Math.floor((z >= 0 ? z : z - 146096) / 146097);
+  const doe = z - era * 146097;
+  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);
+  const y = yoe + era * 400;
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  const day = doy - Math.floor((153 * mp + 2) / 5) + 1;
+  const month = mp < 10 ? mp + 3 : mp - 9;
+  return { year: y + (month <= 2 ? 1 : 0), month, day };
+}
+
+/** Number of whole days from date `a` to date `b` (b − a; negative if b < a). */
+function daysBetween(a: Ymd, b: Ymd): number {
+  return daysFromCivil(b) - daysFromCivil(a);
+}
+
+function toISO({ year, month, day }: Ymd): string {
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+/** The month immediately after the given year/month, rolling the year in Dec. */
+function nextMonth(year: number, month: number): { year: number; month: number } {
+  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+}
+
+/** The month immediately before the given year/month, rolling the year in Jan. */
+function prevMonth(year: number, month: number): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+}
+
+/**
+ * Clamp a requested rent day-of-month (1-31) into a valid range. Non-finite or
+ * out-of-range values fall back to 1 (the first-of-month default).
+ */
+export function clampRentDay(day: number | null | undefined): number {
+  if (day == null || !Number.isFinite(day)) return 1;
+  return Math.min(31, Math.max(1, Math.trunc(day)));
+}
+
+/**
+ * The actual calendar day a "rent on the Nth" cycle lands on in a given month —
+ * the requested day, but never past the month's length (so "the 31st" bills on
+ * Feb 28/29, Apr 30, etc., the standard end-of-month convention).
+ */
+export function rentDayInMonth(year: number, month: number, rentDay: number): number {
+  return Math.min(clampRentDay(rentDay), daysInMonth(year, month));
+}
+
 function pad2(n: number): string {
   return n < 10 ? "0" + n : String(n);
 }
@@ -108,52 +177,86 @@ export type ProratedAmount = {
 };
 
 export type ProrationComputation = {
-  // false when the lease starts on the 1st — a full first month, no proration.
+  // false when the lease starts exactly on its rent-cycle day (1st, or the chosen
+  // recurring day) — a full first cycle, no proration.
   applicable: boolean;
+  rentDay: number; // the recurring rent day-of-month this cycle is anchored on
   startDate: string; // YYYY-MM-DD (== periodStart)
   periodStart: string; // YYYY-MM-DD, the lease start date
-  periodEnd: string; // YYYY-MM-DD, last day of the start month
-  fullRentStart: string; // YYYY-MM-DD, first day of the following month
-  daysInMonth: number; // calendar days in the start month
+  periodEnd: string; // YYYY-MM-DD, the day before full rent begins
+  fullRentStart: string; // YYYY-MM-DD, the next rent-cycle day
+  daysInMonth: number; // calendar days in the billing cycle the stub sits in
   calendar: ProratedAmount;
   thirtyDay: ProratedAmount;
   // true iff both methods produce the same dollar figure (always so in a 30-day
-  // month) — lets the UI hide the redundant second chip.
+  // cycle) — lets the UI hide the redundant second chip.
   methodsAgree: boolean;
 };
 
 /**
- * Compute the prorated-rent suggestion from monthly rent (in cents) and a lease
- * start date. Returns null when the rent is missing/non-positive or the date is
- * not a valid YYYY-MM-DD — the caller then simply shows the blank inputs.
+ * Compute the prorated-rent suggestion from monthly rent (in cents), a lease
+ * start date, and the recurring rent day-of-month (default the 1st). Returns
+ * null when the rent is missing/non-positive or the date is not a valid
+ * YYYY-MM-DD — the caller then simply shows the blank inputs.
  *
- * Both methods charge from the start date through the last day of the start
- * month; full rent begins the 1st of the next month. The amount is rounded to
+ * The stub is charged from the start date through the day BEFORE the next
+ * rent-cycle day; full rent then begins on that rent-cycle day. With the default
+ * `rentDay = 1` this is identical to the classic "prorate the partial first
+ * month, full rent on the 1st" behavior. With any other day it anchors on that
+ * recurring day instead (e.g. rent on the 15th → a lease starting the 20th
+ * prorates the 20th→14th stub, full rent on the 15th). A start that lands exactly
+ * on the rent day is a full first cycle (`applicable: false`).
+ *
+ * Two methods: `calendar` divides the monthly rent by the actual length of the
+ * cycle the stub sits in; `thirtyDay` uses a flat 30-day cycle. Both round to
  * the nearest cent.
  */
 export function computeProration(
   rentCents: number | null | undefined,
   startDate: string | null | undefined,
+  rentDayInput?: number | null,
 ): ProrationComputation | null {
   if (rentCents == null || !Number.isFinite(rentCents) || rentCents <= 0) return null;
   const parsed = parseISODate(startDate ?? "");
   if (!parsed) return null;
 
   const { year, month, day } = parsed;
-  const dim = daysInMonth(year, month);
+  const rentDay = clampRentDay(rentDayInput ?? 1);
 
-  const periodStart = `${year}-${pad2(month)}-${pad2(day)}`;
-  const periodEnd = `${year}-${pad2(month)}-${pad2(dim)}`;
-  const fullRentStart =
-    month === 12 ? `${year + 1}-01-01` : `${year}-${pad2(month + 1)}-01`;
+  // The rent day as it actually lands this month (clamped to month length).
+  const thisMonthRentDay = rentDayInMonth(year, month, rentDay);
 
-  // Calendar method: daily rate over the month's actual length.
-  const calDays = dim - day + 1;
-  const calCents = Math.round((rentCents * calDays) / dim);
+  // Find the next rent-cycle day strictly after the start date (= full-rent
+  // start) and the previous one (= the day the current cycle opened). The stub
+  // sits between them.
+  let nextAnchor: Ymd;
+  let prevAnchor: Ymd;
+  if (day < thisMonthRentDay) {
+    // Start is before this month's rent day → the cycle closes this month.
+    nextAnchor = { year, month, day: thisMonthRentDay };
+    const pm = prevMonth(year, month);
+    prevAnchor = { ...pm, day: rentDayInMonth(pm.year, pm.month, rentDay) };
+  } else {
+    // Start is on/after this month's rent day → next cycle day is next month.
+    const nm = nextMonth(year, month);
+    nextAnchor = { ...nm, day: rentDayInMonth(nm.year, nm.month, rentDay) };
+    prevAnchor = { year, month, day: thisMonthRentDay };
+  }
 
-  // 30-day flat method: daily rate over a fixed 30-day month. Days charged can
-  // hit 0 for a start on the 31st (30 - 31 + 1) — clamp so it never goes negative.
-  const flatDays = Math.max(0, 30 - day + 1);
+  const start: Ymd = { year, month, day };
+  const periodEnd = civilFromDays(daysFromCivil(nextAnchor) - 1);
+
+  // Length of the full cycle the stub sits in (prev → next rent day).
+  const cycleDays = daysBetween(prevAnchor, nextAnchor);
+
+  // Calendar method: daily rate over the actual cycle length × days occupied.
+  const calDays = daysBetween(start, nextAnchor);
+  const calCents = Math.round((rentCents * calDays) / cycleDays);
+
+  // 30-day flat method: how far into a notional 30-day cycle the start lands,
+  // charged at rent/30 per remaining day. Clamped so it never goes negative
+  // (a start past day 30 of the cycle charges 0).
+  const flatDays = Math.max(0, 30 - daysBetween(prevAnchor, start));
   const flatCents = Math.round((rentCents * flatDays) / 30);
 
   const calendar: ProratedAmount = {
@@ -170,12 +273,13 @@ export function computeProration(
   };
 
   return {
-    applicable: day !== 1,
-    startDate: periodStart,
-    periodStart,
-    periodEnd,
-    fullRentStart,
-    daysInMonth: dim,
+    applicable: day !== thisMonthRentDay,
+    rentDay,
+    startDate: toISO(start),
+    periodStart: toISO(start),
+    periodEnd: toISO(periodEnd),
+    fullRentStart: toISO(nextAnchor),
+    daysInMonth: cycleDays,
     calendar,
     thirtyDay,
     methodsAgree: calCents === flatCents,

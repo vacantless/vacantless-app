@@ -35,6 +35,7 @@ import {
   prorationVarValues,
   ordinalDay,
   parseISODate,
+  clampRentDay,
   PRORATION_TOKENS,
   type ProrationMethod,
 } from "@/lib/proration";
@@ -182,27 +183,44 @@ export default function LeaseClauseWizard({
     [selected, vars, recordVars],
   );
 
-  // How rent recurs. "first_of_month" (the default) prorates a mid-month first
-  // month; "anniversary" means rent runs from the start day each month, so no
-  // proration is needed (the operator's edge case — e.g. a 17th-to-17th cycle).
-  const [rentCycle, setRentCycle] = useState<"first_of_month" | "anniversary">(
-    "first_of_month",
-  );
+  // How rent recurs. "first_of_month" (the default) bills on the 1st and
+  // prorates a mid-month first month; "anniversary" runs from the lease start day
+  // each month (no proration — e.g. a 17th-to-17th cycle); "specific" bills on a
+  // chosen recurring day (e.g. the 15th) and prorates the stub to that day.
+  const [rentCycle, setRentCycle] = useState<
+    "first_of_month" | "anniversary" | "specific"
+  >("first_of_month");
+  // The chosen recurring day for the "specific" cycle (1–31; clamped per month).
+  const [specificDay, setSpecificDay] = useState(15);
 
-  // The raw proration math (independent of the chosen cycle). `applicable` is
-  // true only for a valid rent + a mid-month start — i.e. proration is possible.
-  const rawProration = useMemo(
-    () => computeProration(rentCents, startDate),
-    [rentCents, startDate],
-  );
-  const prorationPossible = rawProration?.applicable ?? false;
-  // The start day-of-month, for the anniversary-cycle label.
+  // The start day-of-month, for the anniversary-cycle label and defaults.
   const startDay = useMemo(() => parseISODate(startDate ?? "")?.day ?? null, [startDate]);
 
-  // The ACTIVE suggestion: only offered on the first-of-month cycle. Switching to
-  // an anniversary cycle suppresses the banner + chips (no proration needed).
-  const proration =
-    rentCycle === "first_of_month" && prorationPossible ? rawProration : null;
+  // The recurring rent day-of-month implied by the chosen cycle.
+  const rentDay =
+    rentCycle === "first_of_month"
+      ? 1
+      : rentCycle === "anniversary"
+        ? (startDay ?? 1)
+        : clampRentDay(specificDay);
+
+  // The proration math for the chosen rent day. `applicable` is true for a valid
+  // rent + a start date that doesn't land exactly on the rent day.
+  const rawProration = useMemo(
+    () => computeProration(rentCents, startDate, rentDay),
+    [rentCents, startDate, rentDay],
+  );
+  // Whether to show the rent-cycle control at all: we need a valid rent + start
+  // date. (The day-1 computation is non-null iff both are valid.)
+  const cycleControlVisible = useMemo(
+    () => computeProration(rentCents, startDate, 1) != null && startDay != null,
+    [rentCents, startDate, startDay],
+  );
+
+  // The ACTIVE suggestion: the chosen cycle's proration when a stub actually
+  // applies. An anniversary cycle (or a specific day equal to the start day)
+  // collapses to no proration, so the banner + chips hide automatically.
+  const proration = rawProration?.applicable ? rawProration : null;
 
   // The prorated-rent clause id, so toggling the cycle can include/drop it.
   const proratedClauseId = useMemo(
@@ -277,21 +295,42 @@ export default function LeaseClauseWizard({
   function setVar(token: string, value: string) {
     setVars((v) => ({ ...v, [token]: value }));
   }
-  // Switching to an anniversary cycle means no proration: drop the prorated-rent
-  // clause + fact; switching back to first-of-month re-adds them. Only the
-  // prorated clause is touched — every other selection stays as the operator set it.
-  function changeRentCycle(next: "first_of_month" | "anniversary") {
-    setRentCycle(next);
-    const anniversary = next === "anniversary";
-    setFacts((f) => ({ ...f, hasProratedRent: !anniversary }));
+  // Sync the prorated-rent clause + fact with whether the chosen cycle actually
+  // produces a partial first month. A first-of-month or specific-day cycle that
+  // doesn't land on the start date prorates (add the clause); an anniversary
+  // cycle — or a specific day equal to the start day — is a full first cycle
+  // (drop it). Only the prorated clause is touched; every other selection stays
+  // as the operator set it.
+  function syncProratedClause(mode: typeof rentCycle, day: number) {
+    const nextRentDay =
+      mode === "first_of_month"
+        ? 1
+        : mode === "anniversary"
+          ? (startDay ?? 1)
+          : clampRentDay(day);
+    const willProrate =
+      computeProration(rentCents, startDate, nextRentDay)?.applicable ?? false;
+    setFacts((f) => ({ ...f, hasProratedRent: willProrate }));
     if (proratedClauseId) {
       setIncluded((prev) => {
         const s = new Set(prev);
-        if (anniversary) s.delete(proratedClauseId);
-        else s.add(proratedClauseId);
+        if (willProrate) s.add(proratedClauseId);
+        else s.delete(proratedClauseId);
         return s;
       });
     }
+  }
+  function changeRentCycle(next: typeof rentCycle) {
+    setRentCycle(next);
+    syncProratedClause(next, specificDay);
+  }
+  // Picking a day implies the specific-day cycle: switch to it and sync the
+  // prorated clause against the newly chosen day in one step (never a stale one).
+  function changeSpecificDay(day: number) {
+    const clamped = clampRentDay(day);
+    setSpecificDay(clamped);
+    setRentCycle("specific");
+    syncProratedClause("specific", clamped);
   }
   // Fill all four prorated-rent inputs at once for the chosen method (the dates
   // are method-independent; only the amount differs between calendar/30-day).
@@ -384,10 +423,11 @@ export default function LeaseClauseWizard({
         </div>
       </fieldset>
 
-      {/* Rent cycle — only relevant when the lease starts mid-month. Lets the
-          operator say rent runs from the 1st (prorate) vs. the start day (no
-          proration), which collapses the proration suggestion below. */}
-      {prorationPossible && startDay != null && (
+      {/* Rent cycle — which day rent recurs on. Bill on the 1st (prorate the
+          partial first month), run from the lease start day (no proration), or
+          pick any recurring day (e.g. the 15th) and prorate the stub to it. The
+          choice drives the proration suggestion below. */}
+      {cycleControlVisible && startDay != null && (
         <fieldset className="rounded-lg border border-gray-200 p-3">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
             Rent cycle
@@ -420,6 +460,38 @@ export default function LeaseClauseWizard({
                 Rent runs from the {ordinalDay(startDay)} of each month
                 <span className="block text-xs text-gray-500">
                   No proration needed — full cycles from the {ordinalDay(startDay)}.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="radio"
+                name="rent_cycle_ui"
+                checked={rentCycle === "specific"}
+                onChange={() => changeRentCycle("specific")}
+                className="mt-0.5 h-4 w-4 border-gray-300"
+              />
+              <span className="flex-1">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  Rent on the
+                  <select
+                    value={specificDay}
+                    onChange={(e) => changeSpecificDay(Number(e.target.value))}
+                    className="rounded-md border border-gray-300 px-1.5 py-0.5 text-sm"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>
+                        {ordinalDay(d)}
+                      </option>
+                    ))}
+                  </select>
+                  of each month
+                </span>
+                <span className="block text-xs text-gray-500">
+                  {clampRentDay(specificDay) === startDay
+                    ? `Matches the start day — no proration needed.`
+                    : `Prorate the partial period up to the ${ordinalDay(clampRentDay(specificDay))}.`}{" "}
+                  The 29th–31st bill on the last day in shorter months.
                 </span>
               </span>
             </label>
