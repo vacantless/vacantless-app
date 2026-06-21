@@ -295,9 +295,39 @@ ok(
   applied.steps.find((s) => s.step === "screen")!.href ===
     `/dashboard/leads?property=${PID}&status=applied`,
 );
+// Lease / Tenanted deep-links (S282, IA G8 fix). With no tenancy yet, the
+// steps route to the "new tenancy" form pre-filled for this unit; with a
+// tenancy, straight into it — never the cross-unit hub.
+const TID = "22222222-2222-2222-2222-222222222222";
 ok(
-  "tenanted href routes to tenants hub",
-  live.steps.find((s) => s.step === "tenanted")!.href === "/dashboard/tenants",
+  "lease href -> new tenancy form for this unit when none exists",
+  live.steps.find((s) => s.step === "lease")!.href ===
+    `/dashboard/tenancies/new?property=${PID}`,
+);
+ok(
+  "tenanted href -> new tenancy form for this unit when none exists",
+  live.steps.find((s) => s.step === "tenanted")!.href ===
+    `/dashboard/tenancies/new?property=${PID}`,
+);
+const withTenancy = deriveRentalLifecycle(
+  PID,
+  inp({
+    propertyStatus: "leased",
+    hasRent: true,
+    photoCount: 1,
+    leadStatuses: ["leased"],
+    tenancyId: TID,
+  }),
+);
+ok(
+  "lease href -> this unit's tenancy when one exists",
+  withTenancy.steps.find((s) => s.step === "lease")!.href ===
+    `/dashboard/tenancies/${TID}`,
+);
+ok(
+  "tenanted href -> this unit's tenancy when one exists",
+  withTenancy.steps.find((s) => s.step === "tenanted")!.href ===
+    `/dashboard/tenancies/${TID}`,
 );
 
 // --- paused unit still counts as marketed -----------------------------------

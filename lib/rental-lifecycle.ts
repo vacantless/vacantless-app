@@ -81,6 +81,15 @@ export type RentalLifecycleInput = {
   hasAvailability: boolean;
   /** leads.status for every inquiry on this unit. */
   leadStatuses: LeadStatus[];
+  /**
+   * The tenancy record for this unit, if one exists (active preferred, else
+   * most recent). Lets the Lease/Tenanted steps deep-link into THIS unit's
+   * tenancy instead of dumping the operator at the cross-unit hub — the spine's
+   * "act on one unit" promise, kept through the lease step (S282, IA G8 fix).
+   * Null/omitted = no tenancy yet → the steps route to the pre-filled
+   * "new tenancy" form for this property (the forward-derivation cascade).
+   */
+  tenancyId?: string | null;
 };
 
 export type LifecycleStepResult = {
@@ -205,8 +214,16 @@ export function deriveRentalLifecycle(
   // has applications, jumps to the inquiries list filtered to THIS rental's
   // applicants (?property=&status=applied) instead of the generic screening
   // config — so reviewing applications lands on the right rows.
+  //
+  // Lease / Tenanted (S282, IA G8 fix): if this unit has a tenancy, link
+  // straight to it (the lease, rent setup, and tenant comms all live there);
+  // otherwise route to the "new tenancy" form pre-filled for this property, so
+  // the spine never dumps the operator at the cross-unit hub to re-find the unit.
   const hrefFor = (step: LifecycleStep): string => {
     const self = `/dashboard/properties/${propertyId}`;
+    const tenancyHref = input.tenancyId
+      ? `/dashboard/tenancies/${input.tenancyId}`
+      : `/dashboard/tenancies/new?property=${propertyId}`;
     switch (step) {
       case "set_up":
         return `${self}#rental-details`;
@@ -221,9 +238,9 @@ export function deriveRentalLifecycle(
           ? `/dashboard/leads?property=${propertyId}&status=applied`
           : "/dashboard/leasing/screening";
       case "lease":
-        return "/dashboard/tenants";
+        return tenancyHref;
       case "tenanted":
-        return "/dashboard/tenants";
+        return tenancyHref;
     }
   };
 

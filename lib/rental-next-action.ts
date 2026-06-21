@@ -348,7 +348,13 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
             ]
           : [],
         gaps: [{ key: "lease", label: "Create the lease & send for signing" }],
-        cta: { label: "Go to Tenants", href: "/dashboard/tenants" },
+        // S282 (IA G8 fix): act on THIS unit — the lease step is frontier only
+        // before a tenancy exists, so route to the new-tenancy form pre-filled
+        // for this property, not the cross-unit hub.
+        cta: {
+          label: "Create the lease",
+          href: `/dashboard/tenancies/new?property=${input.propertyId}`,
+        },
       };
     }
 
@@ -361,7 +367,10 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         blurb: "Confirm the tenancy and set up rent collection.",
         derived: [],
         gaps: [{ key: "tenancy", label: "Confirm the tenancy" }],
-        cta: { label: "Go to Tenants", href: "/dashboard/tenants" },
+        cta: {
+          label: "Set up the tenancy",
+          href: `/dashboard/tenancies/new?property=${input.propertyId}`,
+        },
       };
   }
 }

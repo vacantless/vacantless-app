@@ -35,7 +35,7 @@ const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 export default async function NewTenancyPage({
   searchParams,
 }: {
-  searchParams: { from?: string; err?: string };
+  searchParams: { from?: string; err?: string; property?: string };
 }) {
   const supabase = createClient();
 
@@ -57,7 +57,10 @@ export default async function NewTenancyPage({
   }
 
   const isConvert = lead != null;
-  const defaultPropertyId = lead?.property_id ?? "";
+  // Preselect the unit: a converted lead's property wins; otherwise honor
+  // ?property= from the rental lifecycle rail's Lease step (S282, IA G8 fix),
+  // so "create the lease for this unit" lands with the unit already chosen.
+  const defaultPropertyId = lead?.property_id ?? searchParams.property ?? "";
 
   // A tenancy attaches to a real, in-use unit, so Draft and Off-market rentals
   // (e.g. a freshly duplicated "Copy of …" draft) don't belong in the picker —

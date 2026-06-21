@@ -237,6 +237,18 @@ export default async function PropertyDetailPage({
     .from("availability_rules")
     .select("id", { count: "exact", head: true });
 
+  // The unit's tenancy (active preferred, else most recent) — lets the
+  // lifecycle rail's Lease/Tenanted steps deep-link into THIS unit's tenancy
+  // rather than the cross-unit hub (S282, IA G8 fix).
+  const { data: tenancy } = await supabase
+    .from("tenancies")
+    .select("id")
+    .eq("property_id", p.id)
+    .order("start_date", { ascending: false }) // most recent tenancy
+    .limit(1)
+    .maybeSingle();
+  const tenancyId = (tenancy as { id: string } | null)?.id ?? null;
+
   const eligibleCount = countEligible(leadRows, p.rent_cents);
   const showBlastCard = blastOfferable(
     p.price_drop_pending_cents,
@@ -433,6 +445,7 @@ export default async function PropertyDetailPage({
     listingPostCount: postRows.length,
     hasAvailability: (availabilityCount ?? 0) > 0,
     leadStatuses: leadRows.map((l) => l.status),
+    tenancyId,
   });
 
   // Forward-derivation (IA Step 4 slice 3): the PRE-FILLED next action for the

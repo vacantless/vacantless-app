@@ -177,7 +177,7 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   const a = deriveNextAction(inp({ currentStep: "lease", effective, inherited: new Set(["lease_term"]) }));
   ok("lease: lease gap present", findGap(a, "lease"));
   ok("lease: policy fact present", !!findFact(a, "policy"));
-  ok("lease: cta -> tenants", a?.cta.href === "/dashboard/tenants");
+  ok("lease: cta -> new tenancy for this unit", a?.cta.href === `/dashboard/tenancies/new?property=${PID}`);
 }
 
 // --- every non-null step yields a non-empty cta + title ---------------------
