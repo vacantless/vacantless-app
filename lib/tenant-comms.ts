@@ -368,3 +368,162 @@ export function buildTenantSmsBody(renderedBody: string, orgName: string | null)
   const full = hasOptOut ? prefixed : `${prefixed} ${SMS_OPT_OUT_LINE}`;
   return noEmDash(full);
 }
+
+// --- Starter template seed (provisioned on onboarding) ----------------------
+//
+// The Tenant message centre (migration 0033) shipped with NO default templates,
+// so every new org opened to a blank slate while the lease-clause library DOES
+// seed defaults on onboarding. This is the parity fix: a starter pack the
+// operator can edit, delete, or add to — a starting point, not a lock-in.
+//
+// Approved 2026-06-21 (S288) from TENANT-MESSAGE-TEMPLATES-STARTER-DRAFT, itself
+// adapted from the Windsor Community Guidelines v10 into 1:1 tenant messages.
+// Each body is generic + token-based (no hardcoded business name / contact /
+// amount) so it reads correctly for any org. Bodies use ONLY the real
+// MESSAGE_TOKENS (first_name / full_name / property_address / org_name / rent) —
+// the draft's friendly labels {{business_name}}/{{rent_amount}} map to the
+// implemented slugs {{org_name}}/{{rent}} (an unknown token would render its raw
+// braces, so this mapping is load-bearing). Where a concrete date/time/amount is
+// needed the body leaves a [square-bracket gap] the operator fills before
+// sending. The entry-notice and late-rent copy stay within Ontario's RTA (24h
+// written notice, 8am-8pm, stated purpose; no coercive late-rent language or
+// invented fees). House style: hyphens, never em/en dashes.
+//
+// channel "both" carries the email subject + body; the SMS leg auto-derives via
+// buildTenantSmsBody at send time (the data model is one body per template), and
+// the operator picks the channel + trims per send.
+
+export type SeedTemplate = {
+  name: string;
+  channel: MessageChannel;
+  /** Required for email/both, null for sms-only (none today). */
+  subject: string | null;
+  body: string;
+};
+
+export const TENANT_MESSAGE_TEMPLATE_SEED: SeedTemplate[] = [
+  {
+    name: "Move-in welcome",
+    channel: "email",
+    subject: "Welcome to {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "Welcome to your new home at {{property_address}}. We're glad to have you with us.\n\n" +
+      "A few quick things to get you settled:\n" +
+      "- The best way to reach us for anything - maintenance, questions, updates - is to reply to this message, so it's logged and we can respond quickly.\n" +
+      "- For an emergency (fire, active flooding, no heat in winter, a gas odour), call 911 or local emergency services first, then let us know once you're safe.\n" +
+      "- We'll follow up separately with your community guidelines and any building-specific details.\n\n" +
+      "If there's anything you need in your first few weeks, just reach out.\n\n" +
+      "Best,\n{{org_name}}",
+  },
+  {
+    name: "24-hour notice of entry",
+    channel: "email",
+    subject: "Notice of entry - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "This is written notice that we'll need to enter your unit at {{property_address}} for the following:\n\n" +
+      "- Date: [date]\n" +
+      "- Time window: [start time]-[end time] (between 8 a.m. and 8 p.m.)\n" +
+      "- Reason: [repair / inspection / maintenance / other]\n\n" +
+      "You don't need to be home, and we'll leave everything secure. If the timing is a real problem, reply and we'll do our best to adjust.\n\n" +
+      "Thank you,\n{{org_name}}",
+  },
+  {
+    name: "Maintenance request received",
+    channel: "both",
+    subject: "We got your maintenance request - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "Thanks for letting us know. We've logged your request for {{property_address}} and we're arranging next steps. We'll follow up with a time once it's scheduled.\n\n" +
+      "If anything about the issue changes or gets worse in the meantime, reply here and let us know.\n\n" +
+      "{{org_name}}",
+  },
+  {
+    name: "Maintenance scheduled",
+    channel: "both",
+    subject: "Your repair is scheduled - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "Good news - your repair at {{property_address}} is booked:\n\n" +
+      "- Date: [date]\n" +
+      "- Time window: [start time]-[end time]\n" +
+      "- Who's coming: [contractor / our team]\n\n" +
+      "You don't need to be home unless you'd prefer to be. Reply if that window doesn't work.\n\n" +
+      "{{org_name}}",
+  },
+  {
+    name: "Maintenance completed",
+    channel: "both",
+    subject: "All done - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "The work at {{property_address}} is complete. Please take a look when you have a moment and reply to let us know everything's working as it should. If anything still isn't right, we'll get back on it.\n\n" +
+      "Thanks for your patience,\n{{org_name}}",
+  },
+  {
+    name: "Rent reminder",
+    channel: "both",
+    subject: "Friendly rent reminder - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "Just a friendly reminder that your rent of {{rent}} for {{property_address}} is due on [due date]. If you've already sent it, thank you and please disregard.\n\n" +
+      "If you ever have a question about a payment, just reply here.\n\n" +
+      "{{org_name}}",
+  },
+  {
+    name: "Rent received",
+    channel: "both",
+    subject: "Payment received - thank you",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "We've received your rent payment of {{rent}} for {{property_address}}. Thank you - nothing further is needed.\n\n" +
+      "{{org_name}}",
+  },
+  {
+    name: "Late rent - gentle nudge",
+    channel: "both",
+    subject: "Checking in on this month's rent - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "We haven't yet received your rent of {{rent}} for {{property_address}}, which was due on [due date]. It may simply have crossed in the mail, so please disregard if it's already on its way.\n\n" +
+      "If something's come up, reply and let's talk it through - we'd rather sort it out together early.\n\n" +
+      "Thank you,\n{{org_name}}",
+  },
+  {
+    name: "Lease renewal heads-up",
+    channel: "email",
+    subject: "Your lease at {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "Your current lease term at {{property_address}} is coming up on [renewal/anniversary date]. We'd be happy to have you stay.\n\n" +
+      "In Ontario, when a fixed term ends the tenancy automatically continues month-to-month under the same conditions, so there's nothing you need to do to remain. If you'd like to talk about a new term or have any questions, just reply.\n\n" +
+      "Best,\n{{org_name}}",
+  },
+  {
+    name: "Winter heat and pipes reminder",
+    channel: "both",
+    subject: "A few winter reminders - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "As the cold sets in, a couple of quick reminders to keep {{property_address}} safe and comfortable:\n" +
+      "- Keep the heat at a minimum of 18 C (65 F), even when you're away, to prevent frozen pipes.\n" +
+      "- Please don't block radiators or baseboard heaters.\n" +
+      "- Report any draft, heat loss, or unsafe icy walkway by replying here so we can address it.\n\n" +
+      "Stay warm,\n{{org_name}}",
+  },
+  {
+    name: "Move-out checklist and showings",
+    channel: "email",
+    subject: "Next steps for your move-out - {{property_address}}",
+    body:
+      "Hi {{first_name}},\n\n" +
+      "Thanks for letting us know you'll be moving out of {{property_address}}. We'll make this as smooth as possible.\n\n" +
+      "A few things ahead:\n" +
+      "- We'll send a move-out checklist covering cleaning standards, key/fob return, and final condition.\n" +
+      "- During your final 60 days we may schedule viewings with 24 hours' written notice each time - keeping the unit tidy helps keep these brief.\n" +
+      "- A move-out walk-through helps return your deposit faster.\n\n" +
+      "We'll be in touch with specifics. Reply any time with questions.\n\n" +
+      "Best,\n{{org_name}}",
+  },
+];

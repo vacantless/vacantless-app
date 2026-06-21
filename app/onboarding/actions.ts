@@ -8,6 +8,7 @@ import {
   DEFAULT_BRAND_SECONDARY,
 } from "@/lib/branding";
 import { RESIDENTIAL_CLAUSE_SEED } from "@/lib/clauses";
+import { TENANT_MESSAGE_TEMPLATE_SEED } from "@/lib/tenant-comms";
 
 // Seed the org's starter clause library (lease vault #11, slice 1). Each seed
 // clause becomes a lease_clauses row + a single version-1 lease_clause_versions
@@ -71,6 +72,32 @@ async function seedClauseLibrary(
   }
 }
 
+// Seed the org's starter tenant-message templates (tenant comms, step 3). Each
+// seed becomes one tenant_message_templates row. Best-effort, exactly like the
+// clause seed: a failure must NOT block onboarding — the org exists and the
+// operator can add templates by hand in the message centre. RLS passes because
+// the just-created user is owner_admin of the org. One bulk insert.
+async function seedTenantMessageTemplates(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+) {
+  const { error } = await supabase.from("tenant_message_templates").insert(
+    TENANT_MESSAGE_TEMPLATE_SEED.map((t) => ({
+      organization_id: orgId,
+      name: t.name,
+      channel: t.channel,
+      subject: t.subject,
+      body: t.body,
+    })),
+  );
+  if (error) {
+    console.error("seedTenantMessageTemplates: insert failed", {
+      orgId,
+      error: error.message,
+    });
+  }
+}
+
 function slugify(name: string) {
   return (
     name
@@ -124,6 +151,9 @@ export async function createOrganization(formData: FormData) {
 
   // Seed the starter clause library (best-effort; never blocks onboarding).
   await seedClauseLibrary(supabase, orgId);
+
+  // Seed the starter tenant-message templates (best-effort; never blocks).
+  await seedTenantMessageTemplates(supabase, orgId);
 
   redirect("/dashboard");
 }
