@@ -68,6 +68,11 @@ import {
 } from "@/lib/clauses";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { RentIncreaseCard } from "@/components/rent-increase-card";
+import {
+  pickDefaultOpenSection,
+  type LeaseDocStatusLabel,
+  type RentCollectionStatusLabel,
+} from "@/lib/tenancy-section";
 
 export const dynamic = "force-dynamic";
 
@@ -565,7 +570,7 @@ export default async function TenancyDetailPage({
   const tenantsStatus = `${tenants.length} on lease`;
   const leaseDetailsStatus = `${formatRentCents(t.rent_cents)}${t.rent_cents != null ? "/mo" : ""}`;
   const hasExecutedLease = leaseDocs.some((d) => d.status === "executed");
-  const leaseDocStatus = hasExecutedLease
+  const leaseDocStatus: LeaseDocStatusLabel = hasExecutedLease
     ? "Signed"
     : leaseDocs.some((d) => d.status === "sent")
       ? "Sent for signature"
@@ -576,7 +581,7 @@ export default async function TenancyDetailPage({
     !!t.rotessa_schedule_id ||
     (!!stripeRentView.subscriptionId &&
       stripeRentView.subscriptionStatus === "active");
-  const rentCollectionStatus = rentAutomatic
+  const rentCollectionStatus: RentCollectionStatusLabel = rentAutomatic
     ? "Automatic monthly debit"
     : t.rotessa_customer_id || stripeRentView.paymentMethodId
       ? "Authorized — not scheduled"
@@ -594,6 +599,15 @@ export default async function TenancyDetailPage({
     overdue: "Overdue",
     exempt: "Exempt",
   };
+
+  // Smart default-open (S286): open the one section that needs attention now,
+  // instead of always-Tenants. Falls back to Tenants when nothing's pending.
+  const openSection = pickDefaultOpenSection({
+    tenantCount: tenants.length,
+    leaseDocStatus,
+    rentCollectionStatus,
+    rentIncreaseStatus: rentIncrease?.status ?? null,
+  });
 
   return (
     <div>
@@ -645,7 +659,12 @@ export default async function TenancyDetailPage({
       )}
 
       {/* Tenants roster --------------------------------------------------- */}
-      <CollapsibleSection title="Tenants & contacts" status={tenantsStatus} defaultOpen>
+      <CollapsibleSection
+        id="tenants"
+        title="Tenants & contacts"
+        status={tenantsStatus}
+        defaultOpen={openSection === "tenants"}
+      >
       <ul className="mb-3 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {tenants.map((tn) => (
           <li key={tn.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
@@ -774,9 +793,11 @@ export default async function TenancyDetailPage({
 
       {/* Lease document (clause-selection wizard + renewal diff) ---------- */}
       <CollapsibleSection
+        id="lease-document"
         title="Lease document"
         status={leaseDocStatus}
         done={hasExecutedLease}
+        defaultOpen={openSection === "lease-document"}
       >
       <TenancyLeaseSection
         tenancyId={t.id}
@@ -795,8 +816,10 @@ export default async function TenancyDetailPage({
       {/* Rent increase (N1 v1) ------------------------------------------- */}
       {rentIncrease && (
         <CollapsibleSection
+          id="rent-increase"
           title="Rent increase"
           status={RENT_INCREASE_STATUS_LABEL[rentIncrease.status] ?? undefined}
+          defaultOpen={openSection === "rent-increase"}
         >
           <div className="mb-8">
             <RentIncreaseCard
@@ -808,7 +831,13 @@ export default async function TenancyDetailPage({
       )}
 
       {/* Rent collection (Rotessa + Stripe) ------------------------------ */}
-      <CollapsibleSection title="Rent collection" status={rentCollectionStatus} done={rentAutomatic}>
+      <CollapsibleSection
+        id="rent-collection"
+        title="Rent collection"
+        status={rentCollectionStatus}
+        done={rentAutomatic}
+        defaultOpen={openSection === "rent-collection"}
+      >
       <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         {t.rotessa_customer_id ? (
           <div className="space-y-3">
