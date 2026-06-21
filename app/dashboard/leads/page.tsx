@@ -34,6 +34,7 @@ type LeadRow = {
   created_at: string;
   next_action_at: string | null;
   qualified_out: boolean;
+  property_id: string | null;
   property: { address: string } | null;
 };
 
@@ -46,13 +47,13 @@ const FOLLOW_CHIP: Record<Exclude<FollowUpStatus, "none">, string> = {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; screen?: string };
+  searchParams: { status?: string; screen?: string; property?: string };
 }) {
   const supabase = createClient();
   const { data } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, status, created_at, next_action_at, qualified_out, property:properties(address)",
+      "id, name, email, phone, source, status, created_at, next_action_at, qualified_out, property_id, property:properties(address)",
     )
     .order("created_at", { ascending: false });
 
@@ -67,17 +68,33 @@ export default async function LeadsPage({
   const screen: ScreenFilter | null = isScreenFilter(searchParams.screen)
     ? searchParams.screen
     : null;
-  // Stage and screening filters are orthogonal — apply both.
-  const rows = all.filter(
+
+  // Per-rental scope: deep-links from a rental's lifecycle rail land here
+  // filtered to that one unit. The stage + screening chips then count and
+  // filter WITHIN the unit, so the queue reads as "this rental's inquiries".
+  const propertyId =
+    typeof searchParams.property === "string" && searchParams.property
+      ? searchParams.property
+      : null;
+  const propertyAddress = propertyId
+    ? (all.find((l) => l.property_id === propertyId)?.property?.address ??
+        null)
+    : null;
+  const scoped = propertyId
+    ? all.filter((l) => l.property_id === propertyId)
+    : all;
+
+  // Stage and screening filters are orthogonal — apply both, within scope.
+  const rows = scoped.filter(
     (l) =>
       (filter ? l.status === filter : true) &&
       matchesScreenFilter(l.qualified_out, screen),
   );
 
-  // The screening filter row only appears once an org actually has flagged
-  // leads — orgs that never enabled screening never see the cue.
-  const mismatchCount = all.filter((l) => l.qualified_out).length;
-  const fitCount = all.length - mismatchCount;
+  // The screening filter row only appears once the (scoped) set actually has
+  // flagged leads — orgs that never enabled screening never see the cue.
+  const mismatchCount = scoped.filter((l) => l.qualified_out).length;
+  const fitCount = scoped.length - mismatchCount;
   const showScreenFilter = mismatchCount > 0;
 
   return (
@@ -89,19 +106,36 @@ export default async function LeadsPage({
         subtitle="Every renter who has reached out about one of your rentals."
       />
 
+      {propertyId && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/20 bg-brand/5 px-4 py-3 text-sm">
+          <span className="text-gray-700">
+            Showing inquiries for{" "}
+            <span className="font-semibold text-gray-900">
+              {propertyAddress ?? "this rental"}
+            </span>
+          </span>
+          <Link
+            href="/dashboard/leads"
+            className="shrink-0 font-medium text-brand hover:underline"
+          >
+            Show all rentals
+          </Link>
+        </div>
+      )}
+
       <div className="mb-3 flex flex-wrap gap-2 text-sm">
         <FilterChip
-          label={`All (${all.length})`}
-          href={leadsHref(null, screen)}
+          label={`All (${scoped.length})`}
+          href={leadsHref(null, screen, propertyId)}
           active={!filter}
         />
         {PIPELINE_STAGES.map((s) => {
-          const n = all.filter((l) => l.status === s).length;
+          const n = scoped.filter((l) => l.status === s).length;
           return (
             <FilterChip
               key={s}
               label={`${statusLabel(s)} (${n})`}
-              href={leadsHref(s, screen)}
+              href={leadsHref(s, screen, propertyId)}
               active={filter === s}
             />
           );
@@ -115,17 +149,17 @@ export default async function LeadsPage({
           </span>
           <FilterChip
             label="All fits"
-            href={leadsHref(filter, null)}
+            href={leadsHref(filter, null, propertyId)}
             active={!screen}
           />
           <FilterChip
             label={`Good fits (${fitCount})`}
-            href={leadsHref(filter, "ok")}
+            href={leadsHref(filter, "ok", propertyId)}
             active={screen === "ok"}
           />
           <FilterChip
             label={`Possible mismatch (${mismatchCount})`}
-            href={leadsHref(filter, "out")}
+            href={leadsHref(filter, "out", propertyId)}
             active={screen === "out"}
           />
         </div>
@@ -283,17 +317,20 @@ export default async function LeadsPage({
 }
 
 /**
- * Build a /dashboard/leads URL preserving whichever of the two orthogonal
- * filters (stage + screening) you are NOT currently changing, so clicking a
- * screening chip keeps the active stage and vice-versa.
+ * Build a /dashboard/leads URL preserving whichever of the orthogonal filters
+ * (stage + screening) you are NOT currently changing, so clicking a screening
+ * chip keeps the active stage and vice-versa. The per-rental scope always rides
+ * along — switching stage/screening chips stays within the same unit.
  */
 function leadsHref(
   status: LeadStatus | null,
   screen: ScreenFilter | null,
+  property: string | null,
 ): string {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (screen) params.set("screen", screen);
+  if (property) params.set("property", property);
   const qs = params.toString();
   return qs ? `/dashboard/leads?${qs}` : "/dashboard/leads";
 }

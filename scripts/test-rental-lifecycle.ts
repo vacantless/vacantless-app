@@ -286,9 +286,14 @@ ok(
   live.steps[2].href === `/dashboard/properties/${PID}#inquiries`,
 );
 ok(
-  "screen href routes to screening surface",
+  "screen href routes to screening surface when no applicants",
   live.steps.find((s) => s.step === "screen")!.href ===
     "/dashboard/leasing/screening",
+);
+ok(
+  "screen href filters the inquiries list to this unit's applicants once an application is in",
+  applied.steps.find((s) => s.step === "screen")!.href ===
+    `/dashboard/leads?property=${PID}&status=applied`,
 );
 ok(
   "tenanted href routes to tenants hub",

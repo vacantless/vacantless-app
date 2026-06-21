@@ -1846,6 +1846,7 @@ export default async function PropertyDetailPage({
           }
         />
       ) : (
+        <>
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {leadRows.map((l) => (
             <li key={l.id}>
@@ -1863,6 +1864,13 @@ export default async function PropertyDetailPage({
             </li>
           ))}
         </ul>
+        <Link
+          href={`/dashboard/leads?property=${p.id}`}
+          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+        >
+          View these in your inquiries list →
+        </Link>
+        </>
       )}
 
       </CollapsibleSection>

@@ -201,7 +201,10 @@ export function deriveRentalLifecycle(
 
   // Deep-links into the surface where each step's work actually happens.
   // Set up / Market / Inquiries live on this same rental page (anchors); the
-  // later cross-unit stages route into their hub queues.
+  // later cross-unit stages route into their hub queues. Screen, once this unit
+  // has applications, jumps to the inquiries list filtered to THIS rental's
+  // applicants (?property=&status=applied) instead of the generic screening
+  // config — so reviewing applications lands on the right rows.
   const hrefFor = (step: LifecycleStep): string => {
     const self = `/dashboard/properties/${propertyId}`;
     switch (step) {
@@ -214,7 +217,9 @@ export function deriveRentalLifecycle(
       case "viewings":
         return "/dashboard/showings";
       case "screen":
-        return "/dashboard/leasing/screening";
+        return appliedLeads >= 1
+          ? `/dashboard/leads?property=${propertyId}&status=applied`
+          : "/dashboard/leasing/screening";
       case "lease":
         return "/dashboard/tenants";
       case "tenanted":
