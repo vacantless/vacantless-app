@@ -1166,6 +1166,8 @@ export default async function TenancyDetailPage({
             orgName={org?.name ?? null}
             propertyAddress={t.property?.address ?? null}
             rentCents={t.rent_cents}
+            orgContactEmail={org?.public_contact_email ?? null}
+            orgContactPhone={org?.public_contact_phone ?? null}
             sendAction={sendTenantMessage}
           />
         )}

@@ -49,6 +49,14 @@ const TOKEN_CHIPS: { token: string; label: string }[] = [
   { token: "rent", label: "Rent amount" },
 ];
 
+// Contact-detail chips are only offered when the org has actually set the value
+// (Settings -> Public Page & Brand), so an operator never inserts a token that
+// would resolve to an empty string.
+const CONTACT_CHIPS: { token: string; label: string }[] = [
+  { token: "business_email", label: "Your email" },
+  { token: "business_phone", label: "Your phone" },
+];
+
 export default function TenantMessageComposer({
   tenancyId,
   tenants,
@@ -57,6 +65,8 @@ export default function TenantMessageComposer({
   orgName,
   propertyAddress,
   rentCents,
+  orgContactEmail = null,
+  orgContactPhone = null,
   sendAction,
 }: {
   tenancyId: string;
@@ -72,6 +82,10 @@ export default function TenantMessageComposer({
   orgName: string | null;
   propertyAddress: string | null;
   rentCents: number | null;
+  // Org public contact details (migration 0043). Drive the {{business_email}} /
+  // {{business_phone}} chips + preview; null when unset (chip then hidden).
+  orgContactEmail?: string | null;
+  orgContactPhone?: string | null;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [channel, setChannel] = useState<MessageChannel>("email");
@@ -110,6 +124,17 @@ export default function TenantMessageComposer({
   const showSubject = channelIncludesEmail(channel);
   const usesEmail = channelIncludesEmail(channel);
   const usesSms = channelIncludesSms(channel);
+
+  // The personalization chips on offer: the always-available tokens plus any
+  // contact-detail chip whose value the org has actually set (so a chip never
+  // inserts a token that would resolve to an empty string).
+  const chips = useMemo(() => {
+    const contactSet: Record<string, boolean> = {
+      business_email: !!(orgContactEmail ?? "").trim(),
+      business_phone: !!(orgContactPhone ?? "").trim(),
+    };
+    return [...TOKEN_CHIPS, ...CONTACT_CHIPS.filter((c) => contactSet[c.token])];
+  }, [orgContactEmail, orgContactPhone]);
 
   // A channel is locked when it needs SMS but the plan doesn't include it.
   function channelLocked(c: MessageChannel): boolean {
@@ -179,6 +204,8 @@ export default function TenantMessageComposer({
           orgName,
           propertyAddress,
           rentCents,
+          orgContactEmail,
+          orgContactPhone,
         };
         const emailBody = renderForRecipient(body, ctx);
         return {
@@ -189,7 +216,7 @@ export default function TenantMessageComposer({
           smsBody: usesSms ? buildTenantSmsBody(emailBody, orgName) : null,
         };
       });
-  }, [tenants, selected, body, subject, usesEmail, usesSms, orgName, propertyAddress, rentCents]);
+  }, [tenants, selected, body, subject, usesEmail, usesSms, orgName, propertyAddress, rentCents, orgContactEmail, orgContactPhone]);
 
   const hasContent =
     body.trim().length > 0 || (usesEmail && subject.trim().length > 0);
@@ -292,7 +319,7 @@ export default function TenantMessageComposer({
             Insert a detail (fills in automatically for each tenant):
           </span>
           <div className="flex flex-wrap gap-1.5">
-            {TOKEN_CHIPS.map((chip) => (
+            {chips.map((chip) => (
               <button
                 key={chip.token}
                 type="button"

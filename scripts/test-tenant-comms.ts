@@ -79,12 +79,37 @@ ok("tokenVars property", vars.property_address === "1 King St");
 ok("tokenVars org", vars.org_name === "Acme Rentals");
 ok("tokenVars rent", vars.rent === "$1,250/month");
 
+const varsContact = tokenVarsFor({
+  tenantName: "Sam Lee",
+  orgName: "Acme Rentals",
+  propertyAddress: "1 King St",
+  rentCents: 125000,
+  orgContactEmail: "  hello@acme.ca ",
+  orgContactPhone: "226-773-7555",
+});
+ok("tokenVars business_email trimmed", varsContact.business_email === "hello@acme.ca");
+ok("tokenVars business_phone", varsContact.business_phone === "226-773-7555");
+
 const varsEmpty = tokenVarsFor({ tenantName: null, orgName: null, propertyAddress: null, rentCents: null });
 ok("tokenVars fallback first_name", varsEmpty.first_name === "there");
 ok("tokenVars fallback full_name", varsEmpty.full_name === "there");
 ok("tokenVars fallback property", varsEmpty.property_address === "your home");
 ok("tokenVars fallback org", varsEmpty.org_name === "your property manager");
 ok("tokenVars fallback rent empty", varsEmpty.rent === "");
+ok("tokenVars business_email empty when unset", varsEmpty.business_email === "");
+ok("tokenVars business_phone empty when unset", varsEmpty.business_phone === "");
+
+ok(
+  "renderForRecipient with contact tokens",
+  renderForRecipient("Questions? Email {{business_email}} or call {{business_phone}}.", {
+    tenantName: "Sam Lee",
+    orgName: "Acme",
+    propertyAddress: "1 King St",
+    rentCents: 125000,
+    orgContactEmail: "hello@acme.ca",
+    orgContactPhone: "226-773-7555",
+  }) === "Questions? Email hello@acme.ca or call 226-773-7555.",
+);
 
 ok(
   "renderForRecipient end to end",

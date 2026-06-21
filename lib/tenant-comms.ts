@@ -62,6 +62,8 @@ export const MESSAGE_TOKENS = [
   "property_address",
   "org_name",
   "rent",
+  "business_email",
+  "business_phone",
 ] as const;
 export type MessageToken = (typeof MESSAGE_TOKENS)[number];
 
@@ -98,6 +100,12 @@ export type TokenContext = {
   orgName: string | null;
   propertyAddress: string | null;
   rentCents: number | null;
+  // The org's public contact details (migration 0043). Optional so the existing
+  // call sites that don't supply them keep compiling; when absent the
+  // {{business_email}}/{{business_phone}} tokens resolve to "" (same posture as
+  // an unset rent), and the composer only offers the chip when the value exists.
+  orgContactEmail?: string | null;
+  orgContactPhone?: string | null;
 };
 
 /** Build the {{token}} -> value map for one recipient. */
@@ -108,6 +116,8 @@ export function tokenVarsFor(ctx: TokenContext): Record<string, string> {
     property_address: (ctx.propertyAddress ?? "").trim() || "your home",
     org_name: (ctx.orgName ?? "").trim() || "your property manager",
     rent: formatRentForToken(ctx.rentCents),
+    business_email: (ctx.orgContactEmail ?? "").trim(),
+    business_phone: (ctx.orgContactPhone ?? "").trim(),
   };
 }
 
@@ -380,7 +390,9 @@ export function buildTenantSmsBody(renderedBody: string, orgName: string | null)
 // adapted from the Windsor Community Guidelines v10 into 1:1 tenant messages.
 // Each body is generic + token-based (no hardcoded business name / contact /
 // amount) so it reads correctly for any org. Bodies use ONLY the real
-// MESSAGE_TOKENS (first_name / full_name / property_address / org_name / rent) —
+// MESSAGE_TOKENS (the seed uses first_name / full_name / property_address /
+// org_name / rent; {{business_email}}/{{business_phone}} also exist for operators
+// who want to surface real contact details in their own messages) —
 // the draft's friendly labels {{business_name}}/{{rent_amount}} map to the
 // implemented slugs {{org_name}}/{{rent}} (an unknown token would render its raw
 // braces, so this mapping is load-bearing). Where a concrete date/time/amount is

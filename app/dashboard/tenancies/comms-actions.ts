@@ -131,6 +131,8 @@ export async function sendTenantMessage(formData: FormData) {
       orgName: org.name,
       propertyAddress,
       rentCents,
+      orgContactEmail: org.public_contact_email,
+      orgContactPhone: org.public_contact_phone,
     };
 
     if (!isSendable(d)) {
