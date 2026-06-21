@@ -11,6 +11,7 @@ import {
   propertyStatusBadge,
   isPublicBookable,
   isPubliclyVisible,
+  normalizePropertyStatus,
 } from "@/lib/listing-state";
 import {
   PageHeader,
@@ -88,6 +89,8 @@ import {
   type PortalKey,
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
+import { deriveRentalLifecycle } from "@/lib/rental-lifecycle";
+import { LifecycleRail } from "./lifecycle-rail";
 
 export const dynamic = "force-dynamic";
 
@@ -414,6 +417,17 @@ export default async function PropertyDetailPage({
           )}. Its public page isn't live yet — anyone you share the link with will hit a "not found" page. Set it to Live (below) before sharing.`,
         };
 
+  // Lifecycle rail (IA Step 4 slice 1): derive where this unit sits, empty ->
+  // leased, from data already fetched above. Pure — see lib/rental-lifecycle.
+  const lifecycle = deriveRentalLifecycle(p.id, {
+    propertyStatus: normalizePropertyStatus(p.status),
+    hasRent: (p.rent_cents ?? 0) > 0,
+    photoCount: photoRows.length,
+    listingPostCount: postRows.length,
+    hasAvailability: (availabilityCount ?? 0) > 0,
+    leadStatuses: leadRows.map((l) => l.status),
+  });
+
   return (
     <div>
       <Link
@@ -560,6 +574,8 @@ export default async function PropertyDetailPage({
           </div>
         }
       />
+
+      <LifecycleRail lifecycle={lifecycle} />
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-center gap-2.5">
@@ -1195,8 +1211,9 @@ export default async function PropertyDetailPage({
       )}
 
       <form
+        id="rental-details"
         action={updateProperty}
-        className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        className="mb-8 scroll-mt-4 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <input type="hidden" name="id" value={p.id} />
         <div>
@@ -1701,6 +1718,7 @@ export default async function PropertyDetailPage({
         </button>
       </form>
 
+      <span id="inquiries" className="block scroll-mt-4" aria-hidden />
       <SectionHeading>
         Inquiries for this rental ({leadRows.length})
       </SectionHeading>
