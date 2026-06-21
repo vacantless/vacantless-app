@@ -36,7 +36,15 @@ function rentLine(r: RentIncrease): string | null {
 }
 
 /** Full card — for the tenancy page's rent area. */
-export function RentIncreaseCard({ result }: { result: RentIncrease }) {
+export function RentIncreaseCard({
+  result,
+  n1Href,
+}: {
+  result: RentIncrease;
+  /** Route to the pre-filled N1 working copy (S284). When set, this becomes the
+   *  primary CTA and the official blank LTB form drops to a secondary link. */
+  n1Href?: string;
+}) {
   const chip = STATUS_CHIP[result.status];
   const rent = rentLine(result);
   return (
@@ -68,15 +76,36 @@ export function RentIncreaseCard({ result }: { result: RentIncrease }) {
       )}
 
       {result.status !== "exempt" && (
-        <div className="mt-4">
-          <Link
-            href={N1_FORM_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-brand hover:underline"
-          >
-            Get the Ontario N1 form →
-          </Link>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+          {n1Href ? (
+            <>
+              <Link
+                href={n1Href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                Open pre-filled N1 →
+              </Link>
+              <Link
+                href={N1_FORM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-gray-500 hover:underline"
+              >
+                Official LTB form
+              </Link>
+            </>
+          ) : (
+            <Link
+              href={N1_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Get the Ontario N1 form →
+            </Link>
+          )}
         </div>
       )}
     </Card>

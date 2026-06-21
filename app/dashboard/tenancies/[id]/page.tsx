@@ -799,7 +799,10 @@ export default async function TenancyDetailPage({
           status={RENT_INCREASE_STATUS_LABEL[rentIncrease.status] ?? undefined}
         >
           <div className="mb-8">
-            <RentIncreaseCard result={rentIncrease} />
+            <RentIncreaseCard
+              result={rentIncrease}
+              n1Href={`/dashboard/tenancies/${t.id}/n1`}
+            />
           </div>
         </CollapsibleSection>
       )}
