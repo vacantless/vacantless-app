@@ -594,7 +594,7 @@ export default function LeaseClauseWizard({
                       name={`var_${token}`}
                       value={vars[token] ?? ""}
                       onChange={(e) => setVar(token, e.target.value)}
-                      placeholder={`{{${token}}}`}
+                      placeholder="Add a value (or leave blank)"
                       className={inputCls}
                     />
                     {chips.length > 0 && (
@@ -617,8 +617,8 @@ export default function LeaseClauseWizard({
               })}
             </div>
             <p className="mt-1 text-xs text-gray-400">
-              Leave any blank and the {"{{"}placeholder{"}}"} stays visible in the
-              draft to fill before sending.
+              Leave any blank and the draft keeps a clearly marked gap there for
+              you to fill in before sending.
             </p>
           </div>
         )}
@@ -634,7 +634,7 @@ export default function LeaseClauseWizard({
               {preview.unresolved.length > 0 && (
                 <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
                   Still to fill:{" "}
-                  {preview.unresolved.map((t) => `{{${t}}}`).join(", ")}
+                  {preview.unresolved.map((t) => humanizeToken(t)).join(", ")}
                 </p>
               )}
               <p className="whitespace-pre-wrap text-sm text-gray-700">
