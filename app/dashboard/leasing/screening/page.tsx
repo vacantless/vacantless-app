@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { getCurrentOrg } from "@/lib/org";
+import { createClient } from "@/lib/supabase/server";
 import { SCREENING_REASON } from "@/lib/screening";
-import { updateScreening } from "@/app/dashboard/settings/actions";
+import {
+  questionTypeLabel,
+  type ScreeningQuestion,
+} from "@/lib/screening-questions";
+import {
+  updateScreening,
+  addScreeningQuestion,
+  deleteScreeningQuestion,
+} from "@/app/dashboard/settings/actions";
 import { BrandBanner, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
@@ -23,8 +32,20 @@ export default async function ScreeningSettingsPage({
 }: {
   searchParams: { screening?: string };
 }) {
+  const sp = searchParams.screening;
   const org = await getCurrentOrg();
   if (!org) return null;
+
+  // Operator-authored custom questions (S291). RLS scopes this to the org.
+  const supabase = createClient();
+  const { data: questionRows } = await supabase
+    .from("org_screening_questions")
+    .select("id, prompt, qtype, required")
+    .eq("organization_id", org.id)
+    .eq("active", true)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+  const questions = (questionRows ?? []) as ScreeningQuestion[];
 
   return (
     <div>
@@ -226,6 +247,130 @@ export default async function ScreeningSettingsPage({
             Save pre-screening
           </button>
         </form>
+
+        {/* --- Custom questions (S291) -------------------------------------
+            Operator-authored questions that render on the public inquiry form
+            alongside the three built-ins. Informational: the answers show on
+            each inquiry but never auto-flag a renter. --- */}
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center gap-2.5">
+            <IconTile size="sm"><Icons.users className="h-4 w-4" /></IconTile>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Your own questions
+            </h3>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Add your own questions to the inquiry form — anything you want to know
+            up front, like where someone works or whether they smoke. The answers
+            appear on each inquiry. They&apos;re for your reference only and never
+            auto-flag anyone.
+          </p>
+          {!org.screening_enabled && (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Your questions only show on the public form while{" "}
+              <span className="font-medium">
+                &ldquo;Ask qualifying questions&rdquo;
+              </span>{" "}
+              (above) is turned on.
+            </p>
+          )}
+
+          {sp === "question_added" && (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+              Question added.
+            </div>
+          )}
+          {sp === "question_deleted" && (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+              Question removed. Inquiries you already received keep their answers.
+            </div>
+          )}
+          {sp === "question_prompt" && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+              Enter a question between 1 and 200 characters.
+            </div>
+          )}
+          {sp === "question_qtype" && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+              Pick a valid answer type.
+            </div>
+          )}
+
+          {questions.length > 0 ? (
+            <ul className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
+              {questions.map((q) => (
+                <li
+                  key={q.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-800">
+                      {q.prompt}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {questionTypeLabel(q.qtype)}
+                    </p>
+                  </div>
+                  <form action={deleteScreeningQuestion}>
+                    <input type="hidden" name="question_id" value={q.id} />
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
+                    >
+                      Remove
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 rounded-lg bg-gray-50 px-3 py-3 text-sm text-gray-400">
+              No custom questions yet. Add one below.
+            </p>
+          )}
+
+          {/* Add a question */}
+          <form
+            action={addScreeningQuestion}
+            className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-end"
+          >
+            <label className="block flex-1">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                New question
+              </span>
+              <input
+                name="prompt"
+                type="text"
+                required
+                maxLength={200}
+                placeholder="e.g. Where do you work?"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Answer type
+              </span>
+              <select
+                name="qtype"
+                defaultValue="text"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-36"
+              >
+                <option value="text">Short text</option>
+                <option value="yesno">Yes / no</option>
+              </select>
+            </label>
+            <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm">
+              Add question
+            </button>
+          </form>
+
+          <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            Keep questions about the rental, not the person — ask only what helps
+            you match the right renter to the home, never protected details like
+            background, family, or where someone is from.
+          </p>
+        </div>
       </div>
     </div>
   );

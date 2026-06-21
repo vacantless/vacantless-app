@@ -49,6 +49,9 @@ type Lead = {
   screen_pets_detail: string | null;
   qualified_out: boolean;
   qualify_out_reasons: string[] | null;
+  screen_custom_answers:
+    | { question_id: string; prompt: string; qtype: string; answer: string }[]
+    | null;
   property: { id: string; address: string; rent_cents: number | null } | null;
   listing_post: ListingPost;
 };
@@ -76,7 +79,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, property:properties(id, address, rent_cents), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -344,6 +347,13 @@ export default async function LeadDetailPage({
             }
           />
         )}
+        {(l.screen_custom_answers ?? []).map((a) => (
+          <Field
+            key={a.question_id}
+            label={a.prompt}
+            value={a.qtype === "yesno" ? (a.answer === "yes" ? "Yes" : "No") : a.answer}
+          />
+        ))}
       </div>
 
       {l.notes && (

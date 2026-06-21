@@ -46,6 +46,12 @@ type Listing = {
   brand_color_secondary: string | null;
   logo_url: string | null;
   screening_enabled: boolean;
+  screening_questions: {
+    id: string;
+    prompt: string;
+    qtype: "text" | "yesno";
+    required: boolean;
+  }[];
   photos: string[];
 };
 
@@ -419,6 +425,41 @@ export default async function PublicListingPage({
                           </label>
                         </div>
                       </div>
+                      {/* Operator-authored custom questions (S291). Field names
+                          are cq_<id>; the submit action collects them and the RPC
+                          re-validates against the org's active questions. */}
+                      {(l.screening_questions ?? []).map((q) => (
+                        <div key={q.id}>
+                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                            {q.prompt}{" "}
+                            {!q.required && (
+                              <span className="font-normal text-gray-400">
+                                (optional)
+                              </span>
+                            )}
+                          </label>
+                          {q.qtype === "yesno" ? (
+                            <select
+                              name={`cq_${q.id}`}
+                              required={q.required}
+                              defaultValue=""
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-40"
+                            >
+                              <option value="">Select…</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          ) : (
+                            <input
+                              name={`cq_${q.id}`}
+                              type="text"
+                              required={q.required}
+                              maxLength={500}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                            />
+                          )}
+                        </div>
+                      ))}
                     </fieldset>
                   )}
                   <div>

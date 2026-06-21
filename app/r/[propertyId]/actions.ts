@@ -49,6 +49,18 @@ export async function submitLead(formData: FormData) {
     ? formData.get("screen_has_pets") != null || petsDetail.length > 0
     : null;
 
+  // Custom pre-screening answers (S291). The form names each field cq_<questionId>.
+  // We pass the raw {question_id, answer} pairs; the RPC re-fetches the org's
+  // active questions and authoritatively normalizes + snapshots them (it ignores
+  // any id that is not a real active question for this org).
+  const customAnswers: { question_id: string; answer: string }[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("cq_")) continue;
+    const answer = String(value ?? "").trim();
+    if (answer.length === 0) continue;
+    customAnswers.push({ question_id: key.slice(3), answer });
+  }
+
   const supabase = createClient();
   const { data, error } = await supabase.rpc("submit_public_lead", {
     p_property_id: propertyId,
@@ -62,6 +74,7 @@ export async function submitLead(formData: FormData) {
     p_occupants: occupants,
     p_has_pets: hasPets,
     p_pets_detail: petsDetail || null,
+    p_custom_answers: customAnswers,
   });
 
   if (error) {

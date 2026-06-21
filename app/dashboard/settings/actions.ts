@@ -11,6 +11,7 @@ import {
 } from "@/lib/branding";
 import { validateTestRecipient } from "@/lib/test-email";
 import { validateScreeningSettings } from "@/lib/screening";
+import { validateNewQuestion } from "@/lib/screening-questions";
 import { validatePublicContact } from "@/lib/public-contact";
 import {
   validatePolicyProfileSettings,
@@ -99,6 +100,68 @@ export async function updateScreening(formData: FormData) {
   }
 
   redirect("/dashboard/leasing/screening?screening=saved");
+}
+
+// Custom pre-screening questions (S291). Operator authors arbitrary questions
+// that render on the public inquiry form alongside the three built-ins. v1 is
+// informational only — answers are captured + shown, never drive qualify-out.
+// Both actions redirect back to the screening page (same 503-avoidance reason as
+// the rest of the settings saves).
+export async function addScreeningQuestion(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const result = validateNewQuestion({
+    prompt: String(formData.get("prompt") ?? ""),
+    qtype: String(formData.get("qtype") ?? ""),
+  });
+  if (!result.ok) {
+    redirect(`/dashboard/leasing/screening?screening=question_${result.reason}`);
+  }
+
+  const supabase = createClient();
+  // Append after the existing questions. RLS scopes the read to this org.
+  const { data: last } = await supabase
+    .from("org_screening_questions")
+    .select("position")
+    .eq("organization_id", org.id)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextPosition = (last?.position ?? 0) + 1;
+
+  const { error } = await supabase.from("org_screening_questions").insert({
+    organization_id: org.id,
+    prompt: result.values.prompt,
+    qtype: result.values.qtype,
+    position: nextPosition,
+  });
+  if (error) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  redirect("/dashboard/leasing/screening?screening=question_added");
+}
+
+export async function deleteScreeningQuestion(formData: FormData) {
+  const org = await requireSettingsOrg();
+  const id = String(formData.get("question_id") ?? "").trim();
+  if (!id) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  const supabase = createClient();
+  // Soft delete (active=false) so existing lead snapshots stay meaningful. RLS
+  // plus the explicit org filter prevent touching another org's question.
+  const { error } = await supabase
+    .from("org_screening_questions")
+    .update({ active: false })
+    .eq("id", id)
+    .eq("organization_id", org.id);
+  if (error) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  redirect("/dashboard/leasing/screening?screening=question_deleted");
 }
 
 // Tab 1 — Public Page & Brand: public contact details for the syndication feed.
