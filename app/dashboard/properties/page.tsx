@@ -201,7 +201,7 @@ export default async function PropertiesPage({
           name="mls_text"
           rows={5}
           placeholder={
-            "Paste your MLS or realtor.ca listing here, e.g.\nAddress: 833 Pillette Rd, Unit 20\nList Price: $1,950/Monthly\nBedrooms: 2\nBathrooms: 1\nRemarks: Bright two-bedroom with in-suite laundry..."
+            "Paste your MLS or realtor.ca listing here, e.g.\nAddress: 123 Main St, Unit 4\nList Price: $1,950/Monthly\nBedrooms: 2\nBathrooms: 1\nRemarks: Bright two-bedroom with in-suite laundry..."
           }
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
@@ -234,7 +234,7 @@ export default async function PropertiesPage({
           <input
             name="address"
             required
-            placeholder="833 Pillette Rd, Unit 20"
+            placeholder="123 Main St, Unit 4"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           />
         </div>

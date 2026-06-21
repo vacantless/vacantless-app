@@ -58,6 +58,7 @@ export function TenancyLeaseSection({
   rentCents,
   startDate,
   seed,
+  headingHidden = false,
 }: {
   tenancyId: string;
   leaseDocs: LeaseDocView[];
@@ -68,6 +69,9 @@ export function TenancyLeaseSection({
   rentCents: number | null;
   startDate: string | null;
   seed: LeaseSeedInfo | null;
+  /** Suppress the internal "Lease document" heading when wrapped in a
+   *  CollapsibleSection that already supplies the title (S283). */
+  headingHidden?: boolean;
 }) {
   // Renewal diff: newest [0] vs the one before it [1] (both newest-first).
   const diff =
@@ -80,7 +84,7 @@ export function TenancyLeaseSection({
 
   return (
     <>
-      <SectionHeading>Lease document</SectionHeading>
+      {!headingHidden && <SectionHeading>Lease document</SectionHeading>}
       <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-gray-600">
           Generate a lease from your{" "}

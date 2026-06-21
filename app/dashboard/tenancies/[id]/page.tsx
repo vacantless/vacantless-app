@@ -10,12 +10,12 @@ import {
 } from "@/lib/tenancy";
 import {
   PageHeader,
-  SectionHeading,
   StatusChip,
   tenancyStatusTone,
   SECONDARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import {
   updateTenancy,
   endTenancy,
@@ -560,6 +560,41 @@ export default async function TenancyDetailPage({
       : null) ||
     msgError;
 
+  // Section status lines (S283) — shown on each collapsed header so the
+  // operator reads the tenancy's state without expanding every section.
+  const tenantsStatus = `${tenants.length} on lease`;
+  const leaseDetailsStatus = `${formatRentCents(t.rent_cents)}${t.rent_cents != null ? "/mo" : ""}`;
+  const hasExecutedLease = leaseDocs.some((d) => d.status === "executed");
+  const leaseDocStatus = hasExecutedLease
+    ? "Signed"
+    : leaseDocs.some((d) => d.status === "sent")
+      ? "Sent for signature"
+      : leaseDocs.some((d) => d.status === "draft")
+        ? "Draft"
+        : "Not started";
+  const rentAutomatic =
+    !!t.rotessa_schedule_id ||
+    (!!stripeRentView.subscriptionId &&
+      stripeRentView.subscriptionStatus === "active");
+  const rentCollectionStatus = rentAutomatic
+    ? "Automatic monthly debit"
+    : t.rotessa_customer_id || stripeRentView.paymentMethodId
+      ? "Authorized — not scheduled"
+      : "Not set up";
+  const paymentsStatus =
+    payments.length > 0
+      ? `${payments.length} logged · ${formatMoneyCents(reconciliation.totalCollectedCents)}`
+      : "None logged";
+  const messagesStatus =
+    messages.length > 0 ? `${messages.length} sent` : "None sent";
+  const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
+    scheduled: "Scheduled",
+    serve_window: "Serve now",
+    serve_late: "Serve now · late",
+    overdue: "Overdue",
+    exempt: "Exempt",
+  };
+
   return (
     <div>
       <Link
@@ -610,7 +645,7 @@ export default async function TenancyDetailPage({
       )}
 
       {/* Tenants roster --------------------------------------------------- */}
-      <SectionHeading>Tenants</SectionHeading>
+      <CollapsibleSection title="Tenants & contacts" status={tenantsStatus} defaultOpen>
       <ul className="mb-3 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {tenants.map((tn) => (
           <li key={tn.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
@@ -667,9 +702,10 @@ export default async function TenancyDetailPage({
           <button className={SECONDARY_ACTION_CLASS}>Add tenant</button>
         </form>
       )}
+      </CollapsibleSection>
 
       {/* Lease details (edit) -------------------------------------------- */}
-      <SectionHeading>Lease details</SectionHeading>
+      <CollapsibleSection title="Lease details" status={leaseDetailsStatus}>
       <form
         action={updateTenancy}
         className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
@@ -734,8 +770,14 @@ export default async function TenancyDetailPage({
           Save changes
         </button>
       </form>
+      </CollapsibleSection>
 
       {/* Lease document (clause-selection wizard + renewal diff) ---------- */}
+      <CollapsibleSection
+        title="Lease document"
+        status={leaseDocStatus}
+        done={hasExecutedLease}
+      >
       <TenancyLeaseSection
         tenancyId={t.id}
         leaseDocs={leaseDocs}
@@ -746,20 +788,24 @@ export default async function TenancyDetailPage({
         rentCents={t.rent_cents}
         startDate={t.start_date ?? null}
         seed={leaseSeed}
+        headingHidden
       />
+      </CollapsibleSection>
 
       {/* Rent increase (N1 v1) ------------------------------------------- */}
       {rentIncrease && (
-        <>
-          <SectionHeading>Rent increase</SectionHeading>
+        <CollapsibleSection
+          title="Rent increase"
+          status={RENT_INCREASE_STATUS_LABEL[rentIncrease.status] ?? undefined}
+        >
           <div className="mb-8">
             <RentIncreaseCard result={rentIncrease} />
           </div>
-        </>
+        </CollapsibleSection>
       )}
 
-      {/* Rent collection (Rotessa) --------------------------------------- */}
-      <SectionHeading>Rent collection</SectionHeading>
+      {/* Rent collection (Rotessa + Stripe) ------------------------------ */}
+      <CollapsibleSection title="Rent collection" status={rentCollectionStatus} done={rentAutomatic}>
       <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         {t.rotessa_customer_id ? (
           <div className="space-y-3">
@@ -897,9 +943,10 @@ export default async function TenancyDetailPage({
 
       {/* Rent collection (Stripe Connect — sibling rail to Rotessa) ------- */}
       <TenancyStripeRentSection view={stripeRentView} />
+      </CollapsibleSection>
 
       {/* Manual payments (e-transfer / cheque / cash) -------------------- */}
-      <SectionHeading>Payments received</SectionHeading>
+      <CollapsibleSection title="Payments received" status={paymentsStatus}>
       <div className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-gray-600">
           Record rent you collected manually (e-transfer, cheque, or cash) and
@@ -1061,9 +1108,10 @@ export default async function TenancyDetailPage({
           </button>
         </form>
       </div>
+      </CollapsibleSection>
 
       {/* Tenant messages (email / SMS) ----------------------------------- */}
-      <SectionHeading>Tenant messages</SectionHeading>
+      <CollapsibleSection title="Tenant messages" status={messagesStatus}>
       <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-gray-600">
           Message the tenants on this tenancy by email and/or text — rent
@@ -1121,6 +1169,7 @@ export default async function TenancyDetailPage({
           </div>
         )}
       </div>
+      </CollapsibleSection>
 
       {/* Lifecycle actions ----------------------------------------------- */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
