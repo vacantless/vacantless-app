@@ -15,7 +15,6 @@ import {
 } from "@/lib/listing-state";
 import {
   PageHeader,
-  SectionHeading,
   StatusChip,
   leadStatusTone,
   EmptyState,
@@ -89,10 +88,16 @@ import {
   type PortalKey,
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
-import { deriveRentalLifecycle } from "@/lib/rental-lifecycle";
+import {
+  deriveRentalLifecycle,
+  LIFECYCLE_STEPS,
+  type LifecycleStep,
+} from "@/lib/rental-lifecycle";
 import { LifecycleRail } from "./lifecycle-rail";
 import { deriveNextAction } from "@/lib/rental-next-action";
 import { NextActionCard } from "./next-action-card";
+import { CollapsibleSection } from "./collapsible-section";
+import { SectionDeeplinkOpener } from "./section-deeplink-opener";
 
 export const dynamic = "force-dynamic";
 
@@ -491,8 +496,26 @@ export default async function PropertyDetailPage({
     applicantCount: leadRows.filter((l) => l.status === "applied").length,
   });
 
+  // Slice 2 (S280): collapse the page down to the rail. The three on-page rail
+  // steps each become a <details> section; open the one at the frontier so the
+  // operator lands on the step they're working, the rest collapsed. The header
+  // status mirrors the matching rail step's detail line for cohesion.
+  const currentStep = lifecycle.currentStep;
+  const currentIdx =
+    currentStep == null
+      ? LIFECYCLE_STEPS.length
+      : LIFECYCLE_STEPS.indexOf(currentStep);
+  const setUpOpen = currentStep === "set_up";
+  const marketOpen = currentStep === "market";
+  const inquiriesOpen = currentIdx >= LIFECYCLE_STEPS.indexOf("inquiries");
+  const stepOf = (k: LifecycleStep) =>
+    lifecycle.steps.find((s) => s.step === k);
+  const setUpStep = stepOf("set_up");
+  const marketStep = stepOf("market");
+
   return (
     <div>
+      <SectionDeeplinkOpener />
       <Link
         href="/dashboard/properties"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
@@ -641,6 +664,13 @@ export default async function PropertyDetailPage({
       <LifecycleRail lifecycle={lifecycle} />
 
       {nextAction && <NextActionCard action={nextAction} />}
+
+      <CollapsibleSection
+        title="Market"
+        status={marketStep?.detail}
+        done={marketStep?.state === "done"}
+        defaultOpen={marketOpen}
+      >
 
       <div
         id="share"
@@ -1278,10 +1308,19 @@ export default async function PropertyDetailPage({
         </div>
       )}
 
-      <form
+      </CollapsibleSection>
+
+      <CollapsibleSection
         id="rental-details"
+        title="Set up"
+        status={setUpStep?.detail}
+        done={setUpStep?.state === "done"}
+        defaultOpen={setUpOpen}
+      >
+
+      <form
         action={updateProperty}
-        className="mb-8 scroll-mt-4 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <input type="hidden" name="id" value={p.id} />
         <div>
@@ -1786,10 +1825,16 @@ export default async function PropertyDetailPage({
         </button>
       </form>
 
-      <span id="inquiries" className="block scroll-mt-4" aria-hidden />
-      <SectionHeading>
-        Inquiries for this rental ({leadRows.length})
-      </SectionHeading>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="inquiries"
+        title={`Inquiries (${leadRows.length})`}
+        status={stepOf("inquiries")?.detail}
+        done={stepOf("inquiries")?.state === "done"}
+        defaultOpen={inquiriesOpen}
+      >
+
       {leadRows.length === 0 ? (
         <EmptyState
           icon={<Icons.users />}
@@ -1819,6 +1864,8 @@ export default async function PropertyDetailPage({
           ))}
         </ul>
       )}
+
+      </CollapsibleSection>
     </div>
   );
 }
