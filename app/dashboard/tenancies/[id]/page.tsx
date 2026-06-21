@@ -66,6 +66,8 @@ import {
   type ClauseVersionRowLike,
   type RiskLevel,
 } from "@/lib/clauses";
+import { deriveRentIncrease } from "@/lib/rent-increase";
+import { RentIncreaseCard } from "@/components/rent-increase-card";
 
 export const dynamic = "force-dynamic";
 
@@ -328,6 +330,22 @@ export default async function TenancyDetailPage({
   // the locked channels and show an upgrade nudge instead of a silent skip.
   const org = await getCurrentOrg();
   const smsAllowed = canUseSms(org?.plan);
+
+  // Rent-increase status (N1 v1, S282). "Today" is anchored to Ontario time —
+  // this is an Ontario LTB feature, and server components run UTC on Vercel.
+  // v1 has no stored last-increase date (so the eligible date is start + 12mo)
+  // and no per-unit post-2018 exemption flag yet (v2); shown only for an active
+  // tenancy with a rent set.
+  const todayOntario = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Toronto",
+  });
+  const rentIncrease =
+    t.status === "active" && t.rent_cents != null && t.start_date
+      ? deriveRentIncrease(
+          { startDate: t.start_date, currentRentCents: t.rent_cents },
+          todayOntario,
+        )
+      : null;
 
   const { data: messageRows } = await supabase
     .from("tenant_messages")
@@ -729,6 +747,16 @@ export default async function TenancyDetailPage({
         startDate={t.start_date ?? null}
         seed={leaseSeed}
       />
+
+      {/* Rent increase (N1 v1) ------------------------------------------- */}
+      {rentIncrease && (
+        <>
+          <SectionHeading>Rent increase</SectionHeading>
+          <div className="mb-8">
+            <RentIncreaseCard result={rentIncrease} />
+          </div>
+        </>
+      )}
 
       {/* Rent collection (Rotessa) --------------------------------------- */}
       <SectionHeading>Rent collection</SectionHeading>

@@ -22,6 +22,8 @@ import {
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { LaunchChecklist } from "./launch-checklist";
+import { deriveRentIncrease } from "@/lib/rent-increase";
+import { RentIncreaseRow } from "@/components/rent-increase-card";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,7 @@ export default async function OverviewPage() {
     { data: propertyRows, count: propertyCount },
     { count: availabilityCount },
     { data: showingData },
+    { data: tenancyRows },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -83,6 +86,13 @@ export default async function OverviewPage() {
       .gte("scheduled_at", new Date().toISOString())
       .order("scheduled_at", { ascending: true })
       .limit(5),
+    // Active tenancies — feed the rent-increase rollup (N1 v1, S282). Renders
+    // only when something is actionable, so a pure-leasing org never sees it
+    // (conditional-visibility rule, like the Money nav).
+    supabase
+      .from("tenancies")
+      .select("id, status, rent_cents, start_date, property:properties(address)")
+      .eq("status", "active"),
   ]);
 
   const upcomingShowings = (showingData ?? []) as unknown as {
@@ -105,6 +115,38 @@ export default async function OverviewPage() {
   const counts: Record<string, number> = {};
   for (const stage of PIPELINE_STAGES) counts[stage] = 0;
   for (const l of allLeads) counts[l.status] = (counts[l.status] ?? 0) + 1;
+
+  // Rent-increase rollup (N1 v1, S282): the only actionable statuses surface
+  // here, most-urgent first. "Today" uses the org's timezone (Ontario default).
+  type TenancyRow = {
+    id: string;
+    rent_cents: number | null;
+    start_date: string | null;
+    property: { address: string } | null;
+  };
+  const today = new Date().toLocaleDateString("en-CA", { timeZone });
+  const URGENCY: Record<string, number> = {
+    overdue: 0,
+    serve_late: 1,
+    serve_window: 2,
+  };
+  const rentIncreaseAlerts = ((tenancyRows ?? []) as unknown as TenancyRow[])
+    .flatMap((t) => {
+      if (t.rent_cents == null || !t.start_date) return [];
+      const result = deriveRentIncrease(
+        { startDate: t.start_date, currentRentCents: t.rent_cents },
+        today,
+      );
+      if (!result || !(result.status in URGENCY)) return [];
+      return [{ id: t.id, label: t.property?.address ?? "Tenancy", result }];
+    })
+    .sort(
+      (a, b) =>
+        URGENCY[a.result.status] - URGENCY[b.result.status] ||
+        a.result.earliestEffectiveDate.localeCompare(
+          b.result.earliestEffectiveDate,
+        ),
+    );
 
   const checklist = buildLaunchChecklist({
     propertyCount: propertyCount ?? 0,
@@ -146,6 +188,22 @@ export default async function OverviewPage() {
           icon={<Icons.building className="h-4 w-4" />}
         />
       </div>
+
+      {rentIncreaseAlerts.length > 0 && (
+        <>
+          <SectionHeading>Rent increases due</SectionHeading>
+          <div className="mb-8 grid grid-cols-1 gap-2">
+            {rentIncreaseAlerts.map((a) => (
+              <RentIncreaseRow
+                key={a.id}
+                result={a.result}
+                label={a.label}
+                href={`/dashboard/tenancies/${a.id}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       <SectionHeading>Renters by stage</SectionHeading>
       <div className="mb-8 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
