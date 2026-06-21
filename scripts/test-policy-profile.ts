@@ -1,9 +1,11 @@
-// Unit tests for the standard-policy profile merge (0048, S273 slice 1).
+// Unit tests for the standard-policy profile merge (0048 slice 1 + 0049 slice 2).
 // Run: npx tsx scripts/test-policy-profile.ts
 import {
   POLICY_FIELDS,
   resolveEffectivePolicy,
   resolveEffectiveFeatures,
+  resolveBuildingProfile,
+  validateBuildingPolicySettings,
   type PolicyProfile,
 } from "../lib/policy-profile";
 
@@ -106,6 +108,101 @@ ok("POLICY_FIELDS has 4", POLICY_FIELDS.length === 4);
 {
   const { features } = resolveEffectiveFeatures(null, PILLETTE);
   ok("null unit + profile -> inherits", features.ac_type === "sleeve" && features.lease_term === "1_year");
+}
+
+// ===========================================================================
+// Slice 2 (0049): per-building override resolves building > org, then the
+// existing unit > profile merge runs on top -> unit > building > org overall.
+// ===========================================================================
+
+// An org-wide baseline that does NOT match every building (the Mercer/Manning
+// case): org A/C unset, lease 1-year, on-site false.
+const ORG_DEFAULT: PolicyProfile = {
+  lease_term: "1_year",
+  smoking: null,
+  ac_type: null,
+  on_site_management: false,
+};
+
+// --- resolveBuildingProfile: building value wins, else org ------------------
+{
+  const building: PolicyProfile = {
+    lease_term: null, // inherit org
+    smoking: "non_smoking", // building override
+    ac_type: "sleeve", // building override
+    on_site_management: null, // inherit org
+  };
+  const merged = resolveBuildingProfile(building, ORG_DEFAULT);
+  ok("building ac_type wins over unset org", merged.ac_type === "sleeve");
+  ok("building smoking wins", merged.smoking === "non_smoking");
+  ok("building lease_term null -> inherits org 1_year", merged.lease_term === "1_year");
+  ok("building on_site null -> inherits org false", merged.on_site_management === false);
+}
+
+// --- resolveBuildingProfile: building false is a real value, not inherit ----
+{
+  const building: PolicyProfile = { on_site_management: false };
+  const org: PolicyProfile = { on_site_management: true };
+  const merged = resolveBuildingProfile(building, org);
+  ok("building on_site=false overrides org true (false is a value)", merged.on_site_management === false);
+}
+
+// --- resolveBuildingProfile: null args safe ---------------------------------
+{
+  const onlyOrg = resolveBuildingProfile(null, ORG_DEFAULT);
+  ok("null building -> pure org default", onlyOrg.lease_term === "1_year" && onlyOrg.ac_type === null);
+  const onlyBuilding = resolveBuildingProfile({ ac_type: "central" }, null);
+  ok("null org -> pure building", onlyBuilding.ac_type === "central" && onlyBuilding.lease_term === null);
+  const neither = resolveBuildingProfile(null, null);
+  ok("both null -> all-null profile", neither.ac_type === null && neither.lease_term === null);
+}
+
+// --- end-to-end precedence: unit > building > org ---------------------------
+{
+  const building: PolicyProfile = { ac_type: "sleeve", smoking: "non_smoking" };
+  const merged = resolveBuildingProfile(building, ORG_DEFAULT);
+  // Unit overrides A/C, inherits smoking from building, inherits lease from org.
+  const { features, inherited } = resolveEffectiveFeatures(
+    { ac_type: "central" } as never,
+    merged,
+  );
+  ok("unit ac_type beats building", features.ac_type === "central");
+  ok("building smoking inherited through to unit", features.smoking === "non_smoking");
+  ok("org lease_term inherited through building to unit", features.lease_term === "1_year");
+  ok("ac_type not marked inherited (unit set it)", !inherited.has("ac_type"));
+  ok("smoking marked inherited (came from building/profile)", inherited.has("smoking"));
+}
+
+// --- validateBuildingPolicySettings: lease_term nullable (no 1_year floor) ---
+{
+  const r = validateBuildingPolicySettings({
+    lease_term: "",
+    smoking: "",
+    ac_type: "",
+    on_site_management: "",
+  });
+  ok("all-blank -> all null (no 1_year floor at building level)", r.values.policy_lease_term === null && r.values.policy_smoking === null && r.values.policy_ac_type === null && r.values.policy_on_site_management === null);
+  ok("all-blank -> allInherit true (caller deletes the row)", r.allInherit === true);
+}
+{
+  const r = validateBuildingPolicySettings({
+    lease_term: "2_year",
+    smoking: "non_smoking",
+    ac_type: "sleeve",
+    on_site_management: "false",
+  });
+  ok("valid values pass through", r.values.policy_lease_term === "2_year" && r.values.policy_smoking === "non_smoking" && r.values.policy_ac_type === "sleeve" && r.values.policy_on_site_management === false);
+  ok("any field set -> allInherit false", r.allInherit === false);
+}
+{
+  const r = validateBuildingPolicySettings({
+    lease_term: "garbage",
+    smoking: "nope",
+    ac_type: "bogus",
+    on_site_management: "maybe",
+  });
+  ok("invalid values normalize to null (inherit)", r.values.policy_lease_term === null && r.values.policy_smoking === null && r.values.policy_ac_type === null && r.values.policy_on_site_management === null);
+  ok("all-invalid -> allInherit true", r.allInherit === true);
 }
 
 console.log(`\npolicy-profile: ${passed} passed, ${failed} failed`);

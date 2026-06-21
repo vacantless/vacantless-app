@@ -12,7 +12,10 @@ import {
 import { validateTestRecipient } from "@/lib/test-email";
 import { validateScreeningSettings } from "@/lib/screening";
 import { validatePublicContact } from "@/lib/public-contact";
-import { validatePolicyProfileSettings } from "@/lib/policy-profile";
+import {
+  validatePolicyProfileSettings,
+  validateBuildingPolicySettings,
+} from "@/lib/policy-profile";
 import { sendTestEmail } from "@/lib/email";
 import {
   validateLogoUpload,
@@ -145,6 +148,60 @@ export async function updatePolicyProfile(formData: FormData) {
     .from("organizations")
     .update(result.values)
     .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/properties/standard-policy?policy=error");
+  }
+
+  redirect("/dashboard/properties/standard-policy?policy=saved");
+}
+
+// Per-BUILDING standard-policy override (0049, slice 2 — the hybrid layer). Each
+// building (units sharing a normalized address = properties.building_key) can
+// override the org defaults; every unit in that building inherits the building
+// value unless the unit itself overrides it (resolution: unit > building > org).
+// All four fields are tri-state ("" = inherit). When the operator sets every
+// field back to "inherit" we DELETE the row rather than store an all-null no-op,
+// so org_building_policies only holds genuine overrides.
+export async function updateBuildingPolicy(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const buildingKey = String(formData.get("building_key") ?? "").trim();
+  if (!buildingKey) {
+    redirect("/dashboard/properties/standard-policy?policy=error");
+  }
+
+  const { values, allInherit } = validateBuildingPolicySettings({
+    lease_term: String(formData.get("policy_lease_term") ?? ""),
+    smoking: String(formData.get("policy_smoking") ?? ""),
+    ac_type: String(formData.get("policy_ac_type") ?? ""),
+    on_site_management: String(formData.get("policy_on_site_management") ?? ""),
+  });
+
+  const supabase = createClient();
+
+  if (allInherit) {
+    // Nothing overridden — drop any existing override row for this building so
+    // it cleanly falls back to the org default.
+    const { error } = await supabase
+      .from("org_building_policies")
+      .delete()
+      .eq("organization_id", org.id)
+      .eq("building_key", buildingKey);
+    if (error) {
+      redirect("/dashboard/properties/standard-policy?policy=error");
+    }
+    redirect("/dashboard/properties/standard-policy?policy=saved");
+  }
+
+  const { error } = await supabase.from("org_building_policies").upsert(
+    {
+      organization_id: org.id,
+      building_key: buildingKey,
+      ...values,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "organization_id,building_key" },
+  );
   if (error) {
     redirect("/dashboard/properties/standard-policy?policy=error");
   }

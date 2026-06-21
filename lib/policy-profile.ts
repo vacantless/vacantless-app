@@ -143,6 +143,37 @@ export function resolveEffectiveFeatures(
   };
 }
 
+/**
+ * Resolve the per-building override AHEAD of the org default into a single
+ * PolicyProfile (migration 0049, slice 2 — the HYBRID layer). Per field:
+ * building value wins; else the org default; else unset. The result is handed
+ * straight to resolveEffectiveFeatures, so the unit > building > org precedence
+ * is just resolveEffectiveFeatures(unit, resolveBuildingProfile(building, org)).
+ *
+ * This is exactly the forward-compat path the slice-1 header described: the
+ * per-building layer resolves its override before the existing unit-vs-profile
+ * merge runs, with no change to that merge. Both args may be null (no building
+ * override row, or no org loaded).
+ */
+export function resolveBuildingProfile(
+  building: PolicyProfile | null | undefined,
+  org: PolicyProfile | null | undefined,
+): PolicyProfile {
+  const b = building ?? {};
+  const o = org ?? {};
+  function pick<K extends PolicyField>(key: K): PolicyProfile[K] {
+    const bv = b[key];
+    if (isSet(bv)) return bv;
+    return o[key] ?? null;
+  }
+  return {
+    lease_term: pick("lease_term"),
+    smoking: pick("smoking"),
+    ac_type: pick("ac_type"),
+    on_site_management: pick("on_site_management"),
+  };
+}
+
 // --- Settings save validation ----------------------------------------------
 
 /** The org-profile columns written by the Settings save (organizations.policy_*). */
@@ -177,6 +208,48 @@ export function validatePolicyProfileSettings(input: {
         osm === "true" ? true : osm === "false" ? false : null,
     },
   };
+}
+
+/**
+ * The per-building override columns written by the building-policy save
+ * (org_building_policies.policy_*). ALL FOUR are nullable here — unlike the org
+ * row, a building may inherit the org's lease_term (null = inherit), so there is
+ * no "1_year" floor.
+ */
+export type BuildingPolicyValues = {
+  policy_lease_term: LeaseTerm | null;
+  policy_smoking: Smoking | null;
+  policy_ac_type: AcType | null;
+  policy_on_site_management: boolean | null;
+};
+
+/**
+ * Validate + normalize a per-building override form (0049, slice 2). Every field
+ * is tri-state — a blank/invalid value means "inherit the org default" (null),
+ * NOT a hardcoded fallback. `allInherit` is true when nothing is overridden, so
+ * the caller can DELETE the row instead of storing an all-null override (keeps
+ * org_building_policies free of no-op rows). Never throws.
+ */
+export function validateBuildingPolicySettings(input: {
+  lease_term: string;
+  smoking: string;
+  ac_type: string;
+  on_site_management: string;
+}): { ok: true; values: BuildingPolicyValues; allInherit: boolean } {
+  const osm = input.on_site_management.trim();
+  const values: BuildingPolicyValues = {
+    policy_lease_term: normalizeLeaseTerm(input.lease_term),
+    policy_smoking: normalizeSmoking(input.smoking),
+    policy_ac_type: normalizeAcType(input.ac_type),
+    policy_on_site_management:
+      osm === "true" ? true : osm === "false" ? false : null,
+  };
+  const allInherit =
+    values.policy_lease_term === null &&
+    values.policy_smoking === null &&
+    values.policy_ac_type === null &&
+    values.policy_on_site_management === null;
+  return { ok: true, values, allInherit };
 }
 
 // Re-export the validators the settings/property save actions reuse, so callers

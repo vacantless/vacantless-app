@@ -74,6 +74,7 @@ import {
 } from "@/lib/property-features";
 import {
   resolveEffectiveFeatures,
+  resolveBuildingProfile,
   type PolicyProfile,
 } from "@/lib/policy-profile";
 import {
@@ -122,6 +123,8 @@ type Property = {
   smoking: string | null;
   ac_type: string | null;
   on_site_management: boolean | null;
+  // Generated building identity (0049); resolves the per-building override.
+  building_key: string | null;
 };
 
 type LeadRow = {
@@ -174,7 +177,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management",
+      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -235,13 +238,15 @@ export default async function PropertyDetailPage({
   // viewing." until the rental goes Live.
   const org = await getCurrentOrg();
 
-  // Standard-policy profile (0048): merge the org-level building defaults UNDER
+  // Standard-policy profile (0048 org defaults + 0049 per-building override):
+  // resolve the building override AHEAD of the org default, then merge that UNDER
   // this unit's own values so the listing copy + per-portal fill sheets inherit
-  // lease term / smoking / A/C type / on-site management without re-keying. The
-  // public /r page + syndication feed apply the SAME merge server-side in
-  // get_public_listing / get_org_listing_feed. `inheritedPolicy` records which
-  // fields came from the profile (vs the unit) so the fill sheet labels them.
-  const policyProfile: PolicyProfile | null = org
+  // lease term / smoking / A/C type / on-site management without re-keying
+  // (precedence: unit > building > org). The public /r page + syndication feed
+  // apply the SAME merge server-side in get_public_listing / get_org_listing_feed.
+  // `inheritedPolicy` records which fields came from the profile (vs the unit) so
+  // the fill sheet labels them.
+  const orgProfile: PolicyProfile | null = org
     ? {
         lease_term: org.policy_lease_term,
         smoking: org.policy_smoking,
@@ -249,6 +254,30 @@ export default async function PropertyDetailPage({
         on_site_management: org.policy_on_site_management,
       }
     : null;
+  let buildingProfile: PolicyProfile | null = null;
+  if (org && p.building_key) {
+    const { data: bp } = await supabase
+      .from("org_building_policies")
+      .select(
+        "policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management",
+      )
+      .eq("organization_id", org.id)
+      .eq("building_key", p.building_key)
+      .maybeSingle();
+    if (bp) {
+      buildingProfile = {
+        lease_term: bp.policy_lease_term,
+        smoking: bp.policy_smoking,
+        ac_type: bp.policy_ac_type,
+        on_site_management: bp.policy_on_site_management,
+      };
+    }
+  }
+  // Building-over-org resolved into a single profile (forward-compat path).
+  const policyProfile: PolicyProfile | null =
+    orgProfile || buildingProfile
+      ? resolveBuildingProfile(buildingProfile, orgProfile)
+      : null;
   const { features: effectiveFeatures, inherited: inheritedPolicy } =
     resolveEffectiveFeatures(
       {
@@ -1480,14 +1509,15 @@ export default async function PropertyDetailPage({
             Standard policy
           </legend>
           <p className="mb-3 text-xs text-gray-400">
-            These default to your building&apos;s standard policy (set in{" "}
+            These show the value this unit inherits from your{" "}
             <Link
-              href="/dashboard/settings?tab=brand"
+              href="/dashboard/properties/standard-policy"
               className="underline hover:text-gray-600"
             >
-              Settings
-            </Link>
-            ) and inherit automatically. Only change one here if THIS unit differs.
+              standard policy
+            </Link>{" "}
+            (building override, falling back to the organization default). Only
+            change one here if THIS unit differs.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
@@ -1500,7 +1530,7 @@ export default async function PropertyDetailPage({
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="">
-                  Inherit ({leaseTermLabel(org?.policy_lease_term) ?? "1-year lease"})
+                  Inherit ({leaseTermLabel(policyProfile?.lease_term) ?? "1-year lease"})
                 </option>
                 {LEASE_TERM_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1520,9 +1550,9 @@ export default async function PropertyDetailPage({
               >
                 <option value="">
                   Inherit (
-                  {acTypeLabel(org?.policy_ac_type)
-                    ? acTypeLabel(org?.policy_ac_type)
-                    : org?.policy_ac_type === "none"
+                  {acTypeLabel(policyProfile?.ac_type)
+                    ? acTypeLabel(policyProfile?.ac_type)
+                    : policyProfile?.ac_type === "none"
                       ? "no A/C"
                       : "not set"}
                   )
@@ -1544,7 +1574,7 @@ export default async function PropertyDetailPage({
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="">
-                  Inherit ({smokingLabel(org?.policy_smoking) ?? "not set"})
+                  Inherit ({smokingLabel(policyProfile?.smoking) ?? "not set"})
                 </option>
                 {SMOKING_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1570,9 +1600,9 @@ export default async function PropertyDetailPage({
               >
                 <option value="">
                   Inherit (
-                  {org?.policy_on_site_management == null
+                  {policyProfile?.on_site_management == null
                     ? "not set"
-                    : org.policy_on_site_management
+                    : policyProfile.on_site_management
                       ? "Yes"
                       : "No"}
                   )
