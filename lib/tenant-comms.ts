@@ -390,9 +390,12 @@ export function buildTenantSmsBody(renderedBody: string, orgName: string | null)
 // adapted from the Windsor Community Guidelines v10 into 1:1 tenant messages.
 // Each body is generic + token-based (no hardcoded business name / contact /
 // amount) so it reads correctly for any org. Bodies use ONLY the real
-// MESSAGE_TOKENS (the seed uses first_name / full_name / property_address /
-// org_name / rent; {{business_email}}/{{business_phone}} also exist for operators
-// who want to surface real contact details in their own messages) —
+// MESSAGE_TOKENS (first_name / full_name / property_address / org_name / rent,
+// plus {{business_email}}/{{business_phone}} in the Move-in welcome's contact
+// block — S290; these resolve to "" until the org sets its public contact
+// details in Settings, so they are deliberately placed as a labeled "Email: |
+// Phone:" block that degrades to blank fields rather than broken prose, AFTER
+// the always-works "reply to this message" line) —
 // the draft's friendly labels {{business_name}}/{{rent_amount}} map to the
 // implemented slugs {{org_name}}/{{rent}} (an unknown token would render its raw
 // braces, so this mapping is load-bearing). Where a concrete date/time/amount is
@@ -423,6 +426,7 @@ export const TENANT_MESSAGE_TEMPLATE_SEED: SeedTemplate[] = [
       "Welcome to your new home at {{property_address}}. We're glad to have you with us.\n\n" +
       "A few quick things to get you settled:\n" +
       "- The best way to reach us for anything - maintenance, questions, updates - is to reply to this message, so it's logged and we can respond quickly.\n" +
+      "- You can also reach us directly - Email: {{business_email}} | Phone: {{business_phone}}\n" +
       "- For an emergency (fire, active flooding, no heat in winter, a gas odour), call 911 or local emergency services first, then let us know once you're safe.\n" +
       "- We'll follow up separately with your community guidelines and any building-specific details.\n\n" +
       "If there's anything you need in your first few weeks, just reach out.\n\n" +

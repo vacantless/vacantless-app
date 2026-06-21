@@ -108,6 +108,34 @@ ok("welcome resolves org_name", rendered.includes("Agile Real Estate Group"));
 ok("welcome resolves property_address", rendered.includes("833 Pillette Rd"));
 ok("welcome leaves no unresolved braces", !/\{\{/.test(rendered));
 
+// --- S290 contact block: resolves when set, degrades cleanly when unset -----
+// The Move-in welcome carries a labeled contact block using the org's public
+// contact tokens. The block sits AFTER the always-works "reply to this message"
+// line so the message stays usable either way.
+ok(
+  "welcome carries the contact-block tokens",
+  welcome.body.includes("Email: {{business_email}} | Phone: {{business_phone}}"),
+);
+const withContact = renderForRecipient(welcome.body, {
+  tenantName: "Jordan Lee",
+  orgName: "Agile Real Estate Group",
+  propertyAddress: "833 Pillette Rd",
+  rentCents: 125000,
+  orgContactEmail: "rentals@agileonline.ca",
+  orgContactPhone: "226-773-7555",
+});
+ok(
+  "welcome contact block resolves email + phone when set",
+  withContact.includes("Email: rentals@agileonline.ca | Phone: 226-773-7555"),
+);
+ok("welcome contact block: still has the reply-to-this-message line", withContact.includes("reply to this message"));
+// `rendered` (above) was built WITHOUT contact fields: the block degrades to
+// blank labels rather than broken prose, and leaves no stray braces.
+ok(
+  "welcome contact block degrades to blank labels when unset",
+  rendered.includes("Email:  | Phone: ") && rendered.includes("reply to this message"),
+);
+
 const rentReminder = TENANT_MESSAGE_TEMPLATE_SEED.find((t) => t.name === "Rent reminder")!;
 const rr = renderForRecipient(rentReminder.body, {
   tenantName: "Jordan Lee",
