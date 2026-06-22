@@ -61,6 +61,7 @@ export default async function OverviewPage() {
     { data: showingData },
     { data: tenancyRows },
     { data: availablePropertyRows },
+    { data: workOrderRows },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -103,7 +104,22 @@ export default async function OverviewPage() {
       .eq("status", "available")
       .order("created_at", { ascending: false })
       .limit(1),
+    // Active maintenance work orders — feed the Overview "needs attention" tile
+    // (work-order module Slice 3). Only open/assigned/in_progress jobs; renders
+    // only when something is active (conditional-visibility rule).
+    supabase
+      .from("work_orders")
+      .select("id, status, priority")
+      .in("status", ["open", "assigned", "in_progress"]),
   ]);
+
+  // Open + urgent work-order counts for the Overview tile.
+  const activeWorkOrders = (workOrderRows ?? []) as {
+    id: string;
+    status: string;
+    priority: string;
+  }[];
+  const urgentWorkOrders = activeWorkOrders.filter((w) => w.priority === "urgent");
 
   const upcomingShowings = (showingData ?? []) as unknown as {
     id: string;
@@ -213,6 +229,38 @@ export default async function OverviewPage() {
               />
             ))}
           </div>
+        </>
+      )}
+
+      {activeWorkOrders.length > 0 && (
+        <>
+          <SectionHeading action={{ href: "/dashboard/maintenance", label: "Open Maintenance" }}>
+            Maintenance
+          </SectionHeading>
+          <Link href="/dashboard/maintenance" className="mb-8 block">
+            <div className="flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ring-1 ring-black/5"
+                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+              >
+                <Icons.bolt className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900">
+                  {activeWorkOrders.length} open work{" "}
+                  {activeWorkOrders.length === 1 ? "order" : "orders"}
+                  {urgentWorkOrders.length > 0 && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-100">
+                      {urgentWorkOrders.length} urgent
+                    </span>
+                  )}
+                </p>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Repairs and maintenance still in progress. Open Maintenance to assign trades and track them to done.
+                </p>
+              </div>
+            </div>
+          </Link>
         </>
       )}
 

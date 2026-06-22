@@ -31,7 +31,19 @@ import TenancyStripeRentSection, {
 } from "@/components/tenancy-stripe-rent-section";
 import { getStripe } from "@/lib/stripe";
 import { recordPayment, deletePayment } from "../payment-actions";
+import { reportTenancyIssue } from "../maintenance-actions";
 import { sendTenantMessage } from "../comms-actions";
+import {
+  WORK_ORDER_CATEGORIES,
+  WORK_ORDER_PRIORITIES,
+  workOrderCategoryLabel,
+  workOrderPriorityLabel,
+  workOrderStatusLabel,
+  workOrderStatusTone,
+  workOrderPriorityTone,
+  workOrderErrorMessage,
+  isActiveStatus,
+} from "@/lib/work-orders";
 import {
   PAYMENT_METHODS,
   paymentMethodLabel,
@@ -176,6 +188,28 @@ const PAYMENT_FLASH: Record<string, string> = {
   recorded: "Payment recorded.",
   deleted: "Payment removed.",
 };
+// Maintenance "Report an issue" outcome (?wo=...). `reported` is success-toned;
+// the rest are validation errors handled by workOrderErrorMessage.
+const WO_FLASH: Record<string, string> = {
+  reported: "Maintenance issue logged. Track it in Maintenance.",
+};
+// Map the lib/work-orders tone vocabulary onto the shared StatusChip ChipTone.
+function woChipTone(
+  tone: string,
+): "neutral" | "info" | "success" | "warn" | "danger" {
+  switch (tone) {
+    case "green":
+      return "success";
+    case "blue":
+      return "info";
+    case "amber":
+      return "warn";
+    case "red":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
 // Rotessa customer-creation outcomes (?rotessa=...). `created`/`already` are
 // success-toned; the rest are errors.
 const ROTESSA_SUCCESS: Record<string, string> = {
@@ -244,6 +278,7 @@ export default async function TenancyDetailPage({
     k?: string;
     f?: string;
     lease?: string;
+    wo?: string;
   };
 }) {
   const supabase = createClient();
@@ -321,6 +356,25 @@ export default async function TenancyDetailPage({
     payments.map((p): PaymentRow => ({ amount_cents: p.amount_cents, period_month: p.period_month })),
     t.rent_cents,
   );
+
+  // Maintenance work orders logged against this tenancy (newest first), for the
+  // per-tenancy Maintenance panel (work-order module Slice 3). RLS scopes to
+  // this org. Full management lives on /dashboard/maintenance.
+  const { data: woRows } = await supabase
+    .from("work_orders")
+    .select("id, title, status, priority, category, scheduled_for, trade:trade_contacts(name)")
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false });
+  const workOrders = (woRows ?? []) as unknown as {
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+    category: string;
+    scheduled_for: string | null;
+    trade: { name: string } | null;
+  }[];
+  const openWorkOrders = workOrders.filter((w) => isActiveStatus(w.status));
 
   // Org-level saved message templates (for the composer's "start from template"
   // picker) and the send history for this tenancy. RLS scopes both to this org.
@@ -546,6 +600,7 @@ export default async function TenancyDetailPage({
     (searchParams.striperent && STRIPE_RENT_SUCCESS[searchParams.striperent]) ||
     (searchParams.paid && PAYMENT_FLASH[searchParams.paid]) ||
     (searchParams.lease && LEASE_SUCCESS[searchParams.lease]) ||
+    (searchParams.wo && WO_FLASH[searchParams.wo]) ||
     msgFlash ||
     null;
   const errMsg =
@@ -562,6 +617,9 @@ export default async function TenancyDetailPage({
       : null) ||
     (searchParams.lease && !LEASE_SUCCESS[searchParams.lease]
       ? (LEASE_ERROR[searchParams.lease] ?? null)
+      : null) ||
+    (searchParams.wo && !WO_FLASH[searchParams.wo]
+      ? workOrderErrorMessage(searchParams.wo)
       : null) ||
     msgError;
 
@@ -590,6 +648,12 @@ export default async function TenancyDetailPage({
     payments.length > 0
       ? `${payments.length} logged · ${formatMoneyCents(reconciliation.totalCollectedCents)}`
       : "None logged";
+  const maintenanceStatus =
+    openWorkOrders.length > 0
+      ? `${openWorkOrders.length} open`
+      : workOrders.length > 0
+        ? "All clear"
+        : "None logged";
   const messagesStatus =
     messages.length > 0 ? `${messages.length} sent` : "None sent";
   const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
@@ -1137,6 +1201,104 @@ export default async function TenancyDetailPage({
             style={{ background: "var(--brand-gradient, var(--brand-color))" }}
           >
             Record payment
+          </button>
+        </form>
+      </div>
+      </CollapsibleSection>
+
+      {/* Maintenance (work-order module Slice 3) -------------------------- */}
+      <CollapsibleSection id="maintenance" title="Maintenance" status={maintenanceStatus}>
+      <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-gray-600">
+            Repair and maintenance jobs for this unit. Log an issue here; assign a
+            trade, set a cost, and track it to done in Maintenance.
+          </p>
+          <Link
+            href="/dashboard/maintenance"
+            className="shrink-0 text-sm font-medium text-brand hover:underline"
+          >
+            Open in Maintenance →
+          </Link>
+        </div>
+
+        {workOrders.length > 0 ? (
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+            {workOrders.map((w) => (
+              <li
+                key={w.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="font-medium text-gray-900">{w.title}</span>
+                  <span className="ml-2 block text-xs text-gray-400">
+                    {workOrderCategoryLabel(w.category)}
+                    {w.trade ? ` · ${w.trade.name}` : " · Unassigned"}
+                    {w.scheduled_for ? ` · scheduled ${w.scheduled_for}` : ""}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <StatusChip tone={woChipTone(workOrderPriorityTone(w.priority))}>
+                    {workOrderPriorityLabel(w.priority)}
+                  </StatusChip>
+                  <StatusChip tone={woChipTone(workOrderStatusTone(w.status))}>
+                    {workOrderStatusLabel(w.status)}
+                  </StatusChip>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+            No maintenance logged for this unit yet.
+          </p>
+        )}
+
+        {/* Report-an-issue form */}
+        <form
+          action={reportTenancyIssue}
+          className="flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4"
+        >
+          <input type="hidden" name="tenancy_id" value={t.id} />
+          <div className="min-w-[12rem] flex-1">
+            <label className={labelCls}>Issue</label>
+            <input
+              name="title"
+              required
+              placeholder="e.g. Kitchen faucet leaking"
+              className={inputCls}
+            />
+          </div>
+          <div className="w-40">
+            <label className={labelCls}>Category</label>
+            <select name="category" defaultValue="general" className={inputCls}>
+              {WORK_ORDER_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {workOrderCategoryLabel(c)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-32">
+            <label className={labelCls}>Priority</label>
+            <select name="priority" defaultValue="normal" className={inputCls}>
+              {WORK_ORDER_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {workOrderPriorityLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[10rem] flex-1">
+            <label className={labelCls}>Details (optional)</label>
+            <input name="description" placeholder="Access notes, what's needed…" className={inputCls} />
+          </div>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+          >
+            Report issue
           </button>
         </form>
       </div>
