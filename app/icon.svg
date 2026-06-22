@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Vacantless</title>
+  <desc id="desc">Vacantless V-check icon. Adapts to light/dark browser themes.</desc>
+  <style>
+    .v   { fill: #0B0B0B; }
+    .chk { fill: #FFFFFF; }
+    @media (prefers-color-scheme: dark) {
+      .v   { fill: #FFFFFF; }
+      .chk { fill: #0B0B0B; }
+    }
+  </style>
+  <path class="v" d="M91.7 74h72.4c13.3 0 25.1 8.3 29.6 20.8l63.6 178.5 63.7-178.5c4.5-12.5 16.3-20.8 29.6-20.8h70.1c22.8 0 38.1 23.4 29 44.3L292.1 424.1c-13.6 31.4-58.2 31.5-71.9.1L62.8 118.2C53.5 97.3 68.8 74 91.7 74Z"/>
+  <path class="chk" d="M233.8 356.4c-6.3 0-12.3-2.7-16.5-7.4l-54.1-61.5c-8.1-9.2-7.2-23.2 2-31.3 9.2-8.1 23.2-7.2 31.3 2l36.3 41.3 89.6-111.7c7.7-9.6 21.7-11.1 31.2-3.4 9.6 7.7 11.1 21.7 3.4 31.2L251.1 348c-4 5-10 8-16.4 8.3-.3.1-.6.1-.9.1Z"/>
+</svg>
