@@ -216,6 +216,12 @@ function extractRentCents(lines: string[], rawText: string): number | null {
       "Lease Price",
       "Listing Price",
       "Price",
+      // The TRREB / PropTx data sheet prints the asking rent as a bare
+      // "List: $2,700 For: Lease" line (no "Price"). "List" matches only when a
+      // colon follows immediately, so "List Date:" / "Last Update:" never match,
+      // and the MAX_PLAUSIBLE_RENT_CENTS cap below still rejects a sale "List:"
+      // (a sale price is far over the monthly-rent ceiling).
+      "List",
       "Rent",
       "Monthly Rent",
       "Lease",
@@ -425,7 +431,7 @@ export function parseAvailableDate(raw: string | null): string | null {
   return null;
 }
 
-function extractAvailableDate(lines: string[]): string | null {
+function extractAvailableDate(lines: string[], rawText: string): string | null {
   const v = labelValue(
     lines,
     [
@@ -439,7 +445,26 @@ function extractAvailableDate(lines: string[]): string | null {
     ],
     { allowNextLine: true },
   );
-  return parseAvailableDate(v);
+  const fromLabel = parseAvailableDate(v);
+  if (fromLabel) return fromLabel;
+
+  // TRREB / PropTx prints possession on a SHARED line where the label is not at
+  // the start: "Holdover: 30 Possession: Flexible Date: 08/01/2026 Occup: …".
+  // The line-start label match above misses it, so scan for a date that sits
+  // close after a possession/occupancy/availability cue. The 40-char window +
+  // the cue requirement keep this from grabbing the sheet's OTHER dates
+  // (Contract Date, Expiry Date, Printed On, Last Update), which carry no such
+  // cue. parseAvailableDate validates the captured token, so a non-date
+  // ("Flexible", "TBA") between the cue and a real date is skipped.
+  const cue =
+    /\b(?:possession|occupancy|date available|available)\b[^\n]{0,40}?(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4}|[A-Za-z]{3,9}\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})/i.exec(
+      rawText,
+    );
+  if (cue) {
+    const fromCue = parseAvailableDate(cue[1]);
+    if (fromCue) return fromCue;
+  }
+  return null;
 }
 
 // --- virtual tour / video link ----------------------------------------------
@@ -737,7 +762,7 @@ export function parseMlsListing(text: string): ParsedListing {
   out.sqft = extractSqft(lines, raw);
   out.parking = extractParking(lines);
   out.description = extractDescription(lines);
-  out.availableDate = extractAvailableDate(lines);
+  out.availableDate = extractAvailableDate(lines, raw);
   out.virtualTourUrl = extractVirtualTourUrl(lines, raw);
 
   // A/C: a TRREB explicit Y/N flag ("A/C: N", "CAC Incl: Y", "Central Air: Y")

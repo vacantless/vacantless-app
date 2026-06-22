@@ -79,6 +79,7 @@ export function MlsPdfImport({ placeholder }: { placeholder: string }) {
       const doc = await pdfjs.getDocument({ data }).promise;
       const pageCount = Math.min(doc.numPages, MAX_PAGES);
       const pages: PdfTextItemLike[][] = [];
+      const linkUrls: string[] = [];
       for (let p = 1; p <= pageCount; p++) {
         const page = await doc.getPage(p);
         const content = await page.getTextContent();
@@ -88,8 +89,31 @@ export function MlsPdfImport({ placeholder }: { placeholder: string }) {
             (it): it is PdfTextItemLike => typeof it.str === "string",
           ),
         );
+        // The virtual-tour / video link on a data sheet is usually a clickable
+        // LINK ANNOTATION, not visible text — getTextContent never returns it.
+        // Pull Link annotations' URLs too so the parser's allow-listed tour-host
+        // filter (lib/virtual-tour) can recover a YouTube/Vimeo/iGUIDE/Matterport
+        // tour. Best-effort: a page whose annotations fail to load is skipped.
+        try {
+          const annots = (await page.getAnnotations()) as Array<{
+            subtype?: string;
+            url?: string;
+          }>;
+          for (const a of annots) {
+            if (a.subtype === "Link" && typeof a.url === "string" && a.url) {
+              linkUrls.push(a.url);
+            }
+          }
+        } catch {
+          /* no annotations on this page */
+        }
       }
-      const assembled = assembleDocumentText(pages);
+      // Append discovered link URLs (deduped) as their own lines so the existing
+      // parseMlsListing tour scan sees them; non-tour links it simply ignores.
+      const uniqueLinks = Array.from(new Set(linkUrls));
+      const assembled = [assembleDocumentText(pages), ...uniqueLinks]
+        .filter((s) => s.length > 0)
+        .join("\n");
       if (!assembled.trim()) {
         setStatus({
           kind: "error",

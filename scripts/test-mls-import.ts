@@ -284,5 +284,35 @@ ok("no street-suffix line -> address null", parseMlsListing("Bedrooms: 2\nBathro
   ok("tour: absent not in found-fields", !r.foundFields.includes("Virtual tour"));
 }
 
+// --- TRREB / PropTx data-sheet shapes (S292 real-world: 95 Prince Arthur) ----
+{
+  // Rent printed as a bare "List: $X For: Lease" line (no "Price").
+  const r = parseMlsListing("95 Prince Arthur Ave 711\nList: $2,700 For: Lease\nBedrooms: 2");
+  ok("rent: TRREB 'List: $X For: Lease' -> 270000", r.rentCents === 270000);
+}
+{
+  // The sale-sheet "List:" must NOT import as rent (over the monthly cap).
+  const r = parseMlsListing("List: $899,000 For: Sale\nBedrooms: 3");
+  ok("rent: 'List:' sale price rejected by cap", r.rentCents === null);
+}
+{
+  // Possession date sits mid-line after "Holdover:" — the line-start label match
+  // misses it, the possession-cue scan recovers it.
+  const r = parseMlsListing(
+    "Holdover: 30 Possession: Flexible Date: 08/01/2026 Occup: Tenant Status Cert:",
+  );
+  ok("date: mid-line 'Possession: … 08/01/2026' -> 2026-08-01", r.availableDate === "2026-08-01");
+}
+{
+  // The sheet's OTHER dates (Contract/Expiry) carry no possession cue -> ignored.
+  const r = parseMlsListing("Contract Date: 04/24/2026\nExpiry Date: 07/24/2026\nBedrooms: 2");
+  ok("date: Contract/Expiry without a possession cue -> null", r.availableDate === null);
+}
+{
+  // A possession cue with a non-date value before the real date still resolves.
+  const r = parseMlsListing("Possession: Flexible Date: July 1, 2026");
+  ok("date: possession cue skips 'Flexible', takes July 1 2026", r.availableDate === "2026-07-01");
+}
+
 console.log(`\nmls-import: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
