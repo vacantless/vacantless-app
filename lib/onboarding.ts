@@ -46,7 +46,14 @@ export type ChecklistInput = {
    * Id of a property to deep-link the "Test your renter intake page" step to.
    * When set, that step points straight at the property's public `/r/[id]`
    * page (opened in a new tab) instead of the Properties list, turning the
-   * step into a single click. Null/undefined until a property exists.
+   * step into a single click.
+   *
+   * MUST be a PUBLICLY-VISIBLE property — the caller passes the most-recent
+   * AVAILABLE property, because the public `/r` page 404s on draft/off-market
+   * (get_public_listing excludes them). Passing the newest property of ANY
+   * status would point the step at a draft and 404 (the S294 preview-broken
+   * bug). Null/undefined until a live property exists → the step keeps its
+   * default Properties-list href.
    */
   firstPropertyId?: string | null;
 };

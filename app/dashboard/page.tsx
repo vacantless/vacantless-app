@@ -56,10 +56,11 @@ export default async function OverviewPage() {
   // RLS scopes all of these to the caller's org automatically.
   const [
     { data: leads },
-    { data: propertyRows, count: propertyCount },
+    { count: propertyCount },
     { count: availabilityCount },
     { data: showingData },
     { data: tenancyRows },
+    { data: availablePropertyRows },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -67,13 +68,10 @@ export default async function OverviewPage() {
         "id, name, email, source, status, created_at, property_id, qualified_out, property:properties(address)",
       )
       .order("created_at", { ascending: false }),
-    // Most-recent property id + total count — the id deep-links the "test your
-    // intake page" checklist step straight to a real public /r page.
+    // Total property count — drives the "Add your first rental" checklist step.
     supabase
       .from("properties")
-      .select("id", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .limit(1),
+      .select("id", { count: "exact", head: true }),
     supabase
       .from("availability_rules")
       .select("id", { count: "exact", head: true }),
@@ -93,6 +91,18 @@ export default async function OverviewPage() {
       .from("tenancies")
       .select("id, status, rent_cents, start_date, property:properties(address)")
       .eq("status", "active"),
+    // Most-recent AVAILABLE property — deep-links the "Test your renter inquiry
+    // page" checklist step to a public /r page that actually renders. The public
+    // page 404s on draft/off-market (get_public_listing excludes them), so
+    // linking the newest property of ANY status could point the step at a draft
+    // (the S294 preview-broken bug). Null when nothing is live yet → the step
+    // falls back to the Properties list.
+    supabase
+      .from("properties")
+      .select("id")
+      .eq("status", "available")
+      .order("created_at", { ascending: false })
+      .limit(1),
   ]);
 
   const upcomingShowings = (showingData ?? []) as unknown as {
@@ -157,7 +167,8 @@ export default async function OverviewPage() {
     subscriptionActive:
       isSubscriptionActive(org?.subscription_status) ||
       pilotStatus(org?.pilot_started_at).active,
-    firstPropertyId: (propertyRows as { id: string }[] | null)?.[0]?.id ?? null,
+    firstPropertyId:
+      (availablePropertyRows as { id: string }[] | null)?.[0]?.id ?? null,
   });
 
   return (
