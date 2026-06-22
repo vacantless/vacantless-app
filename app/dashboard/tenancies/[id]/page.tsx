@@ -43,6 +43,9 @@ import {
   workOrderPriorityTone,
   workOrderErrorMessage,
   isActiveStatus,
+  maintenanceTemplateNameForStatus,
+  statusOffersTenantUpdate,
+  findTemplateIdByName,
 } from "@/lib/work-orders";
 import {
   PAYMENT_METHODS,
@@ -279,6 +282,7 @@ export default async function TenancyDetailPage({
     f?: string;
     lease?: string;
     wo?: string;
+    wo_msg?: string;
   };
 }) {
   const supabase = createClient();
@@ -383,6 +387,15 @@ export default async function TenancyDetailPage({
     .select("id, name, channel, subject, body")
     .order("name", { ascending: true });
   const templates = (templateRows ?? []) as ComposerTemplate[];
+
+  // Comms tie-in (Slice 4): when deep-linked from a work-order status change
+  // (?wo_msg=<status>), resolve the matching maintenance template id so the
+  // composer pre-loads it. Falls back to null (blank composer) when the status
+  // maps to nothing or the operator renamed/deleted that template.
+  const initialTemplateId = findTemplateIdByName(
+    templates,
+    maintenanceTemplateNameForStatus(searchParams.wo_msg ?? ""),
+  );
 
   // Plan gate for the composer (S214): SMS is a paid-tier capability. The server
   // action enforces this regardless; here we mirror it so the composer can hide
@@ -1237,13 +1250,23 @@ export default async function TenancyDetailPage({
                     {w.scheduled_for ? ` · scheduled ${w.scheduled_for}` : ""}
                   </span>
                 </span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  <StatusChip tone={woChipTone(workOrderPriorityTone(w.priority))}>
-                    {workOrderPriorityLabel(w.priority)}
-                  </StatusChip>
-                  <StatusChip tone={woChipTone(workOrderStatusTone(w.status))}>
-                    {workOrderStatusLabel(w.status)}
-                  </StatusChip>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="flex items-center gap-1.5">
+                    <StatusChip tone={woChipTone(workOrderPriorityTone(w.priority))}>
+                      {workOrderPriorityLabel(w.priority)}
+                    </StatusChip>
+                    <StatusChip tone={woChipTone(workOrderStatusTone(w.status))}>
+                      {workOrderStatusLabel(w.status)}
+                    </StatusChip>
+                  </span>
+                  {statusOffersTenantUpdate(w.status) && (
+                    <Link
+                      href={`/dashboard/tenancies/${t.id}?wo_msg=${w.status}#message`}
+                      className="text-xs font-medium text-brand hover:underline"
+                    >
+                      Tell the tenant →
+                    </Link>
+                  )}
                 </span>
               </li>
             ))}
@@ -1305,7 +1328,12 @@ export default async function TenancyDetailPage({
       </CollapsibleSection>
 
       {/* Tenant messages (email / SMS) ----------------------------------- */}
-      <CollapsibleSection title="Tenant messages" status={messagesStatus}>
+      <CollapsibleSection
+        id="message"
+        title="Tenant messages"
+        status={messagesStatus}
+        defaultOpen={!!initialTemplateId}
+      >
       <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-gray-600">
           Message the tenants on this tenancy by email and/or text — rent
@@ -1316,6 +1344,13 @@ export default async function TenancyDetailPage({
           </Link>
           .
         </p>
+
+        {initialTemplateId && (
+          <div className="rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-sm text-gray-700">
+            A maintenance update template is loaded below, ready for you to review,
+            fill in any details in [brackets], and send.
+          </div>
+        )}
 
         {tenants.length === 0 ? (
           <p className="text-sm text-gray-500">Add a tenant above to send a message.</p>
@@ -1330,6 +1365,7 @@ export default async function TenancyDetailPage({
             rentCents={t.rent_cents}
             orgContactEmail={org?.public_contact_email ?? null}
             orgContactPhone={org?.public_contact_phone ?? null}
+            initialTemplateId={initialTemplateId}
             sendAction={sendTenantMessage}
           />
         )}

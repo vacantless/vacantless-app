@@ -327,3 +327,50 @@ export function groupCostByCategory(
 export function isActiveStatus(status: string): boolean {
   return status === "open" || status === "assigned" || status === "in_progress";
 }
+
+// --- Tenant comms tie-in (Slice 4) ------------------------------------------
+//
+// When a work order changes status, the owner can let the tenant know with a
+// branded update sent through the EXISTING tenant-comms engine — we don't add a
+// new message system here. This maps a work-order status to the matching
+// maintenance template (seeded in TENANT_MESSAGE_TEMPLATE_SEED, lib/tenant-comms)
+// by NAME, so the composer can pre-load it. Pure + tested; the UI resolves the
+// name to a saved-template id (and degrades to no preselection if the operator
+// renamed or deleted that template). "cancelled" maps to nothing — a cancelled
+// job isn't a tenant-facing update.
+
+const STATUS_TEMPLATE_NAMES: Partial<Record<WorkOrderStatus, string>> = {
+  open: "Maintenance request received",
+  assigned: "Maintenance scheduled",
+  in_progress: "Maintenance scheduled",
+  completed: "Maintenance completed",
+};
+
+/**
+ * The seed maintenance-template NAME that best matches a work-order status, or
+ * null when no tenant update is appropriate (cancelled, or an unknown status).
+ * Used to pre-load the tenant-message composer after a status change.
+ */
+export function maintenanceTemplateNameForStatus(status: string): string | null {
+  return STATUS_TEMPLATE_NAMES[status as WorkOrderStatus] ?? null;
+}
+
+/** Whether a status is worth offering the owner a tenant update for. */
+export function statusOffersTenantUpdate(status: string): boolean {
+  return maintenanceTemplateNameForStatus(status) !== null;
+}
+
+/**
+ * Case-insensitive lookup of a saved template's id by name. Returns null when
+ * the name is empty or no template matches — so a renamed/deleted template just
+ * means the composer opens with nothing pre-selected (never an error).
+ */
+export function findTemplateIdByName(
+  templates: ReadonlyArray<{ id: string; name: string }>,
+  name: string | null,
+): string | null {
+  if (!name) return null;
+  const target = name.trim().toLowerCase();
+  const hit = templates.find((t) => t.name.trim().toLowerCase() === target);
+  return hit ? hit.id : null;
+}

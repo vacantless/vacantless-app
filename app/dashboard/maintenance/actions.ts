@@ -10,6 +10,7 @@ import {
   validateWorkOrderInput,
   validateStatusChange,
   validateTradeContactInput,
+  statusOffersTenantUpdate,
 } from "@/lib/work-orders";
 
 // Maintenance work-order + trade-contact actions (self-managed-owner wedge,
@@ -159,7 +160,7 @@ export async function setWorkOrderStatus(formData: FormData) {
   const supabase = createClient();
   const { data: row } = await supabase
     .from("work_orders")
-    .select("status, completed_on")
+    .select("status, completed_on, tenancy_id")
     .eq("id", id)
     .maybeSingle();
   if (!row) redirect(`${BASE}?wo=notfound`);
@@ -184,6 +185,16 @@ export async function setWorkOrderStatus(formData: FormData) {
     .eq("id", id);
 
   revalidatePath(BASE);
+
+  // Comms tie-in (Slice 4): when the job is tied to a tenancy and the new status
+  // is one a tenant would want to hear about, surface a "let the tenant know"
+  // offer on return — the maintenance page deep-links to that tenancy's message
+  // composer with the matching maintenance template pre-loaded. We never send
+  // automatically; the owner reviews and sends.
+  const tenancyId = (row as { tenancy_id: string | null }).tenancy_id;
+  if (tenancyId && statusOffersTenantUpdate(check.value.status)) {
+    redirect(`${BASE}?wo=status&notify=${tenancyId}&to=${check.value.status}`);
+  }
   redirect(`${BASE}?wo=status`);
 }
 

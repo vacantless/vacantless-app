@@ -7,7 +7,7 @@
 // logic — fan-out, recipient resolution, token substitution — is server-side in
 // lib/tenant-comms; this is just the form state.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MESSAGE_CHANNELS,
   channelLabel,
@@ -67,6 +67,7 @@ export default function TenantMessageComposer({
   rentCents,
   orgContactEmail = null,
   orgContactPhone = null,
+  initialTemplateId = null,
   sendAction,
 }: {
   tenancyId: string;
@@ -86,6 +87,10 @@ export default function TenantMessageComposer({
   // {{business_phone}} chips + preview; null when unset (chip then hidden).
   orgContactEmail?: string | null;
   orgContactPhone?: string | null;
+  // When the composer is deep-linked from a work-order status change (Slice 4),
+  // this is the saved-template id to pre-load so the operator lands on a ready
+  // maintenance update. null = open blank, the normal case.
+  initialTemplateId?: string | null;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [channel, setChannel] = useState<MessageChannel>("email");
@@ -154,6 +159,20 @@ export default function TenantMessageComposer({
     setSubject(tpl.subject ?? "");
     setBody(tpl.body);
   }
+
+  // Pre-load a template when deep-linked from a work-order status change
+  // (Slice 4). Runs once per distinct initialTemplateId; if the template was
+  // renamed/deleted (not found), applyTemplate is a no-op and the composer just
+  // opens blank. The operator can still change everything before sending.
+  const appliedInitial = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialTemplateId) return;
+    if (appliedInitial.current === initialTemplateId) return;
+    if (!templates.some((t) => t.id === initialTemplateId)) return;
+    appliedInitial.current = initialTemplateId;
+    applyTemplate(initialTemplateId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTemplateId]);
 
   function toggle(id: string) {
     setSelected((prev) => {

@@ -136,6 +136,8 @@ export default async function MaintenancePage({
     property?: string;
     priority?: string;
     edit?: string;
+    notify?: string;
+    to?: string;
   };
 }) {
   const supabase = createClient();
@@ -218,6 +220,17 @@ export default async function MaintenancePage({
 
   const editId = searchParams.edit ?? "";
 
+  // Comms tie-in (Slice 4): after a status change on a work order tied to a
+  // tenancy, offer to message that tenant. The action sets ?notify=<tenancyId>
+  // &to=<status>; we resolve the tenancy label here and deep-link to its message
+  // composer with the matching maintenance template pre-loaded (#message anchor).
+  const notifyTenancy =
+    searchParams.notify && searchParams.to
+      ? tenancies.find((t) => t.id === searchParams.notify)
+      : null;
+  const notifyStatusLabel =
+    notifyTenancy && searchParams.to ? workOrderStatusLabel(searchParams.to) : null;
+
   // Build a filter href preserving the other active filters.
   const filterHref = (patch: Record<string, string>) => {
     const p = new URLSearchParams();
@@ -255,6 +268,23 @@ export default async function MaintenancePage({
       {(woError || tradeError) && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {woError ?? tradeError}
+        </div>
+      )}
+
+      {notifyTenancy && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-sm text-gray-700">
+          <span>
+            Status changed to{" "}
+            <span className="font-medium text-gray-900">{notifyStatusLabel}</span>. Want to
+            let the tenant know? We&rsquo;ll open a message with the matching template ready
+            to review.
+          </span>
+          <Link
+            href={`/dashboard/tenancies/${notifyTenancy.id}?wo_msg=${searchParams.to}#message`}
+            className={`${SECONDARY_ACTION_CLASS} shrink-0`}
+          >
+            Message the tenant →
+          </Link>
         </div>
       )}
 

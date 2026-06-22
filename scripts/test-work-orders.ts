@@ -21,6 +21,9 @@ import {
   groupCostByProperty,
   groupCostByCategory,
   isActiveStatus,
+  maintenanceTemplateNameForStatus,
+  statusOffersTenantUpdate,
+  findTemplateIdByName,
   type WorkOrderCostRow,
 } from "../lib/work-orders";
 
@@ -196,6 +199,51 @@ ok("cancelled is not active", !isActiveStatus("cancelled"));
 function matchCode(v: { ok: boolean; code?: string }, code: string): boolean {
   return v.ok === false && v.code === code;
 }
+
+// --- Tenant comms tie-in (Slice 4) ------------------------------------------
+ok(
+  "open maps to request-received template",
+  maintenanceTemplateNameForStatus("open") === "Maintenance request received",
+);
+ok(
+  "assigned maps to scheduled template",
+  maintenanceTemplateNameForStatus("assigned") === "Maintenance scheduled",
+);
+ok(
+  "in_progress maps to scheduled template",
+  maintenanceTemplateNameForStatus("in_progress") === "Maintenance scheduled",
+);
+ok(
+  "completed maps to completed template",
+  maintenanceTemplateNameForStatus("completed") === "Maintenance completed",
+);
+ok("cancelled maps to no template", maintenanceTemplateNameForStatus("cancelled") === null);
+ok("unknown status maps to no template", maintenanceTemplateNameForStatus("bogus") === null);
+
+ok("open offers a tenant update", statusOffersTenantUpdate("open"));
+ok("completed offers a tenant update", statusOffersTenantUpdate("completed"));
+ok("cancelled offers no tenant update", !statusOffersTenantUpdate("cancelled"));
+ok("unknown offers no tenant update", !statusOffersTenantUpdate("bogus"));
+
+const sampleTemplates = [
+  { id: "t1", name: "Maintenance scheduled" },
+  { id: "t2", name: "Maintenance completed" },
+  { id: "t3", name: "Rent reminder" },
+];
+ok(
+  "findTemplateIdByName matches exactly",
+  findTemplateIdByName(sampleTemplates, "Maintenance completed") === "t2",
+);
+ok(
+  "findTemplateIdByName is case/space insensitive",
+  findTemplateIdByName(sampleTemplates, "  maintenance SCHEDULED ") === "t1",
+);
+ok("findTemplateIdByName returns null on miss", findTemplateIdByName(sampleTemplates, "Nope") === null);
+ok("findTemplateIdByName returns null on null name", findTemplateIdByName(sampleTemplates, null) === null);
+ok(
+  "status->template->id resolves end to end",
+  findTemplateIdByName(sampleTemplates, maintenanceTemplateNameForStatus("completed")) === "t2",
+);
 
 console.log(`\nwork-orders: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
