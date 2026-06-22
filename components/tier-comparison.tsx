@@ -1,11 +1,11 @@
 import { TIERS, TIER_KEYS, formatPlanPrice, isTierPurchasable } from "@/lib/billing";
 
-// Preview of the proposed Starter / Growth / Premium ladder (S220). Rendered on
-// the billing page ONLY behind ?preview=tiers — the GTM is held and these tiers
-// have no Stripe products yet, so they must never show as purchasable to a live
-// customer. When the ladder is locked: create the Stripe products, set the
+// Preview of the live Free / Growth / Premium ladder (S296, Package B). Rendered
+// on the billing page ONLY behind ?preview=tiers — the GTM is held and the PAID
+// tiers have no Stripe products yet, so they must never show as purchasable to a
+// live customer. When the ladder is locked: create the Stripe products, set the
 // price-id envs (so isTierPurchasable -> true), wire startCheckout to the tier
-// key, and drop this onto the page unconditionally (or replace the Core/Plus
+// key, and drop this onto the page unconditionally (replacing the Core/Plus
 // cards). Until then it's a review surface for Noam.
 export function TierComparison() {
   return (
@@ -27,6 +27,7 @@ export function TierComparison() {
       <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {TIER_KEYS.map((key) => {
           const tier = TIERS[key];
+          const isFree = tier.priceCents === 0;
           const purchasable = isTierPurchasable(tier);
           return (
             <div
@@ -59,7 +60,7 @@ export function TierComparison() {
               </ul>
               <div className="mt-6">
                 <div className="rounded-lg bg-gray-100 px-4 py-2 text-center text-sm font-medium text-gray-500">
-                  {purchasable ? "Available" : "Coming soon"}
+                  {isFree ? "Included" : purchasable ? "Available" : "Coming soon"}
                 </div>
               </div>
             </div>

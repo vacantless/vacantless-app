@@ -30,6 +30,7 @@ import {
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
+  listingCapForPlan,
   BASE_PHOTO_CAP,
   PREMIUM_PHOTO_CAP,
   photoCapForPlan,
@@ -419,10 +420,10 @@ ok(
 );
 ok("PLAN_FEATURES has 5 features", PLAN_FEATURES.length === 5);
 
-// --- Renter-facing SMS gate (S220: paid tiers incl Starter; trial = false) --
+// --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
 ok("canUseRenterSms: trial false", canUseRenterSms("trial") === false);
-ok("canUseRenterSms: starter true (wedge needs it)", canUseRenterSms("starter") === true);
+ok("canUseRenterSms: free false (email-only funnel)", canUseRenterSms("free") === false);
 ok("canUseRenterSms: growth true", canUseRenterSms("growth") === true);
 ok("canUseRenterSms: premium true", canUseRenterSms("premium") === true);
 ok("canUseRenterSms: pilot true", canUseRenterSms("pilot") === true);
@@ -430,7 +431,7 @@ ok("canUseRenterSms: core true (legacy leasing tier)", canUseRenterSms("core") =
 ok("canUseRenterSms: null false", canUseRenterSms(null) === false);
 
 // --- Rent-collection gate (Growth & up) ------------------------------------
-ok("canCollectRentByPlan: starter false", canCollectRentByPlan("starter") === false);
+ok("canCollectRentByPlan: free false", canCollectRentByPlan("free") === false);
 ok("canCollectRentByPlan: growth true", canCollectRentByPlan("growth") === true);
 ok("canCollectRentByPlan: premium true", canCollectRentByPlan("premium") === true);
 ok("canCollectRentByPlan: trial false", canCollectRentByPlan("trial") === false);
@@ -439,22 +440,37 @@ ok("canCollectRentByPlan: trial false", canCollectRentByPlan("trial") === false)
 ok("accounting: premium only", hasEntitlement("premium", "accounting") === true);
 ok("accounting: growth false", hasEntitlement("growth", "accounting") === false);
 
-// --- New tier ladder shape (Starter < Growth < Premium) --------------------
-ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["starter","growth","premium"]');
-ok("Starter $49", TIERS.starter.priceCents === 4900);
+// --- Live tier ladder shape (Free $0 < Growth $99 < Premium $249) -----------
+ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","growth","premium"]');
+ok("Free $0", TIERS.free.priceCents === 0);
 ok("Growth $99", TIERS.growth.priceCents === 9900);
 ok("Premium $249", TIERS.premium.priceCents === 24900);
 ok(
   "tier prices strictly ascending",
-  TIERS.starter.priceCents < TIERS.growth.priceCents &&
+  TIERS.free.priceCents < TIERS.growth.priceCents &&
     TIERS.growth.priceCents < TIERS.premium.priceCents,
 );
 ok("Growth is the highlighted tier", TIERS.growth.highlight === true);
-// No tier is purchasable yet (no Stripe products) — the preview-only guard.
+// No tier is purchasable yet (no Stripe products); Free is never purchasable.
 ok(
   "no tier purchasable until a Stripe price-id is set",
   TIER_KEYS.every((k) => isTierPurchasable(TIERS[k]) === false),
 );
+ok("Free is $0 and never purchasable", isTierPurchasable(TIERS.free) === false);
+
+// --- Listing allowance (Free funnel cap; config-only until wired) -----------
+ok("listing cap: free = 1", TIERS.free.maxActiveListings === 1);
+ok("listing cap: growth unlimited", TIERS.growth.maxActiveListings === null);
+ok("listing cap: premium unlimited", TIERS.premium.maxActiveListings === null);
+ok("listingCapForPlan free -> 1", listingCapForPlan("free") === 1);
+ok("listingCapForPlan trial -> free cap (1)", listingCapForPlan("trial") === 1);
+ok("listingCapForPlan unknown -> free cap (1)", listingCapForPlan("zzz") === 1);
+ok("listingCapForPlan null -> free cap (1)", listingCapForPlan(null) === 1);
+ok("listingCapForPlan growth -> unlimited", listingCapForPlan("growth") === null);
+ok("listingCapForPlan premium -> unlimited", listingCapForPlan("premium") === null);
+ok("listingCapForPlan pilot -> unlimited", listingCapForPlan("pilot") === null);
+ok("listingCapForPlan core -> unlimited (legacy paid)", listingCapForPlan("core") === null);
+ok("listingCapForPlan plus -> unlimited (legacy paid)", listingCapForPlan("plus") === null);
 
 // --- Photo storage allowance (per-tier) ------------------------------------
 // The base cap MUST equal the photos-module constant the uploader validates
@@ -471,7 +487,7 @@ ok("photoCapForPlan trial -> base", photoCapForPlan("trial") === BASE_PHOTO_CAP)
 ok("photoCapForPlan core -> base", photoCapForPlan("core") === BASE_PHOTO_CAP);
 ok("photoCapForPlan plus -> base", photoCapForPlan("plus") === BASE_PHOTO_CAP);
 ok("photoCapForPlan pilot -> base", photoCapForPlan("pilot") === BASE_PHOTO_CAP);
-ok("photoCapForPlan starter -> base", photoCapForPlan("starter") === BASE_PHOTO_CAP);
+ok("photoCapForPlan free -> base", photoCapForPlan("free") === BASE_PHOTO_CAP);
 ok("photoCapForPlan growth -> base", photoCapForPlan("growth") === BASE_PHOTO_CAP);
 ok("photoCapForPlan null -> base", photoCapForPlan(null) === BASE_PHOTO_CAP);
 ok("photoCapForPlan unknown -> base", photoCapForPlan("zzz") === BASE_PHOTO_CAP);
@@ -480,7 +496,7 @@ ok("photoCapForPlan premium -> premium cap", photoCapForPlan("premium") === PREM
 // --- storageUpsellNote ------------------------------------------------------
 {
   // Well under the base cap on a non-premium plan: no nudge.
-  const low = storageUpsellNote("starter", 3);
+  const low = storageUpsellNote("free", 3);
   ok("storageUpsell: low count cap = base", low.cap === BASE_PHOTO_CAP);
   ok("storageUpsell: low count remaining", low.remaining === BASE_PHOTO_CAP - 3);
   ok("storageUpsell: low count not at cap", low.atCap === false);
@@ -504,7 +520,7 @@ ok("photoCapForPlan premium -> premium cap", photoCapForPlan("premium") === PREM
   ok("storageUpsell: premium never nudged", premiumAt.showUpsell === false);
 
   // Negative/garbage count floors to 0 used.
-  const neg = storageUpsellNote("starter", -5);
+  const neg = storageUpsellNote("free", -5);
   ok("storageUpsell: negative count -> used 0", neg.used === 0);
   ok("storageUpsell: negative count remaining = cap", neg.remaining === BASE_PHOTO_CAP);
 }

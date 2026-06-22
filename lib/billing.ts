@@ -4,7 +4,11 @@
 // unit-tests cleanly via `npx tsx scripts/test-billing.ts`. The impure pieces
 // (the Stripe client, env-driven price-id lookup) live in lib/stripe.ts.
 
-export type PlanKey = "trial" | "pilot" | "core" | "plus";
+// `free` is the permanent, no-card funnel tier (Package B, S296). `trial` stays
+// the pre-anything default for legacy orgs; `core`/`plus` are the DEPRECATED
+// leasing-era Stripe products (kept only until the Growth/Premium product
+// migration lands — see the TIERS migration checklist below).
+export type PlanKey = "trial" | "free" | "pilot" | "core" | "plus";
 export type PaidPlanKey = "core" | "plus";
 
 export type PlanInfo = {
@@ -17,11 +21,12 @@ export type PlanInfo = {
   features: string[];
 };
 
-// The two sellable tiers. Prices match the Stripe products created in the
-// Vacantless account (Core $200/mo, Plus $375/mo CAD — a 50% new-entrant
-// undercut of the original $400/$750 placeholders; raise later + grandfather
-// early customers). The actual Stripe price id is read from env (test vs live
-// = an env swap), keyed by priceEnv.
+// DEPRECATED (S296): the legacy leasing-era Stripe products (Core $200/mo,
+// Plus $375/mo CAD). These remain ONLY because lib/stripe.ts + the billing-page
+// checkout + PaidPlanKey still reference them; they are no longer the offered
+// ladder. The live ladder is now Free / Growth / Premium (see TIERS below).
+// Do not surface Core/Plus to new customers. Removal lands with the
+// Growth/Premium Stripe-product migration (TIERS migration checklist).
 export const PLANS: Record<PaidPlanKey, PlanInfo> = {
   core: {
     key: "core",
@@ -70,8 +75,8 @@ export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey
 // below, so re-pointing the matrix is the ONLY edit needed to re-tier.
 //
 // S220 generalized this from the S214 SMS-only boolean into a feature × tier
-// MATRIX and introduced the proposed Starter/Growth/Premium ladder (see TIERS
-// below). The matrix is keyed by BOTH the new tier keys AND the legacy
+// MATRIX; S296 set the live Free/Growth/Premium ladder (see TIERS below; the
+// $49 Starter was dropped). The matrix is keyed by BOTH the new tier keys AND the legacy
 // leasing-era plan keys (trial/pilot/core/plus) so nothing breaks before the
 // rename + Stripe-product migration lands — a legacy org resolves to the same
 // entitlements it had under S214 (the only LIVE-enforced feature today is `sms`).
@@ -110,10 +115,14 @@ function noEntitlements(): PlanEntitlements {
   };
 }
 
-// The proposed Starter/Growth/Premium ladder (S220). Tier keys are distinct
-// from the legacy plan keys so both can coexist through the migration.
-export type TierKey = "starter" | "growth" | "premium";
-export const TIER_KEYS: TierKey[] = ["starter", "growth", "premium"];
+// The live Free / Growth / Premium ladder (S296, Package B; numbers validated
+// 2026-06-22 — see PRICING-RESEARCH-2026-06-22.md). Replaces the S220 three-
+// paid-tier draft: the $49 Starter is dropped (the leasing wedge moves into the
+// Free funnel, matching how Avail/TurboTenant convert), so the ladder is one
+// free tier + two paid tiers. Tier keys are distinct from the legacy plan keys
+// so both can coexist through the Stripe-product migration.
+export type TierKey = "free" | "growth" | "premium";
+export const TIER_KEYS: TierKey[] = ["free", "growth", "premium"];
 
 // Any stored plan string we recognize: the new ladder + the legacy plans.
 export type AnyPlanKey = PlanKey | TierKey;
@@ -123,10 +132,10 @@ export type AnyPlanKey = PlanKey | TierKey;
 // unchanged; their non-`sms` values are forward-looking config, not yet enforced
 // for legacy orgs (which migrate to the new tiers anyway).
 //
-// New ladder (Noam's S220 calls):
-//   Starter  = leasing wedge. Renter-facing booking/reminder SMS INCLUDED (the
-//              wedge needs it to convert viewings); everything else off.
-//   Growth   = + rent collection + landlord<->tenant comms (SMS) + tax export.
+// Live ladder (S296, Package B):
+//   Free     = lead-gen funnel. One live listing + the standalone tools; EMAIL
+//              ONLY (no renter SMS) and no paid capabilities.
+//   Growth   = rent collection + landlord<->tenant + renter SMS + tax export.
 //   Premium  = + accounting module.
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
@@ -134,8 +143,8 @@ export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: true }, // founder pilot = full access
   core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
   plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
-  // New proposed ladder.
-  starter: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
+  // Live ladder.
+  free: noEntitlements(), // funnel tier: email only, no paid capabilities
   growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: false },
   premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: true },
 };
@@ -168,8 +177,8 @@ export function canUseSms(plan: string | null | undefined): boolean {
 }
 
 // Whether this plan may send renter-facing booking/reminder SMS (the public
-// leasing flow). S220 decision: gated to PAID tiers (Starter and up); trial =
-// email only. DEFINED here now; the live wiring (the book_public_showing RPC
+// leasing flow). S296 decision: gated to PAID tiers (Growth and up); Free + trial
+// = email only. DEFINED here now; the live wiring (the book_public_showing RPC
 // surfacing org.plan + the reminders cron joining plan) is the next increment —
 // see NEXT-SESSION. Until wired, renter SMS remains ungated at the call sites.
 export function canUseRenterSms(plan: string | null | undefined): boolean {
@@ -224,37 +233,52 @@ export function storageUpsellNote(
   return { cap, used, remaining, atCap, showUpsell };
 }
 
-// --- Proposed Starter / Growth / Premium ladder (S220) ----------------------
-// Display config for the new 3-tier ladder. PRICES ARE PROPOSED — confirmed in
-// principle with Noam (S220) but NOT yet wired to Stripe products, so the tier
-// comparison renders behind a preview flag only (GTM is HELD). When the ladder
-// is locked: create the Stripe products, add the price-id env vars, set
-// `priceEnv`, then flip the preview gate. Hard/usage costs (Twilio SMS, ad/portal
-// spend, payment processing) always pass through at cost on top — these monthly
-// prices are the platform fee only.
+// --- Live Free / Growth / Premium ladder (S296, Package B) -------------------
+// Display config for the live 3-tier ladder. NUMBERS VALIDATED 2026-06-22
+// against the market (PRICING-RESEARCH-2026-06-22.md): $0 Free funnel + $99
+// Growth anchor + $249 Premium, all flat (no per-unit caps — the 20–100 door
+// ICP balks at per-unit math; flat is the wedge). The paid tiers are NOT yet
+// wired to Stripe products, so the comparison still renders behind a preview
+// flag (GTM is HELD) and `priceEnv` stays null until the products exist.
+//
+// MIGRATION CHECKLIST (to make Growth/Premium sellable, replacing Core/Plus):
+//   1. Create two CAD Stripe products: Growth $99/mo, Premium $249/mo.
+//   2. Add env vars STRIPE_PRICE_GROWTH / STRIPE_PRICE_PREMIUM in Vercel; set
+//      each tier's `priceEnv` (then isTierPurchasable -> true for paid tiers).
+//   3. Point the billing page's purchasable cards at TIERS (Growth/Premium),
+//      remove the Core/Plus "Founding plans" cards, and wire startCheckout to
+//      the tier key.
+//   4. Widen PaidPlanKey + lib/stripe.ts priceMap to the new tier keys and
+//      update the actions.ts "pick Core or Plus" validation copy.
+//   5. Default a fresh org to plan='free' at signup and enforce
+//      `listingCapForPlan` in the publish path (currently config-only).
+// Hard/usage costs (Twilio SMS, ad/portal spend, payment processing) always
+// pass through at cost on top — these monthly prices are the platform fee only.
 export type TierInfo = {
   key: TierKey;
   name: string;
-  priceCents: number; // CAD / month — PROPOSED platform fee
-  priceEnv: string | null; // Stripe price-id env var (null until the product exists)
+  priceCents: number; // CAD / month — 0 for Free; platform fee for paid tiers
+  priceEnv: string | null; // Stripe price-id env var (null until the product exists; Free is never purchasable)
+  maxActiveListings: number | null; // published-listing allowance; null = unlimited
   blurb: string;
   features: string[]; // customer-facing bullets ("Everything in X, plus…")
   highlight?: boolean; // the recommended/most-popular tier
 };
 
 export const TIERS: Record<TierKey, TierInfo> = {
-  starter: {
-    key: "starter",
-    name: "Starter",
-    priceCents: 4900,
+  free: {
+    key: "free",
+    name: "Free",
+    priceCents: 0,
     priceEnv: null,
-    blurb: "Fill your rentals — from first inquiry to signed lease.",
+    maxActiveListings: 1,
+    blurb: "List one rental and try the tools — no card, no time limit.",
     features: [
-      "Branded inquiry pages + instant replies",
-      "Renters book from your viewing times",
-      "Automatic viewing reminders (email + text)",
-      "Your renters, organized in one list",
-      "Reports by unit and ad source",
+      "One active listing with a branded inquiry page",
+      "Every inquiry organized in one list",
+      "Rent-increase guideline calculator + N1 form",
+      "Listing-copy generator + MLS data-sheet import",
+      "Email replies and reminders (no texting)",
     ],
   },
   growth: {
@@ -262,12 +286,14 @@ export const TIERS: Record<TierKey, TierInfo> = {
     name: "Growth",
     priceCents: 9900,
     priceEnv: null,
-    blurb: "Everything in Starter, plus collect rent and manage tenants.",
+    maxActiveListings: null,
+    blurb: "Everything in Free, plus collect rent, screen renters, and manage tenants.",
     highlight: true,
     features: [
-      "Everything in Starter",
+      "Unlimited active listings",
       "Online rent collection (Stripe / Rotessa)",
-      "Tenant messaging by email and text",
+      "Renter pre-screening questions",
+      "Tenant + renter messaging by email and text",
       "Tenancy records and payment ledger",
       "Year-end tax / rent export",
     ],
@@ -277,11 +303,13 @@ export const TIERS: Record<TierKey, TierInfo> = {
     name: "Premium",
     priceCents: 24900,
     priceEnv: null,
-    blurb: "Everything in Growth, plus full books and operations.",
+    maxActiveListings: null,
+    blurb: "Everything in Growth, plus full books, operations, and automation.",
     features: [
       "Everything in Growth",
       "Full accounting module",
       "Maintenance / repair dispatch",
+      "Automatic post-viewing follow-up",
       "Round-robin lead assignment",
       "Priority support",
     ],
@@ -289,8 +317,19 @@ export const TIERS: Record<TierKey, TierInfo> = {
 };
 
 // True once a tier has a real Stripe product behind it (safe to offer checkout).
+// Free is $0 and never purchasable, so this is only ever true for paid tiers.
 export function isTierPurchasable(tier: TierInfo): boolean {
-  return tier.priceEnv != null;
+  return tier.priceCents > 0 && tier.priceEnv != null;
+}
+
+// The published-listing allowance for a stored plan (the Free funnel cap; null =
+// unlimited). Config is the source of truth — the publish/uploader path reads
+// this — but enforcement wiring is a follow-up increment (the same config-first
+// discipline as the photo cap). Unknown/missing plan -> the Free cap (never more).
+export function listingCapForPlan(plan: string | null | undefined): number | null {
+  if (plan === "growth" || plan === "premium") return null;
+  if (isPaidPlan(plan) || isPilotPlan(plan)) return null; // legacy paid + pilot = unlimited
+  return TIERS.free.maxActiveListings; // free / trial / unknown
 }
 
 // --- Pilot tier (GTM Layer 1) ----------------------------------------------
@@ -503,7 +542,7 @@ export function statusLabel(status: string | null | undefined): string {
 
 export type BillingView = {
   planKey: PlanKey;
-  planLabel: string; // "Trial" | "Pilot" | "Core" | "Plus"
+  planLabel: string; // "Trial" | "Free" | "Pilot" | "Core" | "Plus"
   isPaid: boolean; // org is on a paid tier (core/plus)
   isPilot: boolean; // org is on the pilot plan (active OR expired-not-yet-converted)
   pilotActive: boolean; // pilot started and within the 30-day window
@@ -543,6 +582,7 @@ function planLabelOf(plan: PlanKey): string {
   if (plan === "core") return "Core";
   if (plan === "plus") return "Plus";
   if (plan === "pilot") return "Pilot";
+  if (plan === "free") return "Free";
   return "Trial";
 }
 
@@ -565,12 +605,15 @@ export function formatPeriodEnd(
 
 // Build the view-model the Billing page + settings Account panel render from.
 export function buildBillingView(input: BillingInput): BillingView {
-  // A paid Stripe plan wins; otherwise the org may be on a pilot; else trial.
+  // A paid Stripe plan wins; otherwise pilot; otherwise the free funnel tier;
+  // else trial (the legacy pre-anything default).
   const planKey: PlanKey = isPaidPlan(input.plan)
     ? input.plan
     : isPilotPlan(input.plan)
       ? "pilot"
-      : "trial";
+      : input.plan === "free"
+        ? "free"
+        : "trial";
   const status = input.subscription_status ?? null;
   const periodEnd =
     input.current_period_end != null
