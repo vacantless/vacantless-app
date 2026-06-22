@@ -10,11 +10,11 @@ import {
   BrandBanner,
   SectionHeading,
   PRIMARY_ACTION_CLASS,
-  SECONDARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { addProperty, importPropertyFromMls } from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
+import { MlsPdfImport } from "./mls-pdf-import";
 
 export const dynamic = "force-dynamic";
 
@@ -185,34 +185,22 @@ export default async function PropertiesPage({
           htmlFor="mls_text"
           className="mb-1 block text-sm font-medium text-gray-800"
         >
-          Have it on MLS or realtor.ca? Paste the listing to prefill
+          Have it on MLS or realtor.ca? Drop the data sheet or paste it to prefill
         </label>
-        <p className="mb-2 text-xs text-gray-500">
-          Copy the listing text (address, rent, beds/baths, square footage,
+        <p className="mb-3 text-xs text-gray-500">
+          Drop the realtor data-sheet PDF you downloaded or emailed yourself, or
+          paste the listing text (address, rent, beds/baths, square footage,
           remarks) — the whole realtor.ca page or a full MLS agent data sheet
-          both work — and paste it here. We&apos;ll create a Draft with the
-          details filled in for you to
-          review; nothing goes public until you set it Live. Photos don&apos;t
-          come across, so you&apos;ll add those after. Your own listing text
-          only; we don&apos;t pull from MLS.
+          both work. We&apos;ll create a Draft with the details filled in for you
+          to review; nothing goes public until you set it Live. Photos don&apos;t
+          come across, so you&apos;ll add those after. Your own listing only; we
+          don&apos;t pull from MLS.
         </p>
-        <textarea
-          id="mls_text"
-          name="mls_text"
-          rows={5}
+        <MlsPdfImport
           placeholder={
             "Paste your MLS or realtor.ca listing here, e.g.\nAddress: 123 Main St, Unit 4\nList Price: $1,950/Monthly\nBedrooms: 2\nBathrooms: 1\nRemarks: Bright two-bedroom with in-suite laundry..."
           }
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
-        <div className="mt-3 flex justify-end">
-          <button
-            type="submit"
-            className={SECONDARY_ACTION_CLASS}
-          >
-            Prefill from listing
-          </button>
-        </div>
       </form>
 
       <p className="mb-4 text-center text-xs font-medium uppercase tracking-wide text-gray-400">

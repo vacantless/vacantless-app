@@ -10,6 +10,14 @@ const nextConfig = {
       bodySizeLimit: "30mb",
     },
   },
+  webpack: (config) => {
+    // pdf.js (client-side MLS data-sheet import, S292) references the Node-only
+    // optional `canvas` package on its server path; the browser build never
+    // needs it. Alias it to false so webpack doesn't try to bundle/resolve it
+    // (the standard Next.js + pdf.js fix) — keeps the client build clean.
+    config.resolve.alias.canvas = false;
+    return config;
+  },
 };
 
 export default nextConfig;
