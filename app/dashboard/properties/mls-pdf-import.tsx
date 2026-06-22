@@ -31,6 +31,7 @@ type Status =
   | { kind: "idle" }
   | { kind: "reading"; fileName: string }
   | { kind: "done"; fileName: string; pages: number }
+  | { kind: "pasted" }
   | { kind: "error"; message: string };
 
 // Set the pdf.js worker source exactly once. We serve the worker as a vendored
@@ -140,6 +141,47 @@ export function MlsPdfImport({ placeholder }: { placeholder: string }) {
     if (file) void handleFile(file);
   }
 
+  // One-click paste: read the operator's clipboard with the async Clipboard API
+  // instead of asking them to focus the box and hit Ctrl/Cmd+V. This is the same
+  // compliance posture as the PDF drop — we only read text the operator already
+  // copied and explicitly chose to bring in by clicking; no network call, no
+  // scrape, no MLS portal access. readText() requires a user gesture (this click)
+  // and may surface a browser permission prompt; every failure path falls back to
+  // the manual paste the textarea has always supported.
+  async function handleClipboardPaste() {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.clipboard ||
+      typeof navigator.clipboard.readText !== "function"
+    ) {
+      setStatus({
+        kind: "error",
+        message:
+          "This browser won't let us read the clipboard. Paste the listing text below instead (Ctrl/Cmd+V).",
+      });
+      return;
+    }
+    try {
+      const clip = await navigator.clipboard.readText();
+      if (!clip.trim()) {
+        setStatus({
+          kind: "error",
+          message:
+            "Your clipboard looks empty. Copy the MLS / realtor.ca text first, then try again — or paste below.",
+        });
+        return;
+      }
+      setText(clip);
+      setStatus({ kind: "pasted" });
+    } catch {
+      setStatus({
+        kind: "error",
+        message:
+          "Couldn't read the clipboard (permission denied or blocked). Paste the listing text below instead (Ctrl/Cmd+V).",
+      });
+    }
+  }
+
   return (
     <div>
       {/* Dropzone — drag a PDF or click to browse. Keyboard-accessible. */}
@@ -200,13 +242,27 @@ export function MlsPdfImport({ placeholder }: { placeholder: string }) {
           then prefill.
         </p>
       )}
+      {status.kind === "pasted" && (
+        <p className="mb-2 text-xs font-medium text-green-700">
+          Pasted from your clipboard. Review the details below, then prefill.
+        </p>
+      )}
       {status.kind === "error" && (
         <p className="mb-2 text-xs font-medium text-amber-700">{status.message}</p>
       )}
 
-      <p className="mb-1 text-center text-xs font-medium uppercase tracking-wide text-gray-400">
-        or paste the listing text
-      </p>
+      <div className="mb-1 flex items-center justify-center gap-2">
+        <p className="text-center text-xs font-medium uppercase tracking-wide text-gray-400">
+          or paste the listing text
+        </p>
+        <button
+          type="button"
+          onClick={() => void handleClipboardPaste()}
+          className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-gray-700 hover:underline"
+        >
+          paste from clipboard
+        </button>
+      </div>
 
       <textarea
         id="mls_text"
