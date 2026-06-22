@@ -295,6 +295,14 @@ export default async function MaintenancePage({
         <StatCard label="Spent this month" value={formatMoneyCents(monthSpend)} hint="Completed work, current month" icon={<Icons.card className="h-4 w-4" />} />
       </div>
 
+      <div className="mt-3 text-sm text-gray-600">
+        The costs you record here roll into your{" "}
+        <Link href="/dashboard/rent/statement" className="font-medium text-brand hover:underline">
+          owner statement
+        </Link>{" "}
+        — rent in minus maintenance out, per property, for year-end.
+      </div>
+
       {/* Filters */}
       <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex flex-wrap items-center gap-1.5">

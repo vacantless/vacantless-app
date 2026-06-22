@@ -1,0 +1,318 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import {
+  BrandBanner,
+  Card,
+  StatCard,
+  SectionHeading,
+  EmptyState,
+  SECONDARY_ACTION_CLASS,
+} from "@/components/ui";
+import { Icons } from "@/components/icons";
+import { workOrderCategoryLabel } from "@/lib/work-orders";
+import {
+  STATEMENT_PRESETS,
+  statementPresetLabel,
+  rangeForPreset,
+  parseRangeBound,
+  describeRange,
+  buildOwnerStatement,
+  buildMonthlyStatement,
+  formatMoneyCents,
+  type RentRow,
+  type PropertyRef,
+  type DateRange,
+} from "@/lib/statements";
+import type { WorkOrderCostRow } from "@/lib/work-orders";
+
+export const dynamic = "force-dynamic";
+
+// ============================================================================
+// Owner financial statement — work-order module Slice 5 (S307), the FINAL slice
+// of the self-managed-owner wedge. Joins the two ledgers the owner already
+// keeps — rent received (rent_payments) and maintenance spent (work_orders) —
+// into the year-end package an accountant wants: RENT IN minus MAINTENANCE OUT,
+// per property, for a chosen period. We only REPORT what was logged; no money
+// moves here.
+//
+// Server component, query-param window (preset + optional custom from/to). The
+// downloadable CSV lives at ./statement/export and reuses the same pure model.
+// Cash basis: rent counted by paid_on, maintenance by completed_on (costed,
+// completed jobs only).
+// ============================================================================
+
+type RentQueryRow = {
+  amount_cents: number;
+  paid_on: string | null;
+  tenancy: { property_id: string | null } | null;
+};
+
+type WoQueryRow = {
+  property_id: string | null;
+  category: string;
+  status: string;
+  cost_cents: number | null;
+  completed_on: string | null;
+  tenancy: { property_id: string | null } | null;
+};
+
+function exportHref(preset: string, range: DateRange): string {
+  const p = new URLSearchParams();
+  p.set("preset", preset);
+  if (range.from) p.set("from", range.from);
+  if (range.to) p.set("to", range.to);
+  return `/dashboard/rent/statement/export?${p.toString()}`;
+}
+
+export default async function StatementPage({
+  searchParams,
+}: {
+  searchParams: { preset?: string; from?: string; to?: string };
+}) {
+  const supabase = createClient();
+
+  const presetRaw = searchParams.preset ?? "this_year";
+  const preset = (STATEMENT_PRESETS as readonly string[]).includes(presetRaw)
+    ? presetRaw
+    : "this_year";
+  const customRange: DateRange = {
+    from: parseRangeBound(searchParams.from),
+    to: parseRangeBound(searchParams.to),
+  };
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const range = rangeForPreset(preset, todayIso, customRange);
+
+  // RLS scopes every query to the caller's org.
+  const [{ data: rentData }, { data: woData }, { data: propData }] = await Promise.all([
+    supabase
+      .from("rent_payments")
+      .select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
+    supabase
+      .from("work_orders")
+      .select("property_id, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
+    supabase.from("properties").select("id, address").order("address", { ascending: true }),
+  ]);
+
+  const properties = (propData ?? []) as PropertyRef[];
+
+  // Resolve each payment's property via its tenancy (rent_payments always link
+  // to a tenancy, and every tenancy has a property).
+  const rentRows: RentRow[] = ((rentData ?? []) as unknown as RentQueryRow[]).map((r) => ({
+    amount_cents: r.amount_cents,
+    paid_on: r.paid_on,
+    property_id: r.tenancy?.property_id ?? null,
+  }));
+
+  // A work order's property is its own property_id, or its tenancy's property
+  // when only a tenancy is attached.
+  const woRows: WorkOrderCostRow[] = ((woData ?? []) as unknown as WoQueryRow[]).map((w) => ({
+    property_id: w.property_id ?? w.tenancy?.property_id ?? null,
+    category: w.category,
+    status: w.status,
+    cost_cents: w.cost_cents,
+    completed_on: w.completed_on,
+  }));
+
+  const statement = buildOwnerStatement(rentRows, woRows, properties, range);
+  const monthly = buildMonthlyStatement(rentRows, woRows, properties, range);
+
+  const showCustom = preset === "custom";
+  const inputCls =
+    "rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand";
+
+  return (
+    <div>
+      <BrandBanner
+        eyebrow="Money"
+        title="Owner statement"
+        subtitle="Rent collected minus maintenance spent, per property, for any period. The year-end picture for you and your accountant — built from what you already logged. Vacantless reports; it never moves your money."
+        icon={<Icons.chart className="h-6 w-6" />}
+        action={
+          <a href={exportHref(preset, range)} className={SECONDARY_ACTION_CLASS}>
+            Download CSV
+          </a>
+        }
+      />
+
+      {/* Period selector */}
+      <div className="mb-5 flex flex-wrap items-center gap-1.5">
+        {STATEMENT_PRESETS.map((p) => {
+          const active = preset === p;
+          return (
+            <Link
+              key={p}
+              href={p === "custom" ? "/dashboard/rent/statement?preset=custom" : `/dashboard/rent/statement?preset=${p}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition ${
+                active
+                  ? "bg-brand text-white ring-transparent"
+                  : "bg-white text-gray-600 ring-gray-200 hover:bg-gray-50"
+              }`}
+              style={active ? { background: "var(--brand-color)" } : undefined}
+            >
+              {statementPresetLabel(p)}
+            </Link>
+          );
+        })}
+      </div>
+
+      {showCustom && (
+        <Card className="mb-5 bg-gray-50">
+          <form method="GET" className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="preset" value="custom" />
+            <div>
+              <label className="block text-xs font-medium text-gray-600">From</label>
+              <input type="date" name="from" defaultValue={range.from ?? ""} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600">To</label>
+              <input type="date" name="to" defaultValue={range.to ?? ""} className={inputCls} />
+            </div>
+            <button
+              type="submit"
+              className={SECONDARY_ACTION_CLASS}
+            >
+              Apply
+            </button>
+          </form>
+        </Card>
+      )}
+
+      <p className="mb-4 text-sm text-gray-500">
+        Showing <span className="font-medium text-gray-700">{describeRange(range)}</span>. Rent is
+        counted by the date you received it; maintenance by the date the job was completed.
+      </p>
+
+      {/* Totals */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Rent collected"
+          value={formatMoneyCents(statement.totals.rentInCents)}
+          hint={`${statement.totals.rentCount} payment${statement.totals.rentCount === 1 ? "" : "s"}`}
+          icon={<Icons.card className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Maintenance spent"
+          value={formatMoneyCents(statement.totals.maintenanceOutCents)}
+          hint={`${statement.totals.workOrderCount} completed job${statement.totals.workOrderCount === 1 ? "" : "s"}`}
+          icon={<Icons.bolt className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Net"
+          value={formatMoneyCents(statement.totals.netCents)}
+          hint="Rent in − maintenance out"
+          icon={<Icons.chart className="h-4 w-4" />}
+        />
+      </div>
+
+      {/* Per-property table */}
+      <div className="mt-6">
+        <SectionHeading>By property</SectionHeading>
+        {statement.rows.length === 0 ? (
+          <EmptyState
+            icon={<Icons.chart className="h-5 w-5" />}
+            title="Nothing in this period"
+            description="No rent payments or completed maintenance fall in this window. Record payments inside a tenancy and complete work orders in Maintenance, then they'll roll up here."
+          />
+        ) : (
+          <Card padded={false} className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-3 font-medium">Property</th>
+                  <th className="px-4 py-3 text-right font-medium">Rent collected</th>
+                  <th className="px-4 py-3 text-right font-medium">Maintenance spent</th>
+                  <th className="px-4 py-3 text-right font-medium">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statement.rows.map((r) => (
+                  <tr key={r.propertyId ?? "unassigned"} className="border-b border-gray-50 last:border-0">
+                    <td className="px-4 py-3 text-gray-900">{r.address}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(r.rentInCents)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(r.maintenanceOutCents)}</td>
+                    <td className={`px-4 py-3 text-right font-medium tabular-nums ${r.netCents < 0 ? "text-red-600" : "text-gray-900"}`}>
+                      {formatMoneyCents(r.netCents)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-gray-50 font-semibold text-gray-900">
+                  <td className="px-4 py-3">Total</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatMoneyCents(statement.totals.rentInCents)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatMoneyCents(statement.totals.maintenanceOutCents)}</td>
+                  <td className={`px-4 py-3 text-right tabular-nums ${statement.totals.netCents < 0 ? "text-red-600" : ""}`}>
+                    {formatMoneyCents(statement.totals.netCents)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </Card>
+        )}
+        {statement.hasUnassigned && (
+          <p className="mt-2 text-xs text-gray-500">
+            &ldquo;Unassigned&rdquo; covers payments or work orders not tied to a specific unit.
+          </p>
+        )}
+      </div>
+
+      {/* Maintenance by category */}
+      {statement.categories.length > 0 && (
+        <div className="mt-6">
+          <SectionHeading>Maintenance by category</SectionHeading>
+          <Card padded={false} className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-3 font-medium">Category</th>
+                  <th className="px-4 py-3 text-right font-medium">Amount</th>
+                  <th className="px-4 py-3 text-right font-medium">Jobs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statement.categories.map((c) => (
+                  <tr key={c.category} className="border-b border-gray-50 last:border-0">
+                    <td className="px-4 py-3 text-gray-900">{workOrderCategoryLabel(c.category)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(c.totalCents)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-500">{c.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      )}
+
+      {/* Month-by-month detail */}
+      {monthly.length > 0 && (
+        <div className="mt-6">
+          <SectionHeading>Month by month</SectionHeading>
+          <Card padded={false} className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-3 font-medium">Month</th>
+                  <th className="px-4 py-3 font-medium">Property</th>
+                  <th className="px-4 py-3 text-right font-medium">Rent</th>
+                  <th className="px-4 py-3 text-right font-medium">Maintenance</th>
+                  <th className="px-4 py-3 text-right font-medium">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthly.map((m, i) => (
+                  <tr key={`${m.period}-${m.propertyId ?? "u"}-${i}`} className="border-b border-gray-50 last:border-0">
+                    <td className="px-4 py-3 text-gray-700">{m.monthLabel}</td>
+                    <td className="px-4 py-3 text-gray-900">{m.address}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(m.rentInCents)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(m.maintenanceOutCents)}</td>
+                    <td className={`px-4 py-3 text-right tabular-nums ${m.netCents < 0 ? "text-red-600" : "text-gray-900"}`}>
+                      {formatMoneyCents(m.netCents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}

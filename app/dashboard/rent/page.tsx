@@ -34,6 +34,12 @@ const SECTIONS: Section[] = [
     icon: "building",
   },
   {
+    href: "/dashboard/rent/statement",
+    title: "Owner statement",
+    desc: "Rent collected minus maintenance spent, per property, for any period. The year-end picture for you and your accountant.",
+    icon: "chart",
+  },
+  {
     href: "/dashboard/settings?tab=banking",
     title: "Banking & payouts",
     desc: "Connect or manage your rent rails (Stripe and Rotessa) and where payouts land.",
@@ -87,6 +93,12 @@ export default function MoneyHubPage() {
               Download a CSV of rent activity for your records or year-end taxes.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href="/dashboard/rent/statement/export"
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+              >
+                Owner statement CSV
+              </a>
               <a
                 href="/dashboard/rent/export"
                 className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
