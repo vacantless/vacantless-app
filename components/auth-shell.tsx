@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { VacantlessMark } from "./vacantless-mark";
 
 /**
  * Shared first-impression chrome for the login / signup / onboarding screens.
@@ -18,31 +19,7 @@ import type { ReactNode } from "react";
 export function Wordmark({ href = "/" }: { href?: string }) {
   return (
     <Link href={href} className="inline-flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-teal-500 text-white shadow-sm">
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
-          <path
-            d="M3 11.5 12 4l9 7.5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M5 10v9.5h14V10"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M9.5 19.5v-5h5v5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
+      <VacantlessMark variant="black" className="h-8 w-8" />
       <span className="text-lg font-bold tracking-tight text-gray-900">
         Vacantless
       </span>

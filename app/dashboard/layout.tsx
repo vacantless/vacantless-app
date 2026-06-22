@@ -5,6 +5,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { isRentCollectionActive } from "@/lib/rent-status";
 import { DashboardNav } from "./dashboard-nav";
+import { VacantlessMark } from "@/components/vacantless-mark";
 
 export const dynamic = "force-dynamic";
 
@@ -72,11 +73,17 @@ export default async function DashboardLayout({
           className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/25"
         />
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-wider opacity-80">
-              Vacantless · {org.plan}
-            </p>
-            <h1 className="text-lg font-bold">{org.name}</h1>
+          <div className="flex items-center gap-3">
+            <VacantlessMark
+              variant="white"
+              className="h-8 w-8 shrink-0 drop-shadow-sm"
+            />
+            <div>
+              <p className="text-xs uppercase tracking-wider opacity-80">
+                Vacantless · {org.plan}
+              </p>
+              <h1 className="text-lg font-bold">{org.name}</h1>
+            </div>
           </div>
           <DashboardNav rentActive={rentActive} />
         </div>

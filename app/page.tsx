@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { VacantlessMark } from "../components/vacantless-mark";
 
 export const metadata = {
   title: "Vacantless - Catch every rental opportunity",
@@ -53,31 +54,7 @@ function SiteHeader() {
 function Wordmark() {
   return (
     <span className="flex items-center gap-2">
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-teal-500 text-white shadow-sm">
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
-          <path
-            d="M3 11.5 12 4l9 7.5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M5 10v9.5h14V10"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M9.5 19.5v-5h5v5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
+      <VacantlessMark variant="black" className="h-7 w-7" />
       <span className="text-lg font-bold tracking-tight text-gray-900">
         Vacantless
       </span>
@@ -101,6 +78,7 @@ function Hero() {
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 sm:py-24 lg:grid-cols-2">
         {/* Left: copy */}
         <div>
+          <VacantlessMark variant="gradient" className="mb-5 h-12 w-12" />
           <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand shadow-sm backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-teal-500" />
             Vacantless
