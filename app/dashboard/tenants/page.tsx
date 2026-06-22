@@ -42,6 +42,13 @@ const SECTIONS: Section[] = [
     desc: "Your reusable clause library. Build it once; pull clauses in when you prepare a lease.",
     icon: "list",
   },
+  {
+    // S305 work-order module Slice 2: maintenance lives with occupied-unit work.
+    href: "/dashboard/maintenance",
+    title: "Maintenance",
+    desc: "Log repair issues, assign them to your own trades, and track each job to done. Costs you record feed your year-end statements.",
+    icon: "bolt",
+  },
 ];
 
 export default function TenantsHubPage() {

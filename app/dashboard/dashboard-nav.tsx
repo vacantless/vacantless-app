@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 // utility/account dropdown ("More ▾"), per VACANTLESS-IA-AUDIT-2026-06-20.md.
 //
 //   PRIMARY:  Overview · Rentals · Leasing · Tenants · [Money — conditional]
-//   MORE ▾ :  Reports · Settings · Your plan
+//   MORE ▾ :  Maintenance · Reports · Settings · Your plan
 //
 // Leasing and Tenants are hub pages that tab across the existing routes
 // (Inquiries/Viewings/Availability and Tenancies/People). The old routes are
@@ -51,6 +51,7 @@ const MONEY: NavItem = { href: "/dashboard/rent", label: "Money" };
 
 // Utility / account menu (behind "More ▾" on desktop; inline on mobile).
 const UTILITY: NavItem[] = [
+  { href: "/dashboard/maintenance", label: "Maintenance" },
   { href: "/dashboard/reports", label: "Reports" },
   { href: "/dashboard/settings", label: "Settings" },
   { href: "/dashboard/billing", label: "Your plan" },
