@@ -12,6 +12,7 @@ import {
   validateTradeContactInput,
   statusOffersTenantUpdate,
 } from "@/lib/work-orders";
+import { validateDirectoryListingInput, minimizeForDirectory } from "@/lib/directory";
 
 // Maintenance work-order + trade-contact actions (self-managed-owner wedge,
 // Slice 2 of the work-order module — see VACANTLESS-WORKORDERS-MODULE-SPEC).
@@ -280,4 +281,189 @@ export async function archiveTradeContact(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?trade=${archived ? "archived" : "restored"}#trades`);
+}
+
+// --- Trades directory: the local network (Slice 2) --------------------------
+//
+// The guardrail holds here exactly as it does for work orders: the owner stays
+// the one who chooses, contracts, and pays. These actions only LIST a private
+// trade into a cross-org phonebook (opt-in, revocable), pull it back, or COPY a
+// network listing into the org's own rolodex. They never dispatch a trade and
+// never move money. All three reuse manage_work_orders (same job: managing the
+// owner's trades). Writes are org-scoped; the directory_trades RLS (0055) is the
+// backstop, and the one cross-org write (used_count++) goes through the
+// narrowly-scoped SECURITY DEFINER fn from 0056.
+
+// List one of the org's private trades into the directory (opt-in consent).
+// Copies only the minimized public fields across (minimizeForDirectory drops the
+// private note); re-lists in place if it was promoted then unlisted before, so
+// toggling never leaves duplicate rows.
+export async function promoteTradeToDirectory(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?trade=forbidden#trades`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const tradeContactId = s(formData, "trade_contact_id");
+  if (!tradeContactId) redirect(`${BASE}?dir=notfound#trades`);
+
+  const supabase = createClient();
+  // RLS scopes this read to the caller's org — a forged id resolves to nothing.
+  const { data: trade } = await supabase
+    .from("trade_contacts")
+    .select("id, name, trade_type, phone, email")
+    .eq("id", tradeContactId)
+    .maybeSingle();
+  if (!trade) redirect(`${BASE}?dir=notfound#trades`);
+
+  const minimized = minimizeForDirectory({
+    name: trade.name,
+    trade_type: trade.trade_type,
+    phone: trade.phone,
+    email: trade.email,
+    service_area: s(formData, "service_area"),
+  });
+  const check = validateDirectoryListingInput({
+    businessName: minimized.businessName,
+    tradeType: minimized.tradeType,
+    serviceArea: minimized.serviceArea,
+    blurb: s(formData, "blurb"),
+    phone: minimized.phone,
+    email: minimized.email,
+  });
+  if (!check.ok) redirect(`${BASE}?dir=${check.code}#trades`);
+
+  // Owner may let contact details show before an add (default: hidden).
+  const contactPublic = s(formData, "contact_public") === "1";
+
+  // Re-list an existing (org, source trade) row instead of inserting a dup.
+  const { data: existingRows } = await supabase
+    .from("directory_trades")
+    .select("id")
+    .eq("contributed_by_org", org.id)
+    .eq("source_trade_contact_id", tradeContactId)
+    .eq("archived", false)
+    .limit(1);
+  const existing = existingRows?.[0];
+
+  const fields = {
+    business_name: check.value.businessName,
+    trade_type: check.value.tradeType,
+    service_area: check.value.serviceArea,
+    blurb: check.value.blurb,
+    phone: check.value.phone,
+    email: check.value.email,
+    contact_public: contactPublic,
+    listed: true,
+  };
+
+  if (existing) {
+    await supabase
+      .from("directory_trades")
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("directory_trades").insert({
+      source: "landlord",
+      contributed_by_org: org.id,
+      source_trade_contact_id: tradeContactId,
+      ...fields,
+    });
+  }
+
+  await supabase
+    .from("trade_contacts")
+    .update({ directory_opt_in: true })
+    .eq("id", tradeContactId);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?dir=listed#trades`);
+}
+
+// Pull the org's listing(s) for a trade back out of the directory (consent is
+// revocable). Own-org write (RLS); also clears the rolodex opt-in marker.
+export async function unlistDirectoryTrade(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?trade=forbidden#trades`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const tradeContactId = s(formData, "trade_contact_id");
+  if (!tradeContactId) redirect(`${BASE}#trades`);
+
+  const supabase = createClient();
+  await supabase
+    .from("directory_trades")
+    .update({ listed: false, updated_at: new Date().toISOString() })
+    .eq("contributed_by_org", org.id)
+    .eq("source_trade_contact_id", tradeContactId);
+
+  await supabase
+    .from("trade_contacts")
+    .update({ directory_opt_in: false })
+    .eq("id", tradeContactId);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?dir=unlisted#trades`);
+}
+
+// The core v1 verb: copy a network listing into the org's private rolodex. From
+// there it behaves like any trade the owner added themselves (they call,
+// schedule, and pay directly). Reveals contact on this explicit add, dedupes by
+// name so a double-add neither duplicates nor inflates the use count, and bumps
+// the listing's used_count through the SECURITY DEFINER fn (0056).
+export async function addDirectoryTradeToRolodex(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?dir=forbidden#network`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const id = s(formData, "directory_trade_id");
+  if (!id) redirect(`${BASE}#network`);
+
+  const supabase = createClient();
+  // The directory read policy returns any LISTED, non-archived row including its
+  // contact (RLS gates rows, not columns — the browse view strips PII via
+  // publicListingView; on an explicit add we DO copy the contact across).
+  const { data: listing } = await supabase
+    .from("directory_trades")
+    .select(
+      "id, business_name, trade_type, service_area, phone, email, listed, archived, contributed_by_org",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!listing || listing.listed !== true || listing.archived === true) {
+    redirect(`${BASE}?dir=notfound#network`);
+  }
+
+  // An org's own listing is already in its rolodex — nothing to add.
+  if (listing.contributed_by_org && listing.contributed_by_org === org.id) {
+    redirect(`${BASE}?dir=own#network`);
+  }
+
+  // Honest dedupe: if the org already has a live rolodex entry with this name,
+  // don't add a second or inflate the proof-loop count.
+  const { data: dupes } = await supabase
+    .from("trade_contacts")
+    .select("id")
+    .eq("organization_id", org.id)
+    .eq("archived", false)
+    .ilike("name", listing.business_name)
+    .limit(1);
+  if (dupes && dupes.length > 0) redirect(`${BASE}?dir=already_added#network`);
+
+  await supabase.from("trade_contacts").insert({
+    organization_id: org.id,
+    name: listing.business_name,
+    trade_type: listing.trade_type,
+    phone: listing.phone,
+    email: listing.email,
+    note: listing.service_area
+      ? `From the Vacantless trade network · ${listing.service_area}`
+      : "From the Vacantless trade network",
+  });
+
+  // Proof-loop flywheel (cross-org write via the SECURITY DEFINER fn from 0056;
+  // it re-checks listed + not-archived and ignores self-adds).
+  await supabase.rpc("increment_directory_trade_use", { p_id: id });
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?dir=added#trades`);
 }

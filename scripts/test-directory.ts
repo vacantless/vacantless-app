@@ -228,5 +228,59 @@ const rows: RankRow[] = [
   ok("full tie breaks A-Z by name", ranked[0].business_name === "Alfa");
 }
 
+// --- Slice 2: promote -> minimize -> validate roundtrip (what the server
+//     action promoteTradeToDirectory relies on) -------------------------------
+{
+  const min = minimizeForDirectory({
+    name: "  Dave's Plumbing  ",
+    trade_type: "Plumber",
+    phone: "519-555-0100",
+    email: "dave@example.com",
+    note: "Knows the boiler; cash discount", // must NOT survive
+    service_area: "Windsor, ON",
+  });
+  ok("promote: business name trimmed", min.businessName === "Dave's Plumbing");
+  ok("promote: service_area carried from promote input", min.serviceArea === "Windsor, ON");
+  ok("promote: blurb starts empty", min.blurb === null);
+  ok("promote: private note never enters the listing", !("note" in min));
+
+  const check = validateDirectoryListingInput({
+    businessName: min.businessName,
+    tradeType: min.tradeType,
+    serviceArea: min.serviceArea,
+    blurb: null,
+    phone: min.phone,
+    email: min.email,
+  });
+  ok("promote: minimized row validates", check.ok === true);
+
+  const bad = validateDirectoryListingInput({ businessName: "   " });
+  ok("promote: blank business name is rejected", bad.ok === false && bad.code === "business_name");
+}
+
+// --- Slice 2: add-to-rolodex reveal (publicListingView on add) --------------
+{
+  const row: DirectoryListing = {
+    id: "x",
+    source: "landlord",
+    business_name: "Roof Co",
+    trade_type: "Roofer",
+    service_area: "Windsor, ON",
+    blurb: null,
+    phone: "519-555-0199",
+    email: "roof@example.com",
+    contact_public: false,
+    verified: false,
+    used_count: 2,
+  };
+  const browseView = publicListingView(row, false);
+  ok("browse view hides phone", browseView.phone === null);
+  ok("browse view hides email", browseView.email === null);
+  const addedView = publicListingView(row, true);
+  ok("added view reveals phone", addedView.phone === "519-555-0199");
+  ok("added view reveals email", addedView.email === "roof@example.com");
+  ok("provenance counts the two landlords", addedView.provenance === "Used by 2 landlords near you");
+}
+
 console.log(`\ndirectory: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

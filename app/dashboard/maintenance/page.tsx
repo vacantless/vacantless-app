@@ -28,6 +28,13 @@ import {
   workOrderErrorMessage,
 } from "@/lib/work-orders";
 import {
+  publicListingView,
+  rankListings,
+  directoryErrorMessage,
+  type DirectoryListing,
+} from "@/lib/directory";
+import { getCurrentOrg } from "@/lib/org";
+import {
   createWorkOrder,
   updateWorkOrder,
   setWorkOrderStatus,
@@ -35,6 +42,9 @@ import {
   createTradeContact,
   updateTradeContact,
   archiveTradeContact,
+  promoteTradeToDirectory,
+  unlistDirectoryTrade,
+  addDirectoryTradeToRolodex,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +87,16 @@ type TradeRow = {
   email: string | null;
   note: string | null;
   archived: boolean;
+  directory_opt_in: boolean;
+};
+
+// A directory_trades row as read from the DB (before PII minimization). Carries
+// the write-scoping fields the public view type omits.
+type DirectoryRow = DirectoryListing & {
+  listed: boolean;
+  archived: boolean;
+  contributed_by_org: string | null;
+  source_trade_contact_id: string | null;
 };
 
 type PropertyRef = { id: string; address: string };
@@ -110,6 +130,16 @@ const TRADE_SUCCESS: Record<string, string> = {
   archived: "Trade contact archived.",
   restored: "Trade contact restored.",
 };
+const DIR_SUCCESS: Record<string, string> = {
+  listed: "Trade listed in the network. Other landlords nearby can now find them.",
+  unlisted: "Trade removed from the network.",
+  added: "Added to your trades. You contact and pay them directly.",
+};
+// Benign, non-error outcomes (informational, not a red banner).
+const DIR_INFO: Record<string, string> = {
+  already_added: "You already have this trade in your rolodex.",
+  own: "That's your own listing - it's already in your trades.",
+};
 
 function fmtDate(d: string | null): string {
   if (!d) return "—";
@@ -138,34 +168,54 @@ export default async function MaintenancePage({
     edit?: string;
     notify?: string;
     to?: string;
+    dir?: string;
+    dirType?: string;
+    dirArea?: string;
   };
 }) {
   const supabase = createClient();
 
-  const [{ data: woData }, { data: tradeData }, { data: propData }, { data: tenData }] =
-    await Promise.all([
-      supabase
-        .from("work_orders")
-        .select(
-          "id, title, description, category, priority, status, cost_cents, reported_on, scheduled_for, completed_on, property_id, tenancy_id, trade_contact_id, property:properties(address), trade:trade_contacts(name, trade_type)",
-        )
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("trade_contacts")
-        .select("id, name, trade_type, phone, email, note, archived")
-        .order("archived", { ascending: true })
-        .order("name", { ascending: true }),
-      supabase.from("properties").select("id, address").order("address", { ascending: true }),
-      supabase
-        .from("tenancies")
-        .select("id, property:properties(address), tenants(name, is_primary)")
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: woData },
+    { data: tradeData },
+    { data: propData },
+    { data: tenData },
+    { data: dirData },
+    org,
+  ] = await Promise.all([
+    supabase
+      .from("work_orders")
+      .select(
+        "id, title, description, category, priority, status, cost_cents, reported_on, scheduled_for, completed_on, property_id, tenancy_id, trade_contact_id, property:properties(address), trade:trade_contacts(name, trade_type)",
+      )
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("trade_contacts")
+      .select("id, name, trade_type, phone, email, note, archived, directory_opt_in")
+      .order("archived", { ascending: true })
+      .order("name", { ascending: true }),
+    supabase.from("properties").select("id, address").order("address", { ascending: true }),
+    supabase
+      .from("tenancies")
+      .select("id, property:properties(address), tenants(name, is_primary)")
+      .order("created_at", { ascending: false }),
+    // The directory read policy (0055) returns LISTED, non-archived rows from
+    // ANY org, plus this org's own contributed rows (even unlisted). We filter
+    // to the browse set in memory below.
+    supabase
+      .from("directory_trades")
+      .select(
+        "id, source, business_name, trade_type, service_area, blurb, phone, email, contact_public, verified, used_count, listed, archived, contributed_by_org, source_trade_contact_id",
+      )
+      .order("used_count", { ascending: false }),
+    getCurrentOrg(),
+  ]);
 
   const allOrders = (woData ?? []) as unknown as WorkOrderRow[];
   const trades = (tradeData ?? []) as TradeRow[];
   const properties = (propData ?? []) as PropertyRef[];
   const activeTrades = trades.filter((t) => !t.archived);
+  const orgId = org?.id ?? null;
 
   const tenancies: TenancyRef[] = (
     (tenData ?? []) as unknown as {
@@ -231,6 +281,59 @@ export default async function MaintenancePage({
   const notifyStatusLabel =
     notifyTenancy && searchParams.to ? workOrderStatusLabel(searchParams.to) : null;
 
+  // --- Trades directory (the local network) view model -----------------------
+  // The browse set is the listed, non-archived rows; this org's own contributed
+  // rows come back too (read_own policy) so we can label + manage them. Every
+  // row is mapped through publicListingView, which strips phone/email unless the
+  // viewer already added the trade (or it's their own / contact_public) — PII
+  // minimization at the app layer, since RLS gates rows, not columns.
+  const allListings = (dirData ?? []) as unknown as DirectoryRow[];
+  const rolodexNames = new Set(
+    trades.filter((t) => !t.archived).map((t) => t.name.trim().toLowerCase()),
+  );
+  const dirType = (searchParams.dirType ?? "").trim();
+  const dirArea = (searchParams.dirArea ?? "").trim().toLowerCase();
+
+  const browse = allListings.filter((l) => l.listed && !l.archived);
+  const directoryTypes = Array.from(
+    new Set(browse.map((l) => l.trade_type).filter((t): t is string => !!t)),
+  ).sort((a, b) => a.localeCompare(b));
+
+  const directoryCards = rankListings(
+    browse.filter((l) => {
+      if (dirType && (l.trade_type ?? "") !== dirType) return false;
+      if (dirArea && !(l.service_area ?? "").toLowerCase().includes(dirArea)) return false;
+      return true;
+    }),
+  ).map((l) => {
+    const isOwn = !!orgId && l.contributed_by_org === orgId;
+    const isAdded = rolodexNames.has(l.business_name.trim().toLowerCase());
+    const view = publicListingView(l, isOwn || isAdded);
+    return { ...view, isOwn, isAdded, source_trade_contact_id: l.source_trade_contact_id };
+  });
+
+  const dirFlash = searchParams.dir
+    ? (DIR_SUCCESS[searchParams.dir] ?? DIR_INFO[searchParams.dir] ?? null)
+    : null;
+  const dirError =
+    searchParams.dir && !DIR_SUCCESS[searchParams.dir] && !DIR_INFO[searchParams.dir]
+      ? directoryErrorMessage(searchParams.dir)
+      : null;
+
+  // Network-filter href that preserves the work-order filters (separate section).
+  const dirFilterHref = (patch: { dirType?: string; dirArea?: string }) => {
+    const p = new URLSearchParams();
+    if (fStatus && fStatus !== "active") p.set("status", fStatus);
+    if (fProperty) p.set("property", fProperty);
+    if (fPriority) p.set("priority", fPriority);
+    const t = patch.dirType ?? dirType;
+    const a = patch.dirArea ?? searchParams.dirArea ?? "";
+    if (t) p.set("dirType", t);
+    if (a) p.set("dirArea", a);
+    const qs = p.toString();
+    return qs ? `/dashboard/maintenance?${qs}#network` : "/dashboard/maintenance#network";
+  };
+
   // Build a filter href preserving the other active filters.
   const filterHref = (patch: Record<string, string>) => {
     const p = new URLSearchParams();
@@ -260,14 +363,14 @@ export default async function MaintenancePage({
         }
       />
 
-      {(woFlash || tradeFlash) && (
+      {(woFlash || tradeFlash || dirFlash) && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {woFlash ?? tradeFlash}
+          {woFlash ?? tradeFlash ?? dirFlash}
         </div>
       )}
-      {(woError || tradeError) && (
+      {(woError || tradeError || dirError) && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {woError ?? tradeError}
+          {woError ?? tradeError ?? dirError}
         </div>
       )}
 
@@ -688,6 +791,61 @@ export default async function MaintenancePage({
                       </SubmitButton>
                     </form>
                   </details>
+
+                  {/* Directory opt-in (Slice 2): list this private trade in the
+                      local network. Only the minimized fields go cross-org; the
+                      note stays private. Consent is revocable. */}
+                  {!t.archived && (
+                    <div className="mt-2 border-t border-gray-100 pt-2">
+                      {t.directory_opt_in ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                            <Icons.check className="h-3.5 w-3.5" /> Listed in the network
+                          </span>
+                          <form action={unlistDirectoryTrade}>
+                            <input type="hidden" name="trade_contact_id" value={t.id} />
+                            <SubmitButton className="text-xs font-medium text-gray-500 hover:text-gray-700" pendingLabel="…">
+                              Remove from network
+                            </SubmitButton>
+                          </form>
+                        </div>
+                      ) : (
+                        <details>
+                          <summary className="cursor-pointer text-xs font-medium text-brand">
+                            List in the trade network
+                          </summary>
+                          <form action={promoteTradeToDirectory} className="mt-2 grid gap-2">
+                            <input type="hidden" name="trade_contact_id" value={t.id} />
+                            <p className="text-xs text-gray-500">
+                              Shows this trade&rsquo;s name, type, and service area to other
+                              Vacantless landlords near you. Your private note is never shared.
+                              Contact details stay hidden until someone adds them, unless you
+                              tick the box below.
+                            </p>
+                            <input
+                              name="service_area"
+                              required
+                              placeholder="Service area (e.g. Windsor, ON)"
+                              className={inputCls}
+                            />
+                            <input
+                              name="blurb"
+                              placeholder="Short blurb (optional, e.g. Fast, reliable, fair rates)"
+                              className={inputCls}
+                            />
+                            <label className="flex items-center gap-2 text-xs text-gray-600">
+                              <input type="checkbox" name="contact_public" value="1" />
+                              Show their phone and email to anyone browsing (otherwise revealed
+                              only when a landlord adds them)
+                            </label>
+                            <SubmitButton className={`${SECONDARY_ACTION_CLASS} justify-center`} pendingLabel="Listing…">
+                              List this trade
+                            </SubmitButton>
+                          </form>
+                        </details>
+                      )}
+                    </div>
+                  )}
                 </Card>
               );
             })}
@@ -723,6 +881,116 @@ export default async function MaintenancePage({
             </div>
           </form>
         </Card>
+      </div>
+
+      {/* Trade network — the local directory (Slice 2) */}
+      <div id="network" className="mt-8 scroll-mt-6">
+        <SectionHeading>Find a trade</SectionHeading>
+        <p className="mb-3 text-sm text-gray-600">
+          Trades other Vacantless landlords near you already use. Add one to your trades
+          and you contact, schedule, and pay them directly. Vacantless never dispatches a
+          trade or handles the money. Listings show where each one came from; we only label
+          a trade &ldquo;verified&rdquo; when we have actually vetted them.
+        </p>
+
+        {/* Filters */}
+        {browse.length > 0 && (
+          <form method="get" className="mb-4 flex flex-wrap items-end gap-3">
+            {fStatus && fStatus !== "active" && <input type="hidden" name="status" value={fStatus} />}
+            {fProperty && <input type="hidden" name="property" value={fProperty} />}
+            {fPriority && <input type="hidden" name="priority" value={fPriority} />}
+            <div>
+              <label className={labelCls}>Trade type</label>
+              <select name="dirType" defaultValue={dirType} className={inputCls}>
+                <option value="">All types</option>
+                {directoryTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Service area</label>
+              <input
+                name="dirArea"
+                defaultValue={searchParams.dirArea ?? ""}
+                placeholder="e.g. Windsor"
+                className={inputCls}
+              />
+            </div>
+            <SubmitButton className={`${SECONDARY_ACTION_CLASS} justify-center`} pendingLabel="…">
+              Filter
+            </SubmitButton>
+            {(dirType || dirArea) && (
+              <Link href="/dashboard/maintenance#network" className="text-xs font-medium text-brand hover:underline">
+                Clear
+              </Link>
+            )}
+          </form>
+        )}
+
+        {directoryCards.length === 0 ? (
+          <EmptyState
+            icon={<Icons.users className="h-5 w-5" />}
+            title={browse.length === 0 ? "No trades listed yet" : "No trades match these filters"}
+            description={
+              browse.length === 0
+                ? "As landlords list their trusted trades, they'll show up here. List one of your own from “Your trades” above to seed your local network."
+                : "Try a different trade type or area, or clear the filters."
+            }
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {directoryCards.map((l) => (
+              <Card key={l.id}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-gray-900">{l.business_name}</h3>
+                      {l.trade_type && <StatusChip tone="info">{l.trade_type}</StatusChip>}
+                      {l.verified && <StatusChip tone="success">Vacantless-verified</StatusChip>}
+                      {l.isOwn && <StatusChip tone="neutral">Your listing</StatusChip>}
+                    </div>
+                    <p className="mt-1 text-xs font-medium text-gray-500">{l.provenance}</p>
+                    {l.service_area && (
+                      <p className="mt-0.5 text-xs text-gray-500">{l.service_area}</p>
+                    )}
+                    {l.blurb && <p className="mt-1 text-sm text-gray-600">{l.blurb}</p>}
+                    <p className="mt-1 text-xs text-gray-500">
+                      {l.phone || l.email
+                        ? [l.phone, l.email].filter(Boolean).join(" · ")
+                        : "Contact shared once you add them"}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  {l.isOwn ? (
+                    l.source_trade_contact_id ? (
+                      <form action={unlistDirectoryTrade}>
+                        <input type="hidden" name="trade_contact_id" value={l.source_trade_contact_id} />
+                        <SubmitButton className="text-xs font-medium text-gray-500 hover:text-gray-700" pendingLabel="…">
+                          Remove from network
+                        </SubmitButton>
+                      </form>
+                    ) : null
+                  ) : l.isAdded ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                      <Icons.check className="h-3.5 w-3.5" /> In your trades
+                    </span>
+                  ) : (
+                    <form action={addDirectoryTradeToRolodex}>
+                      <input type="hidden" name="directory_trade_id" value={l.id} />
+                      <SubmitButton className={`${SECONDARY_ACTION_CLASS} justify-center`} pendingLabel="Adding…">
+                        Add to my trades
+                      </SubmitButton>
+                    </form>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
