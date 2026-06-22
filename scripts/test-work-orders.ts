@@ -20,6 +20,9 @@ import {
   sumCostCents,
   groupCostByProperty,
   groupCostByCategory,
+  groupCostByBuilding,
+  workOrderScope,
+  effectiveBuildingKey,
   isActiveStatus,
   maintenanceTemplateNameForStatus,
   statusOffersTenantUpdate,
@@ -186,6 +189,76 @@ ok(
     const g = groupCostByCategory(costRows);
     const plumb = g.find((b) => b.key === "plumbing");
     return plumb?.totalCents === 15000 && plumb?.count === 2;
+  })(),
+);
+
+// --- Expense scope: unit vs building (migration 0057) -----------------------
+// workOrderScope truth table
+ok("scope unit when property_id set", workOrderScope({ property_id: "A" }) === "unit");
+ok(
+  "scope unit even if building_key also present (property wins)",
+  workOrderScope({ property_id: "A", building_key: "bk" }) === "unit",
+);
+ok(
+  "scope building when only building_key set",
+  workOrderScope({ property_id: null, building_key: "bk" }) === "building",
+);
+ok("scope unscoped when both null", workOrderScope({ property_id: null, building_key: null }) === "unscoped");
+ok("scope unscoped when both absent/blank", workOrderScope({ property_id: "  ", building_key: "" }) === "unscoped");
+
+// effectiveBuildingKey: unit derives from the map, building is direct, unscoped null
+const pbMap: Record<string, string | null> = { A: "100 king st", B: "200 bay st", C: null };
+ok(
+  "effectiveBuildingKey unit derives from property map",
+  effectiveBuildingKey({ property_id: "A" }, pbMap) === "100 king st",
+);
+ok(
+  "effectiveBuildingKey unit with unknown property -> null",
+  effectiveBuildingKey({ property_id: "Z" }, pbMap) === null,
+);
+ok(
+  "effectiveBuildingKey unit whose property has null key -> null",
+  effectiveBuildingKey({ property_id: "C" }, pbMap) === null,
+);
+ok(
+  "effectiveBuildingKey building returns its own key",
+  effectiveBuildingKey({ property_id: null, building_key: "300 yonge st" }, pbMap) === "300 yonge st",
+);
+ok(
+  "effectiveBuildingKey unscoped -> null",
+  effectiveBuildingKey({ property_id: null, building_key: null }, pbMap) === null,
+);
+
+// groupCostByBuilding: a unit cost and a same-building shared cost land in ONE
+// bucket; an unscoped cost buckets under null.
+const scopedRows: WorkOrderCostRow[] = [
+  { property_id: "A", category: "plumbing", status: "completed", cost_cents: 30000, completed_on: "2026-01-20" }, // unit in 100 king
+  { property_id: null, building_key: "100 king st", category: "landscaping", status: "completed", cost_cents: 50000, completed_on: "2026-02-01" }, // shared, same building
+  { property_id: "B", category: "hvac", status: "completed", cost_cents: 12000, completed_on: "2026-02-10" }, // unit in 200 bay
+  { property_id: null, building_key: null, category: "general", status: "completed", cost_cents: 7000, completed_on: "2026-03-01" }, // unscoped
+];
+ok(
+  "groupCostByBuilding merges unit + same-building shared into one bucket",
+  (() => {
+    const g = groupCostByBuilding(scopedRows, pbMap);
+    const king = g.find((b) => b.key === "100 king st");
+    const bay = g.find((b) => b.key === "200 bay st");
+    const overhead = g.find((b) => b.key === null);
+    return (
+      king?.totalCents === 80000 &&
+      king?.count === 2 &&
+      bay?.totalCents === 12000 &&
+      overhead?.totalCents === 7000
+    );
+  })(),
+);
+ok(
+  "groupCostByBuilding respects the date filter",
+  (() => {
+    const g = groupCostByBuilding(scopedRows, pbMap, { from: "2026-02-01", to: "2026-02-28" });
+    const king = g.find((b) => b.key === "100 king st");
+    // only the 2026-02-01 shared cost falls in the window; the Jan unit cost drops
+    return king?.totalCents === 50000 && king?.count === 1;
   })(),
 );
 

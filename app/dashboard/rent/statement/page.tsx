@@ -49,6 +49,7 @@ type RentQueryRow = {
 
 type WoQueryRow = {
   property_id: string | null;
+  building_key: string | null;
   category: string;
   status: string;
   cost_cents: number | null;
@@ -89,11 +90,16 @@ export default async function StatementPage({
       .select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
     supabase
       .from("work_orders")
-      .select("property_id, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
-    supabase.from("properties").select("id, address").order("address", { ascending: true }),
+      .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
+    supabase
+      .from("properties")
+      .select("id, address, building_key")
+      .order("address", { ascending: true }),
   ]);
 
-  const properties = (propData ?? []) as PropertyRef[];
+  const properties = ((propData ?? []) as { id: string; address: string; building_key: string | null }[]).map(
+    (p) => ({ id: p.id, address: p.address, buildingKey: p.building_key }),
+  ) as PropertyRef[];
 
   // Resolve each payment's property via its tenancy (rent_payments always link
   // to a tenancy, and every tenancy has a property).
@@ -104,9 +110,12 @@ export default async function StatementPage({
   }));
 
   // A work order's property is its own property_id, or its tenancy's property
-  // when only a tenancy is attached.
+  // when only a tenancy is attached. A building-scoped cost carries building_key
+  // (property_id null, tenancy cleared at write) so it rolls up at the building
+  // tier instead of onto a unit.
   const woRows: WorkOrderCostRow[] = ((woData ?? []) as unknown as WoQueryRow[]).map((w) => ({
     property_id: w.property_id ?? w.tenancy?.property_id ?? null,
+    building_key: w.building_key,
     category: w.category,
     status: w.status,
     cost_cents: w.cost_cents,
@@ -204,10 +213,10 @@ export default async function StatementPage({
         />
       </div>
 
-      {/* Per-property table */}
+      {/* By building — units nested under their building, with the shared line */}
       <div className="mt-6">
-        <SectionHeading>By property</SectionHeading>
-        {statement.rows.length === 0 ? (
+        <SectionHeading>By building</SectionHeading>
+        {statement.buildings.length === 0 ? (
           <EmptyState
             icon={<Icons.chart className="h-5 w-5" />}
             title="Nothing in this period"
@@ -218,23 +227,49 @@ export default async function StatementPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-4 py-3 font-medium">Property</th>
+                  <th className="px-4 py-3 font-medium">Property / building</th>
                   <th className="px-4 py-3 text-right font-medium">Rent collected</th>
                   <th className="px-4 py-3 text-right font-medium">Maintenance spent</th>
                   <th className="px-4 py-3 text-right font-medium">Net</th>
                 </tr>
               </thead>
-              <tbody>
-                {statement.rows.map((r) => (
-                  <tr key={r.propertyId ?? "unassigned"} className="border-b border-gray-50 last:border-0">
-                    <td className="px-4 py-3 text-gray-900">{r.address}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(r.rentInCents)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(r.maintenanceOutCents)}</td>
-                    <td className={`px-4 py-3 text-right font-medium tabular-nums ${r.netCents < 0 ? "text-red-600" : "text-gray-900"}`}>
-                      {formatMoneyCents(r.netCents)}
-                    </td>
-                  </tr>
-                ))}
+              {statement.buildings.map((b) => (
+                <tbody key={b.buildingKey ?? "overhead"} className="border-b border-gray-100 last:border-0">
+                  {b.buildingKey != null ? (
+                    <tr className="bg-gray-50/70">
+                      <td className="px-4 py-2.5 font-semibold text-gray-900">{b.label}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatMoneyCents(b.rentInCents)}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatMoneyCents(b.maintenanceOutCents)}</td>
+                      <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${b.netCents < 0 ? "text-red-600" : "text-gray-900"}`}>
+                        {formatMoneyCents(b.netCents)}
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr className="bg-gray-50/70">
+                      <td className="px-4 py-2.5 font-medium text-gray-600" colSpan={4}>{b.label}</td>
+                    </tr>
+                  )}
+                  {b.unitRows.map((r) => (
+                    <tr key={r.propertyId ?? "unassigned"}>
+                      <td className="px-4 py-2 pl-8 text-gray-700">{r.address}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-gray-600">{formatMoneyCents(r.rentInCents)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-gray-600">{formatMoneyCents(r.maintenanceOutCents)}</td>
+                      <td className={`px-4 py-2 text-right tabular-nums ${r.netCents < 0 ? "text-red-600" : "text-gray-700"}`}>
+                        {formatMoneyCents(r.netCents)}
+                      </td>
+                    </tr>
+                  ))}
+                  {b.sharedMaintenanceCents > 0 && (
+                    <tr>
+                      <td className="px-4 py-2 pl-8 italic text-gray-500">Building-wide (shared)</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-gray-400">—</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-gray-600">{formatMoneyCents(b.sharedMaintenanceCents)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-red-600">{formatMoneyCents(-b.sharedMaintenanceCents)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              ))}
+              <tfoot>
                 <tr className="bg-gray-50 font-semibold text-gray-900">
                   <td className="px-4 py-3">Total</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatMoneyCents(statement.totals.rentInCents)}</td>
@@ -243,15 +278,17 @@ export default async function StatementPage({
                     {formatMoneyCents(statement.totals.netCents)}
                   </td>
                 </tr>
-              </tbody>
+              </tfoot>
             </table>
           </Card>
         )}
-        {statement.hasUnassigned && (
-          <p className="mt-2 text-xs text-gray-500">
-            &ldquo;Unassigned&rdquo; covers payments or work orders not tied to a specific unit.
-          </p>
-        )}
+        <p className="mt-2 text-xs text-gray-500">
+          Shared building costs (gardening, snow, roof) are shown at the building level and are not
+          split across units.
+          {statement.hasUnassigned
+            ? " “Unassigned / overhead” covers rent or costs not tied to a unit or building."
+            : ""}
+        </p>
       </div>
 
       {/* Maintenance by category */}

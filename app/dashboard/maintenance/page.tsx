@@ -33,6 +33,7 @@ import {
   directoryErrorMessage,
   type DirectoryListing,
 } from "@/lib/directory";
+import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { getCurrentOrg } from "@/lib/org";
 import {
   createWorkOrder,
@@ -73,6 +74,7 @@ type WorkOrderRow = {
   scheduled_for: string | null;
   completed_on: string | null;
   property_id: string | null;
+  building_key: string | null;
   tenancy_id: string | null;
   trade_contact_id: string | null;
   property: { address: string } | null;
@@ -99,8 +101,17 @@ type DirectoryRow = DirectoryListing & {
   source_trade_contact_id: string | null;
 };
 
-type PropertyRef = { id: string; address: string };
+type PropertyRef = { id: string; address: string; building_key: string | null };
 type TenancyRef = { id: string; label: string };
+type BuildingOption = { key: string; label: string };
+
+// The expense-scope control (migration 0057): a cost is for one specific unit,
+// the whole building (a shared cost), or nothing unit-specific.
+const SCOPE_OPTIONS = [
+  { value: "unit", label: "A specific unit" },
+  { value: "building", label: "The whole building" },
+  { value: "none", label: "Not unit-specific" },
+] as const;
 
 // Map the lib's tone vocabulary onto the shared StatusChip ChipTone set.
 function chipTone(tone: string): ChipTone {
@@ -186,7 +197,7 @@ export default async function MaintenancePage({
     supabase
       .from("work_orders")
       .select(
-        "id, title, description, category, priority, status, cost_cents, reported_on, scheduled_for, completed_on, property_id, tenancy_id, trade_contact_id, property:properties(address), trade:trade_contacts(name, trade_type)",
+        "id, title, description, category, priority, status, cost_cents, reported_on, scheduled_for, completed_on, property_id, building_key, tenancy_id, trade_contact_id, property:properties(address), trade:trade_contacts(name, trade_type)",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -194,7 +205,10 @@ export default async function MaintenancePage({
       .select("id, name, trade_type, phone, email, note, archived, directory_opt_in")
       .order("archived", { ascending: true })
       .order("name", { ascending: true }),
-    supabase.from("properties").select("id, address").order("address", { ascending: true }),
+    supabase
+      .from("properties")
+      .select("id, address, building_key")
+      .order("address", { ascending: true }),
     supabase
       .from("tenancies")
       .select("id, property:properties(address), tenants(name, is_primary)")
@@ -216,6 +230,27 @@ export default async function MaintenancePage({
   const properties = (propData ?? []) as PropertyRef[];
   const activeTrades = trades.filter((t) => !t.archived);
   const orgId = org?.id ?? null;
+
+  // Distinct buildings (for the "whole building" scope), each labeled by the
+  // unit-stripped street address of a representative unit — not the raw key.
+  const buildingLabels = new Map<string, string>();
+  for (const p of properties) {
+    if (!p.building_key) continue;
+    if (!buildingLabels.has(p.building_key)) {
+      buildingLabels.set(p.building_key, splitAddressUnit(p.address).street ?? p.address);
+    }
+  }
+  const buildingOptions: BuildingOption[] = [...buildingLabels.entries()]
+    .map(([key, label]) => ({ key, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  // The scope line for a work-order row: a specific unit, a whole building, or
+  // not unit-specific.
+  function scopeLine(o: WorkOrderRow): { label: string; value: string } {
+    if (o.property_id) return { label: "Unit", value: o.property?.address ?? "—" };
+    if (o.building_key)
+      return { label: "Building-wide", value: buildingLabels.get(o.building_key) ?? o.building_key };
+    return { label: "Scope", value: "Not unit-specific" };
+  }
 
   const tenancies: TenancyRef[] = (
     (tenData ?? []) as unknown as {
@@ -471,8 +506,8 @@ export default async function MaintenancePage({
                     )}
                     <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
                       <div>
-                        <dt className="inline font-medium text-gray-600">Unit: </dt>
-                        <dd className="inline">{o.property?.address ?? "—"}</dd>
+                        <dt className="inline font-medium text-gray-600">{scopeLine(o).label}: </dt>
+                        <dd className="inline">{scopeLine(o).value}</dd>
                       </div>
                       <div>
                         <dt className="inline font-medium text-gray-600">Trade: </dt>
@@ -589,13 +624,41 @@ export default async function MaintenancePage({
                         ))}
                       </select>
                     </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelCls}>This expense is for</label>
+                      <select
+                        name="scope"
+                        defaultValue={o.property_id ? "unit" : o.building_key ? "building" : "none"}
+                        className={inputCls}
+                      >
+                        {SCOPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Shared building costs (gardening, snow, roof) roll up at the building level, not onto one unit.
+                      </p>
+                    </div>
                     <div>
-                      <label className={labelCls}>Unit (optional)</label>
+                      <label className={labelCls}>Unit (for a unit cost)</label>
                       <select name="property_id" defaultValue={o.property_id ?? ""} className={inputCls}>
                         <option value="">—</option>
                         {properties.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.address}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Building (for a shared cost)</label>
+                      <select name="building_key" defaultValue={o.building_key ?? ""} className={inputCls}>
+                        <option value="">—</option>
+                        {buildingOptions.map((b) => (
+                          <option key={b.key} value={b.key}>
+                            {b.label}
                           </option>
                         ))}
                       </select>
@@ -684,13 +747,38 @@ export default async function MaintenancePage({
                 ))}
               </select>
             </div>
+            <div className="sm:col-span-2">
+              <label className={labelCls}>This expense is for</label>
+              <select name="scope" defaultValue="unit" className={inputCls}>
+                {SCOPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Pick a unit below for a unit cost, or a building for a shared cost (gardening, snow,
+                roof). Shared costs roll up at the building level, not onto one unit.
+              </p>
+            </div>
             <div>
-              <label className={labelCls}>Unit (optional)</label>
+              <label className={labelCls}>Unit (for a unit cost)</label>
               <select name="property_id" defaultValue="" className={inputCls}>
                 <option value="">—</option>
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.address}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Building (for a shared cost)</label>
+              <select name="building_key" defaultValue="" className={inputCls}>
+                <option value="">—</option>
+                {buildingOptions.map((b) => (
+                  <option key={b.key} value={b.key}>
+                    {b.label}
                   </option>
                 ))}
               </select>

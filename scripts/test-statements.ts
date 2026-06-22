@@ -179,9 +179,9 @@ ok("monthly maintenance reconciles to annual", mMaint === stmt.totals.maintenanc
 const csv = statementToCsv(stmt, monthly);
 ok("csv has title", csv.startsWith("Owner financial statement"));
 ok("csv has period line", csv.includes("Period,2026-01-01 to 2026-12-31"));
-ok("csv has summary header", csv.includes("Property,Rent collected,Maintenance spent,Net"));
-ok("csv TOTAL row in dollars", csv.includes("TOTAL,6250.00,900.00,5350.00"));
-ok("csv per-property A row", csv.includes("10 Adelaide St,4000.00,800.00,3200.00"));
+ok("csv has summary header", csv.includes("Property / building,Scope,Rent collected,Maintenance spent,Net"));
+ok("csv TOTAL row in dollars (with scope column)", csv.includes("TOTAL,,6250.00,900.00,5350.00"));
+ok("csv A unit row carries Unit scope", csv.includes("10 Adelaide St,Unit,4000.00,800.00,3200.00"));
 ok("csv category block", csv.includes("Maintenance by category,Amount,Jobs"));
 ok("csv monthly block header", csv.includes("Month,Property,Rent collected,Maintenance spent,Net"));
 ok("csv monthly Jan A row", csv.includes("January 2026,10 Adelaide St,2000.00,300.00,1700.00"));
@@ -196,13 +196,78 @@ const csvQuote = statementToCsv(
   ),
   [],
 );
-ok("csv quotes fields with commas", csvQuote.includes('"10 Adelaide St, Unit 4",1000.00,0.00,1000.00'));
+ok("csv quotes fields with commas (unit row)", csvQuote.includes('"10 Adelaide St, Unit 4",Unit,1000.00,0.00,1000.00'));
 
 // Empty statement is well-formed
 const empty = buildOwnerStatement([], [], properties, year2026);
 ok("empty statement no rows", empty.rows.length === 0);
+ok("empty statement no buildings", empty.buildings.length === 0);
 ok("empty totals zeroed", empty.totals.netCents === 0 && empty.totals.rentInCents === 0);
-ok("empty csv still has TOTAL", statementToCsv(empty, []).includes("TOTAL,0.00,0.00,0.00"));
+ok("empty csv still has TOTAL", statementToCsv(empty, []).includes("TOTAL,,0.00,0.00,0.00"));
+
+// --- Building tier (unit vs building-scoped shared costs) -------------------
+const BLD = "100 king st"; // the building_key two units share
+const U1 = "11111111-0000-0000-0000-000000000001";
+const U2 = "11111111-0000-0000-0000-000000000002";
+const bprops: PropertyRef[] = [
+  { id: U1, address: "100 King St Unit 1", buildingKey: BLD },
+  { id: U2, address: "100 King St Unit 2", buildingKey: BLD },
+];
+const brent: RentRow[] = [
+  { amount_cents: 200000, paid_on: "2026-01-05", property_id: U1 },
+  { amount_cents: 180000, paid_on: "2026-01-05", property_id: U2 },
+];
+const bwos: WorkOrderCostRow[] = [
+  // unit cost on U1
+  { property_id: U1, building_key: null, category: "plumbing", status: "completed", cost_cents: 30000, completed_on: "2026-01-20" },
+  // shared building cost (gardening) — no unit
+  { property_id: null, building_key: BLD, category: "landscaping", status: "completed", cost_cents: 50000, completed_on: "2026-02-01" },
+  // unscoped overhead
+  { property_id: null, building_key: null, category: "general", status: "completed", cost_cents: 7000, completed_on: "2026-03-01" },
+];
+const bstmt = buildOwnerStatement(brent, bwos, bprops, year2026);
+
+ok("building tier: one building + overhead bucket", bstmt.buildings.length === 2);
+const bRow = bstmt.buildings.find((b) => b.buildingKey === BLD)!;
+ok("building labelled by stripped street", bRow.label === "100 King St");
+ok("building has both units nested", bRow.unitRows.length === 2);
+ok("building shared maintenance is the gardening cost", bRow.sharedMaintenanceCents === 50000);
+ok("building shared count 1", bRow.sharedWorkOrderCount === 1);
+ok("building rent = sum of unit rents", bRow.rentInCents === 380000);
+ok("building maintenance = units + shared", bRow.maintenanceOutCents === 30000 + 50000);
+ok("building net = rent − (units + shared)", bRow.netCents === 380000 - 80000);
+
+const u1Row = bRow.unitRows.find((r) => r.propertyId === U1)!;
+ok("shared cost is NOT pushed onto a unit", u1Row.maintenanceOutCents === 30000);
+
+const overhead = bstmt.buildings.find((b) => b.buildingKey === null)!;
+ok("overhead bucket label", overhead.label === "Unassigned / overhead");
+ok("overhead holds only the unscoped cost", overhead.maintenanceOutCents === 7000 && overhead.rentInCents === 0);
+ok("overhead has no shared line", overhead.sharedMaintenanceCents === 0);
+
+// the per-property Unassigned row carries ONLY the unscoped cost (not the shared)
+const bUnassigned = bstmt.rows.find((r) => r.propertyId === null)!;
+ok("Unassigned row excludes the building-scoped shared cost", bUnassigned.maintenanceOutCents === 7000);
+
+// totals still count everything; building subtotals reconcile to the grand total
+ok("building tier totals: rent", bstmt.totals.rentInCents === 380000);
+ok("building tier totals: maintenance (unit+shared+overhead)", bstmt.totals.maintenanceOutCents === 87000);
+ok(
+  "sum of building maintenance reconciles to total",
+  bstmt.buildings.reduce((s, b) => s + b.maintenanceOutCents, 0) === bstmt.totals.maintenanceOutCents,
+);
+ok(
+  "sum of building rent reconciles to total",
+  bstmt.buildings.reduce((s, b) => s + b.rentInCents, 0) === bstmt.totals.rentInCents,
+);
+
+// CSV carries the scope column: building subtotal, unit, and shared lines
+const bcsv = statementToCsv(bstmt, []);
+ok("csv building subtotal line", bcsv.includes("100 King St,Building subtotal,3800.00,800.00,3000.00"));
+ok("csv unit line under building", bcsv.includes("100 King St Unit 1,Unit,2000.00,300.00,1700.00"));
+ok("csv building-wide shared line", bcsv.includes("Building-wide (shared),Shared,0.00,500.00,-500.00"));
+ok("csv overhead unscoped line", bcsv.includes("Unassigned,Unassigned,0.00,70.00,-70.00"));
+ok("csv building tier TOTAL", bcsv.includes("TOTAL,,3800.00,870.00,2930.00"));
 
 console.log(`\nstatements: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

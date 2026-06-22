@@ -30,6 +30,7 @@ type RentQueryRow = {
 };
 type WoQueryRow = {
   property_id: string | null;
+  building_key: string | null;
   category: string;
   status: string;
   cost_cents: number | null;
@@ -62,11 +63,16 @@ export async function GET(req: NextRequest) {
     supabase.from("rent_payments").select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
     supabase
       .from("work_orders")
-      .select("property_id, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
-    supabase.from("properties").select("id, address").order("address", { ascending: true }),
+      .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
+    supabase
+      .from("properties")
+      .select("id, address, building_key")
+      .order("address", { ascending: true }),
   ]);
 
-  const properties = (propData ?? []) as PropertyRef[];
+  const properties = ((propData ?? []) as { id: string; address: string; building_key: string | null }[]).map(
+    (p) => ({ id: p.id, address: p.address, buildingKey: p.building_key }),
+  ) as PropertyRef[];
   const rentRows: RentRow[] = ((rentData ?? []) as unknown as RentQueryRow[]).map((r) => ({
     amount_cents: r.amount_cents,
     paid_on: r.paid_on,
@@ -74,6 +80,7 @@ export async function GET(req: NextRequest) {
   }));
   const woRows: WorkOrderCostRow[] = ((woData ?? []) as unknown as WoQueryRow[]).map((w) => ({
     property_id: w.property_id ?? w.tenancy?.property_id ?? null,
+    building_key: w.building_key,
     category: w.category,
     status: w.status,
     cost_cents: w.cost_cents,

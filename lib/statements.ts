@@ -18,10 +18,13 @@ import { formatMoneyCents, formatPeriodMonth } from "./payments";
 import {
   groupCostByProperty,
   groupCostByCategory,
+  groupCostByBuilding,
+  workOrderScope,
   sumCostCents,
   type WorkOrderCostRow,
   type CostFilter,
 } from "./work-orders";
+import { splitAddressUnit } from "./listing-fill-sheet";
 
 export { formatMoneyCents };
 
@@ -38,8 +41,13 @@ export type RentRow = {
   property_id: string | null;
 };
 
-/** A property reference for labelling the statement rows. */
-export type PropertyRef = { id: string; address: string };
+/**
+ * A property reference for labelling the statement rows. `buildingKey` (the
+ * normalized building identity, properties.building_key) is optional: when
+ * supplied it lets the statement nest units under their building and roll up a
+ * building tier. Absent/null = the property stands alone (back-compatible).
+ */
+export type PropertyRef = { id: string; address: string; buildingKey?: string | null };
 
 /**
  * An inclusive date window. Either bound may be null (open-ended). A statement
@@ -172,9 +180,30 @@ export type StatementTotals = {
 
 export type CategoryRow = { category: string; totalCents: number; count: number };
 
+/**
+ * A building tier: the per-unit rows nested under one building, plus a single
+ * "Building-wide (shared)" maintenance figure for that building's shared costs
+ * (gardening, snow, roof). The subtotal is units + shared. Shared costs are NOT
+ * pro-rated onto the units (v1); they sit at the building level so every per-unit
+ * figure stays truthful. `buildingKey == null` is the catch-all "Unassigned /
+ * overhead" bucket: rent or costs not tied to any unit or building.
+ */
+export type StatementBuildingRow = {
+  buildingKey: string | null;
+  label: string;
+  unitRows: StatementRow[];
+  sharedMaintenanceCents: number;
+  sharedWorkOrderCount: number;
+  rentInCents: number; // sum of unit rents (there is no building-level rent)
+  maintenanceOutCents: number; // sum(unit maintenance) + shared
+  netCents: number;
+};
+
 export type OwnerStatement = {
   range: DateRange;
   rows: StatementRow[];
+  /** Unit rows nested under their building, with the shared line and subtotal. */
+  buildings: StatementBuildingRow[];
   totals: StatementTotals;
   /** Maintenance spend broken out by category, for the year-end detail. */
   categories: CategoryRow[];
@@ -182,6 +211,7 @@ export type OwnerStatement = {
 };
 
 const UNASSIGNED_LABEL = "Unassigned";
+const OVERHEAD_LABEL = "Unassigned / overhead";
 
 /**
  * Build the per-property owner statement for a window. `rentRows` carry a
@@ -199,8 +229,13 @@ export function buildOwnerStatement(
   const addressOf = new Map(properties.map((p) => [p.id, p.address]));
   const costFilter: CostFilter = { from: range.from ?? undefined, to: range.to ?? undefined };
 
+  // The per-property (unit) rows count UNIT and UNSCOPED maintenance only —
+  // building-scoped (shared) costs are pulled out so they never land on a unit
+  // or in the "Unassigned" row; they roll up at the building tier below instead.
+  const unitAndUnscopedWO = workOrderRows.filter((w) => workOrderScope(w) !== "building");
+
   const rentBuckets = groupRentByProperty(rentRows, range);
-  const costBuckets = groupCostByProperty(workOrderRows, costFilter);
+  const costBuckets = groupCostByProperty(unitAndUnscopedWO, costFilter);
 
   const rentByProp = new Map(rentBuckets.map((b) => [b.propertyId, b]));
   const costByProp = new Map(costBuckets.map((b) => [b.key, b]));
@@ -246,9 +281,81 @@ export function buildOwnerStatement(
     .map((b) => ({ category: b.key, totalCents: b.totalCents, count: b.count }))
     .sort((a, b) => b.totalCents - a.totalCents);
 
+  // --- Building tier: nest unit rows under their building + the shared line ---
+  //
+  // A unit row rolls up under its property's buildingKey; the "Unassigned" row
+  // (no property) goes in the null overhead bucket. A unit whose property has no
+  // buildingKey stands alone (synthetic key) so it isn't merged into overhead.
+  // Shared (building-scoped) costs add a "Building-wide" figure to their building.
+  const buildingLabelOf = new Map<string, string>();
+  for (const p of properties) {
+    const bk = p.buildingKey ?? null;
+    if (bk && !buildingLabelOf.has(bk)) {
+      buildingLabelOf.set(bk, splitAddressUnit(p.address).street ?? p.address);
+    }
+  }
+  const propBuildingKey = new Map(properties.map((p) => [p.id, p.buildingKey ?? null]));
+
+  type Acc = { unitRows: StatementRow[]; shared: number; sharedCount: number; label: string };
+  const acc = new Map<string | null, Acc>();
+  const ensure = (key: string | null, label: string): Acc => {
+    let a = acc.get(key);
+    if (!a) {
+      a = { unitRows: [], shared: 0, sharedCount: 0, label };
+      acc.set(key, a);
+    }
+    return a;
+  };
+
+  for (const r of rows) {
+    if (r.propertyId == null) {
+      ensure(null, OVERHEAD_LABEL).unitRows.push(r);
+      continue;
+    }
+    const bk = propBuildingKey.get(r.propertyId) ?? null;
+    if (bk) ensure(bk, buildingLabelOf.get(bk) ?? bk).unitRows.push(r);
+    else ensure(`prop:${r.propertyId}`, r.address).unitRows.push(r); // keyless unit stands alone
+  }
+
+  // Building-scoped (shared) costs resolve to their own building_key.
+  const buildingWO = workOrderRows.filter((w) => workOrderScope(w) === "building");
+  for (const b of groupCostByBuilding(buildingWO, {}, costFilter)) {
+    if (b.key == null) continue; // a building-scoped row always carries a key
+    const a = ensure(b.key, buildingLabelOf.get(b.key) ?? b.key);
+    a.shared += b.totalCents;
+    a.sharedCount += b.count;
+  }
+
+  const buildings: StatementBuildingRow[] = [...acc.entries()].map(([key, a]) => {
+    const rentInCents = a.unitRows.reduce((s, r) => s + r.rentInCents, 0);
+    const unitMaint = a.unitRows.reduce((s, r) => s + r.maintenanceOutCents, 0);
+    const maintenanceOutCents = unitMaint + a.shared;
+    const unitRows = [...a.unitRows].sort((x, y) => {
+      if (x.propertyId == null) return 1;
+      if (y.propertyId == null) return -1;
+      return x.address.localeCompare(y.address);
+    });
+    return {
+      buildingKey: key,
+      label: a.label,
+      unitRows,
+      sharedMaintenanceCents: a.shared,
+      sharedWorkOrderCount: a.sharedCount,
+      rentInCents,
+      maintenanceOutCents,
+      netCents: rentInCents - maintenanceOutCents,
+    };
+  });
+  buildings.sort((a, b) => {
+    if (a.buildingKey == null) return 1; // overhead bucket last
+    if (b.buildingKey == null) return -1;
+    return a.label.localeCompare(b.label);
+  });
+
   return {
     range,
     rows,
+    buildings,
     totals,
     categories,
     hasUnassigned: rows.some((r) => r.propertyId == null),
@@ -370,13 +477,36 @@ export function statementToCsv(
   row(["Period", describeRange(statement.range)]);
   lines.push("");
 
-  // Per-property summary
-  row(["Property", "Rent collected", "Maintenance spent", "Net"]);
-  for (const r of statement.rows) {
-    row([r.address, dollars(r.rentInCents), dollars(r.maintenanceOutCents), dollars(r.netCents)]);
+  // Summary, grouped by building: a subtotal line per building, its unit lines,
+  // and a "Building-wide (shared)" line; then the overhead bucket; then TOTAL.
+  // The Scope column carries unit vs building-wide so the accountant can tell a
+  // shared cost from a unit cost.
+  row(["Property / building", "Scope", "Rent collected", "Maintenance spent", "Net"]);
+  for (const b of statement.buildings) {
+    if (b.buildingKey == null) {
+      // Overhead bucket: flat rows, no subtotal header.
+      for (const u of b.unitRows) {
+        row([u.address, "Unassigned", dollars(u.rentInCents), dollars(u.maintenanceOutCents), dollars(u.netCents)]);
+      }
+      continue;
+    }
+    row([b.label, "Building subtotal", dollars(b.rentInCents), dollars(b.maintenanceOutCents), dollars(b.netCents)]);
+    for (const u of b.unitRows) {
+      row([u.address, "Unit", dollars(u.rentInCents), dollars(u.maintenanceOutCents), dollars(u.netCents)]);
+    }
+    if (b.sharedMaintenanceCents > 0) {
+      row([
+        "Building-wide (shared)",
+        "Shared",
+        dollars(0),
+        dollars(b.sharedMaintenanceCents),
+        dollars(-b.sharedMaintenanceCents),
+      ]);
+    }
   }
   row([
     "TOTAL",
+    "",
     dollars(statement.totals.rentInCents),
     dollars(statement.totals.maintenanceOutCents),
     dollars(statement.totals.netCents),

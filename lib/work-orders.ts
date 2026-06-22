@@ -234,6 +234,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   status: "That isn't a valid status.",
   transition: "You can't move the work order to that status from where it is.",
   completed_date: "Enter the date the work was completed.",
+  scope_building: "Choose a building for a building-wide expense.",
   name: "Enter the trade contact's name.",
   email: "Enter a valid email address, or leave it blank.",
   forbidden: "You don't have permission to manage work orders.",
@@ -249,6 +250,13 @@ export function workOrderErrorMessage(code: string | undefined): string | null {
 
 export type WorkOrderCostRow = {
   property_id: string | null;
+  /**
+   * Building a SHARED cost belongs to (building-scoped row). Null/absent for a
+   * unit-scoped row (its building is derived from the unit) and an unscoped row.
+   * Optional so existing callers that only deal in unit/unscoped rows are
+   * unchanged. See workOrderScope / effectiveBuildingKey. (Migration 0057.)
+   */
+  building_key?: string | null;
   category: string;
   status: string;
   cost_cents: number | null;
@@ -319,6 +327,75 @@ export function groupCostByCategory(
     cur.total += r.cost_cents;
     cur.count += 1;
     by.set(r.category, cur);
+  }
+  return [...by.entries()].map(([key, v]) => ({ key, totalCents: v.total, count: v.count }));
+}
+
+// --- Expense scope: unit vs building (migration 0057) -----------------------
+//
+// A maintenance cost belongs to exactly ONE level. A UNIT cost (sink in unit 22)
+// carries property_id; its building, for rollup, is DERIVED from the unit. A
+// BUILDING (shared) cost (gardening for the whole building) carries building_key
+// and no property_id, so it rolls up at the building level and is never pushed
+// onto one unit. An UNSCOPED cost (org-level overhead) carries neither. The DB
+// CHECK (work_orders_scope_chk) guarantees property_id and building_key are never
+// both set, so the three are mutually exclusive.
+
+export type WorkOrderScope = "unit" | "building" | "unscoped";
+
+function scopeNonEmpty(v: string | null | undefined): string | null {
+  const t = (v ?? "").trim();
+  return t === "" ? null : t;
+}
+
+/** Which level a cost belongs to, from its property_id / building_key. Pure. */
+export function workOrderScope(wo: {
+  property_id: string | null;
+  building_key?: string | null;
+}): WorkOrderScope {
+  if (scopeNonEmpty(wo.property_id) != null) return "unit";
+  if (scopeNonEmpty(wo.building_key) != null) return "building";
+  return "unscoped";
+}
+
+/**
+ * The building key a cost rolls up UNDER. A unit-scoped row resolves via the
+ * unit's building (propertyBuildingMap[property_id]); a building-scoped row
+ * returns its own building_key; an unscoped row returns null. propertyBuildingMap
+ * is { [propertyId]: building_key } built from the properties read the statement
+ * already does — so the unit's building is never duplicated on the work order and
+ * can't drift.
+ */
+export function effectiveBuildingKey(
+  wo: { property_id: string | null; building_key?: string | null },
+  propertyBuildingMap: Record<string, string | null>,
+): string | null {
+  const scope = workOrderScope(wo);
+  if (scope === "unit") return propertyBuildingMap[wo.property_id as string] ?? null;
+  if (scope === "building") return scopeNonEmpty(wo.building_key);
+  return null;
+}
+
+/**
+ * Cost grouped by the building it rolls up under (effectiveBuildingKey). A unit
+ * cost and a same-building shared cost land in ONE bucket; unscoped costs bucket
+ * under null. Mirrors groupCostByProperty so the statement builder stays one
+ * pattern.
+ */
+export function groupCostByBuilding(
+  rows: WorkOrderCostRow[],
+  propertyBuildingMap: Record<string, string | null>,
+  filter: CostFilter = {},
+): CostBucket<string | null>[] {
+  const by = new Map<string | null, { total: number; count: number }>();
+  for (const r of rows) {
+    if (r.cost_cents == null) continue;
+    if (!passesFilter(r, filter)) continue;
+    const key = effectiveBuildingKey(r, propertyBuildingMap);
+    const cur = by.get(key) ?? { total: 0, count: 0 };
+    cur.total += r.cost_cents;
+    cur.count += 1;
+    by.set(key, cur);
   }
   return [...by.entries()].map(([key, v]) => ({ key, totalCents: v.total, count: v.count }));
 }

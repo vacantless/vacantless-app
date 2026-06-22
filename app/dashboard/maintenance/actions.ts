@@ -50,6 +50,49 @@ async function fkOk(
   return !!data;
 }
 
+// Confirm a building_key actually names a building the org has at least one unit
+// in (RLS scopes the read), so a forged key can't attach a shared cost to a
+// building the owner doesn't have. Blank passes (nothing to attach).
+async function buildingKeyOk(
+  supabase: ReturnType<typeof createClient>,
+  buildingKey: string | null,
+): Promise<boolean> {
+  if (!buildingKey) return true;
+  const { data } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("building_key", buildingKey)
+    .limit(1);
+  return !!(data && data.length > 0);
+}
+
+// Expense scope (migration 0057): exactly one of unit / building / none. We
+// derive property_id vs building_key from the chosen scope (never read both), so
+// the DB CHECK can't be violated, and clear tenancy_id when the cost isn't tied
+// to a unit. Returns an error code for a building scope with no building chosen.
+type ResolvedScope =
+  | { ok: true; propertyId: string | null; buildingKey: string | null; tenancyId: string | null }
+  | { ok: false; code: string };
+
+function resolveScope(formData: FormData): ResolvedScope {
+  const scope = s(formData, "scope") || "unit"; // default unit (back-compat)
+  if (scope === "building") {
+    const buildingKey = s(formData, "building_key");
+    if (!buildingKey) return { ok: false, code: "scope_building" };
+    return { ok: true, propertyId: null, buildingKey, tenancyId: null };
+  }
+  if (scope === "none") {
+    return { ok: true, propertyId: null, buildingKey: null, tenancyId: null };
+  }
+  // unit (default): honor the property + tenancy selects, ignore any building_key.
+  return {
+    ok: true,
+    propertyId: orNull(formData, "property_id"),
+    buildingKey: null,
+    tenancyId: orNull(formData, "tenancy_id"),
+  };
+}
+
 // --- Work orders ------------------------------------------------------------
 
 export async function createWorkOrder(formData: FormData) {
@@ -65,15 +108,20 @@ export async function createWorkOrder(formData: FormData) {
   });
   if (!check.ok) redirect(`${BASE}?wo=${check.code}`);
 
+  const scope = resolveScope(formData);
+  if (!scope.ok) redirect(`${BASE}?wo=${scope.code}`);
+
   const supabase = createClient();
-  const propertyId = orNull(formData, "property_id");
-  const tenancyId = orNull(formData, "tenancy_id");
+  const propertyId = scope.propertyId;
+  const buildingKey = scope.buildingKey;
+  const tenancyId = scope.tenancyId;
   const tradeContactId = orNull(formData, "trade_contact_id");
 
   if (
     !(await fkOk(supabase, "properties", propertyId)) ||
     !(await fkOk(supabase, "tenancies", tenancyId)) ||
-    !(await fkOk(supabase, "trade_contacts", tradeContactId))
+    !(await fkOk(supabase, "trade_contacts", tradeContactId)) ||
+    !(await buildingKeyOk(supabase, buildingKey))
   ) {
     redirect(`${BASE}?wo=notfound`);
   }
@@ -84,6 +132,7 @@ export async function createWorkOrder(formData: FormData) {
   await supabase.from("work_orders").insert({
     organization_id: org.id,
     property_id: propertyId,
+    building_key: buildingKey,
     tenancy_id: tenancyId,
     trade_contact_id: tradeContactId,
     title: check.value.title,
@@ -116,25 +165,33 @@ export async function updateWorkOrder(formData: FormData) {
   });
   if (!check.ok) redirect(`${BASE}?wo=${check.code}`);
 
+  const scope = resolveScope(formData);
+  if (!scope.ok) redirect(`${BASE}?wo=${scope.code}`);
+
   const supabase = createClient();
-  const propertyId = orNull(formData, "property_id");
-  const tenancyId = orNull(formData, "tenancy_id");
+  const propertyId = scope.propertyId;
+  const buildingKey = scope.buildingKey;
+  const tenancyId = scope.tenancyId;
   const tradeContactId = orNull(formData, "trade_contact_id");
 
   if (
     !(await fkOk(supabase, "properties", propertyId)) ||
     !(await fkOk(supabase, "tenancies", tenancyId)) ||
-    !(await fkOk(supabase, "trade_contacts", tradeContactId))
+    !(await fkOk(supabase, "trade_contacts", tradeContactId)) ||
+    !(await buildingKeyOk(supabase, buildingKey))
   ) {
     redirect(`${BASE}?wo=notfound`);
   }
 
   // RLS scopes the update to the caller's org. status/completed_on are changed
-  // only through setWorkOrderStatus (which validates the lifecycle).
+  // only through setWorkOrderStatus (which validates the lifecycle). property_id
+  // and building_key are set as an exactly-one-of pair from the chosen scope, so
+  // switching a cost from unit to building (or back) never leaves both set.
   await supabase
     .from("work_orders")
     .update({
       property_id: propertyId,
+      building_key: buildingKey,
       tenancy_id: tenancyId,
       trade_contact_id: tradeContactId,
       title: check.value.title,
