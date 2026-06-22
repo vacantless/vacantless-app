@@ -28,6 +28,7 @@ export const CAPABILITIES = [
   "manage_settings", // branding, logo, reply-to, feature toggles (incl. SMS)
   "manage_properties", // create/edit/duplicate/delete units, listing posts, photos, price-drop blast
   "manage_tenancies", // create/edit/end tenancies + co-tenants (post-lease property management)
+  "manage_work_orders", // create/assign/track maintenance work orders + the org's trade-contact rolodex (self-managed-owner wedge)
   "manage_rotessa", // connect/manage the org's Rotessa rent-collection account + API key
   "manage_rent", // connect/manage the org's Stripe Connect rent rail (sibling of manage_rotessa; the two fold into one "rent collection" gate in the generic-provider refactor)
   "manage_availability", // booking windows, clustering settings
