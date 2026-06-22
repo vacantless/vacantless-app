@@ -11,7 +11,10 @@ import {
 } from "@/lib/branding";
 import { validateTestRecipient } from "@/lib/test-email";
 import { validateScreeningSettings } from "@/lib/screening";
-import { validateNewQuestion } from "@/lib/screening-questions";
+import {
+  validateNewQuestion,
+  normalizePreferredAnswer,
+} from "@/lib/screening-questions";
 import { validatePublicContact } from "@/lib/public-contact";
 import {
   validatePolicyProfileSettings,
@@ -113,6 +116,7 @@ export async function addScreeningQuestion(formData: FormData) {
   const result = validateNewQuestion({
     prompt: String(formData.get("prompt") ?? ""),
     qtype: String(formData.get("qtype") ?? ""),
+    preferredAnswer: String(formData.get("preferred_answer") ?? ""),
   });
   if (!result.ok) {
     redirect(`/dashboard/leasing/screening?screening=question_${result.reason}`);
@@ -133,6 +137,9 @@ export async function addScreeningQuestion(formData: FormData) {
     organization_id: org.id,
     prompt: result.values.prompt,
     qtype: result.values.qtype,
+    // S293: only a yes/no question can carry a preference; validateNewQuestion
+    // already normalized it to null for text questions / unrecognized values.
+    preferred_answer: result.values.preferredAnswer,
     position: nextPosition,
   });
   if (error) {
@@ -162,6 +169,49 @@ export async function deleteScreeningQuestion(formData: FormData) {
   }
 
   redirect("/dashboard/leasing/screening?screening=question_deleted");
+}
+
+// Set / clear the operator's preferred answer on an EXISTING yes/no question
+// (S293, the v2 soft flag). The preference is informational only — a mismatch
+// shows a soft heads-up on the lead, it never drives qualified_out. We re-read
+// the question's qtype server-side and run it through normalizePreferredAnswer,
+// so a preference can never be attached to a text question even if the form is
+// tampered with. An empty / "none" value clears the preference.
+export async function updateScreeningPreferredAnswer(formData: FormData) {
+  const org = await requireSettingsOrg();
+  const id = String(formData.get("question_id") ?? "").trim();
+  if (!id) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  const supabase = createClient();
+  // Read the question's type (scoped to this org by RLS + the explicit filter)
+  // so the preference can only ever apply to a yes/no question.
+  const { data: q } = await supabase
+    .from("org_screening_questions")
+    .select("qtype")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!q) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  const preferred = normalizePreferredAnswer(
+    q.qtype === "yesno" ? "yesno" : "text",
+    String(formData.get("preferred_answer") ?? ""),
+  );
+
+  const { error } = await supabase
+    .from("org_screening_questions")
+    .update({ preferred_answer: preferred })
+    .eq("id", id)
+    .eq("organization_id", org.id);
+  if (error) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  redirect("/dashboard/leasing/screening?screening=preference_saved");
 }
 
 // Tab 1 — Public Page & Brand: public contact details for the syndication feed.

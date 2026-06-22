@@ -5,6 +5,11 @@ import { getCurrentOrg } from "@/lib/org";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import { incomeRequirementMagnitude } from "@/lib/screening";
 import {
+  collectPreferenceMismatches,
+  preferredAnswerLabel,
+  type CustomAnswerSnapshot,
+} from "@/lib/screening-questions";
+import {
   resolveLeadSource,
   followUpStatus,
   followUpLabel,
@@ -49,9 +54,7 @@ type Lead = {
   screen_pets_detail: string | null;
   qualified_out: boolean;
   qualify_out_reasons: string[] | null;
-  screen_custom_answers:
-    | { question_id: string; prompt: string; qtype: string; answer: string }[]
-    | null;
+  screen_custom_answers: CustomAnswerSnapshot[] | null;
   property: { id: string; address: string; rent_cents: number | null } | null;
   listing_post: ListingPost;
 };
@@ -138,6 +141,12 @@ export default async function LeadDetailPage({
         org.screening_income_multiple,
       )
     : null;
+
+  // Custom preferred-answer mismatches (S293). A SOFT, purely informational
+  // heads-up — kept entirely separate from qualified_out so an operator-authored
+  // question can never auto-disqualify. Silent for every pre-S293 lead and every
+  // no-preference question (collectPreferenceMismatches returns []).
+  const preferenceMismatches = collectPreferenceMismatches(l.screen_custom_answers);
 
   return (
     <div>
@@ -256,6 +265,37 @@ export default async function LeadDetailPage({
               )}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Preferred-answer heads-up (S293). DELIBERATELY separate from the
+          qualify-out panel above and styled blue (informational), not amber
+          (criteria flag): a custom question's preferred answer never feeds
+          qualified_out and never hides a lead. Shown only when the operator set
+          a preference and the renter's answer differs. */}
+      {preferenceMismatches.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">
+              Worth a look
+            </span>
+            <span className="text-xs text-gray-500">
+              Doesn&apos;t match a preference you set — just a heads-up, not a flag.
+            </span>
+          </div>
+          <ul className="mt-2 space-y-1 text-sm text-sky-900">
+            {preferenceMismatches.map((a) => (
+              <li key={a.question_id}>
+                <span className="font-medium">{a.prompt}</span> — answered{" "}
+                <span className="font-semibold">
+                  {a.answer === "yes" ? "Yes" : "No"}
+                </span>{" "}
+                <span className="text-sky-700">
+                  (you {preferredAnswerLabel(a.preferred ?? null).toLowerCase()})
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

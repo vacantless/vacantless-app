@@ -9,7 +9,13 @@ import {
   questionTypeLabel,
   MAX_QUESTION_PROMPT_LEN,
   MAX_CUSTOM_ANSWER_LEN,
+  isPreferredAnswer,
+  normalizePreferredAnswer,
+  isPreferenceMismatch,
+  collectPreferenceMismatches,
+  preferredAnswerLabel,
   type ScreeningQuestion,
+  type CustomAnswerSnapshot,
 } from "../lib/screening-questions";
 
 let passed = 0;
@@ -86,9 +92,9 @@ ok("answer text: keeps interior punctuation", parseCustomAnswer("text", "I work 
 
 // --- buildAnswerSnapshot ----------------------------------------------------
 const QS: ScreeningQuestion[] = [
-  { id: "q1", prompt: "Where do you work?", qtype: "text", required: false },
-  { id: "q2", prompt: "Are you a non-smoker?", qtype: "yesno", required: true },
-  { id: "q3", prompt: "Any other notes?", qtype: "text", required: false },
+  { id: "q1", prompt: "Where do you work?", qtype: "text", required: false, preferred_answer: null },
+  { id: "q2", prompt: "Are you a non-smoker?", qtype: "yesno", required: true, preferred_answer: null },
+  { id: "q3", prompt: "Any other notes?", qtype: "text", required: false, preferred_answer: null },
 ];
 
 {
@@ -122,6 +128,95 @@ const QS: ScreeningQuestion[] = [
 // --- questionTypeLabel ------------------------------------------------------
 ok("label: text", questionTypeLabel("text") === "Short text");
 ok("label: yesno", questionTypeLabel("yesno") === "Yes / no");
+
+// ===========================================================================
+// Preferred answer + soft mismatch (S293, the v2 soft flag)
+// ===========================================================================
+
+// --- isPreferredAnswer ------------------------------------------------------
+ok("pref: yes valid", isPreferredAnswer("yes"));
+ok("pref: no valid", isPreferredAnswer("no"));
+ok("pref: maybe invalid", !isPreferredAnswer("maybe"));
+ok("pref: empty invalid", !isPreferredAnswer(""));
+ok("pref: null invalid", !isPreferredAnswer(null));
+
+// --- normalizePreferredAnswer ----------------------------------------------
+ok("norm pref: yesno + yes -> yes", normalizePreferredAnswer("yesno", "yes") === "yes");
+ok("norm pref: yesno + NO -> no (case-insensitive)", normalizePreferredAnswer("yesno", "NO") === "no");
+ok("norm pref: yesno + padded -> trimmed", normalizePreferredAnswer("yesno", "  yes ") === "yes");
+ok("norm pref: yesno + bogus -> null", normalizePreferredAnswer("yesno", "sometimes") === null);
+ok("norm pref: yesno + empty -> null", normalizePreferredAnswer("yesno", "") === null);
+ok("norm pref: text question ALWAYS null (guard)", normalizePreferredAnswer("text", "yes") === null);
+ok("norm pref: null raw -> null", normalizePreferredAnswer("yesno", null) === null);
+
+// --- validateNewQuestion w/ preferred ---------------------------------------
+{
+  const r = validateNewQuestion({ prompt: "Smoker?", qtype: "yesno", preferredAnswer: "no" });
+  ok("validate: yesno carries preferred", r.ok && r.values.preferredAnswer === "no");
+}
+{
+  // a preferred answer on a TEXT question is silently dropped, not rejected
+  const r = validateNewQuestion({ prompt: "Where do you work?", qtype: "text", preferredAnswer: "yes" });
+  ok("validate: text drops preferred (still ok)", r.ok && r.values.preferredAnswer === null);
+}
+{
+  const r = validateNewQuestion({ prompt: "Smoker?", qtype: "yesno" });
+  ok("validate: missing preferred -> null", r.ok && r.values.preferredAnswer === null);
+}
+{
+  const r = validateNewQuestion({ prompt: "Smoker?", qtype: "yesno", preferredAnswer: "bogus" });
+  ok("validate: bogus preferred -> null (not rejected)", r.ok && r.values.preferredAnswer === null);
+}
+
+// --- buildAnswerSnapshot carries preferred ----------------------------------
+{
+  const qs: ScreeningQuestion[] = [
+    { id: "p1", prompt: "Non-smoker?", qtype: "yesno", required: true, preferred_answer: "yes" },
+    { id: "p2", prompt: "Where do you work?", qtype: "text", required: false, preferred_answer: null },
+    { id: "p3", prompt: "Have a car?", qtype: "yesno", required: false, preferred_answer: null },
+  ];
+  const snap = buildAnswerSnapshot(qs, { p1: "no", p2: "Acme", p3: "yes" });
+  const byId = (id: string) => snap.find((s) => s.question_id === id)!;
+  ok("snapshot: yesno w/ preference carries preferred", byId("p1").preferred === "yes");
+  ok("snapshot: text question has no preferred key", !("preferred" in byId("p2")));
+  ok("snapshot: yesno w/o preference has no preferred key", !("preferred" in byId("p3")));
+}
+
+// --- isPreferenceMismatch ---------------------------------------------------
+ok(
+  "mismatch: preferred yes, answered no -> mismatch",
+  isPreferenceMismatch({ question_id: "x", prompt: "?", qtype: "yesno", answer: "no", preferred: "yes" }),
+);
+ok(
+  "mismatch: preferred yes, answered yes -> no mismatch",
+  !isPreferenceMismatch({ question_id: "x", prompt: "?", qtype: "yesno", answer: "yes", preferred: "yes" }),
+);
+ok(
+  "mismatch: no preference -> never a mismatch",
+  !isPreferenceMismatch({ question_id: "x", prompt: "?", qtype: "yesno", answer: "no" }),
+);
+ok(
+  "mismatch: pre-S293 snapshot (no preferred key) -> silent",
+  !isPreferenceMismatch({ question_id: "x", prompt: "?", qtype: "text", answer: "anything" } as CustomAnswerSnapshot),
+);
+
+// --- collectPreferenceMismatches --------------------------------------------
+{
+  const snaps: CustomAnswerSnapshot[] = [
+    { question_id: "a", prompt: "Non-smoker?", qtype: "yesno", answer: "no", preferred: "yes" },
+    { question_id: "b", prompt: "Have a car?", qtype: "yesno", answer: "yes", preferred: "yes" },
+    { question_id: "c", prompt: "Where do you work?", qtype: "text", answer: "Acme" },
+  ];
+  const out = collectPreferenceMismatches(snaps);
+  ok("collect: returns only the mismatch", out.length === 1 && out[0].question_id === "a");
+  ok("collect: null -> empty", collectPreferenceMismatches(null).length === 0);
+  ok("collect: undefined -> empty", collectPreferenceMismatches(undefined).length === 0);
+}
+
+// --- preferredAnswerLabel ---------------------------------------------------
+ok("pref label: yes", preferredAnswerLabel("yes") === "Prefer Yes");
+ok("pref label: no", preferredAnswerLabel("no") === "Prefer No");
+ok("pref label: null", preferredAnswerLabel(null) === "No preference");
 
 console.log(`\nscreening-questions: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -4,12 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { SCREENING_REASON } from "@/lib/screening";
 import {
   questionTypeLabel,
+  preferredAnswerLabel,
   type ScreeningQuestion,
 } from "@/lib/screening-questions";
 import {
   updateScreening,
   addScreeningQuestion,
   deleteScreeningQuestion,
+  updateScreeningPreferredAnswer,
 } from "@/app/dashboard/settings/actions";
 import { BrandBanner, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -40,7 +42,7 @@ export default async function ScreeningSettingsPage({
   const supabase = createClient();
   const { data: questionRows } = await supabase
     .from("org_screening_questions")
-    .select("id, prompt, qtype, required")
+    .select("id, prompt, qtype, required, preferred_answer")
     .eq("organization_id", org.id)
     .eq("active", true)
     .order("position", { ascending: true })
@@ -285,6 +287,12 @@ export default async function ScreeningSettingsPage({
               Question removed. Inquiries you already received keep their answers.
             </div>
           )}
+          {sp === "preference_saved" && (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+              Preference saved. New inquiries that don&apos;t match will show a
+              heads-up — it never rejects anyone.
+            </div>
+          )}
           {sp === "question_prompt" && (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
               Enter a question between 1 and 200 characters.
@@ -301,7 +309,7 @@ export default async function ScreeningSettingsPage({
               {questions.map((q) => (
                 <li
                   key={q.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
+                  className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-gray-800">
@@ -309,17 +317,53 @@ export default async function ScreeningSettingsPage({
                     </p>
                     <p className="text-xs text-gray-400">
                       {questionTypeLabel(q.qtype)}
+                      {q.qtype === "yesno" && q.preferred_answer && (
+                        <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-500">
+                          {preferredAnswerLabel(q.preferred_answer)}
+                        </span>
+                      )}
                     </p>
                   </div>
-                  <form action={deleteScreeningQuestion}>
-                    <input type="hidden" name="question_id" value={q.id} />
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
-                    >
-                      Remove
-                    </button>
-                  </form>
+                  <div className="flex items-center gap-2">
+                    {/* Preferred answer (S293): only for yes/no. Setting one
+                        shows a soft heads-up on a mismatched inquiry; it never
+                        rejects or hides a lead. Auto-submits on change. */}
+                    {q.qtype === "yesno" && (
+                      <form
+                        action={updateScreeningPreferredAnswer}
+                        className="flex items-center gap-1.5"
+                      >
+                        <input type="hidden" name="question_id" value={q.id} />
+                        <label className="text-xs text-gray-500">
+                          You prefer
+                        </label>
+                        <select
+                          name="preferred_answer"
+                          defaultValue={q.preferred_answer ?? ""}
+                          className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                        >
+                          <option value="">No preference</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                        <button
+                          type="submit"
+                          className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                        >
+                          Save
+                        </button>
+                      </form>
+                    )}
+                    <form action={deleteScreeningQuestion}>
+                      <input type="hidden" name="question_id" value={q.id} />
+                      <button
+                        type="submit"
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -360,10 +404,29 @@ export default async function ScreeningSettingsPage({
                 <option value="yesno">Yes / no</option>
               </select>
             </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Preferred answer
+              </span>
+              <select
+                name="preferred_answer"
+                defaultValue=""
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-40"
+              >
+                <option value="">No preference</option>
+                <option value="yes">Prefer Yes</option>
+                <option value="no">Prefer No</option>
+              </select>
+            </label>
             <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm">
               Add question
             </button>
           </form>
+          <p className="mt-2 text-xs text-gray-400">
+            A preferred answer applies to yes/no questions only. When an inquiry
+            doesn&apos;t match, you&apos;ll see a soft heads-up on it — it never
+            rejects, hides, or auto-flags anyone.
+          </p>
 
           <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
             Keep questions about the rental, not the person — ask only what helps
