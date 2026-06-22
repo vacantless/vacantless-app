@@ -15,8 +15,22 @@
 // authoritative snapshot is the one the RPC writes; this module pins both sides.
 // ============================================================================
 
-export const QUESTION_TYPES = ["text", "yesno"] as const;
+// 'text' = free-text short answer; 'yesno' = yes/no; 'choice' = single-select
+// from an operator-defined option list (S294). choice is INFORMATIONAL ONLY,
+// like text — it carries no preferred-answer soft flag (the S293 flag is yes/no
+// only). Wiring an arbitrary operator-defined "preferred option" to a soft flag
+// re-opens the fair-housing question (e.g. a preferred answer on a "how many
+// occupants?" pick-list), so it is deliberately out of scope here.
+export const QUESTION_TYPES = ["text", "yesno", "choice"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
+
+// --- choice options (S294) --------------------------------------------------
+/** A choice question must offer at least this many options (1 is pointless). */
+export const MIN_CHOICES = 2;
+/** A choice question may offer at most this many options (keeps the select sane). */
+export const MAX_CHOICES = 12;
+/** Each option label is trimmed and clamped to this many characters. */
+export const MAX_CHOICE_LABEL_LEN = 80;
 
 // --- preferred answer (S293, the v2 soft flag) ------------------------------
 // An operator may OPTIONALLY mark a "preferred answer" on a YES/NO question. If
@@ -70,7 +84,35 @@ export type ScreeningQuestion = {
   required: boolean;
   /** Operator's preferred yes/no answer (S293). null = no preference. */
   preferred_answer: PreferredAnswer | null;
+  /**
+   * The options for a 'choice' question (S294). Empty for text/yesno. Stored as
+   * org_screening_questions.choices text[]; mirrors normalizeChoices below.
+   */
+  choices: string[];
 };
+
+/**
+ * Normalize an operator's choice-option input (S294). Accepts either a raw
+ * textarea string (one option per line) or an already-split array. Each option
+ * is trimmed, inner whitespace collapsed, clamped to MAX_CHOICE_LABEL_LEN; empty
+ * options are dropped; exact duplicates are removed (first wins); the list is
+ * capped at MAX_CHOICES. The result is order-preserving. Used both to validate a
+ * new question and to mirror the text[] stored in the DB. Order MUST match the
+ * SQL that reads org_screening_questions.choices.
+ */
+export function normalizeChoices(raw: string | string[] | null | undefined): string[] {
+  const parts = Array.isArray(raw) ? raw : String(raw ?? "").split(/\r?\n/);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const label = String(part ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_CHOICE_LABEL_LEN);
+    if (label.length === 0 || seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
+    if (out.length >= MAX_CHOICES) break;
+  }
+  return out;
+}
 
 // --- the per-lead answer snapshot (one element of leads.screen_custom_answers)
 export type CustomAnswerSnapshot = {
@@ -93,6 +135,11 @@ export type NewQuestionInput = {
   qtype: string;
   /** Optional operator preferred answer (S293); only honored for yes/no. */
   preferredAnswer?: string | null;
+  /**
+   * Operator's options for a 'choice' question (S294). Raw textarea string (one
+   * per line) or an array. Ignored for text/yesno.
+   */
+  choices?: string | string[] | null;
 };
 export type ValidateQuestionResult =
   | {
@@ -101,9 +148,11 @@ export type ValidateQuestionResult =
         prompt: string;
         qtype: QuestionType;
         preferredAnswer: PreferredAnswer | null;
+        /** Normalized options; empty unless qtype = 'choice' (S294). */
+        choices: string[];
       };
     }
-  | { ok: false; reason: "prompt" | "qtype" };
+  | { ok: false; reason: "prompt" | "qtype" | "choices" };
 
 /**
  * Trim + validate an operator-authored question. Prompt must be 1..200 chars
@@ -111,7 +160,9 @@ export type ValidateQuestionResult =
  * prompt is collapsed so a label never renders with odd runs of spaces. The
  * optional preferred answer (S293) is normalized to null unless the question is
  * yes/no and the value is "yes"/"no" — an invalid preference never blocks the
- * save, it just resolves to "no preference".
+ * save, it just resolves to "no preference". A 'choice' question (S294) MUST
+ * resolve to at least MIN_CHOICES distinct options or it is rejected; text/yesno
+ * always store an empty options list.
  */
 export function validateNewQuestion(input: NewQuestionInput): ValidateQuestionResult {
   const prompt = String(input.prompt ?? "").replace(/\s+/g, " ").trim();
@@ -122,24 +173,39 @@ export function validateNewQuestion(input: NewQuestionInput): ValidateQuestionRe
     return { ok: false, reason: "qtype" };
   }
   const preferredAnswer = normalizePreferredAnswer(input.qtype, input.preferredAnswer);
-  return { ok: true, values: { prompt, qtype: input.qtype, preferredAnswer } };
+  // Choice options only matter for a 'choice' question; for text/yesno they are
+  // always [] regardless of what the form sent.
+  const choices = input.qtype === "choice" ? normalizeChoices(input.choices) : [];
+  if (input.qtype === "choice" && choices.length < MIN_CHOICES) {
+    return { ok: false, reason: "choices" };
+  }
+  return { ok: true, values: { prompt, qtype: input.qtype, preferredAnswer, choices } };
 }
 
 /**
  * Normalize one renter answer by question type, returning null when there is no
  * usable answer (so the snapshot omits it). MUST match the SQL in
- * submit_public_lead (0051):
- *   - yesno: 'yes' / 'no' (case-insensitive), anything else -> null
- *   - text:  trimmed, clamped to 500 chars; empty -> null
+ * submit_public_lead (0051/0053):
+ *   - yesno:  'yes' / 'no' (case-insensitive), anything else -> null
+ *   - text:   trimmed, clamped to 500 chars; empty -> null
+ *   - choice: trimmed; kept ONLY if it exactly matches one of the question's
+ *             options (the operator-defined list); anything else -> null. This
+ *             is the authoritative membership check (the renter cannot smuggle a
+ *             value that was never an option), mirrored by the SQL `= any(choices)`.
  */
 export function parseCustomAnswer(
   qtype: QuestionType,
   raw: string | null | undefined,
+  choices?: string[] | null,
 ): string | null {
   const s = String(raw ?? "").trim();
   if (qtype === "yesno") {
     const low = s.toLowerCase();
     return low === "yes" ? "yes" : low === "no" ? "no" : null;
+  }
+  if (qtype === "choice") {
+    if (s.length === 0) return null;
+    return (choices ?? []).includes(s) ? s : null;
   }
   // text
   if (s.length === 0) return null;
@@ -158,7 +224,7 @@ export function buildAnswerSnapshot(
 ): CustomAnswerSnapshot[] {
   const out: CustomAnswerSnapshot[] = [];
   for (const q of questions) {
-    const answer = parseCustomAnswer(q.qtype, rawAnswersById[q.id]);
+    const answer = parseCustomAnswer(q.qtype, rawAnswersById[q.id], q.choices);
     if (answer == null) continue;
     const snap: CustomAnswerSnapshot = {
       question_id: q.id,
@@ -200,7 +266,9 @@ export function collectPreferenceMismatches(
 
 /** Human label for a question type (operator UI). */
 export function questionTypeLabel(qtype: QuestionType): string {
-  return qtype === "yesno" ? "Yes / no" : "Short text";
+  if (qtype === "yesno") return "Yes / no";
+  if (qtype === "choice") return "Multiple choice";
+  return "Short text";
 }
 
 /** Human label for a preferred answer (operator UI). null = no preference. */

@@ -7,8 +7,12 @@ import {
   parseCustomAnswer,
   buildAnswerSnapshot,
   questionTypeLabel,
+  normalizeChoices,
   MAX_QUESTION_PROMPT_LEN,
   MAX_CUSTOM_ANSWER_LEN,
+  MIN_CHOICES,
+  MAX_CHOICES,
+  MAX_CHOICE_LABEL_LEN,
   isPreferredAnswer,
   normalizePreferredAnswer,
   isPreferenceMismatch,
@@ -33,10 +37,10 @@ function ok(name: string, cond: boolean) {
 // --- isQuestionType ---------------------------------------------------------
 ok("type: text valid", isQuestionType("text"));
 ok("type: yesno valid", isQuestionType("yesno"));
-ok("type: choice not (yet) valid", !isQuestionType("choice"));
+ok("type: choice valid (S294)", isQuestionType("choice"));
 ok("type: junk invalid", !isQuestionType("banana"));
 ok("type: non-string invalid", !isQuestionType(3 as unknown));
-ok("type: list is exactly text+yesno", QUESTION_TYPES.join(",") === "text,yesno");
+ok("type: list is exactly text+yesno+choice", QUESTION_TYPES.join(",") === "text,yesno,choice");
 
 // --- validateNewQuestion ----------------------------------------------------
 {
@@ -66,7 +70,7 @@ ok("type: list is exactly text+yesno", QUESTION_TYPES.join(",") === "text,yesno"
   ok("validate: exactly-max prompt ok", r.ok === true);
 }
 {
-  const r = validateNewQuestion({ prompt: "Pick a color", qtype: "choice" });
+  const r = validateNewQuestion({ prompt: "Pick a color", qtype: "rating" });
   ok("validate: unsupported qtype rejected", !r.ok && r.reason === "qtype");
 }
 
@@ -92,9 +96,9 @@ ok("answer text: keeps interior punctuation", parseCustomAnswer("text", "I work 
 
 // --- buildAnswerSnapshot ----------------------------------------------------
 const QS: ScreeningQuestion[] = [
-  { id: "q1", prompt: "Where do you work?", qtype: "text", required: false, preferred_answer: null },
-  { id: "q2", prompt: "Are you a non-smoker?", qtype: "yesno", required: true, preferred_answer: null },
-  { id: "q3", prompt: "Any other notes?", qtype: "text", required: false, preferred_answer: null },
+  { id: "q1", prompt: "Where do you work?", qtype: "text", required: false, preferred_answer: null, choices: [] },
+  { id: "q2", prompt: "Are you a non-smoker?", qtype: "yesno", required: true, preferred_answer: null, choices: [] },
+  { id: "q3", prompt: "Any other notes?", qtype: "text", required: false, preferred_answer: null, choices: [] },
 ];
 
 {
@@ -128,6 +132,7 @@ const QS: ScreeningQuestion[] = [
 // --- questionTypeLabel ------------------------------------------------------
 ok("label: text", questionTypeLabel("text") === "Short text");
 ok("label: yesno", questionTypeLabel("yesno") === "Yes / no");
+ok("label: choice", questionTypeLabel("choice") === "Multiple choice");
 
 // ===========================================================================
 // Preferred answer + soft mismatch (S293, the v2 soft flag)
@@ -171,9 +176,9 @@ ok("norm pref: null raw -> null", normalizePreferredAnswer("yesno", null) === nu
 // --- buildAnswerSnapshot carries preferred ----------------------------------
 {
   const qs: ScreeningQuestion[] = [
-    { id: "p1", prompt: "Non-smoker?", qtype: "yesno", required: true, preferred_answer: "yes" },
-    { id: "p2", prompt: "Where do you work?", qtype: "text", required: false, preferred_answer: null },
-    { id: "p3", prompt: "Have a car?", qtype: "yesno", required: false, preferred_answer: null },
+    { id: "p1", prompt: "Non-smoker?", qtype: "yesno", required: true, preferred_answer: "yes", choices: [] },
+    { id: "p2", prompt: "Where do you work?", qtype: "text", required: false, preferred_answer: null, choices: [] },
+    { id: "p3", prompt: "Have a car?", qtype: "yesno", required: false, preferred_answer: null, choices: [] },
   ];
   const snap = buildAnswerSnapshot(qs, { p1: "no", p2: "Acme", p3: "yes" });
   const byId = (id: string) => snap.find((s) => s.question_id === id)!;
@@ -217,6 +222,84 @@ ok(
 ok("pref label: yes", preferredAnswerLabel("yes") === "Prefer Yes");
 ok("pref label: no", preferredAnswerLabel("no") === "Prefer No");
 ok("pref label: null", preferredAnswerLabel(null) === "No preference");
+
+// ===========================================================================
+// Choice single-select question type (S294)
+// ===========================================================================
+
+// --- normalizeChoices -------------------------------------------------------
+ok("choices: string splits on newlines", normalizeChoices("a\nb\nc").join("|") === "a|b|c");
+ok("choices: CRLF splits too", normalizeChoices("a\r\nb").join("|") === "a|b");
+ok("choices: trims each option", normalizeChoices("  a  \n b ").join("|") === "a|b");
+ok("choices: collapses inner whitespace", normalizeChoices("1   bedroom").join("|") === "1 bedroom");
+ok("choices: drops blank lines", normalizeChoices("a\n\n  \nb").join("|") === "a|b");
+ok("choices: dedupes (first wins, order preserved)", normalizeChoices("a\nb\na").join("|") === "a|b");
+ok("choices: accepts an array input", normalizeChoices(["x", " y ", "x"]).join("|") === "x|y");
+ok("choices: null -> empty", normalizeChoices(null).length === 0);
+ok("choices: undefined -> empty", normalizeChoices(undefined).length === 0);
+{
+  const many = Array.from({ length: MAX_CHOICES + 5 }, (_, i) => `opt${i}`).join("\n");
+  ok("choices: caps at MAX_CHOICES", normalizeChoices(many).length === MAX_CHOICES);
+}
+{
+  const long = "x".repeat(MAX_CHOICE_LABEL_LEN + 20);
+  ok("choices: clamps each label length", normalizeChoices(long)[0].length === MAX_CHOICE_LABEL_LEN);
+}
+
+// --- validateNewQuestion (choice) -------------------------------------------
+{
+  const r = validateNewQuestion({ prompt: "Unit type?", qtype: "choice", choices: "Studio\n1 bedroom\n2 bedroom" });
+  ok("validate choice: ok with >=2 options", r.ok === true);
+  ok("validate choice: keeps qtype", r.ok && r.values.qtype === "choice");
+  ok("validate choice: normalizes choices", r.ok && r.values.choices.join("|") === "Studio|1 bedroom|2 bedroom");
+  ok("validate choice: preferred always null (no soft flag)", r.ok && r.values.preferredAnswer === null);
+}
+{
+  const r = validateNewQuestion({ prompt: "Unit?", qtype: "choice", choices: "Only one" });
+  ok("validate choice: <2 options rejected", !r.ok && r.reason === "choices");
+}
+{
+  const r = validateNewQuestion({ prompt: "Unit?", qtype: "choice", choices: "Dup\nDup" });
+  ok("validate choice: dedup-to-one rejected", !r.ok && r.reason === "choices");
+}
+{
+  const r = validateNewQuestion({ prompt: "Unit?", qtype: "choice", choices: ["A", "B"] });
+  ok("validate choice: array input ok", r.ok && r.values.choices.join("|") === "A|B");
+}
+{
+  // a preferred answer offered on a choice question is dropped (yes/no-only flag)
+  const r = validateNewQuestion({ prompt: "Unit?", qtype: "choice", choices: "A\nB", preferredAnswer: "yes" });
+  ok("validate choice: preferred dropped to null", r.ok && r.values.preferredAnswer === null);
+}
+{
+  // text/yesno never carry choices even if the form sends some
+  const r = validateNewQuestion({ prompt: "Where?", qtype: "text", choices: "A\nB" });
+  ok("validate text: choices forced empty", r.ok && r.values.choices.length === 0);
+}
+ok("validate choice: MIN_CHOICES is 2", MIN_CHOICES === 2);
+
+// --- parseCustomAnswer (choice) ---------------------------------------------
+const CHOICES = ["Studio", "1 bedroom", "2 bedroom"];
+ok("answer choice: exact match kept", parseCustomAnswer("choice", "1 bedroom", CHOICES) === "1 bedroom");
+ok("answer choice: trims then matches", parseCustomAnswer("choice", "  Studio  ", CHOICES) === "Studio");
+ok("answer choice: non-option -> null", parseCustomAnswer("choice", "Penthouse", CHOICES) === null);
+ok("answer choice: empty -> null", parseCustomAnswer("choice", "", CHOICES) === null);
+ok("answer choice: no choices list -> null", parseCustomAnswer("choice", "Studio") === null);
+ok("answer choice: case-sensitive (does not match)", parseCustomAnswer("choice", "studio", CHOICES) === null);
+
+// --- buildAnswerSnapshot (choice) -------------------------------------------
+{
+  const qs: ScreeningQuestion[] = [
+    { id: "c1", prompt: "Unit type?", qtype: "choice", required: true, preferred_answer: null, choices: CHOICES },
+    { id: "c2", prompt: "Floor?", qtype: "choice", required: false, preferred_answer: null, choices: ["Low", "High"] },
+  ];
+  const snap = buildAnswerSnapshot(qs, { c1: "2 bedroom", c2: "Penthouse" });
+  ok("snapshot choice: valid option kept", snap.length === 1 && snap[0].question_id === "c1");
+  ok("snapshot choice: carries the chosen option", snap[0].answer === "2 bedroom");
+  ok("snapshot choice: carries qtype", snap[0].qtype === "choice");
+  ok("snapshot choice: invalid option dropped (c2)", !snap.some((s) => s.question_id === "c2"));
+  ok("snapshot choice: no preferred key", !("preferred" in snap[0]));
+}
 
 console.log(`\nscreening-questions: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

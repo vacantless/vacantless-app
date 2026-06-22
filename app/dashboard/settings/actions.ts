@@ -117,6 +117,8 @@ export async function addScreeningQuestion(formData: FormData) {
     prompt: String(formData.get("prompt") ?? ""),
     qtype: String(formData.get("qtype") ?? ""),
     preferredAnswer: String(formData.get("preferred_answer") ?? ""),
+    // S294: choice options (one per line). Ignored for text/yesno.
+    choices: String(formData.get("choices") ?? ""),
   });
   if (!result.ok) {
     redirect(`/dashboard/leasing/screening?screening=question_${result.reason}`);
@@ -140,6 +142,9 @@ export async function addScreeningQuestion(formData: FormData) {
     // S293: only a yes/no question can carry a preference; validateNewQuestion
     // already normalized it to null for text questions / unrecognized values.
     preferred_answer: result.values.preferredAnswer,
+    // S294: choice options; validateNewQuestion already normalized this to [] for
+    // text/yesno and to a deduped/trimmed list (>=2) for a choice question.
+    choices: result.values.choices,
     position: nextPosition,
   });
   if (error) {

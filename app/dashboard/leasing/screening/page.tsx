@@ -42,7 +42,7 @@ export default async function ScreeningSettingsPage({
   const supabase = createClient();
   const { data: questionRows } = await supabase
     .from("org_screening_questions")
-    .select("id, prompt, qtype, required, preferred_answer")
+    .select("id, prompt, qtype, required, preferred_answer, choices")
     .eq("organization_id", org.id)
     .eq("active", true)
     .order("position", { ascending: true })
@@ -303,6 +303,12 @@ export default async function ScreeningSettingsPage({
               Pick a valid answer type.
             </div>
           )}
+          {sp === "question_choices" && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+              A multiple-choice question needs at least two answer options (one
+              per line).
+            </div>
+          )}
 
           {questions.length > 0 ? (
             <ul className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
@@ -321,6 +327,9 @@ export default async function ScreeningSettingsPage({
                         <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-500">
                           {preferredAnswerLabel(q.preferred_answer)}
                         </span>
+                      )}
+                      {q.qtype === "choice" && q.choices.length > 0 && (
+                        <span className="ml-1">· {q.choices.join(", ")}</span>
                       )}
                     </p>
                   </div>
@@ -376,51 +385,71 @@ export default async function ScreeningSettingsPage({
           {/* Add a question */}
           <form
             action={addScreeningQuestion}
-            className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-end"
+            className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4"
           >
-            <label className="block flex-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="block flex-1">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  New question
+                </span>
+                <input
+                  name="prompt"
+                  type="text"
+                  required
+                  maxLength={200}
+                  placeholder="e.g. Where do you work?"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Answer type
+                </span>
+                <select
+                  name="qtype"
+                  defaultValue="text"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-36"
+                >
+                  <option value="text">Short text</option>
+                  <option value="yesno">Yes / no</option>
+                  <option value="choice">Multiple choice</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Preferred answer
+                </span>
+                <select
+                  name="preferred_answer"
+                  defaultValue=""
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-40"
+                >
+                  <option value="">No preference</option>
+                  <option value="yes">Prefer Yes</option>
+                  <option value="no">Prefer No</option>
+                </select>
+              </label>
+              <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm">
+                Add question
+              </button>
+            </div>
+            {/* Choice options (S294). Only used when Answer type = Multiple
+                choice; ignored otherwise (same "show all, normalize away" pattern
+                as the preferred-answer select). One option per line. */}
+            <label className="block">
               <span className="mb-1 block text-sm font-medium text-gray-700">
-                New question
+                Answer choices{" "}
+                <span className="font-normal text-gray-400">
+                  (for multiple choice — one option per line, at least two)
+                </span>
               </span>
-              <input
-                name="prompt"
-                type="text"
-                required
-                maxLength={200}
-                placeholder="e.g. Where do you work?"
+              <textarea
+                name="choices"
+                rows={3}
+                placeholder={"Studio\n1 bedroom\n2 bedroom"}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
             </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">
-                Answer type
-              </span>
-              <select
-                name="qtype"
-                defaultValue="text"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-36"
-              >
-                <option value="text">Short text</option>
-                <option value="yesno">Yes / no</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">
-                Preferred answer
-              </span>
-              <select
-                name="preferred_answer"
-                defaultValue=""
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-40"
-              >
-                <option value="">No preference</option>
-                <option value="yes">Prefer Yes</option>
-                <option value="no">Prefer No</option>
-              </select>
-            </label>
-            <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm">
-              Add question
-            </button>
           </form>
           <p className="mt-2 text-xs text-gray-400">
             A preferred answer applies to yes/no questions only. When an inquiry

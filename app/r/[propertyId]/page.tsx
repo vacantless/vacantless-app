@@ -49,8 +49,10 @@ type Listing = {
   screening_questions: {
     id: string;
     prompt: string;
-    qtype: "text" | "yesno";
+    qtype: "text" | "yesno" | "choice";
     required: boolean;
+    /** Options for a 'choice' question (S294); empty for text/yesno. */
+    choices: string[];
   }[];
   photos: string[];
 };
@@ -448,6 +450,20 @@ export default async function PublicListingPage({
                               <option value="">Select…</option>
                               <option value="yes">Yes</option>
                               <option value="no">No</option>
+                            </select>
+                          ) : q.qtype === "choice" ? (
+                            <select
+                              name={`cq_${q.id}`}
+                              required={q.required}
+                              defaultValue=""
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                            >
+                              <option value="">Select…</option>
+                              {(q.choices ?? []).map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
                             </select>
                           ) : (
                             <input
