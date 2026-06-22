@@ -1,8 +1,8 @@
 // Unit tests for the pure billing helpers. Run: npx tsx scripts/test-billing.ts
 import {
-  PLANS,
   formatPlanPrice,
   isPaidPlan,
+  isAnyPaidPlan,
   planForPriceId,
   isSubscriptionActive,
   needsBillingAttention,
@@ -50,33 +50,41 @@ function ok(name: string, cond: boolean) {
   }
 }
 
-// --- Plan catalog ----------------------------------------------------------
-ok("core priced at $200/mo (20000 cents)", PLANS.core.priceCents === 20000);
-ok("plus priced at $375/mo (37500 cents)", PLANS.plus.priceCents === 37500);
-ok("core list anchor $400 (40000 cents)", PLANS.core.listPriceCents === 40000);
-ok("plus list anchor $750 (75000 cents)", PLANS.plus.listPriceCents === 75000);
-ok("founding rate is below the list anchor (core)", PLANS.core.priceCents < PLANS.core.listPriceCents);
-ok("founding rate is below the list anchor (plus)", PLANS.plus.priceCents < PLANS.plus.listPriceCents);
-ok("core price env name", PLANS.core.priceEnv === "STRIPE_PRICE_CORE");
-ok("plus price env name", PLANS.plus.priceEnv === "STRIPE_PRICE_PLUS");
-ok("formatPlanPrice core", formatPlanPrice(20000) === "$200/month");
-ok("formatPlanPrice plus", formatPlanPrice(37500) === "$375/month");
+// --- Plan catalog (S299: live paid plans = growth/premium via TIERS) --------
+ok("growth price env name", TIERS.growth.priceEnv === "STRIPE_PRICE_GROWTH");
+ok("premium price env name", TIERS.premium.priceEnv === "STRIPE_PRICE_PREMIUM");
+ok("growth carries a price env (config-shape purchasable)", isTierPurchasable(TIERS.growth));
+ok("premium carries a price env (config-shape purchasable)", isTierPurchasable(TIERS.premium));
+ok("formatPlanPrice growth", formatPlanPrice(9900) === "$99/month");
+ok("formatPlanPrice premium", formatPlanPrice(24900) === "$249/month");
 ok("formatPlanPrice thousands separator", formatPlanPrice(120000) === "$1,200/month");
 
-// --- isPaidPlan ------------------------------------------------------------
-ok("core is paid", isPaidPlan("core"));
-ok("plus is paid", isPaidPlan("plus"));
+// --- isPaidPlan (narrow: the LIVE purchasable paid plans only) --------------
+ok("growth is paid", isPaidPlan("growth"));
+ok("premium is paid", isPaidPlan("premium"));
+ok("core is NOT a live paid plan (retired legacy)", !isPaidPlan("core"));
+ok("plus is NOT a live paid plan (retired legacy)", !isPaidPlan("plus"));
 ok("trial is not paid", !isPaidPlan("trial"));
 ok("null is not paid", !isPaidPlan(null));
 ok("garbage is not paid", !isPaidPlan("enterprise"));
 
+// --- isAnyPaidPlan (broad: live + retired legacy) ---------------------------
+ok("isAnyPaidPlan growth", isAnyPaidPlan("growth"));
+ok("isAnyPaidPlan premium", isAnyPaidPlan("premium"));
+ok("isAnyPaidPlan core (legacy)", isAnyPaidPlan("core"));
+ok("isAnyPaidPlan plus (legacy)", isAnyPaidPlan("plus"));
+ok("isAnyPaidPlan trial false", !isAnyPaidPlan("trial"));
+ok("isAnyPaidPlan free false", !isAnyPaidPlan("free"));
+ok("isAnyPaidPlan pilot false", !isAnyPaidPlan("pilot"));
+ok("isAnyPaidPlan null false", !isAnyPaidPlan(null));
+
 // --- planForPriceId --------------------------------------------------------
-const MAP = { price_core: "core" as const, price_plus: "plus" as const };
-ok("price→core", planForPriceId("price_core", MAP) === "core");
-ok("price→plus", planForPriceId("price_plus", MAP) === "plus");
+const MAP = { price_growth: "growth" as const, price_premium: "premium" as const };
+ok("price→growth", planForPriceId("price_growth", MAP) === "growth");
+ok("price→premium", planForPriceId("price_premium", MAP) === "premium");
 ok("unknown price→null", planForPriceId("price_unknown", MAP) === null);
 ok("null price→null", planForPriceId(null, MAP) === null);
-ok("empty map→null", planForPriceId("price_core", {}) === null);
+ok("empty map→null", planForPriceId("price_growth", {}) === null);
 
 // --- status helpers --------------------------------------------------------
 ok("active is active", isSubscriptionActive("active"));
@@ -124,20 +132,40 @@ ok("trial: no subscription", !trial.hasSubscription);
 ok("trial: no attention", !trial.needsAttention);
 ok("trial: no period end label", trial.periodEndLabel === null);
 
-const activeCore = buildBillingView({
-  plan: "core",
+const activeGrowth = buildBillingView({
+  plan: "growth",
   subscription_status: "active",
   stripe_subscription_id: "sub_123",
   current_period_end: "2026-07-15T12:00:00Z",
   timezone: "America/Toronto",
 });
-ok("active core: planKey", activeCore.planKey === "core");
-ok("active core: label", activeCore.planLabel === "Core");
-ok("active core: isPaid", activeCore.isPaid);
-ok("active core: hasSubscription", activeCore.hasSubscription);
-ok("active core: no attention", !activeCore.needsAttention);
-ok("active core: period end label", activeCore.periodEndLabel === "July 15, 2026");
-ok("active core: statusLabel", activeCore.statusLabel === "Active");
+ok("active growth: planKey", activeGrowth.planKey === "growth");
+ok("active growth: label", activeGrowth.planLabel === "Growth");
+ok("active growth: isPaid", activeGrowth.isPaid);
+ok("active growth: hasSubscription", activeGrowth.hasSubscription);
+ok("active growth: no attention", !activeGrowth.needsAttention);
+ok("active growth: period end label", activeGrowth.periodEndLabel === "July 15, 2026");
+ok("active growth: statusLabel", activeGrowth.statusLabel === "Active");
+
+const activePremium = buildBillingView({
+  plan: "premium",
+  subscription_status: "active",
+  stripe_subscription_id: "sub_321",
+  current_period_end: "2026-07-15T12:00:00Z",
+  timezone: "America/Toronto",
+});
+ok("active premium: planKey + label + paid", activePremium.planKey === "premium" && activePremium.planLabel === "Premium" && activePremium.isPaid);
+
+// Legacy core still RECOGNIZED as paid (no live org is on it, but a pre-migration
+// org must not silently drop to trial).
+const activeCore = buildBillingView({
+  plan: "core",
+  subscription_status: "active",
+  stripe_subscription_id: "sub_legacy",
+  current_period_end: "2026-07-15T12:00:00Z",
+  timezone: "America/Toronto",
+});
+ok("legacy core: still planKey core + label Core + paid", activeCore.planKey === "core" && activeCore.planLabel === "Core" && activeCore.isPaid);
 
 const pastDuePlus = buildBillingView({
   plan: "plus",
@@ -451,11 +479,11 @@ ok(
     TIERS.growth.priceCents < TIERS.premium.priceCents,
 );
 ok("Growth is the highlighted tier", TIERS.growth.highlight === true);
-// No tier is purchasable yet (no Stripe products); Free is never purchasable.
-ok(
-  "no tier purchasable until a Stripe price-id is set",
-  TIER_KEYS.every((k) => isTierPurchasable(TIERS[k]) === false),
-);
+// S299: the paid tiers now carry their price-id env names, so they are
+// config-shape purchasable; Free ($0) is never purchasable. (The live runtime
+// gate is isBillingConfigured in lib/stripe.ts, which checks the env VALUES.)
+ok("Growth is config-shape purchasable", isTierPurchasable(TIERS.growth) === true);
+ok("Premium is config-shape purchasable", isTierPurchasable(TIERS.premium) === true);
 ok("Free is $0 and never purchasable", isTierPurchasable(TIERS.free) === false);
 
 // --- Listing allowance (Free funnel cap; config-only until wired) -----------

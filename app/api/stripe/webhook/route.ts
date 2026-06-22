@@ -33,7 +33,9 @@ function customerIdOf(sub: Stripe.Subscription): string | null {
 }
 
 // Apply a subscription's state to its org. `ended` is the cancellation path
-// (subscription.deleted): drop the tier back to trial and clear the sub fields.
+// (subscription.deleted): drop the tier back to the free funnel tier and clear
+// the sub fields (S299: was 'trial'; 'free' is the permanent no-card landing a
+// canceled customer keeps — 1 listing + the standalone tools).
 async function applySubscription(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
   sub: Stripe.Subscription,
@@ -58,13 +60,13 @@ async function applySubscription(
     await admin
       .from("organizations")
       .update({
-        plan: "trial",
+        plan: "free",
         subscription_status: "canceled",
         stripe_subscription_id: null,
         current_period_end: null,
       })
       .eq("id", orgId);
-    return { matched: true as const, orgId, plan: "trial" };
+    return { matched: true as const, orgId, plan: "free" };
   }
 
   // Read the org's current billing state so a stale, out-of-order `incomplete`

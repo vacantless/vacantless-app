@@ -5,66 +5,42 @@
 // (the Stripe client, env-driven price-id lookup) live in lib/stripe.ts.
 
 // `free` is the permanent, no-card funnel tier (Package B, S296). `trial` stays
-// the pre-anything default for legacy orgs; `core`/`plus` are the DEPRECATED
-// leasing-era Stripe products (kept only until the Growth/Premium product
-// migration lands — see the TIERS migration checklist below).
-export type PlanKey = "trial" | "free" | "pilot" | "core" | "plus";
-export type PaidPlanKey = "core" | "plus";
+// the pre-anything default for legacy orgs. `growth`/`premium` are the LIVE
+// purchasable paid plans (S299 Stripe-product migration). `core`/`plus` are the
+// retired leasing-era plans — recognized for any pre-migration org (see
+// isAnyPaidPlan / the entitlements matrix) but never offered for sale.
+export type PlanKey =
+  | "trial"
+  | "free"
+  | "pilot"
+  | "growth"
+  | "premium"
+  | "core"
+  | "plus";
 
-export type PlanInfo = {
-  key: PaidPlanKey;
-  name: string;
-  priceCents: number; // CAD, per month — the current (founding) charge
-  listPriceCents: number; // CAD, per month — the standard list anchor (shown struck through)
-  priceEnv: string; // env var holding the Stripe price id
-  blurb: string;
-  features: string[];
-};
+// The purchasable paid plans. As of S299 these are the live Free/Growth/Premium
+// ladder's two paid tiers — they are exactly the paid keys of TIERS, so the
+// Stripe price layer (lib/stripe.ts) reads each plan's `priceEnv` straight off
+// TIERS. Core/Plus are NO LONGER part of this union (they are retired legacy).
+export type PaidPlanKey = "growth" | "premium";
 
-// DEPRECATED (S296): the legacy leasing-era Stripe products (Core $200/mo,
-// Plus $375/mo CAD). These remain ONLY because lib/stripe.ts + the billing-page
-// checkout + PaidPlanKey still reference them; they are no longer the offered
-// ladder. The live ladder is now Free / Growth / Premium (see TIERS below).
-// Do not surface Core/Plus to new customers. Removal lands with the
-// Growth/Premium Stripe-product migration (TIERS migration checklist).
-export const PLANS: Record<PaidPlanKey, PlanInfo> = {
-  core: {
-    key: "core",
-    name: "Core",
-    priceCents: 20000,
-    listPriceCents: 40000,
-    priceEnv: "STRIPE_PRICE_CORE",
-    blurb: "Everything you need to fill a rental, from first inquiry to signed lease.",
-    features: [
-      "Rental inquiry pages with your business name",
-      "Instant reply to every inquiry",
-      "Your renters, organized in one list",
-      "Renters book from your viewing times",
-      "Automatic viewing reminders",
-      "Reports by unit and ad source",
-    ],
-  },
-  plus: {
-    key: "plus",
-    name: "Plus",
-    priceCents: 37500,
-    listPriceCents: 75000,
-    priceEnv: "STRIPE_PRICE_PLUS",
-    blurb: "Everything in Core, plus tools to follow up and win renters back.",
-    features: [
-      "Everything in Core",
-      "Automatic feedback after each viewing",
-      "Price-drop alerts to past renters",
-      "Automatic follow-up with interested renters",
-      "Reports by unit and advertising source",
-    ],
-  },
-};
+export const PAID_PLAN_KEYS: PaidPlanKey[] = ["growth", "premium"];
 
-export const PAID_PLAN_KEYS: PaidPlanKey[] = ["core", "plus"];
-
+// True for a LIVE purchasable paid plan (growth/premium). This narrows the type,
+// so checkout/price-lookup callers can pass the result straight to TIERS[plan].
 export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey {
-  return plan === "core" || plan === "plus";
+  return plan === "growth" || plan === "premium";
+}
+
+// True for ANY paid subscription plan — the live ones (growth/premium) PLUS the
+// retired legacy plans (core/plus). Used by the billing view + the "already on a
+// paid plan" guards so a pre-migration paid org still reads as paid even though
+// Core/Plus are no longer sold. (No live org is on core/plus today; this is the
+// defensive belt-and-suspenders for the migration.)
+export function isAnyPaidPlan(plan: string | null | undefined): boolean {
+  return (
+    plan === "growth" || plan === "premium" || plan === "core" || plan === "plus"
+  );
 }
 
 // --- Plan entitlements (feature tier-gating) -------------------------------
@@ -241,17 +217,18 @@ export function storageUpsellNote(
 // wired to Stripe products, so the comparison still renders behind a preview
 // flag (GTM is HELD) and `priceEnv` stays null until the products exist.
 //
-// MIGRATION CHECKLIST (to make Growth/Premium sellable, replacing Core/Plus):
-//   1. Create two CAD Stripe products: Growth $99/mo, Premium $249/mo.
-//   2. Add env vars STRIPE_PRICE_GROWTH / STRIPE_PRICE_PREMIUM in Vercel; set
-//      each tier's `priceEnv` (then isTierPurchasable -> true for paid tiers).
-//   3. Point the billing page's purchasable cards at TIERS (Growth/Premium),
-//      remove the Core/Plus "Founding plans" cards, and wire startCheckout to
-//      the tier key.
-//   4. Widen PaidPlanKey + lib/stripe.ts priceMap to the new tier keys and
-//      update the actions.ts "pick Core or Plus" validation copy.
-//   5. Default a fresh org to plan='free' at signup and enforce
-//      `listingCapForPlan` in the publish path (currently config-only).
+// MIGRATION (S299): the ladder is now WIRED as the live billing surface. The
+// paid tiers carry their Stripe price-id env vars (STRIPE_PRICE_GROWTH /
+// STRIPE_PRICE_PREMIUM); once those envs hold a real price id, isTierPurchasable
+// -> true and the billing page's Subscribe buttons go live. Done in S299:
+//   [x] Growth/Premium `priceEnv` set (below).
+//   [x] lib/stripe.ts priceIdForPlan/priceMap read the paid TIERS.
+//   [x] PaidPlanKey = growth|premium; billing page renders TIERS (Core/Plus cards removed).
+//   [x] startCheckout accepts the tier key; webhook maps the price -> growth/premium.
+//   [x] A fresh org defaults to plan='free' at signup (onboarding actions).
+// STILL CONFIG-ONLY (deferred, same discipline as the photo cap): enforcing
+// `listingCapForPlan` in the publish path. Manual step OUTSIDE the code: create
+// the two CAD Stripe products + set the two price-id envs in Vercel.
 // Hard/usage costs (Twilio SMS, ad/portal spend, payment processing) always
 // pass through at cost on top — these monthly prices are the platform fee only.
 export type TierInfo = {
@@ -285,7 +262,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
     key: "growth",
     name: "Growth",
     priceCents: 9900,
-    priceEnv: null,
+    priceEnv: "STRIPE_PRICE_GROWTH",
     maxActiveListings: null,
     blurb: "Everything in Free, plus collect rent, screen renters, and manage tenants.",
     highlight: true,
@@ -302,7 +279,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
     key: "premium",
     name: "Premium",
     priceCents: 24900,
-    priceEnv: null,
+    priceEnv: "STRIPE_PRICE_PREMIUM",
     maxActiveListings: null,
     blurb: "Everything in Growth, plus full books, operations, and automation.",
     features: [
@@ -316,8 +293,12 @@ export const TIERS: Record<TierKey, TierInfo> = {
   },
 };
 
-// True once a tier has a real Stripe product behind it (safe to offer checkout).
-// Free is $0 and never purchasable, so this is only ever true for paid tiers.
+// Config-shape check: the tier is set up to be SOLD — it has a price and a
+// price-id env name. True for the paid tiers (growth/premium), false for Free
+// ($0, never purchasable). NOTE: this does not read the env VALUE, so it does
+// not by itself prove a Stripe product exists. The live runtime gate the
+// billing page uses is isBillingConfigured() in lib/stripe.ts (it checks the
+// actual price-id env values + the secret key).
 export function isTierPurchasable(tier: TierInfo): boolean {
   return tier.priceCents > 0 && tier.priceEnv != null;
 }
@@ -327,8 +308,8 @@ export function isTierPurchasable(tier: TierInfo): boolean {
 // this — but enforcement wiring is a follow-up increment (the same config-first
 // discipline as the photo cap). Unknown/missing plan -> the Free cap (never more).
 export function listingCapForPlan(plan: string | null | undefined): number | null {
-  if (plan === "growth" || plan === "premium") return null;
-  if (isPaidPlan(plan) || isPilotPlan(plan)) return null; // legacy paid + pilot = unlimited
+  // Any paid plan (live growth/premium or legacy core/plus) + pilot = unlimited.
+  if (isAnyPaidPlan(plan) || isPilotPlan(plan)) return null;
   return TIERS.free.maxActiveListings; // free / trial / unknown
 }
 
@@ -351,7 +332,7 @@ export const PILOT = {
   blurb:
     "A 30-day, set-up-with-you trial of the full system, at no monthly cost.",
   features: [
-    "Full access to every Core and Plus feature",
+    "Full access to every Growth and Premium feature",
     "We set it up and onboard you",
     "$0 monthly fee for 30 days",
     "Refundable $200 setup deposit",
@@ -542,8 +523,8 @@ export function statusLabel(status: string | null | undefined): string {
 
 export type BillingView = {
   planKey: PlanKey;
-  planLabel: string; // "Trial" | "Free" | "Pilot" | "Core" | "Plus"
-  isPaid: boolean; // org is on a paid tier (core/plus)
+  planLabel: string; // "Trial" | "Free" | "Pilot" | "Growth" | "Premium" | (legacy) "Core" | "Plus"
+  isPaid: boolean; // org is on a paid tier (growth/premium, or legacy core/plus)
   isPilot: boolean; // org is on the pilot plan (active OR expired-not-yet-converted)
   pilotActive: boolean; // pilot started and within the 30-day window
   pilotExpired: boolean; // pilot started but the 30 days have passed
@@ -579,8 +560,10 @@ export type BillingInput = {
 };
 
 function planLabelOf(plan: PlanKey): string {
-  if (plan === "core") return "Core";
-  if (plan === "plus") return "Plus";
+  if (plan === "growth") return "Growth";
+  if (plan === "premium") return "Premium";
+  if (plan === "core") return "Core"; // retired legacy plan, still labeled for any pre-migration org
+  if (plan === "plus") return "Plus"; // retired legacy plan, still labeled for any pre-migration org
   if (plan === "pilot") return "Pilot";
   if (plan === "free") return "Free";
   return "Trial";
@@ -605,10 +588,11 @@ export function formatPeriodEnd(
 
 // Build the view-model the Billing page + settings Account panel render from.
 export function buildBillingView(input: BillingInput): BillingView {
-  // A paid Stripe plan wins; otherwise pilot; otherwise the free funnel tier;
-  // else trial (the legacy pre-anything default).
-  const planKey: PlanKey = isPaidPlan(input.plan)
-    ? input.plan
+  // A paid Stripe plan wins (live growth/premium OR retired legacy core/plus);
+  // otherwise pilot; otherwise the free funnel tier; else trial (the legacy
+  // pre-anything default).
+  const planKey: PlanKey = isAnyPaidPlan(input.plan)
+    ? (input.plan as PlanKey)
     : isPilotPlan(input.plan)
       ? "pilot"
       : input.plan === "free"
@@ -635,7 +619,7 @@ export function buildBillingView(input: BillingInput): BillingView {
   return {
     planKey,
     planLabel: planLabelOf(planKey),
-    isPaid: isPaidPlan(planKey),
+    isPaid: isAnyPaidPlan(planKey),
     isPilot: planKey === "pilot",
     pilotActive: planKey === "pilot" && pilot.active,
     pilotExpired: planKey === "pilot" && pilot.expired,

@@ -1,7 +1,7 @@
 import { getCurrentOrg } from "@/lib/org";
 import {
-  PLANS,
-  PAID_PLAN_KEYS,
+  TIERS,
+  TIER_KEYS,
   PILOT,
   formatPlanPrice,
   formatAmount,
@@ -16,7 +16,6 @@ import {
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { TierComparison } from "@/components/tier-comparison";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +27,6 @@ export default async function BillingPage({
     error?: string;
     pilot?: string;
     deposit?: string;
-    preview?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -61,7 +59,7 @@ export default async function BillingPage({
   const errorCopy: Record<string, string> = {
     not_configured:
       "Billing isn't connected yet. Add your Stripe keys in Vercel to enable subscriptions.",
-    plan: "That plan isn't recognized. Please pick Core or Plus.",
+    plan: "That plan isn't recognized. Please choose Growth or Premium and try again.",
     checkout: "Couldn't start checkout. Please try again.",
     portal:
       "No billing account yet. Subscribe to a plan first, then you can manage it here.",
@@ -314,40 +312,51 @@ export default async function BillingPage({
         </div>
       )}
 
-      {/* Plan options */}
+      {/* Plan options — the live Free / Growth / Premium ladder (S299). Free is
+          the funnel baseline; Growth/Premium are the purchasable subscriptions
+          (Subscribe wired to startCheckout with the tier key). Usage costs
+          (texts, ad spend, payment processing) always pass through at cost. */}
       <h3 className="mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">
         {view.pilotActive
           ? "Continue after your pilot"
           : view.pilotExpired
             ? "Choose a plan to keep going"
-            : "Founding plans"}
+            : "Plans"}
       </h3>
-      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {PAID_PLAN_KEYS.map((key) => {
-          const plan = PLANS[key];
-          const isCurrent = view.planKey === key && view.isPaid;
+      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {TIER_KEYS.map((key) => {
+          const tier = TIERS[key];
+          const isFree = tier.priceCents === 0;
+          // "Current plan" when the org is on this exact tier. The free card is
+          // also the current plan for a fresh free/trial org (anyone not on a
+          // paid plan or an active/expired pilot).
+          const isCurrent = isFree
+            ? view.planKey === "free" ||
+              (!view.isPaid && !view.isPilot && view.planKey === "trial")
+            : view.planKey === key && view.isPaid;
           return (
             <div
               key={key}
-              className="flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+              className={`flex flex-col rounded-2xl border bg-white p-6 shadow-sm ${
+                tier.highlight ? "border-brand ring-1 ring-brand" : "border-gray-200"
+              }`}
             >
-              <div className="flex items-baseline justify-between">
-                <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-                <p className="text-right">
-                  <span className="mr-1.5 text-sm font-medium text-gray-400 line-through">
-                    {formatPlanPrice(plan.listPriceCents)}
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-lg font-bold text-gray-900">{tier.name}</h3>
+                {tier.highlight && (
+                  <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand">
+                    Most popular
                   </span>
-                  <span className="text-xl font-bold text-gray-900">
-                    {formatPlanPrice(plan.priceCents)}
-                  </span>
-                </p>
+                )}
               </div>
-              <p className="mt-0.5 text-right text-[11px] font-semibold uppercase tracking-wide text-brand">
-                Founding rate · locked for 12 months
+              <p className="mt-1">
+                <span className="text-2xl font-bold text-gray-900">
+                  {formatPlanPrice(tier.priceCents)}
+                </span>
               </p>
-              <p className="mt-1 text-sm text-gray-500">{plan.blurb}</p>
+              <p className="mt-1 text-sm text-gray-500">{tier.blurb}</p>
               <ul className="mt-4 flex-1 space-y-2 text-sm text-gray-700">
-                {plan.features.map((f) => (
+                {tier.features.map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <span className="mt-0.5 text-brand">✓</span>
                     <span>{f}</span>
@@ -359,6 +368,10 @@ export default async function BillingPage({
                   <div className="rounded-lg bg-gray-100 px-4 py-2 text-center text-sm font-medium text-gray-500">
                     Current plan
                   </div>
+                ) : isFree ? (
+                  <div className="rounded-lg bg-gray-50 px-4 py-2 text-center text-sm font-medium text-gray-400">
+                    Free forever
+                  </div>
                 ) : (
                   <form action={startCheckout}>
                     <input type="hidden" name="plan" value={key} />
@@ -367,10 +380,10 @@ export default async function BillingPage({
                       className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {view.isPaid
-                        ? `Switch to ${plan.name}`
+                        ? `Switch to ${tier.name}`
                         : view.isPilot
-                          ? `Continue on ${plan.name}`
-                          : `Subscribe to ${plan.name}`}
+                          ? `Continue on ${tier.name}`
+                          : `Subscribe to ${tier.name}`}
                     </button>
                   </form>
                 )}
@@ -382,13 +395,6 @@ export default async function BillingPage({
 
       <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
         <p>
-          <span className="font-medium text-gray-700">
-            Founding pricing is locked for 12 months
-          </span>{" "}
-          after your pilot starts, then moves to the then-current standard rate
-          with at least 60 days&apos; notice.
-        </p>
-        <p className="mt-1.5">
           Billed monthly. Cancel anytime from the billing portal, with no
           contract and no cancellation fee.
         </p>
@@ -398,10 +404,6 @@ export default async function BillingPage({
         Payments are processed by Stripe; Vacantless never sees your card
         details. Prices are in CAD.
       </p>
-
-      {/* Proposed Starter/Growth/Premium ladder — preview only (GTM held; no
-          Stripe products yet). Visit /dashboard/billing?preview=tiers to review. */}
-      {searchParams.preview === "tiers" && <TierComparison />}
     </div>
   );
 }

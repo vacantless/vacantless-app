@@ -143,10 +143,18 @@ export async function createOrganization(formData: FormData) {
 
   const orgId = (org as { id: string }).id;
 
-  // Set the brand colour (RLS allows the owner to update their own org).
+  // Set the brand colour + default the new org to the free funnel tier (S299:
+  // the create_organization RPC inserts with the DB default 'trial'; Package B
+  // makes 'free' the permanent no-card starting tier — 1 listing + the
+  // standalone tools — so a fresh org lands on 'free', not the legacy 'trial').
+  // RLS allows the owner to update their own org; best-effort like the brand set.
   await supabase
     .from("organizations")
-    .update({ brand_color: brandColor, brand_color_secondary: brandColorSecondary })
+    .update({
+      brand_color: brandColor,
+      brand_color_secondary: brandColorSecondary,
+      plan: "free",
+    })
     .eq("id", orgId);
 
   // Seed the starter clause library (best-effort; never blocks onboarding).

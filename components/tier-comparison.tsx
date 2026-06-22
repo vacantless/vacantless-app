@@ -1,26 +1,22 @@
 import { TIERS, TIER_KEYS, formatPlanPrice, isTierPurchasable } from "@/lib/billing";
 
-// Preview of the live Free / Growth / Premium ladder (S296, Package B). Rendered
-// on the billing page ONLY behind ?preview=tiers — the GTM is held and the PAID
-// tiers have no Stripe products yet, so they must never show as purchasable to a
-// live customer. When the ladder is locked: create the Stripe products, set the
-// price-id envs (so isTierPurchasable -> true), wire startCheckout to the tier
-// key, and drop this onto the page unconditionally (replacing the Core/Plus
-// cards). Until then it's a review surface for Noam.
+// Standalone 3-up comparison of the live Free / Growth / Premium ladder (Package
+// B). The dashboard billing page renders its own purchasable cards (with
+// Subscribe buttons); this component is a self-contained, non-interactive
+// comparison grid suitable for a marketing / public pricing surface. It shows
+// each tier's price + features and a status chip (Included / Available / Coming
+// soon) derived from isTierPurchasable. Not currently mounted anywhere — kept as
+// a reusable building block.
 export function TierComparison() {
   return (
     <section className="mt-10">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Proposed plans
+          Plans
         </h3>
-        <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
-          Preview
-        </span>
       </div>
       <p className="mt-1 text-sm text-gray-500">
-        A look at the new 3-tier ladder. Prices are proposed and not yet live —
-        usage costs (texts, ad spend, payment processing) always pass through at
+        Usage costs (texts, ad spend, payment processing) always pass through at
         cost on top of these monthly fees.
       </p>
 

@@ -10,8 +10,8 @@
 // Env (all server-only, NO NEXT_PUBLIC_):
 //   STRIPE_SECRET_KEY      — sk_test_… (sandbox) or sk_live_… (production)
 //   STRIPE_WEBHOOK_SECRET  — whsec_…  (used by app/api/stripe/webhook)
-//   STRIPE_PRICE_CORE      — the Stripe price id for the Core tier
-//   STRIPE_PRICE_PLUS      — the Stripe price id for the Plus tier
+//   STRIPE_PRICE_GROWTH    — the Stripe price id for the Growth tier ($99/mo CAD)
+//   STRIPE_PRICE_PREMIUM   — the Stripe price id for the Premium tier ($249/mo CAD)
 //   STRIPE_PRICE_PILOT_DEPOSIT — (optional) a one-time Price for the refundable
 //                            pilot setup deposit. If unset, the deposit Checkout
 //                            falls back to an inline price built from
@@ -20,7 +20,7 @@
 //                            amount/currency in the Stripe dashboard instead.
 
 import Stripe from "stripe";
-import { PLANS, type PaidPlanKey } from "@/lib/billing";
+import { TIERS, PAID_PLAN_KEYS, type PaidPlanKey } from "@/lib/billing";
 
 let _stripe: Stripe | null | undefined;
 
@@ -31,19 +31,22 @@ export function getStripe(): Stripe | null {
   return _stripe;
 }
 
-// The configured Stripe price id for a given plan tier (from env), or null if
-// that tier's price env var isn't set.
+// The configured Stripe price id for a given paid plan (from env), or null if
+// that tier's price env var isn't set. Reads the price-id env name straight off
+// the live TIERS config (growth/premium each carry their `priceEnv`).
 export function priceIdForPlan(plan: PaidPlanKey): string | null {
-  return process.env[PLANS[plan].priceEnv] || null;
+  const env = TIERS[plan].priceEnv;
+  return env ? process.env[env] || null : null;
 }
 
 // Reverse lookup: { [priceId]: planKey } built from the configured env vars.
-// Used by the webhook to turn a subscription's price back into a tier. Skips
-// any tier whose price env var isn't set.
+// Used by the webhook to turn a subscription's price back into a plan. Skips any
+// paid tier whose price env var isn't set.
 export function priceMap(): Record<string, PaidPlanKey> {
   const map: Record<string, PaidPlanKey> = {};
-  (Object.keys(PLANS) as PaidPlanKey[]).forEach((plan) => {
-    const id = process.env[PLANS[plan].priceEnv];
+  PAID_PLAN_KEYS.forEach((plan) => {
+    const env = TIERS[plan].priceEnv;
+    const id = env ? process.env[env] : undefined;
     if (id) map[id] = plan;
   });
   return map;
