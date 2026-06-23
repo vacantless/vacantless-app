@@ -446,7 +446,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 5 features", PLAN_FEATURES.length === 5);
+ok("PLAN_FEATURES has 6 features", PLAN_FEATURES.length === 6);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -467,6 +467,12 @@ ok("canCollectRentByPlan: trial false", canCollectRentByPlan("trial") === false)
 // --- accounting (Premium only) ---------------------------------------------
 ok("accounting: premium only", hasEntitlement("premium", "accounting") === true);
 ok("accounting: growth false", hasEntitlement("growth", "accounting") === false);
+
+// --- bank_feed (Growth & up; Free/trial false) -----------------------------
+ok("bank_feed: growth true", hasEntitlement("growth", "bank_feed") === true);
+ok("bank_feed: premium true", hasEntitlement("premium", "bank_feed") === true);
+ok("bank_feed: free false", hasEntitlement("free", "bank_feed") === false);
+ok("bank_feed: trial false", hasEntitlement("trial", "bank_feed") === false);
 
 // --- Live tier ladder shape (Free $0 < Growth $99 < Premium $249) -----------
 ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","growth","premium"]');

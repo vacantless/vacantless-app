@@ -52,6 +52,7 @@ const MONEY: NavItem = { href: "/dashboard/rent", label: "Money" };
 // Utility / account menu (behind "More ▾" on desktop; inline on mobile).
 const UTILITY: NavItem[] = [
   { href: "/dashboard/maintenance", label: "Maintenance" },
+  { href: "/dashboard/expenses", label: "Expenses" },
   { href: "/dashboard/reports", label: "Reports" },
   { href: "/dashboard/settings", label: "Settings" },
   { href: "/dashboard/billing", label: "Your plan" },

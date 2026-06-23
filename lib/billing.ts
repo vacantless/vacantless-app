@@ -62,12 +62,17 @@ export function isAnyPaidPlan(plan: string | null | undefined): boolean {
 //   renter_sms      public booking/reminder SMS to renters (the leasing wedge)
 //   rent_collection automated rent rails (Stripe Connect / Rotessa)
 //   tax_export      year-end rent / tax CSV export
-//   accounting      full accounting module (Premium)
+//   bank_feed       live bank/card transaction sync (Growth+; Plaid). Distinct
+//                   from `accounting`: bank_feed says a live feed exists at all;
+//                   provider routing (Plaid vs Flinks) keys off accounting too —
+//                   see lib/bank-feed providerForPlan (accounting -> Flinks).
+//   accounting      full accounting module + Premium aggregator (Flinks)
 export type PlanFeature =
   | "sms"
   | "renter_sms"
   | "rent_collection"
   | "tax_export"
+  | "bank_feed"
   | "accounting";
 
 export const PLAN_FEATURES: PlanFeature[] = [
@@ -75,6 +80,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "renter_sms",
   "rent_collection",
   "tax_export",
+  "bank_feed",
   "accounting",
 ];
 
@@ -87,6 +93,7 @@ function noEntitlements(): PlanEntitlements {
     renter_sms: false,
     rent_collection: false,
     tax_export: false,
+    bank_feed: false,
     accounting: false,
   };
 }
@@ -111,18 +118,19 @@ export type AnyPlanKey = PlanKey | TierKey;
 // Live ladder (S296, Package B):
 //   Free     = lead-gen funnel. One live listing + the standalone tools; EMAIL
 //              ONLY (no renter SMS) and no paid capabilities.
-//   Growth   = rent collection + landlord<->tenant + renter SMS + tax export.
-//   Premium  = + accounting module.
+//   Growth   = rent collection + landlord<->tenant + renter SMS + tax export +
+//              live bank feed (Plaid).
+//   Premium  = + accounting module + Premium aggregator (Flinks).
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, accounting: false },
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: false },
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, accounting: true },
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false }, // Plaid feed
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true }, // Flinks feed
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
