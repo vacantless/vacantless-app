@@ -23,6 +23,11 @@
 
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import type { TenantContact } from "@/lib/tenant-comms";
+import {
+  workOrderCategoryLabel,
+  formatExpectedDate,
+  formatExpectedWindow,
+} from "@/lib/work-orders";
 
 // --- Building options (the picker) ------------------------------------------
 
@@ -253,3 +258,98 @@ export const SCHEDULED_WORK_TEMPLATE: BuildingNoticeTemplate = {
     "[Describe any disruption, e.g. power may be unavailable during the work window. " +
     "Please save anything important beforehand.]",
 };
+
+// --- Generate a notice FROM a scheduled work order (plan doc §10 pt 3) -------
+//
+// A scheduled-work building notice is, in practice, a work order's fields
+// rendered for tenants: the category (what kind of work), the scheduled window
+// (when), and the assigned trade (who). When an operator already has a work
+// order on the books, "notify the building" should drop them into the composer
+// with those fields pre-filled, so they only review + add the one thing the work
+// order can't know — the "what to expect" disruption line — before sending.
+//
+// This is a PRE-FILL, not an auto-send. The operator always reviews and revises
+// (the demand case, Xavier's power-shutdown notice, was reworded twice in five
+// minutes — see plan §10 pt 2), so every generated value sits in an editable
+// field and any unknown is left as a [bracket] prompt. Pure.
+
+export type WorkOrderNoticeSource = {
+  title?: string | null;
+  description?: string | null;
+  category?: string | null; // a WORK_ORDER_CATEGORIES value, or blank
+  tradeName?: string | null; // the assigned trade contact's name, if any
+  scheduledFor?: string | null; // "YYYY-MM-DD" single scheduled date
+  expectedStart?: string | null; // "YYYY-MM-DD"
+  expectedFinish?: string | null; // "YYYY-MM-DD"
+};
+
+// Category-specific "what to expect" suggestions. These are EDITABLE pre-fills:
+// the operator reviews and revises the wording before sending (exactly the field
+// a careful operator tweaks). Categories with no typical disruption fall back to
+// the generic bracketed prompt from SCHEDULED_WORK_TEMPLATE.
+const CATEGORY_IMPACT_HINT: Record<string, string> = {
+  electrical:
+    "Power may be unavailable during the work window. Please save any open work and " +
+    "unplug sensitive electronics beforehand.",
+  plumbing:
+    "Water may be shut off during the work window. Please set some water aside " +
+    "beforehand if you'll need it.",
+  hvac: "Heating or cooling may be interrupted during the work window.",
+};
+
+/** The "when" line value from a work order: the expected window if set, else the
+ *  single scheduled date, else "" (caller supplies a bracket prompt). */
+function workOrderWhen(wo: WorkOrderNoticeSource): string {
+  const window = formatExpectedWindow(wo.expectedStart, wo.expectedFinish);
+  if (window) return window;
+  return formatExpectedDate(wo.scheduledFor) || "";
+}
+
+/**
+ * Build an editable building-notice draft from a scheduled work order. Fills the
+ * scheduled-work template's What / When / Who lines from the work order's
+ * description-or-title / window / trade, leaving a [bracket] prompt wherever the
+ * work order can't supply a value (and always for the time-of-day, which isn't
+ * stored). Suggests a category-specific "what to expect" line. Body uses only the
+ * real tenant-comms tokens; house style hyphens (noEmDash). Pure.
+ */
+export function composeNoticeFromWorkOrder(
+  wo: WorkOrderNoticeSource,
+): BuildingNoticeTemplate {
+  const rawCat = (wo.category ?? "").trim();
+  const hasCat = rawCat !== "" && rawCat !== "general";
+  const workPhrase = hasCat
+    ? `scheduled ${workOrderCategoryLabel(rawCat).toLowerCase()} work`
+    : "scheduled work";
+  const subjectPhrase = workPhrase.charAt(0).toUpperCase() + workPhrase.slice(1);
+
+  const when = workOrderWhen(wo);
+  const whenLine = when
+    ? `${when}, [start time] - [end time]`
+    : "[date], [start time] - [end time]";
+  const subjectWhen = when || "[date]";
+
+  const what =
+    (wo.description ?? "").trim() ||
+    (wo.title ?? "").trim() ||
+    "[brief description of the work]";
+  const who = (wo.tradeName ?? "").trim() || "[contractor / our team]";
+
+  const subject = `${subjectPhrase} at {{property_address}} - ${subjectWhen}`;
+  const body =
+    "Hi {{first_name}},\n\n" +
+    `We're letting all residents know about ${workPhrase} in the building:\n\n` +
+    `- What: ${what}\n` +
+    `- When: ${whenLine}\n` +
+    `- Who's doing it: ${who}\n\n` +
+    "There's nothing you need to do. If you have any questions, just reply to this message.\n\n" +
+    "Thank you for your patience,\n{{org_name}}";
+  const impact = (hasCat && CATEGORY_IMPACT_HINT[rawCat]) || SCHEDULED_WORK_TEMPLATE.impact;
+
+  return {
+    name: "From work order",
+    subject: noEmDash(subject),
+    body: noEmDash(body),
+    impact: noEmDash(impact),
+  };
+}

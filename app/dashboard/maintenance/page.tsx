@@ -24,6 +24,7 @@ import {
   workOrderPriorityTone,
   nextStatuses,
   isActiveStatus,
+  effectiveBuildingKey,
   formatMoneyCents,
   formatExpectedWindow,
   workOrderErrorMessage,
@@ -360,6 +361,10 @@ export default async function MaintenancePage({
   const buildingOptions: BuildingOption[] = [...buildingLabels.entries()]
     .map(([key, label]) => ({ key, label }))
     .sort((a, b) => a.label.localeCompare(b.label));
+  // unit -> its building_key, so a unit-scoped work order can resolve the
+  // building it belongs to for the "notify the building" action.
+  const propertyBuildingMap: Record<string, string | null> = {};
+  for (const p of properties) propertyBuildingMap[p.id] = p.building_key;
   // The scope line for a work-order row: a specific unit, a whole building, or
   // not unit-specific.
   function scopeLine(o: WorkOrderRow): { label: string; value: string } {
@@ -755,6 +760,12 @@ export default async function MaintenancePage({
           orders.map((o) => {
             const transitions = nextStatuses(o.status);
             const isEditing = editId === o.id;
+            // Offer a building-wide tenant notice for active work in a building
+            // (its own building, or its unit's). Pre-fills the notice composer
+            // from this work order — scheduled-work announcement (plan §10).
+            const notifyBuildingKey = isActiveStatus(o.status)
+              ? effectiveBuildingKey(o, propertyBuildingMap)
+              : null;
             return (
               <Card key={o.id}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -871,6 +882,14 @@ export default async function MaintenancePage({
                         </SubmitButton>
                       </form>
                     </div>
+                    {notifyBuildingKey && (
+                      <Link
+                        href={`/dashboard/maintenance/notices?from_wo=${o.id}`}
+                        className="text-center text-xs font-medium text-brand hover:underline"
+                      >
+                        Notify the building of this work →
+                      </Link>
+                    )}
                   </div>
                 </div>
 

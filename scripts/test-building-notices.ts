@@ -10,6 +10,7 @@ import {
   isBuildingSendable,
   tallyBuildingDeliveries,
   SCHEDULED_WORK_TEMPLATE,
+  composeNoticeFromWorkOrder,
   type PropertyRef,
   type BuildingTenancy,
 } from "../lib/building-notices";
@@ -168,6 +169,55 @@ ok(
   ),
 );
 ok("template: no em/en dash in body", !/[‒–—―]/.test(SCHEDULED_WORK_TEMPLATE.body));
+
+// --- composeNoticeFromWorkOrder ---------------------------------------------
+const full = composeNoticeFromWorkOrder({
+  title: "Main panel repair",
+  description: "Replacing the building's main electrical panel.",
+  category: "electrical",
+  tradeName: "Power Traxx",
+  expectedStart: "2026-07-02",
+  expectedFinish: "2026-07-02",
+});
+ok("fromWO: category in subject", full.subject.includes("Scheduled electrical work"));
+ok("fromWO: keeps property_address token in subject", full.subject.includes("{{property_address}}"));
+ok("fromWO: date in subject", full.subject.includes("Jul 2, 2026"));
+ok("fromWO: prefers description over title for What", full.body.includes("- What: Replacing the building's main electrical panel."));
+ok("fromWO: trade name in Who line", full.body.includes("- Who's doing it: Power Traxx"));
+ok("fromWO: when uses the expected window + time brackets", full.body.includes("- When: Jul 2, 2026, [start time] - [end time]"));
+ok("fromWO: electrical impact hint", full.impact.toLowerCase().includes("power may be unavailable"));
+ok("fromWO: body uses only real tokens",
+  (full.body.match(/\{\{\s*([a-z_]+)\s*\}\}/gi) ?? []).every((m) =>
+    ["{{first_name}}", "{{org_name}}", "{{property_address}}"].includes(m.replace(/\s/g, "")),
+  ),
+);
+ok("fromWO: no em/en dash", !/[‒–—―]/.test(full.subject + full.body + full.impact));
+
+// range window
+const range = composeNoticeFromWorkOrder({
+  title: "Roof work",
+  category: "structural",
+  expectedStart: "2026-07-02",
+  expectedFinish: "2026-07-04",
+});
+ok("fromWO: range window rendered with hyphen", range.body.includes("- When: Jul 2, 2026 - Jul 4, 2026,"));
+ok("fromWO: falls back to title for What when no description", range.body.includes("- What: Roof work"));
+ok("fromWO: non-hinted category uses generic impact", range.impact === SCHEDULED_WORK_TEMPLATE.impact);
+
+// scheduled_for fallback when no expected window
+const sched = composeNoticeFromWorkOrder({ title: "X", category: "plumbing", scheduledFor: "2026-08-01" });
+ok("fromWO: scheduled_for used when no expected window", sched.body.includes("- When: Aug 1, 2026,"));
+ok("fromWO: plumbing impact hint", sched.impact.toLowerCase().includes("water may be shut off"));
+
+// empty / general -> brackets + generic phrasing
+const bare = composeNoticeFromWorkOrder({});
+ok("fromWO: no category -> 'scheduled work'", bare.body.includes("about scheduled work in the building"));
+ok("fromWO: no date -> [date] subject", bare.subject.includes("- [date]"));
+ok("fromWO: no date -> bracketed When", bare.body.includes("- When: [date], [start time] - [end time]"));
+ok("fromWO: no description/title -> bracketed What", bare.body.includes("- What: [brief description of the work]"));
+ok("fromWO: no trade -> bracketed Who", bare.body.includes("- Who's doing it: [contractor / our team]"));
+const general = composeNoticeFromWorkOrder({ category: "general", title: "T" });
+ok("fromWO: 'general' treated as no category", general.body.includes("about scheduled work in the building"));
 
 // ----------------------------------------------------------------------------
 console.log(`building-notices: ${passed} passed, ${failed} failed`);

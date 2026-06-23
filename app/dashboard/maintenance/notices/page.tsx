@@ -14,8 +14,8 @@ import {
   buildBuildingOptions,
   planBuildingEmailDeliveries,
   tallyBuildingDeliveries,
-  buildingLabelFor,
   buildingNoticeErrorMessage,
+  composeNoticeFromWorkOrder,
   type BuildingTenancy,
 } from "@/lib/building-notices";
 import type { TenantContact } from "@/lib/tenant-comms";
@@ -32,6 +32,7 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = {
   building?: string;
+  from_wo?: string;
   msg?: string;
   s?: string;
   k?: string;
@@ -70,7 +71,58 @@ export default async function BuildingNoticesPage({
     (propData ?? []) as { id: string; address: string; building_key: string | null }[],
   );
 
-  const selectedBuildingKey = (searchParams.building ?? "").trim() || null;
+  // Notice-from-work-order (plan §10 pt 3): ?from_wo=<id> drops the operator into
+  // the composer pre-filled from a scheduled work order. We resolve the work
+  // order (RLS-scoped to the org), derive its building (its own building_key, or
+  // its unit's), and build an editable draft. An explicit ?building= still wins.
+  const fromWoId = (searchParams.from_wo ?? "").trim() || null;
+  let prefillSubject = "";
+  let prefillBody = "";
+  let prefillImpact = "";
+  let prefillNote: string | null = null;
+  let woBuildingKey: string | null = null;
+
+  if (fromWoId) {
+    const { data: wo } = await supabase
+      .from("work_orders")
+      .select(
+        "id, title, description, category, building_key, scheduled_for, expected_start, expected_finish, property:properties(building_key), trade:trade_contacts(name)",
+      )
+      .eq("id", fromWoId)
+      .maybeSingle();
+    if (wo) {
+      const w = wo as unknown as {
+        title: string | null;
+        description: string | null;
+        category: string | null;
+        building_key: string | null;
+        scheduled_for: string | null;
+        expected_start: string | null;
+        expected_finish: string | null;
+        property: { building_key: string | null } | null;
+        trade: { name: string | null } | null;
+      };
+      woBuildingKey = w.building_key ?? w.property?.building_key ?? null;
+      const draft = composeNoticeFromWorkOrder({
+        title: w.title,
+        description: w.description,
+        category: w.category,
+        tradeName: w.trade?.name ?? null,
+        scheduledFor: w.scheduled_for,
+        expectedStart: w.expected_start,
+        expectedFinish: w.expected_finish,
+      });
+      prefillSubject = draft.subject;
+      prefillBody = draft.body;
+      prefillImpact = draft.impact;
+      prefillNote = w.title
+        ? `Pre-filled from the work order "${w.title}". Review the details, dates, and what-to-expect line before sending.`
+        : "Pre-filled from a work order. Review the details, dates, and what-to-expect line before sending.";
+    }
+  }
+
+  const selectedBuildingKey =
+    ((searchParams.building ?? "").trim() || null) ?? woBuildingKey;
 
   let summary = null;
   let sampleAddress: string | null = null;
@@ -163,6 +215,10 @@ export default async function BuildingNoticesPage({
                   orgName={org?.name ?? null}
                   orgContactEmail={org?.public_contact_email ?? null}
                   orgContactPhone={org?.public_contact_phone ?? null}
+                  initialSubject={prefillSubject}
+                  initialBody={prefillBody}
+                  initialImpact={prefillImpact}
+                  prefillNote={prefillNote}
                   sendAction={sendBuildingNotice}
                 />
               </div>

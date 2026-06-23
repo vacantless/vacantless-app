@@ -38,6 +38,10 @@ export default function BuildingNoticeComposer({
   orgName,
   orgContactEmail = null,
   orgContactPhone = null,
+  initialSubject = "",
+  initialBody = "",
+  initialImpact = "",
+  prefillNote = null,
   sendAction,
 }: {
   buildingOptions: BuildingOption[];
@@ -50,12 +54,18 @@ export default function BuildingNoticeComposer({
   orgName: string | null;
   orgContactEmail?: string | null;
   orgContactPhone?: string | null;
+  // Pre-fill from a scheduled work order (notice-from-work-order). Seed the draft
+  // once on mount; the operator then reviews + revises before sending.
+  initialSubject?: string;
+  initialBody?: string;
+  initialImpact?: string;
+  prefillNote?: string | null;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
   const router = useRouter();
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [impact, setImpact] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
+  const [impact, setImpact] = useState(initialImpact);
   const [showPreview, setShowPreview] = useState(false);
 
   const subjectRef = useRef<HTMLInputElement>(null);
@@ -167,6 +177,13 @@ export default function BuildingNoticeComposer({
               </span>
             )}
           </div>
+
+          {/* Pre-filled-from-work-order review note */}
+          {prefillNote && (
+            <div className="rounded-xl border border-brand/30 bg-brand/5 px-3 py-2 text-sm text-gray-700">
+              {prefillNote}
+            </div>
+          )}
 
           {/* Start from template */}
           <button
