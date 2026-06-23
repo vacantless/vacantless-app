@@ -35,11 +35,20 @@ import {
 } from "@/lib/directory";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { getCurrentOrg } from "@/lib/org";
+import { canUseIncidentIntake } from "@/lib/billing";
+import {
+  incidentCategoryLabel,
+  incidentReportStatusLabel,
+  workOrderTitleFromReport,
+} from "@/lib/incident-reports";
+import { createIncidentMediaDownloadUrls } from "@/lib/incident-media-server";
 import {
   createWorkOrder,
   updateWorkOrder,
   setWorkOrderStatus,
   deleteWorkOrder,
+  approveIncidentReport,
+  declineIncidentReport,
   createTradeContact,
   updateTradeContact,
   archiveTradeContact,
@@ -101,6 +110,28 @@ type DirectoryRow = DirectoryListing & {
   source_trade_contact_id: string | null;
 };
 
+// An open tenant incident report awaiting triage (Option B Slice 3). Joined to
+// the unit address + the tenancy's primary tenant for context.
+type IncidentReportRow = {
+  id: string;
+  category: string;
+  description: string;
+  reporter_name: string | null;
+  reporter_contact: string | null;
+  status: string;
+  submitted_at: string;
+  property: { address: string } | null;
+  tenancy: { id: string; tenants: { name: string | null; is_primary: boolean }[] } | null;
+};
+
+type IncidentMediaRow = {
+  id: string;
+  incident_report_id: string;
+  storage_path: string;
+  mime_type: string;
+  kind: string;
+};
+
 type PropertyRef = { id: string; address: string; building_key: string | null };
 type TenancyRef = { id: string; label: string };
 type BuildingOption = { key: string; label: string };
@@ -151,6 +182,20 @@ const DIR_INFO: Record<string, string> = {
   already_added: "You already have this trade in your rolodex.",
   own: "That's your own listing - it's already in your trades.",
 };
+// Incident-report triage (Slice 3) outcomes.
+const REPORT_SUCCESS: Record<string, string> = {
+  approved: "Report approved and converted to a work order. Assign a trade and cost below.",
+  declined: "Report declined.",
+};
+const REPORT_INFO: Record<string, string> = {
+  notopen: "That report was already handled by you or a teammate.",
+};
+const REPORT_ERROR: Record<string, string> = {
+  forbidden: "You don't have permission to triage tenant reports.",
+  notfound: "That report could not be found.",
+  locked: "Tenant issue reporting is a Growth feature. Upgrade to enable it.",
+  failed: "Something went wrong handling that report. Please try again.",
+};
 
 function fmtDate(d: string | null): string {
   if (!d) return "—";
@@ -165,6 +210,19 @@ function fmtDate(d: string | null): string {
   });
 }
 
+// A timestamptz (incident report submitted_at) -> short local datetime.
+function fmtDateTime(ts: string | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  return d.toLocaleString("en-CA", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 const STATUS_FILTERS = ["all", "active", ...WORK_ORDER_STATUSES] as const;
 
 export default async function MaintenancePage({
@@ -173,6 +231,7 @@ export default async function MaintenancePage({
   searchParams: {
     wo?: string;
     trade?: string;
+    report?: string;
     status?: string;
     property?: string;
     priority?: string;
@@ -192,6 +251,7 @@ export default async function MaintenancePage({
     { data: propData },
     { data: tenData },
     { data: dirData },
+    { data: reportData },
     org,
   ] = await Promise.all([
     supabase
@@ -222,6 +282,15 @@ export default async function MaintenancePage({
         "id, source, business_name, trade_type, service_area, blurb, phone, email, contact_public, verified, used_count, listed, archived, contributed_by_org, source_trade_contact_id",
       )
       .order("used_count", { ascending: false }),
+    // Open tenant incident reports awaiting triage (Slice 3). RLS scopes to the
+    // org; oldest first so the operator works the backlog top-down.
+    supabase
+      .from("incident_reports")
+      .select(
+        "id, category, description, reporter_name, reporter_contact, status, submitted_at, property:properties(address), tenancy:tenancies(id, tenants(name, is_primary))",
+      )
+      .in("status", ["submitted", "under_review"])
+      .order("submitted_at", { ascending: true }),
     getCurrentOrg(),
   ]);
 
@@ -230,6 +299,49 @@ export default async function MaintenancePage({
   const properties = (propData ?? []) as PropertyRef[];
   const activeTrades = trades.filter((t) => !t.archived);
   const orgId = org?.id ?? null;
+
+  // --- Tenant incident reports: triage inbox (Option B Slice 3) --------------
+  // Gated on the incident_intake entitlement (Growth+). When entitled we surface
+  // the open queue + the tenant's attached photos/video (signed preview URLs,
+  // minted with the operator's RLS client — the 0060 SELECT policy scopes them to
+  // this org's folder). When not entitled we show a locked upsell instead.
+  const canIntake = canUseIncidentIntake(org?.plan);
+  const openReports = (reportData ?? []) as unknown as IncidentReportRow[];
+
+  // Map report id -> its media (with a freshly-signed preview URL per object).
+  const reportMedia = new Map<string, { url: string; kind: string }[]>();
+  if (canIntake && openReports.length > 0) {
+    const { data: mediaData } = await supabase
+      .from("incident_media")
+      .select("id, incident_report_id, storage_path, mime_type, kind")
+      .in(
+        "incident_report_id",
+        openReports.map((r) => r.id),
+      );
+    const media = (mediaData ?? []) as IncidentMediaRow[];
+    if (media.length > 0) {
+      const signed = await createIncidentMediaDownloadUrls(
+        supabase,
+        media.map((m) => m.storage_path),
+      );
+      const urlByPath = new Map<string, string | null>();
+      if (signed.ok) for (const u of signed.urls) urlByPath.set(u.path, u.signedUrl);
+      for (const m of media) {
+        const url = urlByPath.get(m.storage_path);
+        if (!url) continue;
+        const list = reportMedia.get(m.incident_report_id) ?? [];
+        list.push({ url, kind: m.kind });
+        reportMedia.set(m.incident_report_id, list);
+      }
+    }
+  }
+
+  function reportReporter(r: IncidentReportRow): string {
+    if (r.reporter_name) return r.reporter_name;
+    const primary =
+      r.tenancy?.tenants?.find((t) => t.is_primary) ?? r.tenancy?.tenants?.[0];
+    return primary?.name ?? "Tenant";
+  }
 
   // Distinct buildings (for the "whole building" scope), each labeled by the
   // unit-stripped street address of a representative unit — not the raw key.
@@ -294,6 +406,13 @@ export default async function MaintenancePage({
 
   const woFlash = searchParams.wo ? WO_SUCCESS[searchParams.wo] : null;
   const tradeFlash = searchParams.trade ? TRADE_SUCCESS[searchParams.trade] : null;
+  const reportFlash = searchParams.report
+    ? (REPORT_SUCCESS[searchParams.report] ?? REPORT_INFO[searchParams.report] ?? null)
+    : null;
+  const reportError =
+    searchParams.report && !REPORT_SUCCESS[searchParams.report] && !REPORT_INFO[searchParams.report]
+      ? (REPORT_ERROR[searchParams.report] ?? "Something went wrong.")
+      : null;
   const woError =
     searchParams.wo && !WO_SUCCESS[searchParams.wo]
       ? workOrderErrorMessage(searchParams.wo)
@@ -398,14 +517,14 @@ export default async function MaintenancePage({
         }
       />
 
-      {(woFlash || tradeFlash || dirFlash) && (
+      {(woFlash || tradeFlash || dirFlash || reportFlash) && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {woFlash ?? tradeFlash ?? dirFlash}
+          {woFlash ?? tradeFlash ?? dirFlash ?? reportFlash}
         </div>
       )}
-      {(woError || tradeError || dirError) && (
+      {(woError || tradeError || dirError || reportError) && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {woError ?? tradeError ?? dirError}
+          {woError ?? tradeError ?? dirError ?? reportError}
         </div>
       )}
 
@@ -439,6 +558,143 @@ export default async function MaintenancePage({
           owner statement
         </Link>{" "}
         — rent in minus maintenance out, per property, for year-end.
+      </div>
+
+      {/* Tenant-reported issues — triage inbox (Option B Slice 3) */}
+      <div id="reports" className="mt-8 scroll-mt-6">
+        <SectionHeading>
+          Tenant-reported issues
+          {canIntake && openReports.length > 0 ? ` (${openReports.length})` : ""}
+        </SectionHeading>
+
+        {!canIntake ? (
+          <Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-gray-900">Let tenants report issues themselves</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Give each tenancy a private link to report a maintenance problem with photos or a
+                  short video. Reports land here for you to approve into a work order — no tenant
+                  account needed. Available on Growth and up.
+                </p>
+              </div>
+              <Link
+                href="/dashboard/billing"
+                className={`${PRIMARY_ACTION_CLASS} shrink-0`}
+                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+              >
+                Upgrade
+              </Link>
+            </div>
+          </Card>
+        ) : openReports.length === 0 ? (
+          <EmptyState
+            icon={<Icons.bolt className="h-5 w-5" />}
+            title="No tenant reports waiting"
+            description="When a tenant submits an issue through their reporting link, it shows up here to approve into a work order or decline. Share a tenancy's link from its page under Tenants."
+          />
+        ) : (
+          <div className="space-y-3">
+            {openReports.map((r) => {
+              const media = reportMedia.get(r.id) ?? [];
+              const previewTitle = workOrderTitleFromReport(r.category, r.description);
+              return (
+                <Card key={r.id}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusChip tone="warn">{incidentReportStatusLabel(r.status)}</StatusChip>
+                        <StatusChip tone="neutral">{incidentCategoryLabel(r.category)}</StatusChip>
+                        <span className="text-xs text-gray-500">{fmtDateTime(r.submitted_at)}</span>
+                      </div>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">
+                        {r.description}
+                      </p>
+                      <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
+                        <div>
+                          <dt className="inline font-medium text-gray-600">From: </dt>
+                          <dd className="inline">{reportReporter(r)}</dd>
+                        </div>
+                        {r.reporter_contact && (
+                          <div>
+                            <dt className="inline font-medium text-gray-600">Contact: </dt>
+                            <dd className="inline">{r.reporter_contact}</dd>
+                          </div>
+                        )}
+                        <div>
+                          <dt className="inline font-medium text-gray-600">Unit: </dt>
+                          <dd className="inline">{r.property?.address ?? "—"}</dd>
+                        </div>
+                      </dl>
+
+                      {/* Tenant-attached media (signed preview URLs). */}
+                      {media.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {media.map((m, i) =>
+                            m.kind === "video" ? (
+                              <video
+                                key={i}
+                                src={m.url}
+                                controls
+                                className="h-24 w-32 rounded-lg border border-gray-200 bg-black object-cover"
+                              />
+                            ) : (
+                              <a key={i} href={m.url} target="_blank" rel="noreferrer">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={m.url}
+                                  alt="Tenant-attached photo"
+                                  className="h-24 w-24 rounded-lg border border-gray-200 object-cover transition hover:opacity-90"
+                                />
+                              </a>
+                            ),
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Triage actions */}
+                    <div className="flex shrink-0 flex-col items-stretch gap-2 sm:w-56">
+                      <form action={approveIncidentReport}>
+                        <input type="hidden" name="report_id" value={r.id} />
+                        <SubmitButton
+                          className={`${PRIMARY_ACTION_CLASS} w-full justify-center`}
+                          style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+                          pendingLabel="Approving…"
+                        >
+                          Approve → work order
+                        </SubmitButton>
+                      </form>
+                      <p className="text-xs text-gray-500">
+                        Creates: <span className="font-medium text-gray-600">{previewTitle}</span>
+                      </p>
+                      <details className="rounded-lg bg-gray-50 p-2">
+                        <summary className="cursor-pointer text-xs font-medium text-gray-600">
+                          Decline instead
+                        </summary>
+                        <form action={declineIncidentReport} className="mt-2 flex flex-col gap-1.5">
+                          <input type="hidden" name="report_id" value={r.id} />
+                          <textarea
+                            name="decline_reason"
+                            rows={2}
+                            placeholder="Reason (optional, kept for your records)"
+                            className={inputCls}
+                          />
+                          <SubmitButton
+                            className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50"
+                            pendingLabel="Declining…"
+                          >
+                            Decline report
+                          </SubmitButton>
+                        </form>
+                      </details>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Filters */}

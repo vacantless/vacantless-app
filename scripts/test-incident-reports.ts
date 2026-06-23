@@ -18,6 +18,10 @@ import {
   validateReportSubmission,
   reportErrorMessage,
   deriveReporterDefaults,
+  workOrderTitleFromReport,
+  WORK_ORDER_TITLE_SNIPPET_LEN,
+  normalizeDeclineReason,
+  MAX_DECLINE_REASON_LEN,
   tenantReportPath,
   tenantReportUrl,
 } from "../lib/incident-reports";
@@ -183,6 +187,51 @@ ok(
     const d = deriveReporterDefaults([{ name: "  Spacey  ", email: "  s@x.com ", phone: null, is_primary: true }]);
     return d.name === "Spacey" && d.contact === "s@x.com";
   })(),
+);
+
+// --- Slice 3: work-order title derivation -----------------------------------
+ok(
+  "title = label + first line of description",
+  workOrderTitleFromReport("plumbing", "Sink leaking under cabinet") ===
+    "Plumbing / water: Sink leaking under cabinet",
+);
+ok(
+  "title uses only the FIRST line of a multi-line description",
+  workOrderTitleFromReport("electrical", "Outlet sparks\nin the kitchen\nby the stove") ===
+    "Electrical: Outlet sparks",
+);
+ok(
+  "title falls back to just the label when description is blank",
+  workOrderTitleFromReport("hvac", "   ") === "Heating / cooling",
+);
+ok(
+  "title truncates a long first line with an ellipsis and stays in budget",
+  (() => {
+    const long = "x".repeat(200);
+    const t = workOrderTitleFromReport("general", long);
+    // "Something else: " + snippet; snippet is capped to the budget and ends in …
+    const snippet = t.split(": ").slice(1).join(": ");
+    return snippet.length === WORK_ORDER_TITLE_SNIPPET_LEN && snippet.endsWith("…");
+  })(),
+);
+ok(
+  "title leaves a short line unchanged (no ellipsis)",
+  !workOrderTitleFromReport("pest", "Ants in the kitchen").includes("…"),
+);
+ok(
+  "title uses an unknown category verbatim",
+  workOrderTitleFromReport("weird", "Some issue") === "weird: Some issue",
+);
+
+// --- Slice 3: decline-reason normalization ----------------------------------
+ok("decline reason: empty -> null", normalizeDeclineReason("") === null);
+ok("decline reason: whitespace -> null", normalizeDeclineReason("   ") === null);
+ok("decline reason: null -> null", normalizeDeclineReason(null) === null);
+ok("decline reason: undefined -> null", normalizeDeclineReason(undefined) === null);
+ok("decline reason: trims", normalizeDeclineReason("  not our responsibility ") === "not our responsibility");
+ok(
+  "decline reason: caps at MAX_DECLINE_REASON_LEN",
+  normalizeDeclineReason("y".repeat(MAX_DECLINE_REASON_LEN + 50))?.length === MAX_DECLINE_REASON_LEN,
 );
 
 // --- Link builders ----------------------------------------------------------

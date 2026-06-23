@@ -233,6 +233,47 @@ export function deriveReporterDefaults(
 }
 
 // ---------------------------------------------------------------------------
+// Slice 3 — operator triage. Two pure helpers shared by the approve/decline
+// server actions so the conversion logic has one tested home (the SQL function
+// only guards what these produce).
+// ---------------------------------------------------------------------------
+
+// A work order needs a title; an incident report has only a category + free-text
+// description. Derive a concise, human title: the category label followed by the
+// first line of the tenant's description, trimmed to a sane length. Falls back to
+// just the category label when the description is empty/whitespace (the SQL
+// approve fn has its own last-ditch "Tenant-reported <category>" fallback). The
+// operator can rename the work order afterward.
+export const WORK_ORDER_TITLE_SNIPPET_LEN = 80;
+
+export function workOrderTitleFromReport(
+  category: string,
+  description: string,
+): string {
+  const label = incidentCategoryLabel(category);
+  const firstLine = (description ?? "").split(/\r?\n/)[0].trim();
+  if (!firstLine) return label;
+  const snippet =
+    firstLine.length > WORK_ORDER_TITLE_SNIPPET_LEN
+      ? firstLine.slice(0, WORK_ORDER_TITLE_SNIPPET_LEN - 1).trimEnd() + "…"
+      : firstLine;
+  return `${label}: ${snippet}`;
+}
+
+// A decline reason is optional free text the operator can record. Normalize to a
+// trimmed, length-capped string or null (empty -> null). Mirrors the description
+// cap style; the column is plain text so this is the only guard.
+export const MAX_DECLINE_REASON_LEN = 1000;
+
+export function normalizeDeclineReason(reason: string | null | undefined): string | null {
+  const trimmed = (reason ?? "").trim();
+  if (!trimmed) return null;
+  return trimmed.length > MAX_DECLINE_REASON_LEN
+    ? trimmed.slice(0, MAX_DECLINE_REASON_LEN)
+    : trimmed;
+}
+
+// ---------------------------------------------------------------------------
 // Tenant report link — the URL an operator copies for a tenancy. Pure string
 // build so the page + the operator "copy link" action agree.
 // ---------------------------------------------------------------------------

@@ -13,6 +13,11 @@ import {
   statusOffersTenantUpdate,
 } from "@/lib/work-orders";
 import { validateDirectoryListingInput, minimizeForDirectory } from "@/lib/directory";
+import { canUseIncidentIntake } from "@/lib/billing";
+import {
+  workOrderTitleFromReport,
+  normalizeDeclineReason,
+} from "@/lib/incident-reports";
 
 // Maintenance work-order + trade-contact actions (self-managed-owner wedge,
 // Slice 2 of the work-order module — see VACANTLESS-WORKORDERS-MODULE-SPEC).
@@ -267,6 +272,95 @@ export async function deleteWorkOrder(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?wo=deleted`);
+}
+
+// --- Tenant incident reports: operator triage (Option B Slice 3) ------------
+//
+// Slice 2 let an account-less tenant FILE an incident_report (lands OFF the
+// work_orders queue). These two actions are the operator side: APPROVE promotes
+// a report to a real work_orders row (atomically, via the approve_incident_report
+// SQL fn — migration 0062 — so a double click can't create two work orders) and
+// marks the report converted; DECLINE records a reason and closes it. Both reuse
+// manage_work_orders (same job: managing the owner's maintenance work) and are
+// gated on the incident_intake entitlement (Growth+) — the feature's enforcement
+// point, mirroring generateTenantReportLink. We still never dispatch a trade or
+// move money: an approved report becomes a normal work order the owner runs the
+// same way as any other (Slice 5 is the future trade-dispatch leap).
+
+// Confirm the org may use incident intake (Growth+); redirect to a locked banner
+// otherwise. Returns the org so callers can keep using it.
+async function requireIncidentIntake(suffix: string) {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!canUseIncidentIntake(org.plan)) {
+    redirect(`${BASE}?report=locked${suffix}`);
+  }
+  return org;
+}
+
+export async function approveIncidentReport(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?report=forbidden#reports`);
+  await requireIncidentIntake("#reports");
+
+  const id = s(formData, "report_id");
+  if (!id) redirect(`${BASE}#reports`);
+
+  const supabase = createClient();
+  // RLS scopes this to the caller's org; a forged/other-org id finds nothing.
+  // We read category + description here so the work-order title is derived in the
+  // tested TS helper (the SQL fn only guards/falls back).
+  const { data: report } = await supabase
+    .from("incident_reports")
+    .select("id, category, description, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!report) redirect(`${BASE}?report=notfound#reports`);
+  const r = report as { category: string; description: string; status: string };
+
+  const title = workOrderTitleFromReport(r.category, r.description);
+
+  const { data, error } = await supabase.rpc("approve_incident_report", {
+    p_report_id: id,
+    p_title: title,
+  });
+  const result = data as { ok?: boolean; reason?: string; work_order_id?: string } | null;
+  if (error || !result?.ok) {
+    // not_open = someone already approved/declined it (race or stale page).
+    redirect(`${BASE}?report=${result?.reason === "not_open" ? "notopen" : "failed"}#reports`);
+  }
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?report=approved#reports`);
+}
+
+export async function declineIncidentReport(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?report=forbidden#reports`);
+  await requireIncidentIntake("#reports");
+
+  const id = s(formData, "report_id");
+  if (!id) redirect(`${BASE}#reports`);
+
+  const reason = normalizeDeclineReason(s(formData, "decline_reason"));
+  const now = new Date().toISOString();
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org. The status guard makes the decline
+  // a no-op (0 rows) if the report was already converted/declined — surfaced as a
+  // "no longer open" notice rather than silently overwriting a converted report.
+  const { data: updated } = await supabase
+    .from("incident_reports")
+    .update({
+      status: "declined",
+      decline_reason: reason,
+      reviewed_at: now,
+      updated_at: now,
+    })
+    .eq("id", id)
+    .in("status", ["submitted", "under_review"])
+    .select("id");
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?report=${updated && updated.length > 0 ? "declined" : "notopen"}#reports`);
 }
 
 // --- Trade contacts (the owner's own vendor rolodex) ------------------------
