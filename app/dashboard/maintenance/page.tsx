@@ -516,9 +516,14 @@ export default async function MaintenancePage({
         subtitle="Log a maintenance issue, assign it to one of your own trades, and track it to done. Costs you record here feed your year-end statements. Vacantless tracks the work; it never dispatches a trade or moves money."
         icon={<Icons.bolt className="h-6 w-6" />}
         action={
-          <a href="#new-work-order" className={PRIMARY_ACTION_CLASS} style={{ background: "var(--brand-gradient, var(--brand-color))" }}>
-            New work order
-          </a>
+          <>
+            <Link href="/dashboard/maintenance/notices" className={SECONDARY_ACTION_CLASS}>
+              Building notices
+            </Link>
+            <a href="#new-work-order" className={PRIMARY_ACTION_CLASS} style={{ background: "var(--brand-gradient, var(--brand-color))" }}>
+              New work order
+            </a>
+          </>
         }
       />
 
