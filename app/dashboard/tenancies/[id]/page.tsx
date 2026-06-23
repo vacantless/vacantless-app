@@ -31,7 +31,9 @@ import TenancyStripeRentSection, {
 } from "@/components/tenancy-stripe-rent-section";
 import { getStripe } from "@/lib/stripe";
 import { recordPayment, deletePayment } from "../payment-actions";
-import { reportTenancyIssue } from "../maintenance-actions";
+import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-actions";
+import { CopyLinkButton } from "@/components/copy-link-button";
+import { tenantReportPath } from "@/lib/incident-reports";
 import { sendTenantMessage } from "../comms-actions";
 import {
   WORK_ORDER_CATEGORIES,
@@ -121,6 +123,7 @@ type Tenancy = {
   stripe_rent_synced_at: string | null;
   stripe_subscription_id: string | null;
   stripe_subscription_status: string | null;
+  report_token: string | null;
   property: { id: string; address: string } | null;
   tenants: Tenant[];
 };
@@ -283,13 +286,14 @@ export default async function TenancyDetailPage({
     lease?: string;
     wo?: string;
     wo_msg?: string;
+    report?: string;
   };
 }) {
   const supabase = createClient();
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, report_token, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1233,6 +1237,54 @@ export default async function TenancyDetailPage({
           >
             Open in Maintenance →
           </Link>
+        </div>
+
+        {/* Tenant report link (Option B Slice 2 — tokenized tenant intake). The
+            tenant uses this stable link to report issues with no account. */}
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800">Tenant reporting link</p>
+              <p className="text-xs text-gray-500">
+                Share this with the tenant so they can report maintenance issues
+                (with photos or video) — no account needed.
+              </p>
+            </div>
+            {t.report_token ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <CopyLinkButton
+                  path={tenantReportPath(t.report_token)}
+                  label="Copy tenant link"
+                />
+                <Link
+                  href={tenantReportPath(t.report_token)}
+                  target="_blank"
+                  className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Preview →
+                </Link>
+              </div>
+            ) : (
+              <form action={generateTenantReportLink} className="shrink-0">
+                <input type="hidden" name="tenancy_id" value={t.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  Create reporting link
+                </button>
+              </form>
+            )}
+          </div>
+          {searchParams.report === "locked" ? (
+            <p className="mt-2 text-xs text-amber-700">
+              Tenant reporting is available on the Growth plan and up.
+            </p>
+          ) : searchParams.report === "ready" && t.report_token ? (
+            <p className="mt-2 text-xs text-green-700">
+              Link ready — copy it and send it to your tenant.
+            </p>
+          ) : null}
         </div>
 
         {workOrders.length > 0 ? (

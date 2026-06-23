@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { validateWorkOrderInput } from "@/lib/work-orders";
+import { canUseIncidentIntake } from "@/lib/billing";
+import { generateReportToken } from "@/lib/incident-reports";
 
 // Tenancy-scoped "Report an issue" action (work-order module Slice 3). A thin
 // wrapper over the same work_orders insert the maintenance page uses, but it
@@ -65,4 +67,44 @@ export async function reportTenancyIssue(formData: FormData) {
   revalidatePath(tenancyPath(tenancyId));
   revalidatePath("/dashboard/maintenance");
   redirect(`${tenancyPath(tenancyId)}?wo=reported#maintenance`);
+}
+
+// Mint (idempotently) the per-tenancy tenant report link (Option B Slice 2 —
+// tenant tokenized intake). The operator shares this stable link with the
+// tenant, who reports maintenance issues via the account-less /report/[token]
+// page. Generating it once stores the token on the tenancy; re-running is a
+// no-op (the existing token is kept) so the link the tenant has never breaks.
+//
+// Gated server-side on the `incident_intake` entitlement (Growth+) — the clean
+// enforcement point for the feature gate. Capability: manage_tenancies (the
+// person who manages the tenancy controls who can report against it).
+export async function generateTenantReportLink(formData: FormData) {
+  const tenancyId = s(formData, "tenancy_id");
+  if (!tenancyId) redirect("/dashboard/tenancies");
+  await requireCapability("manage_tenancies", `${tenancyPath(tenancyId)}?report=forbidden#maintenance`);
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!canUseIncidentIntake(org.plan)) {
+    redirect(`${tenancyPath(tenancyId)}?report=locked#maintenance`);
+  }
+
+  const supabase = createClient();
+  const { data: tRow } = await supabase
+    .from("tenancies")
+    .select("id, report_token")
+    .eq("id", tenancyId)
+    .maybeSingle();
+  if (!tRow) redirect("/dashboard/tenancies");
+
+  // Idempotent: only mint a token if none exists yet.
+  if (!(tRow as { report_token: string | null }).report_token) {
+    await supabase
+      .from("tenancies")
+      .update({ report_token: generateReportToken() })
+      .eq("id", tenancyId);
+  }
+
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?report=ready#maintenance`);
 }

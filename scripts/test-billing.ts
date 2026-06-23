@@ -27,6 +27,8 @@ import {
   canUseSms,
   canUseRenterSms,
   canCollectRentByPlan,
+  canUseIncidentIntake,
+  canUseIncidentDispatch,
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
@@ -446,7 +448,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 6 features", PLAN_FEATURES.length === 6);
+ok("PLAN_FEATURES has 8 features", PLAN_FEATURES.length === 8);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -473,6 +475,23 @@ ok("bank_feed: growth true", hasEntitlement("growth", "bank_feed") === true);
 ok("bank_feed: premium true", hasEntitlement("premium", "bank_feed") === true);
 ok("bank_feed: free false", hasEntitlement("free", "bank_feed") === false);
 ok("bank_feed: trial false", hasEntitlement("trial", "bank_feed") === false);
+
+// --- incident_intake (Growth & up; Option B Slices 1-4) --------------------
+ok("incident_intake: growth true", hasEntitlement("growth", "incident_intake") === true);
+ok("incident_intake: premium true", hasEntitlement("premium", "incident_intake") === true);
+ok("incident_intake: pilot true", hasEntitlement("pilot", "incident_intake") === true);
+ok("incident_intake: free false", hasEntitlement("free", "incident_intake") === false);
+ok("incident_intake: trial false", hasEntitlement("trial", "incident_intake") === false);
+ok("canUseIncidentIntake: growth true", canUseIncidentIntake("growth") === true);
+ok("canUseIncidentIntake: free false", canUseIncidentIntake("free") === false);
+
+// --- incident_dispatch (Premium only; the guardrail amendment, Slices 5-7) --
+ok("incident_dispatch: premium true", hasEntitlement("premium", "incident_dispatch") === true);
+ok("incident_dispatch: pilot true", hasEntitlement("pilot", "incident_dispatch") === true);
+ok("incident_dispatch: growth false (intake yes, dispatch no)", hasEntitlement("growth", "incident_dispatch") === false);
+ok("incident_dispatch: free false", hasEntitlement("free", "incident_dispatch") === false);
+ok("canUseIncidentDispatch: premium true", canUseIncidentDispatch("premium") === true);
+ok("canUseIncidentDispatch: growth false", canUseIncidentDispatch("growth") === false);
 
 // --- Live tier ladder shape (Free $0 < Growth $99 < Premium $249) -----------
 ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","growth","premium"]');

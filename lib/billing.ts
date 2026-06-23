@@ -67,13 +67,24 @@ export function isAnyPaidPlan(plan: string | null | undefined): boolean {
 //                   provider routing (Plaid vs Flinks) keys off accounting too —
 //                   see lib/bank-feed providerForPlan (accounting -> Flinks).
 //   accounting      full accounting module + Premium aggregator (Flinks)
+//   incident_intake tenant self-serve incident reporting + operator triage
+//                   (Option B Slices 1-4). Growth+ — table-stakes for the
+//                   self-managed-owner wedge (an Abbas-type expects tenants to
+//                   report issues). Split from incident_dispatch deliberately
+//                   (plan doc §7 / locked decision 4): intake is broad value,
+//                   the trade-coordination depth is reserved for Premium.
+//   incident_dispatch in-app trade dispatch / quote / two-way scheduling
+//                   (Option B Slices 5-7, the guardrail amendment). Premium+ —
+//                   the marketplace-coordination depth, gated above intake.
 export type PlanFeature =
   | "sms"
   | "renter_sms"
   | "rent_collection"
   | "tax_export"
   | "bank_feed"
-  | "accounting";
+  | "accounting"
+  | "incident_intake"
+  | "incident_dispatch";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -82,6 +93,8 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "tax_export",
   "bank_feed",
   "accounting",
+  "incident_intake",
+  "incident_dispatch",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -95,6 +108,8 @@ function noEntitlements(): PlanEntitlements {
     tax_export: false,
     bank_feed: false,
     accounting: false,
+    incident_intake: false,
+    incident_dispatch: false,
   };
 }
 
@@ -124,13 +139,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false },
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false }, // Plaid feed
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true }, // Flinks feed
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false }, // Plaid feed; tenant intake (Slices 1-4)
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7)
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -172,6 +187,19 @@ export function canUseRenterSms(plan: string | null | undefined): boolean {
 // Whether this plan may use the automated rent-collection rails (Stripe/Rotessa).
 export function canCollectRentByPlan(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "rent_collection");
+}
+
+// Whether this plan may use tenant incident intake + operator triage (Option B
+// Slices 1-4). Growth+. The gate the /report token surfaces + the operator
+// triage inbox enforce server-side.
+export function canUseIncidentIntake(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "incident_intake");
+}
+
+// Whether this plan may use in-app trade dispatch / quote / scheduling (Option B
+// Slices 5-7, the guardrail amendment). Premium+. Gated above intake.
+export function canUseIncidentDispatch(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "incident_dispatch");
 }
 
 // --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------
