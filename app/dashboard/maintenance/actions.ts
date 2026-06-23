@@ -14,11 +14,19 @@ import {
   statusOffersTenantUpdate,
 } from "@/lib/work-orders";
 import { validateDirectoryListingInput, minimizeForDirectory } from "@/lib/directory";
-import { canUseIncidentIntake } from "@/lib/billing";
+import { canUseIncidentIntake, canUseIncidentDispatch } from "@/lib/billing";
 import {
   workOrderTitleFromReport,
   normalizeDeclineReason,
 } from "@/lib/incident-reports";
+import {
+  generateDispatchToken,
+  dispatchTokenExpiry,
+  normalizeOperatorNote,
+  validateScheduleConfirmation,
+  ACTIVE_DISPATCH_STATUSES,
+} from "@/lib/work-order-dispatch";
+import { sendTradeDispatchInvite } from "@/lib/email";
 
 // Maintenance work-order + trade-contact actions (self-managed-owner wedge,
 // Slice 2 of the work-order module — see VACANTLESS-WORKORDERS-MODULE-SPEC).
@@ -642,4 +650,186 @@ export async function addDirectoryTradeToRolodex(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?dir=added#trades`);
+}
+
+// --- In-app trade dispatch (Option B Slice 5 — the guardrail amendment) ------
+//
+// THE leap past the old "directory + handoff only" guardrail (Noam-authorized,
+// S313): the operator DISPATCHES a work order to one of their own trades, the
+// trade accepts/declines + quotes + proposes a date via /job/[token], and the
+// operator approves the quote by confirming a date, then marks it complete. We
+// STILL never move money — the quote is a recorded number, the owner pays the
+// trade DIRECTLY. Gated on incident_dispatch (Premium+) on TOP of the
+// manage_work_orders capability, so it lands DARK for every non-Premium org. The
+// trade side is account-less (token RPCs in 0065); the operator side here is
+// ordinary authenticated, RLS-scoped, guarded UPDATEs (the declineIncidentReport
+// pattern) — no new SECURITY DEFINER surface beyond the four token RPCs.
+
+// Premium-gate the dispatch surface; redirect to a locked banner otherwise.
+async function requireIncidentDispatch(suffix: string) {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!canUseIncidentDispatch(org.plan)) {
+    redirect(`${BASE}?disp=locked${suffix}`);
+  }
+  return org;
+}
+
+// Dispatch a work order to one of the org's own trade contacts. Creates a
+// work_order_dispatches row (status 'offered') with a single-job magic-link
+// token, snapshots who it went to, and emails the trade the /job link
+// (best-effort). The partial-unique index (0065) is the hard backstop against a
+// second active dispatch; we also check first for a clean error.
+export async function dispatchWorkOrderToTrade(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
+  const org = await requireIncidentDispatch("");
+
+  const workOrderId = s(formData, "work_order_id");
+  const tradeContactId = s(formData, "trade_contact_id");
+  if (!workOrderId || !tradeContactId) redirect(`${BASE}?disp=notfound`);
+
+  const supabase = createClient();
+
+  // RLS scopes both reads to the caller's org — a forged id resolves to nothing.
+  const { data: wo } = await supabase
+    .from("work_orders")
+    .select("id, title, status, property_id, building_key, property:properties(address)")
+    .eq("id", workOrderId)
+    .maybeSingle();
+  if (!wo) redirect(`${BASE}?disp=notfound`);
+  const w = wo as unknown as {
+    id: string;
+    title: string;
+    status: string;
+    property_id: string | null;
+    building_key: string | null;
+    property: { address: string } | null;
+  };
+
+  const { data: trade } = await supabase
+    .from("trade_contacts")
+    .select("id, name, email")
+    .eq("id", tradeContactId)
+    .maybeSingle();
+  if (!trade) redirect(`${BASE}?disp=notfound`);
+  const tc = trade as { id: string; name: string; email: string | null };
+  if (!tc.email || tc.email.trim() === "") redirect(`${BASE}?disp=no_email`);
+
+  // Reject a second active dispatch up front (the index is the backstop).
+  const { data: active } = await supabase
+    .from("work_order_dispatches")
+    .select("id")
+    .eq("work_order_id", workOrderId)
+    .in("dispatch_status", ACTIVE_DISPATCH_STATUSES as unknown as string[])
+    .limit(1);
+  if (active && active.length > 0) redirect(`${BASE}?disp=active_exists`);
+
+  const token = generateDispatchToken();
+  const { error: insErr } = await supabase.from("work_order_dispatches").insert({
+    organization_id: org.id,
+    work_order_id: workOrderId,
+    trade_contact_id: tc.id,
+    trade_name_snapshot: tc.name,
+    trade_email_snapshot: tc.email,
+    operator_note: normalizeOperatorNote(s(formData, "operator_note")),
+    dispatch_status: "offered",
+    trade_access_token: token,
+    token_expires_at: dispatchTokenExpiry().toISOString(),
+  });
+  // A unique-violation here means a race lost to the partial-unique index.
+  if (insErr) redirect(`${BASE}?disp=active_exists`);
+
+  // Email the trade the job link (best-effort; never fails the dispatch).
+  try {
+    await sendTradeDispatchInvite({
+      trade_email: tc.email,
+      trade_name: tc.name,
+      token,
+      job_title: w.title,
+      property_address: w.property?.address ?? w.building_key ?? null,
+      org_name: org.name,
+      brand_color: org.brand_color,
+      logo_url: org.logo_url,
+      reply_to_email: org.reply_to_email,
+    });
+  } catch {
+    // swallow — the dispatch is recorded; the operator can re-send/copy the link
+  }
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?disp=dispatched`);
+}
+
+// Operator approves a submitted quote BY confirming the agreed date (quoted ->
+// scheduled in one step). Guarded so a stale page can't approve a dispatch that
+// already moved on.
+export async function approveDispatchSchedule(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
+  await requireIncidentDispatch("");
+
+  const id = s(formData, "dispatch_id");
+  if (!id) redirect(BASE);
+
+  const check = validateScheduleConfirmation({ scheduledFor: s(formData, "scheduled_for") });
+  if (!check.ok) redirect(`${BASE}?disp=${check.code}`);
+
+  const now = new Date().toISOString();
+  const supabase = createClient();
+  const { data: updated } = await supabase
+    .from("work_order_dispatches")
+    .update({
+      dispatch_status: "scheduled",
+      scheduled_for: check.value.scheduledFor,
+      proposed_by: "operator",
+      schedule_confirmed_at: now,
+      updated_at: now,
+    })
+    .eq("id", id)
+    .eq("dispatch_status", "quoted")
+    .select("id");
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?disp=${updated && updated.length > 0 ? "approved" : "wrong_state"}`);
+}
+
+// Operator marks a scheduled dispatch complete.
+export async function completeDispatch(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
+  await requireIncidentDispatch("");
+
+  const id = s(formData, "dispatch_id");
+  if (!id) redirect(BASE);
+
+  const now = new Date().toISOString();
+  const supabase = createClient();
+  const { data: updated } = await supabase
+    .from("work_order_dispatches")
+    .update({ dispatch_status: "completed", completed_at: now, updated_at: now })
+    .eq("id", id)
+    .eq("dispatch_status", "scheduled")
+    .select("id");
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?disp=${updated && updated.length > 0 ? "completed" : "wrong_state"}`);
+}
+
+// Operator pulls a dispatch back any time before it's terminal.
+export async function cancelDispatch(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
+  await requireIncidentDispatch("");
+
+  const id = s(formData, "dispatch_id");
+  if (!id) redirect(BASE);
+
+  const now = new Date().toISOString();
+  const supabase = createClient();
+  const { data: updated } = await supabase
+    .from("work_order_dispatches")
+    .update({ dispatch_status: "cancelled", updated_at: now })
+    .eq("id", id)
+    .in("dispatch_status", ACTIVE_DISPATCH_STATUSES as unknown as string[])
+    .select("id");
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?disp=${updated && updated.length > 0 ? "cancelled" : "wrong_state"}`);
 }

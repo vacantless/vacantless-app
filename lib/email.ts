@@ -1151,3 +1151,114 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
     return { sent: false, reason: `fetch_error:${(e as Error).message}` };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Trade dispatch invite — a work order was dispatched to a trade (Option B
+// Slice 5, the guardrail amendment). Goes to the TRADE (a third actor, no
+// account): a branded email with the /job/[token] magic link to accept/decline,
+// quote, and propose a date. No money — the quote is a recorded number; the owner
+// pays the trade directly. Best-effort + degrades like the rest.
+// ---------------------------------------------------------------------------
+
+export type TradeDispatchInvitePayload = {
+  trade_email: string; // validated non-empty by the caller
+  trade_name: string | null;
+  token: string;
+  job_title: string;
+  property_address: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+};
+
+function jobUrl(token: string): string {
+  return `${APP_BASE_URL}/job/${encodeURIComponent(token)}`;
+}
+
+function tradeDispatchHtml(p: TradeDispatchInvitePayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "A property owner");
+  const hi = escapeHtml(firstName(p.trade_name));
+  const job = escapeHtml(p.job_title);
+  const where = p.property_address
+    ? ` at <strong>${escapeHtml(p.property_address)}</strong>`
+    : "";
+  const url = escapeHtml(jobUrl(p.token));
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">${org} would like to send you a job: <strong>${job}</strong>${where}. You can review the details, accept or decline, and send a quote with your earliest date - no account needed.</p>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">View the job</a>
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or paste this link into your browser:<br/><span style="color:#52525b;">${url}</span></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You're receiving this because ${org} dispatched a job to you. This link is unique to this job - please don't forward it. Any payment is arranged directly with ${org}.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded trade dispatch invite. Never throws; returns
+ * { sent:false } if BREVO_API_KEY is unset or the trade has no email.
+ */
+export async function sendTradeDispatchInvite(
+  p: TradeDispatchInvitePayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.trade_email) return { sent: false, reason: "no_trade_email" };
+
+  const subject = p.property_address
+    ? `New job from ${p.org_name || "a property owner"} - ${p.property_address}`
+    : `New job from ${p.org_name || "a property owner"}`;
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.trade_email,
+        ...(p.trade_name ? { name: p.trade_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: tradeDispatchHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}

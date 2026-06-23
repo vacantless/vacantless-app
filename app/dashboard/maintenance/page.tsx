@@ -37,12 +37,19 @@ import {
 } from "@/lib/directory";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { getCurrentOrg } from "@/lib/org";
-import { canUseIncidentIntake } from "@/lib/billing";
+import { canUseIncidentIntake, canUseIncidentDispatch } from "@/lib/billing";
 import {
   incidentCategoryLabel,
   incidentReportStatusLabel,
   workOrderTitleFromReport,
 } from "@/lib/incident-reports";
+import {
+  dispatchStatusLabel,
+  dispatchStatusTone,
+  isActiveDispatchStatus,
+  formatDispatchDate,
+  dispatchErrorMessage,
+} from "@/lib/work-order-dispatch";
 import { createIncidentMediaDownloadUrls } from "@/lib/incident-media-server";
 import {
   createWorkOrder,
@@ -57,6 +64,10 @@ import {
   promoteTradeToDirectory,
   unlistDirectoryTrade,
   addDirectoryTradeToRolodex,
+  dispatchWorkOrderToTrade,
+  approveDispatchSchedule,
+  completeDispatch,
+  cancelDispatch,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +148,20 @@ type IncidentMediaRow = {
   kind: string;
 };
 
+// A trade dispatch on a work order (Option B Slice 5). One active per work order
+// (guaranteed by the partial-unique index in 0065).
+type DispatchRow = {
+  id: string;
+  work_order_id: string;
+  dispatch_status: string;
+  trade_name_snapshot: string;
+  quote_cents: number | null;
+  quote_note: string | null;
+  proposed_date: string | null;
+  scheduled_for: string | null;
+  decline_reason: string | null;
+};
+
 type PropertyRef = { id: string; address: string; building_key: string | null };
 type TenancyRef = { id: string; label: string };
 type BuildingOption = { key: string; label: string };
@@ -201,6 +226,14 @@ const REPORT_ERROR: Record<string, string> = {
   locked: "Tenant issue reporting is a Growth feature. Upgrade to enable it.",
   failed: "Something went wrong handling that report. Please try again.",
 };
+// In-app trade dispatch (Slice 5) outcomes. Success codes show a green banner;
+// every other code maps through dispatchErrorMessage to a red banner.
+const DISP_SUCCESS: Record<string, string> = {
+  dispatched: "Job dispatched. We emailed the trade a link to accept and quote.",
+  approved: "Quote approved and the job is scheduled.",
+  completed: "Dispatch marked complete.",
+  cancelled: "Dispatch cancelled.",
+};
 
 function fmtDate(d: string | null): string {
   if (!d) return "—";
@@ -247,6 +280,7 @@ export default async function MaintenancePage({
     dir?: string;
     dirType?: string;
     dirArea?: string;
+    disp?: string;
   };
 }) {
   const supabase = createClient();
@@ -349,6 +383,35 @@ export default async function MaintenancePage({
     return primary?.name ?? "Tenant";
   }
 
+  // --- In-app trade dispatch (Option B Slice 5) ------------------------------
+  // Premium+ only (incident_dispatch). When entitled, load the ACTIVE dispatch
+  // (if any) for each work order so the row can show its state + the operator
+  // controls (approve+schedule a quote, mark complete, cancel) and otherwise
+  // offer "dispatch to a trade". The partial-unique index guarantees at most one
+  // active dispatch per work order. When NOT entitled the row shows a locked
+  // upsell (show-locked, never hide — the two-axis visibility rule).
+  const canDispatch = canUseIncidentDispatch(org?.plan);
+  const activeDispatchByWo = new Map<string, DispatchRow>();
+  if (canDispatch && allOrders.length > 0) {
+    const { data: dispData } = await supabase
+      .from("work_order_dispatches")
+      .select(
+        "id, work_order_id, dispatch_status, trade_name_snapshot, quote_cents, quote_note, proposed_date, scheduled_for, decline_reason",
+      )
+      .in(
+        "work_order_id",
+        allOrders.map((o) => o.id),
+      )
+      .in("dispatch_status", ["offered", "accepted", "quoted", "scheduled"]);
+    for (const d of (dispData ?? []) as DispatchRow[]) {
+      activeDispatchByWo.set(d.work_order_id, d);
+    }
+  }
+  // Trades that can actually receive a dispatch: active + have an email on file.
+  const dispatchableTrades = activeTrades.filter(
+    (t) => !!t.email && t.email.trim() !== "",
+  );
+
   // Distinct buildings (for the "whole building" scope), each labeled by the
   // unit-stripped street address of a representative unit — not the raw key.
   const buildingLabels = new Map<string, string>();
@@ -430,6 +493,11 @@ export default async function MaintenancePage({
   const tradeError =
     searchParams.trade && !TRADE_SUCCESS[searchParams.trade]
       ? workOrderErrorMessage(searchParams.trade)
+      : null;
+  const dispFlash = searchParams.disp ? DISP_SUCCESS[searchParams.disp] : null;
+  const dispError =
+    searchParams.disp && !DISP_SUCCESS[searchParams.disp]
+      ? dispatchErrorMessage(searchParams.disp)
       : null;
 
   const editId = searchParams.edit ?? "";
@@ -532,14 +600,14 @@ export default async function MaintenancePage({
         }
       />
 
-      {(woFlash || tradeFlash || dirFlash || reportFlash) && (
+      {(woFlash || tradeFlash || dirFlash || reportFlash || dispFlash) && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {woFlash ?? tradeFlash ?? dirFlash ?? reportFlash}
+          {woFlash ?? tradeFlash ?? dirFlash ?? reportFlash ?? dispFlash}
         </div>
       )}
-      {(woError || tradeError || dirError || reportError) && (
+      {(woError || tradeError || dirError || reportError || dispError) && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {woError ?? tradeError ?? dirError ?? reportError}
+          {woError ?? tradeError ?? dirError ?? reportError ?? dispError}
         </div>
       )}
 
@@ -744,6 +812,21 @@ export default async function MaintenancePage({
         )}
       </div>
 
+      {/* Premium dispatch upsell — shown once (show-locked, never hide). When
+          entitled, each work order carries its own dispatch controls instead. */}
+      {!canDispatch && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50/70 px-4 py-3 text-sm text-gray-600">
+          <span>
+            <span className="font-medium text-gray-800">Dispatch jobs to your trades in-app</span> — send a
+            work order to a trade who can accept, quote, and schedule it without an account. Available on
+            Premium.
+          </span>
+          <Link href="/dashboard/billing" className={`${SECONDARY_ACTION_CLASS} shrink-0`}>
+            See Premium →
+          </Link>
+        </div>
+      )}
+
       {/* Work-order list */}
       <div className="mt-4 space-y-3">
         {orders.length === 0 ? (
@@ -892,6 +975,122 @@ export default async function MaintenancePage({
                     )}
                   </div>
                 </div>
+
+                {/* In-app trade dispatch (Option B Slice 5). Premium only; shown
+                    per work order. We never move money — the trade quotes, the
+                    owner approves a date, the owner pays the trade directly. */}
+                {canDispatch &&
+                  (() => {
+                    const disp = activeDispatchByWo.get(o.id);
+                    return (
+                      <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3">
+                        {disp ? (
+                          <div>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                  Trade dispatch
+                                </span>
+                                <StatusChip tone={chipTone(dispatchStatusTone(disp.dispatch_status))}>
+                                  {dispatchStatusLabel(disp.dispatch_status)}
+                                </StatusChip>
+                              </div>
+                              <span className="text-xs text-gray-500">{disp.trade_name_snapshot}</span>
+                            </div>
+                            {disp.quote_cents != null && (
+                              <p className="mt-1 text-xs text-gray-600">
+                                Quote: {formatMoneyCents(disp.quote_cents)}
+                                {disp.proposed_date ? ` · proposed ${formatDispatchDate(disp.proposed_date)}` : ""}
+                              </p>
+                            )}
+                            {disp.quote_note && (
+                              <p className="mt-0.5 text-xs italic text-gray-500">“{disp.quote_note}”</p>
+                            )}
+                            {disp.scheduled_for && (
+                              <p className="mt-1 text-xs text-gray-600">
+                                Scheduled: {formatDispatchDate(disp.scheduled_for)}
+                              </p>
+                            )}
+                            {(disp.dispatch_status === "offered" || disp.dispatch_status === "accepted") && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                Waiting on the trade to{" "}
+                                {disp.dispatch_status === "offered" ? "accept the job" : "send a quote"}.
+                              </p>
+                            )}
+                            <div className="mt-2 flex flex-wrap items-end gap-2">
+                              {disp.dispatch_status === "quoted" && (
+                                <form action={approveDispatchSchedule} className="flex items-end gap-2">
+                                  <input type="hidden" name="dispatch_id" value={disp.id} />
+                                  <div>
+                                    <label className={labelCls}>Confirm date</label>
+                                    <input
+                                      type="date"
+                                      name="scheduled_for"
+                                      defaultValue={disp.proposed_date ?? ""}
+                                      required
+                                      className={inputCls}
+                                    />
+                                  </div>
+                                  <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="…">
+                                    Approve &amp; schedule
+                                  </SubmitButton>
+                                </form>
+                              )}
+                              {disp.dispatch_status === "scheduled" && (
+                                <form action={completeDispatch}>
+                                  <input type="hidden" name="dispatch_id" value={disp.id} />
+                                  <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="…">
+                                    Mark complete
+                                  </SubmitButton>
+                                </form>
+                              )}
+                              <form action={cancelDispatch}>
+                                <input type="hidden" name="dispatch_id" value={disp.id} />
+                                <SubmitButton
+                                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50"
+                                  pendingLabel="…"
+                                >
+                                  Cancel dispatch
+                                </SubmitButton>
+                              </form>
+                            </div>
+                          </div>
+                        ) : dispatchableTrades.length > 0 ? (
+                          <form action={dispatchWorkOrderToTrade} className="flex flex-wrap items-end gap-2">
+                            <input type="hidden" name="work_order_id" value={o.id} />
+                            <div className="min-w-[10rem] flex-1">
+                              <label className={labelCls}>Dispatch to a trade</label>
+                              <select name="trade_contact_id" required defaultValue="" className={inputCls}>
+                                <option value="" disabled>
+                                  Choose a trade…
+                                </option>
+                                {dispatchableTrades.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}
+                                    {t.trade_type ? ` (${t.trade_type})` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="min-w-[10rem] flex-1">
+                              <label className={labelCls}>Note to the trade (optional)</label>
+                              <input name="operator_note" placeholder="Access details, scope…" className={inputCls} />
+                            </div>
+                            <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Sending…">
+                              Dispatch
+                            </SubmitButton>
+                          </form>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            Add a trade with an email to dispatch this job.{" "}
+                            <a href="#trades" className="font-medium text-brand hover:underline">
+                              Manage trades
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                 {/* Inline edit form */}
                 {isEditing && (
