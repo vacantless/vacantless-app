@@ -78,22 +78,37 @@ export interface BankFeedProvider {
 
 // --- Provider routing (pure) ------------------------------------------------
 //
-// Which aggregator an org uses is a function of its plan entitlements, NOT a
-// per-org setting: Premium (accounting) -> Flinks; any tier with the bank_feed
-// entitlement -> Plaid; otherwise no live feed (CSV import only). This keeps the
-// tier matrix (lib/billing PLAN_ENTITLEMENTS) the single source of truth — see
-// the bank_feed flag added there. `accounting` implies Premium, so it is checked
-// first.
-//
+// Tiers are a SUPERSET: a higher tier gets everything the lower tier has PLUS
+// more. Every paid-feed tier (Growth+) gets Plaid; Premium ADDS Flinks on top —
+// it does NOT lose Plaid. So a Premium org can run connections on either rail.
+// Driven entirely by the plan entitlements (lib/billing PLAN_ENTITLEMENTS): the
+// `bank_feed` flag = "has the Plaid rail", `accounting` = "Premium, also gets
+// Flinks". Free / unentitled = no live feed (CSV import only).
+
+/**
+ * All aggregator rails a plan is entitled to, lowest-to-highest. Growth = [plaid];
+ * Premium = [plaid, flinks] (superset). Empty = no live feed.
+ */
+export function availableProviders(entitlements: PlanEntitlements): ProviderKey[] {
+  const out: ProviderKey[] = [];
+  if (entitlements.bank_feed || entitlements.accounting) out.push("plaid");
+  if (entitlements.accounting) out.push("flinks"); // Premium-only addition
+  return out;
+}
+
+/**
+ * The DEFAULT rail for a NEW connection. Plaid is the built/default rail for every
+ * entitled tier today; Premium also has Flinks available (see availableProviders),
+ * and once the Flinks adapter ships (Slice 6) Premium's default can prefer it while
+ * keeping Plaid. Returns null when the plan has no live feed.
+ */
 export function providerForPlan(entitlements: PlanEntitlements): ProviderKey | null {
-  if (entitlements.accounting) return "flinks"; // Premium
-  if (entitlements.bank_feed) return "plaid"; // Growth+
-  return null; // Free / unentitled: manual CSV import only
+  return availableProviders(entitlements).length > 0 ? "plaid" : null;
 }
 
 /** True when the org may use a LIVE aggregator feed (vs. CSV import only). */
 export function hasLiveBankFeed(entitlements: PlanEntitlements): boolean {
-  return providerForPlan(entitlements) !== null;
+  return availableProviders(entitlements).length > 0;
 }
 
 // --- Normalization helpers (pure) -------------------------------------------

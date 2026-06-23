@@ -1,6 +1,7 @@
 // Unit tests for the pure bank-feed seam. Run: npx tsx scripts/test-bank-feed.ts
 import {
   providerForPlan,
+  availableProviders,
   hasLiveBankFeed,
   normalizeAmount,
   isExpenseCandidate,
@@ -22,15 +23,20 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- Provider routing off the real entitlements matrix ----------------------
-// Premium (accounting) -> Flinks; Growth (bank_feed) -> Plaid; Free/trial -> none.
-ok("premium -> flinks", providerForPlan(PLAN_ENTITLEMENTS.premium) === "flinks");
-ok("growth -> plaid", providerForPlan(PLAN_ENTITLEMENTS.growth) === "plaid");
+// Tiers are a SUPERSET: Growth = [plaid]; Premium = [plaid, flinks]. Plaid is the
+// default rail for every entitled tier today; Free/trial = no live feed.
+ok("premium default -> plaid", providerForPlan(PLAN_ENTITLEMENTS.premium) === "plaid");
+ok("growth default -> plaid", providerForPlan(PLAN_ENTITLEMENTS.growth) === "plaid");
 ok("free -> none", providerForPlan(PLAN_ENTITLEMENTS.free) === null);
 ok("trial -> none", providerForPlan(PLAN_ENTITLEMENTS.trial) === null);
 
-// accounting wins over bank_feed (a premium-shaped entitlement -> Flinks).
-ok("accounting wins over bank_feed", providerForPlan({ ...PLAN_ENTITLEMENTS.growth, accounting: true }) === "flinks");
-ok("bank_feed only -> plaid", providerForPlan({ ...PLAN_ENTITLEMENTS.free, bank_feed: true }) === "plaid");
+// Superset: Premium has everything Growth has (plaid) PLUS flinks.
+ok("growth providers = [plaid]", JSON.stringify(availableProviders(PLAN_ENTITLEMENTS.growth)) === JSON.stringify(["plaid"]));
+ok("premium providers = [plaid, flinks] (superset)", JSON.stringify(availableProviders(PLAN_ENTITLEMENTS.premium)) === JSON.stringify(["plaid", "flinks"]));
+ok("premium keeps growth's plaid", availableProviders(PLAN_ENTITLEMENTS.premium).includes("plaid"));
+ok("premium adds flinks", availableProviders(PLAN_ENTITLEMENTS.premium).includes("flinks"));
+ok("free providers = []", availableProviders(PLAN_ENTITLEMENTS.free).length === 0);
+ok("bank_feed only -> [plaid]", JSON.stringify(availableProviders({ ...PLAN_ENTITLEMENTS.free, bank_feed: true })) === JSON.stringify(["plaid"]));
 
 ok("hasLiveBankFeed premium", hasLiveBankFeed(PLAN_ENTITLEMENTS.premium) === true);
 ok("hasLiveBankFeed free", hasLiveBankFeed(PLAN_ENTITLEMENTS.free) === false);
