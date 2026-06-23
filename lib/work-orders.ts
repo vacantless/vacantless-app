@@ -231,6 +231,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   category: "Pick a valid category.",
   priority: "Pick a valid priority.",
   cost: "Cost can't be negative.",
+  quote: "Quote can't be negative.",
+  expected_dates: "The expected finish date can't be before the start date.",
   status: "That isn't a valid status.",
   transition: "You can't move the work order to that status from where it is.",
   completed_date: "Enter the date the work was completed.",
@@ -450,4 +452,119 @@ export function findTemplateIdByName(
   const target = name.trim().toLowerCase();
   const hit = templates.find((t) => t.name.trim().toLowerCase() === target);
   return hit ? hit.id : null;
+}
+
+// --- Quote + expected timeline (Slice 4 — the Option A ceiling) --------------
+//
+// An operator can put an ESTIMATE (quote_cents) and an expected window
+// (expected_start / expected_finish) on a work order so they can be communicated
+// to the tenant via the existing offer-to-send branded message. This is
+// record-keeping + communication only — no money moves (cost_cents stays the
+// final reconciled actual; quote_cents is the up-front estimate). Migration 0063.
+
+export type QuoteTimelineInput = {
+  /** Estimate in cents, or null when not quoted. Must be >= 0 when present. */
+  quoteCents: number | null;
+  /** "YYYY-MM-DD" or "" / null. */
+  expectedStart: string | null;
+  /** "YYYY-MM-DD" or "" / null. */
+  expectedFinish: string | null;
+};
+
+export type QuoteTimelineValidation =
+  | {
+      ok: true;
+      value: {
+        quoteCents: number | null;
+        expectedStart: string | null;
+        expectedFinish: string | null;
+      };
+    }
+  | { ok: false; code: string };
+
+/**
+ * Validate the operator-entered quote + expected window. The quote (when given)
+ * must be >= 0; the dates (when given) must parse; and when BOTH dates are given,
+ * finish must not precede start. Any field may be omitted independently (a quote
+ * with no dates, a start with no finish, etc.). Blank strings normalize to null.
+ */
+export function validateQuoteTimeline(v: QuoteTimelineInput): QuoteTimelineValidation {
+  const quoteCents = v.quoteCents;
+  if (quoteCents != null && quoteCents < 0) return { ok: false, code: "quote" };
+
+  const start = parseDateOrNull(v.expectedStart ?? "");
+  const finish = parseDateOrNull(v.expectedFinish ?? "");
+  // String date compare is correct for "YYYY-MM-DD".
+  if (start && finish && finish < start) return { ok: false, code: "expected_dates" };
+
+  return {
+    ok: true,
+    value: { quoteCents: quoteCents ?? null, expectedStart: start, expectedFinish: finish },
+  };
+}
+
+/**
+ * Format a single "YYYY-MM-DD" as a plain, timezone-safe day label
+ * ("Jun 25, 2026"). Returns "" for a missing/unparseable date. UTC-pinned so a
+ * server component (UTC on Vercel) and the browser agree — same idiom as the
+ * maintenance page's local fmtDate.
+ */
+export function formatExpectedDate(d: string | null | undefined): string {
+  const parsed = parseDateOrNull(d ?? "");
+  if (!parsed) return "";
+  const [y, m, day] = parsed.split("-").map((n) => parseInt(n, 10));
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-CA", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * A human window from an expected start/finish pair:
+ *   both, same day  -> "Jun 25, 2026"
+ *   both, range     -> "Jun 25, 2026 - Jun 27, 2026"   (hyphen, house style)
+ *   start only      -> "starting Jun 25, 2026"
+ *   finish only     -> "by Jun 27, 2026"
+ *   neither         -> ""
+ */
+export function formatExpectedWindow(
+  start: string | null | undefined,
+  finish: string | null | undefined,
+): string {
+  const s = formatExpectedDate(start);
+  const f = formatExpectedDate(finish);
+  if (s && f) return s === f ? s : `${s} - ${f}`;
+  if (s) return `starting ${s}`;
+  if (f) return `by ${f}`;
+  return "";
+}
+
+/**
+ * Build the tenant-facing details block for a maintenance update, from the
+ * operator-entered quote + expected window. Plain text (the tenant-message
+ * composer renders plain text into the branded card). Returns "" when neither a
+ * quote nor any date is set, so the caller appends nothing. The estimate line is
+ * framed as an estimate (not a charge) — Vacantless never moves money; the owner
+ * settles with the trade directly.
+ *
+ * Example (both set):
+ *   "Here are the details:
+ *    - Estimated cost: $250
+ *    - Expected: Jun 25, 2026 - Jun 27, 2026"
+ */
+export function tenantScheduleDetails(wo: {
+  quote_cents?: number | null;
+  expected_start?: string | null;
+  expected_finish?: string | null;
+}): string {
+  const lines: string[] = [];
+  if (wo.quote_cents != null) {
+    lines.push(`- Estimated cost: ${formatMoneyCents(wo.quote_cents)}`);
+  }
+  const window = formatExpectedWindow(wo.expected_start, wo.expected_finish);
+  if (window) lines.push(`- Expected: ${window}`);
+  if (lines.length === 0) return "";
+  return ["Here are the details:", ...lines].join("\n");
 }

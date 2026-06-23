@@ -27,6 +27,10 @@ import {
   maintenanceTemplateNameForStatus,
   statusOffersTenantUpdate,
   findTemplateIdByName,
+  validateQuoteTimeline,
+  formatExpectedDate,
+  formatExpectedWindow,
+  tenantScheduleDetails,
   type WorkOrderCostRow,
 } from "../lib/work-orders";
 
@@ -317,6 +321,58 @@ ok(
   "status->template->id resolves end to end",
   findTemplateIdByName(sampleTemplates, maintenanceTemplateNameForStatus("completed")) === "t2",
 );
+
+// --- Quote + expected timeline (Slice 4) ------------------------------------
+ok("quote/timeline: all blank ok -> nulls", (() => {
+  const r = validateQuoteTimeline({ quoteCents: null, expectedStart: "", expectedFinish: "" });
+  return r.ok && r.value.quoteCents === null && r.value.expectedStart === null && r.value.expectedFinish === null;
+})());
+ok("quote/timeline: negative quote rejected", (() => {
+  const r = validateQuoteTimeline({ quoteCents: -1, expectedStart: null, expectedFinish: null });
+  return !r.ok && r.code === "quote";
+})());
+ok("quote/timeline: zero quote allowed", (() => {
+  const r = validateQuoteTimeline({ quoteCents: 0, expectedStart: null, expectedFinish: null });
+  return r.ok && r.value.quoteCents === 0;
+})());
+ok("quote/timeline: finish before start rejected", (() => {
+  const r = validateQuoteTimeline({ quoteCents: null, expectedStart: "2026-06-27", expectedFinish: "2026-06-25" });
+  return !r.ok && r.code === "expected_dates";
+})());
+ok("quote/timeline: equal dates ok", (() => {
+  const r = validateQuoteTimeline({ quoteCents: null, expectedStart: "2026-06-25", expectedFinish: "2026-06-25" });
+  return r.ok;
+})());
+ok("quote/timeline: start only ok", (() => {
+  const r = validateQuoteTimeline({ quoteCents: 25000, expectedStart: "2026-06-25", expectedFinish: "" });
+  return r.ok && r.value.expectedStart === "2026-06-25" && r.value.expectedFinish === null && r.value.quoteCents === 25000;
+})());
+ok("quote/timeline: finish only ok", (() => {
+  const r = validateQuoteTimeline({ quoteCents: null, expectedStart: "", expectedFinish: "2026-06-27" });
+  return r.ok && r.value.expectedStart === null && r.value.expectedFinish === "2026-06-27";
+})());
+ok("quote/timeline: garbage date normalizes to null", (() => {
+  const r = validateQuoteTimeline({ quoteCents: null, expectedStart: "not-a-date", expectedFinish: "" });
+  return r.ok && r.value.expectedStart === null;
+})());
+ok("error message: quote", workOrderErrorMessage("quote") === "Quote can't be negative.");
+ok("error message: expected_dates", workOrderErrorMessage("expected_dates") === "The expected finish date can't be before the start date.");
+
+// formatExpectedDate / formatExpectedWindow
+ok("formatExpectedDate blank -> ''", formatExpectedDate("") === "" && formatExpectedDate(null) === "");
+ok("formatExpectedDate parses", formatExpectedDate("2026-06-25") === "Jun 25, 2026");
+ok("formatExpectedWindow none -> ''", formatExpectedWindow(null, null) === "");
+ok("formatExpectedWindow same day collapses", formatExpectedWindow("2026-06-25", "2026-06-25") === "Jun 25, 2026");
+ok("formatExpectedWindow range uses hyphen", formatExpectedWindow("2026-06-25", "2026-06-27") === "Jun 25, 2026 - Jun 27, 2026");
+ok("formatExpectedWindow start only", formatExpectedWindow("2026-06-25", null) === "starting Jun 25, 2026");
+ok("formatExpectedWindow finish only", formatExpectedWindow(null, "2026-06-27") === "by Jun 27, 2026");
+
+// tenantScheduleDetails
+ok("tenantScheduleDetails empty -> ''", tenantScheduleDetails({}) === "");
+ok("tenantScheduleDetails quote only", tenantScheduleDetails({ quote_cents: 25000 }) === "Here are the details:\n- Estimated cost: $250.00");
+ok("tenantScheduleDetails dates only", tenantScheduleDetails({ expected_start: "2026-06-25", expected_finish: "2026-06-27" }) === "Here are the details:\n- Expected: Jun 25, 2026 - Jun 27, 2026");
+ok("tenantScheduleDetails both", tenantScheduleDetails({ quote_cents: 18050, expected_start: "2026-06-25", expected_finish: "2026-06-25" }) === "Here are the details:\n- Estimated cost: $180.50\n- Expected: Jun 25, 2026");
+ok("tenantScheduleDetails zero quote still shows", tenantScheduleDetails({ quote_cents: 0 }) === "Here are the details:\n- Estimated cost: $0.00");
 
 console.log(`\nwork-orders: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

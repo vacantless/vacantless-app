@@ -48,6 +48,7 @@ import {
   maintenanceTemplateNameForStatus,
   statusOffersTenantUpdate,
   findTemplateIdByName,
+  tenantScheduleDetails,
 } from "@/lib/work-orders";
 import {
   PAYMENT_METHODS,
@@ -286,6 +287,7 @@ export default async function TenancyDetailPage({
     lease?: string;
     wo?: string;
     wo_msg?: string;
+    wo_id?: string;
     report?: string;
   };
 }) {
@@ -370,7 +372,9 @@ export default async function TenancyDetailPage({
   // this org. Full management lives on /dashboard/maintenance.
   const { data: woRows } = await supabase
     .from("work_orders")
-    .select("id, title, status, priority, category, scheduled_for, trade:trade_contacts(name)")
+    .select(
+      "id, title, status, priority, category, scheduled_for, quote_cents, expected_start, expected_finish, trade:trade_contacts(name)",
+    )
     .eq("tenancy_id", t.id)
     .order("created_at", { ascending: false });
   const workOrders = (woRows ?? []) as unknown as {
@@ -380,6 +384,9 @@ export default async function TenancyDetailPage({
     priority: string;
     category: string;
     scheduled_for: string | null;
+    quote_cents: number | null;
+    expected_start: string | null;
+    expected_finish: string | null;
     trade: { name: string } | null;
   }[];
   const openWorkOrders = workOrders.filter((w) => isActiveStatus(w.status));
@@ -400,6 +407,17 @@ export default async function TenancyDetailPage({
     templates,
     maintenanceTemplateNameForStatus(searchParams.wo_msg ?? ""),
   );
+
+  // Slice 4: when the message offer carries a work-order id (?wo_id=), pre-fill
+  // the composer body with that job's quote + expected window so the operator
+  // shares concrete numbers, not just the template's [bracket] gaps. Empty string
+  // when the WO has neither set (or the id doesn't match a WO on this tenancy).
+  const notifyWorkOrder = searchParams.wo_id
+    ? workOrders.find((w) => w.id === searchParams.wo_id)
+    : null;
+  const initialDetails = notifyWorkOrder
+    ? tenantScheduleDetails(notifyWorkOrder)
+    : "";
 
   // Plan gate for the composer (S214): SMS is a paid-tier capability. The server
   // action enforces this regardless; here we mirror it so the composer can hide
@@ -1313,7 +1331,7 @@ export default async function TenancyDetailPage({
                   </span>
                   {statusOffersTenantUpdate(w.status) && (
                     <Link
-                      href={`/dashboard/tenancies/${t.id}?wo_msg=${w.status}#message`}
+                      href={`/dashboard/tenancies/${t.id}?wo_msg=${w.status}&wo_id=${w.id}#message`}
                       className="text-xs font-medium text-brand hover:underline"
                     >
                       Tell the tenant →
@@ -1384,7 +1402,7 @@ export default async function TenancyDetailPage({
         id="message"
         title="Tenant messages"
         status={messagesStatus}
-        defaultOpen={!!initialTemplateId}
+        defaultOpen={!!initialTemplateId || !!initialDetails}
       >
       <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-gray-600">
@@ -1397,10 +1415,11 @@ export default async function TenancyDetailPage({
           .
         </p>
 
-        {initialTemplateId && (
+        {(initialTemplateId || initialDetails) && (
           <div className="rounded-lg border border-brand/30 bg-brand/5 px-4 py-3 text-sm text-gray-700">
-            A maintenance update template is loaded below, ready for you to review,
-            fill in any details in [brackets], and send.
+            A maintenance update is loaded below
+            {initialDetails ? ", with this job's quote and expected dates filled in" : ""}, ready
+            for you to review, fill in any remaining details in [brackets], and send.
           </div>
         )}
 
@@ -1418,6 +1437,7 @@ export default async function TenancyDetailPage({
             orgContactEmail={org?.public_contact_email ?? null}
             orgContactPhone={org?.public_contact_phone ?? null}
             initialTemplateId={initialTemplateId}
+            initialDetails={initialDetails}
             sendAction={sendTenantMessage}
           />
         )}

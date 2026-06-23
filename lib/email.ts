@@ -978,6 +978,119 @@ export async function sendLeaseSignatureRequest(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Operator notification — a new tenant incident report landed (Option B Slice 4).
+// Unlike every other sender here (renter / tenant facing), this goes to the
+// OPERATOR TEAM: a report otherwise only surfaces when someone opens the
+// dashboard, so we proactively tell whoever can triage it. Recipients are
+// resolved upstream from org membership + manage_work_orders
+// (resolveIncidentNotifyEmails). Best-effort + degrades like the rest. We never
+// auto-send anything tenant-facing from here — this is an internal heads-up only.
+// ---------------------------------------------------------------------------
+
+export type IncidentReportNotificationPayload = {
+  to_email: string; // a single operator recipient (caller fans out)
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  property_address: string | null;
+  category_label: string; // already humanized (incidentCategoryLabel)
+  description: string;
+  reporter_name: string | null;
+};
+
+function maintenanceInboxUrl(): string {
+  return `${APP_BASE_URL}/dashboard/maintenance#reports`;
+}
+
+function incidentNotificationHtml(p: IncidentReportNotificationPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Vacantless");
+  const addr = p.property_address ? escapeHtml(p.property_address) : "a unit";
+  const who = escapeHtml((p.reporter_name ?? "").trim() || "A tenant");
+  const cat = escapeHtml(p.category_label);
+  const url = escapeHtml(maintenanceInboxUrl());
+  // Trim the description to a readable preview; the full text is in the inbox.
+  const descRaw = (p.description ?? "").trim();
+  const desc = escapeHtml(descRaw.length > 600 ? descRaw.slice(0, 600) + "…" : descRaw);
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">New maintenance report</p>
+      <p style="margin:0 0 16px;">${who} reported an issue at <strong>${addr}</strong>.</p>
+      <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 6px;"><span style="color:#71717a;">Category:</span> <strong>${cat}</strong></p>
+        <p style="margin:0;white-space:pre-wrap;color:#3f3f46;">${desc || "(no description)"}</p>
+      </div>
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Review &amp; approve</a>
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or open it directly:<br/><span style="color:#52525b;">${url}</span></p>
+      <p style="margin:24px 0 0;color:#52525b;">Vacantless</p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you manage maintenance for ${org} in Vacantless.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort operator notification that a tenant filed a report. Never throws;
+ * returns { sent:false } if BREVO_API_KEY is unset or there's no recipient. The
+ * caller (the public report action) ignores the result — a failed heads-up must
+ * never block the tenant's submission.
+ */
+export async function sendIncidentReportNotification(
+  p: IncidentReportNotificationPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+
+  const subject = p.property_address
+    ? `New maintenance report - ${p.property_address}`
+    : "New maintenance report from a tenant";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    subject,
+    htmlContent: incidentNotificationHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 /**
  * Best-effort branded auto-reply. Never throws — callers can ignore the result.
  */

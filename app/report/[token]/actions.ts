@@ -3,7 +3,12 @@
 import { randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateReportSubmission } from "@/lib/incident-reports";
+import {
+  validateReportSubmission,
+  resolveIncidentNotifyEmails,
+  incidentCategoryLabel,
+  type NotifyMember,
+} from "@/lib/incident-reports";
 import {
   validateMediaUpload,
   kindForType,
@@ -11,6 +16,8 @@ import {
   incidentMediaStoragePath,
 } from "@/lib/incident-media";
 import { createIncidentMediaUploadUrl } from "@/lib/incident-media-server";
+import { canUseIncidentIntake } from "@/lib/billing";
+import { sendIncidentReportNotification } from "@/lib/email";
 
 // Public, UNAUTHENTICATED tenant incident-intake actions (Option B Slice 2).
 //
@@ -62,11 +69,95 @@ export async function createIncidentReport(input: {
   if (error || !result?.ok || !result.report_id || !result.organization_id) {
     return { ok: false, reason: result?.reason ?? "failed" };
   }
+
+  // Best-effort: tell the operator team a report came in (Slice 4). Awaited so it
+  // runs before the action returns, but fully isolated — a notification failure
+  // must NEVER fail the tenant's submission (the report is already saved).
+  try {
+    await notifyOperatorsOfNewReport(result.organization_id, result.report_id);
+  } catch {
+    // swallow — the report is saved; the team will still see it in the dashboard
+  }
+
   return {
     ok: true,
     reportId: result.report_id,
     organizationId: result.organization_id,
   };
+}
+
+// Notify everyone on the org who can triage maintenance that a new report landed.
+// The tenant is account-less (anon), so this uses the SERVICE-ROLE admin client
+// to read the org, the report, and the membership emails RLS hides from anon.
+// Recipients derive from org membership + manage_work_orders (NOT a subscription
+// table). Email only for now — operators have no stored phone, so the SMS leg
+// (gated behind the `sms` entitlement) is deferred until operator contact numbers
+// exist. Caps the fan-out defensively.
+const MAX_NOTIFY_RECIPIENTS = 10;
+
+async function notifyOperatorsOfNewReport(
+  organizationId: string,
+  reportId: string,
+): Promise<void> {
+  const admin = createAdminClient();
+  if (!admin) return; // no service key -> can't read members; skip quietly
+
+  // Org branding + fallback addresses + plan gate.
+  const { data: org } = await admin
+    .from("organizations")
+    .select("name, brand_color, logo_url, reply_to_email, public_contact_email, plan")
+    .eq("id", organizationId)
+    .maybeSingle();
+  if (!org) return;
+  // Defensive: only notify when the org actually has the intake feature (the link
+  // could only have been generated while entitled, but re-check anyway).
+  if (!canUseIncidentIntake(org.plan)) return;
+
+  // The report + its unit address (for the email subject/body).
+  const { data: report } = await admin
+    .from("incident_reports")
+    .select("category, description, reporter_name, property:properties(address)")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report) return;
+  const r = report as unknown as {
+    category: string;
+    description: string;
+    reporter_name: string | null;
+    property: { address: string } | null;
+  };
+
+  // Members of the org -> resolve each one's auth email.
+  const { data: memberRows } = await admin
+    .from("memberships")
+    .select("user_id, role")
+    .eq("organization_id", organizationId);
+  const members: NotifyMember[] = [];
+  for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
+    const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+    members.push({ role: m.role, email: u?.user?.email ?? null });
+  }
+
+  const recipients = resolveIncidentNotifyEmails(members, [
+    org.reply_to_email,
+    org.public_contact_email,
+  ]).slice(0, MAX_NOTIFY_RECIPIENTS);
+  if (recipients.length === 0) return;
+
+  await Promise.allSettled(
+    recipients.map((to) =>
+      sendIncidentReportNotification({
+        to_email: to,
+        org_name: org.name ?? null,
+        brand_color: org.brand_color ?? null,
+        logo_url: org.logo_url ?? null,
+        property_address: r.property?.address ?? null,
+        category_label: incidentCategoryLabel(r.category),
+        description: r.description,
+        reporter_name: r.reporter_name,
+      }),
+    ),
+  );
 }
 
 export type PrepareUploadResult =

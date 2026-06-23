@@ -10,6 +10,7 @@ import {
   validateWorkOrderInput,
   validateStatusChange,
   validateTradeContactInput,
+  validateQuoteTimeline,
   statusOffersTenantUpdate,
 } from "@/lib/work-orders";
 import { validateDirectoryListingInput, minimizeForDirectory } from "@/lib/directory";
@@ -116,6 +117,15 @@ export async function createWorkOrder(formData: FormData) {
   const scope = resolveScope(formData);
   if (!scope.ok) redirect(`${BASE}?wo=${scope.code}`);
 
+  // Quote + expected window (Slice 4). Optional; validated together so a finish
+  // before a start (or a negative quote) is caught before the insert.
+  const qt = validateQuoteTimeline({
+    quoteCents: parseAmountToCents(s(formData, "quote")),
+    expectedStart: s(formData, "expected_start"),
+    expectedFinish: s(formData, "expected_finish"),
+  });
+  if (!qt.ok) redirect(`${BASE}?wo=${qt.code}`);
+
   const supabase = createClient();
   const propertyId = scope.propertyId;
   const buildingKey = scope.buildingKey;
@@ -146,6 +156,9 @@ export async function createWorkOrder(formData: FormData) {
     priority: check.value.priority,
     status,
     cost_cents: check.value.costCents,
+    quote_cents: qt.value.quoteCents,
+    expected_start: qt.value.expectedStart,
+    expected_finish: qt.value.expectedFinish,
     reported_on: parseDateOrNull(s(formData, "reported_on")) ?? undefined,
     scheduled_for: parseDateOrNull(s(formData, "scheduled_for")),
   });
@@ -172,6 +185,13 @@ export async function updateWorkOrder(formData: FormData) {
 
   const scope = resolveScope(formData);
   if (!scope.ok) redirect(`${BASE}?wo=${scope.code}`);
+
+  const qt = validateQuoteTimeline({
+    quoteCents: parseAmountToCents(s(formData, "quote")),
+    expectedStart: s(formData, "expected_start"),
+    expectedFinish: s(formData, "expected_finish"),
+  });
+  if (!qt.ok) redirect(`${BASE}?wo=${qt.code}`);
 
   const supabase = createClient();
   const propertyId = scope.propertyId;
@@ -204,6 +224,9 @@ export async function updateWorkOrder(formData: FormData) {
       category: check.value.category,
       priority: check.value.priority,
       cost_cents: check.value.costCents,
+      quote_cents: qt.value.quoteCents,
+      expected_start: qt.value.expectedStart,
+      expected_finish: qt.value.expectedFinish,
       scheduled_for: parseDateOrNull(s(formData, "scheduled_for")),
       updated_at: new Date().toISOString(),
     })
@@ -256,7 +279,9 @@ export async function setWorkOrderStatus(formData: FormData) {
   // automatically; the owner reviews and sends.
   const tenancyId = (row as { tenancy_id: string | null }).tenancy_id;
   if (tenancyId && statusOffersTenantUpdate(check.value.status)) {
-    redirect(`${BASE}?wo=status&notify=${tenancyId}&to=${check.value.status}`);
+    // Carry the work-order id so the message offer can pre-fill the tenant note
+    // with this job's quote + expected window (Slice 4).
+    redirect(`${BASE}?wo=status&notify=${tenancyId}&to=${check.value.status}&wo_id=${id}`);
   }
   redirect(`${BASE}?wo=status`);
 }

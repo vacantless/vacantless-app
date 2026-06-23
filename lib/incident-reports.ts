@@ -14,6 +14,7 @@
 // No Supabase / Next imports.
 
 import { randomBytes } from "crypto";
+import { roleCan } from "./roles";
 
 // ---------------------------------------------------------------------------
 // Category whitelist — IDENTICAL to work_orders.category (migration 0054) so an
@@ -284,4 +285,53 @@ export function tenantReportPath(token: string): string {
 export function tenantReportUrl(baseUrl: string, token: string): string {
   const trimmed = baseUrl.replace(/\/+$/, "");
   return `${trimmed}${tenantReportPath(token)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Slice 4 — operator notification recipients. When a tenant submits a report,
+// the team should be told (a report otherwise only surfaces when someone opens
+// the dashboard). The recipient set is DERIVED from org membership + the
+// manage_work_orders capability (NOT a new subscription table — locked decision):
+// anyone who can triage the report is told about it. Pure so the action layer
+// (which reads memberships + resolves each member's auth email via the admin
+// client) just feeds rows in and gets a deduped, sendable email list out.
+// ---------------------------------------------------------------------------
+
+export type NotifyMember = { role: string | null; email: string | null };
+
+// Trim + lowercase + require a bare "@" so a blank / obviously-bad address is
+// dropped before we hand it to the sender (deliverability is the provider's job).
+function normalizeNotifyEmail(email: string | null | undefined): string | null {
+  const t = (email ?? "").trim().toLowerCase();
+  return t && t.includes("@") ? t : null;
+}
+
+/**
+ * Resolve who gets the "new tenant report" email: every org member whose role
+ * holds manage_work_orders, by usable email, deduped. When NO member email
+ * resolves (e.g. emails not yet readable), fall back to the FIRST usable address
+ * in `fallbacks` (the org's reply-to / public contact) so the team still hears
+ * about it. Unknown/missing roles never qualify (roleCan floors them to the most
+ * restrictive role). Pure + tested.
+ */
+export function resolveIncidentNotifyEmails(
+  members: NotifyMember[],
+  fallbacks: (string | null | undefined)[] = [],
+): string[] {
+  const out = new Set<string>();
+  for (const m of members ?? []) {
+    if (!roleCan(m.role, "manage_work_orders")) continue;
+    const e = normalizeNotifyEmail(m.email);
+    if (e) out.add(e);
+  }
+  if (out.size === 0) {
+    for (const f of fallbacks) {
+      const e = normalizeNotifyEmail(f);
+      if (e) {
+        out.add(e);
+        break; // one fallback address is enough
+      }
+    }
+  }
+  return [...out];
 }

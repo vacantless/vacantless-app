@@ -25,6 +25,7 @@ import {
   nextStatuses,
   isActiveStatus,
   formatMoneyCents,
+  formatExpectedWindow,
   workOrderErrorMessage,
 } from "@/lib/work-orders";
 import {
@@ -79,6 +80,9 @@ type WorkOrderRow = {
   priority: string;
   status: string;
   cost_cents: number | null;
+  quote_cents: number | null;
+  expected_start: string | null;
+  expected_finish: string | null;
   reported_on: string | null;
   scheduled_for: string | null;
   completed_on: string | null;
@@ -238,6 +242,7 @@ export default async function MaintenancePage({
     edit?: string;
     notify?: string;
     to?: string;
+    wo_id?: string;
     dir?: string;
     dirType?: string;
     dirArea?: string;
@@ -257,7 +262,7 @@ export default async function MaintenancePage({
     supabase
       .from("work_orders")
       .select(
-        "id, title, description, category, priority, status, cost_cents, reported_on, scheduled_for, completed_on, property_id, building_key, tenancy_id, trade_contact_id, property:properties(address), trade:trade_contacts(name, trade_type)",
+        "id, title, description, category, priority, status, cost_cents, quote_cents, expected_start, expected_finish, reported_on, scheduled_for, completed_on, property_id, building_key, tenancy_id, trade_contact_id, property:properties(address), trade:trade_contacts(name, trade_type)",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -537,7 +542,9 @@ export default async function MaintenancePage({
             to review.
           </span>
           <Link
-            href={`/dashboard/tenancies/${notifyTenancy.id}?wo_msg=${searchParams.to}#message`}
+            href={`/dashboard/tenancies/${notifyTenancy.id}?wo_msg=${searchParams.to}${
+              searchParams.wo_id ? `&wo_id=${searchParams.wo_id}` : ""
+            }#message`}
             className={`${SECONDARY_ACTION_CLASS} shrink-0`}
           >
             Message the tenant →
@@ -793,6 +800,20 @@ export default async function MaintenancePage({
                         <dt className="inline font-medium text-gray-600">Cost: </dt>
                         <dd className="inline">{o.cost_cents != null ? formatMoneyCents(o.cost_cents) : "—"}</dd>
                       </div>
+                      {o.quote_cents != null && (
+                        <div>
+                          <dt className="inline font-medium text-gray-600">Quote: </dt>
+                          <dd className="inline">{formatMoneyCents(o.quote_cents)}</dd>
+                        </div>
+                      )}
+                      {formatExpectedWindow(o.expected_start, o.expected_finish) && (
+                        <div>
+                          <dt className="inline font-medium text-gray-600">Expected: </dt>
+                          <dd className="inline">
+                            {formatExpectedWindow(o.expected_start, o.expected_finish)}
+                          </dd>
+                        </div>
+                      )}
                     </dl>
                   </div>
 
@@ -943,12 +964,33 @@ export default async function MaintenancePage({
                       </select>
                     </div>
                     <div>
-                      <label className={labelCls}>Cost (optional)</label>
+                      <label className={labelCls}>Final cost (optional)</label>
                       <input name="cost" defaultValue={o.cost_cents != null ? (o.cost_cents / 100).toFixed(2) : ""} inputMode="decimal" placeholder="0.00" className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Scheduled for (optional)</label>
                       <input type="date" name="scheduled_for" defaultValue={o.scheduled_for ?? ""} className={inputCls} />
+                    </div>
+                    <div className="sm:col-span-2 border-t border-gray-100 pt-3">
+                      <p className="text-xs font-medium text-gray-600">Quote &amp; timeline for the tenant</p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        An estimate and expected dates you can share with the tenant in a message. The
+                        owner still pays the trade directly — Vacantless never moves money.
+                      </p>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Quote / estimate (optional)</label>
+                      <input name="quote" defaultValue={o.quote_cents != null ? (o.quote_cents / 100).toFixed(2) : ""} inputMode="decimal" placeholder="0.00" className={inputCls} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls}>Expected start</label>
+                        <input type="date" name="expected_start" defaultValue={o.expected_start ?? ""} className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Expected finish</label>
+                        <input type="date" name="expected_finish" defaultValue={o.expected_finish ?? ""} className={inputCls} />
+                      </div>
                     </div>
                     <div className="flex items-end gap-2 sm:col-span-2">
                       <SubmitButton
@@ -1063,7 +1105,7 @@ export default async function MaintenancePage({
               </select>
             </div>
             <div>
-              <label className={labelCls}>Cost (optional)</label>
+              <label className={labelCls}>Final cost (optional)</label>
               <input name="cost" inputMode="decimal" placeholder="0.00" className={inputCls} />
             </div>
             <div>
@@ -1073,6 +1115,20 @@ export default async function MaintenancePage({
             <div>
               <label className={labelCls}>Scheduled for (optional)</label>
               <input type="date" name="scheduled_for" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Quote / estimate (optional)</label>
+              <input name="quote" inputMode="decimal" placeholder="0.00" className={inputCls} />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+              <div>
+                <label className={labelCls}>Expected start (optional)</label>
+                <input type="date" name="expected_start" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Expected finish (optional)</label>
+                <input type="date" name="expected_finish" className={inputCls} />
+              </div>
             </div>
             <div className="sm:col-span-2">
               <SubmitButton

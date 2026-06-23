@@ -68,6 +68,7 @@ export default function TenantMessageComposer({
   orgContactEmail = null,
   orgContactPhone = null,
   initialTemplateId = null,
+  initialDetails = null,
   sendAction,
 }: {
   tenancyId: string;
@@ -91,6 +92,10 @@ export default function TenantMessageComposer({
   // this is the saved-template id to pre-load so the operator lands on a ready
   // maintenance update. null = open blank, the normal case.
   initialTemplateId?: string | null;
+  // A plain-text details block (the work order's quote + expected window) to
+  // append to the body once on deep-link (Slice 4). Appended AFTER any initial
+  // template so the operator lands on a ready note with the concrete numbers in.
+  initialDetails?: string | null;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [channel, setChannel] = useState<MessageChannel>("email");
@@ -160,19 +165,26 @@ export default function TenantMessageComposer({
     setBody(tpl.body);
   }
 
-  // Pre-load a template when deep-linked from a work-order status change
-  // (Slice 4). Runs once per distinct initialTemplateId; if the template was
-  // renamed/deleted (not found), applyTemplate is a no-op and the composer just
-  // opens blank. The operator can still change everything before sending.
-  const appliedInitial = useRef<string | null>(null);
+  // Pre-load a template + append the work-order details when deep-linked from a
+  // status change (Slice 4). Runs ONCE. If the template was renamed/deleted, the
+  // template step is a no-op and the composer just opens with the details block
+  // (or blank). The detail block is appended AFTER the template body via a
+  // functional setBody so it lands on top of the freshly-applied template text.
+  // The operator can still change everything before sending.
+  const appliedInitial = useRef(false);
   useEffect(() => {
-    if (!initialTemplateId) return;
-    if (appliedInitial.current === initialTemplateId) return;
-    if (!templates.some((t) => t.id === initialTemplateId)) return;
-    appliedInitial.current = initialTemplateId;
-    applyTemplate(initialTemplateId);
+    if (appliedInitial.current) return;
+    if (!initialTemplateId && !initialDetails) return;
+    appliedInitial.current = true;
+    if (initialTemplateId && templates.some((t) => t.id === initialTemplateId)) {
+      applyTemplate(initialTemplateId);
+    }
+    const details = (initialDetails ?? "").trim();
+    if (details) {
+      setBody((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${details}` : details));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTemplateId]);
+  }, [initialTemplateId, initialDetails]);
 
   function toggle(id: string) {
     setSelected((prev) => {

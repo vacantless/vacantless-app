@@ -24,6 +24,7 @@ import {
   MAX_DECLINE_REASON_LEN,
   tenantReportPath,
   tenantReportUrl,
+  resolveIncidentNotifyEmails,
 } from "../lib/incident-reports";
 import { WORK_ORDER_CATEGORIES } from "../lib/work-orders";
 
@@ -239,6 +240,50 @@ ok("tenantReportPath", tenantReportPath("abc123") === "/report/abc123");
 ok("tenantReportPath encodes", tenantReportPath("a/b") === "/report/a%2Fb");
 ok("tenantReportUrl joins", tenantReportUrl("https://app.vacantless.com", "tok") === "https://app.vacantless.com/report/tok");
 ok("tenantReportUrl strips trailing slash", tenantReportUrl("https://app.vacantless.com/", "tok") === "https://app.vacantless.com/report/tok");
+
+// --- Notification recipients (Slice 4) --------------------------------------
+ok("notify: owner_admin + operator get it, helper does not", (() => {
+  const r = resolveIncidentNotifyEmails([
+    { role: "owner_admin", email: "Owner@Example.com" },
+    { role: "operator", email: "op@example.com" },
+    { role: "showing_helper", email: "helper@example.com" },
+  ]);
+  return r.length === 2 && r.includes("owner@example.com") && r.includes("op@example.com");
+})());
+ok("notify: lowercases + dedupes", (() => {
+  const r = resolveIncidentNotifyEmails([
+    { role: "owner_admin", email: "A@x.com" },
+    { role: "operator", email: "a@x.com" },
+  ]);
+  return r.length === 1 && r[0] === "a@x.com";
+})());
+ok("notify: drops blank / bad emails", (() => {
+  const r = resolveIncidentNotifyEmails([
+    { role: "owner_admin", email: "" },
+    { role: "operator", email: "noatsign" },
+    { role: "operator", email: null },
+  ]);
+  return r.length === 0;
+})());
+ok("notify: unknown role never qualifies", (() => {
+  const r = resolveIncidentNotifyEmails([{ role: "wizard", email: "x@y.com" }]);
+  return r.length === 0;
+})());
+ok("notify: falls back when no member email", (() => {
+  const r = resolveIncidentNotifyEmails(
+    [{ role: "showing_helper", email: "helper@example.com" }],
+    [null, "", "Reply@Org.com", "second@org.com"],
+  );
+  return r.length === 1 && r[0] === "reply@org.com";
+})());
+ok("notify: fallback NOT used when a member resolves", (() => {
+  const r = resolveIncidentNotifyEmails(
+    [{ role: "operator", email: "op@x.com" }],
+    ["fallback@org.com"],
+  );
+  return r.length === 1 && r[0] === "op@x.com";
+})());
+ok("notify: empty members + no fallback -> []", resolveIncidentNotifyEmails([]).length === 0);
 
 console.log(`\nincident-reports: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
