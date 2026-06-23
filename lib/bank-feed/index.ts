@@ -37,6 +37,12 @@ export type NormalizedTxn = {
   description: string | null;
   rawCategory: string | null;
   currency: string; // ISO 4217, e.g. "CAD"
+  // Categorization signals for the rules engine (lib/categorization-rules):
+  // a stable per-merchant id and the provider's recurring-stream id (when the
+  // txn is part of a detected recurring bill). Both null when the provider
+  // doesn't supply them — the rule model degrades to the merchant-name fallback.
+  merchantEntityId: string | null;
+  streamId: string | null;
 };
 
 export type ConnectedAccount = {

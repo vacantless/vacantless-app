@@ -144,6 +144,29 @@ export class PlaidProvider implements BankFeedProvider {
       accountsRes.data.accounts.map((a) => [a.account_id, a.name ?? a.official_name ?? null]),
     );
 
+    // Best-effort: map each transaction_id to its recurring stream_id. Plaid
+    // pre-groups recurring bills (so the same vendor across several properties
+    // stays distinct) — the strongest signal for the categorization rules. The
+    // recurring product may not be enabled on the item; if the call fails we
+    // simply proceed with streamId=null, exactly like the institution-name probe.
+    const streamOf = new Map<string, string>();
+    try {
+      const accountIds = accountsRes.data.accounts.map((a) => a.account_id);
+      const rec = await client.transactionsRecurringGet({
+        access_token: accessToken,
+        account_ids: accountIds,
+      });
+      const streams = [
+        ...(rec.data.inflow_streams ?? []),
+        ...(rec.data.outflow_streams ?? []),
+      ];
+      for (const st of streams) {
+        for (const tid of st.transaction_ids ?? []) streamOf.set(tid, st.stream_id);
+      }
+    } catch {
+      // recurring not available — leave the map empty.
+    }
+
     const out: NormalizedTxn[] = [];
     const count = 500;
     let offset = 0;
@@ -177,6 +200,11 @@ export class PlaidProvider implements BankFeedProvider {
           description: t.name ?? null,
           rawCategory,
           currency: t.iso_currency_code ?? t.unofficial_currency_code ?? "CAD",
+          // merchant_entity_id is a newer Plaid field; access defensively in case
+          // the SDK type lags the API.
+          merchantEntityId:
+            (t as { merchant_entity_id?: string | null }).merchant_entity_id ?? null,
+          streamId: streamOf.get(t.transaction_id) ?? null,
         });
       }
       if (res.data.transactions.length === 0) break; // safety against a stuck offset

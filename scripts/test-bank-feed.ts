@@ -71,6 +71,8 @@ function txn(id: string): NormalizedTxn {
     description: null,
     rawCategory: null,
     currency: "CAD",
+    merchantEntityId: null,
+    streamId: null,
   };
 }
 const pulled = [txn("a"), txn("b"), txn("c"), txn("b")]; // note dup "b" within batch

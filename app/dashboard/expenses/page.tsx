@@ -17,6 +17,11 @@ import { getCurrentOrg } from "@/lib/org";
 import { planEntitlements } from "@/lib/billing";
 import { providerForPlan } from "@/lib/bank-feed";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/expenses";
+import {
+  bestRuleForTxn,
+  type CategorizationRule,
+  type MatchableTxn,
+} from "@/lib/categorization-rules";
 import { formatMoneyCents } from "@/lib/payments";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { PlaidConnectButton } from "./PlaidConnectButton";
@@ -49,9 +54,77 @@ type TxnRow = {
   raw_category: string | null;
   account_name: string | null;
   currency: string;
+  merchant_entity_id: string | null;
+  stream_id: string | null;
+  account_external_id: string | null;
+};
+
+type RuleRow = {
+  id: string;
+  scope_kind: string;
+  merchant_entity_id: string | null;
+  stream_id: string | null;
+  merchant_norm: string | null;
+  account_external_id: string | null;
+  amount_min_cents: number | null;
+  amount_max_cents: number | null;
+  day_min: number | null;
+  day_max: number | null;
+  category: string;
+  property_id: string | null;
+  building_key: string | null;
+  last_applied_at: string | null;
+  created_at: string | null;
 };
 
 type PropertyRef = { id: string; address: string; building_key: string | null };
+
+/** What a matched rule pre-fills on a triage card (and whether to flag it). */
+type Suggestion = {
+  category: string;
+  scope: "unit" | "building" | "none";
+  propertyId: string;
+  buildingKey: string;
+};
+
+function ruleFromRow(r: RuleRow): CategorizationRule {
+  return {
+    id: r.id,
+    scopeKind: r.scope_kind === "stream" ? "stream" : "merchant",
+    merchantEntityId: r.merchant_entity_id,
+    streamId: r.stream_id,
+    merchantNorm: r.merchant_norm,
+    accountExternalId: r.account_external_id,
+    amountMinCents: r.amount_min_cents,
+    amountMaxCents: r.amount_max_cents,
+    dayMin: r.day_min,
+    dayMax: r.day_max,
+    category: r.category,
+    propertyId: r.property_id,
+    buildingKey: r.building_key,
+    lastAppliedAt: r.last_applied_at,
+    createdAt: r.created_at,
+  };
+}
+
+/** The rule-driven pre-fill for one pending transaction, or null if none match. */
+function suggestionFor(rules: CategorizationRule[], t: TxnRow): Suggestion | null {
+  const matchTxn: MatchableTxn = {
+    merchantEntityId: t.merchant_entity_id,
+    streamId: t.stream_id,
+    merchant: t.merchant,
+    accountExternalId: t.account_external_id,
+    amountCents: t.amount_cents,
+    postedOn: t.posted_on,
+  };
+  const rule = bestRuleForTxn(rules, matchTxn);
+  if (!rule) return null;
+  if (rule.propertyId) return { category: rule.category, scope: "unit", propertyId: rule.propertyId, buildingKey: "" };
+  if (rule.buildingKey) return { category: rule.category, scope: "building", propertyId: "", buildingKey: rule.buildingKey };
+  // Broad merchant→category rule: pre-fill only the category; leave the scope at
+  // the default so the owner still picks which unit it belongs to.
+  return { category: rule.category, scope: "unit", propertyId: "", buildingKey: "" };
+}
 
 function connTone(status: string): ChipTone {
   if (status === "active") return "success";
@@ -96,7 +169,7 @@ export default async function ExpensesPage({
   }
 
   const supabase = createClient();
-  const [{ data: connData }, { data: txnData }, { data: propData }, { count: assignedCount }] =
+  const [{ data: connData }, { data: txnData }, { data: propData }, { data: ruleData }, { count: assignedCount }] =
     await Promise.all([
       supabase
         .from("bank_connections")
@@ -104,12 +177,19 @@ export default async function ExpensesPage({
         .order("created_at", { ascending: true }),
       supabase
         .from("bank_transactions")
-        .select("id, posted_on, amount_cents, merchant, description, raw_category, account_name, currency")
+        .select(
+          "id, posted_on, amount_cents, merchant, description, raw_category, account_name, currency, merchant_entity_id, stream_id, account_external_id",
+        )
         .eq("triage_status", "pending")
         .eq("direction", "debit")
         .order("posted_on", { ascending: false })
         .limit(100),
       supabase.from("properties").select("id, address, building_key"),
+      supabase
+        .from("categorization_rules")
+        .select(
+          "id, scope_kind, merchant_entity_id, stream_id, merchant_norm, account_external_id, amount_min_cents, amount_max_cents, day_min, day_max, category, property_id, building_key, last_applied_at, created_at",
+        ),
       supabase
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
@@ -119,6 +199,7 @@ export default async function ExpensesPage({
   const connections = (connData ?? []) as ConnRow[];
   const pending = (txnData ?? []) as TxnRow[];
   const properties = (propData ?? []) as PropertyRef[];
+  const rules = ((ruleData ?? []) as RuleRow[]).map(ruleFromRow);
 
   // Building options (street label per building_key), like the maintenance form.
   const buildingLabels = new Map<string, string>();
@@ -214,7 +295,9 @@ export default async function ExpensesPage({
           />
         ) : (
           <div className="space-y-3">
-            {pending.map((t) => (
+            {pending.map((t) => {
+              const sug = suggestionFor(rules, t);
+              return (
               <Card key={t.id}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
@@ -231,11 +314,20 @@ export default async function ExpensesPage({
                   </p>
                 </div>
 
+                {sug && (
+                  <p
+                    className="mt-3 inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium ring-1 ring-inset ring-gray-200"
+                    style={{ color: "var(--brand-color)" }}
+                  >
+                    Pre-filled from a rule you saved — confirm or change it
+                  </p>
+                )}
+
                 <form action={assignTransaction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
                   <input type="hidden" name="transaction_id" value={t.id} />
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-600">For</span>
-                    <select name="scope" defaultValue="unit" className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                    <select name="scope" defaultValue={sug?.scope ?? "unit"} className="w-full rounded-lg border border-gray-300 px-3 py-2">
                       <option value="unit">A unit</option>
                       <option value="building">Whole building</option>
                       <option value="none">Not unit-specific</option>
@@ -243,7 +335,7 @@ export default async function ExpensesPage({
                   </label>
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-600">Unit</span>
-                    <select name="property_id" defaultValue="" className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                    <select name="property_id" defaultValue={sug?.propertyId ?? ""} className="w-full rounded-lg border border-gray-300 px-3 py-2">
                       <option value="">—</option>
                       {properties.map((p) => (
                         <option key={p.id} value={p.id}>{p.address}</option>
@@ -252,7 +344,7 @@ export default async function ExpensesPage({
                   </label>
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-600">Building</span>
-                    <select name="building_key" defaultValue="" className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                    <select name="building_key" defaultValue={sug?.buildingKey ?? ""} className="w-full rounded-lg border border-gray-300 px-3 py-2">
                       <option value="">—</option>
                       {buildingOptions.map((b) => (
                         <option key={b.key} value={b.key}>{b.label}</option>
@@ -261,16 +353,20 @@ export default async function ExpensesPage({
                   </label>
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-600">Category</span>
-                    <select name="category" defaultValue="other" className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                    <select name="category" defaultValue={sug?.category ?? "other"} className="w-full rounded-lg border border-gray-300 px-3 py-2">
                       {EXPENSE_CATEGORIES.map((c) => (
                         <option key={c} value={c}>{expenseCategoryLabel(c)}</option>
                       ))}
                     </select>
                   </label>
-                  <div className="flex items-center gap-2 sm:col-span-4">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:col-span-4">
                     <SubmitButton className={PRIMARY_ACTION_CLASS} pendingLabel="Saving…">
                       Log expense
                     </SubmitButton>
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input type="checkbox" name="remember" value="1" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
+                      Remember this — auto-sort future {t.merchant ? t.merchant : "matching"} charges
+                    </label>
                   </div>
                 </form>
 
@@ -281,7 +377,8 @@ export default async function ExpensesPage({
                   </SubmitButton>
                 </form>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
