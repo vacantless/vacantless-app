@@ -14,6 +14,7 @@ import {
   type DateRange,
 } from "@/lib/statements";
 import type { WorkOrderCostRow } from "@/lib/work-orders";
+import { expenseToCostRow, type ExpenseRow } from "@/lib/expenses";
 
 export const dynamic = "force-dynamic";
 
@@ -59,11 +60,14 @@ export async function GET(req: NextRequest) {
   const range = rangeForPreset(preset, todayIso, customRange);
 
   const supabase = createClient();
-  const [{ data: rentData }, { data: woData }, { data: propData }] = await Promise.all([
+  const [{ data: rentData }, { data: woData }, { data: expData }, { data: propData }] = await Promise.all([
     supabase.from("rent_payments").select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
     supabase
       .from("work_orders")
       .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
+    supabase
+      .from("expenses")
+      .select("property_id, building_key, category, amount_cents, incurred_on"),
     supabase
       .from("properties")
       .select("id, address, building_key")
@@ -87,8 +91,15 @@ export async function GET(req: NextRequest) {
     completed_on: w.completed_on,
   }));
 
-  const statement = buildOwnerStatement(rentRows, woRows, properties, range);
-  const monthly = buildMonthlyStatement(rentRows, woRows, properties, range);
+  // Expenses (mortgage/tax/utilities/insurance/...) map to the same cost-row
+  // shape so the CSV's spent side spans the FULL expense set, matching the page.
+  const expenseRows: WorkOrderCostRow[] = ((expData ?? []) as unknown as ExpenseRow[]).map(
+    (e) => expenseToCostRow(e),
+  );
+  const costRows: WorkOrderCostRow[] = [...woRows, ...expenseRows];
+
+  const statement = buildOwnerStatement(rentRows, costRows, properties, range);
+  const monthly = buildMonthlyStatement(rentRows, costRows, properties, range);
   const csv = statementToCsv(statement, monthly);
 
   const stamp = new Date().toISOString().slice(0, 10);

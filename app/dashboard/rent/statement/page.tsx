@@ -11,6 +11,12 @@ import {
 import { Icons } from "@/components/icons";
 import { workOrderCategoryLabel } from "@/lib/work-orders";
 import {
+  expenseToCostRow,
+  isExpenseCategory,
+  expenseCategoryLabel,
+  type ExpenseRow,
+} from "@/lib/expenses";
+import {
   STATEMENT_PRESETS,
   statementPresetLabel,
   rangeForPreset,
@@ -24,6 +30,13 @@ import {
   type DateRange,
 } from "@/lib/statements";
 import type { WorkOrderCostRow } from "@/lib/work-orders";
+
+/** Label a cost row's category, covering BOTH expense + work-order taxonomies. */
+function costCategoryLabel(category: string): string {
+  return isExpenseCategory(category)
+    ? expenseCategoryLabel(category)
+    : workOrderCategoryLabel(category);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -84,13 +97,16 @@ export default async function StatementPage({
   const range = rangeForPreset(preset, todayIso, customRange);
 
   // RLS scopes every query to the caller's org.
-  const [{ data: rentData }, { data: woData }, { data: propData }] = await Promise.all([
+  const [{ data: rentData }, { data: woData }, { data: expData }, { data: propData }] = await Promise.all([
     supabase
       .from("rent_payments")
       .select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
     supabase
       .from("work_orders")
       .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
+    supabase
+      .from("expenses")
+      .select("property_id, building_key, category, amount_cents, incurred_on"),
     supabase
       .from("properties")
       .select("id, address, building_key")
@@ -122,8 +138,18 @@ export default async function StatementPage({
     completed_on: w.completed_on,
   }));
 
-  const statement = buildOwnerStatement(rentRows, woRows, properties, range);
-  const monthly = buildMonthlyStatement(rentRows, woRows, properties, range);
+  // Bank-fed / manual expenses (mortgage, property tax, utilities, insurance...)
+  // map to the SAME WorkOrderCostRow shape (expenseToCostRow) so they roll up
+  // through the statement alongside maintenance — the "spent" side now spans the
+  // FULL expense set, not just work orders. Scope (unit XOR building) carries
+  // straight through the 0057/0058 discipline both ledgers share.
+  const expenseRows: WorkOrderCostRow[] = ((expData ?? []) as unknown as ExpenseRow[]).map(
+    (e) => expenseToCostRow(e),
+  );
+  const costRows: WorkOrderCostRow[] = [...woRows, ...expenseRows];
+
+  const statement = buildOwnerStatement(rentRows, costRows, properties, range);
+  const monthly = buildMonthlyStatement(rentRows, costRows, properties, range);
 
   const showCustom = preset === "custom";
   const inputCls =
@@ -134,7 +160,7 @@ export default async function StatementPage({
       <BrandBanner
         eyebrow="Money"
         title="Owner statement"
-        subtitle="Rent collected minus maintenance spent, per property, for any period. The year-end picture for you and your accountant — built from what you already logged. Vacantless reports; it never moves your money."
+        subtitle="Rent collected minus expenses, per property, for any period. The year-end picture for you and your accountant — built from what you already logged. Vacantless reports; it never moves your money."
         icon={<Icons.chart className="h-6 w-6" />}
         action={
           <a href={exportHref(preset, range)} className={SECONDARY_ACTION_CLASS}>
@@ -188,7 +214,8 @@ export default async function StatementPage({
 
       <p className="mb-4 text-sm text-gray-500">
         Showing <span className="font-medium text-gray-700">{describeRange(range)}</span>. Rent is
-        counted by the date you received it; maintenance by the date the job was completed.
+        counted by the date you received it; expenses by the date they were incurred (maintenance by
+        the date the job was completed).
       </p>
 
       {/* Totals */}
@@ -200,15 +227,15 @@ export default async function StatementPage({
           icon={<Icons.card className="h-4 w-4" />}
         />
         <StatCard
-          label="Maintenance spent"
+          label="Expenses"
           value={formatMoneyCents(statement.totals.maintenanceOutCents)}
-          hint={`${statement.totals.workOrderCount} completed job${statement.totals.workOrderCount === 1 ? "" : "s"}`}
+          hint={`${statement.totals.workOrderCount} entr${statement.totals.workOrderCount === 1 ? "y" : "ies"}`}
           icon={<Icons.bolt className="h-4 w-4" />}
         />
         <StatCard
           label="Net"
           value={formatMoneyCents(statement.totals.netCents)}
-          hint="Rent in − maintenance out"
+          hint="Rent in − expenses out"
           icon={<Icons.chart className="h-4 w-4" />}
         />
       </div>
@@ -220,7 +247,7 @@ export default async function StatementPage({
           <EmptyState
             icon={<Icons.chart className="h-5 w-5" />}
             title="Nothing in this period"
-            description="No rent payments or completed maintenance fall in this window. Record payments inside a tenancy and complete work orders in Maintenance, then they'll roll up here."
+            description="No rent payments, expenses, or completed maintenance fall in this window. Record payments inside a tenancy, log expenses, and complete work orders, then they'll roll up here."
           />
         ) : (
           <Card padded={false} className="overflow-x-auto">
@@ -229,7 +256,7 @@ export default async function StatementPage({
                 <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
                   <th className="px-4 py-3 font-medium">Property / building</th>
                   <th className="px-4 py-3 text-right font-medium">Rent collected</th>
-                  <th className="px-4 py-3 text-right font-medium">Maintenance spent</th>
+                  <th className="px-4 py-3 text-right font-medium">Expenses</th>
                   <th className="px-4 py-3 text-right font-medium">Net</th>
                 </tr>
               </thead>
@@ -291,23 +318,23 @@ export default async function StatementPage({
         </p>
       </div>
 
-      {/* Maintenance by category */}
+      {/* Expenses by category */}
       {statement.categories.length > 0 && (
         <div className="mt-6">
-          <SectionHeading>Maintenance by category</SectionHeading>
+          <SectionHeading>Expenses by category</SectionHeading>
           <Card padded={false} className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
                   <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 text-right font-medium">Amount</th>
-                  <th className="px-4 py-3 text-right font-medium">Jobs</th>
+                  <th className="px-4 py-3 text-right font-medium">Items</th>
                 </tr>
               </thead>
               <tbody>
                 {statement.categories.map((c) => (
                   <tr key={c.category} className="border-b border-gray-50 last:border-0">
-                    <td className="px-4 py-3 text-gray-900">{workOrderCategoryLabel(c.category)}</td>
+                    <td className="px-4 py-3 text-gray-900">{costCategoryLabel(c.category)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">{formatMoneyCents(c.totalCents)}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-500">{c.count}</td>
                   </tr>
@@ -329,7 +356,7 @@ export default async function StatementPage({
                   <th className="px-4 py-3 font-medium">Month</th>
                   <th className="px-4 py-3 font-medium">Property</th>
                   <th className="px-4 py-3 text-right font-medium">Rent</th>
-                  <th className="px-4 py-3 text-right font-medium">Maintenance</th>
+                  <th className="px-4 py-3 text-right font-medium">Expenses</th>
                   <th className="px-4 py-3 text-right font-medium">Net</th>
                 </tr>
               </thead>

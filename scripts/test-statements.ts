@@ -14,6 +14,7 @@ import {
   type PropertyRef,
 } from "../lib/statements";
 import type { WorkOrderCostRow } from "../lib/work-orders";
+import { expenseToCostRow } from "../lib/expenses";
 
 let passed = 0;
 let failed = 0;
@@ -27,11 +28,32 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- Presets ----------------------------------------------------------------
-ok("presets list", STATEMENT_PRESETS.join(",") === "this_year,last_year,all,custom");
+ok(
+  "presets list",
+  STATEMENT_PRESETS.join(",") === "this_year,last_year,last_30,last_60,last_90,all,custom",
+);
 ok("preset label this_year", statementPresetLabel("this_year") === "This year");
+ok("preset label last_30", statementPresetLabel("last_30") === "Last 30 days");
 ok("preset label passthrough", statementPresetLabel("zzz") === "zzz");
 
 const today = "2026-06-22";
+
+// Rolling windows: N-day window ending today inclusive (from = today − N, to = today).
+ok(
+  "last_30 range",
+  JSON.stringify(rangeForPreset("last_30", today)) ===
+    JSON.stringify({ from: "2026-05-23", to: "2026-06-22" }),
+);
+ok(
+  "last_60 range",
+  JSON.stringify(rangeForPreset("last_60", today)) ===
+    JSON.stringify({ from: "2026-04-23", to: "2026-06-22" }),
+);
+ok(
+  "last_90 range",
+  JSON.stringify(rangeForPreset("last_90", today)) ===
+    JSON.stringify({ from: "2026-03-24", to: "2026-06-22" }),
+);
 ok(
   "this_year range",
   JSON.stringify(rangeForPreset("this_year", today)) ===
@@ -179,11 +201,11 @@ ok("monthly maintenance reconciles to annual", mMaint === stmt.totals.maintenanc
 const csv = statementToCsv(stmt, monthly);
 ok("csv has title", csv.startsWith("Owner financial statement"));
 ok("csv has period line", csv.includes("Period,2026-01-01 to 2026-12-31"));
-ok("csv has summary header", csv.includes("Property / building,Scope,Rent collected,Maintenance spent,Net"));
+ok("csv has summary header", csv.includes("Property / building,Scope,Rent collected,Expenses,Net"));
 ok("csv TOTAL row in dollars (with scope column)", csv.includes("TOTAL,,6250.00,900.00,5350.00"));
 ok("csv A unit row carries Unit scope", csv.includes("10 Adelaide St,Unit,4000.00,800.00,3200.00"));
-ok("csv category block", csv.includes("Maintenance by category,Amount,Jobs"));
-ok("csv monthly block header", csv.includes("Month,Property,Rent collected,Maintenance spent,Net"));
+ok("csv category block", csv.includes("Expenses by category,Amount,Items"));
+ok("csv monthly block header", csv.includes("Month,Property,Rent collected,Expenses,Net"));
 ok("csv monthly Jan A row", csv.includes("January 2026,10 Adelaide St,2000.00,300.00,1700.00"));
 ok("csv ends with newline", csv.endsWith("\n"));
 // address with a comma must be quoted
@@ -268,6 +290,41 @@ ok("csv unit line under building", bcsv.includes("100 King St Unit 1,Unit,2000.0
 ok("csv building-wide shared line", bcsv.includes("Building-wide (shared),Shared,0.00,500.00,-500.00"));
 ok("csv overhead unscoped line", bcsv.includes("Unassigned,Unassigned,0.00,70.00,-70.00"));
 ok("csv building tier TOTAL", bcsv.includes("TOTAL,,3800.00,870.00,2930.00"));
+
+// --- Expenses fold into the statement (the bank-feed wiring contract) --------
+//
+// The page + export route concat expenseToCostRow(expense) rows with the
+// work_orders rows before calling buildOwnerStatement, so the "spent" side spans
+// the full expense set (mortgage/tax/...) — not just maintenance. Prove that an
+// expense mapped to a cost row rolls up exactly like a work order, including the
+// scope discipline (unit vs building) and the by-category breakdown.
+const expCostRows: WorkOrderCostRow[] = [
+  // Unit-scoped mortgage on A.
+  expenseToCostRow({ property_id: PROP_A, building_key: null, category: "mortgage", amount_cents: 200000, incurred_on: "2026-03-01" }),
+  // Building-shared property tax (no unit) — must land at the building tier, not on a unit.
+  expenseToCostRow({ property_id: null, building_key: "100-king-st", category: "property_tax", amount_cents: 120000, incurred_on: "2026-04-01" }),
+  // Out-of-window expense — excluded by the date filter.
+  expenseToCostRow({ property_id: PROP_A, building_key: null, category: "insurance", amount_cents: 90000, incurred_on: "2025-06-01" }),
+];
+const mixWO: WorkOrderCostRow[] = [
+  { property_id: PROP_A, category: "hvac", status: "completed", cost_cents: 50000, completed_on: "2026-02-15" },
+];
+const mixProps: PropertyRef[] = [{ id: PROP_A, address: "100 King St Unit 1", buildingKey: "100-king-st" }];
+const mixStmt = buildOwnerStatement([], [...mixWO, ...expCostRows], mixProps, year2026);
+
+const aRowMix = mixStmt.rows.find((r) => r.propertyId === PROP_A)!;
+ok("expense folds into unit spend (hvac 50000 + mortgage 200000)", aRowMix.maintenanceOutCents === 250000);
+ok("expense + WO counted as entries on the unit", aRowMix.workOrderCount === 2);
+ok("out-of-window expense excluded", mixStmt.totals.maintenanceOutCents === 250000 + 120000);
+
+const catMap = new Map(mixStmt.categories.map((c) => [c.category, c.totalCents]));
+ok("by-category spans expense categories (mortgage)", catMap.get("mortgage") === 200000);
+ok("by-category spans expense categories (property_tax)", catMap.get("property_tax") === 120000);
+ok("by-category still has the work-order category (hvac)", catMap.get("hvac") === 50000);
+
+const kingBuilding = mixStmt.buildings.find((b) => b.buildingKey === "100-king-st")!;
+ok("building-shared expense lands at building tier", kingBuilding.sharedMaintenanceCents === 120000);
+ok("building-shared expense is NOT pushed onto the unit", aRowMix.maintenanceOutCents === 250000);
 
 console.log(`\nstatements: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -57,12 +57,23 @@ export type DateRange = { from: string | null; to: string | null };
 
 // --- Range presets ----------------------------------------------------------
 
-export const STATEMENT_PRESETS = ["this_year", "last_year", "all", "custom"] as const;
+export const STATEMENT_PRESETS = [
+  "this_year",
+  "last_year",
+  "last_30",
+  "last_60",
+  "last_90",
+  "all",
+  "custom",
+] as const;
 export type StatementPreset = (typeof STATEMENT_PRESETS)[number];
 
 const PRESET_LABELS: Record<StatementPreset, string> = {
   this_year: "This year",
   last_year: "Last year",
+  last_30: "Last 30 days",
+  last_60: "Last 60 days",
+  last_90: "Last 90 days",
   all: "All time",
   custom: "Custom range",
 };
@@ -75,22 +86,47 @@ function yearRange(year: number): DateRange {
   return { from: `${year}-01-01`, to: `${year}-12-31` };
 }
 
+const PRESET_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Add (or subtract) whole days to an ISO "YYYY-MM-DD" date in UTC, returning a
+ * new ISO date. Deterministic from its inputs (no ambient `now`), so the rolling
+ * presets below stay pure + testable. Invalid input passes through unchanged.
+ */
+function addDaysIso(iso: string, days: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((iso || "").trim());
+  if (!m) return iso;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Resolve a preset to a concrete range. `todayIso` ("YYYY-MM-DD") is passed in
- * so this stays pure (no `new Date()` inside). For "custom", the caller supplies
- * the range via `customRange` (already-validated bounds); a missing/invalid
- * custom range falls back to the current year.
+ * so this stays pure (the only `new Date()` is the invalid-input fallback). For
+ * "custom", the caller supplies the range via `customRange` (already-validated
+ * bounds); a missing/invalid custom range falls back to the current year.
+ *
+ * The rolling presets (`last_30/60/90`) are an N-day window ending today
+ * inclusive: from = today − N days, to = today.
  */
 export function rangeForPreset(
   preset: string,
   todayIso: string,
   customRange?: DateRange,
 ): DateRange {
-  const year = parseInt((todayIso || "").slice(0, 4), 10);
+  const today = PRESET_DATE.test(todayIso) ? todayIso : new Date().toISOString().slice(0, 10);
+  const year = parseInt(today.slice(0, 4), 10);
   const thisYear = Number.isFinite(year) ? year : new Date().getUTCFullYear();
   switch (preset) {
     case "last_year":
       return yearRange(thisYear - 1);
+    case "last_30":
+      return { from: addDaysIso(today, -30), to: today };
+    case "last_60":
+      return { from: addDaysIso(today, -60), to: today };
+    case "last_90":
+      return { from: addDaysIso(today, -90), to: today };
     case "all":
       return { from: null, to: null };
     case "custom":
@@ -481,7 +517,7 @@ export function statementToCsv(
   // and a "Building-wide (shared)" line; then the overhead bucket; then TOTAL.
   // The Scope column carries unit vs building-wide so the accountant can tell a
   // shared cost from a unit cost.
-  row(["Property / building", "Scope", "Rent collected", "Maintenance spent", "Net"]);
+  row(["Property / building", "Scope", "Rent collected", "Expenses", "Net"]);
   for (const b of statement.buildings) {
     if (b.buildingKey == null) {
       // Overhead bucket: flat rows, no subtotal header.
@@ -512,10 +548,10 @@ export function statementToCsv(
     dollars(statement.totals.netCents),
   ]);
 
-  // Maintenance by category
+  // Expenses by category
   if (statement.categories.length > 0) {
     lines.push("");
-    row(["Maintenance by category", "Amount", "Jobs"]);
+    row(["Expenses by category", "Amount", "Items"]);
     for (const c of statement.categories) {
       row([c.category, dollars(c.totalCents), c.count]);
     }
@@ -524,7 +560,7 @@ export function statementToCsv(
   // Month-by-month detail
   if (monthly.length > 0) {
     lines.push("");
-    row(["Month", "Property", "Rent collected", "Maintenance spent", "Net"]);
+    row(["Month", "Property", "Rent collected", "Expenses", "Net"]);
     for (const m of monthly) {
       row([
         m.monthLabel,
