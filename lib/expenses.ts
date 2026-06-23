@@ -67,6 +67,37 @@ export function expenseCategoryLabel(category: string): string {
   return (CATEGORY_LABELS as Record<string, string>)[category] ?? category;
 }
 
+// --- Operating vs financing (for NOI / cap rate) ----------------------------
+//
+// Net operating income (NOI) is the income a property produces from OPERATIONS,
+// before financing. So the rent roll / cap-rate report must exclude FINANCING
+// costs — mortgage principal + interest — from the expense side; everything else
+// (property tax, insurance, utilities, management, maintenance, condo fees,
+// supplies, professional, advertising, travel, other) is an operating cost.
+//
+// Keyed as a small FINANCING set rather than an operating whitelist so this also
+// classifies WORK-ORDER categories (plumbing/hvac/roof/...): a work-order cost is
+// always maintenance = operating, and none of those keys are financing, so the
+// default-true behaviour is correct for both taxonomies that share the cost-row
+// shape. cap rate = NOI / (operator-entered value).
+export const FINANCING_CATEGORIES = ["mortgage", "interest"] as const;
+
+const FINANCING_SET = new Set<string>(FINANCING_CATEGORIES);
+
+/**
+ * Whether a cost category counts as an OPERATING expense for NOI. True for every
+ * category except financing (mortgage, interest). Accepts both expense and
+ * work-order category strings (work-order = maintenance = always operating).
+ */
+export function isOperatingCategory(category: string): boolean {
+  return !FINANCING_SET.has((category ?? "").trim());
+}
+
+/** Whether a cost category is a FINANCING cost (excluded from NOI). */
+export function isFinancingCategory(category: string): boolean {
+  return FINANCING_SET.has((category ?? "").trim());
+}
+
 // --- DB row + cost-row mapping ----------------------------------------------
 
 export type ExpenseRow = {

@@ -163,9 +163,14 @@ export default async function StatementPage({
         subtitle="Rent collected minus expenses, per property, for any period. The year-end picture for you and your accountant — built from what you already logged. Vacantless reports; it never moves your money."
         icon={<Icons.chart className="h-6 w-6" />}
         action={
-          <a href={exportHref(preset, range)} className={SECONDARY_ACTION_CLASS}>
-            Download CSV
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/dashboard/rent/rent-roll" className={SECONDARY_ACTION_CLASS}>
+              Rent roll & cap rate
+            </Link>
+            <a href={exportHref(preset, range)} className={SECONDARY_ACTION_CLASS}>
+              Download CSV
+            </a>
+          </div>
         }
       />
 
