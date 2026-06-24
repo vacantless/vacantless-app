@@ -1199,12 +1199,13 @@ function tradeDispatchHtml(p: TradeDispatchInvitePayload): string {
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
       <p style="margin:0 0 16px;">${org} would like to send you a job: <strong>${job}</strong>${where}. You can review the details, accept or decline, and send a quote with your earliest date - no account needed.</p>
-      <p style="margin:0 0 24px;text-align:center;">
+      <p style="margin:0 0 16px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
           brand,
         )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">View the job</a>
       </p>
-      <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or paste this link into your browser:<br/><span style="color:#52525b;">${url}</span></p>
+      <p style="margin:0 0 8px;font-size:14px;color:#3f3f46;">If the button does not open, copy and paste this link into your browser:</p>
+      <p style="margin:0 0 16px;padding:12px;background:#f4f4f5;border-radius:8px;font-size:14px;color:#3f3f46;word-break:break-all;">${url}</p>
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
