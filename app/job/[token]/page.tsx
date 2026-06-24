@@ -172,7 +172,7 @@ export default async function TradeJobPage({
           {photoUrls.length > 0 ? (
             <div className="mt-3 border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Photos from the tenant
+                Photos
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {photoUrls.map((url, i) => (
