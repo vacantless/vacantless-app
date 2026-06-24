@@ -31,6 +31,7 @@ import {
   tradeJobUrl,
   dispatchErrorMessage,
   tradeDispatchErrorMessage,
+  dispatchBriefOk,
 } from "../lib/work-order-dispatch";
 
 let passed = 0;
@@ -181,6 +182,14 @@ ok("trade err: default", tradeDispatchErrorMessage("zzz").length > 0);
 // Slice 0 Block A: trade Terms acceptance gate.
 ok("trade err: terms_required", /Trade Terms/i.test(tradeDispatchErrorMessage("terms_required")));
 ok("op err: terms_required", /terms/i.test(dispatchErrorMessage("terms_required") ?? ""));
+
+// Slice S328: the dispatch BRIEF gate + its error copy.
+ok("brief: non-blank ok", dispatchBriefOk("Kitchen sink leaking under the cabinet") === true);
+ok("brief: empty blocked", dispatchBriefOk("") === false);
+ok("brief: whitespace blocked", dispatchBriefOk("   \n  ") === false);
+ok("brief: null blocked", dispatchBriefOk(null) === false);
+ok("brief: undefined blocked", dispatchBriefOk(undefined) === false);
+ok("err: needs_brief", /description/i.test(dispatchErrorMessage("needs_brief") ?? ""));
 
 // ---------------------------------------------------------------------------
 console.log(`\nwork-order-dispatch: ${passed} passed, ${failed} failed`);

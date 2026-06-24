@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createIncidentMediaDownloadUrls } from "@/lib/incident-media-server";
 import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { workOrderCategoryLabel, workOrderPriorityLabel } from "@/lib/work-orders";
 import {
@@ -43,6 +45,7 @@ type Context =
       job_description: string | null;
       job_category: string;
       job_priority: string;
+      job_photos: { path: string }[] | null;
       property_address: string | null;
       org_name: string;
       brand_color: string | null;
@@ -109,6 +112,27 @@ export default async function TradeJobPage({
     c.dispatch_status === "declined" ||
     c.dispatch_status === "cancelled";
 
+  // The tenant's photos of the problem (if the job came from an incident report).
+  // Mint short-lived signed URLs from the PRIVATE incident-media bucket: the trade
+  // is account-less, so we sign with the service-role admin client. This is safe
+  // because get_dispatch_context already re-derived these paths from the token and
+  // returned ONLY this job's photos — we sign exactly what the RPC authorized, and
+  // never read paths off the request (feedback_anon_rpc_revalidate_server_side).
+  // Best-effort: a signing failure just hides the gallery, never breaks the page.
+  const photoUrls: string[] = [];
+  if (c.job_photos && c.job_photos.length > 0) {
+    const admin = createAdminClient();
+    if (admin) {
+      const signed = await createIncidentMediaDownloadUrls(
+        admin,
+        c.job_photos.map((p) => p.path),
+      );
+      if (signed.ok) {
+        for (const u of signed.urls) if (u.signedUrl) photoUrls.push(u.signedUrl);
+      }
+    }
+  }
+
   return (
     <div
       className="min-h-screen bg-gray-50"
@@ -143,6 +167,25 @@ export default async function TradeJobPage({
             <div className="mt-3 border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Details</p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{c.job_description}</p>
+            </div>
+          ) : null}
+          {photoUrls.length > 0 ? (
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Photos from the tenant
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {photoUrls.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={url}
+                      alt={`Job photo ${i + 1}`}
+                      className="h-28 w-full rounded-lg border border-gray-200 object-cover"
+                    />
+                  </a>
+                ))}
+              </div>
             </div>
           ) : null}
           {c.operator_note ? (

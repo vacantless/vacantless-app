@@ -278,6 +278,18 @@ export function tradeJobUrl(baseUrl: string, token: string): string {
 
 // --- Operator-facing error messages -----------------------------------------
 // Maps an action redirect code to a sentence for the maintenance page banner.
+// The dispatch BRIEF gate (S328): a job can't go to a trade with nothing to act
+// on. A trade decides whether to accept and quote from the job page; with no
+// description and (often) no photo, that decision is impossible — the S328
+// dogfood surfaced a job a plumber literally could not have accepted. So we
+// require a non-blank description at dispatch time (the work order itself can
+// still be created bare for the owner's own tracking; the gate is only the
+// outbound-to-a-trade boundary). Photos strengthen the brief but aren't required
+// — an operator-originated job may have none, and a clear sentence is enough.
+export function dispatchBriefOk(description: string | null | undefined): boolean {
+  return typeof description === "string" && description.trim().length > 0;
+}
+
 export function dispatchErrorMessage(code: string | undefined): string | null {
   switch (code) {
     case undefined:
@@ -295,6 +307,8 @@ export function dispatchErrorMessage(code: string | undefined): string | null {
       return "That trade has no email on file — add one to dispatch the job to them.";
     case "active_exists":
       return "This work order already has an active dispatch.";
+    case "needs_brief":
+      return "Add a description to this work order before dispatching — a trade needs to know what the job is to accept or quote it. Use Edit to add one.";
     case "bad_quote":
       return "Enter a valid quote amount.";
     case "schedule_required":

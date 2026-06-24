@@ -27,6 +27,7 @@ import {
   formatDispatchDate,
   tradeJobUrl,
   ACTIVE_DISPATCH_STATUSES,
+  dispatchBriefOk,
 } from "@/lib/work-order-dispatch";
 import { sendTradeDispatchInvite } from "@/lib/email";
 import { sendOrgNotification, type NotifyOrg } from "@/lib/notifications-server";
@@ -790,18 +791,25 @@ export async function dispatchWorkOrderToTrade(formData: FormData) {
   // RLS scopes both reads to the caller's org — a forged id resolves to nothing.
   const { data: wo } = await supabase
     .from("work_orders")
-    .select("id, title, status, property_id, building_key, property:properties(address)")
+    .select("id, title, description, status, property_id, building_key, property:properties(address)")
     .eq("id", workOrderId)
     .maybeSingle();
   if (!wo) redirect(`${BASE}?disp=notfound`);
   const w = wo as unknown as {
     id: string;
     title: string;
+    description: string | null;
     status: string;
     property_id: string | null;
     building_key: string | null;
     property: { address: string } | null;
   };
+
+  // The brief gate: don't send a job to a trade with nothing to act on. A trade
+  // accepts/quotes from the job page; a blank description makes that impossible
+  // (S328 dogfood). The work order can exist bare for the owner's own tracking —
+  // this is only the outbound-to-a-trade boundary.
+  if (!dispatchBriefOk(w.description)) redirect(`${BASE}?disp=needs_brief`);
 
   const { data: trade } = await supabase
     .from("trade_contacts")

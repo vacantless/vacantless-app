@@ -1104,6 +1104,13 @@ export default async function MaintenancePage({
                             Enable trade dispatch above to send this job to a trade.
                           </p>
                         ) : dispatchableTrades.length > 0 ? (
+                          <div className="space-y-2">
+                            {!o.description?.trim() && (
+                              <p className="text-xs text-amber-700">
+                                Add a description (use <span className="font-medium">Edit</span>) so the
+                                trade can see what the job is before they accept or quote it.
+                              </p>
+                            )}
                           <form action={dispatchWorkOrderToTrade} className="flex flex-wrap items-end gap-2">
                             <input type="hidden" name="work_order_id" value={o.id} />
                             <div className="min-w-[10rem] flex-1">
@@ -1128,6 +1135,7 @@ export default async function MaintenancePage({
                               Dispatch
                             </SubmitButton>
                           </form>
+                          </div>
                         ) : (
                           <p className="text-xs text-gray-500">
                             Add a trade with an email to dispatch this job.{" "}
