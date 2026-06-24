@@ -287,6 +287,8 @@ export function dispatchErrorMessage(code: string | undefined): string | null {
       return "You don't have permission to dispatch work.";
     case "locked":
       return "In-app trade dispatch is a Premium feature.";
+    case "terms_required":
+      return "Enable trade dispatch (review and accept the one-time terms) before sending a job.";
     case "notfound":
       return "That work order or trade could not be found.";
     case "no_email":
@@ -324,6 +326,8 @@ export function tradeDispatchErrorMessage(reason: string | undefined): string {
       return "This job link has expired. Please contact the owner.";
     case "wrong_state":
       return "This job has already moved on — refresh to see its current status.";
+    case "terms_required":
+      return "Please agree to the Vacantless Trade Terms to accept this job.";
     case "bad_quote":
       return "Enter a valid quote amount.";
     case "note_too_long":

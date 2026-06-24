@@ -675,6 +675,29 @@ async function requireIncidentDispatch(suffix: string) {
   return org;
 }
 
+// Slice 0 Block C: a one-time per-org acknowledgment that the operator hires +
+// pays the trade directly, vets them, and that Vacantless is not a party. Stamps
+// the org so dispatchWorkOrderToTrade can proceed. Premium-gated like the rest of
+// the dispatch surface; manage_work_orders required.
+export async function acknowledgeDispatchTerms() {
+  await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
+  const org = await requireIncidentDispatch("");
+
+  const supabase = createClient();
+  // The acting member's auth uid is recorded for the audit trail (best-effort).
+  const { data: auth } = await supabase.auth.getUser();
+  await supabase
+    .from("organizations")
+    .update({
+      dispatch_terms_accepted_at: new Date().toISOString(),
+      dispatch_terms_accepted_by: auth?.user?.id ?? null,
+    })
+    .eq("id", org.id);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?disp=terms_accepted`);
+}
+
 // Dispatch a work order to one of the org's own trade contacts. Creates a
 // work_order_dispatches row (status 'offered') with a single-job magic-link
 // token, snapshots who it went to, and emails the trade the /job link
@@ -683,6 +706,10 @@ async function requireIncidentDispatch(suffix: string) {
 export async function dispatchWorkOrderToTrade(formData: FormData) {
   await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
   const org = await requireIncidentDispatch("");
+
+  // Slice 0 Block C: the org must have accepted the one-time dispatch terms
+  // before any job goes out to a trade.
+  if (!org.dispatch_terms_accepted_at) redirect(`${BASE}?disp=terms_required`);
 
   const workOrderId = s(formData, "work_order_id");
   const tradeContactId = s(formData, "trade_contact_id");

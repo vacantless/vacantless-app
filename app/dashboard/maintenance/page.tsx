@@ -68,6 +68,7 @@ import {
   approveDispatchSchedule,
   completeDispatch,
   cancelDispatch,
+  acknowledgeDispatchTerms,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -233,6 +234,7 @@ const DISP_SUCCESS: Record<string, string> = {
   approved: "Quote approved and the job is scheduled.",
   completed: "Dispatch marked complete.",
   cancelled: "Dispatch cancelled.",
+  terms_accepted: "Trade dispatch enabled. You can now send jobs to your trades.",
 };
 
 function fmtDate(d: string | null): string {
@@ -391,6 +393,10 @@ export default async function MaintenancePage({
   // active dispatch per work order. When NOT entitled the row shows a locked
   // upsell (show-locked, never hide — the two-axis visibility rule).
   const canDispatch = canUseIncidentDispatch(org?.plan);
+  // Slice 0 Block C: the org's one-time dispatch acknowledgment. Until it's
+  // accepted, an entitled org sees the acknowledgment card instead of the
+  // per-work-order dispatch form (and the server action refuses to dispatch).
+  const dispatchTermsAccepted = !!org?.dispatch_terms_accepted_at;
   const activeDispatchByWo = new Map<string, DispatchRow>();
   if (canDispatch && allOrders.length > 0) {
     const { data: dispData } = await supabase
@@ -827,6 +833,44 @@ export default async function MaintenancePage({
         </div>
       )}
 
+      {/* Slice 0 Block C: one-time per-org acknowledgment before any job goes out
+          to a trade. Shown only to an entitled org that hasn't accepted yet. */}
+      {canDispatch && !dispatchTermsAccepted && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-gray-700">
+          <p className="font-semibold text-gray-900">Before you dispatch a trade through Vacantless</p>
+          <p className="mt-1 text-gray-600">
+            Vacantless lets you offer a job to a contractor, capture their quote, and agree a time, all
+            in one place. A few things to keep in mind:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-gray-600">
+            <li>
+              <span className="font-medium text-gray-800">You hire and pay the contractor directly.</span>{" "}
+              Vacantless does not collect or move any money. The quote you see is a number for your records
+              and for communication; payment is arranged between you and the contractor, off-platform.
+            </li>
+            <li>
+              <span className="font-medium text-gray-800">You choose the contractor.</span> Vacantless does
+              not vet, certify, insure, or guarantee any contractor or their work. Confirm their licensing
+              and insurance yourself.
+            </li>
+            <li>
+              <span className="font-medium text-gray-800">Vacantless is a coordination tool, not a party
+              to the job.</span> The agreement for the work is between you and the contractor.
+            </li>
+            <li>
+              <span className="font-medium text-gray-800">Media you forward is sensitive.</span> A
+              tenant&apos;s photos may show the inside of their home. Share them only with the contractor
+              doing the repair, and only for that repair.
+            </li>
+          </ul>
+          <form action={acknowledgeDispatchTerms} className="mt-3">
+            <SubmitButton className={PRIMARY_ACTION_CLASS} pendingLabel="Enabling…">
+              I understand — enable trade dispatch
+            </SubmitButton>
+          </form>
+        </div>
+      )}
+
       {/* Work-order list */}
       <div className="mt-4 space-y-3">
         {orders.length === 0 ? (
@@ -1055,6 +1099,10 @@ export default async function MaintenancePage({
                               </form>
                             </div>
                           </div>
+                        ) : !dispatchTermsAccepted ? (
+                          <p className="text-xs text-gray-500">
+                            Enable trade dispatch above to send this job to a trade.
+                          </p>
                         ) : dispatchableTrades.length > 0 ? (
                           <form action={dispatchWorkOrderToTrade} className="flex flex-wrap items-end gap-2">
                             <input type="hidden" name="work_order_id" value={o.id} />

@@ -50,13 +50,21 @@ export function ReportForm({
   const [name, setName] = useState(defaultName ?? "");
   const [contact, setContact] = useState(defaultContact ?? "");
   const [files, setFiles] = useState<PickedFile[]>([]);
+  const [mediaConsent, setMediaConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const ready = category !== "" && description.trim().length >= 3 && !submitting;
+  // Slice 0 Block B: media consent is required ONLY when media is attached. A
+  // text-only report needs no consent.
+  const hasMedia = files.length > 0;
+  const ready =
+    category !== "" &&
+    description.trim().length >= 3 &&
+    (!hasMedia || mediaConsent) &&
+    !submitting;
 
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     setFileError(null);
@@ -96,6 +104,7 @@ export function ReportForm({
       description,
       reporterName: name.trim() || null,
       reporterContact: contact.trim() || null,
+      mediaConsent: hasMedia && mediaConsent,
     });
     if (!created.ok) {
       setSubmitting(false);
@@ -260,6 +269,63 @@ export function ReportForm({
         <p className="mt-1 text-xs text-gray-400">
           Photos up to 10 MB, videos up to 25 MB. Up to {MAX_MEDIA_PER_REPORT} files.
         </p>
+
+        {/* Slice 0 Block B: media consent — shown only once media is attached. */}
+        {hasMedia ? (
+          <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <p className="text-xs leading-relaxed text-gray-600">
+              Adding a photo or video helps your property manager fix the problem faster. Only add
+              media of the issue you are reporting. Please do not include other people, faces, or
+              anything you do not want shared with your property manager and the contractor they
+              assign to the repair.
+            </p>
+            <label className="mt-2 flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={mediaConsent}
+                onChange={(e) => setMediaConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0"
+              />
+              <span>
+                I am the person reporting this issue, the media I upload is of the maintenance
+                problem, and I agree to share it with my property manager and any contractor assigned
+                to the repair.
+              </span>
+            </label>
+            <details className="mt-2 text-xs text-gray-500">
+              <summary className="cursor-pointer font-medium text-gray-600">
+                How your photos are used
+              </summary>
+              <ul className="mt-1.5 list-disc space-y-1 pl-5">
+                <li>
+                  <span className="font-medium text-gray-600">Who sees them.</span> The photos or
+                  video you upload go to your property manager and, if they assign a contractor to fix
+                  the issue, to that contractor. They are used only to understand and repair the
+                  problem.
+                </li>
+                <li>
+                  <span className="font-medium text-gray-600">How they are stored.</span> Your media
+                  is stored privately. It is not posted publicly, not used in any listing or
+                  advertisement, and not shared with anyone other than the people working on your
+                  repair.
+                </li>
+                <li>
+                  <span className="font-medium text-gray-600">What to avoid uploading.</span> Please
+                  photograph only the problem. Avoid capturing other people, faces, documents, screens,
+                  or valuables that are not part of the issue.
+                </li>
+                <li>
+                  <span className="font-medium text-gray-600">Your choice.</span> Adding media is
+                  optional. You can submit a description without any photo or video.
+                </li>
+                <li>
+                  <span className="font-medium text-gray-600">Questions or removal.</span> To ask a
+                  question or request that media be removed, contact your property manager.
+                </li>
+              </ul>
+            </details>
+          </div>
+        ) : null}
       </div>
 
       <div>

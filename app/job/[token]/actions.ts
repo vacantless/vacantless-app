@@ -17,12 +17,19 @@ export type DispatchActionResult = { ok: true } | { ok: false; reason: string };
 
 export async function acceptDispatch(input: {
   token: string;
+  termsAccepted: boolean;
 }): Promise<DispatchActionResult> {
   const token = (input.token ?? "").trim();
   if (!token) return { ok: false, reason: "not_found" };
+  // Slice 0 Block A: the trade must agree to the Vacantless Trade Terms. The UI
+  // gates the button on the checkbox; the RPC re-checks (terms_required).
+  if (!input.termsAccepted) return { ok: false, reason: "terms_required" };
 
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("accept_dispatch", { p_token: token });
+  const { data, error } = await supabase.rpc("accept_dispatch", {
+    p_token: token,
+    p_terms_accepted: true,
+  });
   const result = data as { ok?: boolean; reason?: string } | null;
   if (error || !result?.ok) return { ok: false, reason: result?.reason ?? "failed" };
   return { ok: true };

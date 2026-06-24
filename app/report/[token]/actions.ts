@@ -44,6 +44,7 @@ export async function createIncidentReport(input: {
   description: string;
   reporterName?: string | null;
   reporterContact?: string | null;
+  mediaConsent?: boolean;
 }): Promise<CreateReportResult> {
   const token = (input.token ?? "").trim();
   if (!token) return { ok: false, reason: "not_found" };
@@ -56,12 +57,15 @@ export async function createIncidentReport(input: {
   if (!check.ok) return { ok: false, reason: check.reason };
 
   const supabase = createClient();
+  // Slice 0 Block B: when the tenant attaches media and ticks the consent box,
+  // pass p_media_consent so the RPC stamps media_consent_at (the consent record).
   const { data, error } = await supabase.rpc("submit_incident_report", {
     p_token: token,
     p_category: check.category,
     p_description: check.description,
     p_reporter_name: input.reporterName ?? null,
     p_reporter_contact: input.reporterContact ?? null,
+    p_media_consent: input.mediaConsent === true,
   });
   const result = data as
     | { ok?: boolean; reason?: string; report_id?: string; organization_id?: string }

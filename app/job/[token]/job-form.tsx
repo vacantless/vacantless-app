@@ -36,6 +36,9 @@ export function JobForm({
   const [declining, setDeclining] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
+  // Slice 0 Block A: agree to the Vacantless Trade Terms before accepting.
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
   // quote
   const [showQuote, setShowQuote] = useState(status === "accepted");
   const [quote, setQuote] = useState(
@@ -45,9 +48,10 @@ export function JobForm({
   const [proposedDate, setProposedDate] = useState(existingProposedDate ?? "");
 
   async function onAccept() {
+    if (!termsAccepted) return;
     setBusy(true);
     setError(null);
-    const res = await acceptDispatch({ token });
+    const res = await acceptDispatch({ token, termsAccepted });
     setBusy(false);
     if (!res.ok) {
       setError(tradeDispatchErrorMessage(res.reason));
@@ -100,11 +104,41 @@ export function JobForm({
           <p className="text-sm text-gray-700">
             Can you take this job? Accept to send a quote, or decline.
           </p>
+
+          {/* Slice 0 Block A: short in-line notice + required Terms checkbox. */}
+          <p className="mt-3 rounded-lg bg-gray-50 p-3 text-xs leading-relaxed text-gray-600">
+            By accepting this job you agree to the Vacantless Trade Terms. In short: Vacantless is a
+            scheduling and messaging tool used by the property owner or manager who sent you this job.
+            Vacantless is not the customer, is not hiring you, does not pay you, and is not a party to
+            your agreement with the owner. You arrange payment and the work directly with the owner.
+          </p>
+          <label className="mt-3 flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            <span>
+              I have read and agree to the{" "}
+              <a
+                href="/legal/trade-terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline"
+                style={{ color: "var(--brand-color)" }}
+              >
+                Vacantless Trade Terms
+              </a>
+              .
+            </span>
+          </label>
+
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               type="button"
               onClick={onAccept}
-              disabled={busy}
+              disabled={busy || !termsAccepted}
               className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               style={{ background: brandBg }}
             >

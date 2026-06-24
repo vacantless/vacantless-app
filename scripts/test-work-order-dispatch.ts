@@ -178,6 +178,9 @@ ok("err: unknown -> null", dispatchErrorMessage("xyz") === null);
 ok("trade err: expired", /expired/i.test(tradeDispatchErrorMessage("expired")));
 ok("trade err: wrong_state", /moved on/i.test(tradeDispatchErrorMessage("wrong_state")));
 ok("trade err: default", tradeDispatchErrorMessage("zzz").length > 0);
+// Slice 0 Block A: trade Terms acceptance gate.
+ok("trade err: terms_required", /Trade Terms/i.test(tradeDispatchErrorMessage("terms_required")));
+ok("op err: terms_required", /terms/i.test(dispatchErrorMessage("terms_required") ?? ""));
 
 // ---------------------------------------------------------------------------
 console.log(`\nwork-order-dispatch: ${passed} passed, ${failed} failed`);
