@@ -32,6 +32,17 @@ import {
 import { sendTradeDispatchInvite } from "@/lib/email";
 import { sendOrgNotification, type NotifyOrg } from "@/lib/notifications-server";
 import { firstWord } from "@/lib/notifications";
+import { validateMediaUpload, extForType } from "@/lib/incident-media";
+import {
+  INCIDENT_MEDIA_BUCKET,
+  createIncidentMediaDownloadUrls,
+  removeIncidentMedia,
+} from "@/lib/incident-media-server";
+import {
+  workOrderMediaStoragePath,
+  MAX_PHOTOS_PER_WORK_ORDER,
+} from "@/lib/work-order-media";
+import { randomUUID } from "crypto";
 
 // The public app origin for deep links in notifications (matches lib/email.ts).
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -244,6 +255,100 @@ export async function createWorkOrder(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?wo=created`);
+}
+
+// Attach an operator photo to a work order (S328 dispatch-brief completion). For
+// a job that did NOT come from a tenant report, this is the only way to give the
+// dispatched trade a picture of the problem. Photos only; bytes land in the
+// shared private incident-media bucket under the org's work-orders/ path (the
+// bucket's org-folder RLS covers it), and the row points at them. The operator
+// has a session, so this is a direct server-side upload (no anon signed-URL
+// dance) — bodySizeLimit is already 30mb, comfortably over the 10 MB photo cap.
+export async function uploadWorkOrderPhoto(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?wo=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const workOrderId = s(formData, "work_order_id");
+  if (!workOrderId) redirect(`${BASE}?wo=notfound`);
+
+  const file = formData.get("photo");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect(`${BASE}?wo=photo_empty#wo-${workOrderId}`);
+  }
+
+  const check = validateMediaUpload({ type: file.type, size: file.size });
+  if (!check.ok) redirect(`${BASE}?wo=photo_${check.reason}#wo-${workOrderId}`);
+  // Operator attachments are photos; video is the tenant-intake concern.
+  if (check.kind !== "image") redirect(`${BASE}?wo=photo_type#wo-${workOrderId}`);
+
+  const supabase = createClient();
+  // RLS scopes this read to the caller's org — a forged id resolves to nothing.
+  const { data: wo } = await supabase
+    .from("work_orders")
+    .select("id")
+    .eq("id", workOrderId)
+    .maybeSingle();
+  if (!wo) redirect(`${BASE}?wo=notfound`);
+
+  const { count } = await supabase
+    .from("work_order_media")
+    .select("id", { count: "exact", head: true })
+    .eq("work_order_id", workOrderId);
+  if ((count ?? 0) >= MAX_PHOTOS_PER_WORK_ORDER) {
+    redirect(`${BASE}?wo=photo_too_many#wo-${workOrderId}`);
+  }
+
+  const path = workOrderMediaStoragePath(org.id, workOrderId, randomUUID(), extForType(file.type));
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  const { error: upErr } = await supabase.storage
+    .from(INCIDENT_MEDIA_BUCKET)
+    .upload(path, bytes, { contentType: file.type, upsert: false });
+  if (upErr) redirect(`${BASE}?wo=photo_failed#wo-${workOrderId}`);
+
+  const { error: insErr } = await supabase.from("work_order_media").insert({
+    organization_id: org.id,
+    work_order_id: workOrderId,
+    storage_path: path,
+    mime_type: file.type,
+    size_bytes: file.size,
+    kind: "image",
+  });
+  if (insErr) {
+    // Don't leak an orphaned object if the metadata insert fails.
+    await removeIncidentMedia(supabase, [path]);
+    redirect(`${BASE}?wo=photo_failed#wo-${workOrderId}`);
+  }
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?wo=photo_added#wo-${workOrderId}`);
+}
+
+// Remove an operator-attached work-order photo (bytes + row). RLS scopes the
+// lookup/delete to the caller's org.
+export async function deleteWorkOrderPhoto(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?wo=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const mediaId = s(formData, "media_id");
+  if (!mediaId) redirect(`${BASE}?wo=notfound`);
+
+  const supabase = createClient();
+  const { data: media } = await supabase
+    .from("work_order_media")
+    .select("work_order_id, storage_path")
+    .eq("id", mediaId)
+    .maybeSingle();
+  if (!media) redirect(`${BASE}?wo=notfound`);
+  const m = media as { work_order_id: string; storage_path: string };
+
+  await supabase.from("work_order_media").delete().eq("id", mediaId);
+  await removeIncidentMedia(supabase, [m.storage_path]);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?wo=photo_removed#wo-${m.work_order_id}`);
 }
 
 export async function updateWorkOrder(formData: FormData) {

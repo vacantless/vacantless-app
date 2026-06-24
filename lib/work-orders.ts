@@ -241,6 +241,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   email: "Enter a valid email address, or leave it blank.",
   forbidden: "You don't have permission to manage work orders.",
   notfound: "That work order could not be found.",
+  photo_type: "Please attach a photo (JPG, PNG, or WebP).",
+  photo_size: "That photo is too large (10 MB max).",
+  photo_empty: "That file appears to be empty.",
+  photo_too_many: "You've reached the photo limit for this work order.",
+  photo_failed: "The photo couldn't be uploaded. Please try again.",
 };
 
 export function workOrderErrorMessage(code: string | undefined): string | null {

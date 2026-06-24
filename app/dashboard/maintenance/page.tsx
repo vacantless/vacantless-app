@@ -69,6 +69,8 @@ import {
   completeDispatch,
   cancelDispatch,
   acknowledgeDispatchTerms,
+  uploadWorkOrderPhoto,
+  deleteWorkOrderPhoto,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -196,6 +198,8 @@ const WO_SUCCESS: Record<string, string> = {
   saved: "Work order updated.",
   status: "Work order status updated.",
   deleted: "Work order deleted.",
+  photo_added: "Photo added to the work order.",
+  photo_removed: "Photo removed.",
 };
 const TRADE_SUCCESS: Record<string, string> = {
   created: "Trade contact added.",
@@ -337,6 +341,42 @@ export default async function MaintenancePage({
   ]);
 
   const allOrders = (woData ?? []) as unknown as WorkOrderRow[];
+
+  // Operator-attached work-order photos (S328), with a freshly-signed preview URL
+  // per object (RLS client; the incident-media SELECT policy scopes them to this
+  // org's folder — same pattern as the tenant report gallery above).
+  const woPhotos = new Map<string, { id: string; url: string }[]>();
+  if (allOrders.length > 0) {
+    const { data: woMediaData } = await supabase
+      .from("work_order_media")
+      .select("id, work_order_id, storage_path")
+      .in(
+        "work_order_id",
+        allOrders.map((o) => o.id),
+      )
+      .order("created_at", { ascending: true });
+    const woMedia = (woMediaData ?? []) as {
+      id: string;
+      work_order_id: string;
+      storage_path: string;
+    }[];
+    if (woMedia.length > 0) {
+      const signed = await createIncidentMediaDownloadUrls(
+        supabase,
+        woMedia.map((m) => m.storage_path),
+      );
+      const urlByPath = new Map<string, string | null>();
+      if (signed.ok) for (const u of signed.urls) urlByPath.set(u.path, u.signedUrl);
+      for (const m of woMedia) {
+        const url = urlByPath.get(m.storage_path);
+        if (!url) continue;
+        const list = woPhotos.get(m.work_order_id) ?? [];
+        list.push({ id: m.id, url });
+        woPhotos.set(m.work_order_id, list);
+      }
+    }
+  }
+
   const trades = (tradeData ?? []) as TradeRow[];
   const properties = (propData ?? []) as PropertyRef[];
   const activeTrades = trades.filter((t) => !t.archived);
@@ -958,6 +998,62 @@ export default async function MaintenancePage({
                         </div>
                       )}
                     </dl>
+
+                    {/* Operator photos (S328): what the dispatched trade will see */}
+                    {(() => {
+                      const photos = woPhotos.get(o.id) ?? [];
+                      return (
+                        <div className="mt-3">
+                          {photos.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {photos.map((p) => (
+                                <div key={p.id} className="relative">
+                                  <a href={p.url} target="_blank" rel="noopener noreferrer">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={p.url}
+                                      alt="Work order photo"
+                                      className="h-16 w-16 rounded-md border border-gray-200 object-cover"
+                                    />
+                                  </a>
+                                  <form
+                                    action={deleteWorkOrderPhoto}
+                                    className="absolute -right-1.5 -top-1.5"
+                                  >
+                                    <input type="hidden" name="media_id" value={p.id} />
+                                    <SubmitButton
+                                      className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 bg-white text-xs leading-none text-gray-500 shadow-sm hover:bg-gray-50"
+                                      pendingLabel="·"
+                                    >
+                                      ×
+                                    </SubmitButton>
+                                  </form>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <form
+                            action={uploadWorkOrderPhoto}
+                            className="mt-2 flex flex-wrap items-center gap-2"
+                          >
+                            <input type="hidden" name="work_order_id" value={o.id} />
+                            <input
+                              type="file"
+                              name="photo"
+                              accept="image/jpeg,image/png,image/webp"
+                              required
+                              className="block max-w-[15rem] text-xs text-gray-600 file:mr-2 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-2 file:py-1 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-50"
+                            />
+                            <SubmitButton
+                              className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                              pendingLabel="Adding…"
+                            >
+                              Add photo for the trade
+                            </SubmitButton>
+                          </form>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Status change + actions */}
