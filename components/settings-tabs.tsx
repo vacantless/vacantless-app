@@ -9,15 +9,20 @@ import { Icons } from "@/components/icons";
 // survives the redirect-based saves each section uses.
 // S275 IA Step 3: "Lease Clauses" moved out to Tenants → Lease clauses (its
 // point-of-use); screening + building policy moved off the brand tab too.
-export type SettingsTab = "brand" | "comms" | "banking" | "account";
+export type SettingsTab = "brand" | "comms" | "notifications" | "banking" | "account";
 
+// Most tabs are sections of /dashboard/settings driven by ?tab=. "Notifications"
+// is its own route (its editor is large enough to live apart and keeps the main
+// settings page from growing further); `href` overrides the default ?tab= link.
 const TABS: {
   key: SettingsTab;
   label: string;
   icon: keyof typeof Icons;
+  href?: string;
 }[] = [
   { key: "brand", label: "Public Page & Brand", icon: "page" },
   { key: "comms", label: "Communications", icon: "mail" },
+  { key: "notifications", label: "Notifications", icon: "chat", href: "/dashboard/settings/notifications" },
   { key: "banking", label: "Banking & Rent", icon: "card" },
   { key: "account", label: "Account & Plan", icon: "key" },
 ];
@@ -35,7 +40,7 @@ export function SettingsTabs({ active }: { active: SettingsTab }) {
           return (
             <Link
               key={t.key}
-              href={`/dashboard/settings?tab=${t.key}`}
+              href={t.href ?? `/dashboard/settings?tab=${t.key}`}
               aria-current={isActive ? "page" : undefined}
               className={[
                 "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-lg px-3.5 py-2.5 text-sm font-medium transition-colors",

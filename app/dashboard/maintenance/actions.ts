@@ -24,9 +24,79 @@ import {
   dispatchTokenExpiry,
   normalizeOperatorNote,
   validateScheduleConfirmation,
+  formatDispatchDate,
+  tradeJobUrl,
   ACTIVE_DISPATCH_STATUSES,
 } from "@/lib/work-order-dispatch";
 import { sendTradeDispatchInvite } from "@/lib/email";
+import { sendOrgNotification, type NotifyOrg } from "@/lib/notifications-server";
+import { firstWord } from "@/lib/notifications";
+
+// The public app origin for deep links in notifications (matches lib/email.ts).
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
+
+// The branding fields the notification shell needs, narrowed from getCurrentOrg.
+function notifyOrgOf(org: {
+  id: string;
+  name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+}): NotifyOrg {
+  return {
+    id: org.id,
+    name: org.name,
+    brand_color: org.brand_color,
+    logo_url: org.logo_url,
+    reply_to_email: org.reply_to_email,
+  };
+}
+
+// Job title + property address + the tenancy's primary-tenant contact for a work
+// order, used to fill dispatch transition notifications. The operator's RLS
+// client scopes both reads to their org. Returns nulls when a piece is missing
+// (a job with no tenancy still notifies the trade; the tenant legs just skip).
+async function dispatchPartyContext(
+  supabase: ReturnType<typeof createClient>,
+  workOrderId: string,
+): Promise<{
+  jobTitle: string;
+  propertyAddress: string | null;
+  tenantEmail: string | null;
+  tenantName: string | null;
+}> {
+  const { data: wo } = await supabase
+    .from("work_orders")
+    .select("title, tenancy_id, property:properties(address)")
+    .eq("id", workOrderId)
+    .maybeSingle();
+  const w = (wo as unknown as {
+    title: string;
+    tenancy_id: string | null;
+    property: { address: string } | null;
+  } | null) ?? null;
+
+  let tenantEmail: string | null = null;
+  let tenantName: string | null = null;
+  if (w?.tenancy_id) {
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("email, name")
+      .eq("tenancy_id", w.tenancy_id)
+      .eq("is_primary", true)
+      .maybeSingle();
+    const t = tenant as { email: string | null; name: string | null } | null;
+    tenantEmail = t?.email ?? null;
+    tenantName = t?.name ?? null;
+  }
+
+  return {
+    jobTitle: w?.title ?? "your maintenance request",
+    propertyAddress: w?.property?.address ?? null,
+    tenantEmail,
+    tenantName,
+  };
+}
 
 // Maintenance work-order + trade-contact actions (self-managed-owner wedge,
 // Slice 2 of the work-order module — see VACANTLESS-WORKORDERS-MODULE-SPEC).
@@ -792,7 +862,7 @@ export async function dispatchWorkOrderToTrade(formData: FormData) {
 // already moved on.
 export async function approveDispatchSchedule(formData: FormData) {
   await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
-  await requireIncidentDispatch("");
+  const org = await requireIncidentDispatch("");
 
   const id = s(formData, "dispatch_id");
   if (!id) redirect(BASE);
@@ -813,16 +883,64 @@ export async function approveDispatchSchedule(formData: FormData) {
     })
     .eq("id", id)
     .eq("dispatch_status", "quoted")
-    .select("id");
+    .select("id, work_order_id, trade_email_snapshot, trade_name_snapshot, trade_access_token, scheduled_for");
+
+  // Slice 6: tell the trade they're booked and the tenant the date (best-effort;
+  // a mail failure never reverses the schedule). Both events are operator-
+  // customizable (copy + cc recipients) via notification_settings.
+  const d = updated && updated.length > 0 ? (updated[0] as {
+    work_order_id: string;
+    trade_email_snapshot: string | null;
+    trade_name_snapshot: string | null;
+    trade_access_token: string | null;
+    scheduled_for: string | null;
+  }) : null;
+  if (d) {
+    const ctx = await dispatchPartyContext(supabase, d.work_order_id);
+    const notifyOrg = notifyOrgOf(org);
+    const scheduledDate = formatDispatchDate(d.scheduled_for);
+    const propertyAddress = ctx.propertyAddress ?? "the property";
+
+    await sendOrgNotification({
+      client: supabase,
+      org: notifyOrg,
+      eventKey: "dispatch.scheduled.trade",
+      audienceEmail: d.trade_email_snapshot,
+      vars: {
+        org_name: org.name ?? "Your property manager",
+        property_address: propertyAddress,
+        trade_name: d.trade_name_snapshot ?? "there",
+        job_title: ctx.jobTitle,
+        scheduled_date: scheduledDate,
+        job_url: d.trade_access_token ? tradeJobUrl(APP_URL, d.trade_access_token) : "",
+      },
+    });
+
+    if (ctx.tenantEmail) {
+      await sendOrgNotification({
+        client: supabase,
+        org: notifyOrg,
+        eventKey: "dispatch.scheduled.tenant",
+        audienceEmail: ctx.tenantEmail,
+        vars: {
+          org_name: org.name ?? "Your property manager",
+          property_address: propertyAddress,
+          tenant_first_name: firstWord(ctx.tenantName),
+          job_title: ctx.jobTitle,
+          scheduled_date: scheduledDate,
+        },
+      });
+    }
+  }
 
   revalidatePath(BASE);
-  redirect(`${BASE}?disp=${updated && updated.length > 0 ? "approved" : "wrong_state"}`);
+  redirect(`${BASE}?disp=${d ? "approved" : "wrong_state"}`);
 }
 
 // Operator marks a scheduled dispatch complete.
 export async function completeDispatch(formData: FormData) {
   await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
-  await requireIncidentDispatch("");
+  const org = await requireIncidentDispatch("");
 
   const id = s(formData, "dispatch_id");
   if (!id) redirect(BASE);
@@ -834,16 +952,36 @@ export async function completeDispatch(formData: FormData) {
     .update({ dispatch_status: "completed", completed_at: now, updated_at: now })
     .eq("id", id)
     .eq("dispatch_status", "scheduled")
-    .select("id");
+    .select("id, work_order_id");
+
+  // Slice 6: tell the tenant the work is done (best-effort, customizable).
+  const d = updated && updated.length > 0 ? (updated[0] as { work_order_id: string }) : null;
+  if (d) {
+    const ctx = await dispatchPartyContext(supabase, d.work_order_id);
+    if (ctx.tenantEmail) {
+      await sendOrgNotification({
+        client: supabase,
+        org: notifyOrgOf(org),
+        eventKey: "dispatch.completed.tenant",
+        audienceEmail: ctx.tenantEmail,
+        vars: {
+          org_name: org.name ?? "Your property manager",
+          property_address: ctx.propertyAddress ?? "the property",
+          tenant_first_name: firstWord(ctx.tenantName),
+          job_title: ctx.jobTitle,
+        },
+      });
+    }
+  }
 
   revalidatePath(BASE);
-  redirect(`${BASE}?disp=${updated && updated.length > 0 ? "completed" : "wrong_state"}`);
+  redirect(`${BASE}?disp=${d ? "completed" : "wrong_state"}`);
 }
 
 // Operator pulls a dispatch back any time before it's terminal.
 export async function cancelDispatch(formData: FormData) {
   await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
-  await requireIncidentDispatch("");
+  const org = await requireIncidentDispatch("");
 
   const id = s(formData, "dispatch_id");
   if (!id) redirect(BASE);
@@ -855,8 +993,30 @@ export async function cancelDispatch(formData: FormData) {
     .update({ dispatch_status: "cancelled", updated_at: now })
     .eq("id", id)
     .in("dispatch_status", ACTIVE_DISPATCH_STATUSES as unknown as string[])
-    .select("id");
+    .select("id, work_order_id, trade_email_snapshot, trade_name_snapshot");
+
+  // Slice 6: tell the trade the job's been pulled (best-effort, customizable).
+  const d = updated && updated.length > 0 ? (updated[0] as {
+    work_order_id: string;
+    trade_email_snapshot: string | null;
+    trade_name_snapshot: string | null;
+  }) : null;
+  if (d) {
+    const ctx = await dispatchPartyContext(supabase, d.work_order_id);
+    await sendOrgNotification({
+      client: supabase,
+      org: notifyOrgOf(org),
+      eventKey: "dispatch.cancelled.trade",
+      audienceEmail: d.trade_email_snapshot,
+      vars: {
+        org_name: org.name ?? "Your property manager",
+        property_address: ctx.propertyAddress ?? "the property",
+        trade_name: d.trade_name_snapshot ?? "there",
+        job_title: ctx.jobTitle,
+      },
+    });
+  }
 
   revalidatePath(BASE);
-  redirect(`${BASE}?disp=${updated && updated.length > 0 ? "cancelled" : "wrong_state"}`);
+  redirect(`${BASE}?disp=${d ? "cancelled" : "wrong_state"}`);
 }

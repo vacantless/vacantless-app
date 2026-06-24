@@ -1,0 +1,168 @@
+// Unit tests for the pure notifications domain model (Slice 6 substrate, S327).
+// Run: npx tsx scripts/test-notifications.ts
+import {
+  NOTIFICATION_EVENTS,
+  isNotificationEventKey,
+  getNotificationEvent,
+  activeNotificationEvents,
+  notificationFamilyLabel,
+  renderNotification,
+  isEventEnabled,
+  isValidEmail,
+  parseRecipientList,
+  validateRecipientsInput,
+  resolveNotificationRecipients,
+  formatQuoteToken,
+  firstWord,
+  tradeUpdateStatusLabel,
+  tradeUpdateDetail,
+  MAX_NOTIFICATION_RECIPIENTS,
+  type NotificationSettingRow,
+} from "../lib/notifications";
+
+let passed = 0;
+let failed = 0;
+function ok(name: string, cond: boolean) {
+  if (cond) passed++;
+  else {
+    failed++;
+    console.error(`  ✗ ${name}`);
+  }
+}
+
+// --- registry ---------------------------------------------------------------
+ok("events: at least 5", NOTIFICATION_EVENTS.length >= 5);
+ok("events: keys unique", new Set(NOTIFICATION_EVENTS.map((e) => e.key)).size === NOTIFICATION_EVENTS.length);
+ok("events: all dispatch active", NOTIFICATION_EVENTS.filter((e) => e.family === "dispatch").every((e) => e.active));
+ok("isKey: known", isNotificationEventKey("dispatch.scheduled.tenant"));
+ok("isKey: unknown", !isNotificationEventKey("nope.nope"));
+ok("getEvent: known", getNotificationEvent("dispatch.trade_update")?.audience === "operator");
+ok("getEvent: unknown null", getNotificationEvent("zzz") === null);
+ok("active: all active here", activeNotificationEvents().length === NOTIFICATION_EVENTS.length);
+ok("family label dispatch", notificationFamilyLabel("dispatch") === "Maintenance dispatch");
+ok(
+  "events: every default has tokens present in its token list",
+  NOTIFICATION_EVENTS.every((e) => {
+    const used = [...e.defaultSubject.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)].map((m) => m[1]);
+    const usedBody = [...e.defaultBody.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)].map((m) => m[1]);
+    return [...used, ...usedBody].every((t) => (e.tokens as readonly string[]).includes(t));
+  }),
+);
+
+// --- render: default vs override + token substitution -----------------------
+const ev = getNotificationEvent("dispatch.scheduled.tenant")!;
+const vars = {
+  org_name: "Agile",
+  property_address: "833 Pillette Rd — Unit 22",
+  tenant_first_name: "Nya",
+  job_title: "Leaky faucet",
+  scheduled_date: "Thu Jun 25, 2026",
+};
+const rDefault = renderNotification(ev, null, vars);
+ok("render: default subject substitutes date", rDefault.subject.includes("Thu Jun 25, 2026"));
+ok("render: default body greets tenant", rDefault.body.includes("Hi Nya,"));
+ok("render: default body has address", rDefault.body.includes("833 Pillette Rd — Unit 22"));
+
+const overrideRow: NotificationSettingRow = {
+  event_key: ev.key,
+  enabled: true,
+  subject_template: "Booked {{scheduled_date}}",
+  body_template: "Yo {{tenant_first_name}}",
+  recipients: null,
+};
+const rOver = renderNotification(ev, overrideRow, vars);
+ok("render: override subject wins", rOver.subject === "Booked Thu Jun 25, 2026");
+ok("render: override body wins", rOver.body === "Yo Nya");
+
+// blank override falls back to default
+const blankRow: NotificationSettingRow = {
+  event_key: ev.key,
+  enabled: true,
+  subject_template: "   ",
+  body_template: "",
+  recipients: null,
+};
+ok("render: blank override -> default", renderNotification(ev, blankRow, vars).subject.includes("scheduled for"));
+
+// unknown token left intact
+ok(
+  "render: unknown token preserved",
+  renderNotification(ev, { ...overrideRow, subject_template: "{{mystery}}" }, vars).subject === "{{mystery}}",
+);
+
+// --- enabled ----------------------------------------------------------------
+ok("enabled: absent row -> on", isEventEnabled(null));
+ok("enabled: row off -> off", !isEventEnabled({ ...overrideRow, enabled: false }));
+ok("enabled: row on -> on", isEventEnabled({ ...overrideRow, enabled: true }));
+
+// --- email validity + parsing -----------------------------------------------
+ok("email: valid", isValidEmail("a@b.co"));
+ok("email: no domain", !isValidEmail("a@b"));
+ok("email: spaces", !isValidEmail("a b@c.com"));
+ok("parse: splits + dedupes + lowercases", JSON.stringify(parseRecipientList("A@x.com, a@x.com\nb@y.com; ")) === JSON.stringify(["a@x.com", "b@y.com"]));
+ok("parse: drops junk for send", JSON.stringify(parseRecipientList("good@x.com, junk")) === JSON.stringify(["good@x.com"]));
+ok("parse: empty", parseRecipientList("").length === 0 && parseRecipientList(null).length === 0);
+
+// --- validate (settings save) -----------------------------------------------
+const vEmpty = validateRecipientsInput("");
+ok("validate: empty ok", vEmpty.ok && vEmpty.value.length === 0);
+const vGood = validateRecipientsInput("rentals@agileonline.ca\npeterszummer@gmail.com");
+ok("validate: good two", vGood.ok && vGood.value.length === 2);
+const vBad = validateRecipientsInput("ok@x.com, notanemail");
+ok("validate: surfaces invalid", !vBad.ok && vBad.code === "bad_email" && vBad.invalid.includes("notanemail"));
+const vMany = validateRecipientsInput(Array.from({ length: MAX_NOTIFICATION_RECIPIENTS + 1 }, (_, i) => `u${i}@x.com`).join("\n"));
+ok("validate: too many", !vMany.ok && vMany.code === "too_many");
+
+// --- recipient resolution ---------------------------------------------------
+// operator event: configured list wins
+ok(
+  "resolve: operator uses configured",
+  JSON.stringify(
+    resolveNotificationRecipients({ audience: "operator", configured: ["a@x.com"], operatorFallback: ["fb@x.com"] }),
+  ) === JSON.stringify(["a@x.com"]),
+);
+// operator event: empty -> fallback (never silent)
+ok(
+  "resolve: operator falls back",
+  JSON.stringify(
+    resolveNotificationRecipients({ audience: "operator", configured: [], operatorFallback: ["fb@x.com"] }),
+  ) === JSON.stringify(["fb@x.com"]),
+);
+// trade event: natural party always included + additive cc, de-duped
+ok(
+  "resolve: trade includes party + cc",
+  JSON.stringify(
+    resolveNotificationRecipients({ audience: "trade", configured: ["cc@x.com", "trade@x.com"], audienceEmail: "Trade@x.com" }),
+  ) === JSON.stringify(["trade@x.com", "cc@x.com"]),
+);
+// tenant event: no party email + no cc -> empty (caller skips send)
+ok(
+  "resolve: tenant empty when nothing",
+  resolveNotificationRecipients({ audience: "tenant", configured: [], audienceEmail: null }).length === 0,
+);
+// cap
+ok(
+  "resolve: caps at max",
+  resolveNotificationRecipients({
+    audience: "operator",
+    configured: Array.from({ length: 50 }, (_, i) => `u${i}@x.com`),
+  }).length === MAX_NOTIFICATION_RECIPIENTS,
+);
+
+// --- quote token + helpers --------------------------------------------------
+ok("quote token: cents", formatQuoteToken(25000) === "$250.00");
+ok("quote token: null empty", formatQuoteToken(null) === "");
+ok("firstWord: name", firstWord("Karen Mary Kenney") === "Karen");
+ok("firstWord: empty -> there", firstWord(null) === "there");
+
+// --- operator trade_update copy --------------------------------------------
+ok("status label accepted", tradeUpdateStatusLabel("accepted") === "accepted the job");
+ok("status label quoted", tradeUpdateStatusLabel("quoted") === "sent a quote");
+ok("detail: quote with amount", tradeUpdateDetail("quoted", { quoteCents: 25000 }).includes("$250.00"));
+ok("detail: quote with note", tradeUpdateDetail("quoted", { quoteCents: 25000, note: "parts extra" }).includes("parts extra"));
+ok("detail: decline reason", tradeUpdateDetail("declined", { declineReason: "too far" }).includes("too far"));
+ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", {})));
+
+// ---------------------------------------------------------------------------
+console.log(`\nnotifications: ${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);

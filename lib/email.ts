@@ -1263,3 +1263,117 @@ export async function sendTradeDispatchInvite(
     return { sent: false, reason: `fetch_error:${(e as Error).message}` };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Generic customizable notification (Slice 6 substrate, S327). One branded
+// shell every per-org notification draws from: the subject + body are ALREADY
+// rendered (operator-edited template or the code default, token-substituted by
+// lib/notifications.ts), so this function only wraps + sends. The body is plain
+// text (operator-authored), so we escape it and turn newlines into paragraphs —
+// an operator can't break the layout. An optional action link renders as both a
+// button AND prominent plain text (the S326 Brevo fix: Brevo rewrites <a href>
+// into a tracking redirect that some corporate inboxes block, so the bare URL
+// must survive unwrapped). Best-effort + degrades like the rest.
+// ---------------------------------------------------------------------------
+export type NotificationEmailPayload = {
+  to_email: string;
+  subject: string; // already rendered + token-substituted
+  body: string; // already rendered plain text (may contain newlines)
+  action_label?: string | null;
+  action_url?: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+};
+
+function bodyToParagraphs(body: string): string {
+  // Split on blank lines into paragraphs; single newlines become <br>.
+  return body
+    .split(/\n{2,}/)
+    .map(
+      (para) =>
+        `<p style="margin:0 0 16px;">${escapeHtml(para).replace(/\n/g, "<br/>")}</p>`,
+    )
+    .join("");
+}
+
+function notificationHtml(p: NotificationEmailPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Vacantless");
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  let action = "";
+  if (p.action_url) {
+    const url = escapeHtml(p.action_url);
+    const label = escapeHtml(p.action_label || "Open in dashboard");
+    action = `
+      <p style="margin:0 0 16px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">${label}</a>
+      </p>
+      <p style="margin:0 0 8px;font-size:14px;color:#3f3f46;">If the button does not open, copy and paste this link into your browser:</p>
+      <p style="margin:0 0 16px;padding:12px;background:#f4f4f5;border-radius:8px;font-size:14px;color:#3f3f46;word-break:break-all;">${url}</p>`;
+  }
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      ${bodyToParagraphs(p.body)}
+      ${action}
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      Sent by ${org} via Vacantless.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded notification send. Never throws; returns { sent:false }
+ * when BREVO_API_KEY is unset or there's no recipient. The caller fans this out
+ * over the resolved recipient list under Promise.allSettled so one failure never
+ * blocks the others or the underlying transition.
+ */
+export async function sendNotificationEmail(
+  p: NotificationEmailPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject: p.subject,
+    htmlContent: notificationHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject: p.subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
