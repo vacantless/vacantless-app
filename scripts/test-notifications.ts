@@ -163,6 +163,39 @@ ok("detail: quote with note", tradeUpdateDetail("quoted", { quoteCents: 25000, n
 ok("detail: decline reason", tradeUpdateDetail("declined", { declineReason: "too far" }).includes("too far"));
 ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", {})));
 
+// --- leasing.new_lead event (first teardown event) -------------------------
+{
+  const ev = getNotificationEvent("leasing.new_lead");
+  ok("new_lead: registered", ev !== null);
+  ok("new_lead: leasing family", ev?.family === "leasing");
+  ok("new_lead: operator audience", ev?.audience === "operator");
+  ok("new_lead: active", ev?.active === true);
+  ok("new_lead: in active set", activeNotificationEvents().some((e) => e.key === "leasing.new_lead"));
+  ok("new_lead: leasing family label", notificationFamilyLabel("leasing") === "Leasing");
+  // Every {{token}} in the default templates must be a declared token, else it
+  // renders as a literal. (The trigger always supplies each declared token.)
+  if (ev) {
+    const declared = new Set(ev.tokens);
+    const used = [...(ev.defaultSubject + " " + ev.defaultBody).matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)].map(
+      (m) => m[1].toLowerCase(),
+    );
+    ok("new_lead: all template tokens declared", used.every((t) => declared.has(t)));
+    // Fully-supplied render leaves no literal {{...}} behind.
+    const rendered = renderNotification(ev, null, {
+      org_name: "Agile",
+      property_address: "833 Pillette Rd — Unit 20",
+      lead_name: "Karen Kenney",
+      lead_email: "karen@example.com",
+      lead_phone: "519-555-0100",
+      move_in: "2026-08-01",
+      dashboard_url: "https://x/dashboard/leads/abc",
+    });
+    ok("new_lead: renders name", rendered.body.includes("Karen Kenney"));
+    ok("new_lead: renders address in subject", rendered.subject.includes("833 Pillette"));
+    ok("new_lead: no leftover tokens", !/\{\{/.test(rendered.subject + rendered.body));
+  }
+}
+
 // ---------------------------------------------------------------------------
 console.log(`\nnotifications: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

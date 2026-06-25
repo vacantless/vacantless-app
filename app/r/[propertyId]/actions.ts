@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   sendAutoReply,
   sendBookingConfirmation,
@@ -10,6 +11,81 @@ import {
 import { sendSms, bookingConfirmationSms } from "@/lib/sms";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
+import { sendOrgNotification } from "@/lib/notifications-server";
+import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
+import type { NotifyMember } from "@/lib/incident-reports";
+
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
+const MAX_LEAD_NOTIFY_RECIPIENTS = 10;
+
+// Notify the org's leasing team that a new lead came in — the first
+// Agile→Vacantless teardown event (replaces Zap 362007976). Runs on the anon
+// submit-lead path, so it reads the org + member emails (RLS-hidden from anon)
+// via the service-role admin client, exactly like notifyOperatorsOfNewReport
+// (Slice 4). Best-effort: it NEVER throws, so a mail failure can't turn a
+// captured lead into an error for the renter. The customizable substrate
+// (Settings → Notifications) overrides copy/recipients/on-off per org; this only
+// supplies the default audience + the {{token}} values.
+async function notifyOperatorsOfNewLead(
+  payload: AutoReplyPayload,
+  extra: { phone: string; moveIn: string },
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    if (!admin) return; // no service key -> can't read members; skip quietly
+
+    const { data: org } = await admin
+      .from("organizations")
+      .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+      .eq("id", payload.org_id)
+      .maybeSingle();
+    if (!org) return;
+
+    // Org members -> resolve each one's auth email, then keep the leasing roles.
+    const { data: memberRows } = await admin
+      .from("memberships")
+      .select("user_id, role")
+      .eq("organization_id", payload.org_id);
+    const members: NotifyMember[] = [];
+    for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
+      const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+      members.push({ role: m.role, email: u?.user?.email ?? null });
+    }
+    const operatorFallback = resolveLeadNotifyEmails(members, [
+      org.reply_to_email,
+      org.public_contact_email,
+    ]).slice(0, MAX_LEAD_NOTIFY_RECIPIENTS);
+
+    await sendOrgNotification({
+      client: admin,
+      org: {
+        id: org.id,
+        name: org.name,
+        brand_color: org.brand_color,
+        logo_url: org.logo_url,
+        reply_to_email: org.reply_to_email,
+      },
+      eventKey: "leasing.new_lead",
+      vars: {
+        org_name: org.name ?? "",
+        property_address: payload.property_address ?? "(unspecified property)",
+        lead_name: payload.renter_name?.trim() || "(no name given)",
+        lead_email: payload.renter_email?.trim() || "(no email)",
+        lead_phone: extra.phone.trim() || "(no phone)",
+        move_in: extra.moveIn.trim() || "(not specified)",
+        dashboard_url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
+      },
+      operatorFallback,
+      action: {
+        label: "View lead",
+        url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
+      },
+    });
+  } catch {
+    // Swallow — the lead is saved; the operator alert is best-effort.
+  }
+}
 
 // Public, unauthenticated lead submission. Calls a SECURITY DEFINER RPC that
 // resolves the org from the property and inserts the lead — the renter can
@@ -88,6 +164,10 @@ export async function submitLead(formData: FormData) {
   if (!payload?.lead_id) {
     redirect(`/r/${propertyId}?submitted=1`);
   }
+
+  // Tell the leasing team a new lead landed (best-effort; never blocks the
+  // renter). Fires regardless of whether they also booked a showing below.
+  await notifyOperatorsOfNewLead(payload, { phone, moveIn: moveInRaw });
 
   let outcome: "submitted" | "booked" | "booking_failed" = "submitted";
   // The renter picked a time but it was no longer bookable (already taken

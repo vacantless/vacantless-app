@@ -140,6 +140,26 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{trade_name}},\n\n{{org_name}} replied about \"{{job_title}}\" at {{property_address}}:\n\n{{reply}}\n\nView the job and respond: {{job_url}}\n\nThank you,\n{{org_name}}",
     active: true,
   },
+  // ---- Leasing (Agile→Vacantless teardown — first leasing event) ----------
+  // Replaces Agile's real-time "NEW LEAD — ACTION REQUIRED" Zap (362007976).
+  // Audience operator; available to every org but fire-on-data (an org that runs
+  // no leasing pipeline never triggers it). The {{dashboard_url}} action button
+  // is the "work from your inbox" affordance — Aaliyah taps it to log the contact
+  // without opening the grid. Every token is always supplied by the trigger (with
+  // a readable fallback) so none renders as a literal {{token}}.
+  {
+    key: "leasing.new_lead",
+    family: "leasing",
+    audience: "operator",
+    label: "New lead — action required",
+    description:
+      "When a new rental inquiry comes in, your leasing team is notified so you can reply fast. Defaults to members who manage leads; edit the recipients below.",
+    tokens: [...COMMON_TOKENS, "lead_name", "lead_email", "lead_phone", "move_in", "dashboard_url"],
+    defaultSubject: "New lead: {{lead_name}} — {{property_address}}",
+    defaultBody:
+      "A new rental inquiry just came in for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
