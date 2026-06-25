@@ -1283,6 +1283,10 @@ export type NotificationEmailPayload = {
   action_url?: string | null;
   org_name: string | null;
   brand_color: string | null;
+  // Per-event top-stripe accent (hex #RRGGBB). When set it overrides brand_color
+  // for the email's accent bar only — the "urgency" cue for events like a new
+  // lead — while the CTA button stays on the org brand color. Null => brand.
+  accent_color?: string | null;
   logo_url: string | null;
   reply_to_email: string | null;
 };
@@ -1300,6 +1304,9 @@ function bodyToParagraphs(body: string): string {
 
 function notificationHtml(p: NotificationEmailPayload): string {
   const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  // The accent bar uses the per-event accent when set, else the org brand. The
+  // CTA button below always uses `brand` so the action stays on-brand.
+  const accent = p.accent_color || brand;
   const org = escapeHtml(p.org_name || "Vacantless");
   const logo = p.logo_url
     ? `<img src="${escapeHtml(
@@ -1323,7 +1330,7 @@ function notificationHtml(p: NotificationEmailPayload): string {
 
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
-    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="height:6px;background:${escapeHtml(accent)};"></div>
     <div style="padding:28px 28px 24px;">
       ${logo}
       ${bodyToParagraphs(p.body)}

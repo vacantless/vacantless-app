@@ -12,7 +12,7 @@ import { sendSms, bookingConfirmationSms } from "@/lib/sms";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
 import { sendOrgNotification } from "@/lib/notifications-server";
-import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
+import { resolveLeadNotifyEmails, formatLeadScreeningBlock } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 
 const APP_URL =
@@ -57,6 +57,18 @@ async function notifyOperatorsOfNewLead(
       org.public_contact_email,
     ]).slice(0, MAX_LEAD_NOTIFY_RECIPIENTS);
 
+    // Pull the lead's screening snapshot (the RPC already wrote the authoritative
+    // values + custom-answer prompts) so the email can inline it — notification
+    // parity (S332). Best-effort: a read miss just yields an empty block.
+    const { data: lead } = await admin
+      .from("leads")
+      .select(
+        "screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, screen_custom_answers",
+      )
+      .eq("id", payload.lead_id)
+      .maybeSingle();
+    const screening = formatLeadScreeningBlock(lead);
+
     await sendOrgNotification({
       client: admin,
       org: {
@@ -74,6 +86,7 @@ async function notifyOperatorsOfNewLead(
         lead_email: payload.renter_email?.trim() || "(no email)",
         lead_phone: extra.phone.trim() || "(no phone)",
         move_in: extra.moveIn.trim() || "(not specified)",
+        screening,
         dashboard_url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
       },
       operatorFallback,

@@ -16,6 +16,8 @@ import {
   firstWord,
   tradeUpdateStatusLabel,
   tradeUpdateDetail,
+  normalizeAccentColor,
+  resolveNotificationAccent,
   MAX_NOTIFICATION_RECIPIENTS,
   type NotificationSettingRow,
 } from "../lib/notifications";
@@ -69,6 +71,7 @@ const overrideRow: NotificationSettingRow = {
   subject_template: "Booked {{scheduled_date}}",
   body_template: "Yo {{tenant_first_name}}",
   recipients: null,
+  accent_color: null,
 };
 const rOver = renderNotification(ev, overrideRow, vars);
 ok("render: override subject wins", rOver.subject === "Booked Thu Jun 25, 2026");
@@ -81,6 +84,7 @@ const blankRow: NotificationSettingRow = {
   subject_template: "   ",
   body_template: "",
   recipients: null,
+  accent_color: null,
 };
 ok("render: blank override -> default", renderNotification(ev, blankRow, vars).subject.includes("scheduled for"));
 
@@ -180,7 +184,11 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       (m) => m[1].toLowerCase(),
     );
     ok("new_lead: all template tokens declared", used.every((t) => declared.has(t)));
-    // Fully-supplied render leaves no literal {{...}} behind.
+    ok("new_lead: declares screening token", declared.has("screening"));
+    ok("new_lead: subject carries alert emoji", ev.defaultSubject.includes("🔴"));
+    ok("new_lead: defaults to alert-red accent", ev.defaultAccent === "#dc2626");
+    // Fully-supplied render (incl. a populated screening block) leaves no literal
+    // {{...}} behind and inlines the screening text.
     const rendered = renderNotification(ev, null, {
       org_name: "Agile",
       property_address: "833 Pillette Rd — Unit 20",
@@ -188,12 +196,55 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       lead_email: "karen@example.com",
       lead_phone: "519-555-0100",
       move_in: "2026-08-01",
+      screening: "Screening\nOccupants: 3\nEmployment: Employed full-time",
       dashboard_url: "https://x/dashboard/leads/abc",
     });
     ok("new_lead: renders name", rendered.body.includes("Karen Kenney"));
     ok("new_lead: renders address in subject", rendered.subject.includes("833 Pillette"));
+    ok("new_lead: inlines screening", rendered.body.includes("Employment: Employed full-time"));
     ok("new_lead: no leftover tokens", !/\{\{/.test(rendered.subject + rendered.body));
+    // Empty screening collapses cleanly (no orphan label, no literal token).
+    const renderedEmpty = renderNotification(ev, null, {
+      org_name: "Agile",
+      property_address: "833 Pillette Rd — Unit 20",
+      lead_name: "Karen Kenney",
+      lead_email: "karen@example.com",
+      lead_phone: "519-555-0100",
+      move_in: "2026-08-01",
+      screening: "",
+      dashboard_url: "https://x/dashboard/leads/abc",
+    });
+    ok("new_lead: empty screening leaves no token", !/\{\{/.test(renderedEmpty.body));
   }
+}
+
+// --- accent color (S332) ----------------------------------------------------
+{
+  const newLead = getNotificationEvent("leasing.new_lead")!;
+  const scheduled = getNotificationEvent("dispatch.scheduled.trade")!;
+  // normalizeAccentColor
+  ok("accent: blank -> null", (() => { const r = normalizeAccentColor("  "); return r.ok && r.value === null; })());
+  ok("accent: hex preserved + lowercased", (() => { const r = normalizeAccentColor("#DC2626"); return r.ok && r.value === "#dc2626"; })());
+  ok("accent: bare hex gets #", (() => { const r = normalizeAccentColor("dc2626"); return r.ok && r.value === "#dc2626"; })());
+  ok("accent: bad value rejected", !normalizeAccentColor("red").ok);
+  ok("accent: short hex rejected", !normalizeAccentColor("#fff").ok);
+  // resolveNotificationAccent: override > event default > null
+  ok(
+    "accent: override wins",
+    resolveNotificationAccent(newLead, {
+      event_key: newLead.key, enabled: true, subject_template: null,
+      body_template: null, recipients: null, accent_color: "#00ff00",
+    }) === "#00ff00",
+  );
+  ok("accent: falls back to event default", resolveNotificationAccent(newLead, null) === "#dc2626");
+  ok("accent: no default -> null", resolveNotificationAccent(scheduled, null) === null);
+  ok(
+    "accent: blank override -> event default",
+    resolveNotificationAccent(newLead, {
+      event_key: newLead.key, enabled: true, subject_template: null,
+      body_template: null, recipients: null, accent_color: "   ",
+    }) === "#dc2626",
+  );
 }
 
 // ---------------------------------------------------------------------------

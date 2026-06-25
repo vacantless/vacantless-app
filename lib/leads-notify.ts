@@ -8,6 +8,7 @@
 
 import { roleCan } from "./roles";
 import type { NotifyMember } from "./incident-reports";
+import type { CustomAnswerSnapshot } from "./screening-questions";
 
 // Trim + lowercase + require a bare "@" so a blank / obviously-bad address is
 // dropped before the provider sees it (deliverability is the provider's job).
@@ -48,4 +49,66 @@ export function resolveLeadNotifyEmails(
     }
   }
   return [...out];
+}
+
+// --- Screening block for the new-lead email ({{screening}} token) -----------
+// The notification-parity payload (S332): turn a lead's screening snapshot into
+// a labeled, multi-line PLAIN-TEXT block so the leasing.new_lead email shows
+// Occupants / Pets / income / custom answers (Employment, Other units of
+// interest, …) inline — the email-first operator (Aaliyah) sees the screening
+// without opening the dashboard. Pure string work; the caller passes the
+// already-fetched snapshot. Labels + value formatting mirror the lead-detail
+// page so the email reads identically to the dashboard. The values are renter-
+// supplied; the branded shell escapes them at render (bodyToParagraphs ->
+// escapeHtml), so no HTML can be injected here.
+
+export type LeadScreeningSnapshot = {
+  screen_income_cents: number | null;
+  screen_occupants: number | null;
+  screen_has_pets: boolean | null;
+  screen_pets_detail: string | null;
+  screen_custom_answers: CustomAnswerSnapshot[] | null;
+};
+
+/**
+ * Build the {{screening}} token value. Includes only the fields the org actually
+ * collected (a missing field is omitted, never shown as blank), in the same
+ * order + with the same labels as the lead-detail page: Occupants, Pets, Stated
+ * monthly income, then each custom answer by its snapshotted prompt. Returns ""
+ * when nothing was collected (so the surrounding blank lines in the template
+ * collapse and the email still reads cleanly). When non-empty it starts with a
+ * "Screening" header line so the block is visually grouped in the email.
+ */
+export function formatLeadScreeningBlock(
+  s: LeadScreeningSnapshot | null | undefined,
+): string {
+  if (!s) return "";
+  const lines: string[] = [];
+
+  if (s.screen_occupants != null) {
+    lines.push(`Occupants: ${s.screen_occupants}`);
+  }
+
+  const petsDetail = (s.screen_pets_detail ?? "").trim();
+  if (s.screen_has_pets != null || petsDetail !== "") {
+    const pets = petsDetail !== "" ? petsDetail : s.screen_has_pets ? "Yes" : "No";
+    lines.push(`Pets: ${pets}`);
+  }
+
+  if (s.screen_income_cents != null) {
+    lines.push(
+      `Stated monthly income: $${(s.screen_income_cents / 100).toLocaleString("en-CA")}`,
+    );
+  }
+
+  for (const a of s.screen_custom_answers ?? []) {
+    if (!a) continue;
+    const answer = (a.answer ?? "").trim();
+    if (answer === "") continue;
+    const value = a.qtype === "yesno" ? (answer === "yes" ? "Yes" : "No") : answer;
+    lines.push(`${a.prompt}: ${value}`);
+  }
+
+  if (lines.length === 0) return "";
+  return ["Screening", ...lines].join("\n");
 }

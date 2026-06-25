@@ -41,6 +41,13 @@ export type NotificationEvent = {
   defaultSubject: string;
   defaultBody: string;
   active: boolean;
+  // Optional code-default accent color (hex #RRGGBB) for the branded email's
+  // top stripe — the per-event "urgency" cue. Used when the org has set no
+  // accent_color override (notification_settings.accent_color). Absent => the
+  // shell falls back to the org's brand_color. leasing.new_lead defaults to an
+  // alert red so a new-lead email reads like Agile's old "ACTION REQUIRED"
+  // alert out of the box, while staying fully per-org overridable.
+  defaultAccent?: string;
 };
 
 // Tokens available to ALL events (org + the link an email-first operator clicks
@@ -154,11 +161,27 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     label: "New lead — action required",
     description:
       "When a new rental inquiry comes in, your leasing team is notified so you can reply fast. Defaults to members who manage leads; edit the recipients below.",
-    tokens: [...COMMON_TOKENS, "lead_name", "lead_email", "lead_phone", "move_in", "dashboard_url"],
-    defaultSubject: "New lead: {{lead_name}} — {{property_address}}",
+    tokens: [
+      ...COMMON_TOKENS,
+      "lead_name",
+      "lead_email",
+      "lead_phone",
+      "move_in",
+      "screening",
+      "dashboard_url",
+    ],
+    defaultSubject: "🔴 New lead: {{lead_name}} — {{property_address}}",
+    // {{screening}} expands to a labeled, multi-line block of whatever the org
+    // collected (occupants / pets / income / custom questions like Employment +
+    // Other units) so an email-first operator (Aaliyah) sees the screening
+    // inline without opening the dashboard. It is self-contained: when the org
+    // collected nothing it renders as "" and the surrounding blank lines
+    // collapse, so the email still reads cleanly. Runs of blank lines collapse
+    // into one paragraph break (bodyToParagraphs splits on \n{2,}).
     defaultBody:
-      "A new rental inquiry just came in for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
+      "🔴 New lead — action required for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
+    defaultAccent: "#dc2626",
   },
 ] as const;
 
@@ -190,7 +213,48 @@ export type NotificationSettingRow = {
   subject_template: string | null;
   body_template: string | null;
   recipients: string[] | null;
+  // Per-event branded-email top-stripe color (hex #RRGGBB), or null to follow
+  // the event default / org brand. Validated on save (normalizeAccentColor).
+  accent_color: string | null;
 };
+
+// --- Accent color (per-event email stripe) ----------------------------------
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+/** True for a strict 7-char #RRGGBB hex (the only shape we store). */
+export function isHexColor(value: string): boolean {
+  return HEX_COLOR_RE.test(value.trim());
+}
+
+/**
+ * Normalize an operator accent-color input: a #RRGGBB hex (lower-cased) or null
+ * when empty/blank. Returns `{ ok:false }` for a non-empty value that is not a
+ * valid hex, so the settings UI can surface the typo rather than silently drop
+ * it. A leading "#" is optional in the input; we store it canonical with "#".
+ */
+export function normalizeAccentColor(
+  raw: string | null | undefined,
+): { ok: true; value: string | null } | { ok: false } {
+  const t = (raw ?? "").trim();
+  if (t === "") return { ok: true, value: null };
+  const withHash = t.startsWith("#") ? t : `#${t}`;
+  if (!isHexColor(withHash)) return { ok: false };
+  return { ok: true, value: withHash.toLowerCase() };
+}
+
+/**
+ * Resolve the accent (top-stripe) color for one send: the org override, else the
+ * event's code default, else null (the email shell then falls back to the org
+ * brand color / global default). Pure.
+ */
+export function resolveNotificationAccent(
+  event: NotificationEvent,
+  setting: NotificationSettingRow | null,
+): string | null {
+  const override = setting?.accent_color?.trim();
+  if (override && isHexColor(override)) return override.toLowerCase();
+  return event.defaultAccent ?? null;
+}
 
 // --- Token rendering ---------------------------------------------------------
 // A loose bag of strings; unknown tokens are left in place by applyMessageTokens.

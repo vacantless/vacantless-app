@@ -24,6 +24,7 @@ import {
   getNotificationEvent,
   isEventEnabled,
   renderNotification,
+  resolveNotificationAccent,
   resolveNotificationRecipients,
   type NotificationSettingRow,
   type NotificationTokenVars,
@@ -65,7 +66,7 @@ export async function sendOrgNotification(args: SendOrgNotificationArgs): Promis
     // operator client; the explicit org filter scopes it for the admin client.
     const { data } = await args.client
       .from("notification_settings")
-      .select("event_key, enabled, subject_template, body_template, recipients")
+      .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
       .eq("organization_id", args.org.id)
       .eq("event_key", args.eventKey)
       .maybeSingle();
@@ -82,6 +83,7 @@ export async function sendOrgNotification(args: SendOrgNotificationArgs): Promis
     if (recipients.length === 0) return;
 
     const rendered = renderNotification(event, setting, args.vars);
+    const accent = resolveNotificationAccent(event, setting);
 
     await Promise.allSettled(
       recipients.map((to) =>
@@ -93,6 +95,7 @@ export async function sendOrgNotification(args: SendOrgNotificationArgs): Promis
           action_url: args.action?.url ?? null,
           org_name: args.org.name,
           brand_color: args.org.brand_color,
+          accent_color: accent,
           logo_url: args.org.logo_url,
           reply_to_email: args.org.reply_to_email,
         }),

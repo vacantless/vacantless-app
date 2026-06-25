@@ -5,7 +5,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { isNotificationEventKey, validateRecipientsInput } from "@/lib/notifications";
+import {
+  isNotificationEventKey,
+  normalizeAccentColor,
+  validateRecipientsInput,
+} from "@/lib/notifications";
 
 const BASE = "/dashboard/settings/notifications";
 
@@ -36,6 +40,13 @@ export async function saveNotificationSetting(formData: FormData) {
     redirect(`${BASE}?error=${rc.code}&ev=${encodeURIComponent(eventKey)}`);
   }
 
+  // Accent color (S332): blank = null = follow the event/brand default; a non-empty
+  // value must be a #RRGGBB hex (the picker submits one; guard anyway).
+  const ac = normalizeAccentColor(s(formData, "accent_color"));
+  if (!ac.ok) {
+    redirect(`${BASE}?error=bad_color&ev=${encodeURIComponent(eventKey)}`);
+  }
+
   const supabase = createClient();
   const { error } = await supabase.from("notification_settings").upsert(
     {
@@ -45,6 +56,7 @@ export async function saveNotificationSetting(formData: FormData) {
       subject_template: subjectRaw === "" ? null : subjectRaw,
       body_template: bodyRaw === "" ? null : bodyRaw,
       recipients: rc.value,
+      accent_color: ac.value,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "organization_id,event_key" },

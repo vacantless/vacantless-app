@@ -11,7 +11,12 @@ import {
   type NotificationEvent,
   type NotificationSettingRow,
 } from "@/lib/notifications";
+import { AccentColorField } from "@/components/accent-color-field";
 import { saveNotificationSetting } from "./actions";
+
+// Global fallback when an event has no code default accent and the org has no
+// brand color set — keeps the color picker seeded with a valid hex.
+const DEFAULT_ACCENT = "#0f172a";
 
 // Settings → Notifications (Slice 6 substrate, S327). The operator surface to
 // turn each transition notification on/off, edit its copy, and set extra
@@ -45,6 +50,8 @@ function errorBanner(code: string | undefined): string | null {
       return "One of the recipient addresses isn't a valid email. Please fix it and save again.";
     case "too_many":
       return "That's too many recipients. Please keep the list to 20 addresses or fewer.";
+    case "bad_color":
+      return "The accent color isn't a valid hex value (like #dc2626). Please fix it and save again.";
     case "save":
       return "Something went wrong saving. Please try again.";
     default:
@@ -66,7 +73,7 @@ export default async function NotificationsSettingsPage({
   const supabase = createClient();
   const { data: rows } = await supabase
     .from("notification_settings")
-    .select("event_key, enabled, subject_template, body_template, recipients")
+    .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
     .eq("organization_id", org.id);
   const byKey = new Map<string, NotificationSettingRow>();
   for (const r of (rows ?? []) as NotificationSettingRow[]) byKey.set(r.event_key, r);
@@ -200,6 +207,14 @@ export default async function NotificationsSettingsPage({
                           {AUDIENCE_HINT[event.audience]} One address per line (or comma-separated).
                         </p>
                       </div>
+
+                      <AccentColorField
+                        name="accent_color"
+                        saved={row?.accent_color ?? ""}
+                        fallback={
+                          event.defaultAccent ?? org.brand_color ?? DEFAULT_ACCENT
+                        }
+                      />
                     </div>
 
                     <div className="mt-4 flex justify-end">
