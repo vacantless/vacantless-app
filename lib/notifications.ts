@@ -183,6 +183,34 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     active: true,
     defaultAccent: "#dc2626",
   },
+  // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the
+  // scheduled daily Zap 365197456). Audience operator; ONE email per weekday at
+  // start-of-shift summarizing four buckets, not one-per-event. The scheduled
+  // builder (app/api/cron/leasing-snapshot) fills {{snapshot}} with the four
+  // labeled sections (built by lib/leasing-snapshot.ts) and supplies the count
+  // tokens; the substrate handles copy/recipients/branding. Fire-on-data: an
+  // org with an empty snapshot gets no email. Informational, so no alert accent.
+  {
+    key: "leasing.daily_snapshot",
+    family: "leasing",
+    audience: "operator",
+    label: "Daily leasing snapshot",
+    description:
+      "Once each weekday, at the start of your shift, a single digest of new leads, today's showings, showings later this week, and leads still waiting on a viewing. Quiet days send nothing. Defaults to members who manage leads; edit the recipients below.",
+    tokens: [
+      "org_name",
+      "snapshot_date",
+      "new_count",
+      "showings_today_count",
+      "snapshot",
+      "dashboard_url",
+    ],
+    defaultSubject:
+      "Leasing snapshot — {{snapshot_date}}: {{new_count}} new (24h), {{showings_today_count}} showing(s) today",
+    defaultBody:
+      "Here is today's leasing snapshot for {{snapshot_date}}.\n\n{{snapshot}}\n\nThis is a daily status view, not a to-do backlog — nothing here is overdue. One email per weekday at the start of your shift.\n\nOpen your pipeline: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {

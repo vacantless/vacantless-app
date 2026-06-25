@@ -218,6 +218,36 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
   }
 }
 
+// --- leasing.daily_snapshot event (digest — S333) --------------------------
+{
+  const ev = getNotificationEvent("leasing.daily_snapshot");
+  ok("snapshot: registered", ev !== null);
+  ok("snapshot: leasing family", ev?.family === "leasing");
+  ok("snapshot: operator audience", ev?.audience === "operator");
+  ok("snapshot: active", ev?.active === true);
+  ok("snapshot: in active set", activeNotificationEvents().some((e) => e.key === "leasing.daily_snapshot"));
+  ok("snapshot: no alert accent (informational)", ev?.defaultAccent === undefined);
+  if (ev) {
+    const declared = new Set(ev.tokens);
+    const used = [...(ev.defaultSubject + " " + ev.defaultBody).matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)].map(
+      (m) => m[1].toLowerCase(),
+    );
+    ok("snapshot: all template tokens declared", used.every((t) => declared.has(t)));
+    ok("snapshot: declares snapshot token", declared.has("snapshot"));
+    const rendered = renderNotification(ev, null, {
+      org_name: "Agile",
+      snapshot_date: "Thursday, June 25",
+      new_count: "2",
+      showings_today_count: "1",
+      snapshot: "NEW LEADS — LAST 24 HOURS (2)\n\n• Jane Doe — 22 King St W",
+      dashboard_url: "https://x/dashboard/leads",
+    });
+    ok("snapshot: renders date in subject", rendered.subject.includes("Thursday, June 25"));
+    ok("snapshot: inlines snapshot block", rendered.body.includes("• Jane Doe — 22 King St W"));
+    ok("snapshot: no leftover tokens", !/\{\{/.test(rendered.subject + rendered.body));
+  }
+}
+
 // --- accent color (S332) ----------------------------------------------------
 {
   const newLead = getNotificationEvent("leasing.new_lead")!;

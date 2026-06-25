@@ -9,6 +9,8 @@ name: Vacantless background sweeps
 #   * /api/cron/reminders — 24h + 2h showing reminders (M3)
 #   * /api/cron/feedback  — post-showing feedback requests (M5)
 #   * /api/cron/nurture   — lead nurture drip to un-booked inquiries (M5)
+#   * /api/cron/leasing-snapshot — daily weekday leasing digest (self-gates to
+#     once/day at the org's start-of-shift hour via leasing_snapshot_last_sent_on)
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -45,4 +47,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/nurture" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger leasing-snapshot sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/leasing-snapshot" \
             -w "\nHTTP %{http_code}\n"
