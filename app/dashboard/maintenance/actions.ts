@@ -32,6 +32,10 @@ import {
 import { sendTradeDispatchInvite } from "@/lib/email";
 import { sendOrgNotification, type NotifyOrg } from "@/lib/notifications-server";
 import { firstWord } from "@/lib/notifications";
+import {
+  validateDispatchMessage,
+  canPostDispatchMessage,
+} from "@/lib/dispatch-messages";
 import { validateMediaUpload, extForType } from "@/lib/incident-media";
 import {
   INCIDENT_MEDIA_BUCKET,
@@ -1132,4 +1136,69 @@ export async function cancelDispatch(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?disp=${d ? "cancelled" : "wrong_state"}`);
+}
+
+// S329: the operator replies to a trade's question on a dispatch (the dashboard
+// side of the "ask a question" back-channel). Authenticated + RLS-scoped — no
+// token RPC. Inserts a sender='operator' message (the RLS policy + the org match
+// gate it to the caller's org), then notifies the trade so they come back to the
+// job. Text only; no state change, no money. Allowed only while the dispatch is
+// live (canPostDispatchMessage); a stale page replying to a closed job is a no-op.
+export async function replyToDispatchQuestion(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?disp=forbidden`);
+  const org = await requireIncidentDispatch("");
+
+  const dispatchId = s(formData, "dispatch_id");
+  if (!dispatchId) redirect(BASE);
+
+  const check = validateDispatchMessage(s(formData, "body"));
+  if (!check.ok) redirect(`${BASE}?disp=reply_${check.code}`);
+
+  const supabase = createClient();
+  // RLS scopes this read to the caller's org — a forged id resolves to nothing.
+  const { data: disp } = await supabase
+    .from("work_order_dispatches")
+    .select("id, organization_id, work_order_id, dispatch_status, trade_email_snapshot, trade_name_snapshot, trade_access_token")
+    .eq("id", dispatchId)
+    .maybeSingle();
+  const d = disp as {
+    id: string;
+    organization_id: string;
+    work_order_id: string;
+    dispatch_status: string;
+    trade_email_snapshot: string | null;
+    trade_name_snapshot: string | null;
+    trade_access_token: string | null;
+  } | null;
+  if (!d) redirect(`${BASE}?disp=notfound`);
+  // The thread is read-only once the job is terminal.
+  if (!canPostDispatchMessage(d.dispatch_status)) redirect(`${BASE}?disp=wrong_state`);
+
+  const { error: insErr } = await supabase.from("dispatch_messages").insert({
+    organization_id: d.organization_id,
+    dispatch_id: d.id,
+    sender: "operator",
+    body: check.value,
+  });
+  if (insErr) redirect(`${BASE}?disp=reply_failed`);
+
+  // Tell the trade there's a reply (best-effort, operator-customizable copy + cc).
+  const ctx = await dispatchPartyContext(supabase, d.work_order_id);
+  await sendOrgNotification({
+    client: supabase,
+    org: notifyOrgOf(org),
+    eventKey: "dispatch.reply.trade",
+    audienceEmail: d.trade_email_snapshot,
+    vars: {
+      org_name: org.name ?? "Your property manager",
+      property_address: ctx.propertyAddress ?? "the property",
+      trade_name: d.trade_name_snapshot ?? "there",
+      job_title: ctx.jobTitle,
+      reply: check.value,
+      job_url: d.trade_access_token ? tradeJobUrl(APP_URL, d.trade_access_token) : "",
+    },
+  });
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?disp=replied`);
 }

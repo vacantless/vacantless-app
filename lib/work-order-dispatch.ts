@@ -317,6 +317,12 @@ export function dispatchErrorMessage(code: string | undefined): string | null {
       return "That date isn't valid.";
     case "wrong_state":
       return "That action no longer applies to this dispatch.";
+    case "reply_empty":
+      return "Type a reply before sending.";
+    case "reply_too_long":
+      return "That reply is too long.";
+    case "reply_failed":
+      return "Couldn't send that reply. Please try again.";
     case "dispatched":
       return "Job dispatched to the trade.";
     case "approved":
@@ -348,6 +354,10 @@ export function tradeDispatchErrorMessage(reason: string | undefined): string {
       return "That note is too long.";
     case "bad_date":
       return "That date isn't valid.";
+    case "empty":
+      return "Type a message before sending.";
+    case "too_long":
+      return "That message is too long.";
     default:
       return "Something went wrong. Please try again.";
   }

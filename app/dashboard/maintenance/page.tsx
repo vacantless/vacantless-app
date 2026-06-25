@@ -52,6 +52,11 @@ import {
 } from "@/lib/work-order-dispatch";
 import { createIncidentMediaDownloadUrls } from "@/lib/incident-media-server";
 import {
+  operatorSenderLabel,
+  awaitsOperatorReply,
+  type DispatchMessage,
+} from "@/lib/dispatch-messages";
+import {
   createWorkOrder,
   updateWorkOrder,
   setWorkOrderStatus,
@@ -69,6 +74,7 @@ import {
   completeDispatch,
   cancelDispatch,
   acknowledgeDispatchTerms,
+  replyToDispatchQuestion,
   uploadWorkOrderPhoto,
   deleteWorkOrderPhoto,
 } from "./actions";
@@ -239,6 +245,7 @@ const DISP_SUCCESS: Record<string, string> = {
   completed: "Dispatch marked complete.",
   cancelled: "Dispatch cancelled.",
   terms_accepted: "Trade dispatch enabled. You can now send jobs to your trades.",
+  replied: "Reply sent to the trade.",
 };
 
 function fmtDate(d: string | null): string {
@@ -438,6 +445,7 @@ export default async function MaintenancePage({
   // per-work-order dispatch form (and the server action refuses to dispatch).
   const dispatchTermsAccepted = !!org?.dispatch_terms_accepted_at;
   const activeDispatchByWo = new Map<string, DispatchRow>();
+  const dispatchMessagesByDispatch = new Map<string, DispatchMessage[]>();
   if (canDispatch && allOrders.length > 0) {
     const { data: dispData } = await supabase
       .from("work_order_dispatches")
@@ -451,6 +459,23 @@ export default async function MaintenancePage({
       .in("dispatch_status", ["offered", "accepted", "quoted", "scheduled"]);
     for (const d of (dispData ?? []) as DispatchRow[]) {
       activeDispatchByWo.set(d.work_order_id, d);
+    }
+
+    // S329: the message thread for each active dispatch (trade questions +
+    // operator replies), oldest-first, grouped by dispatch id. RLS scopes this to
+    // the org; we only fetch threads for the dispatches we just loaded.
+    const activeDispatchIds = Array.from(activeDispatchByWo.values()).map((d) => d.id);
+    if (activeDispatchIds.length > 0) {
+      const { data: msgData } = await supabase
+        .from("dispatch_messages")
+        .select("id, dispatch_id, sender, body, created_at")
+        .in("dispatch_id", activeDispatchIds)
+        .order("created_at", { ascending: true });
+      for (const m of (msgData ?? []) as (DispatchMessage & { dispatch_id: string })[]) {
+        const list = dispatchMessagesByDispatch.get(m.dispatch_id) ?? [];
+        list.push({ id: m.id, sender: m.sender, body: m.body, created_at: m.created_at });
+        dispatchMessagesByDispatch.set(m.dispatch_id, list);
+      }
     }
   }
   // Trades that can actually receive a dispatch: active + have an email on file.
@@ -1194,6 +1219,56 @@ export default async function MaintenancePage({
                                 </SubmitButton>
                               </form>
                             </div>
+
+                            {/* S329: trade<->operator question thread + reply. */}
+                            {(() => {
+                              const thread = dispatchMessagesByDispatch.get(disp.id) ?? [];
+                              const needsReply = awaitsOperatorReply(thread);
+                              return (
+                                <div className="mt-3 border-t border-gray-200 pt-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                      Questions
+                                    </span>
+                                    {needsReply && (
+                                      <StatusChip tone={chipTone("amber")}>Awaiting reply</StatusChip>
+                                    )}
+                                  </div>
+                                  {thread.length > 0 ? (
+                                    <div className="mt-2 space-y-2">
+                                      {thread.map((m) => (
+                                        <div key={m.id} className="text-xs">
+                                          <span className="font-semibold text-gray-700">
+                                            {operatorSenderLabel(m.sender, disp.trade_name_snapshot)}:
+                                          </span>{" "}
+                                          <span className="whitespace-pre-wrap text-gray-600">{m.body}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="mt-1 text-xs text-gray-500">
+                                      No questions yet. The trade can ask one from their job link.
+                                    </p>
+                                  )}
+                                  <form action={replyToDispatchQuestion} className="mt-2 space-y-2">
+                                    <input type="hidden" name="dispatch_id" value={disp.id} />
+                                    <textarea
+                                      name="body"
+                                      rows={2}
+                                      required
+                                      maxLength={2000}
+                                      placeholder={
+                                        needsReply ? "Answer the trade…" : "Send a message to the trade…"
+                                      }
+                                      className={inputCls}
+                                    />
+                                    <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Sending…">
+                                      Send reply
+                                    </SubmitButton>
+                                  </form>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ) : !dispatchTermsAccepted ? (
                           <p className="text-xs text-gray-500">

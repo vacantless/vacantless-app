@@ -10,7 +10,9 @@ import {
   formatDispatchQuote,
   formatDispatchDate,
 } from "@/lib/work-order-dispatch";
+import type { DispatchMessage } from "@/lib/dispatch-messages";
 import { JobForm } from "./job-form";
+import { JobMessages } from "./job-messages";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,7 @@ type Context =
       job_category: string;
       job_priority: string;
       job_photos: { path: string }[] | null;
+      messages: DispatchMessage[] | null;
       property_address: string | null;
       org_name: string;
       brand_color: string | null;
@@ -225,6 +228,17 @@ export default async function TradeJobPage({
             existingProposedDate={c.proposed_date}
           />
         )}
+
+        {/* S329: ask-a-question thread. Visible in every non-expired state — a
+            trade can ask BEFORE accepting; the thread stays read-only once the
+            job is terminal. */}
+        <JobMessages
+          token={c.token}
+          status={c.dispatch_status}
+          orgName={c.org_name}
+          brandBg={brandBg}
+          messages={c.messages ?? []}
+        />
       </main>
     </div>
   );

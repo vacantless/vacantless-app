@@ -114,6 +114,32 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{trade_name}},\n\nThe job \"{{job_title}}\" at {{property_address}} has been cancelled. No action is needed. Sorry for any inconvenience.\n\nThank you,\n{{org_name}}",
     active: true,
   },
+  {
+    key: "dispatch.question.operator",
+    family: "dispatch",
+    audience: "operator",
+    label: "Trade asked a question",
+    description:
+      "When a trade sends a question about a job you dispatched (often before they accept), your team is notified so you can answer from the dashboard.",
+    tokens: [...COMMON_TOKENS, "trade_name", "job_title", "question", "dashboard_url"],
+    defaultSubject: "{{trade_name}} asked a question — {{job_title}}",
+    defaultBody:
+      "{{trade_name}} asked a question about \"{{job_title}}\" at {{property_address}}:\n\n{{question}}\n\nReply from your dashboard: {{dashboard_url}}",
+    active: true,
+  },
+  {
+    key: "dispatch.reply.trade",
+    family: "dispatch",
+    audience: "trade",
+    label: "You replied — notify the trade",
+    description:
+      "When you answer a trade's question, they're told there's a reply and linked back to the job. The trade on the job is always included; add cc's below.",
+    tokens: [...COMMON_TOKENS, "trade_name", "job_title", "reply", "job_url"],
+    defaultSubject: "Reply about {{job_title}}",
+    defaultBody:
+      "Hi {{trade_name}},\n\n{{org_name}} replied about \"{{job_title}}\" at {{property_address}}:\n\n{{reply}}\n\nView the job and respond: {{job_url}}\n\nThank you,\n{{org_name}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
