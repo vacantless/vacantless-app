@@ -179,7 +179,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     // collapse, so the email still reads cleanly. Runs of blank lines collapse
     // into one paragraph break (bodyToParagraphs splits on \n{2,}).
     defaultBody:
-      "🔴 New lead — action required for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
+      "New lead — action required for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
     defaultAccent: "#dc2626",
   },
