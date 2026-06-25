@@ -49,9 +49,13 @@ type Listing = {
   screening_questions: {
     id: string;
     prompt: string;
-    qtype: "text" | "yesno" | "choice";
+    qtype: "text" | "yesno" | "choice" | "units";
     required: boolean;
-    /** Options for a 'choice' question (S294); empty for text/yesno. */
+    /**
+     * Options for a 'choice' question (S294); empty for text/yesno. For a 'units'
+     * question (S331) this is the org's OTHER available units, computed
+     * dynamically by get_public_listing.
+     */
     choices: string[];
   }[];
   photos: string[];
@@ -430,7 +434,15 @@ export default async function PublicListingPage({
                       {/* Operator-authored custom questions (S291). Field names
                           are cq_<id>; the submit action collects them and the RPC
                           re-validates against the org's active questions. */}
-                      {(l.screening_questions ?? []).map((q) => (
+                      {(l.screening_questions ?? []).map((q) => {
+                        // A 'units' question (S331) renders its dynamic option
+                        // list of the org's OTHER available units. When there are
+                        // none right now, the option list is empty — render
+                        // nothing rather than an empty dropdown.
+                        if (q.qtype === "units" && (q.choices?.length ?? 0) === 0) {
+                          return null;
+                        }
+                        return (
                         <div key={q.id}>
                           <label className="mb-1 block text-sm font-medium text-gray-700">
                             {q.prompt}{" "}
@@ -451,14 +463,16 @@ export default async function PublicListingPage({
                               <option value="yes">Yes</option>
                               <option value="no">No</option>
                             </select>
-                          ) : q.qtype === "choice" ? (
+                          ) : q.qtype === "choice" || q.qtype === "units" ? (
                             <select
                               name={`cq_${q.id}`}
                               required={q.required}
                               defaultValue=""
                               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                             >
-                              <option value="">Select…</option>
+                              <option value="">
+                                {q.qtype === "units" ? "Select a unit…" : "Select…"}
+                              </option>
                               {(q.choices ?? []).map((opt) => (
                                 <option key={opt} value={opt}>
                                   {opt}
@@ -475,7 +489,8 @@ export default async function PublicListingPage({
                             />
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </fieldset>
                   )}
                   <div>

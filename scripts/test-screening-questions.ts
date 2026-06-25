@@ -38,9 +38,10 @@ function ok(name: string, cond: boolean) {
 ok("type: text valid", isQuestionType("text"));
 ok("type: yesno valid", isQuestionType("yesno"));
 ok("type: choice valid (S294)", isQuestionType("choice"));
+ok("type: units valid (S331)", isQuestionType("units"));
 ok("type: junk invalid", !isQuestionType("banana"));
 ok("type: non-string invalid", !isQuestionType(3 as unknown));
-ok("type: list is exactly text+yesno+choice", QUESTION_TYPES.join(",") === "text,yesno,choice");
+ok("type: list is text+yesno+choice+units", QUESTION_TYPES.join(",") === "text,yesno,choice,units");
 
 // --- validateNewQuestion ----------------------------------------------------
 {
@@ -133,6 +134,7 @@ const QS: ScreeningQuestion[] = [
 ok("label: text", questionTypeLabel("text") === "Short text");
 ok("label: yesno", questionTypeLabel("yesno") === "Yes / no");
 ok("label: choice", questionTypeLabel("choice") === "Multiple choice");
+ok("label: units", questionTypeLabel("units") === "Available units");
 
 // ===========================================================================
 // Preferred answer + soft mismatch (S293, the v2 soft flag)
@@ -299,6 +301,51 @@ ok("answer choice: case-sensitive (does not match)", parseCustomAnswer("choice",
   ok("snapshot choice: carries qtype", snap[0].qtype === "choice");
   ok("snapshot choice: invalid option dropped (c2)", !snap.some((s) => s.question_id === "c2"));
   ok("snapshot choice: no preferred key", !("preferred" in snap[0]));
+}
+
+// ===========================================================================
+// Available-units dynamic question type (S331)
+// Options are NOT stored on the question (they come from the org's live
+// available rentals at render); the answer is captured as informational text,
+// exactly like 'text'. So the pure layer treats 'units' like a text answer.
+// ===========================================================================
+
+// --- validateNewQuestion (units) -------------------------------------------
+{
+  // 'units' needs NO operator-authored choices (they are dynamic) — it validates
+  // like text/yesno: choices forced empty, no preferred-answer soft flag.
+  const r = validateNewQuestion({ prompt: "Other units you're interested in?", qtype: "units" });
+  ok("validate units: ok without choices", r.ok === true);
+  ok("validate units: keeps qtype", r.ok && r.values.qtype === "units");
+  ok("validate units: choices forced empty", r.ok && r.values.choices.length === 0);
+  ok("validate units: preferred always null", r.ok && r.values.preferredAnswer === null);
+}
+{
+  // even if the form sends a choices blob, a units question stores none
+  const r = validateNewQuestion({ prompt: "Other units?", qtype: "units", choices: "A\nB" });
+  ok("validate units: ignores any sent choices", r.ok && r.values.choices.length === 0);
+}
+
+// --- parseCustomAnswer (units) ---------------------------------------------
+ok("answer units: trims like text", parseCustomAnswer("units", "  833 Pillette Rd, Unit 20  ") === "833 Pillette Rd, Unit 20");
+ok("answer units: blank -> null", parseCustomAnswer("units", "   ") === null);
+ok("answer units: null -> null", parseCustomAnswer("units", null) === null);
+{
+  const long = "a".repeat(MAX_CUSTOM_ANSWER_LEN + 50);
+  ok("answer units: clamps to max len", parseCustomAnswer("units", long)?.length === MAX_CUSTOM_ANSWER_LEN);
+}
+
+// --- buildAnswerSnapshot (units) -------------------------------------------
+{
+  const qs: ScreeningQuestion[] = [
+    { id: "u1", prompt: "Other units of interest?", qtype: "units", required: false, preferred_answer: null, choices: [] },
+  ];
+  const snap = buildAnswerSnapshot(qs, { u1: "2419 Mercer Street" });
+  ok("snapshot units: carries the selected unit as text", snap.length === 1 && snap[0].answer === "2419 Mercer Street");
+  ok("snapshot units: carries qtype", snap[0].qtype === "units");
+  ok("snapshot units: no preferred key", !("preferred" in snap[0]));
+  const empty = buildAnswerSnapshot(qs, { u1: "  " });
+  ok("snapshot units: blank dropped", empty.length === 0);
 }
 
 console.log(`\nscreening-questions: ${passed} passed, ${failed} failed`);

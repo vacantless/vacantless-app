@@ -21,7 +21,15 @@
 // only). Wiring an arbitrary operator-defined "preferred option" to a soft flag
 // re-opens the fair-housing question (e.g. a preferred answer on a "how many
 // occupants?" pick-list), so it is deliberately out of scope here.
-export const QUESTION_TYPES = ["text", "yesno", "choice"] as const;
+//
+// 'units' = single-select "other units of interest" whose options are NOT stored
+// on the question — they are computed at form-render time from the org's OTHER
+// AVAILABLE rentals (get_public_listing). Available-only + dynamic by
+// construction, so a leased unit never appears and the operator never maintains
+// a list. INFORMATIONAL ONLY (stored + shown like 'text', never auto-flags). The
+// "available-only" guarantee is enforced at render (the form only offers live
+// units); the stored answer is plain informational text.
+export const QUESTION_TYPES = ["text", "yesno", "choice", "units"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 // --- choice options (S294) --------------------------------------------------
@@ -207,7 +215,10 @@ export function parseCustomAnswer(
     if (s.length === 0) return null;
     return (choices ?? []).includes(s) ? s : null;
   }
-  // text
+  // text + units: both store the trimmed answer as informational free text.
+  // For 'units' the option came from the org's live available rentals at render
+  // time; the membership guarantee is the render, not a stored option list, so
+  // here it is treated exactly like a text answer (clamped, never auto-flags).
   if (s.length === 0) return null;
   return s.slice(0, MAX_CUSTOM_ANSWER_LEN);
 }
@@ -268,6 +279,7 @@ export function collectPreferenceMismatches(
 export function questionTypeLabel(qtype: QuestionType): string {
   if (qtype === "yesno") return "Yes / no";
   if (qtype === "choice") return "Multiple choice";
+  if (qtype === "units") return "Available units";
   return "Short text";
 }
 

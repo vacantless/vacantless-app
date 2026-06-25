@@ -331,6 +331,9 @@ export default async function ScreeningSettingsPage({
                       {q.qtype === "choice" && q.choices.length > 0 && (
                         <span className="ml-1">· {q.choices.join(", ")}</span>
                       )}
+                      {q.qtype === "units" && (
+                        <span className="ml-1">· auto from your available rentals</span>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -413,6 +416,7 @@ export default async function ScreeningSettingsPage({
                   <option value="text">Short text</option>
                   <option value="yesno">Yes / no</option>
                   <option value="choice">Multiple choice</option>
+                  <option value="units">Available units</option>
                 </select>
               </label>
               <label className="block">
@@ -440,7 +444,9 @@ export default async function ScreeningSettingsPage({
               <span className="mb-1 block text-sm font-medium text-gray-700">
                 Answer choices{" "}
                 <span className="font-normal text-gray-400">
-                  (for multiple choice — one option per line, at least two)
+                  (for multiple choice — one option per line, at least two.
+                  &ldquo;Available units&rdquo; fills in from your live rentals
+                  automatically — leave this blank.)
                 </span>
               </span>
               <textarea
