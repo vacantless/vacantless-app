@@ -91,6 +91,12 @@ import {
   type LeaseDocStatusLabel,
   type RentCollectionStatusLabel,
 } from "@/lib/tenancy-section";
+import {
+  TenancyDocumentsSection,
+  type DocumentView,
+} from "./documents-section";
+import { createDocumentDownloadUrls } from "@/lib/documents-server";
+import { shareLinkStatus } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -289,6 +295,7 @@ export default async function TenancyDetailPage({
     wo_msg?: string;
     wo_id?: string;
     report?: string;
+    docs?: string;
   };
 }) {
   const supabase = createClient();
@@ -496,6 +503,68 @@ export default async function TenancyDetailPage({
     }),
   );
 
+  // Document vault (Slices 1+2): stored documents for this tenancy (newest
+  // first, soft-deleted excluded) + their share links. RLS scopes both to this
+  // org. We mint short-lived signed download URLs for the private bucket here
+  // (the operator's RLS client; the 0076 SELECT policy authorizes it).
+  const { data: docRows } = await supabase
+    .from("documents")
+    .select("id, title, doc_type, size_bytes, storage_path, created_at")
+    .eq("tenancy_id", t.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  const docList = (docRows ?? []) as {
+    id: string;
+    title: string;
+    doc_type: string;
+    size_bytes: number;
+    storage_path: string;
+    created_at: string;
+  }[];
+  const { data: shareRows } = await supabase
+    .from("document_share_links")
+    .select("id, document_id, token, expires_at, revoked_at")
+    .in("document_id", docList.length > 0 ? docList.map((d) => d.id) : ["00000000-0000-0000-0000-000000000000"])
+    .order("created_at", { ascending: false });
+  const nowForShares = new Date();
+  const sharesByDoc = new Map<
+    string,
+    { id: string; token: string; status: "active" | "expired" | "revoked"; expires_at: string | null }[]
+  >();
+  for (const r of (shareRows ?? []) as {
+    id: string;
+    document_id: string;
+    token: string;
+    expires_at: string | null;
+    revoked_at: string | null;
+  }[]) {
+    const arr = sharesByDoc.get(r.document_id) ?? [];
+    arr.push({
+      id: r.id,
+      token: r.token,
+      status: shareLinkStatus(r, nowForShares),
+      expires_at: r.expires_at,
+    });
+    sharesByDoc.set(r.document_id, arr);
+  }
+  const docSigned = await createDocumentDownloadUrls(
+    supabase,
+    docList.map((d) => d.storage_path),
+  );
+  const docUrlByPath = new Map<string, string | null>();
+  if (docSigned.ok) {
+    for (const u of docSigned.urls) docUrlByPath.set(u.path, u.signedUrl);
+  }
+  const documents: DocumentView[] = docList.map((d) => ({
+    id: d.id,
+    title: d.title,
+    doc_type: d.doc_type,
+    size_bytes: d.size_bytes,
+    created_at: d.created_at,
+    signedUrl: docUrlByPath.get(d.storage_path) ?? null,
+    shareLinks: sharesByDoc.get(d.id) ?? [],
+  }));
+
   // The org clause library powers the clause-selection wizard (#11 slice 7).
   // RLS scopes both reads to this org. We resolve each clause to its current
   // version and enrich with the slice-6 display metadata (category / risk /
@@ -626,7 +695,35 @@ export default async function TenancyDetailPage({
           ? commsErrorMessage(searchParams.msg)
           : null;
 
+  // Document-vault outcome (?docs=...). `uploaded:N`/`deleted`/`shared`/`revoked`
+  // are success-toned; the rest are errors.
+  const docsParam = searchParams.docs ?? "";
+  const docsUploadedMatch = /^uploaded:(\d+)$/.exec(docsParam);
+  const docsFlash = docsUploadedMatch
+    ? `${docsUploadedMatch[1]} document${docsUploadedMatch[1] === "1" ? "" : "s"} uploaded.`
+    : docsParam === "deleted"
+      ? "Document deleted."
+      : docsParam === "shared"
+        ? "Read-only share link created. Copy it from the document below."
+        : docsParam === "revoked"
+          ? "Share link revoked."
+          : null;
+  const DOCS_ERROR: Record<string, string> = {
+    none: "Choose at least one file to upload.",
+    toomany: "Too many files at once. Upload up to 10 at a time.",
+    failed: "We couldn't store that file. Please try again.",
+    type: "Unsupported file. Upload a PDF, or a scan image (JPG, PNG, WebP).",
+    size: "That file is too large. Documents must be under 25 MB.",
+    empty: "That file appears to be empty.",
+    shareerr: "We couldn't create the share link. Please try again.",
+    forbidden: "You don't have permission to manage documents.",
+    error: "Something went wrong. Please try again.",
+  };
+  const docsError =
+    docsParam && !docsFlash ? (DOCS_ERROR[docsParam] ?? null) : null;
+
   const flash =
+    docsFlash ||
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created && FLASH.created) ||
     (searchParams.ended && FLASH.ended) ||
@@ -656,6 +753,7 @@ export default async function TenancyDetailPage({
     (searchParams.wo && !WO_FLASH[searchParams.wo]
       ? workOrderErrorMessage(searchParams.wo)
       : null) ||
+    docsError ||
     msgError;
 
   // Section status lines (S283) — shown on each collapsed header so the
@@ -691,6 +789,10 @@ export default async function TenancyDetailPage({
         : "None logged";
   const messagesStatus =
     messages.length > 0 ? `${messages.length} sent` : "None sent";
+  const documentsStatus =
+    documents.length > 0
+      ? `${documents.length} stored`
+      : "None stored";
   const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
     scheduled: "Scheduled",
     serve_window: "Serve now",
@@ -910,6 +1012,11 @@ export default async function TenancyDetailPage({
         seed={leaseSeed}
         headingHidden
       />
+      </CollapsibleSection>
+
+      {/* Document vault (Slices 1+2) ------------------------------------- */}
+      <CollapsibleSection id="documents" title="Documents" status={documentsStatus}>
+        <TenancyDocumentsSection tenancyId={t.id} documents={documents} />
       </CollapsibleSection>
 
       {/* Rent increase (N1 v1) ------------------------------------------- */}
