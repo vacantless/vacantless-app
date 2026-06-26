@@ -33,9 +33,14 @@ export type DocumentView = {
   doc_type: string;
   size_bytes: number;
   created_at: string;
+  /** display name of the person this document is filed about, if any (Slice 3). */
+  aboutPersonName: string | null;
   signedUrl: string | null;
   shareLinks: ShareLinkView[];
 };
+
+/** A tenant the operator can attribute an upload to (Slice 3 person filing). */
+export type DocumentTenantOption = { id: string; name: string };
 
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
@@ -43,9 +48,11 @@ const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 export function TenancyDocumentsSection({
   tenancyId,
   documents,
+  tenants = [],
 }: {
   tenancyId: string;
   documents: DocumentView[];
+  tenants?: DocumentTenantOption[];
 }) {
   return (
     <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -72,6 +79,7 @@ export function TenancyDocumentsSection({
                     <span className="ml-2 block text-xs text-gray-400">
                       {formatBytes(d.size_bytes)} · added{" "}
                       {new Date(d.created_at).toLocaleDateString()}
+                      {d.aboutPersonName ? ` · about ${d.aboutPersonName}` : ""}
                       {activeLinks.length > 0
                         ? ` · ${activeLinks.length} active share link${
                             activeLinks.length === 1 ? "" : "s"
@@ -204,6 +212,19 @@ export function TenancyDocumentsSection({
           <label className={labelCls}>Title (optional — single file)</label>
           <input name="title" placeholder="e.g. Executed lease 2026" className={inputCls} />
         </div>
+        {tenants.length > 0 && (
+          <div className="w-48">
+            <label className={labelCls}>About (optional)</label>
+            <select name="about_tenant_id" defaultValue="" className={inputCls}>
+              <option value="">— the tenancy</option>
+              {tenants.map((tn) => (
+                <option key={tn.id} value={tn.id}>
+                  {tn.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           type="submit"
           className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"

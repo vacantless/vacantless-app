@@ -94,9 +94,11 @@ import {
 import {
   TenancyDocumentsSection,
   type DocumentView,
+  type DocumentTenantOption,
 } from "./documents-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import { shareLinkStatus } from "@/lib/documents";
+import { personDisplayName } from "@/lib/persons";
 
 export const dynamic = "force-dynamic";
 
@@ -509,7 +511,7 @@ export default async function TenancyDetailPage({
   // (the operator's RLS client; the 0076 SELECT policy authorizes it).
   const { data: docRows } = await supabase
     .from("documents")
-    .select("id, title, doc_type, size_bytes, storage_path, created_at")
+    .select("id, title, doc_type, size_bytes, storage_path, created_at, person_id")
     .eq("tenancy_id", t.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
@@ -520,7 +522,28 @@ export default async function TenancyDetailPage({
     size_bytes: number;
     storage_path: string;
     created_at: string;
+    person_id: string | null;
   }[];
+  // Resolve a friendly display name for each document's filed-about person
+  // (Slice 3 person filing). RLS scopes the persons read to this org.
+  const docPersonIds = Array.from(
+    new Set(docList.map((d) => d.person_id).filter((p): p is string => !!p)),
+  );
+  const personNameById = new Map<string, string>();
+  if (docPersonIds.length > 0) {
+    const { data: personRows } = await supabase
+      .from("persons")
+      .select("id, full_name, email, phone")
+      .in("id", docPersonIds);
+    for (const p of (personRows ?? []) as {
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      phone: string | null;
+    }[]) {
+      personNameById.set(p.id, personDisplayName(p));
+    }
+  }
   const { data: shareRows } = await supabase
     .from("document_share_links")
     .select("id, document_id, token, expires_at, revoked_at")
@@ -561,6 +584,7 @@ export default async function TenancyDetailPage({
     doc_type: d.doc_type,
     size_bytes: d.size_bytes,
     created_at: d.created_at,
+    aboutPersonName: d.person_id ? personNameById.get(d.person_id) ?? null : null,
     signedUrl: docUrlByPath.get(d.storage_path) ?? null,
     shareLinks: sharesByDoc.get(d.id) ?? [],
   }));
@@ -1016,7 +1040,13 @@ export default async function TenancyDetailPage({
 
       {/* Document vault (Slices 1+2) ------------------------------------- */}
       <CollapsibleSection id="documents" title="Documents" status={documentsStatus}>
-        <TenancyDocumentsSection tenancyId={t.id} documents={documents} />
+        <TenancyDocumentsSection
+          tenancyId={t.id}
+          documents={documents}
+          tenants={tenants
+            .filter((tn) => (tn.name ?? "").trim().length > 0)
+            .map((tn): DocumentTenantOption => ({ id: tn.id, name: tn.name as string }))}
+        />
       </CollapsibleSection>
 
       {/* Rent increase (N1 v1) ------------------------------------------- */}

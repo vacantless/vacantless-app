@@ -19,6 +19,9 @@ import {
   type DocumentType,
 } from "@/lib/documents";
 import { DOCUMENTS_BUCKET, removeDocuments } from "@/lib/documents-server";
+import { retentionUntil } from "@/lib/document-retention";
+import { resolvePersonId } from "@/lib/persons-server";
+import { normalizePhoneE164 } from "@/lib/sms";
 
 // Document-vault server actions (DOCUMENT-VAULT-DESIGN-2026-06-26.md, Slices
 // 1+2). Upload / soft-delete a stored document, and mint / revoke a tokenized
@@ -86,6 +89,39 @@ export async function uploadTenancyDocuments(formData: FormData) {
     .maybeSingle();
   if (!tRow) redirect("/dashboard/tenancies");
 
+  // Optional cross-tenancy filing: the operator can attribute this upload to one
+  // of the tenancy's tenants (e.g. an ID/application package about a specific
+  // person). We store the resolved person_id on the document so the Slice 3
+  // person vault can surface it across that person's tenancies. Default = none
+  // (the document is still reached via its tenancy). A tenant already carries a
+  // person_id (0042); if not, resolve/create one so the link is always durable.
+  let personId: string | null = null;
+  const aboutTenantId = s(formData, "about_tenant_id");
+  if (aboutTenantId) {
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("id, name, email, phone, person_id")
+      .eq("id", aboutTenantId)
+      .eq("tenancy_id", tenancyId)
+      .maybeSingle();
+    if (tenant) {
+      const tn = tenant as {
+        name: string | null;
+        email: string | null;
+        phone: string | null;
+        person_id: string | null;
+      };
+      personId =
+        tn.person_id ??
+        (await resolvePersonId(supabase, org.id, {
+          name: tn.name,
+          email: tn.email,
+          phone: tn.phone,
+          phone_e164: normalizePhoneE164(tn.phone),
+        }));
+    }
+  }
+
   let uploaded = 0;
   const singleTitle = files.length === 1 && titleOverride ? titleOverride : null;
 
@@ -112,6 +148,7 @@ export async function uploadTenancyDocuments(formData: FormData) {
       id: docId,
       organization_id: org.id,
       tenancy_id: tenancyId,
+      person_id: personId,
       title: singleTitle ?? defaultTitleFromFilename(file.name),
       doc_type: docType,
       storage_path: path,
@@ -163,10 +200,19 @@ export async function deleteTenancyDocument(formData: FormData) {
   const d = doc as { id: string; storage_path: string; deleted_at: string | null };
 
   // Stamp soft-delete (idempotent) and revoke any live share links so a
-  // deleted document can't keep being viewed by an outstanding link.
+  // deleted document can't keep being viewed by an outstanding link. We also set
+  // retention_until = now + grace so the document-retention purge cron has an
+  // explicit anchor at which to permanently hard-delete the row (the bytes are
+  // removed below). Guarded on deleted_at IS NULL so a re-delete can't slide the
+  // retention window forward.
+  const nowIso = new Date().toISOString();
   await supabase
     .from("documents")
-    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({
+      deleted_at: nowIso,
+      retention_until: retentionUntil(nowIso),
+      updated_at: nowIso,
+    })
     .eq("id", documentId)
     .is("deleted_at", null);
 

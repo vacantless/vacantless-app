@@ -16,6 +16,9 @@ name: Vacantless background sweeps
 #   * /api/cron/compliance-calendar — seasonal soft tenant courtesy notes (drafts
 #     into pending_tenant_messages on the season window; opt-in per org+event,
 #     self-gates to once/season via the pending_tenant_messages dedupe index)
+#   * /api/cron/document-retention — permanently purges soft-deleted vault
+#     documents past their retention window (documents.retention_until); acts only
+#     on already soft-deleted rows, so frequent pings are safe
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -70,4 +73,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/compliance-calendar" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger document-retention purge
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/document-retention" \
             -w "\nHTTP %{http_code}\n"
