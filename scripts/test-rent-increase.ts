@@ -126,6 +126,31 @@ ok("unknown year -> null", guidelineForYear(2099) === null);
   ok("exactly 90 days out -> serve_window", r90.status === "serve_window" && r90.daysUntilEligible === NOTICE_DAYS);
 }
 
+// --- persisted last-increase date advances the cycle (S339 column) ----------
+{
+  // Same tenancy, but a prior increase was recorded on 2025-05-01. The next
+  // eligible date is measured from THAT, not the 2025-03-01 start.
+  const noLast = deriveRentIncrease(inp({ startDate: "2025-03-01" }), "2025-06-01")!;
+  ok("no last-increase -> eligible from start", noLast.earliestEffectiveDate === "2026-03-01");
+  const withLast = deriveRentIncrease(
+    inp({ startDate: "2025-03-01", lastIncreaseDate: "2025-05-01" }),
+    "2025-06-01",
+  )!;
+  ok("recorded last-increase -> eligible advances ~1yr", withLast.earliestEffectiveDate === "2026-05-01");
+  ok("recorded last-increase pushes serve-by too", withLast.serveByDate === "2026-01-31");
+}
+
+// --- persisted exemption flag (S339 properties.rent_control_exempt) ----------
+{
+  // A post-2018 unit inside what would otherwise be the serve window: the stored
+  // exemption short-circuits to `exempt` with no amounts, no matter the dates.
+  const capped = deriveRentIncrease(inp(), "2025-11-21")!;
+  ok("not exempt -> actionable serve_window", capped.status === "serve_window");
+  const exempt = deriveRentIncrease(inp({ exempt: true }), "2025-11-21")!;
+  ok("stored exempt=true -> status exempt", exempt.status === "exempt");
+  ok("stored exempt=true -> no guideline/amounts", exempt.guidelinePercent === null && exempt.newRentCents === null);
+}
+
 // --- robustness: bad dates -> null ------------------------------------------
 ok("bad today -> null", deriveRentIncrease(inp(), "not-a-date") === null);
 ok("bad start -> null", deriveRentIncrease(inp({ startDate: "2025-13-40" }), "2025-06-01") === null);

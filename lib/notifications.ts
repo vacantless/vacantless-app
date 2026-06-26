@@ -211,6 +211,39 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Here is today's leasing snapshot for {{snapshot_date}}.\n\n{{snapshot}}\n\nThis is a daily status view, not a to-do backlog — nothing here is overdue. One email per weekday at the start of your shift.\n\nOpen your pipeline: {{dashboard_url}}",
     active: true,
   },
+  // Rent-increase autopilot (the FREE compliance wedge — S339). The proactive
+  // half of the already-shipped engine (lib/rent-increase.ts + lib/n1-render.ts):
+  // a per-tenancy reminder fired by app/api/cron/rent-increase when a unit enters
+  // the actionable band (serve_window / serve_late / overdue) so the operator is
+  // told WHEN to serve the N1 instead of having to open the dashboard. Audience
+  // operator; one email per tenancy (deadline-specific, unlike the org-wide
+  // snapshot). Once-per-cycle: the cron stamps tenancies.rent_increase_nudged_for
+  // so a given increase cycle nudges at most once. {{dashboard_url}} deep-links to
+  // the tenancy where the rent-increase card + the pre-filled N1 button already
+  // live. Informational-but-actionable → no alert accent (not an emergency).
+  {
+    key: "leasing.rent_increase",
+    family: "leasing",
+    audience: "operator",
+    label: "Rent increase due — serve the N1",
+    description:
+      "When one of your tenancies reaches its annual rent-increase window, you get a reminder of the date you must serve the Form N1 and the guideline amount — so you never leave a legal increase on the table. One email per unit, once per cycle. Defaults to members who manage leads; edit the recipients below.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "tenant_names",
+      "serve_by_date",
+      "effective_date",
+      "guideline_percent",
+      "current_rent",
+      "new_rent",
+      "dashboard_url",
+    ],
+    defaultSubject:
+      "Rent increase: serve the N1 by {{serve_by_date}} — {{property_address}}",
+    defaultBody:
+      "It's time to start the annual rent increase for {{property_address}}.\n\nTenant(s): {{tenant_names}}\nServe the Form N1 by: {{serve_by_date}}\nIncrease effective: {{effective_date}}\nGuideline: {{guideline_percent}}\nRent: {{current_rent}} → {{new_rent}}/mo\n\nOpen the tenancy to review the details and print the pre-filled N1: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
