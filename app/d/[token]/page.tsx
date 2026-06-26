@@ -6,6 +6,14 @@ import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { isShareLinkValid, formatBytes, documentTypeLabel } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
+// SECURITY: this viewer re-validates the share token (revoked / expired /
+// soft-deleted) on every request. On Next 14, `fetch` GETs are cached by
+// default and `force-dynamic` alone does NOT opt them out — so the supabase-js
+// reads below (the share-link + document lookups) would be served stale from
+// the Data Cache, and a REVOKED or EXPIRED link would keep serving the document
+// (verified live, S346). Force every fetch in this segment to no-store so the
+// revocation/expiry/soft-delete checks always see the live row.
+export const fetchCache = "force-no-store";
 
 // The share token is a bearer credential to a private document. Keep these pages
 // out of every index — they must never be crawled or cached by search engines.
