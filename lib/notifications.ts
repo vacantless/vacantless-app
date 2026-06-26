@@ -27,6 +27,27 @@ import { formatMoneyCents } from "./payments";
 // natural party and treat the editable list as additive cc).
 export type NotificationAudience = "operator" | "trade" | "tenant";
 
+// --- Send mode ---------------------------------------------------------------
+// HOW a registered event reaches its audience — the second tier of the locked
+// send-mode decision (S340). Three values on ONE axis so the compliance-comms
+// "drip" (a landlord-to-tenant message stream, compliance-triggered) can carry
+// every step from a friendly reminder to a legal notice without parallel
+// machinery:
+//   - "notify"          fire-and-send to the audience when the trigger happens
+//                       (today's behavior; operator alerts + the action-driven
+//                       tenant dispatch emails all sit here). Absent => this.
+//   - "approve_to_send" the trigger only DRAFTS the message into the pending
+//                       queue (pending_tenant_messages, 0075); a human operator
+//                       must open it, optionally edit, and tap Approve & Send
+//                       before it ever reaches the tenant. The soft/operational
+//                       comms tier (filter / water / smoke test / insurance /
+//                       entry notice / the renewal courtesy). NEVER auto-sends —
+//                       so it is inherently dark/safe even when "on".
+//   - "served_notice"   a legal LTB notice routed through the #11 signing rail
+//                       with a delivery record (Slice 3) — GATED behind a legal/
+//                       ToS pass; not wired this release.
+export type NotificationSendMode = "notify" | "approve_to_send" | "served_notice";
+
 // --- Event registry ----------------------------------------------------------
 // One entry per distinct notification. `family` groups them in the settings UI.
 // `active` = wired to a real trigger this release (inactive ones are roadmap
@@ -41,6 +62,10 @@ export type NotificationEvent = {
   defaultSubject: string;
   defaultBody: string;
   active: boolean;
+  // HOW this event reaches its audience (see NotificationSendMode). Absent =>
+  // "notify" (the default behavior every event shipped with). Only the new
+  // compliance-drip tenant events declare "approve_to_send".
+  sendMode?: NotificationSendMode;
   // Optional code-default accent color (hex #RRGGBB) for the branded email's
   // top stripe — the per-event "urgency" cue. Used when the org has set no
   // accent_color override (notification_settings.accent_color). Absent => the
@@ -244,6 +269,39 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "It's time to start the annual rent increase for {{property_address}}.\n\nTenant(s): {{tenant_names}}\nServe the Form N1 by: {{serve_by_date}}\nIncrease effective: {{effective_date}}\nGuideline: {{guideline_percent}}\nRent: {{current_rent}} → {{new_rent}}/mo\n\nOpen the tenancy to review the details and print the pre-filled N1: {{dashboard_url}}",
     active: true,
   },
+  // Rent-increase TENANT courtesy note (the compliance-comms drip — S341). The
+  // SOFT, non-legal companion to leasing.rent_increase: when a tenancy reaches
+  // its annual window, the operator can send the tenant a friendly heads-up that
+  // their fixed term is approaching and ask whether they intend to stay — WITHOUT
+  // implying they must renew (most Ontario fixed terms continue month-to-month
+  // unless properly ended; the LTB N9/N11 paths handle an actual end). This is
+  // NOT the Form N1 and carries no legal weight — the N1 stays a separate
+  // operator-served document (leasing.rent_increase + the pre-filled N1 route).
+  //
+  // sendMode "approve_to_send": the rent-increase cron only DRAFTS this into the
+  // pending_tenant_messages queue (0075); the operator reviews/edits and taps
+  // Approve & Send before it reaches the tenant. Enqueue is OPT-IN per org
+  // (isDripEnqueueEnabled — an explicit enabled override), so it stays dark until
+  // an operator turns the drip on. audience tenant; no alert accent (courtesy).
+  {
+    key: "leasing.rent_increase_tenant_notice",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Rent increase — courtesy note to the tenant",
+    description:
+      "An optional, friendly heads-up to the tenant when their lease anniversary approaches, asking whether they intend to stay — drafted for you to review and send, never sent automatically. This is a courtesy note, not the legal Form N1 (you still serve the N1 separately). Off until you turn it on.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "tenant_first_name",
+      "effective_date",
+      "dashboard_url",
+    ],
+    defaultSubject: "A quick note about your lease at {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nWe're reaching out ahead of your lease anniversary at {{property_address}}. There's nothing you need to do right now — your tenancy simply continues unless you choose otherwise.\n\nWhen you have a moment, we'd love to know: are you planning to stay on for another year? There's no pressure either way — we just want to plan ahead. A separate notice with any rent details will follow if applicable.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
@@ -361,6 +419,25 @@ export function renderNotification(
 /** Is this event on for this org? Absent row == on (defaults). */
 export function isEventEnabled(setting: NotificationSettingRow | null): boolean {
   return setting ? setting.enabled : true;
+}
+
+/** The send mode for an event (absent => "notify", the shipped default). */
+export function notificationSendMode(event: NotificationEvent): NotificationSendMode {
+  return event.sendMode ?? "notify";
+}
+
+/**
+ * Should an `approve_to_send` (drip) event ENQUEUE a draft for this org?
+ *
+ * Opt-IN, unlike isEventEnabled: a drip stays dark until the org EXPLICITLY
+ * turns it on (a notification_settings row with enabled=true). An absent row
+ * means "no draft" — so no org starts drafting tenant comms by default, and the
+ * compliance drip ships dark behind the per-org flag. (Once enabled, the draft
+ * still only goes to the pending queue; a human must Approve & Send — the
+ * enqueue gate is about noise/consent to draft, not about reaching the tenant.)
+ */
+export function isDripEnqueueEnabled(setting: NotificationSettingRow | null): boolean {
+  return setting?.enabled === true;
 }
 
 // --- Recipients --------------------------------------------------------------

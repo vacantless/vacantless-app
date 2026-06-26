@@ -4,6 +4,8 @@ import { sendOrgNotification } from "@/lib/notifications-server";
 import {
   getNotificationEvent,
   isEventEnabled,
+  isDripEnqueueEnabled,
+  firstWord,
   renderNotification,
   resolveNotificationRecipients,
   type NotificationSettingRow,
@@ -17,6 +19,7 @@ import {
   decideRentIncreaseNudge,
   RENT_INCREASE_URGENCY,
 } from "@/lib/rent-increase-sweep";
+import { tenantNoticeDedupeKey } from "@/lib/tenant-message-approvals";
 
 // Rent-increase reminder sweep — the proactive "autopilot" half of the free
 // compliance wedge (S339). The calc core (lib/rent-increase.ts) + pre-filled N1
@@ -48,6 +51,9 @@ const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 const MAX_RECIPIENTS = 10;
 const EVENT_KEY = "leasing.rent_increase";
+// The SOFT, approve-to-send companion drafted alongside the landlord N1 nudge
+// (S341). Opt-in per org; never sent from here — only queued for operator review.
+const TENANT_NOTICE_EVENT_KEY = "leasing.rent_increase_tenant_notice";
 
 type Summary = {
   ok: boolean;
@@ -55,6 +61,7 @@ type Summary = {
   scanned: number; // orgs scanned
   sent: number; // reminders sent (or "would send" in dry mode)
   skipped: number; // tenancies not actionable / already nudged
+  enqueued: number; // soft tenant-notice drafts queued (or "would queue" in dry)
   errors: number;
   details: Array<Record<string, unknown>>;
 };
@@ -79,8 +86,9 @@ type TenancyRow = {
   start_date: string | null;
   last_rent_increase_date: string | null;
   rent_increase_nudged_for: string | null;
+  property_id: string | null;
   property: { address: string | null; rent_control_exempt: boolean | null } | null;
-  tenants: { name: string | null; is_primary: boolean | null }[] | null;
+  tenants: { name: string | null; email: string | null; is_primary: boolean | null }[] | null;
 };
 
 /** Primary tenant first, then co-tenants; drop the unnamed. Mirrors n1/route.ts. */
@@ -92,6 +100,13 @@ function tenantNamesOf(t: TenancyRow): string[] {
     .filter((n) => n.length > 0);
 }
 
+/** The primary tenant (is_primary first, else the first listed) — its name+email
+ *  is the address for the soft approve-to-send courtesy draft. */
+function primaryTenantOf(t: TenancyRow): { name: string | null; email: string | null } | null {
+  const list = (t.tenants ?? []).slice().sort((a, b) => Number(b.is_primary) - Number(a.is_primary));
+  return list[0] ?? null;
+}
+
 export async function GET(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
@@ -100,7 +115,7 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
-      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
+      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, skipped: 0, enqueued: 0, errors: 0, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -113,10 +128,13 @@ export async function GET(req: NextRequest) {
   const event = getNotificationEvent(EVENT_KEY);
   if (!event) {
     return NextResponse.json(
-      { ok: false, reason: "event_not_registered", scanned: 0, sent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: "event_not_registered", scanned: 0, sent: 0, skipped: 0, enqueued: 0, errors: 1, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
+  // The soft tenant-notice companion event (approve-to-send). Absent => skip the
+  // drip entirely (it just won't draft); the landlord nudge is unaffected.
+  const tenantNoticeEvent = getNotificationEvent(TENANT_NOTICE_EVENT_KEY);
 
   let orgQuery = admin
     .from("organizations")
@@ -128,13 +146,13 @@ export async function GET(req: NextRequest) {
 
   if (orgErr) {
     return NextResponse.json(
-      { ok: false, reason: `org_query_error:${orgErr.message}`, scanned: 0, sent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: `org_query_error:${orgErr.message}`, scanned: 0, sent: 0, skipped: 0, enqueued: 0, errors: 1, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
 
   const nowMs = Date.now();
-  const summary: Summary = { ok: true, scanned: (orgs ?? []).length, sent: 0, skipped: 0, errors: 0, details: [] };
+  const summary: Summary = { ok: true, scanned: (orgs ?? []).length, sent: 0, skipped: 0, enqueued: 0, errors: 0, details: [] };
 
   for (const org of (orgs ?? []) as any[]) {
     // Per-org isolation: one org's thrown error must not abort the sweep.
@@ -148,8 +166,8 @@ export async function GET(req: NextRequest) {
       const { data: tenancyRows } = await admin
         .from("tenancies")
         .select(
-          "id, status, rent_cents, start_date, last_rent_increase_date, rent_increase_nudged_for, " +
-            "property:properties(address, rent_control_exempt), tenants(name, is_primary)",
+          "id, status, rent_cents, start_date, last_rent_increase_date, rent_increase_nudged_for, property_id, " +
+            "property:properties(address, rent_control_exempt), tenants(name, email, is_primary)",
         )
         .eq("organization_id", org.id)
         .eq("status", "active");
@@ -230,6 +248,22 @@ export async function GET(req: NextRequest) {
         setting = (settingRow as NotificationSettingRow | null) ?? null;
       }
 
+      // The soft tenant-notice (approve-to-send) drip override. Fetched in BOTH
+      // dry and real modes because the enqueue is OPT-IN (isDripEnqueueEnabled):
+      // it only drafts when the org has explicitly turned this event on, so the
+      // drip ships dark. Absent event / absent row => no draft.
+      let tenantNoticeSetting: NotificationSettingRow | null = null;
+      if (tenantNoticeEvent) {
+        const { data: tnRow } = await admin
+          .from("notification_settings")
+          .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
+          .eq("organization_id", org.id)
+          .eq("event_key", TENANT_NOTICE_EVENT_KEY)
+          .maybeSingle();
+        tenantNoticeSetting = (tnRow as NotificationSettingRow | null) ?? null;
+      }
+      const dripOn = tenantNoticeEvent != null && isDripEnqueueEnabled(tenantNoticeSetting);
+
       for (const { t, result, stampFor } of due) {
         const address = t.property?.address?.trim() || "your rental unit";
         const tenantNames = tenantNamesOf(t);
@@ -248,7 +282,28 @@ export async function GET(req: NextRequest) {
           dashboard_url: dashboardUrl,
         };
 
-        // --- Dry run: render + report, never send, never stamp ---------------
+        // The soft tenant-notice draft vars (shared by dry + real). Only the
+        // primary tenant is addressed; the courtesy note is non-legal and uses
+        // first-name + effective date, never the rent math.
+        const primary = primaryTenantOf(t);
+        const tenantEmail = (primary?.email ?? "").trim() || null;
+        const tenantNoticeVars: Record<string, string> = {
+          org_name: org.name ?? "",
+          property_address: address,
+          tenant_first_name: firstWord(primary?.name ?? null),
+          effective_date: result.effectiveDate,
+          dashboard_url: dashboardUrl,
+        };
+        const tenantNoticeDedupe = tenantNoticeDedupeKey(
+          TENANT_NOTICE_EVENT_KEY,
+          t.id,
+          result.earliestEffectiveDate,
+        );
+        // Draft only when the drip is opt-in ON and the tenant has an address to
+        // send to (a draft with nowhere to go isn't actionable).
+        const willDraft = dripOn && tenantEmail != null && tenantNoticeEvent != null;
+
+        // --- Dry run: render + report, never send, never stamp, never draft ---
         if (dry) {
           const rendered = renderNotification(event, setting, vars);
           const recipients = resolveNotificationRecipients({
@@ -256,7 +311,7 @@ export async function GET(req: NextRequest) {
             configured: setting?.recipients ?? [],
             operatorFallback,
           });
-          summary.details.push({
+          const detail: Record<string, unknown> = {
             org: org.id,
             tenancy: t.id,
             dry: true,
@@ -266,7 +321,19 @@ export async function GET(req: NextRequest) {
             recipients,
             subject: rendered.subject,
             body: rendered.body,
-          });
+          };
+          if (willDraft) {
+            const tn = renderNotification(tenantNoticeEvent!, tenantNoticeSetting, tenantNoticeVars);
+            detail.tenant_notice = {
+              would_enqueue: true,
+              to: tenantEmail,
+              dedupe_key: tenantNoticeDedupe,
+              subject: tn.subject,
+              body: tn.body,
+            };
+            summary.enqueued++; // "would enqueue"
+          }
+          summary.details.push(detail);
           summary.sent++; // "would send"
           continue;
         }
@@ -296,13 +363,48 @@ export async function GET(req: NextRequest) {
           .eq("id", t.id);
 
         summary.sent++;
-        summary.details.push({
+        const detail: Record<string, unknown> = {
           org: org.id,
           tenancy: t.id,
           sent: true,
           status: result.status,
           stamped: stampFor,
-        });
+        };
+
+        // --- Soft tenant-notice: DRAFT into the approval queue, never send ----
+        // Opt-in (dripOn) + a tenant address present. Upsert on the dedupe index
+        // so the 15-min pinger / a forced re-run never doubles a cycle's draft.
+        // This row only reaches the tenant once an operator taps Approve & Send
+        // (app/dashboard/messages). The landlord stamp above already gates this
+        // to once per cycle; the unique dedupe is the belt-and-suspenders guard.
+        if (willDraft) {
+          const tn = renderNotification(tenantNoticeEvent!, tenantNoticeSetting, tenantNoticeVars);
+          const { error: draftErr } = await admin
+            .from("pending_tenant_messages")
+            .upsert(
+              {
+                organization_id: org.id,
+                event_key: TENANT_NOTICE_EVENT_KEY,
+                tenancy_id: t.id,
+                property_id: t.property_id,
+                tenant_name: primary?.name ?? null,
+                tenant_email: tenantEmail,
+                subject: tn.subject,
+                body: tn.body,
+                dedupe_key: tenantNoticeDedupe,
+                status: "pending",
+              },
+              { onConflict: "organization_id,event_key,dedupe_key", ignoreDuplicates: true },
+            );
+          if (!draftErr) {
+            summary.enqueued++;
+            detail.tenant_notice = { enqueued: true, to: tenantEmail };
+          } else {
+            detail.tenant_notice = { enqueued: false, error: draftErr.message };
+          }
+        }
+
+        summary.details.push(detail);
       }
     } catch (err) {
       summary.errors++;

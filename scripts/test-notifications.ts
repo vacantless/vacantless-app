@@ -8,6 +8,8 @@ import {
   notificationFamilyLabel,
   renderNotification,
   isEventEnabled,
+  notificationSendMode,
+  isDripEnqueueEnabled,
   isValidEmail,
   parseRecipientList,
   validateRecipientsInput,
@@ -97,6 +99,26 @@ ok(
 // --- enabled ----------------------------------------------------------------
 ok("enabled: absent row -> on", isEventEnabled(null));
 ok("enabled: row off -> off", !isEventEnabled({ ...overrideRow, enabled: false }));
+
+// --- send mode (S341) -------------------------------------------------------
+ok("sendMode: default is notify", notificationSendMode(getNotificationEvent("leasing.new_lead")!) === "notify");
+ok("sendMode: rent-increase notify", notificationSendMode(getNotificationEvent("leasing.rent_increase")!) === "notify");
+ok(
+  "sendMode: tenant-notice is approve_to_send",
+  notificationSendMode(getNotificationEvent("leasing.rent_increase_tenant_notice")!) === "approve_to_send",
+);
+ok(
+  "sendMode: every approve_to_send event is tenant-audience",
+  NOTIFICATION_EVENTS.filter((e) => notificationSendMode(e) === "approve_to_send").every((e) => e.audience === "tenant"),
+);
+ok(
+  "sendMode: tenant-notice event registered + active",
+  getNotificationEvent("leasing.rent_increase_tenant_notice")?.active === true,
+);
+// drip enqueue is OPT-IN (explicit enabled override), unlike isEventEnabled
+ok("drip: absent row -> NO enqueue", !isDripEnqueueEnabled(null));
+ok("drip: enabled=false -> NO enqueue", !isDripEnqueueEnabled({ ...overrideRow, enabled: false }));
+ok("drip: enabled=true -> enqueue", isDripEnqueueEnabled({ ...overrideRow, enabled: true }));
 ok("enabled: row on -> on", isEventEnabled({ ...overrideRow, enabled: true }));
 
 // --- email validity + parsing -----------------------------------------------

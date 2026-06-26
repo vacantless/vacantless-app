@@ -62,6 +62,7 @@ export default async function OverviewPage() {
     { data: tenancyRows },
     { data: availablePropertyRows },
     { data: workOrderRows },
+    { count: pendingMessageCount },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -111,6 +112,14 @@ export default async function OverviewPage() {
       .from("work_orders")
       .select("id, status, priority")
       .in("status", ["open", "assigned", "in_progress"]),
+    // Pending tenant-message drafts awaiting approval (approve-to-send drip,
+    // S341). Drives a conditional Overview rollup → /dashboard/messages. Renders
+    // only when something is waiting (conditional-visibility rule), so the whole
+    // approval-gated drip stays invisible until a draft exists.
+    supabase
+      .from("pending_tenant_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
   ]);
 
   // Open + urgent work-order counts for the Overview tile.
@@ -229,6 +238,33 @@ export default async function OverviewPage() {
               />
             ))}
           </div>
+        </>
+      )}
+
+      {(pendingMessageCount ?? 0) > 0 && (
+        <>
+          <SectionHeading action={{ href: "/dashboard/messages", label: "Review messages" }}>
+            Tenant messages
+          </SectionHeading>
+          <Link href="/dashboard/messages" className="mb-8 block">
+            <div className="flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ring-1 ring-black/5"
+                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+              >
+                <Icons.mail className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900">
+                  {pendingMessageCount} tenant{" "}
+                  {pendingMessageCount === 1 ? "message" : "messages"} awaiting your approval
+                </p>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Courtesy notes we&apos;ve drafted for your tenants. Nothing sends until you review and approve it.
+                </p>
+              </div>
+            </div>
+          </Link>
         </>
       )}
 
