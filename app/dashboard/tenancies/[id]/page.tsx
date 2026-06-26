@@ -1074,6 +1074,12 @@ export default async function TenancyDetailPage({
         done={rentAutomatic}
         defaultOpen={openSection === "rent-collection"}
       >
+      {/* Stripe Connect — primary rent rail (shown first for now; Rotessa's
+          multi-tenant Platform API is closed to new clients, so Stripe is the
+          productized path). Rotessa stays below as the secondary rail. */}
+      <TenancyStripeRentSection view={stripeRentView} />
+
+      {/* Rotessa (pre-authorized debit — secondary rail) ------------------ */}
       <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         {t.rotessa_customer_id ? (
           <div className="space-y-3">
@@ -1208,9 +1214,6 @@ export default async function TenancyDetailPage({
           </div>
         )}
       </div>
-
-      {/* Rent collection (Stripe Connect — sibling rail to Rotessa) ------- */}
-      <TenancyStripeRentSection view={stripeRentView} />
       </CollapsibleSection>
 
       {/* Manual payments (e-transfer / cheque / cash) -------------------- */}
