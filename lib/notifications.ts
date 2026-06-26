@@ -373,6 +373,48 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{tenant_first_name}},\n\nNow that the risk of frost has passed, we're getting the outdoor faucets at {{property_address}} ready for the warmer months. If you'd like the exterior water turned back on, just let us know and we'll arrange it. It's also a good time to check the outdoor taps for any drips after the winter.\n\nThanks,\n{{org_name}}",
     active: true,
   },
+  {
+    key: "leasing.seasonal_dryer_vent",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: dryer-vent cleaning",
+    description:
+      "A mid-winter fire-safety reminder to the tenant to clear lint from the dryer's vent and lint trap — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "A quick dryer safety reminder for {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nThis is a friendly reminder to clean out the dryer's lint trap and check the vent at {{property_address}}. Built-up lint is a common fire hazard and also makes the dryer work harder than it needs to. If the vent runs somewhere you can't easily reach, just let us know and we'll arrange to have it cleared.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
+  {
+    key: "leasing.seasonal_ac_startup",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: AC startup & cooling filter",
+    description:
+      "Ahead of the cooling season, an optional reminder to the tenant to test the air conditioning and replace the filter before the first hot stretch — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "Getting ready for the cooling season — {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nWith warmer weather on the way, this is a friendly reminder to test the air conditioning at {{property_address}} and replace the filter so it's ready before the first hot stretch. Running it for a few minutes now is the easiest way to catch any issue early. If the AC doesn't cool the way it should, please let us know and we'll arrange a service.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
+  {
+    key: "leasing.seasonal_eavestrough",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: eavestrough clearing",
+    description:
+      "After the leaves have fallen, an optional reminder about clearing the eavestroughs and downspouts before winter — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "Clearing the eavestroughs before winter — {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nNow that most of the leaves have come down, it's a good time to clear the eavestroughs and downspouts at {{property_address}} so melting snow and ice can drain freely this winter. If clearing the eavestroughs is something we look after for your home, you don't need to do anything — we'll take care of it.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {

@@ -50,6 +50,12 @@ export const COMPLIANCE_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
   { eventKey: "leasing.seasonal_smoke_co_test", anchorMonth: 11, anchorDay: 1, leadDays: 14, graceDays: 7 },
   // After frost risk passes — outdoor water back on for spring.
   { eventKey: "leasing.seasonal_water_turnon", anchorMonth: 4, anchorDay: 20, leadDays: 21, graceDays: 7 },
+  // Deep winter — clear dryer lint/vent (fire safety; fills the Jan–Feb gap).
+  { eventKey: "leasing.seasonal_dryer_vent", anchorMonth: 2, anchorDay: 1, leadDays: 14, graceDays: 14 },
+  // Before the cooling season — test the AC and swap the filter.
+  { eventKey: "leasing.seasonal_ac_startup", anchorMonth: 5, anchorDay: 15, leadDays: 14, graceDays: 7 },
+  // After leaf-fall, before winter — clear eavestroughs + downspouts.
+  { eventKey: "leasing.seasonal_eavestrough", anchorMonth: 11, anchorDay: 15, leadDays: 14, graceDays: 14 },
 ] as const;
 
 // --- Date helpers (UTC-anchored on YYYY-MM-DD strings; no TZ drift) -----------

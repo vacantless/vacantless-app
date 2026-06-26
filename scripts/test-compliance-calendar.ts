@@ -67,6 +67,21 @@ ok("smoke/CO due Oct 25", dueKeys("2026-10-25").includes("leasing.seasonal_smoke
 ok("water-turnon due Apr 10", dueKeys("2026-04-10").includes("leasing.seasonal_water_turnon"));
 ok("water-turnon NOT due in Oct", !dueKeys("2026-10-10").includes("leasing.seasonal_water_turnon"));
 
+// Dryer-vent: anchor Feb 1, lead 14, grace 14 -> [Jan 18, Feb 15].
+ok("dryer-vent due on anchor (Feb 1)", dueKeys("2026-02-01").includes("leasing.seasonal_dryer_vent"));
+ok("dryer-vent due at window open (Jan 18)", dueKeys("2026-01-18").includes("leasing.seasonal_dryer_vent"));
+ok("dryer-vent NOT due day before open (Jan 17)", !dueKeys("2026-01-17").includes("leasing.seasonal_dryer_vent"));
+ok("dryer-vent due at grace close (Feb 15)", dueKeys("2026-02-15").includes("leasing.seasonal_dryer_vent"));
+ok("dryer-vent NOT due day after grace (Feb 16)", !dueKeys("2026-02-16").includes("leasing.seasonal_dryer_vent"));
+
+// AC startup: anchor May 15, lead 14, grace 7 -> [May 1, May 22].
+ok("ac-startup due in window (May 10)", dueKeys("2026-05-10").includes("leasing.seasonal_ac_startup"));
+ok("ac-startup NOT due in Aug", !dueKeys("2026-08-15").includes("leasing.seasonal_ac_startup"));
+
+// Eavestrough: anchor Nov 15, lead 14, grace 14 -> [Nov 1, Nov 29].
+ok("eavestrough due Nov 20", dueKeys("2026-11-20").includes("leasing.seasonal_eavestrough"));
+ok("eavestrough NOT due in Sep", !dueKeys("2026-09-20").includes("leasing.seasonal_eavestrough"));
+
 // --- overlapping fall windows: multiple items can be due the same day --------
 // Oct 1: filter [Sep17-Oct8] open AND water-shutoff [Sep29-Oct27] open.
 ok(
