@@ -13,6 +13,9 @@ name: Vacantless background sweeps
 #     once/day at the org's start-of-shift hour via leasing_snapshot_last_sent_on)
 #   * /api/cron/rent-increase — per-tenancy N1 reminder (self-gates to once per
 #     increase cycle via tenancies.rent_increase_nudged_for)
+#   * /api/cron/compliance-calendar — seasonal soft tenant courtesy notes (drafts
+#     into pending_tenant_messages on the season window; opt-in per org+event,
+#     self-gates to once/season via the pending_tenant_messages dedupe index)
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -61,4 +64,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/rent-increase" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger compliance-calendar sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/compliance-calendar" \
             -w "\nHTTP %{http_code}\n"

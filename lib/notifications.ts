@@ -302,6 +302,77 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{tenant_first_name}},\n\nWe're reaching out ahead of your lease anniversary at {{property_address}}. There's nothing you need to do right now — your tenancy simply continues unless you choose otherwise.\n\nWhen you have a moment, we'd love to know: are you planning to stay on for another year? There's no pressure either way — we just want to plan ahead. A separate notice with any rent details will follow if applicable.\n\nThanks,\n{{org_name}}",
     active: true,
   },
+  // ---- Seasonal compliance calendar (S343 — the soft-comms drip build-out) ----
+  // The first follow-on slice of the send-mode axis after the S341 keystone: a
+  // set of SOFT, non-legal seasonal courtesy notes to the tenant, each fired by
+  // a fixed-calendar trigger (app/api/cron/compliance-calendar) when its lead
+  // window opens. They ride the SAME approve_to_send substrate as the rent-
+  // increase courtesy note — the cron only DRAFTS into pending_tenant_messages
+  // (0075); a human operator reviews/edits and taps Approve & Send before the
+  // tenant ever receives one. Enqueue is OPT-IN per org (isDripEnqueueEnabled),
+  // so every seasonal note ships dark until an operator turns that event on.
+  //
+  // These are operational/courtesy comms with NO legal weight — deliberately
+  // distinct from the LTB form-driven items (N1..N14), which stay notify-the-
+  // landlord + a link to the official form (never auto-served, never invented
+  // copy). audience tenant; no alert accent (friendly, not urgent). Tokens:
+  // {{tenant_first_name}} {{property_address}} {{season_year}} {{org_name}}.
+  {
+    key: "leasing.seasonal_furnace_filter",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: furnace filter reminder",
+    description:
+      "As the heating season begins, an optional friendly reminder to the tenant to replace the furnace filter — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "A quick seasonal reminder for {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nAs we head into the heating season, this is a friendly reminder to replace the furnace filter at {{property_address}}. A fresh filter keeps the heat running efficiently and the air cleaner. If the filter for your unit is one we look after, just let us know and we'll take care of it.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
+  {
+    key: "leasing.seasonal_water_shutoff",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: outdoor water shut-off",
+    description:
+      "Before the first frost, an optional reminder to the tenant to disconnect garden hoses and prepare outdoor faucets for winter — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "Outdoor water shut-off for the winter — {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nWith colder weather on the way, it's time to prepare the outdoor faucets at {{property_address}} for winter. Please disconnect and drain any garden hoses so the exterior taps don't freeze. If the outdoor water supply needs to be shut off at the valve, we'll be in touch to arrange a convenient time.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
+  {
+    key: "leasing.seasonal_smoke_co_test",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: smoke & CO alarm test",
+    description:
+      "An optional seasonal reminder to the tenant to test their smoke and carbon-monoxide alarms and report any that aren't working — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "Time to test your smoke & CO alarms — {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nThis is a friendly seasonal reminder to test the smoke and carbon-monoxide alarms in your home at {{property_address}} and make sure each one is working. If any alarm is missing, chirping, or doesn't sound when you test it, please let us know right away and we'll arrange a replacement.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
+  {
+    key: "leasing.seasonal_water_turnon",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: outdoor water turn-on",
+    description:
+      "Once the frost risk has passed, an optional reminder to the tenant that the outdoor faucets are being readied for spring — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "Outdoor water is coming back on — {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nNow that the risk of frost has passed, we're getting the outdoor faucets at {{property_address}} ready for the warmer months. If you'd like the exterior water turned back on, just let us know and we'll arrange it. It's also a good time to check the outdoor taps for any drips after the winter.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
