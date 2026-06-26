@@ -16,6 +16,7 @@ import {
 } from "@/lib/tenancy";
 import { normalizePhoneE164 } from "@/lib/sms";
 import { resolvePersonId } from "@/lib/persons-server";
+import { validateWatchLeaseInput } from "@/lib/watch-lease";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 
@@ -118,6 +119,108 @@ export async function createTenancy(formData: FormData) {
   revalidatePath("/dashboard/tenancies");
   revalidatePath("/dashboard");
   redirect(`/dashboard/tenancies/${tenancyId}?created=1`);
+}
+
+// ===========================================================================
+// "Watch a lease" — the FREE compliance-wedge front door (rent-increase
+// autopilot Slice 2, S340). An owner who is NOT on the leasing pipeline enrolls
+// one existing lease into the rent-increase drip in a single screen.
+//
+// It writes the SAME records the autopilot already reads — no parallel model:
+//   1. a lightweight PRIVATE unit (status=off_market, so it never appears on the
+//      public /r renter page), carrying the owner-asserted exemption fact;
+//   2. an ACTIVE tenancy on that unit with the lease start + last-increase date
+//      (the inputs deriveRentIncrease / the cron / the N1 route consume);
+//   3. the primary tenant, resolved to the durable per-org person vault.
+//
+// Notify-only: enrolling a lease never messages the tenant. The Slice 1 cron
+// emails the OWNER to serve the N1 themselves (send-on-behalf is a later,
+// approval-gated mode). Exemption is flag-don't-conclude: we store what the
+// owner declares, never auto-determine rent-control status.
+// ===========================================================================
+export async function watchLease(formData: FormData) {
+  // Creates a unit AND a tenancy, so it needs both capabilities.
+  await requireCapability("manage_properties", FORBIDDEN);
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const address = s(formData, "address");
+  const startDate = parseDateOrNull(s(formData, "start_date"));
+  const lastIncreaseDate = parseDateOrNull(s(formData, "last_rent_increase_date"));
+  const firstOccupancyDate = parseDateOrNull(s(formData, "first_occupancy_date"));
+  const exempt = s(formData, "rent_control_exempt") === "on";
+  const primaryName = s(formData, "tenant_name");
+
+  const check = validateWatchLeaseInput({
+    address,
+    startDate,
+    lastIncreaseDate,
+    primaryTenantName: primaryName,
+  });
+  if (!check.ok) redirect(`/dashboard/tenancies/watch?err=${check.code}`);
+
+  const rentCents = parseMoneyToCents(s(formData, "rent"));
+  const supabase = createClient();
+
+  // 1. The private unit. off_market keeps it off the public /r page — a watched
+  //    lease is not being marketed. The exemption + its evidence date live here
+  //    (a property fact), where the card/cron read them.
+  const { data: prop } = await supabase
+    .from("properties")
+    .insert({
+      organization_id: org.id,
+      address,
+      rent_cents: rentCents,
+      status: "off_market",
+      rent_control_exempt: exempt,
+      first_occupancy_date: firstOccupancyDate,
+    })
+    .select("id")
+    .maybeSingle();
+  const propertyId = (prop as { id: string } | null)?.id;
+  if (!propertyId) redirect("/dashboard/tenancies?forbidden=1");
+
+  // 2. The active tenancy — the record the rent-increase autopilot sweeps.
+  const { data: inserted } = await supabase
+    .from("tenancies")
+    .insert({
+      organization_id: org.id,
+      property_id: propertyId,
+      rent_cents: rentCents,
+      start_date: startDate,
+      last_rent_increase_date: lastIncreaseDate,
+      status: "active",
+    })
+    .select("id")
+    .maybeSingle();
+  const tenancyId = (inserted as { id: string } | null)?.id;
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  // 3. The primary tenant (resolved to the durable per-org person vault).
+  const email = s(formData, "tenant_email") || null;
+  const phone = s(formData, "tenant_phone") || null;
+  const phone_e164 = normalizePhoneE164(phone);
+  const personId = await resolvePersonId(supabase, org.id, {
+    name: primaryName,
+    email,
+    phone,
+    phone_e164,
+  });
+  await supabase.from("tenants").insert({
+    organization_id: org.id,
+    tenancy_id: tenancyId,
+    name: primaryName,
+    email,
+    phone,
+    phone_e164,
+    is_primary: true,
+    person_id: personId,
+  });
+
+  revalidatePath("/dashboard/tenancies");
+  revalidatePath("/dashboard");
+  redirect(`/dashboard/tenancies/${tenancyId}?created=1&watch=1`);
 }
 
 // ===========================================================================

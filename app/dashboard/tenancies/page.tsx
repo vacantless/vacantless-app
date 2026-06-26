@@ -12,6 +12,7 @@ import {
   EmptyState,
   BrandBanner,
   PRIMARY_ACTION_CLASS,
+  SECONDARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
@@ -72,13 +73,22 @@ export default async function TenanciesPage({
         title="Tenancies"
         subtitle="Your active leases. Each tenancy links a tenant to a unit with the signed rent and lease dates — the record rent collection and tenant messaging build on."
         action={
-          <Link
-            href="/dashboard/tenancies/new"
-            className={PRIMARY_ACTION_CLASS}
-            style={{ background: "rgba(255,255,255,0.18)" }}
-          >
-            + Add tenancy
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/tenancies/watch"
+              className={SECONDARY_ACTION_CLASS}
+              style={{ background: "rgba(255,255,255,0.10)", color: "#fff" }}
+            >
+              Watch a lease
+            </Link>
+            <Link
+              href="/dashboard/tenancies/new"
+              className={PRIMARY_ACTION_CLASS}
+              style={{ background: "rgba(255,255,255,0.18)" }}
+            >
+              + Add tenancy
+            </Link>
+          </div>
         }
       />
 
