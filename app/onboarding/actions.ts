@@ -7,96 +7,14 @@ import {
   DEFAULT_BRAND_COLOR,
   DEFAULT_BRAND_SECONDARY,
 } from "@/lib/branding";
-import { RESIDENTIAL_CLAUSE_SEED } from "@/lib/clauses";
-import { TENANT_MESSAGE_TEMPLATE_SEED } from "@/lib/tenant-comms";
+import {
+  seedClauseLibrary,
+  seedTenantMessageTemplates,
+} from "@/lib/org-seeds-server";
 
-// Seed the org's starter clause library (lease vault #11, slice 1). Each seed
-// clause becomes a lease_clauses row + a single version-1 lease_clause_versions
-// row flagged current. Best-effort: a seed failure must NOT block onboarding —
-// the org is already created, and the operator can add clauses by hand in
-// Settings. RLS passes because the just-created user is owner_admin of the org.
-async function seedClauseLibrary(
-  supabase: ReturnType<typeof createClient>,
-  orgId: string,
-) {
-  const { data: inserted, error } = await supabase
-    .from("lease_clauses")
-    .insert(
-      RESIDENTIAL_CLAUSE_SEED.map((c) => ({
-        organization_id: orgId,
-        key: c.key,
-        title: c.title,
-        category: c.category,
-        applicable_to: c.applicableTo,
-        risk_level: c.riskLevel,
-        jurisdiction: c.jurisdiction,
-        notes_for_landlord: c.notesForLandlord,
-      })),
-    )
-    .select("id, key");
-
-  if (error || !inserted) {
-    console.error("seedClauseLibrary: clause insert failed", {
-      orgId,
-      error: error?.message,
-    });
-    return;
-  }
-
-  // Map each inserted clause id back to its seed body, then insert version 1
-  // (current) for each. One bulk insert; the partial-unique is_current index is
-  // satisfied because each clause gets exactly one current version.
-  const byKey = new Map(RESIDENTIAL_CLAUSE_SEED.map((c) => [c.key, c]));
-  const versions = (inserted as { id: string; key: string }[])
-    .map((row) => {
-      const seed = byKey.get(row.key);
-      if (!seed) return null;
-      return {
-        organization_id: orgId,
-        clause_id: row.id,
-        version: 1,
-        body: seed.body,
-        is_current: true,
-      };
-    })
-    .filter((v): v is NonNullable<typeof v> => v !== null);
-
-  const { error: vErr } = await supabase
-    .from("lease_clause_versions")
-    .insert(versions);
-  if (vErr) {
-    console.error("seedClauseLibrary: version insert failed", {
-      orgId,
-      error: vErr.message,
-    });
-  }
-}
-
-// Seed the org's starter tenant-message templates (tenant comms, step 3). Each
-// seed becomes one tenant_message_templates row. Best-effort, exactly like the
-// clause seed: a failure must NOT block onboarding — the org exists and the
-// operator can add templates by hand in the message centre. RLS passes because
-// the just-created user is owner_admin of the org. One bulk insert.
-async function seedTenantMessageTemplates(
-  supabase: ReturnType<typeof createClient>,
-  orgId: string,
-) {
-  const { error } = await supabase.from("tenant_message_templates").insert(
-    TENANT_MESSAGE_TEMPLATE_SEED.map((t) => ({
-      organization_id: orgId,
-      name: t.name,
-      channel: t.channel,
-      subject: t.subject,
-      body: t.body,
-    })),
-  );
-  if (error) {
-    console.error("seedTenantMessageTemplates: insert failed", {
-      orgId,
-      error: error.message,
-    });
-  }
-}
+// Org-seeding helpers (clause library + tenant-message templates) now live in
+// lib/org-seeds-server.ts so the provisioning primitive can reuse them with the
+// service-role client. Imported above.
 
 function slugify(name: string) {
   return (
