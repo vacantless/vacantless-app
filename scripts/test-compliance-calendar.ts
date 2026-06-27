@@ -2,10 +2,12 @@
 // Run: npx tsx scripts/test-compliance-calendar.ts
 import {
   COMPLIANCE_CALENDAR_ITEMS,
+  LANDLORD_CALENDAR_ITEMS,
   parseYmdUTC,
   anchorDateFor,
   dueComplianceItems,
   seasonalDedupeKey,
+  complianceReminderDedupeKey,
   type ComplianceCalendarItem,
 } from "../lib/compliance-calendar";
 import { getNotificationEvent, notificationSendMode } from "../lib/notifications";
@@ -46,6 +48,26 @@ for (const item of COMPLIANCE_CALENDAR_ITEMS) {
   ok(`event is tenant audience: ${item.eventKey}`, ev?.audience === "tenant");
   ok(`event is approve_to_send: ${item.eventKey}`, ev != null && notificationSendMode(ev) === "approve_to_send");
   ok(`event is active: ${item.eventKey}`, ev?.active === true);
+}
+
+// --- config integrity: every LANDLORD item points at a registered operator/
+// notify event (S357). The landlord tier emails the operator directly, so the
+// event must be audience operator and sendMode notify (the registry default). --
+for (const item of LANDLORD_CALENDAR_ITEMS) {
+  const ev = getNotificationEvent(item.eventKey);
+  ok(`landlord event registered: ${item.eventKey}`, ev != null);
+  ok(`landlord event is operator audience: ${item.eventKey}`, ev?.audience === "operator");
+  ok(`landlord event is notify mode: ${item.eventKey}`, ev != null && notificationSendMode(ev) === "notify");
+  ok(`landlord event is active: ${item.eventKey}`, ev?.active === true);
+}
+
+// The two tiers must not share an event key (routed differently in the cron).
+{
+  const tenantKeys = new Set(COMPLIANCE_CALENDAR_ITEMS.map((i) => i.eventKey));
+  ok(
+    "tenant and landlord item sets are disjoint",
+    LANDLORD_CALENDAR_ITEMS.every((i) => !tenantKeys.has(i.eventKey)),
+  );
 }
 
 // --- dueComplianceItems: window open/closed ----------------------------------
@@ -103,6 +125,29 @@ ok("mid-winter (Jan 15) has nothing due", dueComplianceItems("2026-01-15").lengt
 
 // --- malformed today returns nothing (cron-safe) -----------------------------
 ok("malformed today -> empty", dueComplianceItems("garbage").length === 0);
+
+// --- LANDLORD tier: dueComplianceItems(today, LANDLORD_CALENDAR_ITEMS) --------
+function landlordKeys(today: string): string[] {
+  return dueComplianceItems(today, LANDLORD_CALENDAR_ITEMS)
+    .map((d) => d.item.eventKey)
+    .sort();
+}
+// insurance review: anchor Jan 15, lead 14, grace 30 -> window [Jan 1, Feb 14].
+ok("insurance review due on anchor", landlordKeys("2026-01-15").includes("leasing.landlord_insurance_review"));
+ok("insurance review due in grace", landlordKeys("2026-02-10").includes("leasing.landlord_insurance_review"));
+ok("insurance review not due after grace", !landlordKeys("2026-03-01").includes("leasing.landlord_insurance_review"));
+// furnace service: anchor Sep 15, lead 21, grace 21 -> window [Aug 25, Oct 6].
+ok("furnace service due on anchor", landlordKeys("2026-09-15").includes("leasing.landlord_furnace_service"));
+// fire safety: anchor Oct 1, lead 21, grace 21 -> window [Sep 10, Oct 22].
+ok("fire safety due on anchor", landlordKeys("2026-10-01").includes("leasing.landlord_fire_safety"));
+// The default tenant call must NOT surface landlord items, and vice-versa.
+ok("tenant call excludes landlord items", !dueKeys("2026-01-15").includes("leasing.landlord_insurance_review"));
+ok("landlord call excludes tenant items", !landlordKeys("2026-10-01").includes("leasing.seasonal_furnace_filter"));
+ok("landlord mid-summer (Jul 1) has nothing due", landlordKeys("2026-07-01").length === 0);
+
+// --- complianceReminderDedupeKey: stable per season, distinct across years ----
+ok("compliance reminder key shape", complianceReminderDedupeKey(2026) === "season:2026");
+ok("compliance reminder key differs by year", complianceReminderDedupeKey(2026) !== complianceReminderDedupeKey(2027));
 
 // --- seasonalDedupeKey: stable per (event, tenancy, year), distinct otherwise -
 ok(

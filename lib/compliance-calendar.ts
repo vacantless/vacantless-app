@@ -35,6 +35,21 @@ export type ComplianceCalendarItem = {
   graceDays?: number;
 };
 
+// There are TWO tiers of calendar item, both scheduled by this same pure logic
+// and swept by the same cron, but routed differently:
+//   - COMPLIANCE_CALENDAR_ITEMS — SOFT tenant courtesy notes (audience tenant,
+//     sendMode approve_to_send). The cron DRAFTS one per active tenancy into the
+//     pending_tenant_messages approval queue; idempotency = that table's unique
+//     dedupe index (one draft per tenancy/event/season).
+//   - LANDLORD_CALENDAR_ITEMS — ANNUAL landlord-side reminders (audience
+//     operator, sendMode notify). The cron EMAILS the operator directly (like
+//     leasing.rent_increase), ONE per org per season — no tenant message. Because
+//     these are org-wide (no per-tenancy stamp) and draft no pending row, their
+//     at-most-once guard is the dedicated compliance_reminder_log table (0079),
+//     keyed (org, event, complianceReminderDedupeKey(season)).
+// Both tiers are OPT-IN per org (isDripEnqueueEnabled) so the whole calendar
+// ships dark until an operator turns an individual item on.
+
 // The v1 seasonal set — all SOFT, approve_to_send tenant courtesy notes. Spread
 // across the year so the calendar feels real: a fall cluster (filter / water-off
 // / alarm test as the heating season starts) + a spring item (water back on).
@@ -56,6 +71,23 @@ export const COMPLIANCE_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
   { eventKey: "leasing.seasonal_ac_startup", anchorMonth: 5, anchorDay: 15, leadDays: 14, graceDays: 7 },
   // After leaf-fall, before winter — clear eavestroughs + downspouts.
   { eventKey: "leasing.seasonal_eavestrough", anchorMonth: 11, anchorDay: 15, leadDays: 14, graceDays: 14 },
+] as const;
+
+// The LANDLORD-NOTIFY set — ANNUAL landlord-side compliance reminders that email
+// the operator directly (audience operator, sendMode notify), NOT the tenant.
+// One per org per season; the cron gates them with the compliance_reminder_log
+// (0079) idempotency table. These are the landlord's OWN recurring obligations,
+// so they fire independent of occupancy (a vacant unit still needs insurance and
+// a furnace service). Extend by adding a row here AND registering the matching
+// operator event in lib/notifications.ts — no cron/UI changes needed. Ontario-
+// appropriate anchors; generous lead windows so a fortnightly glance catches them.
+export const LANDLORD_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
+  // Start of the year — review property/landlord insurance coverage + renewal.
+  { eventKey: "leasing.landlord_insurance_review", anchorMonth: 1, anchorDay: 15, leadDays: 14, graceDays: 30 },
+  // Ahead of heating season — book a licensed heating-system service.
+  { eventKey: "leasing.landlord_furnace_service", anchorMonth: 9, anchorDay: 15, leadDays: 21, graceDays: 21 },
+  // Heating season begins (clocks change) — verify smoke + CO alarm compliance.
+  { eventKey: "leasing.landlord_fire_safety", anchorMonth: 10, anchorDay: 1, leadDays: 21, graceDays: 21 },
 ] as const;
 
 // --- Date helpers (UTC-anchored on YYYY-MM-DD strings; no TZ drift) -----------
@@ -98,19 +130,26 @@ export type DueComplianceItem = {
 };
 
 /**
- * Which seasonal items are inside their draft window on `today` (a local
- * YYYY-MM-DD). Pure. For each item we test the anchor in the previous, current,
- * and next calendar year so a window that straddles Jan 1 still resolves; since
- * every window is far shorter than a year, at most one year matches per item.
+ * Which calendar items are inside their window on `today` (a local YYYY-MM-DD).
+ * Pure. For each item we test the anchor in the previous, current, and next
+ * calendar year so a window that straddles Jan 1 still resolves; since every
+ * window is far shorter than a year, at most one year matches per item.
+ *
+ * `items` defaults to the SOFT tenant set (COMPLIANCE_CALENDAR_ITEMS) for
+ * backward compatibility; pass LANDLORD_CALENDAR_ITEMS to resolve the landlord-
+ * notify tier with the identical window math.
  *
  * Window is inclusive: [anchor - leadDays, anchor + graceDays].
  */
-export function dueComplianceItems(today: string): DueComplianceItem[] {
+export function dueComplianceItems(
+  today: string,
+  items: readonly ComplianceCalendarItem[] = COMPLIANCE_CALENDAR_ITEMS,
+): DueComplianceItem[] {
   const todayMs = parseYmdUTC(today);
   if (todayMs == null) return [];
   const todayYear = new Date(todayMs).getUTCFullYear();
   const out: DueComplianceItem[] = [];
-  for (const item of COMPLIANCE_CALENDAR_ITEMS) {
+  for (const item of items) {
     for (const year of [todayYear - 1, todayYear, todayYear + 1]) {
       const anchorMs = parseYmdUTC(anchorDateFor(item, year));
       if (anchorMs == null) continue;
@@ -137,4 +176,16 @@ export function seasonalDedupeKey(
   seasonYear: number,
 ): string {
   return `${eventKey}:${tenancyId}:${seasonYear}`;
+}
+
+/**
+ * The idempotency dedupe_key for a LANDLORD-NOTIFY reminder. Unlike the tenant
+ * drafts there is no tenancy in the key: the landlord items are ORG-WIDE (one
+ * email per org per season), so the compliance_reminder_log (0079) unique index
+ * (organization_id, event_key, dedupe_key) already carries the org + event — this
+ * only has to scope to the season. Stable per year so the 15-min cron sends at
+ * most once per season even though the window stays open for weeks.
+ */
+export function complianceReminderDedupeKey(seasonYear: number): string {
+  return `season:${seasonYear}`;
 }

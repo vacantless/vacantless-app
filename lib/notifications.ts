@@ -415,6 +415,64 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{tenant_first_name}},\n\nNow that most of the leaves have come down, it's a good time to clear the eavestroughs and downspouts at {{property_address}} so melting snow and ice can drain freely this winter. If clearing the eavestroughs is something we look after for your home, you don't need to do anything — we'll take care of it.\n\nThanks,\n{{org_name}}",
     active: true,
   },
+  // ---- Landlord-notify compliance reminders (S357 — the landlord tier) --------
+  // The third send-mode build-out: ANNUAL landlord-side compliance reminders that
+  // go to the OPERATOR (audience operator, sendMode notify — the registry default,
+  // same as leasing.rent_increase), NOT the tenant. The compliance-calendar cron
+  // (app/api/cron/compliance-calendar) fires each on a fixed-calendar trigger when
+  // its lead window opens (LANDLORD_CALENDAR_ITEMS in lib/compliance-calendar) and
+  // emails the operator ONCE per org per season — its at-most-once guard is the
+  // compliance_reminder_log table (0079), not a tenant draft.
+  //
+  // These are the LANDLORD'S OWN recurring obligations (insurance, heating-system
+  // service, smoke/CO alarm compliance), so they read as a to-do reminder TO the
+  // operator, with {{dashboard_url}} as the "work from your inbox" link. They are
+  // operational reminders, NOT legal LTB-served notices (N1..N14 stay separate,
+  // notify-the-landlord + official form, gated behind a legal pass — never auto-
+  // served, never invented copy). Like the seasonal tenant drip they are OPT-IN
+  // per org (the cron requires an explicit enabled override; isDripEnqueueEnabled),
+  // so each ships dark until the operator turns it on. No alert accent (planning
+  // reminders, not emergencies). Tokens: {{org_name}} {{season_year}}
+  // {{dashboard_url}} + the common {{property_address}} (renders generically here).
+  {
+    key: "leasing.landlord_insurance_review",
+    family: "leasing",
+    audience: "operator",
+    label: "Annual: review your property insurance",
+    description:
+      "Once a year, a reminder to review and renew your landlord/property insurance — confirm the policy is current, reflects the rental use, and that coverage and rebuild value are still adequate. Goes to your team, not the tenant. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
+    defaultSubject: "Annual reminder: review your property insurance ({{season_year}})",
+    defaultBody:
+      "It's a good time for your yearly insurance check.\n\nA quick annual review of your landlord/property insurance helps avoid surprises at claim time:\n\n- Confirm the policy is active and renews on schedule.\n- Make sure it reflects that the property is a rental (a homeowner policy often won't cover a tenanted unit).\n- Check the rebuild/replacement value and liability limits are still adequate.\n- Consider requiring tenants to carry their own contents + liability insurance.\n\nReview your units and records in your dashboard: {{dashboard_url}}",
+    active: true,
+  },
+  {
+    key: "leasing.landlord_furnace_service",
+    family: "leasing",
+    audience: "operator",
+    label: "Annual: book the heating-system service",
+    description:
+      "Ahead of the heating season, a reminder to schedule a licensed technician to service the furnace/heating systems across your units — a safety and efficiency check that many insurers also expect. Goes to your team, not the tenant. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
+    defaultSubject: "Time to book the annual heating-system service ({{season_year}})",
+    defaultBody:
+      "Heating season is approaching — a good time to book your annual furnace/heating service.\n\nA yearly inspection by a licensed technician keeps the systems running safely and efficiently, helps catch a failing heat exchanger (a carbon-monoxide risk) before the cold sets in, and is often a condition of your insurance.\n\n- Schedule service for the heating systems across your units.\n- Keep the service record on file.\n- Replace or arrange replacement of furnace filters where you're responsible.\n\nOpen your units in the dashboard: {{dashboard_url}}",
+    active: true,
+  },
+  {
+    key: "leasing.landlord_fire_safety",
+    family: "leasing",
+    audience: "operator",
+    label: "Annual: smoke & CO alarm compliance",
+    description:
+      "A yearly reminder of your legal duty as the landlord to provide and maintain working smoke and carbon-monoxide alarms, and to keep a record. Goes to your team, not the tenant — it pairs with the optional tenant 'test your alarms' courtesy note. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
+    defaultSubject: "Annual smoke & CO alarm compliance check ({{season_year}})",
+    defaultBody:
+      "A yearly reminder about your alarm obligations as the landlord.\n\nUnder Ontario's Fire Code (O. Reg. 213/07), the landlord is responsible for installing and maintaining working smoke alarms and, where there is a fuel-burning appliance or an attached garage, carbon-monoxide alarms — and for keeping a maintenance record.\n\n- Verify a working smoke alarm on every storey and outside sleeping areas of each unit.\n- Verify CO alarms where required.\n- Test, replace dead batteries, and replace any alarm past its expiry.\n- Log the date you checked each unit.\n\nYou can also send tenants the optional 'test your smoke & CO alarms' courtesy note from your dashboard: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
