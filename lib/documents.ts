@@ -299,3 +299,62 @@ export function executedLeaseVaultEntries(
 export function documentSharePath(token: string): string {
   return `/d/${encodeURIComponent(token)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Slice 4b (Option C) — a stored, shareable PDF of an executed in-app lease.
+//
+// The operator Prints the executed lease (the on-demand render route) to PDF and
+// files it here; the filing writes a `documents` row with source='in_app_executed'
+// + lease_document_id pointing at the lease (the pre-provisioned 0076 columns).
+// That row then participates in the vault exactly like an uploaded file — signed
+// download URLs, the tokenized /d/[token] share-out, soft-delete + retention —
+// EXCEPT it is folded into its lease's "Signed in app" entry rather than shown as
+// a separate uploaded file, so each executed lease appears exactly once.
+//
+// `partitionVaultDocuments` is the pure split: given the tenancy's vault docs and
+// the set of its executed-lease ids, it returns the uploaded docs (everything the
+// "Uploaded files" list shows) and the newest stored PDF per lease (folded into
+// the "Signed in app" entries). A source='in_app_executed' row whose lease is NOT
+// in the set (e.g. lease_document_id was SET NULL when the lease row was removed,
+// or the lease is no longer executed) falls back into the uploaded list so it can
+// never silently disappear from the UI.
+// ---------------------------------------------------------------------------
+
+/** True for a vault row that is a stored PDF of an in-app executed lease. */
+export function isExecutedLeasePdf(source: unknown): boolean {
+  return source === "in_app_executed";
+}
+
+/** Minimal vault-row shape the partition consumes; the caller's richer row type
+ * flows through unchanged via the generic. */
+export type VaultDocRowLike = {
+  id: string;
+  source?: string | null;
+  lease_document_id?: string | null;
+};
+
+/**
+ * Split a tenancy's vault documents (assumed newest-first) into the uploaded list
+ * and a per-lease map of the stored executed-lease PDF. Only a source=
+ * 'in_app_executed' row whose lease_document_id is in `executedLeaseIds` is
+ * folded out of the uploaded list; the FIRST such row per lease wins (newest,
+ * given newest-first input). Pure — no IO; unit-tested.
+ */
+export function partitionVaultDocuments<T extends VaultDocRowLike>(
+  docs: T[],
+  executedLeaseIds: Iterable<string>,
+): { uploaded: T[]; executedPdfByLeaseId: Map<string, T> } {
+  const leaseSet = new Set(executedLeaseIds);
+  const executedPdfByLeaseId = new Map<string, T>();
+  const uploaded: T[] = [];
+  for (const d of docs) {
+    const lid = d.lease_document_id ?? null;
+    if (isExecutedLeasePdf(d.source) && lid && leaseSet.has(lid)) {
+      if (executedPdfByLeaseId.has(lid)) continue; // keep newest; drop extra
+      executedPdfByLeaseId.set(lid, d);
+    } else {
+      uploaded.push(d);
+    }
+  }
+  return { uploaded, executedPdfByLeaseId };
+}

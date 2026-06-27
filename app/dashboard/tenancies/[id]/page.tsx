@@ -95,9 +95,14 @@ import {
   TenancyDocumentsSection,
   type DocumentView,
   type DocumentTenantOption,
+  type InAppLeaseView,
 } from "./documents-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
-import { shareLinkStatus, executedLeaseVaultEntries } from "@/lib/documents";
+import {
+  shareLinkStatus,
+  executedLeaseVaultEntries,
+  partitionVaultDocuments,
+} from "@/lib/documents";
 import { personDisplayName } from "@/lib/persons";
 
 export const dynamic = "force-dynamic";
@@ -516,11 +521,11 @@ export default async function TenancyDetailPage({
   // (the operator's RLS client; the 0076 SELECT policy authorizes it).
   const { data: docRows } = await supabase
     .from("documents")
-    .select("id, title, doc_type, size_bytes, storage_path, created_at, person_id")
+    .select("id, title, doc_type, size_bytes, storage_path, created_at, person_id, source, lease_document_id")
     .eq("tenancy_id", t.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
-  const docList = (docRows ?? []) as {
+  const allDocList = (docRows ?? []) as {
     id: string;
     title: string;
     doc_type: string;
@@ -528,7 +533,19 @@ export default async function TenancyDetailPage({
     storage_path: string;
     created_at: string;
     person_id: string | null;
+    source: string | null;
+    lease_document_id: string | null;
   }[];
+  // Slice 4b (Option C): a stored PDF of an in-app executed lease folds into that
+  // lease's "Signed in app" entry instead of the uploaded-files list, so each
+  // executed lease shows exactly once. Everything else stays in `docList` (the
+  // uploaded list). An orphaned in_app_executed row (lease no longer executed /
+  // lease_document_id SET NULL) falls back into the uploaded list.
+  const executedLeaseIds = inAppLeaseEntries.map((e) => e.id);
+  const { uploaded: docList, executedPdfByLeaseId } = partitionVaultDocuments(
+    allDocList,
+    executedLeaseIds,
+  );
   // Resolve a friendly display name for each document's filed-about person
   // (Slice 3 person filing). RLS scopes the persons read to this org.
   const docPersonIds = Array.from(
@@ -549,10 +566,12 @@ export default async function TenancyDetailPage({
       personNameById.set(p.id, personDisplayName(p));
     }
   }
+  // Share links + signed URLs cover ALL live docs (uploaded + the stored
+  // executed-lease PDFs) so a folded PDF is downloadable + shareable too.
   const { data: shareRows } = await supabase
     .from("document_share_links")
     .select("id, document_id, token, expires_at, revoked_at")
-    .in("document_id", docList.length > 0 ? docList.map((d) => d.id) : ["00000000-0000-0000-0000-000000000000"])
+    .in("document_id", allDocList.length > 0 ? allDocList.map((d) => d.id) : ["00000000-0000-0000-0000-000000000000"])
     .order("created_at", { ascending: false });
   const nowForShares = new Date();
   const sharesByDoc = new Map<
@@ -577,7 +596,7 @@ export default async function TenancyDetailPage({
   }
   const docSigned = await createDocumentDownloadUrls(
     supabase,
-    docList.map((d) => d.storage_path),
+    allDocList.map((d) => d.storage_path),
   );
   const docUrlByPath = new Map<string, string | null>();
   if (docSigned.ok) {
@@ -593,6 +612,25 @@ export default async function TenancyDetailPage({
     signedUrl: docUrlByPath.get(d.storage_path) ?? null,
     shareLinks: sharesByDoc.get(d.id) ?? [],
   }));
+
+  // Slice 4b (Option C): enrich each executed-lease vault entry with its stored
+  // PDF (if the operator has filed one), so the "Signed in app" entry offers
+  // Download + Share on the PDF — or a "File signed PDF" action when absent.
+  const inAppLeases: InAppLeaseView[] = inAppLeaseEntries.map((e) => {
+    const pdf = executedPdfByLeaseId.get(e.id);
+    return {
+      ...e,
+      storedPdf: pdf
+        ? {
+            id: pdf.id,
+            size_bytes: pdf.size_bytes,
+            created_at: pdf.created_at,
+            signedUrl: docUrlByPath.get(pdf.storage_path) ?? null,
+            shareLinks: sharesByDoc.get(pdf.id) ?? [],
+          }
+        : null,
+    };
+  });
 
   // The org clause library powers the clause-selection wizard (#11 slice 7).
   // RLS scopes both reads to this org. We resolve each clause to its current
@@ -736,7 +774,9 @@ export default async function TenancyDetailPage({
         ? "Read-only share link created. Copy it from the document below."
         : docsParam === "revoked"
           ? "Share link revoked."
-          : null;
+          : docsParam === "filed"
+            ? "Signed lease PDF filed. It's stored under the lease below and ready to download or share."
+            : null;
   const DOCS_ERROR: Record<string, string> = {
     none: "Choose at least one file to upload.",
     toomany: "Too many files at once. Upload up to 10 at a time.",
@@ -745,6 +785,7 @@ export default async function TenancyDetailPage({
     size: "That file is too large. Documents must be under 25 MB.",
     empty: "That file appears to be empty.",
     shareerr: "We couldn't create the share link. Please try again.",
+    notexecuted: "Only an executed (fully signed) lease can be filed as a PDF.",
     forbidden: "You don't have permission to manage documents.",
     error: "Something went wrong. Please try again.",
   };
@@ -1049,7 +1090,7 @@ export default async function TenancyDetailPage({
         <TenancyDocumentsSection
           tenancyId={t.id}
           documents={documents}
-          inAppLeases={inAppLeaseEntries}
+          inAppLeases={inAppLeases}
           tenants={tenants
             .filter((tn) => (tn.name ?? "").trim().length > 0)
             .map((tn): DocumentTenantOption => ({ id: tn.id, name: tn.name as string }))}

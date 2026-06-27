@@ -179,6 +179,121 @@ export async function uploadTenancyDocuments(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------------
+// File a printed PDF of an in-app EXECUTED lease into the vault (Option C /
+// Slice 4b). The operator opens the executed lease's render route, Prints →
+// Save as PDF (byte-identical to what they reviewed + signed), and files that
+// PDF here. We store it as a documents row with source='in_app_executed' +
+// lease_document_id, so it surfaces folded into the lease's "Signed in app"
+// vault entry and becomes downloadable + shareable via /d/[token] like any
+// uploaded file. PDF only (this is an executed artifact, not a scan). Mirrors
+// uploadTenancyDocuments' storage + rollback handling.
+// ---------------------------------------------------------------------------
+export async function fileExecutedLeasePdf(formData: FormData) {
+  const tenancyId = s(formData, "tenancy_id");
+  if (!tenancyId) redirect("/dashboard/tenancies");
+  await requireCapability("manage_tenancies", docsAnchor(tenancyId, "forbidden"));
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const leaseId = s(formData, "lease_id");
+  const fail = (reason: string) => redirect(docsAnchor(tenancyId, reason));
+  if (!leaseId) fail("error");
+
+  // Exactly one PDF (the executed-lease print). Reject images here — unlike the
+  // general uploader, this slot is the executed lease artifact.
+  const file = formData
+    .getAll("document")
+    .find(
+      (f): f is File =>
+        typeof f === "object" &&
+        f !== null &&
+        "size" in f &&
+        "type" in f &&
+        (f as File).size > 0,
+    );
+  if (!file) fail("none");
+  const theFile = file as File;
+  if (theFile.type !== "application/pdf") fail("type");
+  const v = validateDocumentUpload({ type: theFile.type, size: theFile.size });
+  if (!v.ok) fail(v.reason);
+
+  const supabase = createClient();
+
+  // The lease must exist, belong to this tenancy (and this org via RLS), and be
+  // EXECUTED — we only store the final signed artifact, never a draft/sent one.
+  const { data: leaseRow } = await supabase
+    .from("lease_documents")
+    .select("id, tenancy_id, title, status")
+    .eq("id", leaseId)
+    .eq("tenancy_id", tenancyId)
+    .maybeSingle();
+  if (!leaseRow) fail("error");
+  const lease = leaseRow as { id: string; title: string; status: string };
+  if (lease.status !== "executed") fail("notexecuted");
+
+  // Best-effort: file the PDF about the primary tenant too, so it also surfaces
+  // on that person's vault page (Slice 3b). A tenant already carries a person_id
+  // (0042); if not, leave null rather than minting one here.
+  let personId: string | null = null;
+  const { data: primary } = await supabase
+    .from("tenants")
+    .select("person_id")
+    .eq("tenancy_id", tenancyId)
+    .eq("is_primary", true)
+    .maybeSingle();
+  if (primary) personId = (primary as { person_id: string | null }).person_id ?? null;
+
+  const docId = crypto.randomUUID();
+  const path = documentStoragePath(org.id, docId, "pdf");
+
+  const { error: upErr } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(path, theFile, { contentType: "application/pdf", upsert: false });
+  if (upErr) fail("failed");
+
+  let sha256: string | null = null;
+  try {
+    sha256 = createHash("sha256")
+      .update(Buffer.from(await theFile.arrayBuffer()))
+      .digest("hex");
+  } catch {
+    sha256 = null;
+  }
+
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    organization_id: org.id,
+    tenancy_id: tenancyId,
+    person_id: personId,
+    lease_document_id: lease.id,
+    title: lease.title || "Executed lease",
+    doc_type: "lease",
+    storage_path: path,
+    mime_type: "application/pdf",
+    size_bytes: theFile.size,
+    sha256,
+    source: "in_app_executed",
+  });
+  if (insErr) {
+    // Roll back the orphaned object so Storage and the table stay in sync.
+    const { error: rbErr } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .remove([path]);
+    if (rbErr) {
+      console.error("fileExecutedLeasePdf: rollback remove failed", {
+        path,
+        error: rbErr.message,
+      });
+    }
+    fail("failed");
+  }
+
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(docsAnchor(tenancyId, "filed"));
+}
+
+// ---------------------------------------------------------------------------
 // Soft-delete a document (keeps the row + audit trail; a later retention cron
 // hard-deletes the bytes). We ALSO remove the stored object now so the bytes
 // don't linger — soft-delete preserves the metadata record, not the file.

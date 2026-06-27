@@ -24,6 +24,8 @@ import {
   shareLinkStatus,
   documentSharePath,
   executedLeaseVaultEntries,
+  isExecutedLeasePdf,
+  partitionVaultDocuments,
 } from "../lib/documents";
 
 let passed = 0;
@@ -204,6 +206,50 @@ ok("share path encodes", documentSharePath("a/b").includes("%2F"));
   ok("no executed -> empty", executedLeaseVaultEntries([
     { id: "z", title: "Z", status: "draft", created_at: "2026-01-01T00:00:00Z" },
   ]).length === 0);
+}
+
+// --- Slice 4b (Option C): stored executed-lease PDF partition ---------------
+{
+  ok("isExecutedLeasePdf true for in_app_executed", isExecutedLeasePdf("in_app_executed"));
+  ok("isExecutedLeasePdf false for uploaded", !isExecutedLeasePdf("uploaded"));
+  ok("isExecutedLeasePdf false for null", !isExecutedLeasePdf(null));
+
+  // newest-first input; two uploaded files + one stored PDF for executed lease "c".
+  const docs = [
+    { id: "u1", source: "uploaded", lease_document_id: null },
+    { id: "p_c", source: "in_app_executed", lease_document_id: "c" },
+    { id: "u2", source: "uploaded", lease_document_id: null },
+  ];
+  const { uploaded, executedPdfByLeaseId } = partitionVaultDocuments(docs, ["c", "d"]);
+  ok("uploaded excludes the folded PDF", uploaded.length === 2 && uploaded.every((d) => d.id !== "p_c"));
+  ok("PDF folded under its lease id", executedPdfByLeaseId.get("c")?.id === "p_c");
+  ok("no PDF for a lease without one", !executedPdfByLeaseId.has("d"));
+
+  // newest wins when a lease has more than one stored PDF (first seen = newest).
+  const dup = partitionVaultDocuments(
+    [
+      { id: "new", source: "in_app_executed", lease_document_id: "c" },
+      { id: "old", source: "in_app_executed", lease_document_id: "c" },
+    ],
+    ["c"],
+  );
+  ok("newest stored PDF wins per lease", dup.executedPdfByLeaseId.get("c")?.id === "new");
+  ok("older duplicate is dropped, not uploaded", dup.uploaded.length === 0);
+
+  // an in_app_executed row whose lease is NOT executed/known falls back to uploaded
+  // (lease_document_id SET NULL after lease removal, or lease no longer executed).
+  const orphan = partitionVaultDocuments(
+    [
+      { id: "orphan_null", source: "in_app_executed", lease_document_id: null },
+      { id: "orphan_unknown", source: "in_app_executed", lease_document_id: "gone" },
+    ],
+    ["c"],
+  );
+  ok("orphan PDF (null lease) stays visible in uploaded", orphan.uploaded.some((d) => d.id === "orphan_null"));
+  ok("orphan PDF (unknown lease) stays visible in uploaded", orphan.uploaded.some((d) => d.id === "orphan_unknown"));
+  ok("orphan PDFs not folded", orphan.executedPdfByLeaseId.size === 0);
+
+  ok("empty docs -> empty split", partitionVaultDocuments([], ["c"]).uploaded.length === 0);
 }
 
 // ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import {
   deleteTenancyDocument,
   createDocumentShareLink,
   revokeDocumentShareLink,
+  fileExecutedLeasePdf,
 } from "./documents-actions";
 
 // The per-tenancy document vault section (Slices 1+2). Server component: it
@@ -43,6 +44,22 @@ export type DocumentView = {
 /** A tenant the operator can attribute an upload to (Slice 3 person filing). */
 export type DocumentTenantOption = { id: string; name: string };
 
+/** The stored PDF of an executed in-app lease (Slice 4b / Option C), folded into
+ * its "Signed in app" entry. Null on a lease that has no filed PDF yet. */
+export type StoredLeasePdfView = {
+  /** the documents row id (used by the share + delete actions). */
+  id: string;
+  size_bytes: number;
+  created_at: string;
+  signedUrl: string | null;
+  shareLinks: ShareLinkView[];
+};
+
+/** An executed in-app lease vault entry, enriched with its stored PDF if filed. */
+export type InAppLeaseView = InAppLeaseEntry & {
+  storedPdf: StoredLeasePdfView | null;
+};
+
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 
@@ -59,8 +76,9 @@ export function TenancyDocumentsSection({
 }: {
   tenancyId: string;
   documents: DocumentView[];
-  /** Executed in-app leases surfaced as read-only vault entries (Slice 4). */
-  inAppLeases?: InAppLeaseEntry[];
+  /** Executed in-app leases surfaced as vault entries (Slice 4), each enriched
+   * with its stored PDF if the operator has filed one (Slice 4b / Option C). */
+  inAppLeases?: InAppLeaseView[];
   tenants?: DocumentTenantOption[];
 }) {
   return (
@@ -79,39 +97,158 @@ export function TenancyDocumentsSection({
             Signed in app
           </p>
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
-            {inAppLeases.map((l) => (
-              <li key={l.id} className="px-4 py-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="font-medium text-gray-900">{l.title}</span>
-                    <span className="ml-2">
-                      <StatusChip tone="success">Executed</StatusChip>
+            {inAppLeases.map((l) => {
+              const pdf = l.storedPdf;
+              const pdfActiveLinks =
+                pdf?.shareLinks.filter((s) => s.status === "active") ?? [];
+              return (
+                <li key={l.id} className="px-4 py-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="font-medium text-gray-900">{l.title}</span>
+                      <span className="ml-2">
+                        <StatusChip tone="success">Executed</StatusChip>
+                      </span>
+                      <span className="ml-2 block text-xs text-gray-400">
+                        In-app lease · executed {fmtDay(l.executed_at ?? l.created_at)}
+                        {pdf
+                          ? ` · signed PDF stored (${formatBytes(pdf.size_bytes)})${
+                              pdfActiveLinks.length > 0
+                                ? ` · ${pdfActiveLinks.length} active share link${
+                                    pdfActiveLinks.length === 1 ? "" : "s"
+                                  }`
+                                : ""
+                            }`
+                          : ""}
+                      </span>
                     </span>
-                    <span className="ml-2 block text-xs text-gray-400">
-                      In-app lease · executed {fmtDay(l.executed_at ?? l.created_at)}
+                    <span className="flex shrink-0 items-center gap-2">
+                      <a
+                        href={`/dashboard/tenancies/${tenancyId}/lease/${l.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        View / print
+                      </a>
+                      <a
+                        href={`/dashboard/tenancies/${tenancyId}/lease/${l.id}/certificate`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Certificate
+                      </a>
+                      {pdf?.signedUrl && (
+                        <a
+                          href={pdf.signedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          Download PDF
+                        </a>
+                      )}
                     </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <a
-                      href={`/dashboard/tenancies/${tenancyId}/lease/${l.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  </div>
+
+                  {pdf ? (
+                    <>
+                      {/* Share controls for the stored signed PDF */}
+                      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-2">
+                        <form action={createDocumentShareLink} className="flex items-center gap-2">
+                          <input type="hidden" name="tenancy_id" value={tenancyId} />
+                          <input type="hidden" name="document_id" value={pdf.id} />
+                          <label className="text-xs text-gray-500">Share for</label>
+                          <select
+                            name="days"
+                            defaultValue={String(SHARE_LINK_DEFAULT_DAYS)}
+                            className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                          >
+                            <option value="1">1 day</option>
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30">30 days</option>
+                          </select>
+                          <button className="rounded-lg bg-brand px-3 py-1 text-xs font-semibold text-white hover:opacity-90">
+                            Create share link
+                          </button>
+                        </form>
+                        <form action={deleteTenancyDocument}>
+                          <input type="hidden" name="tenancy_id" value={tenancyId} />
+                          <input type="hidden" name="document_id" value={pdf.id} />
+                          <button className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
+                            Remove PDF
+                          </button>
+                        </form>
+                      </div>
+
+                      {pdfActiveLinks.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {pdfActiveLinks.map((s) => (
+                            <li
+                              key={s.id}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-1.5"
+                            >
+                              <span className="text-xs text-gray-500">
+                                Read-only link · expires{" "}
+                                {s.expires_at
+                                  ? new Date(s.expires_at).toLocaleDateString()
+                                  : "—"}
+                              </span>
+                              <span className="flex items-center gap-2">
+                                <CopyLinkButton
+                                  path={documentSharePath(s.token)}
+                                  label="Copy link"
+                                />
+                                <a
+                                  href={documentSharePath(s.token)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                                >
+                                  Preview →
+                                </a>
+                                <form action={revokeDocumentShareLink}>
+                                  <input type="hidden" name="tenancy_id" value={tenancyId} />
+                                  <input type="hidden" name="link_id" value={s.id} />
+                                  <button className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
+                                    Revoke
+                                  </button>
+                                </form>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  ) : (
+                    /* No stored PDF yet — file one so the executed lease can be
+                       downloaded + shared as a real file. */
+                    <form
+                      action={fileExecutedLeasePdf}
+                      className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-2"
                     >
-                      View / print
-                    </a>
-                    <a
-                      href={`/dashboard/tenancies/${tenancyId}/lease/${l.id}/certificate`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      Certificate
-                    </a>
-                  </span>
-                </div>
-              </li>
-            ))}
+                      <input type="hidden" name="tenancy_id" value={tenancyId} />
+                      <input type="hidden" name="lease_id" value={l.id} />
+                      <span className="text-xs text-gray-500">
+                        Use “View / print” → Save as PDF, then file it here to store + share:
+                      </span>
+                      <input
+                        type="file"
+                        name="document"
+                        accept="application/pdf"
+                        required
+                        className="text-xs"
+                      />
+                      <button className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        File signed PDF
+                      </button>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
