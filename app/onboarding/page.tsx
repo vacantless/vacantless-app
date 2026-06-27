@@ -7,7 +7,7 @@ import { AuthShell } from "@/components/auth-shell";
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; ref?: string };
 }) {
   const supabase = createClient();
   const {
@@ -35,7 +35,11 @@ export default async function OnboardingPage({
         <span className="h-1.5 flex-1 rounded-full bg-gray-200" />
       </div>
 
-      <OnboardingForm action={createOrganization} error={searchParams.error} />
+      <OnboardingForm
+        action={createOrganization}
+        error={searchParams.error}
+        referralToken={searchParams.ref}
+      />
     </AuthShell>
   );
 }

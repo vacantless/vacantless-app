@@ -23,9 +23,11 @@ import { AUTH_BUTTON_CLASS, AUTH_INPUT_CLASS } from "@/components/auth-shell";
 export function OnboardingForm({
   action,
   error,
+  referralToken,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   error?: string;
+  referralToken?: string;
 }) {
   const [name, setName] = useState("");
   // A brand-new org starts on the homepage ombre (indigo -> teal); the picker
@@ -38,6 +40,9 @@ export function OnboardingForm({
 
   return (
     <form action={action} className="mt-6 space-y-5">
+      {/* Referral attribution: carries the ?ref token into createOrganization,
+          which flips the referrer's pending invite to accepted (best-effort). */}
+      {referralToken && <input type="hidden" name="ref" value={referralToken} />}
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
           Business name

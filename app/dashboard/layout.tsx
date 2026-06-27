@@ -85,7 +85,10 @@ export default async function DashboardLayout({
               <h1 className="text-lg font-bold">{org.name}</h1>
             </div>
           </div>
-          <DashboardNav rentActive={rentActive} />
+          <DashboardNav
+            rentActive={rentActive}
+            referralsEnabled={process.env.REFERRALS_ENABLED === "1"}
+          />
         </div>
       </header>
       <main className="relative z-10 mx-auto max-w-5xl px-6 py-8">{children}</main>

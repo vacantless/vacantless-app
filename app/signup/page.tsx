@@ -35,7 +35,14 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
-    router.push("/onboarding");
+    // Carry any referral token (/signup?ref=...) through to onboarding, where
+    // the new org gets attributed to the referrer once it's created. Read it
+    // from the URL at submit time (no useSearchParams -> no Suspense boundary).
+    const ref =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("ref")
+        : null;
+    router.push(ref ? `/onboarding?ref=${encodeURIComponent(ref)}` : "/onboarding");
     router.refresh();
   }
 

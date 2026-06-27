@@ -11,6 +11,7 @@ import {
   seedClauseLibrary,
   seedTenantMessageTemplates,
 } from "@/lib/org-seeds-server";
+import { acceptReferral } from "@/lib/referrals-server";
 
 // Org-seeding helpers (clause library + tenant-message templates) now live in
 // lib/org-seeds-server.ts so the provisioning primitive can reuse them with the
@@ -80,6 +81,21 @@ export async function createOrganization(formData: FormData) {
 
   // Seed the starter tenant-message templates (best-effort; never blocks).
   await seedTenantMessageTemplates(supabase, orgId);
+
+  // Referral attribution (best-effort; never blocks onboarding). If this signup
+  // arrived via a referral link (/signup?ref=... -> hidden field), flip the
+  // referrer's pending invite to accepted with this new org. The flip needs the
+  // service-role client (the friend can't update the referrer's row under RLS),
+  // which acceptReferral handles; a missing/invalid/used token is a silent skip.
+  const ref = String(formData.get("ref") ?? "").trim();
+  if (ref) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await acceptReferral(ref, orgId, user.id).catch(() => {});
+    }
+  }
 
   redirect("/dashboard");
 }

@@ -58,6 +58,11 @@ const UTILITY: NavItem[] = [
   { href: "/dashboard/billing", label: "Your plan" },
 ];
 
+// Referral surface (Slice 2). Ships dark: the /dashboard/referrals page is
+// always reachable by URL, but this link only appears when REFERRALS_ENABLED is
+// set (read in the layout, passed as the referralsEnabled prop).
+const REFERRALS: NavItem = { href: "/dashboard/referrals", label: "Refer a landlord" };
+
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/dashboard") return pathname === "/dashboard";
   if (pathname.startsWith(item.href)) return true;
@@ -69,14 +74,21 @@ function isActive(pathname: string, item: NavItem) {
  * dropdown for utility items; on small screens everything collapses behind a
  * Menu toggle. The mobile menu lists primary + utility together.
  */
-export function DashboardNav({ rentActive = false }: { rentActive?: boolean }) {
+export function DashboardNav({
+  rentActive = false,
+  referralsEnabled = false,
+}: {
+  rentActive?: boolean;
+  referralsEnabled?: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false); // mobile menu
   const [moreOpen, setMoreOpen] = useState(false); // desktop "More ▾"
   const moreRef = useRef<HTMLDivElement>(null);
 
   const primary = rentActive ? [...PRIMARY, MONEY] : PRIMARY;
-  const utilityActive = UTILITY.some((u) => isActive(pathname, u));
+  const utility = referralsEnabled ? [...UTILITY, REFERRALS] : UTILITY;
+  const utilityActive = utility.some((u) => isActive(pathname, u));
 
   // Close menus whenever the route changes.
   useEffect(() => {
@@ -144,7 +156,7 @@ export function DashboardNav({ rentActive = false }: { rentActive?: boolean }) {
               role="menu"
               className="absolute right-0 top-full z-30 mt-1 min-w-44 overflow-hidden rounded-lg border border-black/5 bg-white py-1 text-gray-700 shadow-lg"
             >
-              {UTILITY.map((item) => (
+              {utility.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -194,7 +206,7 @@ export function DashboardNav({ rentActive = false }: { rentActive?: boolean }) {
               </Link>
             ))}
             <div className="my-1 border-t border-white/15" />
-            {UTILITY.map((item) => (
+            {utility.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
