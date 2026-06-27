@@ -4,10 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import {
   personDisplayName,
   mergePersonDocuments,
+  mergePersonVaultFiles,
   sortVaultTenancies,
   type VaultDocument,
+  type VaultFile,
   type VaultTenancy,
 } from "@/lib/persons";
+import { documentTypeLabel, formatBytes } from "@/lib/documents";
+import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import { tenancyStatusLabel } from "@/lib/tenancy";
 import { StatusChip, tenancyStatusTone, SectionHeading, type ChipTone } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -132,6 +136,54 @@ export default async function PersonVaultPage({ params }: { params: { id: string
 
   const documents = mergePersonDocuments(viaTenancy, viaSigner, signedDocIds);
 
+  // Uploaded vault files (0076 `documents`) that follow this person: files
+  // stored on any of their tenancies UNION files filed directly about them
+  // (`person_id`). RLS scopes both reads to this org; soft-deleted excluded.
+  type FileRow = {
+    id: string;
+    tenancy_id: string | null;
+    person_id: string | null;
+    title: string;
+    doc_type: string;
+    size_bytes: number;
+    storage_path: string;
+    created_at: string;
+  };
+  let filesViaTenancy: FileRow[] = [];
+  if (tenancyIds.length > 0) {
+    const { data } = await supabase
+      .from("documents")
+      .select("id, tenancy_id, person_id, title, doc_type, size_bytes, storage_path, created_at")
+      .in("tenancy_id", tenancyIds)
+      .is("deleted_at", null);
+    filesViaTenancy = (data ?? []) as FileRow[];
+  }
+  const { data: filesViaPersonData } = await supabase
+    .from("documents")
+    .select("id, tenancy_id, person_id, title, doc_type, size_bytes, storage_path, created_at")
+    .eq("person_id", person.id)
+    .is("deleted_at", null);
+  const filesViaPerson = (filesViaPersonData ?? []) as FileRow[];
+  const vaultFiles: VaultFile[] = mergePersonVaultFiles(filesViaTenancy, filesViaPerson);
+
+  // Mint short-lived signed download URLs for the private bucket (the operator's
+  // RLS client; the 0076 SELECT policy authorizes it).
+  const fileUrlByPath = new Map<string, string | null>();
+  if (vaultFiles.length > 0) {
+    const signed = await createDocumentDownloadUrls(
+      supabase,
+      vaultFiles.map((f) => f.storage_path),
+    );
+    if (signed.ok) {
+      for (const u of signed.urls) fileUrlByPath.set(u.path, u.signedUrl);
+    }
+  }
+  // Friendly "on <unit>" label per file (its tenancy's address, if on file).
+  const addressByTenancy = new Map<string, string | null>();
+  for (const t of tenancies) addressByTenancy.set(t.id, t.property_address);
+
+  const totalDocCount = documents.length + vaultFiles.length;
+
   return (
     <div>
       <div className="mb-4">
@@ -154,7 +206,7 @@ export default async function PersonVaultPage({ params }: { params: { id: string
             </p>
             <p className="mt-1 text-xs text-gray-400">
               {tenancies.length} {tenancies.length === 1 ? "tenancy" : "tenancies"} ·{" "}
-              {documents.length} {documents.length === 1 ? "document" : "documents"} · in your
+              {totalDocCount} {totalDocCount === 1 ? "document" : "documents"} · in your
               records since {fmtDate(person.created_at)}
             </p>
           </div>
@@ -195,8 +247,8 @@ export default async function PersonVaultPage({ params }: { params: { id: string
         </p>
       )}
 
-      {/* Documents that follow the person ----------------------------------- */}
-      <SectionHeading>Documents</SectionHeading>
+      {/* In-app leases that follow the person ------------------------------- */}
+      <SectionHeading>Leases</SectionHeading>
       {documents.length > 0 ? (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {documents.map((d) => {
@@ -245,7 +297,54 @@ export default async function PersonVaultPage({ params }: { params: { id: string
         </ul>
       ) : (
         <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
-          No documents on file for this person yet.
+          No in-app leases for this person yet.
+        </p>
+      )}
+
+      {/* Uploaded vault files that follow the person ------------------------ */}
+      <div className="mt-8">
+        <SectionHeading>Uploaded files</SectionHeading>
+      </div>
+      {vaultFiles.length > 0 ? (
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          {vaultFiles.map((f) => {
+            const signedUrl = fileUrlByPath.get(f.storage_path) ?? null;
+            const address = f.tenancy_id ? addressByTenancy.get(f.tenancy_id) ?? null : null;
+            return (
+              <li key={f.id} className="px-4 py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-gray-900">{f.title}</span>
+                      <StatusChip tone="neutral">{documentTypeLabel(f.doc_type)}</StatusChip>
+                    </span>
+                    <span className="block truncate text-xs text-gray-500">
+                      {formatBytes(f.size_bytes)} · added {fmtDate(f.created_at)}
+                      {address ? ` · on ${address}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    {signedUrl ? (
+                      <a
+                        href={signedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Download
+                      </a>
+                    ) : (
+                      <span className="text-xs text-gray-400">Unavailable</span>
+                    )}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="rounded-2xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
+          No uploaded files for this person yet.
         </p>
       )}
     </div>

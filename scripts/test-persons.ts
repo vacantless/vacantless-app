@@ -8,10 +8,12 @@ import {
   personDisplayName,
   dedupeById,
   mergePersonDocuments,
+  mergePersonVaultFiles,
   sortVaultTenancies,
   sortPeople,
   type PersonMatchRow,
   type VaultDocument,
+  type VaultFile,
 } from "../lib/persons";
 
 let passed = 0;
@@ -132,6 +134,23 @@ const ppl = [
 const sortedP = sortPeople(ppl);
 ok("sortPeople case-insensitive A before z", sortedP[0].display_name === "Abe");
 ok("sortPeople is pure (no mutation)", ppl[0].display_name === "zoe");
+
+// --- mergePersonVaultFiles --------------------------------------------------
+const filesViaTenancy: VaultFile[] = [
+  { id: "f1", tenancy_id: "t1", person_id: null, title: "Signed lease.pdf", doc_type: "lease", size_bytes: 1000, storage_path: "org/f1.pdf", created_at: "2026-01-01T00:00:00Z" },
+  { id: "f2", tenancy_id: "t1", person_id: "p1", title: "ID package.pdf", doc_type: "id_package", size_bytes: 2000, storage_path: "org/f2.pdf", created_at: "2026-03-01T00:00:00Z" },
+];
+const filesViaPerson: VaultFile[] = [
+  // f2 also reached via person filing (dup) + f3 only via person (no tenancy)
+  { id: "f2", tenancy_id: "t1", person_id: "p1", title: "ID package.pdf", doc_type: "id_package", size_bytes: 2000, storage_path: "org/f2.pdf", created_at: "2026-03-01T00:00:00Z" },
+  { id: "f3", tenancy_id: null, person_id: "p1", title: "Insurance.pdf", doc_type: "insurance", size_bytes: 500, storage_path: "org/f3.pdf", created_at: "2026-02-01T00:00:00Z" },
+];
+const mergedFiles = mergePersonVaultFiles(filesViaTenancy, filesViaPerson);
+ok("vault files dedupe the union", mergedFiles.length === 3);
+ok("vault files newest first", mergedFiles.map((f) => f.id).join(",") === "f2,f3,f1");
+ok("vault files keep person-only file", mergedFiles.some((f) => f.id === "f3" && f.tenancy_id === null));
+ok("mergePersonVaultFiles is pure (no mutation)", filesViaTenancy[0].id === "f1");
+ok("mergePersonVaultFiles empty -> empty", mergePersonVaultFiles([], []).length === 0);
 
 // ----------------------------------------------------------------------------
 console.log(`persons: ${passed} passed, ${failed} failed`);

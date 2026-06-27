@@ -155,6 +155,35 @@ export function mergePersonDocuments(
   return merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+/**
+ * An UPLOADED vault file (the 0076 `documents` table) as the person view lists
+ * it. Distinct from VaultDocument, which describes the in-app assembled lease
+ * (`lease_documents`). created_at is an ISO string.
+ */
+export type VaultFile = {
+  id: string;
+  tenancy_id: string | null;
+  person_id: string | null;
+  title: string;
+  doc_type: string;
+  size_bytes: number;
+  storage_path: string;
+  created_at: string;
+};
+
+/**
+ * A person's uploaded vault files = files reached via their tenancies UNION
+ * files filed directly about them (`documents.person_id`), deduped by id,
+ * newest first. The tenancy path catches anything stored on a lease the person
+ * is on; the person path catches files filed about them even after the tenant
+ * roster changes or the file was never tied to a tenancy.
+ */
+export function mergePersonVaultFiles(viaTenancy: VaultFile[], viaPerson: VaultFile[]): VaultFile[] {
+  return dedupeById([...viaTenancy, ...viaPerson]).sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  );
+}
+
 /** A tenancy as the vault lists it (one person across many of these). */
 export type VaultTenancy = {
   id: string;
