@@ -818,10 +818,11 @@ export default async function TenancyDetailPage({
         : "None logged";
   const messagesStatus =
     messages.length > 0 ? `${messages.length} sent` : "None sent";
+  // Count uploaded files + executed in-app leases surfaced in the vault (Slice 4)
+  // so the collapsed header reflects everything inside, not just uploads.
+  const documentsCount = documents.length + inAppLeaseEntries.length;
   const documentsStatus =
-    documents.length > 0
-      ? `${documents.length} stored`
-      : "None stored";
+    documentsCount > 0 ? `${documentsCount} stored` : "None stored";
   const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
     scheduled: "Scheduled",
     serve_window: "Serve now",
