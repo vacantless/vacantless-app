@@ -415,6 +415,20 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{tenant_first_name}},\n\nNow that most of the leaves have come down, it's a good time to clear the eavestroughs and downspouts at {{property_address}} so melting snow and ice can drain freely this winter. If clearing the eavestroughs is something we look after for your home, you don't need to do anything — we'll take care of it.\n\nThanks,\n{{org_name}}",
     active: true,
   },
+  {
+    key: "leasing.seasonal_winter_walkways",
+    family: "leasing",
+    audience: "tenant",
+    sendMode: "approve_to_send",
+    label: "Seasonal: winter walkways & ice",
+    description:
+      "As winter sets in, an optional reminder to the tenant about keeping walkways and steps clear of snow and ice, and reporting slippery spots — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
+    defaultSubject: "Keeping walkways safe this winter — {{property_address}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nWith winter weather setting in, this is a friendly reminder to help keep the walkways, steps, and entrances at {{property_address}} clear of snow and ice so everyone stays safe. If clearing snow and salting is something we look after for your home, you don't need to do anything — and either way, please let us know right away about any icy or slippery spots so we can take care of them.\n\nThanks,\n{{org_name}}",
+    active: true,
+  },
   // ---- Landlord-notify compliance reminders (S357 — the landlord tier) --------
   // The third send-mode build-out: ANNUAL landlord-side compliance reminders that
   // go to the OPERATOR (audience operator, sendMode notify — the registry default,
@@ -471,6 +485,61 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     defaultSubject: "Annual smoke & CO alarm compliance check ({{season_year}})",
     defaultBody:
       "A yearly reminder about your alarm obligations as the landlord.\n\nUnder Ontario's Fire Code (O. Reg. 213/07), the landlord is responsible for installing and maintaining working smoke alarms and, where there is a fuel-burning appliance or an attached garage, carbon-monoxide alarms — and for keeping a maintenance record.\n\n- Verify a working smoke alarm on every storey and outside sleeping areas of each unit.\n- Verify CO alarms where required.\n- Test, replace dead batteries, and replace any alarm past its expiry.\n- Log the date you checked each unit.\n\nYou can also send tenants the optional 'test your smoke & CO alarms' courtesy note from your dashboard: {{dashboard_url}}",
+    active: true,
+  },
+  // Vacant Home Tax declaration — two timed nudges (60 days, then 30 days) ahead
+  // of the municipal deadline. Toronto's declaration for the prior occupancy year
+  // is due April 30; Ottawa (Vacant Unit Tax) and Hamilton run their own annual
+  // declarations on their own dates, so the copy names Toronto's date but tells
+  // the operator to confirm their municipality. EVERY residential owner in a
+  // participating city must declare each year (even a principal residence) or the
+  // city assumes the home is vacant and bills the tax — exactly the easy-to-forget,
+  // deadline-driven obligation this tier exists for. Two separate events (not one)
+  // so each fires once per season on its own window via the standard cron path; a
+  // future "mark this year done" suppression can gate the 30-day one later.
+  {
+    key: "leasing.landlord_vacant_home_tax_60d",
+    family: "leasing",
+    audience: "operator",
+    label: "Vacant Home Tax: declaration due in ~2 months",
+    description:
+      "An early reminder (about 60 days out) to file your municipal Vacant Home Tax declaration for each residential property. Toronto's deadline is April 30; other cities differ. Goes to your team, not the tenant. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
+    defaultSubject: "Vacant Home Tax declaration opens — due in about 2 months ({{season_year}})",
+    defaultBody:
+      "A heads-up so the Vacant Home Tax declaration doesn't sneak up on you.\n\nMany Ontario municipalities now require an ANNUAL vacant-home declaration for every residential property — even your principal residence. If you miss it, the city can assume the home was vacant and bill you the tax.\n\n- In Toronto, the declaration for the prior year is due April 30. Ottawa and Hamilton run their own declarations on their own dates — confirm yours.\n- File one declaration per residential property you own.\n- Keep the confirmation for your records.\n\nThis is your early (~2 months out) reminder; you'll get one more about a month before the deadline. Review your properties in your dashboard: {{dashboard_url}}",
+    active: true,
+  },
+  {
+    key: "leasing.landlord_vacant_home_tax_30d",
+    family: "leasing",
+    audience: "operator",
+    label: "Vacant Home Tax: declaration due in ~1 month",
+    description:
+      "A final reminder (about 30 days out) to file your municipal Vacant Home Tax declaration if you haven't already. Toronto's deadline is April 30; other cities differ. Goes to your team, not the tenant. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
+    defaultSubject: "Reminder: Vacant Home Tax declaration due in about a month ({{season_year}})",
+    defaultBody:
+      "A final nudge on the Vacant Home Tax declaration.\n\nIf you've already filed for each of your residential properties, you can ignore this. If not, the deadline is close — and missing it means the city can assume the home was vacant and bill you the tax.\n\n- In Toronto, the declaration for the prior year is due April 30. Confirm the date for your municipality (Ottawa and Hamilton differ).\n- File one declaration per residential property.\n- Keep the confirmation for your records.\n\nFile now and you're done for the year. Review your properties in your dashboard: {{dashboard_url}}",
+    active: true,
+  },
+  // Freehold winterization — the LANDLORD-side companion to the tenant outdoor-
+  // water note. For houses/freehold units you look after directly (and any vacant
+  // or between-tenants unit), a reminder to shut off and drain the exterior water
+  // supply before the first frost so a hose bib or supply line doesn't freeze and
+  // burst. Condos don't have this, so the copy says "freehold/houses". Goes to the
+  // operator, not the tenant; pairs with leasing.seasonal_water_shutoff (tenant).
+  {
+    key: "leasing.landlord_winter_water_shutoff",
+    family: "leasing",
+    audience: "operator",
+    label: "Freehold: shut off outdoor water before winter",
+    description:
+      "Before the first frost, a reminder to shut off and drain the exterior water supply on the freehold houses you manage directly — especially any vacant or between-tenants unit — so an outdoor faucet or supply line doesn't freeze and burst. Goes to your team, not the tenant. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
+    defaultSubject: "Winterize the outdoor water on your freehold units ({{season_year}})",
+    defaultBody:
+      "Frost is on the way — time to winterize the outdoor water on the houses you look after.\n\nFor your freehold/house units (and any vacant or between-tenants unit especially), a frozen hose bib or supply line can split and cause a costly flood:\n\n- Shut off the interior valve that feeds each exterior faucet, then open the outside tap to drain the line.\n- Disconnect and store garden hoses.\n- Blow out or drain any irrigation/sprinkler lines.\n- For an occupied unit, coordinate with the tenant (you can send them the 'outdoor water shut-off' courtesy note from your dashboard).\n\nReview your properties in your dashboard: {{dashboard_url}}",
     active: true,
   },
 ] as const;

@@ -8,6 +8,8 @@ import {
   dueComplianceItems,
   seasonalDedupeKey,
   complianceReminderDedupeKey,
+  landlordReminderEventKeys,
+  summarizeReminderLog,
   type ComplianceCalendarItem,
 } from "../lib/compliance-calendar";
 import { getNotificationEvent, notificationSendMode } from "../lib/notifications";
@@ -140,6 +142,23 @@ ok("insurance review not due after grace", !landlordKeys("2026-03-01").includes(
 ok("furnace service due on anchor", landlordKeys("2026-09-15").includes("leasing.landlord_furnace_service"));
 // fire safety: anchor Oct 1, lead 21, grace 21 -> window [Sep 10, Oct 22].
 ok("fire safety due on anchor", landlordKeys("2026-10-01").includes("leasing.landlord_fire_safety"));
+// Vacant Home Tax: anchor Apr 30, two nudges. 60d -> window [Mar 1, Apr 30]; 30d -> [Mar 31, Apr 30].
+ok("VHT 60-day nudge due ~60 days out (Mar 1)", landlordKeys("2026-03-01").includes("leasing.landlord_vacant_home_tax_60d"));
+ok("VHT 60-day nudge NOT due day before open (Feb 28)", !landlordKeys("2026-02-28").includes("leasing.landlord_vacant_home_tax_60d"));
+ok("VHT 30-day nudge NOT yet due at 60 days (Mar 1)", !landlordKeys("2026-03-01").includes("leasing.landlord_vacant_home_tax_30d"));
+ok("VHT 30-day nudge due ~30 days out (Apr 1)", landlordKeys("2026-04-01").includes("leasing.landlord_vacant_home_tax_30d"));
+ok("both VHT nudges due on deadline (Apr 30)",
+  landlordKeys("2026-04-30").includes("leasing.landlord_vacant_home_tax_60d") &&
+    landlordKeys("2026-04-30").includes("leasing.landlord_vacant_home_tax_30d"));
+ok("VHT nudges NOT due after deadline (May 1)", !landlordKeys("2026-05-01").includes("leasing.landlord_vacant_home_tax_60d"));
+// Freehold landlord water shut-off: anchor Oct 15, lead 21, grace 21 -> [Sep 24, Nov 5].
+ok("freehold water shut-off due on anchor (Oct 15)", landlordKeys("2026-10-15").includes("leasing.landlord_winter_water_shutoff"));
+ok("freehold water shut-off due at window open (Sep 24)", landlordKeys("2026-09-24").includes("leasing.landlord_winter_water_shutoff"));
+ok("freehold water shut-off NOT due in mid-summer", !landlordKeys("2026-07-15").includes("leasing.landlord_winter_water_shutoff"));
+// New soft tenant item: winter walkways, anchor Dec 1, lead 14, grace 30 -> [Nov 17, Dec 31].
+ok("winter-walkways due on anchor (Dec 1)", dueKeys("2026-12-01").includes("leasing.seasonal_winter_walkways"));
+ok("winter-walkways due at grace close (Dec 31)", dueKeys("2026-12-31").includes("leasing.seasonal_winter_walkways"));
+ok("winter-walkways NOT due day after grace (Jan 1)", !dueKeys("2027-01-01").includes("leasing.seasonal_winter_walkways"));
 // The default tenant call must NOT surface landlord items, and vice-versa.
 ok("tenant call excludes landlord items", !dueKeys("2026-01-15").includes("leasing.landlord_insurance_review"));
 ok("landlord call excludes tenant items", !landlordKeys("2026-10-01").includes("leasing.seasonal_furnace_filter"));
@@ -167,6 +186,64 @@ ok(
   "dedupe key differs by event",
   seasonalDedupeKey("e1", "t", 2026) !== seasonalDedupeKey("e2", "t", 2026),
 );
+
+// --- landlordReminderEventKeys: matches LANDLORD_CALENDAR_ITEMS ---------------
+ok(
+  "landlordReminderEventKeys matches the landlord calendar",
+  JSON.stringify(landlordReminderEventKeys()) ===
+    JSON.stringify(LANDLORD_CALENDAR_ITEMS.map((i) => i.eventKey)),
+);
+ok("landlordReminderEventKeys has 6 entries", landlordReminderEventKeys().length === 6);
+
+// --- summarizeReminderLog -----------------------------------------------------
+{
+  // Empty log: every landlord event present, all null, count 0.
+  const empty = summarizeReminderLog([]);
+  ok("summarize seeds all landlord keys when log empty", empty.length === 6);
+  ok("summarize all-null on empty log", empty.every((s) => s.lastSentAt === null && s.count === 0));
+  ok(
+    "summarize preserves landlord calendar order",
+    JSON.stringify(empty.map((s) => s.eventKey)) ===
+      JSON.stringify(landlordReminderEventKeys()),
+  );
+
+  // Newest sent_at wins within a key; count reflects all rows.
+  const rows = [
+    { event_key: "leasing.landlord_insurance_review", sent_at: "2025-01-16T10:00:00Z" },
+    { event_key: "leasing.landlord_insurance_review", sent_at: "2026-01-15T09:00:00Z" },
+    { event_key: "leasing.landlord_insurance_review", sent_at: "2024-01-20T09:00:00Z" },
+  ];
+  const sum = summarizeReminderLog(rows);
+  const ins = sum.find((s) => s.eventKey === "leasing.landlord_insurance_review")!;
+  ok("summarize picks newest sent_at", ins.lastSentAt === "2026-01-15T09:00:00Z");
+  ok("summarize counts all rows for a key", ins.count === 3);
+  const fire = sum.find((s) => s.eventKey === "leasing.landlord_fire_safety")!;
+  ok("summarize leaves untouched key null", fire.lastSentAt === null && fire.count === 0);
+
+  // Forward-compat: an unknown event_key in the log is appended after the known keys.
+  const withExtra = summarizeReminderLog([
+    { event_key: "leasing.landlord_future_item", sent_at: "2026-03-01T00:00:00Z" },
+  ]);
+  ok("summarize appends unknown keys", withExtra.length === 7);
+  ok("summarize keeps known keys first", withExtra[6].eventKey === "leasing.landlord_future_item");
+  ok("summarize records the extra key's send", withExtra[6].lastSentAt === "2026-03-01T00:00:00Z");
+
+  // Robustness: blank/garbage sent_at counted but never chosen as "last".
+  const messy = summarizeReminderLog([
+    { event_key: "leasing.landlord_fire_safety", sent_at: "" },
+    { event_key: "leasing.landlord_fire_safety", sent_at: "not-a-date" },
+    { event_key: "leasing.landlord_fire_safety", sent_at: "2026-10-02T12:00:00Z" },
+    { event_key: "  ", sent_at: "2026-10-02T12:00:00Z" },
+  ]);
+  const fs = messy.find((s) => s.eventKey === "leasing.landlord_fire_safety")!;
+  ok("summarize ignores unparseable sent_at for last pick", fs.lastSentAt === "2026-10-02T12:00:00Z");
+  ok("summarize counts rows with bad sent_at", fs.count === 3);
+  ok("summarize skips blank event_key", !messy.some((s) => s.eventKey.trim() === ""));
+
+  // Custom eventKeys arg overrides the default seed set.
+  const custom = summarizeReminderLog([], ["a.one", "a.two"]);
+  ok("summarize honors custom eventKeys", custom.length === 2 && custom[0].eventKey === "a.one");
+}
 
 console.log(`\ncompliance-calendar: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

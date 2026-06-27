@@ -71,6 +71,8 @@ export const COMPLIANCE_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
   { eventKey: "leasing.seasonal_ac_startup", anchorMonth: 5, anchorDay: 15, leadDays: 14, graceDays: 7 },
   // After leaf-fall, before winter — clear eavestroughs + downspouts.
   { eventKey: "leasing.seasonal_eavestrough", anchorMonth: 11, anchorDay: 15, leadDays: 14, graceDays: 14 },
+  // Winter sets in — keep walkways/steps clear of snow + ice (fills the Dec gap).
+  { eventKey: "leasing.seasonal_winter_walkways", anchorMonth: 12, anchorDay: 1, leadDays: 14, graceDays: 30 },
 ] as const;
 
 // The LANDLORD-NOTIFY set — ANNUAL landlord-side compliance reminders that email
@@ -88,6 +90,15 @@ export const LANDLORD_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
   { eventKey: "leasing.landlord_furnace_service", anchorMonth: 9, anchorDay: 15, leadDays: 21, graceDays: 21 },
   // Heating season begins (clocks change) — verify smoke + CO alarm compliance.
   { eventKey: "leasing.landlord_fire_safety", anchorMonth: 10, anchorDay: 1, leadDays: 21, graceDays: 21 },
+  // Vacant Home Tax declaration — two timed nudges before the Apr 30 deadline
+  // (Toronto). Anchored on the deadline so the 60-day nudge fires ~Mar 1 and the
+  // 30-day nudge ~Apr 1; each is its own event so it logs + fires independently.
+  { eventKey: "leasing.landlord_vacant_home_tax_60d", anchorMonth: 4, anchorDay: 30, leadDays: 60, graceDays: 0 },
+  { eventKey: "leasing.landlord_vacant_home_tax_30d", anchorMonth: 4, anchorDay: 30, leadDays: 30, graceDays: 0 },
+  // Freehold winterization (landlord-side) — shut off + drain exterior water
+  // before first frost. Anchor Oct 15, opens ~Sep 24, a touch ahead of the
+  // tenant outdoor-water note (Oct 20) so the landlord can plan the work.
+  { eventKey: "leasing.landlord_winter_water_shutoff", anchorMonth: 10, anchorDay: 15, leadDays: 21, graceDays: 21 },
 ] as const;
 
 // --- Date helpers (UTC-anchored on YYYY-MM-DD strings; no TZ drift) -----------
@@ -188,4 +199,78 @@ export function seasonalDedupeKey(
  */
 export function complianceReminderDedupeKey(seasonYear: number): string {
   return `season:${seasonYear}`;
+}
+
+// --- "Last reminded" read model (S358) ---------------------------------------
+// A small pure reducer over compliance_reminder_log (0079) rows so the
+// notifications-settings surface can show, per landlord-notify event, when it
+// last fired. The cron writes ONE row per (org, event, season) for the
+// LANDLORD_CALENDAR_ITEMS tier only (the soft tenant tier dedupes on
+// pending_tenant_messages instead), so this view is scoped to those events but
+// stays forward-compatible: any extra event_key that shows up in the log is
+// surfaced too. No DB/I/O here — the page passes in the org's rows.
+
+/** A row of the compliance_reminder_log table (only the columns this view needs). */
+export type ComplianceReminderLogRow = {
+  event_key: string;
+  /** ISO timestamp string (sent_at). */
+  sent_at: string;
+};
+
+/** Per-event summary: when it last fired and how many seasons are logged. */
+export type ReminderLogSummary = {
+  eventKey: string;
+  /** Newest sent_at ISO string, or null if this event has never fired. */
+  lastSentAt: string | null;
+  /** How many distinct log rows (seasons) exist for this event. */
+  count: number;
+};
+
+/** The event keys that fire into compliance_reminder_log (the landlord-notify tier). */
+export function landlordReminderEventKeys(): string[] {
+  return LANDLORD_CALENDAR_ITEMS.map((i) => i.eventKey);
+}
+
+/**
+ * Reduce raw compliance_reminder_log rows to a per-event "last reminded" view.
+ *
+ * Always includes every key in `eventKeys` (defaults to the landlord-notify
+ * tier) so an event that has never fired still appears with lastSentAt=null —
+ * the operator can see the tracking exists. Any event_key present in the rows
+ * but NOT in `eventKeys` is appended after, alphabetically, so a future
+ * landlord-reminder kind surfaces without a code change here. Within a key the
+ * newest sent_at wins; malformed/blank sent_at values are ignored for the
+ * "last" pick but still counted.
+ *
+ * Order: `eventKeys` order first (matches LANDLORD_CALENDAR_ITEMS), then extras
+ * alphabetically. Pure and total.
+ */
+export function summarizeReminderLog(
+  rows: readonly ComplianceReminderLogRow[],
+  eventKeys: readonly string[] = landlordReminderEventKeys(),
+): ReminderLogSummary[] {
+  const acc = new Map<string, { lastMs: number; lastSentAt: string | null; count: number }>();
+  // Seed the requested keys so never-fired events still render.
+  for (const key of eventKeys) {
+    if (!acc.has(key)) acc.set(key, { lastMs: -Infinity, lastSentAt: null, count: 0 });
+  }
+  for (const r of rows ?? []) {
+    const key = (r?.event_key ?? "").trim();
+    if (!key) continue;
+    const cur = acc.get(key) ?? { lastMs: -Infinity, lastSentAt: null, count: 0 };
+    cur.count += 1;
+    const ms = Date.parse(r?.sent_at ?? "");
+    if (!Number.isNaN(ms) && ms > cur.lastMs) {
+      cur.lastMs = ms;
+      cur.lastSentAt = r.sent_at;
+    }
+    acc.set(key, cur);
+  }
+  const requested = new Set(eventKeys);
+  const extras = [...acc.keys()].filter((k) => !requested.has(k)).sort();
+  const ordered = [...eventKeys, ...extras];
+  return ordered.map((key) => {
+    const v = acc.get(key)!;
+    return { eventKey: key, lastSentAt: v.lastSentAt, count: v.count };
+  });
 }

@@ -11,6 +11,11 @@ import {
   type NotificationEvent,
   type NotificationSettingRow,
 } from "@/lib/notifications";
+import {
+  summarizeReminderLog,
+  type ComplianceReminderLogRow,
+  type ReminderLogSummary,
+} from "@/lib/compliance-calendar";
 import { AccentColorField } from "@/components/accent-color-field";
 import { saveNotificationSetting } from "./actions";
 
@@ -36,6 +41,20 @@ const AUDIENCE_HINT: Record<NotificationEvent["audience"], string> = {
   tenant:
     "Always goes to the tenant who reported it. Anyone you add below is cc'd as well.",
 };
+
+// Format a compliance_reminder_log sent_at for the "Last reminded" line, in the
+// org's booking timezone so it matches the operator's calendar (falls back to
+// Toronto, then to a tz-less render if Intl rejects the zone).
+function formatReminderDate(iso: string, tz?: string | null): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const opts: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
+  try {
+    return d.toLocaleDateString("en-CA", { ...opts, timeZone: tz || "America/Toronto" });
+  } catch {
+    return d.toLocaleDateString("en-CA", opts);
+  }
+}
 
 function errorBanner(code: string | undefined): string | null {
   switch (code) {
@@ -77,6 +96,21 @@ export default async function NotificationsSettingsPage({
     .eq("organization_id", org.id);
   const byKey = new Map<string, NotificationSettingRow>();
   for (const r of (rows ?? []) as NotificationSettingRow[]) byKey.set(r.event_key, r);
+
+  // "Last reminded" view over the landlord-notify compliance log (0079). RLS
+  // scopes the rows to this org; summarizeReminderLog seeds every landlord-notify
+  // event (so never-fired ones still show the line) and folds in the newest send
+  // per event. Only those events appear in the map, so the per-card line shows
+  // exactly on the annual landlord reminders.
+  const { data: reminderRows } = await supabase
+    .from("compliance_reminder_log")
+    .select("event_key, sent_at")
+    .eq("organization_id", org.id)
+    .order("sent_at", { ascending: false });
+  const reminderByKey = new Map<string, ReminderLogSummary>();
+  for (const s of summarizeReminderLog((reminderRows ?? []) as ComplianceReminderLogRow[])) {
+    reminderByKey.set(s.eventKey, s);
+  }
 
   // Group active events by family for display.
   const events = activeNotificationEvents();
@@ -144,6 +178,16 @@ export default async function NotificationsSettingsPage({
                           {event.label}
                         </h3>
                         <p className="mt-1 text-sm text-gray-600">{event.description}</p>
+                        {reminderByKey.has(event.key) && (
+                          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                            {reminderByKey.get(event.key)!.lastSentAt
+                              ? `Last reminded ${formatReminderDate(
+                                  reminderByKey.get(event.key)!.lastSentAt!,
+                                  org.booking_timezone,
+                                )}`
+                              : "Not sent yet — sends once a year when it's due"}
+                          </p>
+                        )}
                       </div>
                       <label className="flex shrink-0 items-center gap-2 text-sm text-gray-700">
                         <input
