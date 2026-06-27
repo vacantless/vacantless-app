@@ -23,6 +23,7 @@ import {
   isShareLinkValid,
   shareLinkStatus,
   documentSharePath,
+  executedLeaseVaultEntries,
 } from "../lib/documents";
 
 let passed = 0;
@@ -167,6 +168,43 @@ ok("clamp floors floats", clampShareDays(5.9) === 5);
 // --- share path -------------------------------------------------------------
 ok("share path", documentSharePath("abc") === "/d/abc");
 ok("share path encodes", documentSharePath("a/b").includes("%2F"));
+
+// --- Slice 4: executed-lease vault entries ----------------------------------
+{
+  const leases = [
+    { id: "a", title: "Lease A", status: "draft", created_at: "2026-01-01T00:00:00Z" },
+    { id: "b", title: "Lease B", status: "sent", created_at: "2026-02-01T00:00:00Z" },
+    { id: "c", title: "Lease C", status: "executed", created_at: "2026-03-01T00:00:00Z", executed_at: "2026-03-05T00:00:00Z" },
+    { id: "d", title: "Lease D", status: "executed", created_at: "2026-04-01T00:00:00Z", executed_at: "2026-04-10T00:00:00Z" },
+    { id: "e", title: "Lease E", status: "void", created_at: "2026-05-01T00:00:00Z" },
+  ];
+  const entries = executedLeaseVaultEntries(leases);
+  ok("only executed leases surface", entries.length === 2);
+  ok("excludes draft/sent/void", entries.every((e) => e.id === "c" || e.id === "d"));
+  ok("newest executed first", entries[0].id === "d" && entries[1].id === "c");
+  ok("carries title", entries[0].title === "Lease D");
+  ok("carries executed_at", entries[0].executed_at === "2026-04-10T00:00:00Z");
+
+  // executed_at missing -> falls back to created_at for ordering, null in output
+  const fallback = executedLeaseVaultEntries([
+    { id: "old", title: "Old", status: "executed", created_at: "2026-01-01T00:00:00Z" },
+    { id: "new", title: "New", status: "executed", created_at: "2026-06-01T00:00:00Z" },
+  ]);
+  ok("null executed_at -> null in entry", fallback[0].executed_at === null);
+  ok("orders by created_at when executed_at absent", fallback[0].id === "new" && fallback[1].id === "old");
+
+  // mixed: a recent executed_at outranks an older one even with a newer created_at on the loser
+  const mixed = executedLeaseVaultEntries([
+    { id: "x", title: "X", status: "executed", created_at: "2026-09-01T00:00:00Z", executed_at: "2026-03-01T00:00:00Z" },
+    { id: "y", title: "Y", status: "executed", created_at: "2026-01-01T00:00:00Z", executed_at: "2026-08-01T00:00:00Z" },
+  ]);
+  ok("orders by executed_at not created_at", mixed[0].id === "y");
+
+  ok("empty input -> empty", executedLeaseVaultEntries([]).length === 0);
+  ok("no executed -> empty", executedLeaseVaultEntries([
+    { id: "z", title: "Z", status: "draft", created_at: "2026-01-01T00:00:00Z" },
+  ]).length === 0);
+}
 
 // ---------------------------------------------------------------------------
 console.log(`\ndocuments: ${passed} passed, ${failed} failed`);

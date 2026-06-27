@@ -238,6 +238,63 @@ export function shareLinkStatus(
   return "expired";
 }
 
+// ---------------------------------------------------------------------------
+// Slice 4 — in-app executed leases as vault entries (read-model unification).
+//
+// An in-app lease signed via the #11 signing rail is NOT a stored file: its
+// bytes are reconstructed on demand by the lease render route (frozen
+// rendered_snapshot + stamped signatures, Print → Save as PDF), and the vault
+// bucket only accepts PDFs/images. Rather than mint a phantom `documents` row
+// with no bytes (which would then need special-casing in the retention purge,
+// share-out, and a backfill), we surface executed leases in the document vault
+// as LINKED, read-only entries beside the uploaded files — one unified history,
+// no migration, no write, idempotent by construction. The pre-provisioned
+// `documents.source`/`lease_document_id` columns stay available for a future
+// "real stored PDF" slice if a PDF render path is ever added.
+// ---------------------------------------------------------------------------
+
+/** A read-only document-vault entry for an in-app lease executed via the
+ * signing rail. Not a stored file — the View/Certificate links resolve to the
+ * on-demand render + audit routes. */
+export type InAppLeaseEntry = {
+  id: string;
+  title: string;
+  created_at: string;
+  /** when the last signer signed (lease flipped to 'executed'); may be null on pre-slice rows. */
+  executed_at: string | null;
+};
+
+/** Minimal lease shape this consumes (a subset of the tenancy's lease rows). */
+export type LeaseStatusLike = {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  executed_at?: string | null;
+};
+
+/** Filter a tenancy's leases to the EXECUTED ones and shape them as read-only
+ * vault entries, newest first (by executed_at, falling back to created_at).
+ * Pure — no DB/IO; unit-tested. */
+export function executedLeaseVaultEntries(
+  leases: LeaseStatusLike[],
+): InAppLeaseEntry[] {
+  return leases
+    .filter((l) => l.status === "executed")
+    .map((l) => ({
+      id: l.id,
+      title: l.title,
+      created_at: l.created_at,
+      executed_at: l.executed_at ?? null,
+    }))
+    .sort((a, b) => {
+      const ax = a.executed_at ?? a.created_at;
+      const bx = b.executed_at ?? b.created_at;
+      // newest first; localeCompare on ISO strings is chronological.
+      return bx.localeCompare(ax);
+    });
+}
+
 /** The path to the public read-only viewer for a share token. */
 export function documentSharePath(token: string): string {
   return `/d/${encodeURIComponent(token)}`;

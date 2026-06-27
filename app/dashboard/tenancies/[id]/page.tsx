@@ -97,7 +97,7 @@ import {
   type DocumentTenantOption,
 } from "./documents-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
-import { shareLinkStatus } from "@/lib/documents";
+import { shareLinkStatus, executedLeaseVaultEntries } from "@/lib/documents";
 import { personDisplayName } from "@/lib/persons";
 
 export const dynamic = "force-dynamic";
@@ -464,7 +464,7 @@ export default async function TenancyDetailPage({
   // this org. The two most recent power the renewal diff (#11 slice 2).
   const { data: leaseRows } = await supabase
     .from("lease_documents")
-    .select("id, title, status, assembled_body, executed_clause_versions, created_at")
+    .select("id, title, status, assembled_body, executed_clause_versions, created_at, executed_at")
     .eq("tenancy_id", t.id)
     .order("created_at", { ascending: false });
   // Signers across all of this tenancy's leases (one query; grouped in code).
@@ -486,14 +486,16 @@ export default async function TenancyDetailPage({
     arr.push({ role: r.role, name: r.name, status: r.status, token: r.token });
     signersByLease.set(r.lease_document_id, arr);
   }
-  const leaseDocs = ((leaseRows ?? []) as {
+  const leaseRowsTyped = (leaseRows ?? []) as {
     id: string;
     title: string;
     status: string;
     assembled_body: string | null;
     executed_clause_versions: ExecutedClauseRef[] | null;
     created_at: string;
-  }[]).map(
+    executed_at: string | null;
+  }[];
+  const leaseDocs = leaseRowsTyped.map(
     (d): LeaseDocView => ({
       id: d.id,
       title: d.title,
@@ -504,6 +506,9 @@ export default async function TenancyDetailPage({
       signers: signersByLease.get(d.id) ?? [],
     }),
   );
+  // Slice 4: executed in-app leases surface in the document vault as read-only
+  // linked entries (one unified history alongside uploaded files).
+  const inAppLeaseEntries = executedLeaseVaultEntries(leaseRowsTyped);
 
   // Document vault (Slices 1+2): stored documents for this tenancy (newest
   // first, soft-deleted excluded) + their share links. RLS scopes both to this
@@ -1043,6 +1048,7 @@ export default async function TenancyDetailPage({
         <TenancyDocumentsSection
           tenancyId={t.id}
           documents={documents}
+          inAppLeases={inAppLeaseEntries}
           tenants={tenants
             .filter((tn) => (tn.name ?? "").trim().length > 0)
             .map((tn): DocumentTenantOption => ({ id: tn.id, name: tn.name as string }))}

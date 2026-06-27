@@ -7,6 +7,7 @@ import {
   formatBytes,
   SHARE_LINK_DEFAULT_DAYS,
   type DocumentType,
+  type InAppLeaseEntry,
 } from "@/lib/documents";
 import {
   uploadTenancyDocuments,
@@ -45,13 +46,21 @@ export type DocumentTenantOption = { id: string; name: string };
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 
+function fmtDay(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString();
+}
+
 export function TenancyDocumentsSection({
   tenancyId,
   documents,
+  inAppLeases = [],
   tenants = [],
 }: {
   tenancyId: string;
   documents: DocumentView[];
+  /** Executed in-app leases surfaced as read-only vault entries (Slice 4). */
+  inAppLeases?: InAppLeaseEntry[];
   tenants?: DocumentTenantOption[];
 }) {
   return (
@@ -63,7 +72,51 @@ export function TenancyDocumentsSection({
         revocable read-only link.
       </p>
 
-      {/* Stored documents ------------------------------------------------- */}
+      {/* In-app executed leases (read-only; managed in the Lease section) -- */}
+      {inAppLeases.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Signed in app
+          </p>
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+            {inAppLeases.map((l) => (
+              <li key={l.id} className="px-4 py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="font-medium text-gray-900">{l.title}</span>
+                    <span className="ml-2">
+                      <StatusChip tone="success">Executed</StatusChip>
+                    </span>
+                    <span className="ml-2 block text-xs text-gray-400">
+                      In-app lease · executed {fmtDay(l.executed_at ?? l.created_at)}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <a
+                      href={`/dashboard/tenancies/${tenancyId}/lease/${l.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      View / print
+                    </a>
+                    <a
+                      href={`/dashboard/tenancies/${tenancyId}/lease/${l.id}/certificate`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Certificate
+                    </a>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Uploaded files --------------------------------------------------- */}
       {documents.length > 0 ? (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
           {documents.map((d) => {
@@ -177,7 +230,9 @@ export function TenancyDocumentsSection({
         </ul>
       ) : (
         <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-          No documents stored for this tenancy yet.
+          {inAppLeases.length > 0
+            ? "No uploaded files yet — your in-app signed lease is shown above."
+            : "No documents stored for this tenancy yet."}
         </p>
       )}
 
