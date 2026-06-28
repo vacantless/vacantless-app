@@ -581,6 +581,45 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Some of the major equipment you've logged at {{property_address}} is reaching its manufacturer end-of-life:\n\n{{equipment_list}}\n\nPlan the replacement now, while you can do it on your own schedule. A tank water heater past ~10 years carries a rising risk of leaking and causing water damage, and a furnace is best replaced in the off-season before the next heating season — both cost considerably more as an emergency. Please confirm each item's manufacturer date.\n\nReview or update this unit's equipment: {{dashboard_url}}",
     active: true,
   },
+  {
+    // Appliance WARRANTY reminder (S362). The one-shot, asset-tracked sibling of
+    // landlord_equipment_eol: fires off the recorded appliance inventory
+    // (unit_appliances) when an appliance's manufacturer warranty is about to
+    // lapse — anchored to each appliance's purchase date + warranty length (a
+    // per-record sweep, app/api/cron/appliance-care), not the seasonal calendar.
+    // Opt-in per org (isDripEnqueueEnabled) so it ships dark.
+    key: "leasing.landlord_appliance_warranty",
+    family: "leasing",
+    audience: "operator",
+    label: "Appliance warranty expiring",
+    description:
+      "When the manufacturer warranty on an appliance you've logged for a unit is about to lapse (~6 weeks out), you get one reminder per unit — so you can register it or use the coverage before it runs out. Goes to your team, not the tenant. Built from each unit's Appliances list; off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "appliance_list", "earliest_date", "dashboard_url"],
+    defaultSubject: "Appliance warranty expiring soon — {{property_address}}",
+    defaultBody:
+      "The manufacturer warranty on some appliances you've logged at {{property_address}} is about to lapse:\n\n{{appliance_list}}\n\nIf you haven't registered these with the manufacturer, now is the time — and if anything has been acting up, get it looked at while the coverage still applies. Please confirm each purchase date and your warranty terms.\n\nReview or update this unit's appliances: {{dashboard_url}}",
+    active: true,
+  },
+  {
+    // Appliance CONSUMABLE reminder (S362) — the RECURRING primitive. Unlike every
+    // other asset reminder (which fires once per lifecycle), this re-arms on a
+    // cycle: a labelled consumable (e.g. a fridge water filter) with an interval
+    // in months, anchored to the last replacement. Fires once per cycle when the
+    // next due date is near; a one-tap "Mark replaced" on the unit's Appliances
+    // list rolls the schedule forward. Per-record sweep, app/api/cron/appliance-
+    // care. Opt-in per org (isDripEnqueueEnabled) so it ships dark.
+    key: "leasing.landlord_appliance_consumable",
+    family: "leasing",
+    audience: "operator",
+    label: "Appliance consumable due",
+    description:
+      "For appliance consumables you track on a cycle (a fridge water filter, a range-hood filter), you get one reminder per unit when one is due — so you order the right part and swap it on time. After you replace it, tap “Mark replaced” on the unit's Appliances list and the next reminder is scheduled automatically. Goes to your team, not the tenant; off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "appliance_list", "earliest_date", "dashboard_url"],
+    defaultSubject: "Appliance consumable due — {{property_address}}",
+    defaultBody:
+      "Some appliance consumables you track at {{property_address}} are due for replacement:\n\n{{appliance_list}}\n\nOrder the right part now so it's a quick swap. Once it's done, tap “Mark replaced” on the unit's Appliances list and we'll schedule the next reminder for you.\n\nReview or update this unit's appliances: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {

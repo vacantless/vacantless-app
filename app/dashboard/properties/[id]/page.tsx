@@ -106,6 +106,14 @@ import {
   equipmentStatusFor,
   type EquipmentType,
 } from "@/lib/equipment-eol";
+import { AppliancesSection, type ApplianceView } from "./appliances-section";
+import {
+  warrantyExpiryDate,
+  warrantyStatusFor,
+  consumableDueDate,
+  consumableStatusFor,
+  type ApplianceType,
+} from "@/lib/appliance-care";
 import { localDateString } from "@/lib/leasing-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -354,6 +362,56 @@ export default async function PropertyDetailPage({
   });
   const equipmentAttention = equipmentViews.filter(
     (d) => d.status === "overdue" || d.status === "due_soon",
+  ).length;
+
+  // Appliance inventory (S362): this unit's logged appliances + each one's
+  // warranty-expiry date + recurring-consumable due date + their statuses
+  // (against the org-local "today"). Shaped here so the section stays
+  // presentational. RLS scopes the read.
+  const { data: applianceRows } = await supabase
+    .from("unit_appliances")
+    .select(
+      "id, appliance_type, make, model, serial, location, purchase_date, install_year, quantity, " +
+        "warranty_months, consumable_label, consumable_interval_months, consumable_anchor_date, notes",
+    )
+    .eq("property_id", params.id)
+    .order("created_at", { ascending: true });
+  const applianceViews: ApplianceView[] = ((applianceRows ?? []) as any[]).map((r) => {
+    const input = {
+      purchase_date: r.purchase_date ?? null,
+      install_year: r.install_year ?? null,
+      warranty_months: r.warranty_months ?? null,
+      consumable_label: r.consumable_label ?? null,
+      consumable_interval_months: r.consumable_interval_months ?? null,
+      consumable_anchor_date: r.consumable_anchor_date ?? null,
+    };
+    return {
+      id: r.id,
+      appliance_type: r.appliance_type as ApplianceType,
+      make: r.make ?? null,
+      model: r.model ?? null,
+      serial: r.serial ?? null,
+      location: r.location ?? null,
+      purchase_date: r.purchase_date ?? null,
+      install_year: r.install_year ?? null,
+      quantity: r.quantity ?? 1,
+      warranty_months: r.warranty_months ?? null,
+      consumable_label: r.consumable_label ?? null,
+      consumable_interval_months: r.consumable_interval_months ?? null,
+      consumable_anchor_date: r.consumable_anchor_date ?? null,
+      notes: r.notes ?? null,
+      warrantyExpiry: warrantyExpiryDate(input),
+      warrantyStatus: warrantyStatusFor(input, detectorToday),
+      consumableDue: consumableDueDate(input),
+      consumableStatus: consumableStatusFor(input, detectorToday),
+    };
+  });
+  const applianceAttention = applianceViews.filter(
+    (d) =>
+      d.warrantyStatus === "overdue" ||
+      d.warrantyStatus === "due_soon" ||
+      d.consumableStatus === "overdue" ||
+      d.consumableStatus === "due_soon",
   ).length;
 
   // Standard-policy profile (0048 org defaults + 0049 per-building override):
@@ -1951,6 +2009,21 @@ export default async function PropertyDetailPage({
         done={equipmentViews.length > 0 && equipmentAttention === 0}
       >
         <EquipmentSection propertyId={p.id} equipment={equipmentViews} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="appliances"
+        title="Appliances"
+        status={
+          applianceViews.length === 0
+            ? "Not logged"
+            : applianceAttention > 0
+              ? `${applianceAttention} need attention`
+              : `${applianceViews.length} logged`
+        }
+        done={applianceViews.length > 0 && applianceAttention === 0}
+      >
+        <AppliancesSection propertyId={p.id} appliances={applianceViews} />
       </CollapsibleSection>
 
       <CollapsibleSection

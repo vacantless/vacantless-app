@@ -1755,3 +1755,135 @@ export async function removeEquipment(formData: FormData) {
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?equipment=removed#equipment`);
 }
+
+// ---------------------------------------------------------------------------
+// Appliance inventory (S362) — per-unit appliance records (unit_appliances,
+// 0082). The third per-unit asset record after detectors + equipment; capture
+// surface for TWO date-anchored reminders: a warranty one-shot and a recurring
+// consumable. RLS scopes reads/writes to the caller's org; we set
+// organization_id from the caller's org on insert so the WITH CHECK passes. No
+// tenant PII here — appliance facts only (make/model/serial are the
+// manufacturer's). Reuses parseBoundedIntOrNull / parseDateOrNull from the
+// detector block.
+// ---------------------------------------------------------------------------
+
+const APPLIANCE_TYPES_ACTION = [
+  "fridge",
+  "stove",
+  "dishwasher",
+  "washer",
+  "dryer",
+  "microwave",
+  "other",
+] as const;
+type ApplianceTypeAction = (typeof APPLIANCE_TYPES_ACTION)[number];
+
+function normalizeApplianceType(raw: unknown): ApplianceTypeAction {
+  const v = String(raw ?? "").trim();
+  return (APPLIANCE_TYPES_ACTION as readonly string[]).includes(v)
+    ? (v as ApplianceTypeAction)
+    : "fridge";
+}
+
+/** The shared field parse for add + update (everything but org/property/id). */
+function applianceFieldsFromForm(formData: FormData) {
+  return {
+    appliance_type: normalizeApplianceType(formData.get("appliance_type")),
+    make: String(formData.get("make") ?? "").trim() || null,
+    model: String(formData.get("model") ?? "").trim() || null,
+    serial: String(formData.get("serial") ?? "").trim() || null,
+    location: String(formData.get("location") ?? "").trim() || null,
+    purchase_date: parseDateOrNull(String(formData.get("purchase_date") ?? "")),
+    install_year: parseBoundedIntOrNull(String(formData.get("install_year") ?? ""), 1950, 2100),
+    quantity: parseBoundedIntOrNull(String(formData.get("quantity") ?? ""), 1, 999) ?? 1,
+    warranty_months: parseBoundedIntOrNull(String(formData.get("warranty_months") ?? ""), 1, 600),
+    consumable_label: String(formData.get("consumable_label") ?? "").trim() || null,
+    consumable_interval_months: parseBoundedIntOrNull(
+      String(formData.get("consumable_interval_months") ?? ""),
+      1,
+      120,
+    ),
+    consumable_anchor_date: parseDateOrNull(String(formData.get("consumable_anchor_date") ?? "")),
+    notes: String(formData.get("notes") ?? "").trim() || null,
+  };
+}
+
+export async function addAppliance(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  const supabase = createClient();
+  await supabase.from("unit_appliances").insert({
+    organization_id: org.id,
+    property_id: propertyId,
+    ...applianceFieldsFromForm(formData),
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?appliance=added#appliances`);
+}
+
+export async function updateAppliance(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org; .eq("id") targets one row. The
+  // reminder stamps are NOT cleared here on purpose: each reminder keys on its
+  // computed target date (warranty expiry / consumable next-due), so changing the
+  // purchase date / warranty length / consumable anchor moves the target and
+  // re-arms the relevant cycle automatically (see appliance-care-sweep.ts).
+  await supabase
+    .from("unit_appliances")
+    .update({
+      ...applianceFieldsFromForm(formData),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?appliance=updated#appliances`);
+}
+
+export async function removeAppliance(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const supabase = createClient();
+  await supabase.from("unit_appliances").delete().eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?appliance=removed#appliances`);
+}
+
+// One-tap "Mark replaced" for the recurring consumable: roll the anchor to today
+// so the next-due date advances one full interval. Clearing consumable_nudged_for
+// is belt-and-braces — the next-due date changes anyway, so the stamp would no
+// longer match — but nulling it makes the re-arm explicit and obvious in the DB.
+export async function markConsumableReplaced(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD' (UTC)
+  const supabase = createClient();
+  await supabase
+    .from("unit_appliances")
+    .update({
+      consumable_anchor_date: today,
+      consumable_nudged_for: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?appliance=replaced#appliances`);
+}
