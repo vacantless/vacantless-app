@@ -41,13 +41,15 @@ DELETE FROM property_photos
   WHERE property_id IN (SELECT id FROM properties WHERE organization_id = 'b733a191-30fd-47fe-bd21-731404148026');
 DELETE FROM properties           WHERE organization_id = 'b733a191-30fd-47fe-bd21-731404148026'; -- cascades listing_posts
 
--- --- Properties (status 'available' = Live). building_key is GENERATED. ---
+-- --- Properties. building_key is GENERATED. Pillette + Manning are 'available'
+-- (Live); 18 Shorncliffe is 'leased' to match its active tenancy below, so the
+-- public/booking surfaces stay consistent with the lifecycle rail (S371). ---
 INSERT INTO properties (id, organization_id, address, rent_cents, beds, baths, parking,
   status, laundry, air_conditioning, ac_type, heat_included, hydro_included, water_included,
   furnished, smoking, lease_term, pets_cats, pets_dogs, sqft, available_date, description)
 VALUES
   ('11111111-1111-4111-8111-111111111101','b733a191-30fd-47fe-bd21-731404148026','833 Pillette Road, Windsor, ON',129500,1,1,'1 spot included','available','in_building',true,'window',true,false,true,false,'non_smoking','1_year',true,false,600,CURRENT_DATE+14,'Bright one-bedroom in a well-kept Windsor building. Laundry in building, one parking spot included. Heat and water included; hydro paid by tenant. Unfurnished. Available next month.'),
-  ('11111111-1111-4111-8111-111111111102','b733a191-30fd-47fe-bd21-731404148026','18 Shorncliffe Avenue, Toronto, ON',220000,2,1,'1 spot included','available','in_suite',true,'central',true,false,true,false,'non_smoking','1_year',true,false,850,CURRENT_DATE+21,'Two-bedroom unit in a multi-unit Toronto property. In-suite laundry, central air, one parking spot. Heat and water included; hydro paid by tenant. Building-specific lease clauses apply.'),
+  ('11111111-1111-4111-8111-111111111102','b733a191-30fd-47fe-bd21-731404148026','18 Shorncliffe Avenue, Toronto, ON',220000,2,1,'1 spot included','leased','in_suite',true,'central',true,false,true,false,'non_smoking','1_year',true,false,850,CURRENT_DATE+21,'Two-bedroom unit in a multi-unit Toronto property. In-suite laundry, central air, one parking spot. Heat and water included; hydro paid by tenant. Building-specific lease clauses apply.'),
   ('11111111-1111-4111-8111-111111111103','b733a191-30fd-47fe-bd21-731404148026','506 Manning Avenue, Toronto, ON',195000,2,1,'Street parking','available','in_building',false,'window',false,false,true,false,'non_smoking','1_year',true,false,800,CURRENT_DATE+30,'Two-bedroom unit in a Manning Avenue triplex. Flat monthly gas charge billed to tenant; hydro paid by tenant; water included. Ontario standard lease.');
 
 -- --- Renter inquiries (leads): 8 spanning the pipeline ---

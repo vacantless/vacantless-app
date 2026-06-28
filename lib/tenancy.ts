@@ -24,6 +24,17 @@ export function isTenancyStatus(value: string): value is TenancyStatus {
   return (TENANCY_STATUSES as readonly string[]).includes(value);
 }
 
+/**
+ * Does creating a tenancy with this status take the unit OFF the public market?
+ * Only a current (`active`) or forthcoming (`upcoming`) tenancy means the unit is
+ * spoken-for; recording a HISTORICAL (`ended`) tenancy on a currently-marketed
+ * rental must NOT flip it to `leased` (Codex re-review S371). Mirrors migration
+ * 0089's active/upcoming backfill condition — keep the two in lockstep.
+ */
+export function tenancyTakesUnitOffMarket(status: string): boolean {
+  return status === "active" || status === "upcoming";
+}
+
 // Co-tenants on a single lease. 1 is the common case; 2-3 covers roommates.
 export const MAX_TENANTS_PER_TENANCY = 3;
 

@@ -127,8 +127,16 @@ export async function addProperty(formData: FormData) {
   const supabase = createClient();
   // organization_id is taken from the caller's own org; RLS WITH CHECK also
   // enforces it must be an org they belong to — no cross-tenant write possible.
+  //
+  // status='draft' = PRIVATE until reviewed (Codex re-review P2, S371): a bare
+  // quick-add (address + maybe rent/beds/baths, no photos, no description) is not
+  // share-ready, so it must not land Live/public by inheriting the column
+  // default ('available'). This matches the MLS-import path, which already lands
+  // as a draft "so nothing goes public until the operator reviews". The operator
+  // sets it Live from the edit form once the listing is complete.
   await supabase.from("properties").insert({
     organization_id: org.id,
+    status: "draft",
     address,
     rent_cents: parseRentCents(String(formData.get("rent") ?? "")),
     beds: parseIntOrNull(String(formData.get("beds") ?? "")),

@@ -4,6 +4,7 @@ import {
   MAX_TENANTS_PER_TENANCY,
   tenancyStatusLabel,
   isTenancyStatus,
+  tenancyTakesUnitOffMarket,
   parseMoneyToCents,
   parseTermMonths,
   parseDateOrNull,
@@ -32,6 +33,15 @@ ok("isTenancyStatus accepts known", TENANCY_STATUSES.every((s) => isTenancyStatu
 ok("isTenancyStatus rejects unknown", !isTenancyStatus("evicted"));
 ok("label active", tenancyStatusLabel("active") === "Active");
 ok("label unknown passthrough", tenancyStatusLabel("zzz") === "zzz");
+
+// --- Takes-unit-off-market gate (Codex re-review S371) -----------------------
+// Creating a tenancy flips the rental to `leased` ONLY for a current/forthcoming
+// tenancy. Recording a HISTORICAL (ended) tenancy on a marketed rental must NOT
+// take it offline. Must stay in lockstep with migration 0089's backfill.
+ok("active tenancy takes unit off-market", tenancyTakesUnitOffMarket("active") === true);
+ok("upcoming tenancy takes unit off-market", tenancyTakesUnitOffMarket("upcoming") === true);
+ok("ended tenancy does NOT flip the rental to leased", tenancyTakesUnitOffMarket("ended") === false);
+ok("unknown status does NOT take unit off-market", tenancyTakesUnitOffMarket("evicted") === false);
 
 // --- parseMoneyToCents ------------------------------------------------------
 ok("money plain", parseMoneyToCents("1250") === 125000);

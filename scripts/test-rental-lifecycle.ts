@@ -396,6 +396,55 @@ ok(
   upcomingTenancy.steps.find((s) => s.step === "tenanted")!.detail ===
     "Tenancy starts soon",
 );
+// --- REGRESSION (Codex re-review, S371): tenancy truth wins over status -------
+// Creating a tenancy now flips the unit to `leased` (so the public/booking
+// surfaces close). The rail must keep deriving tenanted-ness from the TENANCY,
+// not the status shortcut: an UPCOMING tenancy on a now-`leased` unit must still
+// read "Tenancy starts soon" with Tenanted as the frontier — NOT "Tenant in
+// place"/done (the bug if isLeased short-circuited). Active stays "Tenant in place".
+const upcomingTenancyLeased = deriveRentalLifecycle(
+  PID,
+  inp({
+    hasRent: true,
+    propertyStatus: "leased",
+    photoCount: 3,
+    leadStatuses: ["applied"],
+    tenancyId: TID,
+    tenancyStatus: "upcoming",
+  }),
+);
+ok(
+  "upcoming tenancy + leased status -> lease done",
+  stateOf(upcomingTenancyLeased, "lease") === "done",
+);
+ok(
+  "upcoming tenancy + leased status -> tenanted is the frontier (not done)",
+  stateOf(upcomingTenancyLeased, "tenanted") !== "done" &&
+    upcomingTenancyLeased.currentStep === "tenanted",
+);
+ok(
+  "upcoming tenancy + leased status -> detail still 'Tenancy starts soon'",
+  upcomingTenancyLeased.steps.find((s) => s.step === "tenanted")!.detail ===
+    "Tenancy starts soon",
+);
+const activeTenancyLeased = deriveRentalLifecycle(
+  PID,
+  inp({
+    hasRent: true,
+    propertyStatus: "leased",
+    photoCount: 3,
+    leadStatuses: ["leased"],
+    tenancyId: TID,
+    tenancyStatus: "active",
+  }),
+);
+ok(
+  "active tenancy + leased status -> tenanted done, 'Tenant in place'",
+  stateOf(activeTenancyLeased, "tenanted") === "done" &&
+    activeTenancyLeased.steps.find((s) => s.step === "tenanted")!.detail ===
+      "Tenant in place",
+);
+
 // An ENDED-only tenancy on a re-listed unit is NOT current progress: the rail
 // derives from re-marketing state, and lease is not auto-"done".
 const endedTenancy = deriveRentalLifecycle(

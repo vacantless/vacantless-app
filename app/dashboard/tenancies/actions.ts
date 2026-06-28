@@ -7,6 +7,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import {
   isTenancyStatus,
+  tenancyTakesUnitOffMarket,
   parseMoneyToCents,
   parseTermMonths,
   parseDateOrNull,
@@ -128,6 +129,32 @@ export async function createTenancy(formData: FormData) {
 
   const tenancyId = (inserted as { id: string } | null)?.id;
   if (!tenancyId) redirect("/dashboard/tenancies");
+
+  // P1 status truth (Codex re-review S371): a unit with an active/upcoming
+  // tenancy must not stay publicly bookable. The lifecycle rail already reads
+  // tenancy truth, but every PUBLIC/SHARE/FEED surface (get_public_listing,
+  // book_public_showing/submit_public_lead, the units picker, the syndication
+  // feed RPC, the Rentals list chip + Copy-link) keys off properties.status —
+  // so flip the unit to `leased` here, which closes all of them at once.
+  //
+  // Gated on the INSERTED tenancy's status (Codex re-review S371 follow-up): only
+  // a current/forthcoming (active/upcoming) tenancy takes the unit off-market.
+  // Recording a HISTORICAL (ended) tenancy on a currently-marketed rental must
+  // NOT take it offline — this mirrors migration 0089's backfill condition.
+  // The update is further guarded: org-scoped, and only from a publicly-exposed
+  // state (available/paused). It deliberately leaves `off_market` alone so
+  // watchLease's private units stay private, and `leased`/`draft` are already
+  // non-bookable (no-op).
+  if (tenancyTakesUnitOffMarket(status)) {
+    await supabase
+      .from("properties")
+      .update({ status: "leased" })
+      .eq("id", propertyId)
+      .eq("organization_id", org.id)
+      .in("status", ["available", "paused"]);
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    revalidatePath("/dashboard/properties");
+  }
 
   // Insert the co-tenant child rows (buildTenantList guarantees exactly one
   // primary among them — the future Rotessa payer). Each is resolved to a

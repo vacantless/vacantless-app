@@ -176,9 +176,13 @@ export function deriveRentalLifecycle(
     // A lease is "done" only when there is an actual tenancy record (or the unit
     // is explicitly marked leased) — never inferred from lead.status alone.
     lease: isLeased || hasCurrentTenancy,
-    // A tenant is in place only when a tenancy is active (or the unit is marked
-    // leased). An upcoming tenancy means the lease is signed but move-in is later.
-    tenanted: isLeased || tenancyActive,
+    // A tenant is in place only when a tenancy is ACTIVE. When a tenancy record
+    // exists, its status is the truth and OVERRIDES the leased-status shortcut —
+    // creating a tenancy now flips the unit to `leased` (so the public/booking
+    // surfaces close, S371), but an UPCOMING tenancy must still read as not-yet-
+    // tenanted even though the status is `leased`. Only fall back to the status
+    // shortcut when there is no tenancy record (a unit manually marked Leased).
+    tenanted: hasCurrentTenancy ? tenancyActive : isLeased,
   };
 
   // Make it monotone from the back: satisfied[i] = raw[i] || satisfied[i+1].
@@ -232,8 +236,11 @@ export function deriveRentalLifecycle(
         if (isLeased || hasCurrentTenancy) return "Lease done";
         return leasedLeads >= 1 ? "Ready to start tenancy" : "No lease yet";
       case "tenanted":
-        if (tenancyActive || isLeased) return "Tenant in place";
+        // Check the upcoming case BEFORE the leased shortcut: creating a tenancy
+        // flips the unit to `leased` (S371), so an upcoming tenancy would
+        // otherwise be mislabelled "Tenant in place". A real tenancy record wins.
         if (tenancyUpcoming) return "Tenancy starts soon";
+        if (tenancyActive || isLeased) return "Tenant in place";
         return "Not tenanted yet";
     }
   };
