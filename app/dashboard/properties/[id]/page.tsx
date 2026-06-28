@@ -100,6 +100,12 @@ import { CollapsibleSection } from "./collapsible-section";
 import { SectionDeeplinkOpener } from "./section-deeplink-opener";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
+import { EquipmentSection, type EquipmentView } from "./equipment-section";
+import {
+  computeEolDate as computeEquipmentEol,
+  equipmentStatusFor,
+  type EquipmentType,
+} from "@/lib/equipment-eol";
 import { localDateString } from "@/lib/leasing-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -312,6 +318,41 @@ export default async function PropertyDetailPage({
     };
   });
   const detectorAttention = detectorViews.filter(
+    (d) => d.status === "overdue" || d.status === "due_soon",
+  ).length;
+
+  // Major-equipment inventory (S361): this unit's logged water heaters / furnaces
+  // + each one's computed end-of-life date + status (against the org-local
+  // "today", using the per-type lead window). Shaped here so the section
+  // component stays presentational. RLS scopes the read.
+  const { data: equipmentRows } = await supabase
+    .from("unit_equipment")
+    .select(
+      "id, equipment_type, location, install_date, install_year, service_life_years, quantity, notes",
+    )
+    .eq("property_id", params.id)
+    .order("created_at", { ascending: true });
+  const equipmentViews: EquipmentView[] = ((equipmentRows ?? []) as any[]).map((r) => {
+    const input = {
+      equipment_type: r.equipment_type as EquipmentType,
+      install_date: r.install_date ?? null,
+      install_year: r.install_year ?? null,
+      service_life_years: r.service_life_years ?? null,
+    };
+    return {
+      id: r.id,
+      equipment_type: r.equipment_type as EquipmentType,
+      location: r.location ?? null,
+      install_date: r.install_date ?? null,
+      install_year: r.install_year ?? null,
+      service_life_years: r.service_life_years ?? null,
+      quantity: r.quantity ?? 1,
+      notes: r.notes ?? null,
+      eolDate: computeEquipmentEol(input),
+      status: equipmentStatusFor(input, detectorToday),
+    };
+  });
+  const equipmentAttention = equipmentViews.filter(
     (d) => d.status === "overdue" || d.status === "due_soon",
   ).length;
 
@@ -1895,6 +1936,21 @@ export default async function PropertyDetailPage({
         done={detectorViews.length > 0 && detectorAttention === 0}
       >
         <DetectorsSection propertyId={p.id} detectors={detectorViews} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="equipment"
+        title="Equipment"
+        status={
+          equipmentViews.length === 0
+            ? "Not logged"
+            : equipmentAttention > 0
+              ? `${equipmentAttention} need attention`
+              : `${equipmentViews.length} logged`
+        }
+        done={equipmentViews.length > 0 && equipmentAttention === 0}
+      >
+        <EquipmentSection propertyId={p.id} equipment={equipmentViews} />
       </CollapsibleSection>
 
       <CollapsibleSection

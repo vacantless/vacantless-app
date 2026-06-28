@@ -1663,3 +1663,95 @@ export async function removeDetector(formData: FormData) {
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?detector=removed#detectors`);
 }
+
+// ---------------------------------------------------------------------------
+// Major-equipment inventory (S361) — per-unit water-heater/furnace records
+// (unit_equipment, 0081). The sibling of the detector actions above; capture
+// surface for the date-anchored end-of-life reminder. RLS scopes reads/writes to
+// the caller's org; we set organization_id from the caller's org on insert so the
+// WITH CHECK passes. No tenant PII here — equipment facts only. Reuses
+// parseBoundedIntOrNull / parseDateOrNull from the detector block.
+// ---------------------------------------------------------------------------
+
+const EQUIPMENT_TYPES = ["water_heater", "furnace"] as const;
+
+function normalizeEquipmentType(raw: unknown): "water_heater" | "furnace" {
+  const v = String(raw ?? "").trim();
+  return (EQUIPMENT_TYPES as readonly string[]).includes(v)
+    ? (v as "water_heater" | "furnace")
+    : "water_heater";
+}
+
+export async function addEquipment(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  const installDate = parseDateOrNull(String(formData.get("install_date") ?? ""));
+  const installYear = parseBoundedIntOrNull(String(formData.get("install_year") ?? ""), 1950, 2100);
+  const quantityRaw = parseBoundedIntOrNull(String(formData.get("quantity") ?? ""), 1, 999);
+
+  const supabase = createClient();
+  await supabase.from("unit_equipment").insert({
+    organization_id: org.id,
+    property_id: propertyId,
+    equipment_type: normalizeEquipmentType(formData.get("equipment_type")),
+    location: String(formData.get("location") ?? "").trim() || null,
+    install_date: installDate,
+    install_year: installYear,
+    service_life_years: parseBoundedIntOrNull(String(formData.get("service_life_years") ?? ""), 1, 40),
+    quantity: quantityRaw ?? 1,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?equipment=added#equipment`);
+}
+
+export async function updateEquipment(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const installDate = parseDateOrNull(String(formData.get("install_date") ?? ""));
+  const installYear = parseBoundedIntOrNull(String(formData.get("install_year") ?? ""), 1950, 2100);
+  const quantityRaw = parseBoundedIntOrNull(String(formData.get("quantity") ?? ""), 1, 999);
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org; .eq("id") targets one row. The
+  // EOL stamp is NOT cleared here on purpose: the reminder keys on the computed
+  // EOL date, so changing the install date (e.g. logging a replacement) changes
+  // the EOL and re-arms the next cycle automatically (see equipment-eol-sweep.ts).
+  await supabase
+    .from("unit_equipment")
+    .update({
+      equipment_type: normalizeEquipmentType(formData.get("equipment_type")),
+      location: String(formData.get("location") ?? "").trim() || null,
+      install_date: installDate,
+      install_year: installYear,
+      service_life_years: parseBoundedIntOrNull(String(formData.get("service_life_years") ?? ""), 1, 40),
+      quantity: quantityRaw ?? 1,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?equipment=updated#equipment`);
+}
+
+export async function removeEquipment(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const supabase = createClient();
+  await supabase.from("unit_equipment").delete().eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?equipment=removed#equipment`);
+}

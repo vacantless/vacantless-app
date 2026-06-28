@@ -561,6 +561,26 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Some of the smoke / carbon-monoxide detectors you've logged at {{property_address}} are reaching their manufacturer end-of-life:\n\n{{detector_list}}\n\nOrder the right type now — a combination smoke + CO unit is not interchangeable with a smoke-only one — so you can replace the whole unit's set in a single trip. Please confirm each detector's manufacturer date and your local fire code; service life is typically ~10 years for smoke and combination alarms and ~7 for CO-only.\n\nReview or update this unit's detector inventory: {{dashboard_url}}",
     active: true,
   },
+  {
+    // Major-equipment end-of-life reminder (S361). The asset-tracked sibling of
+    // landlord_detector_eol: fires off the recorded equipment inventory
+    // (unit_equipment) when a water heater / furnace reaches its manufacturer
+    // end-of-life — anchored to each item's install date (a per-record sweep,
+    // app/api/cron/equipment-eol), not the seasonal calendar. Per-type lead
+    // window (water heater 120d, furnace 180d). Opt-in per org
+    // (isDripEnqueueEnabled) so it ships dark.
+    key: "leasing.landlord_equipment_eol",
+    family: "leasing",
+    audience: "operator",
+    label: "Major equipment reaching end of life",
+    description:
+      "When the water heaters and furnaces you've logged for a unit reach their manufacturer end-of-life (~10 years for tank water heaters, ~15 for furnaces), you get one reminder per unit — with enough lead time to plan the replacement on your schedule instead of reacting to a failure. Goes to your team, not the tenant. Built from each unit's Equipment list; off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "equipment_list", "earliest_eol", "dashboard_url"],
+    defaultSubject: "Major equipment due for replacement — {{property_address}}",
+    defaultBody:
+      "Some of the major equipment you've logged at {{property_address}} is reaching its manufacturer end-of-life:\n\n{{equipment_list}}\n\nPlan the replacement now, while you can do it on your own schedule. A tank water heater past ~10 years carries a rising risk of leaking and causing water damage, and a furnace is best replaced in the off-season before the next heating season — both cost considerably more as an emergency. Please confirm each item's manufacturer date.\n\nReview or update this unit's equipment: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
