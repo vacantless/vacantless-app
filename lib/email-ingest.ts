@@ -81,6 +81,15 @@ export function formatIngestLocalPart(token: string): string {
   return `${INGEST_LOCALPART_PREFIX}${token}`;
 }
 
+/** The full, user-facing ingest address for a token: "u-<token>@<domain>". The
+ * value the settings panel shows the landlord to forward/text photos to. */
+export function ingestAddressFromToken(
+  token: string,
+  domain: string = DEFAULT_INGEST_DOMAIN,
+): string {
+  return `${formatIngestLocalPart(token)}@${domain.trim().toLowerCase()}`;
+}
+
 /**
  * Given ONE recipient address, return the ingest token iff it is exactly
  * u-<token>@<ingestDomain> (domain + prefix matched case-insensitively; the
@@ -184,6 +193,18 @@ export function isAllowedSenderEmail(from: unknown, allowlist: unknown[]): boole
       .filter((a): a is string => a != null),
   );
   return allowed.has(sender);
+}
+
+/** Normalize a sender the SAME way for both the allow-list store and the inbound
+ * compare, by channel: a lowercased bare email, or an E.164 phone. Returns null
+ * for an unparseable value (the provisioning action rejects it). Used when the
+ * landlord adds a verified sender so what's stored matches what the webhook
+ * compares against. */
+export function normalizeIngestSender(channel: IngestChannel, raw: unknown): string | null {
+  if (channel === "sms") {
+    return typeof raw === "string" ? normalizePhoneE164(raw) : null;
+  }
+  return normalizeSenderEmail(raw);
 }
 
 /** Channel C (text/MMS) variant: compare normalized E.164 phone numbers. */

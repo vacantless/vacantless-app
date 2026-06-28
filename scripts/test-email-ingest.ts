@@ -6,6 +6,8 @@ import {
   isValidIngestToken,
   generateIngestToken,
   formatIngestLocalPart,
+  ingestAddressFromToken,
+  normalizeIngestSender,
   parseIngestToken,
   pickIngestToken,
   toRecipientList,
@@ -61,6 +63,16 @@ const gen = generateIngestToken();
 ok("generated token is valid", isValidIngestToken(gen));
 ok("generated tokens differ", generateIngestToken() !== generateIngestToken());
 ok("formatIngestLocalPart", formatIngestLocalPart(TOK) === `u-${TOK}`);
+ok("ingestAddressFromToken default domain", ingestAddressFromToken(TOK) === `u-${TOK}@in.vacantless.com`);
+ok("ingestAddressFromToken custom domain lowercased", ingestAddressFromToken(TOK, "IN.Example.com") === `u-${TOK}@in.example.com`);
+// round-trip: an address built from a token parses back to it
+ok("address round-trips to token", parseIngestToken(ingestAddressFromToken(TOK)) === TOK);
+
+// normalizeIngestSender — what the allow-list stores must match the inbound compare
+ok("normalizeIngestSender email lowercases bare", normalizeIngestSender("email", "Noam <Noam@X.com>") === "noam@x.com");
+ok("normalizeIngestSender email rejects junk", normalizeIngestSender("email", "nope") === null);
+ok("normalizeIngestSender sms to e164", normalizeIngestSender("sms", "519-915-8865") === "+15199158865");
+ok("normalizeIngestSender sms rejects junk", normalizeIngestSender("sms", "abc") === null);
 
 // parseIngestToken
 ok(

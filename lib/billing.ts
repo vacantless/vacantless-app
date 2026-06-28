@@ -84,7 +84,12 @@ export type PlanFeature =
   | "bank_feed"
   | "accounting"
   | "incident_intake"
-  | "incident_dispatch";
+  | "incident_dispatch"
+  // Capture Phase 3 ingress (S368): forward/text a plate or receipt to a per-org
+  // address and it files a pending capture. email-in = Growth+ (cheap to run);
+  // text-in = Premium (per-message MMS cost + the premium convenience).
+  | "capture_email_in"
+  | "capture_text_in";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -95,6 +100,8 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "accounting",
   "incident_intake",
   "incident_dispatch",
+  "capture_email_in",
+  "capture_text_in",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -110,6 +117,8 @@ function noEntitlements(): PlanEntitlements {
     accounting: false,
     incident_intake: false,
     incident_dispatch: false,
+    capture_email_in: false,
+    capture_text_in: false,
   };
 }
 
@@ -139,13 +148,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false },
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false }, // Plaid feed; tenant intake (Slices 1-4)
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7)
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false }, // Plaid feed; tenant intake (Slices 1-4); email-in capture
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -200,6 +209,21 @@ export function canUseIncidentIntake(plan: string | null | undefined): boolean {
 // Slices 5-7, the guardrail amendment). Premium+. Gated above intake.
 export function canUseIncidentDispatch(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "incident_dispatch");
+}
+
+// Whether this plan may provision an email-in capture address (forward a plate/
+// receipt photo to u-<token>@in.vacantless.com -> a pending capture). Growth+
+// (S368). The gate the ingest-address provisioning action + the settings panel
+// enforce; the inbound webhook itself stays org-scoped regardless.
+export function canUseCaptureEmailIn(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "capture_email_in");
+}
+
+// Whether this plan may provision a text/MMS-in capture identity. Premium+
+// (S368) — above email-in, since MMS carries a per-message cost. Gated at
+// provisioning; the foundation is tier-agnostic.
+export function canUseCaptureTextIn(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "capture_text_in");
 }
 
 // --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------

@@ -12,6 +12,7 @@ import {
   type IngestLoopHeaders,
 } from "@/lib/email-ingest";
 import { parseAssetImage } from "@/lib/asset-capture-vision";
+import type { AssetDraft } from "@/lib/asset-capture";
 import {
   documentStoragePath,
   defaultTitleFromFilename,
@@ -208,20 +209,23 @@ export async function POST(req: NextRequest) {
   );
 
   // parseAssetImage runs ONLY on a vision-parseable image; a PDF lands as a
-  // store-only pending capture (no prefill) — the engine takes images in v1.
-  let draftKind: "plate" | "receipt" | null = null;
+  // store-only pending capture (no prefill) — the engine takes images in v1. The
+  // parsed draft is persisted on the row so the review queue prefills the confirm
+  // form without a second vision call.
+  let draft: AssetDraft | null = null;
   if (decision.attachment.parseable) {
     const parsed = await parseAssetImage(
       Buffer.from(decision.attachment.bytes),
       decision.attachment.mimeType,
     );
-    if (parsed.ok) draftKind = parsed.draft.kind;
+    if (parsed.ok) draft = parsed.draft;
     // A parse miss is non-fatal: we still keep the image as a pending capture so
-    // the landlord can confirm/enter it from the review queue (Slice 2).
+    // the landlord can confirm/enter it from the review queue.
   }
 
   const stored = await storeIngestCapture(admin, orgId!, decision.attachment, {
-    docType: draftKind === "receipt" || !decision.attachment.parseable ? "receipt" : "other",
+    docType: draft?.kind === "receipt" || !decision.attachment.parseable ? "receipt" : "other",
+    draft,
     dedupeKey,
   });
 
@@ -249,7 +253,7 @@ async function storeIngestCapture(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
   orgId: string,
   attachment: { filename: string; mimeType: string; bytes: Uint8Array },
-  opts: { docType: "receipt" | "other"; dedupeKey: string },
+  opts: { docType: "receipt" | "other"; draft: AssetDraft | null; dedupeKey: string },
 ): Promise<string | "duplicate" | null> {
   try {
     // Pre-check dedupe so we don't upload bytes for a message we've seen.
@@ -287,6 +291,7 @@ async function storeIngestCapture(
       source: "ingest_email",
       pending_until: pendingCaptureUntil(nowIso, INGEST_PENDING_GRACE_HOURS),
       ingest_message_key: opts.dedupeKey,
+      ingest_draft: opts.draft, // parsed fields for the review-queue prefill (or NULL)
     });
     if (insErr) {
       // Unique-violation on the dedupe key => a concurrent duplicate; treat as such.
