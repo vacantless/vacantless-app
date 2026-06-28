@@ -85,7 +85,7 @@ export default async function PeoplePage() {
     <div>
       <BrandBanner
         icon={<Icons.users />}
-        eyebrow="Property management"
+        eyebrow="Tenants & contacts"
         title="People"
         subtitle="Everyone you've rented to, as a permanent record that follows the person across units and tenancies. Open anyone to see every lease and document tied to them — even from a tenancy that has ended."
       />

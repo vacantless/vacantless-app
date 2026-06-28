@@ -291,7 +291,7 @@ export default async function StandardPolicyPage({
       <BrandBanner
         eyebrow="Rentals"
         title="Building standard policy"
-        subtitle="Set your standard policy once. Every unit inherits it on its listings, copy, and syndication feed — so you only re-enter a value where a building or unit genuinely differs."
+        subtitle="Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed — so you only re-enter a value where a building or unit genuinely differs."
         icon={<Icons.building className="h-6 w-6" />}
       />
 

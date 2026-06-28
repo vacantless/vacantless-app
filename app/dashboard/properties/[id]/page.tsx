@@ -282,14 +282,25 @@ export default async function PropertyDetailPage({
   // The unit's tenancy (active preferred, else most recent) — lets the
   // lifecycle rail's Lease/Tenanted steps deep-link into THIS unit's tenancy
   // rather than the cross-unit hub (S282, IA G8 fix).
-  const { data: tenancy } = await supabase
+  const { data: tenancyRows } = await supabase
     .from("tenancies")
-    .select("id")
+    .select("id, status")
     .eq("property_id", p.id)
-    .order("start_date", { ascending: false }) // most recent tenancy
-    .limit(1)
-    .maybeSingle();
-  const tenancyId = (tenancy as { id: string } | null)?.id ?? null;
+    .order("start_date", { ascending: false }); // most recent first
+  // Prefer an active tenancy, then an upcoming one, else the most recent (ended).
+  // An active/upcoming tenancy is what makes the Lease/Tenanted steps true — so
+  // the rail can never say "not tenanted" while an active tenancy exists.
+  const tenancyList =
+    (tenancyRows as { id: string; status: string }[] | null) ?? [];
+  const chosenTenancy =
+    tenancyList.find((t) => t.status === "active") ??
+    tenancyList.find((t) => t.status === "upcoming") ??
+    tenancyList[0] ??
+    null;
+  const tenancyId = chosenTenancy?.id ?? null;
+  const tenancyStatus =
+    (chosenTenancy?.status as "upcoming" | "active" | "ended" | undefined) ??
+    null;
 
   const eligibleCount = countEligible(leadRows, p.rent_cents);
   const showBlastCard = blastOfferable(
@@ -663,6 +674,7 @@ export default async function PropertyDetailPage({
     hasAvailability: (availabilityCount ?? 0) > 0,
     leadStatuses: leadRows.map((l) => l.status),
     tenancyId,
+    tenancyStatus,
   });
 
   // Forward-derivation (IA Step 4 slice 3): the PRE-FILLED next action for the

@@ -183,9 +183,9 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     key: "leasing.new_lead",
     family: "leasing",
     audience: "operator",
-    label: "New lead — action required",
+    label: "New inquiry — action required",
     description:
-      "When a new rental inquiry comes in, your leasing team is notified so you can reply fast. Defaults to members who manage leads; edit the recipients below.",
+      "When a new rental inquiry comes in, your leasing team is notified so you can reply fast. Defaults to members who manage inquiries; edit the recipients below.",
     tokens: [
       ...COMMON_TOKENS,
       "lead_name",
@@ -195,7 +195,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "screening",
       "dashboard_url",
     ],
-    defaultSubject: "🔴 New lead: {{lead_name}} — {{property_address}}",
+    defaultSubject: "🔴 New inquiry: {{lead_name}} — {{property_address}}",
     // {{screening}} expands to a labeled, multi-line block of whatever the org
     // collected (occupants / pets / income / custom questions like Employment +
     // Other units) so an email-first operator (Aaliyah) sees the screening
@@ -204,7 +204,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     // collapse, so the email still reads cleanly. Runs of blank lines collapse
     // into one paragraph break (bodyToParagraphs splits on \n{2,}).
     defaultBody:
-      "New lead — action required for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
+      "New inquiry — action required for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
     defaultAccent: "#dc2626",
   },
@@ -221,7 +221,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Daily leasing snapshot",
     description:
-      "Once each weekday, at the start of your shift, a single digest of new leads, today's showings, showings later this week, and leads still waiting on a viewing. Quiet days send nothing. Defaults to members who manage leads; edit the recipients below.",
+      "Once each weekday, at the start of your shift, a single digest of new inquiries, today's viewings, viewings later this week, and inquiries still waiting on a viewing. Quiet days send nothing. Defaults to members who manage inquiries; edit the recipients below.",
     tokens: [
       "org_name",
       "snapshot_date",
@@ -233,7 +233,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     defaultSubject:
       "Leasing snapshot — {{snapshot_date}}: {{new_count}} new (24h), {{showings_today_count}} showing(s) today",
     defaultBody:
-      "Here is today's leasing snapshot for {{snapshot_date}}.\n\n{{snapshot}}\n\nThis is a daily status view, not a to-do backlog — nothing here is overdue. One email per weekday at the start of your shift.\n\nOpen your pipeline: {{dashboard_url}}",
+      "Here is today's leasing snapshot for {{snapshot_date}}.\n\n{{snapshot}}\n\nThis is a daily status view, not a to-do backlog — nothing here is overdue. One email per weekday at the start of your shift.\n\nOpen your inquiries: {{dashboard_url}}",
     active: true,
   },
   // Rent-increase autopilot (the FREE compliance wedge — S339). The proactive
@@ -252,7 +252,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Rent increase due — serve the N1",
     description:
-      "When one of your tenancies reaches its annual rent-increase window, you get a reminder of the date you must serve the Form N1 and the guideline amount — so you never leave a legal increase on the table. One email per unit, once per cycle. Defaults to members who manage leads; edit the recipients below.",
+      "When one of your tenancies reaches its annual rent-increase window, you get a reminder of the date you must serve the Form N1 and the guideline amount — so you never leave a legal increase on the table. One email per unit, once per cycle. Defaults to members who manage inquiries; edit the recipients below.",
     tokens: [
       ...COMMON_TOKENS,
       "tenant_names",

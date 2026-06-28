@@ -36,6 +36,10 @@ export const LIFECYCLE_STEPS = [
 
 export type LifecycleStep = (typeof LIFECYCLE_STEPS)[number];
 
+// A unit's tenancy status (mirrors tenancies.status). This — not lead.status —
+// is the authoritative "is there a lease / is a tenant in place" signal.
+export type TenancyLifecycleStatus = "upcoming" | "active" | "ended";
+
 // "done"    = the operator is past this step (progress has moved beyond it)
 // "current" = the frontier — the earliest step not yet satisfied; act here next
 // "todo"    = still ahead
@@ -90,6 +94,16 @@ export type RentalLifecycleInput = {
    * "new tenancy" form for this property (the forward-derivation cascade).
    */
   tenancyId?: string | null;
+  /**
+   * The status of the chosen tenancy (active preferred, else upcoming, else the
+   * most recent ended one). This is the AUTHORITATIVE lease/tenanted signal: an
+   * actual tenancy record — not lead.status — proves a lease exists, and an
+   * `active` tenancy proves a tenant is in place. Only `active`/`upcoming`
+   * tenancies count as forward lifecycle progress; an `ended`-only tenancy means
+   * the unit is between tenants and the rail derives from its re-marketing state.
+   * Null/omitted = no tenancy.
+   */
+  tenancyStatus?: TenancyLifecycleStatus | null;
 };
 
 export type LifecycleStepResult = {
@@ -132,6 +146,13 @@ export function deriveRentalLifecycle(
   const isLive = isPubliclyVisible(input.propertyStatus);
   const isLeased = input.propertyStatus === "leased";
 
+  // An actual tenancy is the truth for the Lease/Tenanted steps — NOT lead.status.
+  // Only a live (active) or forthcoming (upcoming) tenancy is forward progress;
+  // an ended-only tenancy means the unit is between tenants.
+  const tenancyActive = input.tenancyStatus === "active";
+  const tenancyUpcoming = input.tenancyStatus === "upcoming";
+  const hasCurrentTenancy = tenancyActive || tenancyUpcoming;
+
   const maxLeadRank = input.leadStatuses.reduce(
     (max, s) => Math.max(max, LEAD_RANK[s] ?? 0),
     0,
@@ -152,8 +173,12 @@ export function deriveRentalLifecycle(
     inquiries: totalLeads >= 1,
     viewings: maxLeadRank >= LEAD_RANK.booked,
     screen: maxLeadRank >= LEAD_RANK.applied,
-    lease: isLeased || maxLeadRank >= LEAD_RANK.leased,
-    tenanted: isLeased,
+    // A lease is "done" only when there is an actual tenancy record (or the unit
+    // is explicitly marked leased) — never inferred from lead.status alone.
+    lease: isLeased || hasCurrentTenancy,
+    // A tenant is in place only when a tenancy is active (or the unit is marked
+    // leased). An upcoming tenancy means the lease is signed but move-in is later.
+    tenanted: isLeased || tenancyActive,
   };
 
   // Make it monotone from the back: satisfied[i] = raw[i] || satisfied[i+1].
@@ -201,10 +226,15 @@ export function deriveRentalLifecycle(
           ? plural(appliedLeads, "application", "applications")
           : "No applications yet";
       case "lease":
-        if (isLeased) return "Lease done";
-        return leasedLeads >= 1 ? "Lease signed" : "No lease yet";
+        // Only claim a lease when one actually exists (tenancy record or the
+        // unit is marked leased). A lead marked "leased" with no tenancy yet is
+        // a prompt to create the tenancy, not proof a lease was signed.
+        if (isLeased || hasCurrentTenancy) return "Lease done";
+        return leasedLeads >= 1 ? "Ready to start tenancy" : "No lease yet";
       case "tenanted":
-        return isLeased ? "Tenant in place" : "Not tenanted yet";
+        if (tenancyActive || isLeased) return "Tenant in place";
+        if (tenancyUpcoming) return "Tenancy starts soon";
+        return "Not tenanted yet";
     }
   };
 

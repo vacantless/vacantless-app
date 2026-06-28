@@ -294,7 +294,7 @@ export async function GET(req: NextRequest) {
         eventKey: EVENT_KEY,
         vars,
         operatorFallback,
-        action: { label: "Open your pipeline", url: `${APP_URL}/dashboard/leads` },
+        action: { label: "Open your inquiries", url: `${APP_URL}/dashboard/leads` },
       });
 
       // Stamp regardless of whether the event was enabled/had recipients — the

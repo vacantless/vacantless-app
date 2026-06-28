@@ -33,13 +33,15 @@ export default async function PropertiesPage({
   searchParams: { added?: string; import?: string };
 }) {
   const supabase = createClient();
-  const [{ data: properties }, { data: leadRefs }] = await Promise.all([
-    supabase
-      .from("properties")
-      .select("id, address, rent_cents, beds, baths, status")
-      .order("created_at", { ascending: false }),
-    supabase.from("leads").select("property_id"),
-  ]);
+  const [{ data: properties }, { data: leadRefs }, { data: photoRefs }] =
+    await Promise.all([
+      supabase
+        .from("properties")
+        .select("id, address, rent_cents, beds, baths, status")
+        .order("created_at", { ascending: false }),
+      supabase.from("leads").select("property_id"),
+      supabase.from("property_photos").select("property_id"),
+    ]);
 
   const rows = (properties ?? []) as PropertyRow[];
 
@@ -48,6 +50,16 @@ export default async function PropertiesPage({
   for (const r of (leadRefs ?? []) as { property_id: string | null }[]) {
     if (r.property_id) {
       leadCounts.set(r.property_id, (leadCounts.get(r.property_id) ?? 0) + 1);
+    }
+  }
+
+  // Per-property photo counts — so a shareable-but-photo-poor rental can be
+  // labelled at the list level (Codex QA: don't offer a bare "Copy link" with no
+  // signal that the listing has no photos).
+  const photoCounts = new Map<string, number>();
+  for (const r of (photoRefs ?? []) as { property_id: string | null }[]) {
+    if (r.property_id) {
+      photoCounts.set(r.property_id, (photoCounts.get(r.property_id) ?? 0) + 1);
     }
   }
 
@@ -142,7 +154,20 @@ export default async function PropertiesPage({
                   {propertyStatusLabel(p.status)}
                 </StatusChip>
                 {isPubliclyVisible(p.status) ? (
-                  <CopyIntakeButton url={intakeUrl(p.id)} />
+                  <span className="flex items-center gap-1.5">
+                    <CopyIntakeButton url={intakeUrl(p.id)} />
+                    {(photoCounts.get(p.id) ?? 0) === 0 && (
+                      // The link works, but a photo-less listing gets far fewer
+                      // inquiries — label it so sharing is an informed choice
+                      // rather than a surprise (Codex QA). Non-blocking.
+                      <span
+                        title="The link works, but listings without photos get far fewer inquiries. Add photos before sharing widely."
+                        className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+                      >
+                        No photos
+                      </span>
+                    )}
+                  </span>
                 ) : (
                   // Draft / off-market: the public /r link 404s, so don't offer
                   // a Copy button that hands out a broken link (QA blocker #1).

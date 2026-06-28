@@ -69,7 +69,7 @@ export default async function TenanciesPage({
     <div>
       <BrandBanner
         icon={<Icons.key />}
-        eyebrow="Property management"
+        eyebrow="Leases & tenants"
         title="Tenancies"
         subtitle="Your active leases. Each tenancy links a tenant to a unit with the signed rent and lease dates — the record rent collection and tenant messaging build on."
         action={

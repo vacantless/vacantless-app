@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Vacantless",
-  description: "Leasing automation for landlords and property managers.",
+  description: "Rental leasing software for landlords and property managers.",
 };
 
 export default function RootLayout({

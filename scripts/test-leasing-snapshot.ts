@@ -127,13 +127,13 @@ const block = buildSnapshotBlock(
   { newLeads: [lead()], showingsToday: [showing()], showingsWeek: [], noShowing: [] },
   TZ,
 );
-ok("block: new-leads header with count", block.includes("NEW LEADS — LAST 24 HOURS (1)"));
+ok("block: new-leads header with count", block.includes("NEW INQUIRIES — LAST 24 HOURS (1)"));
 ok("block: lead name+unit line", block.includes("• Jane Doe — 22 King St W #602"));
 ok("block: lead detail line", block.includes("Move-in: 2026-07-01 · Source: kijiji · Phone: 519-555-1234"));
-ok("block: showings-today header", block.includes("SHOWINGS TODAY (1)"));
-ok("block: showing time line", block.includes("Showing: Thu Jun 25, 2:30pm · Phone: 519-555-9999"));
-ok("block: empty week section message", block.includes("No showings booked for the rest of the week."));
-ok("block: empty nudge section message", block.includes("Every lead from this week has a showing booked. Nice."));
+ok("block: showings-today header", block.includes("VIEWINGS TODAY (1)"));
+ok("block: showing time line", block.includes("Viewing: Thu Jun 25, 2:30pm · Phone: 519-555-9999"));
+ok("block: empty week section message", block.includes("No viewings booked for the rest of the week."));
+ok("block: empty nudge section message", block.includes("Every inquiry from this week has a viewing booked. Nice."));
 // blocks separate with a blank line so the branded shell renders paragraphs
 ok("block: blank-line separated", block.includes("\n\n"));
 
@@ -149,7 +149,7 @@ ok("block: missing move-in/source/phone fallbacks", sparse.includes("Move-in: no
 // cap: more than SNAPSHOT_SECTION_CAP leads -> overflow line
 const many = Array.from({ length: SNAPSHOT_SECTION_CAP + 5 }, (_, i) => lead({ name: `Lead ${i}` }));
 const capped = buildSnapshotBlock({ newLeads: many, showingsToday: [], showingsWeek: [], noShowing: [] }, TZ);
-ok("block: caps long section", capped.includes(`NEW LEADS — LAST 24 HOURS (${SNAPSHOT_SECTION_CAP + 5})`));
+ok("block: caps long section", capped.includes(`NEW INQUIRIES — LAST 24 HOURS (${SNAPSHOT_SECTION_CAP + 5})`));
 ok("block: shows overflow count", capped.includes("…and 5 more not shown."));
 
 // --- snapshotDateLabel -------------------------------------------------------

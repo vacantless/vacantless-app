@@ -134,6 +134,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   tenant: "Add at least one tenant with a name.",
   max: `A tenancy can have at most ${MAX_TENANTS_PER_TENANCY} tenants.`,
   forbidden: "You don't have permission to manage tenancies.",
+  // Server-side guardrails (Codex QA, 2026-06-28).
+  property_not_found: "That rental couldn't be found in your account.",
+  lead_not_found: "That inquiry couldn't be found in your account.",
+  lead_mismatch: "That inquiry is for a different rental than the one selected.",
+  dup_tenancy:
+    "This rental already has an active or upcoming tenancy. End it first, or pick another rental.",
 };
 
 export function tenancyErrorMessage(code: string | undefined): string | null {

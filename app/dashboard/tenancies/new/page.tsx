@@ -62,14 +62,35 @@ export default async function NewTenancyPage({
   // so "create the lease for this unit" lands with the unit already chosen.
   const defaultPropertyId = lead?.property_id ?? searchParams.property ?? "";
 
+  // Units already carrying an active/upcoming tenancy are "spoken for" and must
+  // not be offered again — listing one invited the double-booking bug where
+  // 18 Shorncliffe (already actively tenanted) showed up in the picker (Codex QA).
+  const { data: liveTenancyRows } = await supabase
+    .from("tenancies")
+    .select("property_id")
+    .in("status", ["active", "upcoming"]);
+  const spokenFor = new Set(
+    ((liveTenancyRows ?? []) as { property_id: string | null }[])
+      .map((t) => t.property_id)
+      .filter((id): id is string => !!id),
+  );
+
   // A tenancy attaches to a real, in-use unit, so Draft and Off-market rentals
   // (e.g. a freshly duplicated "Copy of …" draft) don't belong in the picker —
-  // listing them invited attaching a lease to a placeholder (S226 QA-audit).
-  // Exception: keep the convert-flow lead's own unit even if it's not visible,
-  // so the prefilled selection still resolves.
+  // listing them invited attaching a lease to a placeholder (S226 QA-audit) —
+  // and neither do units that already have a live tenancy. Exception: keep the
+  // convert-flow lead's own unit visible if it's just non-public (so the prefill
+  // resolves), but NOT if it's already tenanted.
   const properties = allProperties.filter(
-    (p) => isPubliclyVisible(p.status) || p.id === defaultPropertyId,
+    (p) =>
+      !spokenFor.has(p.id) &&
+      (isPubliclyVisible(p.status) || p.id === defaultPropertyId),
   );
+
+  // The pre-selected unit (convert flow, or ?property= from the lifecycle rail)
+  // already has a live tenancy → we filtered it out; tell the operator why.
+  const defaultUnitSpokenFor =
+    defaultPropertyId !== "" && spokenFor.has(defaultPropertyId);
 
   const leadProperty = properties.find((p) => p.id === defaultPropertyId);
   const defaultRent =
@@ -104,6 +125,14 @@ export default async function NewTenancyPage({
       {errMsg && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {errMsg}
+        </p>
+      )}
+
+      {defaultUnitSpokenFor && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          {isConvert
+            ? "This inquiry's rental already has an active or upcoming tenancy. End that tenancy first, or pick another rental below."
+            : "That rental already has an active or upcoming tenancy. Pick another rental below."}
         </p>
       )}
 

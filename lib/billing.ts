@@ -341,13 +341,14 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceCents: 24900,
     priceEnv: "STRIPE_PRICE_PREMIUM",
     maxActiveListings: null,
-    blurb: "Everything in Growth, plus full books, operations, and automation.",
+    blurb:
+      "Everything in Growth, plus full books, repairs, and automatic reminders.",
     features: [
       "Everything in Growth",
       "Full accounting module",
       "Maintenance / repair dispatch",
       "Automatic post-viewing follow-up",
-      "Round-robin lead assignment",
+      "Shares new inquiries evenly across your team",
       "Priority support",
     ],
   },

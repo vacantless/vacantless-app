@@ -65,6 +65,48 @@ export async function createTenancy(formData: FormData) {
   const status = isTenancyStatus(statusRaw) ? statusRaw : "active";
 
   const supabase = createClient();
+
+  // Server-side guardrails (Codex QA, 2026-06-28). The form is RLS-scoped, but a
+  // crafted POST could still pair the caller's org with a foreign property/lead,
+  // or double-book a unit that already has a live tenancy. Re-validate here — the
+  // page-level filtering is convenience; THIS is the enforcement.
+  const guardFail = (code: string): never => {
+    const q = fromLead ? `from=${fromLead}&` : "";
+    redirect(`/dashboard/tenancies/new?${q}err=${code}`);
+  };
+
+  // 1. The property must belong to the caller's org (RLS scopes this SELECT, so
+  //    a foreign property_id simply won't resolve).
+  const { data: propRow } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!propRow) guardFail("property_not_found");
+
+  // 2. A convert-flow lead must belong to the org and, if it names a unit, to
+  //    the SAME unit this tenancy is for.
+  if (fromLead) {
+    const { data: leadRow } = await supabase
+      .from("leads")
+      .select("id, property_id")
+      .eq("id", fromLead)
+      .maybeSingle();
+    if (!leadRow) guardFail("lead_not_found");
+    const leadProp = (leadRow as { property_id: string | null }).property_id;
+    if (leadProp && leadProp !== propertyId) guardFail("lead_mismatch");
+  }
+
+  // 3. No double-booking: a unit can hold at most one active/upcoming tenancy.
+  //    (The DB also enforces one ACTIVE per property via a partial unique index;
+  //    this catches upcoming overlaps and returns a friendly message.)
+  const { data: liveTenancies } = await supabase
+    .from("tenancies")
+    .select("id")
+    .eq("property_id", propertyId)
+    .in("status", ["active", "upcoming"]);
+  if ((liveTenancies ?? []).length > 0) guardFail("dup_tenancy");
+
   const { data: inserted } = await supabase
     .from("tenancies")
     .insert({

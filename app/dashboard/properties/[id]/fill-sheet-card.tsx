@@ -128,7 +128,7 @@ export function FillSheetCard({ sheets }: { sheets: FillSheet[] }) {
         )}
 
         <p className="mt-3 text-xs text-gray-400">
-          A reference, not automation — you paste each value into the portal
+          A reference you copy from — you paste each value into the rental site
           yourself. Nothing here is submitted for you. Edit the rental above and
           this updates automatically.
         </p>

@@ -43,7 +43,15 @@ export function PhotoGallery({
     };
   }, [open, count]);
 
-  if (count === 0) return null;
+  // No photos yet: show a calm placeholder rather than a blank gap, so a shared
+  // link to a not-yet-photographed unit still reads as intentional (Codex QA).
+  if (count === 0) {
+    return (
+      <div className="mt-6 flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center">
+        <span className="text-sm text-gray-400">Photos coming soon</span>
+      </div>
+    );
+  }
   const [cover, ...rest] = photos;
 
   return (

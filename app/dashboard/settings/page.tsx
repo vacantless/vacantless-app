@@ -504,14 +504,14 @@ export default async function SettingsPage({
             <div className="flex items-center gap-2.5">
               <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
               <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Listing syndication feed
+                Listing feed for rental sites
               </h3>
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Your Live listings are published as a single feed a rental
-              aggregator (like Zumper, PadMapper, or Rentsync) can pull from to
-              syndicate them. Add a contact phone below, then send the feed link
-              to the aggregator to get listed.
+              Your Live listings are published as a single feed that rental sites
+              (like Zumper, PadMapper, or Rentsync) can pull from to list them.
+              Add a contact phone below, then send the feed link to the rental
+              site to get listed.
             </p>
 
             {searchParams.feed === "saved" && (
@@ -554,8 +554,8 @@ export default async function SettingsPage({
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
                 <span className="mt-1 block text-xs text-gray-400">
-                  Required by aggregators. Shown on syndicated listings so renters
-                  can reach you.
+                  Required by most rental sites. Shown on your listings there so
+                  renters can reach you.
                 </span>
               </label>
               <label className="block">
@@ -587,7 +587,7 @@ export default async function SettingsPage({
                 Your feed link
               </h4>
               <p className="mt-1 text-sm text-gray-500">
-                Send this URL to an aggregator to syndicate your Live listings. It
+                Send this URL to a rental site to list your Live rentals there. It
                 updates automatically as your listings change.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -634,7 +634,7 @@ export default async function SettingsPage({
                       {feedSummary.readyCount} of {feedSummary.total}
                     </span>{" "}
                     Live {feedSummary.total === 1 ? "listing is" : "listings are"}{" "}
-                    ready to syndicate.
+                    ready to list on rental sites.
                   </p>
                   {feedSummary.skippedCount > 0 && (
                     <div className="mt-3">
@@ -665,8 +665,8 @@ export default async function SettingsPage({
                 </>
               )}
               <p className="mt-3 text-xs text-gray-400">
-                Only Live listings syndicate. Drafts, paused, and leased listings
-                are never included.
+                Only Live listings are included. Drafts, paused, and leased
+                listings are never sent to rental sites.
               </p>
             </div>
           </div>

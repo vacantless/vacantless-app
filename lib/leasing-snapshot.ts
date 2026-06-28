@@ -274,7 +274,7 @@ function leadBlock(l: SnapshotLead): string {
 
 function showingBlock(s: SnapshotShowing, tz: string): string {
   const line1 = `• ${cleanName(s.name)} — ${cleanUnit(s.property_address)}`;
-  const line2 = `Showing: ${formatSnapshotTime(s.scheduled_at, tz)} · Phone: ${cleanPhone(s.phone)}`;
+  const line2 = `Viewing: ${formatSnapshotTime(s.scheduled_at, tz)} · Phone: ${cleanPhone(s.phone)}`;
   return `${line1}\n${line2}`;
 }
 
@@ -298,24 +298,24 @@ function section(title: string, blocks: string[], emptyMsg: string): string {
 export function buildSnapshotBlock(b: SnapshotBuckets, tz: string): string {
   return [
     section(
-      "NEW LEADS — LAST 24 HOURS",
+      "NEW INQUIRIES — LAST 24 HOURS",
       b.newLeads.map(leadBlock),
-      "No new leads in the last 24 hours.",
+      "No new inquiries in the last 24 hours.",
     ),
     section(
-      "SHOWINGS TODAY",
+      "VIEWINGS TODAY",
       b.showingsToday.map((s) => showingBlock(s, tz)),
-      "No showings booked for today.",
+      "No viewings booked for today.",
     ),
     section(
-      "SHOWINGS LATER THIS WEEK",
+      "VIEWINGS LATER THIS WEEK",
       b.showingsWeek.map((s) => showingBlock(s, tz)),
-      "No showings booked for the rest of the week.",
+      "No viewings booked for the rest of the week.",
     ),
     section(
-      "CAME IN THIS WEEK, NO SHOWING BOOKED YET",
+      "CAME IN THIS WEEK, NO VIEWING BOOKED YET",
       b.noShowing.map(leadBlock),
-      "Every lead from this week has a showing booked. Nice.",
+      "Every inquiry from this week has a viewing booked. Nice.",
     ),
   ].join("\n\n");
 }

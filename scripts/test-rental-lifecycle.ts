@@ -202,14 +202,21 @@ const leadLeased = deriveRentalLifecycle(
     leadStatuses: ["applied", "leased"],
   }),
 );
-ok("leased lead -> lease done", stateOf(leadLeased, "lease") === "done");
+// A lead marked "leased" is NOT proof a lease exists — without an actual
+// tenancy record, the Lease step is the frontier (a prompt to create the
+// tenancy), not "done", and we never claim "Lease signed".
 ok(
-  "leased lead but unit available -> tenanted current",
-  leadLeased.currentStep === "tenanted",
+  "leased lead, no tenancy -> lease is current (not done)",
+  stateOf(leadLeased, "lease") === "current",
 );
 ok(
-  "lease detail when a lead is leased",
-  leadLeased.steps.find((s) => s.step === "lease")!.detail === "Lease signed",
+  "leased lead, no tenancy -> lease is the frontier",
+  leadLeased.currentStep === "lease",
+);
+ok(
+  "lease detail when a lead is leased but no tenancy",
+  leadLeased.steps.find((s) => s.step === "lease")!.detail ===
+    "Ready to start tenancy",
 );
 
 // --- fully leased unit ------------------------------------------------------
@@ -328,6 +335,83 @@ ok(
   "tenanted href -> this unit's tenancy when one exists",
   withTenancy.steps.find((s) => s.step === "tenanted")!.href ===
     `/dashboard/tenancies/${TID}`,
+);
+
+// --- REGRESSION (Codex QA, 2026-06-28): lifecycle truth ---------------------
+// 18 Shorncliffe showed "Lease signed" + "Not tenanted yet" while an ACTIVE
+// tenancy existed (unit still marked 'available', lead 'leased'). An active
+// tenancy is the truth: the unit must read fully tenanted, never "not tenanted".
+const activeTenancyAvailable = deriveRentalLifecycle(
+  PID,
+  inp({
+    hasRent: true,
+    propertyStatus: "available",
+    photoCount: 3,
+    leadStatuses: ["leased"],
+    tenancyId: TID,
+    tenancyStatus: "active",
+  }),
+);
+ok(
+  "active tenancy on available unit -> tenanted done",
+  stateOf(activeTenancyAvailable, "tenanted") === "done",
+);
+ok(
+  "active tenancy -> currentStep null (fully leased)",
+  activeTenancyAvailable.currentStep === null,
+);
+ok(
+  "active tenancy -> lease detail 'Lease done'",
+  activeTenancyAvailable.steps.find((s) => s.step === "lease")!.detail ===
+    "Lease done",
+);
+ok(
+  "active tenancy -> tenanted detail 'Tenant in place'",
+  activeTenancyAvailable.steps.find((s) => s.step === "tenanted")!.detail ===
+    "Tenant in place",
+);
+
+// An UPCOMING tenancy: a lease exists (done) but the tenant is not in yet.
+const upcomingTenancy = deriveRentalLifecycle(
+  PID,
+  inp({
+    hasRent: true,
+    propertyStatus: "available",
+    photoCount: 3,
+    leadStatuses: ["applied"],
+    tenancyId: TID,
+    tenancyStatus: "upcoming",
+  }),
+);
+ok(
+  "upcoming tenancy -> lease done",
+  stateOf(upcomingTenancy, "lease") === "done",
+);
+ok(
+  "upcoming tenancy -> tenanted is the frontier",
+  upcomingTenancy.currentStep === "tenanted",
+);
+ok(
+  "upcoming tenancy -> tenanted detail 'Tenancy starts soon'",
+  upcomingTenancy.steps.find((s) => s.step === "tenanted")!.detail ===
+    "Tenancy starts soon",
+);
+// An ENDED-only tenancy on a re-listed unit is NOT current progress: the rail
+// derives from re-marketing state, and lease is not auto-"done".
+const endedTenancy = deriveRentalLifecycle(
+  PID,
+  inp({
+    hasRent: true,
+    propertyStatus: "available",
+    photoCount: 3,
+    leadStatuses: ["new"],
+    tenancyId: TID,
+    tenancyStatus: "ended",
+  }),
+);
+ok(
+  "ended-only tenancy -> lease NOT done",
+  stateOf(endedTenancy, "lease") !== "done",
 );
 
 // --- paused unit still counts as marketed -----------------------------------

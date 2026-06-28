@@ -26,7 +26,7 @@ const SECTIONS: Section[] = [
   {
     href: "/dashboard/leads",
     title: "Inquiries",
-    desc: "Every renter inquiry across all your rentals — reply, qualify, and move them through the pipeline.",
+    desc: "Every renter inquiry across all your rentals — reply, qualify, and move them through your follow-up list.",
     icon: "chat",
   },
   {
