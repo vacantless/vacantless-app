@@ -47,6 +47,24 @@ export const MAX_TEXT_LEN = 120;
 /** Sanity ceiling on a parsed receipt total, in cents ($1,000,000). */
 export const MAX_TOTAL_CENTS = 100_000_000;
 
+/**
+ * HTTP header values must be an ASCII ByteString. An API key pasted through a
+ * notes app can pick up a non-ASCII character — most commonly a hyphen
+ * autocorrected to an en/em dash (U+2013 / U+2014) or a smart quote — which makes
+ * `fetch` throw a raw "Cannot convert argument to a ByteString" TypeError while
+ * it builds the x-api-key header (KI555: this exact em-dash paste broke the first
+ * S364 live scan, surfacing only as a generic "failed"). Validate the key up
+ * front so a malformed one is reported as a configuration problem
+ * ("unconfigured" — the operator must fix the key) rather than a transient
+ * network "failed" (which implies a retry might help). A real Anthropic key is
+ * printable ASCII with no spaces, so require exactly that: every code point in
+ * 0x21..0x7E, and at least one character. Pure + testable; the vision adapter
+ * trims first so a stray trailing newline from a paste is forgiven, not rejected.
+ */
+export function isAsciiApiKey(key: string): boolean {
+  return key.length > 0 && /^[\x21-\x7E]+$/.test(key);
+}
+
 // ---------------------------------------------------------------------------
 // The result contract (discriminated union)
 // ---------------------------------------------------------------------------

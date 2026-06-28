@@ -7,6 +7,7 @@ import {
   extractJsonObject,
   normalizeAssetDraft,
   isEmptyDraft,
+  isAsciiApiKey,
   plateFieldsToQuery,
   appliancePrefillFromQuery,
   scanExpensePrefillFromQuery,
@@ -273,6 +274,16 @@ ok("prompt names plate branch", prompt.includes('"kind":"plate"'));
 ok("prompt names receipt branch", prompt.includes('"kind":"receipt"'));
 ok("prompt lists fridge type", prompt.includes("fridge"));
 ok("prompt asks for recommended_consumables", prompt.includes("recommended_consumables"));
+
+// --- isAsciiApiKey (KI555: a non-ASCII key breaks the fetch header) ---------
+ok("valid printable-ascii key", isAsciiApiKey("sk-ant-api03-AbC_123-xyZ"));
+ok("empty key rejected", !isAsciiApiKey(""));
+ok("em dash (U+2014) rejected", !isAsciiApiKey("sk-ant—api03-abc"));
+ok("en dash (U+2013) rejected", !isAsciiApiKey("sk-ant–api03-abc"));
+ok("smart quote rejected", !isAsciiApiKey("sk-ant’s-key"));
+ok("internal space rejected", !isAsciiApiKey("sk-ant api03"));
+ok("trailing newline rejected (caller trims first)", !isAsciiApiKey("sk-ant-api03\n"));
+ok("non-breaking space rejected", !isAsciiApiKey("sk-ant api03"));
 
 // ---------------------------------------------------------------------------
 console.log(`\nasset-capture: ${passed} passed, ${failed} failed`);

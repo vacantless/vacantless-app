@@ -29,6 +29,7 @@ import {
   extractJsonObject,
   normalizeAssetDraft,
   isEmptyDraft,
+  isAsciiApiKey,
   type AssetParseResult,
 } from "./asset-capture";
 
@@ -62,8 +63,18 @@ export async function parseAssetImage(
   bytes: Buffer,
   mimeType: string,
 ): Promise<AssetParseResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return { ok: false, reason: "unconfigured" };
+  // A non-ASCII key (e.g. a hyphen autocorrected to an em dash on paste) would
+  // make fetch throw a raw ByteString TypeError when building the x-api-key
+  // header; treat it as a config problem, not a transient failure (KI555).
+  if (!isAsciiApiKey(apiKey)) {
+    console.error(
+      "parseAssetImage: ANTHROPIC_API_KEY contains a non-ASCII character " +
+        "(likely an autocorrected dash or smart quote from a paste); treating as unconfigured",
+    );
+    return { ok: false, reason: "unconfigured" };
+  }
   if (!isVisionImageType(mimeType)) return { ok: false, reason: "unconfigured" };
 
   const model = process.env.ASSET_CAPTURE_MODEL || DEFAULT_MODEL;
