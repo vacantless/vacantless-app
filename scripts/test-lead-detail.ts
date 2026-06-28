@@ -68,10 +68,17 @@ ok(
 
 // --- resolveLeadSource: fallback to source/source_detail --------------------
 ok(
-  "source: label only, no url",
+  "source: bare 'website' -> friendly 'Public rental page'",
+  (() => {
+    const r = resolveLeadSource({ source: "website", source_detail: null });
+    return r?.label === "Public rental page" && r?.url === null;
+  })(),
+);
+ok(
+  "source: 'Website' friendly-mapped case-insensitively",
   (() => {
     const r = resolveLeadSource({ source: "Website", source_detail: null });
-    return r?.label === "Website" && r?.url === null;
+    return r?.label === "Public rental page" && r?.url === null;
   })(),
 );
 ok(

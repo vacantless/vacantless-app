@@ -213,7 +213,10 @@ export function deriveRentalLifecycle(
         }
         if (input.photoCount === 0 && !isLive) return "Add photos & go live";
         if (!isLive) return "Go live to publish";
-        return "Add photos to publish";
+        // Live already — it's published and shareable without photos (photos are
+        // a recommended, non-blocking check; see lib/share-readiness). Avoid
+        // "to publish" here so it doesn't contradict the "Ready to share" card.
+        return "Live · add photos";
       }
       case "inquiries":
         return totalLeads >= 1

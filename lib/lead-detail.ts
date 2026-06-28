@@ -27,10 +27,19 @@ export { normalizeText, normalizeDate };
 // --- source display --------------------------------------------------------
 
 export type LeadSourceDisplay = {
-  /** Human label, e.g. "Kijiji", "Facebook Marketplace", "Website". */
+  /** Human label, e.g. "Kijiji", "Facebook Marketplace", "Public rental page". */
   label: string;
   /** The ad URL to open, when we have one. */
   url: string | null;
+};
+
+// Friendly display labels for the bare internal source tokens the app itself
+// writes. The public intake RPC stamps every self-serve inquiry with the literal
+// 'website' source; surfaced raw it reads like a generic website, so map it to
+// the page renters actually used — the org's public rental page. Matched
+// case-insensitively; unknown sources fall through to their own text.
+const FRIENDLY_SOURCE_LABELS: Record<string, string> = {
+  website: "Public rental page",
 };
 
 type JoinedPost = {
@@ -68,7 +77,8 @@ export function resolveLeadSource(input: {
   const isUrl = detailUrl !== null && /^https?:\/\//i.test(detailUrl);
 
   if (label) {
-    return { label, url: isUrl ? detailUrl : null };
+    const friendly = FRIENDLY_SOURCE_LABELS[label.toLowerCase()] ?? label;
+    return { label: friendly, url: isUrl ? detailUrl : null };
   }
   if (isUrl) {
     // No label but we have an ad URL — still useful.

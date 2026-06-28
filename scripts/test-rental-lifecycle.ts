@@ -98,8 +98,8 @@ ok(
   liveNoPhotos.currentStep === "market",
 );
 ok(
-  "live without photos -> market detail asks for photos",
-  liveNoPhotos.steps[1].detail === "Add photos to publish",
+  "live without photos -> market detail asks for photos (no 'publish' contradiction)",
+  liveNoPhotos.steps[1].detail === "Live · add photos",
 );
 
 // --- inquiries in, no viewing yet -------------------------------------------
