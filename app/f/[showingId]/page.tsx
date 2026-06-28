@@ -93,7 +93,7 @@ export default async function PublicFeedbackPage({
               )}
               {searchParams.error === "1" && (
                 <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  We couldn't record that. Your feedback may already be in.
+                  We couldn&apos;t record that. Your feedback may already be in.
                   Thanks all the same!
                 </p>
               )}
@@ -105,7 +105,7 @@ export default async function PublicFeedbackPage({
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Anything you'd like to add?{" "}
+                    Anything you&apos;d like to add?{" "}
                     <span className="font-normal text-gray-400">(optional)</span>
                   </label>
                   <textarea

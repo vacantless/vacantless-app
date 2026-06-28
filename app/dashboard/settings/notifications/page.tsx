@@ -145,7 +145,7 @@ export default async function NotificationsSettingsPage({
           Each update below can be turned off, re-worded, and sent to extra
           people. Leave the subject or message blank to use the built-in wording.
           Use <code className="rounded bg-white px-1 py-0.5 text-gray-800">{"{{token}}"}</code>{" "}
-          placeholders — they're filled in automatically when the email is sent.
+          placeholders — they&apos;re filled in automatically when the email is sent.
         </div>
 
         {families.map((family) => (

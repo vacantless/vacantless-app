@@ -166,7 +166,7 @@ export default async function BillingPage({
 
         {view.needsAttention && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            There's a problem with your subscription payment ({view.statusLabel}
+            There&apos;s a problem with your subscription payment ({view.statusLabel}
             ). Open <strong>Manage billing</strong> to update your card and keep
             your account active.
           </div>
@@ -175,7 +175,7 @@ export default async function BillingPage({
 
       {!configured && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Billing isn't connected yet. Once your Stripe keys are set in Vercel,
+          Billing isn&apos;t connected yet. Once your Stripe keys are set in Vercel,
           the subscribe buttons below go live, with no other change needed.
         </div>
       )}

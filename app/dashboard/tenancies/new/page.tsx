@@ -214,7 +214,7 @@ export default async function NewTenancyPage({
           <div>
             <p className="mb-1 text-sm font-semibold text-gray-700">Tenants</p>
             <p className="mb-3 text-xs text-gray-500">
-              Add up to three. Mark one as primary — that's who rent collection bills.
+              Add up to three. Mark one as primary — that&apos;s who rent collection bills.
             </p>
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (

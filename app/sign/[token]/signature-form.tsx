@@ -183,7 +183,7 @@ export function SignatureForm({
         />
         <span>
           I agree to sign this lease electronically and consent to the use of an
-          electronic signature, which is legally binding under Ontario's
+          electronic signature, which is legally binding under Ontario&apos;s
           Electronic Commerce Act, 2000.
         </span>
       </label>
