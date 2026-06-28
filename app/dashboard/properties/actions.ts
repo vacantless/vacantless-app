@@ -1829,6 +1829,21 @@ export async function addAppliance(formData: FormData) {
   if (!org) return;
 
   const supabase = createClient();
+
+  // Confirm the target property is one the caller's org can actually see (RLS
+  // scopes this read) before attaching an appliance to it. The insert's RLS WITH
+  // CHECK validates only organization_id — NOT that property_id belongs to the
+  // org — so a crafted request pairing the caller's org id with a foreign
+  // property_id would otherwise create an orphan appliance row (S369 security
+  // review F3; defense-in-depth — the in-app + review-queue pickers only ever
+  // offer org-scoped properties, but the action must not trust that).
+  const { data: prop } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!prop) redirect("/dashboard/properties?notfound=1");
+
   const { data: created } = await supabase
     .from("unit_appliances")
     .insert({
