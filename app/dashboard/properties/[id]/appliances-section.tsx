@@ -3,6 +3,8 @@ import {
   updateAppliance,
   removeAppliance,
   markConsumableReplaced,
+  uploadApplianceReceipt,
+  removeApplianceReceipt,
 } from "../actions";
 import {
   applianceTypeLabel,
@@ -24,6 +26,16 @@ import {
 // e.g. a fridge water filter every N months). A one-tap "Mark replaced" rolls the
 // consumable's clock forward one cycle (the recurrence).
 
+/** One receipt / purchase proof attached to an appliance (a document-vault row,
+ * 0083). signedUrl is a short-lived URL into the private bucket, minted by the
+ * page; null if the mint failed. */
+export type ApplianceReceiptView = {
+  id: string;
+  title: string;
+  mime_type: string;
+  signedUrl: string | null;
+};
+
 export type ApplianceView = {
   id: string;
   appliance_type: ApplianceType;
@@ -43,6 +55,7 @@ export type ApplianceView = {
   warrantyStatus: ApplianceStatus;
   consumableDue: string | null;
   consumableStatus: ApplianceStatus;
+  receipts: ApplianceReceiptView[];
 };
 
 const STATUS_META: Record<ApplianceStatus, { label: string; cls: string }> = {
@@ -246,6 +259,86 @@ function Chip({ prefix, status }: { prefix: string; status: ApplianceStatus }) {
   );
 }
 
+/** Receipts / purchase proof attached to one appliance (S363). Lists each stored
+ * receipt with a View link (a short-lived signed URL into the private vault) +
+ * Remove, and an inline upload form. PDFs or scan images, one per upload. */
+function ReceiptsBlock({ d, propertyId }: { d: ApplianceView; propertyId: string }) {
+  return (
+    <div className="mt-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="text-xs font-medium text-gray-600">Receipts:</span>
+
+        {d.receipts.length === 0 ? (
+          <span className="text-xs text-gray-400">none yet</span>
+        ) : (
+          <ul className="flex flex-wrap items-center gap-2">
+            {d.receipts.map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 py-1"
+              >
+                {r.signedUrl ? (
+                  <a
+                    href={r.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="max-w-[12rem] truncate text-xs font-medium text-brand hover:underline"
+                    title={r.title}
+                  >
+                    {r.title}
+                  </a>
+                ) : (
+                  <span className="max-w-[12rem] truncate text-xs text-gray-400" title={r.title}>
+                    {r.title} (unavailable)
+                  </span>
+                )}
+                <form action={removeApplianceReceipt}>
+                  <input type="hidden" name="document_id" value={r.id} />
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <button
+                    type="submit"
+                    className="text-xs text-gray-400 hover:text-red-600"
+                    title="Remove this receipt"
+                    aria-label={`Remove receipt ${r.title}`}
+                  >
+                    &times;
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <details className="group ml-auto">
+          <summary className="cursor-pointer list-none text-xs font-medium text-brand hover:underline [&::-webkit-details-marker]:hidden">
+            + Add receipt
+          </summary>
+          <form action={uploadApplianceReceipt} className="mt-2 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="appliance_id" value={d.id} />
+            <input type="hidden" name="property_id" value={propertyId} />
+            <input
+              type="file"
+              name="receipt"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              required
+              className="text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:opacity-90"
+            />
+            <button
+              type="submit"
+              className="rounded-lg border border-brand px-2.5 py-1.5 text-xs font-medium text-brand hover:bg-brand/5"
+            >
+              Upload
+            </button>
+          </form>
+          <p className="mt-1 text-xs text-gray-500">
+            PDF or photo of the receipt, up to 25 MB. Stored privately; only you can open it.
+          </p>
+        </details>
+      </div>
+    </div>
+  );
+}
+
 export function AppliancesSection({
   propertyId,
   appliances,
@@ -345,6 +438,7 @@ export function AppliancesSection({
                     </form>
                   </div>
                 </div>
+                <ReceiptsBlock d={d} propertyId={propertyId} />
               </li>
             );
           })}

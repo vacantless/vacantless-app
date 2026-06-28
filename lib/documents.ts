@@ -51,6 +51,7 @@ export const DOCUMENT_TYPES = [
   "insurance",
   "id_package",
   "statement",
+  "receipt",
   "other",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
@@ -74,6 +75,8 @@ export function documentTypeLabel(t: string): string {
       return "ID / application package";
     case "statement":
       return "Statement";
+    case "receipt":
+      return "Receipt";
     case "other":
     default:
       return "Other";

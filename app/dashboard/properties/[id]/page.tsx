@@ -106,7 +106,11 @@ import {
   equipmentStatusFor,
   type EquipmentType,
 } from "@/lib/equipment-eol";
-import { AppliancesSection, type ApplianceView } from "./appliances-section";
+import {
+  AppliancesSection,
+  type ApplianceView,
+  type ApplianceReceiptView,
+} from "./appliances-section";
 import {
   warrantyExpiryDate,
   warrantyStatusFor,
@@ -114,6 +118,7 @@ import {
   consumableStatusFor,
   type ApplianceType,
 } from "@/lib/appliance-care";
+import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import { localDateString } from "@/lib/leasing-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -404,8 +409,59 @@ export default async function PropertyDetailPage({
       warrantyStatus: warrantyStatusFor(input, detectorToday),
       consumableDue: consumableDueDate(input),
       consumableStatus: consumableStatusFor(input, detectorToday),
+      receipts: [] as ApplianceReceiptView[],
     };
   });
+
+  // Receipts (S363): the purchase proof for each appliance lives in the document
+  // vault (documents.appliance_id, 0083) — the private bucket, so each row needs a
+  // short-lived SIGNED URL minted server-side. One query for all of this unit's
+  // appliances, one batched signed-URL mint, then attach to each appliance view.
+  if (applianceViews.length > 0) {
+    const { data: receiptRows } = await supabase
+      .from("documents")
+      .select("id, appliance_id, title, mime_type, storage_path, created_at")
+      .in(
+        "appliance_id",
+        applianceViews.map((a) => a.id),
+      )
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+    const receipts = (receiptRows ?? []) as {
+      id: string;
+      appliance_id: string | null;
+      title: string;
+      mime_type: string;
+      storage_path: string;
+      created_at: string;
+    }[];
+    if (receipts.length > 0) {
+      const signed = await createDocumentDownloadUrls(
+        supabase,
+        receipts.map((r) => r.storage_path),
+      );
+      const urlByPath = new Map<string, string | null>();
+      if (signed.ok) {
+        for (const u of signed.urls) urlByPath.set(u.path, u.signedUrl);
+      }
+      const byAppliance = new Map<string, ApplianceReceiptView[]>();
+      for (const r of receipts) {
+        if (!r.appliance_id) continue;
+        const list = byAppliance.get(r.appliance_id) ?? [];
+        list.push({
+          id: r.id,
+          title: r.title,
+          mime_type: r.mime_type,
+          signedUrl: urlByPath.get(r.storage_path) ?? null,
+        });
+        byAppliance.set(r.appliance_id, list);
+      }
+      for (const a of applianceViews) {
+        a.receipts = byAppliance.get(a.id) ?? [];
+      }
+    }
+  }
+
   const applianceAttention = applianceViews.filter(
     (d) =>
       d.warrantyStatus === "overdue" ||

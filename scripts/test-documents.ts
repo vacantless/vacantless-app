@@ -50,10 +50,12 @@ ok("isAllowedDocumentType rejects gif", !isAllowedDocumentType("image/gif"));
 ok("isAllowedDocumentType rejects non-string", !isAllowedDocumentType(123));
 
 // --- Doc type taxonomy ------------------------------------------------------
-ok("7 doc types", DOCUMENT_TYPES.length === 7);
+ok("8 doc types", DOCUMENT_TYPES.length === 8);
 ok("isDocumentType lease", isDocumentType("lease"));
+ok("isDocumentType receipt", isDocumentType("receipt"));
 ok("isDocumentType rejects bogus", !isDocumentType("contract"));
 ok("label lease", documentTypeLabel("lease") === "Lease");
+ok("label receipt", documentTypeLabel("receipt") === "Receipt");
 ok("label id_package", documentTypeLabel("id_package") === "ID / application package");
 ok("label unknown -> Other", documentTypeLabel("zzz") === "Other");
 

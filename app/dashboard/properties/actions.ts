@@ -54,6 +54,15 @@ import {
   type DropboxLeafFolder,
 } from "@/lib/dropbox-import";
 import { photoCapForPlan } from "@/lib/billing";
+import { createHash } from "crypto";
+import {
+  validateDocumentUpload,
+  documentStoragePath,
+  defaultTitleFromFilename,
+  extForType as documentExtForType,
+} from "@/lib/documents";
+import { DOCUMENTS_BUCKET, removeDocuments } from "@/lib/documents-server";
+import { retentionUntil } from "@/lib/document-retention";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -1857,6 +1866,12 @@ export async function removeAppliance(formData: FormData) {
   if (!id || !propertyId) return;
 
   const supabase = createClient();
+  // Soft-delete (and remove the bytes of) any receipts attached to this appliance
+  // BEFORE deleting the appliance. documents.appliance_id is ON DELETE SET NULL,
+  // so a bare delete would leave the receipt row with every link nulled — an
+  // unreachable orphan whose bytes keep billing in the private bucket. Cleaning
+  // them up first hands the rows to the retention purge cron and frees the bytes.
+  await softDeleteApplianceReceipts(supabase, id);
   await supabase.from("unit_appliances").delete().eq("id", id);
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
@@ -1886,4 +1901,176 @@ export async function markConsumableReplaced(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?appliance=replaced#appliances`);
+}
+
+// ---------------------------------------------------------------------------
+// Appliance receipts (S363) — attach a purchase receipt / proof to an appliance,
+// reusing the document vault (0076) via documents.appliance_id (0083). A receipt
+// is just a `documents` row in the PRIVATE bucket: org-scoped RLS, short-lived
+// signed URLs, soft-delete + the retention purge cron, all inherited for free.
+// The unit page mints the signed view URL; these actions handle upload + delete.
+// Guarded on manage_properties (appliances hang off a property, not a tenancy).
+// No tenant PII: a receipt is a store transaction record, not a person's data.
+// ---------------------------------------------------------------------------
+
+const applianceAnchor = (propertyId: string, q: string) =>
+  `/dashboard/properties/${propertyId}?appliance=${q}#appliances`;
+
+/**
+ * Soft-delete every live receipt attached to an appliance and remove its bytes,
+ * mirroring documents-actions.deleteTenancyDocument: stamp deleted_at +
+ * retention_until (the purge cron's anchor) on rows where deleted_at is null,
+ * then delete the stored objects. Shared by removeApplianceReceipt (one row) and
+ * removeAppliance (all of an appliance's rows). Best-effort; never throws.
+ */
+async function softDeleteApplianceReceipts(
+  supabase: ReturnType<typeof createClient>,
+  applianceId: string,
+) {
+  const { data: docs } = await supabase
+    .from("documents")
+    .select("id, storage_path")
+    .eq("appliance_id", applianceId)
+    .is("deleted_at", null);
+  const rows = (docs ?? []) as { id: string; storage_path: string }[];
+  if (rows.length === 0) return;
+
+  const nowIso = new Date().toISOString();
+  await supabase
+    .from("documents")
+    .update({
+      deleted_at: nowIso,
+      retention_until: retentionUntil(nowIso),
+      updated_at: nowIso,
+    })
+    .eq("appliance_id", applianceId)
+    .is("deleted_at", null);
+
+  await removeDocuments(
+    supabase,
+    rows.map((r) => r.storage_path),
+  );
+}
+
+/** Upload one receipt (PDF or scan image) and link it to an appliance. */
+export async function uploadApplianceReceipt(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const applianceId = String(formData.get("appliance_id") ?? "");
+  if (!propertyId) redirect("/dashboard/properties");
+  if (!applianceId) redirect(applianceAnchor(propertyId, "receipt-error"));
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const fail = (reason: string) => redirect(applianceAnchor(propertyId, reason));
+
+  // Exactly one file from the "receipt" input.
+  const file = formData
+    .getAll("receipt")
+    .find(
+      (f): f is File =>
+        typeof f === "object" &&
+        f !== null &&
+        "size" in f &&
+        "type" in f &&
+        (f as File).size > 0,
+    );
+  if (!file) fail("receipt-none");
+  const theFile = file as File;
+  const v = validateDocumentUpload({ type: theFile.type, size: theFile.size });
+  if (!v.ok) fail(`receipt-${v.reason}`);
+
+  const supabase = createClient();
+
+  // Confirm the appliance belongs to this org (RLS scopes the read) before we
+  // attach a receipt to it.
+  const { data: appRow } = await supabase
+    .from("unit_appliances")
+    .select("id")
+    .eq("id", applianceId)
+    .eq("property_id", propertyId)
+    .maybeSingle();
+  if (!appRow) fail("receipt-error");
+
+  const docId = crypto.randomUUID();
+  const path = documentStoragePath(org.id, docId, documentExtForType(theFile.type));
+
+  const { error: upErr } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(path, theFile, { contentType: theFile.type, upsert: false });
+  if (upErr) fail("receipt-failed");
+
+  // Tamper-evidence hash of the stored bytes (best-effort).
+  let sha256: string | null = null;
+  try {
+    sha256 = createHash("sha256")
+      .update(Buffer.from(await theFile.arrayBuffer()))
+      .digest("hex");
+  } catch {
+    sha256 = null;
+  }
+
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    organization_id: org.id,
+    appliance_id: applianceId,
+    title: defaultTitleFromFilename(theFile.name),
+    doc_type: "receipt",
+    storage_path: path,
+    mime_type: theFile.type,
+    size_bytes: theFile.size,
+    sha256,
+    source: "uploaded",
+  });
+  if (insErr) {
+    // Roll back the orphaned object so Storage and the table stay in sync.
+    const { error: rbErr } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .remove([path]);
+    if (rbErr) {
+      console.error("uploadApplianceReceipt: rollback remove failed", {
+        path,
+        error: rbErr.message,
+      });
+    }
+    fail("receipt-failed");
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(applianceAnchor(propertyId, "receipt-added"));
+}
+
+/** Soft-delete one receipt + remove its bytes (the retention cron hard-deletes). */
+export async function removeApplianceReceipt(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const documentId = String(formData.get("document_id") ?? "");
+  if (!propertyId) redirect("/dashboard/properties");
+  if (!documentId) redirect(applianceAnchor(propertyId, "receipt-error"));
+
+  const supabase = createClient();
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id, storage_path, deleted_at")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (!doc) redirect(applianceAnchor(propertyId, "receipt-error"));
+  const d = doc as { storage_path: string; deleted_at: string | null };
+
+  const nowIso = new Date().toISOString();
+  await supabase
+    .from("documents")
+    .update({
+      deleted_at: nowIso,
+      retention_until: retentionUntil(nowIso),
+      updated_at: nowIso,
+    })
+    .eq("id", documentId)
+    .is("deleted_at", null);
+
+  await removeDocuments(supabase, [d.storage_path]);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(applianceAnchor(propertyId, "receipt-removed"));
 }
