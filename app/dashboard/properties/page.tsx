@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { propertyStatusLabel } from "@/lib/pipeline";
-import { isPubliclyVisible } from "@/lib/listing-state";
+import { isPubliclyVisible, isPublicBookable } from "@/lib/listing-state";
 import {
   StatusChip,
   propertyStatusTone,
@@ -154,7 +154,7 @@ export default async function PropertiesPage({
                 <StatusChip tone={propertyStatusTone(p.status)}>
                   {propertyStatusLabel(p.status)}
                 </StatusChip>
-                {isPubliclyVisible(p.status) ? (
+                {isPublicBookable(p.status) ? (
                   <span className="flex items-center gap-1.5">
                     <CopyIntakeButton url={intakeUrl(p.id)} />
                     {(photoCounts.get(p.id) ?? 0) === 0 && (
@@ -168,6 +168,16 @@ export default async function PropertiesPage({
                         No photos
                       </span>
                     )}
+                  </span>
+                ) : isPubliclyVisible(p.status) ? (
+                  // Leased / Paused: the public /r page LOADS but tells renters
+                  // the unit is no longer available, so a bare "Copy inquiry
+                  // link" reads like a Live listing. Label the state instead of
+                  // offering an inquiry action (Codex QA re-review).
+                  <span className="text-xs text-gray-400">
+                    {p.status === "leased"
+                      ? "Leased - page shows unavailable"
+                      : "Paused - not accepting inquiries"}
                   </span>
                 ) : (
                   // Draft / off-market: the public /r link 404s, so don't offer

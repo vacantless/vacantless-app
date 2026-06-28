@@ -20,12 +20,18 @@ export type CopyTab = {
 export function ListingCopyCard({
   tabs,
   descriptionThin = false,
+  notLive = false,
 }: {
   tabs: CopyTab[];
   // True when the saved description is empty/very short. The channel copy below
   // is built from the description, so a thin one yields a field-summary ad -
   // surface a nudge into the Description Helper instead of letting it ship flat.
   descriptionThin?: boolean;
+  // True when the rental's public /r page doesn't resolve (Draft / off market).
+  // The copy is still preparable, but it omits the public link and the rental
+  // can't take inquiries yet - so we soften the "paste it into your ad" framing
+  // with a guard banner so a Draft isn't posted as if it were Live (Codex QA).
+  notLive?: boolean;
 }) {
   const [active, setActive] = useState(tabs[0]?.key ?? "generic");
   // Which field was most recently copied, so we can flash "Copied!" on it.
@@ -56,9 +62,21 @@ export function ListingCopyCard({
       <p className="mb-4 text-xs text-gray-500">
         Ready-to-paste wording built from this rental&apos;s details, formatted
         for each site - the title length, link placement, and call-to-action are
-        adjusted per platform. Pick a channel, copy, and paste it into your ad.
+        adjusted per platform.{" "}
+        {notLive
+          ? "Prepare it now; set the rental Live above before you post it."
+          : "Pick a channel, copy, and paste it into your ad."}{" "}
         Edit the rental above and this updates automatically.
       </p>
+
+      {notLive && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          <span className="font-medium">This rental isn&apos;t live yet.</span>{" "}
+          You can prepare and copy this wording now, but it doesn&apos;t include
+          your public listing link and the rental can&apos;t take inquiries -
+          set it to Live (above) before you post it anywhere.
+        </div>
+      )}
 
       {descriptionThin && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">

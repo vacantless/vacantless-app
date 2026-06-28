@@ -101,14 +101,18 @@ export default async function SettingsPage({
   // get_public_listing 404s 'draft' + 'off_market' (migration 0020), so a draft
   // (e.g. a freshly duplicated rental) would lead to a 404 - exclude both here.
   // 'paused'/'leased' still load a "no longer available" page, fine to preview.
+  // Carry status so the picker can flag a leased/paused listing — its public
+  // page LOADS but says "no longer available", so it must not read like a Live
+  // rental in the picker (Codex QA re-review).
   const { data: propertyRows } = await supabase
     .from("properties")
-    .select("id, address")
+    .select("id, address, status")
     .not("status", "in", "(draft,off_market)")
     .order("created_at", { ascending: false });
   const renterPageProperties = (propertyRows ?? []) as {
     id: string;
     address: string;
+    status: string;
   }[];
 
   // The signed-in operator's own email prefills the test-send recipient — the

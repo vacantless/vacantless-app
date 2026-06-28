@@ -11,7 +11,23 @@ import { useState } from "react";
 // passes the org's properties + the absolute base URL so the opened tab points
 // at the live renter page exactly as a renter would see it.
 
-export type RenterPageProperty = { id: string; address: string };
+export type RenterPageProperty = {
+  id: string;
+  address: string;
+  // properties.status — the picker only ever receives publicly-previewable
+  // listings (draft/off_market are excluded upstream), so this is one of
+  // available / paused / leased.
+  status: string;
+};
+
+// A leased/paused listing's /r page LOADS but tells renters it's no longer
+// available. Surface that in the picker so a previewable-but-not-Live rental
+// isn't mistaken for a Live one (Codex QA re-review). null = Live, no note.
+function previewStatusNote(status: string): string | null {
+  if (status === "leased") return "Leased / no longer available";
+  if (status === "paused") return "Paused / not currently available";
+  return null;
+}
 
 export function RenterPagePreview({
   properties,
@@ -33,6 +49,10 @@ export function RenterPagePreview({
   }
 
   const href = selectedId ? `${baseUrl}/r/${selectedId}` : "#";
+  const selected = properties.find((p) => p.id === selectedId);
+  // Note for the currently-selected listing — covers the single-listing case,
+  // where the <select> is hidden so the option-level suffix wouldn't show.
+  const selectedNote = selected ? previewStatusNote(selected.status) : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -41,13 +61,17 @@ export function RenterPagePreview({
           aria-label="Choose a listing to preview"
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
-          className="max-w-[15rem] rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700"
+          className="max-w-[18rem] rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700"
         >
-          {properties.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.address}
-            </option>
-          ))}
+          {properties.map((p) => {
+            const note = previewStatusNote(p.status);
+            return (
+              <option key={p.id} value={p.id}>
+                {p.address}
+                {note ? ` - ${note}` : ""}
+              </option>
+            );
+          })}
         </select>
       )}
       <a
@@ -58,6 +82,11 @@ export function RenterPagePreview({
       >
         View public renter page ↗
       </a>
+      {selectedNote && (
+        <span className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+          {selectedNote}
+        </span>
+      )}
     </div>
   );
 }

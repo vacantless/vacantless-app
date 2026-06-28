@@ -1014,7 +1014,11 @@ export default async function PropertyDetailPage({
       </div>
 
       {/* --- Listing copy for each channel --- */}
-      <ListingCopyCard tabs={copyTabs} descriptionThin={descriptionThin} />
+      <ListingCopyCard
+        tabs={copyTabs}
+        descriptionThin={descriptionThin}
+        notLive={!linkIsLive}
+      />
 
       {/* --- Photos for this rental --- */}
       <div
