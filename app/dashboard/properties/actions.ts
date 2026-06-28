@@ -63,6 +63,8 @@ import {
 } from "@/lib/documents";
 import { DOCUMENTS_BUCKET, removeDocuments } from "@/lib/documents-server";
 import { retentionUntil } from "@/lib/document-retention";
+import { parseAssetImage, isVisionImageType } from "@/lib/asset-capture-vision";
+import { plateFieldsToQuery } from "@/lib/asset-capture";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -2073,4 +2075,62 @@ export async function removeApplianceReceipt(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(applianceAnchor(propertyId, "receipt-removed"));
+}
+
+// ---------------------------------------------------------------------------
+// Scan a plate / receipt -> prefill the Add-appliance form (S364, Phase 1 of the
+// photo-OCR capture). The landlord snaps an appliance data plate (or a receipt);
+// we send the image to the multimodal parser (lib/asset-capture-vision, gated on
+// ANTHROPIC_API_KEY so it ships dark) and redirect back with the extracted fields
+// in namespaced query params, which the unit page reads to OPEN the add form
+// PREFILLED for a one-tap review-and-save. The parse output is the join point
+// that also feeds the expense ledger (receipt mode) + the Unit Bible — see
+// CAPTURE-PHOTO-OCR-EMAIL-IN-DESIGN-2026-06-28.md.
+//
+// Phase 1 is migration-free and orphan-free by NOT storing the image: the scan
+// only EXTRACTS fields. Keeping the scanned photo as the receipt is a Phase-2
+// follow-up (needs a pending-document lifecycle). No tenant PII: a nameplate /
+// store receipt is the landlord's own asset/transaction record.
+export async function scanAppliancePlate(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) redirect("/dashboard/properties");
+
+  // Redirect back to the Appliances section with the scan outcome (+ extracted
+  // fields). redirect() is called directly at each exit so its `never` return
+  // drives control-flow narrowing (a wrapper loses that).
+  const scanUrl = (params: Record<string, string>) =>
+    `/dashboard/properties/${propertyId}?${new URLSearchParams(params).toString()}#appliances`;
+
+  const file = formData
+    .getAll("plate")
+    .find(
+      (f): f is File =>
+        typeof f === "object" && f !== null && "size" in f && (f as File).size > 0,
+    );
+  if (!file) redirect(scanUrl({ scan: "none" }));
+
+  // Image-only + the same 25 MB envelope the vault enforces. The vision image
+  // block takes images (not PDF) in Phase 1, so exclude anything non-image.
+  const v = validateDocumentUpload({ type: file.type, size: file.size });
+  if (!v.ok || !isVisionImageType(file.type)) redirect(scanUrl({ scan: "badtype" }));
+
+  // Read the bytes (the only throw-risk; parseAssetImage itself never throws).
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(await file.arrayBuffer());
+  } catch (err) {
+    console.error("scanAppliancePlate: file read failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    redirect(scanUrl({ scan: "failed" }));
+  }
+
+  const result = await parseAssetImage(bytes, file.type);
+
+  // unconfigured (no key / ships dark) | failed | empty -> the page shows a
+  // matching note and the landlord falls back to manual entry.
+  if (!result.ok) redirect(scanUrl({ scan: result.reason }));
+
+  redirect(scanUrl({ scan: "ok", ...plateFieldsToQuery(result.draft) }));
 }

@@ -5,6 +5,7 @@ import {
   markConsumableReplaced,
   uploadApplianceReceipt,
   removeApplianceReceipt,
+  scanAppliancePlate,
 } from "../actions";
 import {
   applianceTypeLabel,
@@ -12,6 +13,7 @@ import {
   type ApplianceType,
   type ApplianceStatus,
 } from "@/lib/appliance-care";
+import type { AppliancePrefill } from "@/lib/asset-capture";
 
 // Per-unit appliance inventory capture surface (S362) — the sibling of
 // detectors-section.tsx / equipment-section.tsx (fridge, stove, dishwasher,
@@ -81,15 +83,21 @@ function TypeSelect({ value }: { value?: ApplianceType }) {
   );
 }
 
-/** The shared field grid, reused by the add form and each row's edit form. */
-function ApplianceFields({ d }: { d?: ApplianceView }) {
-  const installYear = d?.install_year != null ? String(d.install_year) : "";
+/** The shared field grid, reused by the add form and each row's edit form. When
+ * `prefill` is set (from a plate/receipt scan, S364) its values seed the inputs
+ * that the scan could read — type/make/model/serial/year/warranty — while every
+ * field stays editable so the landlord confirms before saving. An existing row
+ * (`d`) always wins over a scan prefill. */
+function ApplianceFields({ d, prefill }: { d?: ApplianceView; prefill?: AppliancePrefill | null }) {
+  const installYearVal = d?.install_year ?? prefill?.install_year ?? null;
+  const installYear = installYearVal != null ? String(installYearVal) : "";
+  const warrantyVal = d?.warranty_months ?? prefill?.warranty_months ?? null;
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className={LABEL_CLS}>Type</label>
-          <TypeSelect value={d?.appliance_type} />
+          <TypeSelect value={d?.appliance_type ?? prefill?.appliance_type ?? undefined} />
         </div>
         <div>
           <label className={LABEL_CLS}>Location</label>
@@ -104,7 +112,7 @@ function ApplianceFields({ d }: { d?: ApplianceView }) {
           <label className={LABEL_CLS}>Make</label>
           <input
             name="make"
-            defaultValue={d?.make ?? ""}
+            defaultValue={d?.make ?? prefill?.make ?? ""}
             placeholder="e.g. Whirlpool"
             className={INPUT_CLS}
           />
@@ -113,7 +121,7 @@ function ApplianceFields({ d }: { d?: ApplianceView }) {
           <label className={LABEL_CLS}>Model</label>
           <input
             name="model"
-            defaultValue={d?.model ?? ""}
+            defaultValue={d?.model ?? prefill?.model ?? ""}
             placeholder="e.g. WRF555SDFZ"
             className={INPUT_CLS}
           />
@@ -122,7 +130,7 @@ function ApplianceFields({ d }: { d?: ApplianceView }) {
           <label className={LABEL_CLS}>Serial</label>
           <input
             name="serial"
-            defaultValue={d?.serial ?? ""}
+            defaultValue={d?.serial ?? prefill?.serial ?? ""}
             placeholder="from the plate"
             className={INPUT_CLS}
           />
@@ -173,7 +181,7 @@ function ApplianceFields({ d }: { d?: ApplianceView }) {
               type="number"
               min={1}
               max={600}
-              defaultValue={d?.warranty_months != null ? String(d.warranty_months) : ""}
+              defaultValue={warrantyVal != null ? String(warrantyVal) : ""}
               placeholder="e.g. 24"
               className={INPUT_CLS}
             />
@@ -194,7 +202,7 @@ function ApplianceFields({ d }: { d?: ApplianceView }) {
             <label className={LABEL_CLS}>What</label>
             <input
               name="consumable_label"
-              defaultValue={d?.consumable_label ?? ""}
+              defaultValue={d?.consumable_label ?? prefill?.consumable_label ?? ""}
               placeholder="e.g. Water filter"
               className={INPUT_CLS}
             />
@@ -207,7 +215,9 @@ function ApplianceFields({ d }: { d?: ApplianceView }) {
               min={1}
               max={120}
               defaultValue={
-                d?.consumable_interval_months != null ? String(d.consumable_interval_months) : ""
+                (d?.consumable_interval_months ?? prefill?.consumable_interval_months) != null
+                  ? String(d?.consumable_interval_months ?? prefill?.consumable_interval_months)
+                  : ""
               }
               placeholder="e.g. 6"
               className={INPUT_CLS}
@@ -339,13 +349,69 @@ function ReceiptsBlock({ d, propertyId }: { d: ApplianceView; propertyId: string
   );
 }
 
+/** Maps a scan outcome (the ?scan= query the scanAppliancePlate action sets) to
+ * a one-line note above the add form. "ok" is handled by the prefill banner, so
+ * only the non-ok outcomes surface here. */
+const SCAN_NOTE: Record<string, { msg: string; tone: string }> = {
+  unconfigured: {
+    msg: "Plate scanning isn’t switched on yet. Enter the details by hand for now.",
+    tone: "bg-gray-100 text-gray-600",
+  },
+  empty: {
+    msg: "Couldn’t read that photo clearly — try a sharper, straight-on shot of the plate, or enter the details by hand.",
+    tone: "bg-amber-100 text-amber-800",
+  },
+  failed: {
+    msg: "Something went wrong reading that photo. Try again, or enter the details by hand.",
+    tone: "bg-amber-100 text-amber-800",
+  },
+  badtype: {
+    msg: "Please choose a photo (JPEG, PNG or WebP) of the plate or receipt.",
+    tone: "bg-amber-100 text-amber-800",
+  },
+  none: {
+    msg: "No photo was selected. Pick a photo of the plate or receipt to scan.",
+    tone: "bg-amber-100 text-amber-800",
+  },
+};
+
+/** The "scan a plate / receipt" capture affordance (S364). A single file input
+ * that opens the phone camera (capture=environment); posting it runs the
+ * multimodal parse and reopens the Add form prefilled. */
+function ScanCapture({ propertyId }: { propertyId: string }) {
+  return (
+    <form action={scanAppliancePlate} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="property_id" value={propertyId} />
+      <input
+        type="file"
+        name="plate"
+        accept="image/jpeg,image/png,image/webp"
+        capture="environment"
+        required
+        className="text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:opacity-90"
+      />
+      <button
+        type="submit"
+        className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+      >
+        Scan plate / receipt
+      </button>
+    </form>
+  );
+}
+
 export function AppliancesSection({
   propertyId,
   appliances,
+  prefill,
+  scanStatus,
 }: {
   propertyId: string;
   appliances: ApplianceView[];
+  prefill?: AppliancePrefill | null;
+  scanStatus?: string | null;
 }) {
+  const scanNote = scanStatus && scanStatus !== "ok" ? SCAN_NOTE[scanStatus] : null;
   return (
     <div className="space-y-5">
       <p className="text-sm text-gray-600">
@@ -445,13 +511,40 @@ export function AppliancesSection({
         </ul>
       )}
 
-      <details className="group rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      {/* Photo-OCR capture (S364): snap the plate / receipt to prefill the form. */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Scan a plate or receipt</p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Snap the appliance data plate or the purchase receipt — we read the make, model and
+              serial (and any recommended replacement schedule) and prefill the form for you to
+              confirm.
+            </p>
+          </div>
+          <ScanCapture propertyId={propertyId} />
+        </div>
+        {scanNote ? (
+          <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${scanNote.tone}`}>{scanNote.msg}</p>
+        ) : null}
+      </div>
+
+      <details
+        className="group rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+        open={!!prefill}
+      >
         <summary className="cursor-pointer list-none text-sm font-semibold text-gray-900 [&::-webkit-details-marker]:hidden">
           + Add appliance
         </summary>
+        {prefill ? (
+          <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-xs text-green-800">
+            Scanned the photo — review the details below and save. Anything we couldn’t read is left
+            blank.
+          </p>
+        ) : null}
         <form action={addAppliance} className="mt-4">
           <input type="hidden" name="property_id" value={propertyId} />
-          <ApplianceFields />
+          <ApplianceFields prefill={prefill} />
           <div className="mt-3">
             <button
               type="submit"

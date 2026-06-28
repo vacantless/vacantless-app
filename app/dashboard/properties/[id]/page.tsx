@@ -119,6 +119,7 @@ import {
   type ApplianceType,
 } from "@/lib/appliance-care";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
+import { appliancePrefillFromQuery } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -216,6 +217,16 @@ export default async function PropertyDetailPage({
     duplicated?: string;
     imported?: string;
     tourerr?: string;
+    // Appliance plate/receipt scan (S364): outcome + extracted prefill fields.
+    scan?: string;
+    sc_type?: string;
+    sc_make?: string;
+    sc_model?: string;
+    sc_serial?: string;
+    sc_year?: string;
+    sc_warranty?: string;
+    sc_clabel?: string;
+    sc_cmonths?: string;
   };
 }) {
   const supabase = createClient();
@@ -2079,7 +2090,12 @@ export default async function PropertyDetailPage({
         }
         done={applianceViews.length > 0 && applianceAttention === 0}
       >
-        <AppliancesSection propertyId={p.id} appliances={applianceViews} />
+        <AppliancesSection
+          propertyId={p.id}
+          appliances={applianceViews}
+          prefill={appliancePrefillFromQuery(searchParams)}
+          scanStatus={searchParams.scan ?? null}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection
