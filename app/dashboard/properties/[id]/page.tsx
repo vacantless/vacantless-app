@@ -98,6 +98,9 @@ import { deriveNextAction } from "@/lib/rental-next-action";
 import { NextActionCard } from "./next-action-card";
 import { CollapsibleSection } from "./collapsible-section";
 import { SectionDeeplinkOpener } from "./section-deeplink-opener";
+import { DetectorsSection, type DetectorView } from "./detectors-section";
+import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
+import { localDateString } from "@/lib/leasing-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -272,6 +275,45 @@ export default async function PropertyDetailPage({
   // never embeds a URL that 404s; the copy falls back to "Contact us to book a
   // viewing." until the rental goes Live.
   const org = await getCurrentOrg();
+
+  // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
+  // computed end-of-life date + status (against the org-local "today"). Shaped
+  // here so the section component stays presentational. RLS scopes the read.
+  const { data: detectorRows } = await supabase
+    .from("unit_detectors")
+    .select(
+      "id, detector_type, location, install_date, install_year, service_life_years, quantity, notes",
+    )
+    .eq("property_id", params.id)
+    .order("created_at", { ascending: true });
+  const detectorToday = localDateString(
+    Date.now(),
+    org?.booking_timezone || "America/Toronto",
+  );
+  const detectorViews: DetectorView[] = ((detectorRows ?? []) as any[]).map((r) => {
+    const input = {
+      detector_type: r.detector_type as DetectorType,
+      install_date: r.install_date ?? null,
+      install_year: r.install_year ?? null,
+      service_life_years: r.service_life_years ?? null,
+    };
+    const eolDate = computeEolDate(input);
+    return {
+      id: r.id,
+      detector_type: r.detector_type as DetectorType,
+      location: r.location ?? null,
+      install_date: r.install_date ?? null,
+      install_year: r.install_year ?? null,
+      service_life_years: r.service_life_years ?? null,
+      quantity: r.quantity ?? 1,
+      notes: r.notes ?? null,
+      eolDate,
+      status: detectorStatus(eolDate, detectorToday),
+    };
+  });
+  const detectorAttention = detectorViews.filter(
+    (d) => d.status === "overdue" || d.status === "due_soon",
+  ).length;
 
   // Standard-policy profile (0048 org defaults + 0049 per-building override):
   // resolve the building override AHEAD of the org default, then merge that UNDER
@@ -1838,6 +1880,21 @@ export default async function PropertyDetailPage({
         </button>
       </form>
 
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="detectors"
+        title="Detectors"
+        status={
+          detectorViews.length === 0
+            ? "Not logged"
+            : detectorAttention > 0
+              ? `${detectorAttention} need attention`
+              : `${detectorViews.length} logged`
+        }
+        done={detectorViews.length > 0 && detectorAttention === 0}
+      >
+        <DetectorsSection propertyId={p.id} detectors={detectorViews} />
       </CollapsibleSection>
 
       <CollapsibleSection

@@ -542,6 +542,25 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Frost is on the way — time to winterize the outdoor water on the houses you look after.\n\nFor your freehold/house units (and any vacant or between-tenants unit especially), a frozen hose bib or supply line can split and cause a costly flood:\n\n- Shut off the interior valve that feeds each exterior faucet, then open the outside tap to drain the line.\n- Disconnect and store garden hoses.\n- Blow out or drain any irrigation/sprinkler lines.\n- For an occupied unit, coordinate with the tenant (you can send them the 'outdoor water shut-off' courtesy note from your dashboard).\n\nReview your properties in your dashboard: {{dashboard_url}}",
     active: true,
   },
+  {
+    // Asset-tracked detector replacement reminder (S359). Unlike the GENERIC
+    // annual landlord_fire_safety ("check your alarms"), this fires per UNIT from
+    // the recorded detector inventory (unit_detectors) when a specific detector
+    // reaches its manufacturer end-of-life — anchored to each detector's install
+    // date (a per-record sweep, app/api/cron/detector-eol), not the seasonal
+    // calendar. Opt-in per org (isDripEnqueueEnabled) so it ships dark.
+    key: "leasing.landlord_detector_eol",
+    family: "leasing",
+    audience: "operator",
+    label: "Detectors reaching end of life",
+    description:
+      "When the smoke / carbon-monoxide detectors you've logged for a unit reach their manufacturer end-of-life (~10 years for smoke and combo, ~7 for CO-only), you get one reminder per unit — so you order the right type and replace the whole unit's set in one trip instead of reacting to a beep. Goes to your team, not the tenant. Built from each unit's Detectors list; off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "detector_list", "earliest_eol", "dashboard_url"],
+    defaultSubject: "Detectors due for replacement — {{property_address}}",
+    defaultBody:
+      "Some of the smoke / carbon-monoxide detectors you've logged at {{property_address}} are reaching their manufacturer end-of-life:\n\n{{detector_list}}\n\nOrder the right type now — a combination smoke + CO unit is not interchangeable with a smoke-only one — so you can replace the whole unit's set in a single trip. Please confirm each detector's manufacturer date and your local fire code; service life is typically ~10 years for smoke and combination alarms and ~7 for CO-only.\n\nReview or update this unit's detector inventory: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {

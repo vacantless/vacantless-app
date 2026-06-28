@@ -1565,3 +1565,101 @@ export async function deletePhoto(formData: FormData) {
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?photos=removed`);
 }
+
+// ---------------------------------------------------------------------------
+// Detector inventory (S359) — per-unit smoke/CO detector records (unit_detectors,
+// 0080). Capture surface for the date-anchored end-of-life reminder. RLS scopes
+// reads/writes to the caller's org; we set organization_id from the caller's org
+// on insert so the WITH CHECK passes. No tenant PII here — detector facts only.
+// ---------------------------------------------------------------------------
+
+const DETECTOR_TYPES = ["smoke", "co", "combo"] as const;
+
+function normalizeDetectorType(raw: unknown): "smoke" | "co" | "combo" {
+  const v = String(raw ?? "").trim();
+  return (DETECTOR_TYPES as readonly string[]).includes(v)
+    ? (v as "smoke" | "co" | "combo")
+    : "combo";
+}
+
+/** Bound an optional positive integer to [min,max], else null. */
+function parseBoundedIntOrNull(raw: string, min: number, max: number): number | null {
+  const n = parseIntOrNull(raw);
+  if (n == null) return null;
+  if (n < min || n > max) return null;
+  return n;
+}
+
+export async function addDetector(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  const installDate = parseDateOrNull(String(formData.get("install_date") ?? ""));
+  const installYear = parseBoundedIntOrNull(String(formData.get("install_year") ?? ""), 1980, 2100);
+  const quantityRaw = parseBoundedIntOrNull(String(formData.get("quantity") ?? ""), 1, 999);
+
+  const supabase = createClient();
+  await supabase.from("unit_detectors").insert({
+    organization_id: org.id,
+    property_id: propertyId,
+    detector_type: normalizeDetectorType(formData.get("detector_type")),
+    location: String(formData.get("location") ?? "").trim() || null,
+    install_date: installDate,
+    install_year: installYear,
+    service_life_years: parseBoundedIntOrNull(String(formData.get("service_life_years") ?? ""), 1, 30),
+    quantity: quantityRaw ?? 1,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?detector=added#detectors`);
+}
+
+export async function updateDetector(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const installDate = parseDateOrNull(String(formData.get("install_date") ?? ""));
+  const installYear = parseBoundedIntOrNull(String(formData.get("install_year") ?? ""), 1980, 2100);
+  const quantityRaw = parseBoundedIntOrNull(String(formData.get("quantity") ?? ""), 1, 999);
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org; .eq("id") targets one row. The
+  // EOL stamp is NOT cleared here on purpose: the reminder keys on the computed
+  // EOL date, so changing the install date (e.g. logging a replacement) changes
+  // the EOL and re-arms the next cycle automatically (see detector-eol-sweep.ts).
+  await supabase
+    .from("unit_detectors")
+    .update({
+      detector_type: normalizeDetectorType(formData.get("detector_type")),
+      location: String(formData.get("location") ?? "").trim() || null,
+      install_date: installDate,
+      install_year: installYear,
+      service_life_years: parseBoundedIntOrNull(String(formData.get("service_life_years") ?? ""), 1, 30),
+      quantity: quantityRaw ?? 1,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?detector=updated#detectors`);
+}
+
+export async function removeDetector(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const supabase = createClient();
+  await supabase.from("unit_detectors").delete().eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?detector=removed#detectors`);
+}
