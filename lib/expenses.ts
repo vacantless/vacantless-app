@@ -157,7 +157,7 @@ export type ExpenseValue = {
   buildingKey: string | null;
   merchant: string | null;
   note: string | null;
-  source: "manual" | "bank" | "import";
+  source: "manual" | "bank" | "import" | "scan";
   bankTransactionId: string | null;
 };
 
@@ -166,7 +166,9 @@ export type ExpenseValidation =
   | { ok: false; code: "category" | "amount" | "date" | "scope" };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const EXPENSE_SOURCES = ["manual", "bank", "import"] as const;
+// Provenance of an expense. 'scan' (S365 Phase 2) = created from a photo-OCR
+// receipt scan; mirrors the source CHECK in migration 0084.
+const EXPENSE_SOURCES = ["manual", "bank", "import", "scan"] as const;
 
 function nonEmpty(v: string | null | undefined): string | null {
   const t = (v ?? "").trim();
@@ -200,7 +202,7 @@ export function validateExpenseInput(v: ExpenseInput): ExpenseValidation {
 
   const rawSource = (v.source ?? "manual").trim();
   const source = (EXPENSE_SOURCES as readonly string[]).includes(rawSource)
-    ? (rawSource as "manual" | "bank" | "import")
+    ? (rawSource as "manual" | "bank" | "import" | "scan")
     : "manual";
 
   return {
@@ -287,5 +289,62 @@ export function draftExpenseFromTransaction(
     buildingKey: scope.buildingKey ?? null,
     source: "bank",
     bankTransactionId: txn.id ?? null,
+  };
+}
+
+// --- Receipt scan -> expense draft (S365 Phase 2 — the "start routing" rail) --
+//
+// The photo-OCR engine (lib/asset-capture) parses a purchase RECEIPT into
+// merchant / purchase_date / total_cents (+ the appliance it names). This maps
+// that receipt branch to an ExpenseInput so a scanned receipt can file a
+// categorized expense — the sibling of draftExpenseFromTransaction, source
+// 'scan'. The expense-creation UI is a later slice; this is the tested join
+// point it consumes. Category is advisory (owner confirms): an identified
+// appliance purchase is maintenance/repairs; otherwise best-effort off the
+// merchant string. Scope is NOT guessed (the owner assigns the unit/building),
+// except when the caller already knows it (a receipt scanned on a unit page).
+
+/** The receipt fields the mapper needs — a structural subset of the parser's
+ * ReceiptDraft (lib/asset-capture), kept loose so this stays I/O- and
+ * import-free and unit-testable. */
+export type ReceiptDraftSource = {
+  merchant?: string | null;
+  purchase_date?: string | null; // ISO 'YYYY-MM-DD'
+  total_cents?: number | null;
+  appliance_type?: string | null;
+  make?: string | null;
+  model?: string | null;
+};
+
+/**
+ * Build an ExpenseInput draft from a scanned receipt, ready for
+ * validateExpenseInput once the owner confirms (and picks/keeps a scope). The
+ * amount/date/merchant come straight off the parse; the category is a best-effort
+ * hint — `maintenance` when the receipt clearly names an appliance (a durable
+ * good = a repairs/maintenance or capital cost in the owner's ledger), else the
+ * merchant string through categoryFromRawHint. source is fixed to "scan". A
+ * missing date falls back to `today` (ISO) so the draft always has a valid
+ * incurred_on for the form to show; a missing total stays null so validation
+ * surfaces an amount prompt rather than inventing a number.
+ */
+export function draftExpenseFromReceipt(
+  receipt: ReceiptDraftSource,
+  scope: { propertyId?: string | null; buildingKey?: string | null } = {},
+  today: string = new Date().toISOString().slice(0, 10),
+): ExpenseInput {
+  const namesAppliance = !!(receipt.appliance_type || receipt.make || receipt.model);
+  const category: ExpenseCategory = namesAppliance
+    ? "maintenance"
+    : categoryFromRawHint(receipt.merchant);
+  const incurredOn = (receipt.purchase_date ?? "").trim() || today;
+  return {
+    category,
+    amountCents: receipt.total_cents ?? null,
+    incurredOn,
+    merchant: receipt.merchant ?? null,
+    propertyId: scope.propertyId ?? null,
+    buildingKey: scope.buildingKey ?? null,
+    source: "scan",
+    bankTransactionId: null,
   };
 }

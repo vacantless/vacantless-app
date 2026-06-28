@@ -119,7 +119,7 @@ import {
   type ApplianceType,
 } from "@/lib/appliance-care";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
-import { appliancePrefillFromQuery } from "@/lib/asset-capture";
+import { appliancePrefillFromQuery, pendingDocIdFromQuery } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -2094,6 +2094,7 @@ export default async function PropertyDetailPage({
           propertyId={p.id}
           appliances={applianceViews}
           prefill={appliancePrefillFromQuery(searchParams)}
+          pendingDocId={pendingDocIdFromQuery(searchParams)}
           scanStatus={searchParams.scan ?? null}
         />
       </CollapsibleSection>

@@ -404,11 +404,15 @@ export function AppliancesSection({
   propertyId,
   appliances,
   prefill,
+  pendingDocId,
   scanStatus,
 }: {
   propertyId: string;
   appliances: ApplianceView[];
   prefill?: AppliancePrefill | null;
+  /** The pending-capture document id (S365 Phase 2): when a scan stored the image
+   * as a pending receipt, addAppliance promotes it to this appliance on save. */
+  pendingDocId?: string | null;
   scanStatus?: string | null;
 }) {
   const scanNote = scanStatus && scanStatus !== "ok" ? SCAN_NOTE[scanStatus] : null;
@@ -539,11 +543,14 @@ export function AppliancesSection({
         {prefill ? (
           <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-xs text-green-800">
             Scanned the photo — review the details below and save. Anything we couldn’t read is left
-            blank.
+            blank.{pendingDocId ? " The photo is saved as this appliance’s receipt when you save." : ""}
           </p>
         ) : null}
         <form action={addAppliance} className="mt-4">
           <input type="hidden" name="property_id" value={propertyId} />
+          {pendingDocId ? (
+            <input type="hidden" name="pending_doc_id" value={pendingDocId} />
+          ) : null}
           <ApplianceFields prefill={prefill} />
           <div className="mt-3">
             <button

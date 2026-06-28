@@ -399,3 +399,34 @@ export function appliancePrefillFromQuery(
     prefill.consumable_interval_months == null;
   return empty ? null : prefill;
 }
+
+// ---------------------------------------------------------------------------
+// Pending-capture round-trip (S365 Phase 2). When the scan STORES the image as a
+// pending receipt, it appends the new document's id (sc_doc=<uuid>) to the
+// redirect; the unit page reads it here and carries it as a hidden field on the
+// Add-appliance form, so addAppliance can PROMOTE the pending capture (link it to
+// the just-created appliance) on confirm. Validated to a uuid shape so a
+// hand-edited URL can't inject an arbitrary value into the promote update.
+// ---------------------------------------------------------------------------
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Coerce an arbitrary value to a lowercase uuid string, or null. The single
+ * shape check shared by the query reader (the page) and the promote guard (the
+ * addAppliance action) — neither trusts the value, but both reject non-uuids
+ * before it reaches a DB filter. */
+export function normalizePendingDocId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const t = value.trim();
+  return UUID_RE.test(t) ? t.toLowerCase() : null;
+}
+
+/** The pending-capture document id from the scan redirect (?sc_doc=), or null if
+ * absent / not a uuid. Only validates the shape — the server action still scopes
+ * the promote update to the caller's org + the pending/unlinked guards. */
+export function pendingDocIdFromQuery(
+  params: Record<string, string | string[] | undefined>,
+): string | null {
+  const v = params["sc_doc"];
+  return normalizePendingDocId(Array.isArray(v) ? v[0] : v);
+}

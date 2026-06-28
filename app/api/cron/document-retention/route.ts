@@ -4,8 +4,10 @@ import { removeDocuments } from "@/lib/documents-server";
 import {
   isDueForPurge,
   effectiveRetentionUntilMs,
+  isReapablePendingCapture,
   RETENTION_GRACE_DAYS,
   type RetentionDoc,
+  type PendingCaptureDoc,
 } from "@/lib/document-retention";
 
 // Document-retention purge sweep — the PII hard-delete half of the document
@@ -45,6 +47,10 @@ type Summary = {
   purged: number; // documents permanently deleted (or "would purge" in dry mode)
   skipped: number; // soft-deleted but still inside the retention window
   errors: number;
+  // Pending scan-capture reap (S365 Phase 2): unconfirmed photo-OCR captures
+  // (pending_until set, appliance_id null, not soft-deleted) past their grace.
+  pendingScanned: number;
+  pendingReaped: number; // reaped (bytes + row), or "would reap" in dry mode
   details: Array<Record<string, unknown>>;
 };
 
@@ -70,7 +76,7 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
-      { ok: false, reason: "service_role_not_configured", scanned: 0, purged: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
+      { ok: false, reason: "service_role_not_configured", scanned: 0, purged: 0, skipped: 0, errors: 0, pendingScanned: 0, pendingReaped: 0, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -90,14 +96,14 @@ export async function GET(req: NextRequest) {
   const { data: rows, error } = await q;
   if (error) {
     return NextResponse.json(
-      { ok: false, reason: `query_error:${error.message}`, scanned: 0, purged: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: `query_error:${error.message}`, scanned: 0, purged: 0, skipped: 0, errors: 1, pendingScanned: 0, pendingReaped: 0, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
 
   const docs = (rows ?? []) as DocRow[];
   const now = new Date();
-  const summary: Summary = { ok: true, scanned: docs.length, purged: 0, skipped: 0, errors: 0, details: [] };
+  const summary: Summary = { ok: true, scanned: docs.length, purged: 0, skipped: 0, errors: 0, pendingScanned: 0, pendingReaped: 0, details: [] };
 
   for (const doc of docs) {
     const due = force || isDueForPurge(doc, now);
@@ -133,6 +139,55 @@ export async function GET(req: NextRequest) {
       document: doc.id,
       bytes_removed: rm.ok,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pending scan-capture reap (S365 Phase 2). A photo-OCR scan stores the image
+  // as a `documents` row BEFORE the appliance exists (pending_until set,
+  // appliance_id null). On confirm addAppliance promotes it (pending_until ->
+  // null); if abandoned, reap it here so no bytes are orphaned. Disjoint from the
+  // purge above: those rows are soft-deleted (deleted_at set) and confirmed; these
+  // are NOT soft-deleted and never confirmed, so an abandoned capture goes
+  // straight out (bytes removed + row hard-deleted) — no audit value to keep.
+  // ?force reaps every pending capture regardless of the window; ?dry reports only.
+  let pq = admin
+    .from("documents")
+    .select("id, organization_id, storage_path, pending_until, appliance_id, deleted_at")
+    .not("pending_until", "is", null)
+    .is("appliance_id", null)
+    .is("deleted_at", null);
+  if (onlyOrg) pq = pq.eq("organization_id", onlyOrg);
+
+  const { data: pendRows, error: pendErr } = await pq;
+  if (pendErr) {
+    summary.errors++;
+    summary.details.push({ pending_query_error: pendErr.message });
+  } else {
+    type PendRow = PendingCaptureDoc & { id: string; organization_id: string; storage_path: string };
+    const pend = (pendRows ?? []) as PendRow[];
+    summary.pendingScanned = pend.length;
+
+    for (const doc of pend) {
+      const due = force || isReapablePendingCapture(doc, now);
+      if (!due) {
+        summary.skipped++;
+        continue;
+      }
+      if (dry) {
+        summary.pendingReaped++; // "would reap"
+        summary.details.push({ org: doc.organization_id, pending_capture: doc.id, dry: true });
+        continue;
+      }
+      const rm = await removeDocuments(admin, [doc.storage_path]);
+      const { error: delErr } = await admin.from("documents").delete().eq("id", doc.id);
+      if (delErr) {
+        summary.errors++;
+        summary.details.push({ org: doc.organization_id, pending_capture: doc.id, error: delErr.message });
+        continue;
+      }
+      summary.pendingReaped++;
+      summary.details.push({ org: doc.organization_id, pending_capture: doc.id, bytes_removed: rm.ok });
+    }
   }
 
   return NextResponse.json(summary, { status: 200 });

@@ -9,6 +9,7 @@ import {
   expenseErrorMessage,
   categoryFromRawHint,
   draftExpenseFromTransaction,
+  draftExpenseFromReceipt,
   type ExpenseRow,
 } from "../lib/expenses";
 import {
@@ -119,6 +120,49 @@ ok("draft source bank", draft.source === "bank");
 ok("draft links txn", draft.bankTransactionId === "txn_1");
 ok("draft carries scope", draft.propertyId === "p1");
 ok("draft then validates", validateExpenseInput(draft).ok === true);
+
+// --- 'scan' source acceptance (S365 Phase 2) --------------------------------
+const scanSrc = validateExpenseInput({
+  category: "maintenance",
+  amountCents: 129999,
+  incurredOn: "2026-06-15",
+  propertyId: "p1",
+  source: "scan",
+});
+ok("scan source accepted + preserved", scanSrc.ok === true && scanSrc.value.source === "scan");
+const badSrc = validateExpenseInput({
+  category: "maintenance",
+  amountCents: 100,
+  incurredOn: "2026-06-15",
+  source: "bogus",
+});
+ok("unknown source falls back to manual", badSrc.ok === true && badSrc.value.source === "manual");
+
+// --- Draft from receipt (the receipt -> expense rail) -----------------------
+const rDraft = draftExpenseFromReceipt(
+  { merchant: "Home Depot", purchase_date: "2026-06-15", total_cents: 129999, appliance_type: "fridge", make: "Whirlpool" },
+  { propertyId: "p1" },
+);
+ok("receipt draft carries amount + date", rDraft.amountCents === 129999 && rDraft.incurredOn === "2026-06-15");
+ok("receipt naming an appliance => maintenance", rDraft.category === "maintenance");
+ok("receipt draft source scan", rDraft.source === "scan");
+ok("receipt draft no bank txn link", rDraft.bankTransactionId === null);
+ok("receipt draft carries scope", rDraft.propertyId === "p1");
+ok("receipt draft carries merchant", rDraft.merchant === "Home Depot");
+ok("receipt draft then validates", validateExpenseInput(rDraft).ok === true);
+
+// No appliance named => category falls back to the merchant hint.
+const rUtil = draftExpenseFromReceipt({ merchant: "Enbridge Gas", purchase_date: "2026-05-01", total_cents: 8800 });
+ok("receipt w/o appliance hints off merchant", rUtil.category === "utilities");
+
+// Missing date => falls back to the provided 'today' (deterministic in test).
+const rNoDate = draftExpenseFromReceipt({ merchant: "Lowe's", total_cents: 5000 }, {}, "2026-06-28");
+ok("receipt missing date falls back to today", rNoDate.incurredOn === "2026-06-28");
+
+// Missing total => amount null so validation prompts (rather than inventing one).
+const rNoTotal = draftExpenseFromReceipt({ merchant: "Lowe's", purchase_date: "2026-06-01" });
+ok("receipt missing total => amount null", rNoTotal.amountCents === null);
+ok("receipt missing total fails validation on amount", validateExpenseInput(rNoTotal).ok === false);
 
 console.log(`\nexpenses: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -6,6 +6,10 @@ import {
   effectiveRetentionUntilMs,
   isDueForPurge,
   dueForPurge,
+  PENDING_CAPTURE_GRACE_HOURS,
+  pendingCaptureUntil,
+  isReapablePendingCapture,
+  dueForReapPendingCaptures,
 } from "../lib/document-retention";
 
 let passed = 0;
@@ -116,6 +120,77 @@ const batch = [
 ];
 const due = dueForPurge(batch, T0).map((d) => d.id);
 ok("batch selects only the ripe doc", due.length === 1 && due[0] === "ripe");
+
+// --- Pending scan-capture reap (S365 Phase 2) -------------------------------
+const HOUR = 60 * 60 * 1000;
+ok("pending grace is 6 hours", PENDING_CAPTURE_GRACE_HOURS === 6);
+ok(
+  "pendingCaptureUntil = storedAt + 6h",
+  pendingCaptureUntil(T0) === new Date(t0 + 6 * HOUR).toISOString(),
+);
+ok(
+  "pendingCaptureUntil honours override hours",
+  pendingCaptureUntil(T0, 1) === new Date(t0 + 1 * HOUR).toISOString(),
+);
+
+// A fresh capture (pending, unlinked, not deleted) is NOT yet reapable.
+ok(
+  "fresh pending capture not reapable",
+  !isReapablePendingCapture(
+    { pending_until: pendingCaptureUntil(T0), appliance_id: null, deleted_at: null },
+    new Date(t0 + 1 * HOUR),
+  ),
+);
+// Past its window => reapable.
+ok(
+  "elapsed pending capture is reapable",
+  isReapablePendingCapture(
+    { pending_until: pendingCaptureUntil(T0), appliance_id: null, deleted_at: null },
+    new Date(t0 + 7 * HOUR),
+  ),
+);
+// Promoted (pending_until null) => never reapable, even past any time.
+ok(
+  "promoted receipt never reapable",
+  !isReapablePendingCapture(
+    { pending_until: null, appliance_id: "app1", deleted_at: null },
+    new Date(t0 + 100 * HOUR),
+  ),
+);
+// Linked but pending_until somehow still set => not reapable (guard on appliance_id).
+ok(
+  "linked capture not reapable",
+  !isReapablePendingCapture(
+    { pending_until: pendingCaptureUntil(T0), appliance_id: "app1", deleted_at: null },
+    new Date(t0 + 7 * HOUR),
+  ),
+);
+// Soft-deleted => the purge's job, not the reaper's.
+ok(
+  "soft-deleted pending row not reapable (purge handles it)",
+  !isReapablePendingCapture(
+    { pending_until: pendingCaptureUntil(T0), appliance_id: null, deleted_at: T0.toISOString() },
+    new Date(t0 + 7 * HOUR),
+  ),
+);
+// A non-pending row (pending_until null, no link) => not reapable.
+ok(
+  "non-pending live doc not reapable",
+  !isReapablePendingCapture(
+    { pending_until: null, appliance_id: null, deleted_at: null },
+    new Date(t0 + 7 * HOUR),
+  ),
+);
+
+// Batch: only the elapsed, unlinked, not-deleted pending capture is reaped.
+const pendBatch = [
+  { id: "fresh", pending_until: pendingCaptureUntil(T0), appliance_id: null, deleted_at: null },
+  { id: "ripe", pending_until: pendingCaptureUntil(new Date(t0 - 10 * HOUR)), appliance_id: null, deleted_at: null },
+  { id: "promoted", pending_until: null, appliance_id: "a1", deleted_at: null },
+  { id: "deleted", pending_until: pendingCaptureUntil(new Date(t0 - 10 * HOUR)), appliance_id: null, deleted_at: T0.toISOString() },
+];
+const reap = dueForReapPendingCaptures(pendBatch, T0).map((d) => d.id);
+ok("batch reaps only the ripe unconfirmed capture", reap.length === 1 && reap[0] === "ripe");
 
 // ---------------------------------------------------------------------------
 console.log(`\ndocument-retention: ${passed} passed, ${failed} failed`);

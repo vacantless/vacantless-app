@@ -62,9 +62,9 @@ import {
   extForType as documentExtForType,
 } from "@/lib/documents";
 import { DOCUMENTS_BUCKET, removeDocuments } from "@/lib/documents-server";
-import { retentionUntil } from "@/lib/document-retention";
+import { retentionUntil, pendingCaptureUntil } from "@/lib/document-retention";
 import { parseAssetImage, isVisionImageType } from "@/lib/asset-capture-vision";
-import { plateFieldsToQuery } from "@/lib/asset-capture";
+import { plateFieldsToQuery, normalizePendingDocId, type AssetDraft } from "@/lib/asset-capture";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -1827,11 +1827,32 @@ export async function addAppliance(formData: FormData) {
   if (!org) return;
 
   const supabase = createClient();
-  await supabase.from("unit_appliances").insert({
-    organization_id: org.id,
-    property_id: propertyId,
-    ...applianceFieldsFromForm(formData),
-  });
+  const { data: created } = await supabase
+    .from("unit_appliances")
+    .insert({
+      organization_id: org.id,
+      property_id: propertyId,
+      ...applianceFieldsFromForm(formData),
+    })
+    .select("id")
+    .single();
+
+  // Phase 2 (S365): if this add came from a scan that stored the image as a
+  // pending capture, PROMOTE that document — link it to the just-created
+  // appliance and clear pending_until so it becomes a normal receipt (and is no
+  // longer reapable). Guarded so a stale/forged id can't link a foreign or
+  // already-linked doc: org-scoped (RLS scopes too), only-if-still-pending
+  // (idempotent on re-submit), only-if-unlinked. Best-effort; never blocks the add.
+  const pendingDocId = normalizePendingDocId(formData.get("pending_doc_id"));
+  if (created?.id && pendingDocId) {
+    await supabase
+      .from("documents")
+      .update({ appliance_id: created.id, pending_until: null, updated_at: new Date().toISOString() })
+      .eq("id", pendingDocId)
+      .eq("organization_id", org.id)
+      .not("pending_until", "is", null)
+      .is("appliance_id", null);
+  }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?appliance=added#appliances`);
@@ -2087,10 +2108,66 @@ export async function removeApplianceReceipt(formData: FormData) {
 // that also feeds the expense ledger (receipt mode) + the Unit Bible — see
 // CAPTURE-PHOTO-OCR-EMAIL-IN-DESIGN-2026-06-28.md.
 //
-// Phase 1 is migration-free and orphan-free by NOT storing the image: the scan
-// only EXTRACTS fields. Keeping the scanned photo as the receipt is a Phase-2
-// follow-up (needs a pending-document lifecycle). No tenant PII: a nameplate /
-// store receipt is the landlord's own asset/transaction record.
+// Phase 2 (S365) ALSO keeps the scanned image as the appliance's receipt/proof
+// via a pending-document lifecycle: on a successful parse the image is stored as
+// a `documents` row with appliance_id NULL + pending_until = now + grace (a
+// "pending capture"), and its id rides the redirect (sc_doc=). addAppliance
+// promotes it (links appliance_id, clears pending_until) on confirm; an abandoned
+// capture is reaped by app/api/cron/document-retention so no bytes are orphaned.
+// The store NEVER blocks the scan — if org/upload/insert fails, the scan still
+// redirects with the prefill (Phase-1 behaviour: prefill, no kept image). No
+// tenant PII: a nameplate / store receipt is the landlord's own record.
+//
+// Stores a successful scan as a pending-capture `documents` row (private bucket,
+// org RLS) and returns the new doc id, or null if anything went wrong (the scan
+// then degrades to prefill-only). Mirrors uploadApplianceReceipt's storage path.
+async function storePendingCapture(
+  supabase: ReturnType<typeof createClient>,
+  org: { id: string },
+  file: File,
+  draft: AssetDraft,
+): Promise<string | null> {
+  try {
+    const docId = crypto.randomUUID();
+    const path = documentStoragePath(org.id, docId, documentExtForType(file.type));
+    const { error: upErr } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) return null;
+
+    let sha256: string | null = null;
+    try {
+      sha256 = createHash("sha256").update(Buffer.from(await file.arrayBuffer())).digest("hex");
+    } catch {
+      sha256 = null;
+    }
+
+    const nowIso = new Date().toISOString();
+    const { error: insErr } = await supabase.from("documents").insert({
+      id: docId,
+      organization_id: org.id,
+      // appliance_id stays NULL until addAppliance promotes it on confirm.
+      title: defaultTitleFromFilename(file.name),
+      // A receipt scan is a 'receipt'; a plate scan is asset proof ('other').
+      doc_type: draft.kind === "receipt" ? "receipt" : "other",
+      storage_path: path,
+      mime_type: file.type,
+      size_bytes: file.size,
+      sha256,
+      source: "uploaded",
+      pending_until: pendingCaptureUntil(nowIso),
+    });
+    if (insErr) {
+      // Roll back the orphaned object so Storage + the table stay in sync.
+      await supabase.storage.from(DOCUMENTS_BUCKET).remove([path]);
+      return null;
+    }
+    return docId;
+  } catch {
+    return null;
+  }
+}
+
 export async function scanAppliancePlate(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
@@ -2132,5 +2209,15 @@ export async function scanAppliancePlate(formData: FormData) {
   // matching note and the landlord falls back to manual entry.
   if (!result.ok) redirect(scanUrl({ scan: result.reason }));
 
-  redirect(scanUrl({ scan: "ok", ...plateFieldsToQuery(result.draft) }));
+  // Phase 2: keep the scanned image as the pending receipt so it links to the
+  // appliance on confirm. Best-effort — a store failure degrades to prefill-only.
+  const params: Record<string, string> = { scan: "ok", ...plateFieldsToQuery(result.draft) };
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (org) {
+    const docId = await storePendingCapture(supabase, org, file as File, result.draft);
+    if (docId) params.sc_doc = docId;
+  }
+
+  redirect(scanUrl(params));
 }

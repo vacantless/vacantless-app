@@ -94,3 +94,69 @@ export function dueForPurge<T extends RetentionDoc>(
 ): T[] {
   return docs.filter((d) => isDueForPurge(d, now, graceDays));
 }
+
+// ---------------------------------------------------------------------------
+// Pending scan-capture lifecycle (S365 Phase 2 — CAPTURE-PHASE2-PENDING-DOC-
+// LIFECYCLE-2026-06-28.md). A photo-OCR scan stores the image as a `documents`
+// row BEFORE the appliance it belongs to exists (the Add form is only prefilled,
+// not yet saved). Such a row carries pending_until = scan time + grace and a NULL
+// appliance_id. On confirm (addAppliance) it is promoted (appliance_id set,
+// pending_until -> NULL) and becomes a normal receipt. If the landlord abandons
+// the form, this decides when the unconfirmed capture is reaped — bytes removed +
+// the row HARD-deleted (never confirmed => no audit value, unlike the 30-day
+// soft-delete purge above). Disjoint from that purge: this acts only on rows that
+// are pending AND not soft-deleted; the purge acts only on soft-deleted rows.
+//
+// Pure date arithmetic, unit-tested alongside the purge.
+// ---------------------------------------------------------------------------
+
+/** Grace between storing an unconfirmed scan capture and reaping it. Short: a
+ * landlord reviewing a prefilled form confirms within minutes; 6h forgives a
+ * distracted user without letting abandoned bytes accumulate (the GitHub-Actions
+ * sweep runs ~every 4h, so an abandoned byte lives ~10h worst case). */
+export const PENDING_CAPTURE_GRACE_HOURS = 6;
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/** The ISO instant at which a capture stored at `storedAt` should be reaped if
+ * still unconfirmed: storedAt + graceHours. The scan action stamps this onto
+ * documents.pending_until. */
+export function pendingCaptureUntil(
+  storedAt: string | Date,
+  graceHours: number = PENDING_CAPTURE_GRACE_HOURS,
+): string {
+  const base = toMs(storedAt) ?? Date.now();
+  const hours =
+    Number.isFinite(graceHours) && graceHours >= 0 ? graceHours : PENDING_CAPTURE_GRACE_HOURS;
+  return new Date(base + hours * HOUR_MS).toISOString();
+}
+
+/** The minimum shape the reap decision reads off a document row. */
+export type PendingCaptureDoc = {
+  pending_until: string | null;
+  appliance_id: string | null;
+  deleted_at: string | null;
+};
+
+/**
+ * Whether an unconfirmed scan capture is reapable at `now`: it must still be
+ * pending (pending_until set), still unlinked (appliance_id null), NOT soft-
+ * deleted (that path is the purge's, not the reaper's), AND past its
+ * pending_until. A promoted receipt (pending_until null) or a linked row is never
+ * reapable.
+ */
+export function isReapablePendingCapture(doc: PendingCaptureDoc, now: Date): boolean {
+  if (doc.deleted_at != null) return false; // soft-deleted => the purge's job, not ours
+  if (doc.appliance_id != null) return false; // already confirmed/linked
+  const until = toMs(doc.pending_until);
+  if (until == null) return false; // not a pending capture
+  return until <= now.getTime();
+}
+
+/** Filter a batch down to the unconfirmed scan captures reapable at `now`. */
+export function dueForReapPendingCaptures<T extends PendingCaptureDoc>(
+  docs: T[],
+  now: Date,
+): T[] {
+  return docs.filter((d) => isReapablePendingCapture(d, now));
+}
