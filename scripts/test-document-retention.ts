@@ -165,6 +165,15 @@ ok(
     new Date(t0 + 7 * HOUR),
   ),
 );
+// S366: linked to an EXPENSE (not an appliance) but pending_until still set =>
+// not reapable (guard on expense_id, the second confirm path).
+ok(
+  "expense-linked capture not reapable",
+  !isReapablePendingCapture(
+    { pending_until: pendingCaptureUntil(T0), appliance_id: null, expense_id: "exp1", deleted_at: null },
+    new Date(t0 + 7 * HOUR),
+  ),
+);
 // Soft-deleted => the purge's job, not the reaper's.
 ok(
   "soft-deleted pending row not reapable (purge handles it)",
@@ -187,6 +196,7 @@ const pendBatch = [
   { id: "fresh", pending_until: pendingCaptureUntil(T0), appliance_id: null, deleted_at: null },
   { id: "ripe", pending_until: pendingCaptureUntil(new Date(t0 - 10 * HOUR)), appliance_id: null, deleted_at: null },
   { id: "promoted", pending_until: null, appliance_id: "a1", deleted_at: null },
+  { id: "expense-linked", pending_until: pendingCaptureUntil(new Date(t0 - 10 * HOUR)), appliance_id: null, expense_id: "e1", deleted_at: null },
   { id: "deleted", pending_until: pendingCaptureUntil(new Date(t0 - 10 * HOUR)), appliance_id: null, deleted_at: T0.toISOString() },
 ];
 const reap = dueForReapPendingCaptures(pendBatch, T0).map((d) => d.id);

@@ -131,23 +131,30 @@ export function pendingCaptureUntil(
   return new Date(base + hours * HOUR_MS).toISOString();
 }
 
-/** The minimum shape the reap decision reads off a document row. */
+/** The minimum shape the reap decision reads off a document row. A capture is
+ * "confirmed" once it links to EITHER parent: an appliance (addAppliance promote)
+ * or an expense (the S366 log-as-expense promote). expense_id is optional on the
+ * type so callers that predate the column still type-check. */
 export type PendingCaptureDoc = {
   pending_until: string | null;
   appliance_id: string | null;
   deleted_at: string | null;
+  expense_id?: string | null;
 };
 
 /**
  * Whether an unconfirmed scan capture is reapable at `now`: it must still be
- * pending (pending_until set), still unlinked (appliance_id null), NOT soft-
- * deleted (that path is the purge's, not the reaper's), AND past its
- * pending_until. A promoted receipt (pending_until null) or a linked row is never
- * reapable.
+ * pending (pending_until set), still unlinked (appliance_id AND expense_id null),
+ * NOT soft-deleted (that path is the purge's, not the reaper's), AND past its
+ * pending_until. A promoted receipt (pending_until null) or a row linked to an
+ * appliance OR an expense is never reapable — both promote paths clear
+ * pending_until, but guarding on the links too means an expense-linked receipt is
+ * safe even if a future path forgets to clear the stamp.
  */
 export function isReapablePendingCapture(doc: PendingCaptureDoc, now: Date): boolean {
   if (doc.deleted_at != null) return false; // soft-deleted => the purge's job, not ours
-  if (doc.appliance_id != null) return false; // already confirmed/linked
+  if (doc.appliance_id != null) return false; // confirmed: linked to an appliance
+  if (doc.expense_id != null) return false; // confirmed: linked to an expense (S366)
   const until = toMs(doc.pending_until);
   if (until == null) return false; // not a pending capture
   return until <= now.getTime();

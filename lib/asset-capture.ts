@@ -335,7 +335,10 @@ export function isEmptyDraft(d: AssetDraft | null): boolean {
 // is carried; receipt-only fields are not needed for the prefill yet.
 // ---------------------------------------------------------------------------
 
-/** Compact, namespaced query params for the appliance prefill. */
+/** Compact, namespaced query params for the appliance prefill. For a RECEIPT
+ * draft the expense-relevant fields (merchant / purchase date / total) ALSO ride
+ * along (sc_merchant / sc_pdate / sc_total) so the unit page can offer "Log as a
+ * $X expense" off the same scan — the S366 slice that consumes the S365 rail. */
 export function plateFieldsToQuery(d: AssetDraft): Record<string, string> {
   const out: Record<string, string> = {};
   if (d.appliance_type) out.sc_type = d.appliance_type;
@@ -345,6 +348,12 @@ export function plateFieldsToQuery(d: AssetDraft): Record<string, string> {
   if (d.kind === "plate") {
     if (d.install_year != null) out.sc_year = String(d.install_year);
     if (d.warranty_months != null) out.sc_warranty = String(d.warranty_months);
+  } else {
+    // receipt: carry the expense fields (the appliance/plate subset above is
+    // already carried because a receipt names the appliance too).
+    if (d.merchant) out.sc_merchant = d.merchant;
+    if (d.purchase_date) out.sc_pdate = d.purchase_date;
+    if (d.total_cents != null) out.sc_total = String(d.total_cents);
   }
   const c = primaryConsumable(d);
   if (c) {
@@ -429,4 +438,47 @@ export function pendingDocIdFromQuery(
 ): string | null {
   const v = params["sc_doc"];
   return normalizePendingDocId(Array.isArray(v) ? v[0] : v);
+}
+
+// ---------------------------------------------------------------------------
+// Receipt -> expense prefill (S366). When a RECEIPT scan carried an amount, the
+// unit page offers "Log as a $X expense" scoped to that property. This rebuilds
+// the receipt fields from the scan-redirect query (re-clamped, so a hand-edited
+// URL can't inject junk) into the structural subset lib/expenses.draftExpenseFromReceipt
+// consumes. Gated on a parseable TOTAL: an expense needs an amount, so with no
+// readable total there is nothing to offer and this returns null (the page shows
+// no expense card). The appliance fields (type/make/model) ride along so the
+// draft's category hint can recognise an appliance purchase as maintenance.
+// ---------------------------------------------------------------------------
+
+/** The receipt fields the expense draft + the confirm card need. A structural
+ * superset-by-shape of lib/expenses.ReceiptDraftSource (kept import-free so this
+ * stays a pure URL reader). */
+export interface ScanExpensePrefill {
+  merchant: string | null;
+  purchase_date: string | null; // ISO 'YYYY-MM-DD'
+  total_cents: number;
+  appliance_type: ApplianceType | null;
+  make: string | null;
+  model: string | null;
+}
+
+export function scanExpensePrefillFromQuery(
+  params: Record<string, string | string[] | undefined>,
+): ScanExpensePrefill | null {
+  const one = (k: string): string | undefined => {
+    const v = params[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  // An expense needs an amount: no readable total => nothing to offer.
+  const total = clampInt(one("sc_total"), 1, MAX_TOTAL_CENTS);
+  if (total == null) return null;
+  return {
+    merchant: cleanText(one("sc_merchant")),
+    purchase_date: cleanIsoDate(one("sc_pdate")),
+    total_cents: total,
+    appliance_type: cleanApplianceType(one("sc_type")),
+    make: cleanText(one("sc_make")),
+    model: cleanText(one("sc_model")),
+  };
 }

@@ -65,6 +65,8 @@ import { DOCUMENTS_BUCKET, removeDocuments } from "@/lib/documents-server";
 import { retentionUntil, pendingCaptureUntil } from "@/lib/document-retention";
 import { parseAssetImage, isVisionImageType } from "@/lib/asset-capture-vision";
 import { plateFieldsToQuery, normalizePendingDocId, type AssetDraft } from "@/lib/asset-capture";
+import { validateExpenseInput } from "@/lib/expenses";
+import { parseMoneyToCents } from "@/lib/tenancy";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -2220,4 +2222,91 @@ export async function scanAppliancePlate(formData: FormData) {
   }
 
   redirect(scanUrl(params));
+}
+
+// ---------------------------------------------------------------------------
+// Log a scanned RECEIPT as an EXPENSE (S366) — the slice the S365 receipt->expense
+// rail was laid for. When a receipt is scanned on a unit page the scope is already
+// known (= this property) and merchant/date/total were parsed, so the page offers
+// a one-confirm "Log as a $X expense" card. This action validates the confirmed
+// form values, inserts an `expenses` row (source 'scan'), and PROMOTES the stored
+// receipt image (sc_doc) to that expense — linking it (documents.expense_id, 0085)
+// and clearing pending_until so the scan capture becomes a confirmed receipt and is
+// never reaped. Guarded on manage_work_orders (the expenses ledger's own
+// capability, NOT manage_properties — writing a cost is a different grant than
+// editing a unit). No tenant PII: a store receipt is a transaction record.
+// ---------------------------------------------------------------------------
+export async function logScanExpense(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  const scanExpAnchor = (q: string) =>
+    `/dashboard/properties/${propertyId}?scanexp=${q}#appliances`;
+
+  await requireCapability(
+    "manage_work_orders",
+    propertyId ? scanExpAnchor("forbidden") : "/dashboard/properties?forbidden=1",
+  );
+  if (!propertyId) redirect("/dashboard/properties");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+
+  // The expense is unit-scoped to THIS property; confirm it belongs to the org
+  // (RLS scopes the read) before attaching a cost to it.
+  const { data: prop } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!prop) redirect(scanExpAnchor("notfound"));
+
+  // Validate the CONFIRMED form values (the owner reviewed the scan's defaults).
+  // source 'scan'; scope fixed to this unit (propertyId, never building).
+  const check = validateExpenseInput({
+    category: String(formData.get("category") ?? "").trim(),
+    amountCents: parseMoneyToCents(String(formData.get("amount") ?? "")),
+    incurredOn: String(formData.get("incurred_on") ?? "").trim(),
+    propertyId,
+    buildingKey: null,
+    merchant: String(formData.get("merchant") ?? "").trim() || null,
+    source: "scan",
+  });
+  if (!check.ok) redirect(scanExpAnchor(check.code));
+
+  const { data: expense, error } = await supabase
+    .from("expenses")
+    .insert({
+      organization_id: org.id,
+      property_id: check.value.propertyId,
+      building_key: null,
+      category: check.value.category,
+      amount_cents: check.value.amountCents,
+      incurred_on: check.value.incurredOn,
+      merchant: check.value.merchant,
+      note: check.value.note,
+      source: "scan",
+    })
+    .select("id")
+    .single();
+  if (error || !expense) redirect(scanExpAnchor("save"));
+
+  // Promote the stored receipt image (if the scan kept one) to this expense:
+  // link expense_id + clear pending_until so it becomes a confirmed receipt (no
+  // longer reapable). Mirrors addAppliance's promote — org-scoped (RLS scopes
+  // too), only-if-unlinked-to-an-expense (idempotent on re-submit). Best-effort;
+  // never blocks the expense. The doc may ALSO be linked to an appliance already
+  // (if the landlord added the appliance first) — that's fine, expense_id is an
+  // independent second link.
+  const pendingDocId = normalizePendingDocId(formData.get("pending_doc_id"));
+  if (pendingDocId) {
+    await supabase
+      .from("documents")
+      .update({ expense_id: expense.id, pending_until: null, updated_at: new Date().toISOString() })
+      .eq("id", pendingDocId)
+      .eq("organization_id", org.id)
+      .is("expense_id", null);
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(scanExpAnchor("logged"));
 }

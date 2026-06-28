@@ -6,6 +6,7 @@ import {
   uploadApplianceReceipt,
   removeApplianceReceipt,
   scanAppliancePlate,
+  logScanExpense,
 } from "../actions";
 import {
   applianceTypeLabel,
@@ -13,7 +14,13 @@ import {
   type ApplianceType,
   type ApplianceStatus,
 } from "@/lib/appliance-care";
-import type { AppliancePrefill } from "@/lib/asset-capture";
+import type { AppliancePrefill, ScanExpensePrefill } from "@/lib/asset-capture";
+import {
+  draftExpenseFromReceipt,
+  expenseCategoryLabel,
+  expenseErrorMessage,
+  EXPENSE_CATEGORIES,
+} from "@/lib/expenses";
 
 // Per-unit appliance inventory capture surface (S362) — the sibling of
 // detectors-section.tsx / equipment-section.tsx (fridge, stove, dishwasher,
@@ -400,12 +407,93 @@ function ScanCapture({ propertyId }: { propertyId: string }) {
   );
 }
 
+/** The "Also log this as a $X expense" confirm card (S366). Shown after a RECEIPT
+ * scan that read an amount: the scope is already known (this unit), so the parsed
+ * merchant / date / total seed a one-confirm expense. draftExpenseFromReceipt
+ * computes the category hint + the date fallback; every field stays editable so
+ * the owner confirms before filing. The same scan's stored receipt image
+ * (pendingDocId) rides along and is linked to the expense on save. */
+function ScanExpenseCard({
+  propertyId,
+  prefill,
+  pendingDocId,
+}: {
+  propertyId: string;
+  prefill: ScanExpensePrefill;
+  pendingDocId?: string | null;
+}) {
+  const draft = draftExpenseFromReceipt(prefill, { propertyId });
+  const amountDollars = ((draft.amountCents ?? prefill.total_cents) / 100).toFixed(2);
+  const defaultCategory = draft.category ?? "maintenance";
+  return (
+    <form action={logScanExpense} className="mt-3 rounded-xl border border-brand/40 bg-brand/5 p-3">
+      <input type="hidden" name="property_id" value={propertyId} />
+      {pendingDocId ? <input type="hidden" name="pending_doc_id" value={pendingDocId} /> : null}
+      <p className="text-sm font-semibold text-gray-900">Also log this as an expense for this unit?</p>
+      <p className="mt-0.5 text-xs text-gray-500">
+        We read {prefill.merchant ? <strong>{prefill.merchant}</strong> : "this receipt"} — confirm
+        the details and file it as a cost on this unit. The scanned receipt is attached as proof.
+      </p>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div>
+          <label className={LABEL_CLS}>Amount</label>
+          <input
+            name="amount"
+            defaultValue={amountDollars}
+            inputMode="decimal"
+            placeholder="e.g. 1299.99"
+            className={INPUT_CLS}
+          />
+        </div>
+        <div>
+          <label className={LABEL_CLS}>Date</label>
+          <input
+            name="incurred_on"
+            type="date"
+            defaultValue={draft.incurredOn ?? ""}
+            className={INPUT_CLS}
+          />
+        </div>
+        <div>
+          <label className={LABEL_CLS}>Category</label>
+          <select name="category" defaultValue={defaultCategory} className={INPUT_CLS}>
+            {EXPENSE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {expenseCategoryLabel(c)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={LABEL_CLS}>Merchant</label>
+          <input
+            name="merchant"
+            defaultValue={prefill.merchant ?? ""}
+            placeholder="e.g. Home Depot"
+            className={INPUT_CLS}
+          />
+        </div>
+      </div>
+      <div className="mt-3">
+        <button
+          type="submit"
+          className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+        >
+          Log ${amountDollars} expense
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function AppliancesSection({
   propertyId,
   appliances,
   prefill,
   pendingDocId,
   scanStatus,
+  scanExpense,
+  expenseStatus,
 }: {
   propertyId: string;
   appliances: ApplianceView[];
@@ -414,8 +502,19 @@ export function AppliancesSection({
    * as a pending receipt, addAppliance promotes it to this appliance on save. */
   pendingDocId?: string | null;
   scanStatus?: string | null;
+  /** Receipt-scan expense prefill (S366): present when a receipt scan read an
+   * amount, so the section offers a one-confirm "Log as a $X expense" card. */
+  scanExpense?: ScanExpensePrefill | null;
+  /** The log-as-expense outcome (?scanexp=): "logged" or a validation code. */
+  expenseStatus?: string | null;
 }) {
   const scanNote = scanStatus && scanStatus !== "ok" ? SCAN_NOTE[scanStatus] : null;
+  const expenseNote =
+    expenseStatus === "logged"
+      ? { msg: "Logged as an expense on this unit, with the scanned receipt attached as proof.", tone: "bg-green-100 text-green-800" }
+      : expenseStatus
+        ? { msg: expenseErrorMessage(expenseStatus) ?? "Couldn’t log that expense.", tone: "bg-amber-100 text-amber-800" }
+        : null;
   return (
     <div className="space-y-5">
       <p className="text-sm text-gray-600">
@@ -530,6 +629,12 @@ export function AppliancesSection({
         </div>
         {scanNote ? (
           <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${scanNote.tone}`}>{scanNote.msg}</p>
+        ) : null}
+        {expenseNote ? (
+          <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${expenseNote.tone}`}>{expenseNote.msg}</p>
+        ) : null}
+        {scanExpense ? (
+          <ScanExpenseCard propertyId={propertyId} prefill={scanExpense} pendingDocId={pendingDocId} />
         ) : null}
       </div>
 

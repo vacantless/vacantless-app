@@ -152,9 +152,10 @@ export async function GET(req: NextRequest) {
   // ?force reaps every pending capture regardless of the window; ?dry reports only.
   let pq = admin
     .from("documents")
-    .select("id, organization_id, storage_path, pending_until, appliance_id, deleted_at")
+    .select("id, organization_id, storage_path, pending_until, appliance_id, expense_id, deleted_at")
     .not("pending_until", "is", null)
     .is("appliance_id", null)
+    .is("expense_id", null)
     .is("deleted_at", null);
   if (onlyOrg) pq = pq.eq("organization_id", onlyOrg);
 

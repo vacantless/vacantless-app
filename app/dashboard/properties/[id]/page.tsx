@@ -119,7 +119,11 @@ import {
   type ApplianceType,
 } from "@/lib/appliance-care";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
-import { appliancePrefillFromQuery, pendingDocIdFromQuery } from "@/lib/asset-capture";
+import {
+  appliancePrefillFromQuery,
+  pendingDocIdFromQuery,
+  scanExpensePrefillFromQuery,
+} from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -227,6 +231,11 @@ export default async function PropertyDetailPage({
     sc_warranty?: string;
     sc_clabel?: string;
     sc_cmonths?: string;
+    // Receipt-scan expense fields (S366) + the log-as-expense outcome.
+    sc_merchant?: string;
+    sc_pdate?: string;
+    sc_total?: string;
+    scanexp?: string;
   };
 }) {
   const supabase = createClient();
@@ -2096,6 +2105,8 @@ export default async function PropertyDetailPage({
           prefill={appliancePrefillFromQuery(searchParams)}
           pendingDocId={pendingDocIdFromQuery(searchParams)}
           scanStatus={searchParams.scan ?? null}
+          scanExpense={scanExpensePrefillFromQuery(searchParams)}
+          expenseStatus={searchParams.scanexp ?? null}
         />
       </CollapsibleSection>
 

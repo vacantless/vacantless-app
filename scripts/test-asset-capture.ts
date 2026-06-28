@@ -9,6 +9,7 @@ import {
   isEmptyDraft,
   plateFieldsToQuery,
   appliancePrefillFromQuery,
+  scanExpensePrefillFromQuery,
   primaryConsumable,
   buildExtractionPrompt,
   MAX_INSTALL_YEAR,
@@ -198,6 +199,29 @@ const receiptSrc: AssetDraft = {
 const rq = plateFieldsToQuery(receiptSrc);
 ok("receipt feeds appliance query subset", rq.sc_type === "stove" && rq.sc_make === "Frigidaire");
 ok("receipt query omits plate-only year", rq.sc_year === undefined);
+// S366: a receipt also carries the expense fields (merchant / date / total).
+ok("receipt query carries merchant", rq.sc_merchant === "Lowes");
+ok("receipt query carries purchase date", rq.sc_pdate === "2026-01-02");
+ok("receipt query carries total cents", rq.sc_total === "50000");
+
+// scanExpensePrefillFromQuery rebuilds the receipt expense prefill (re-clamped).
+const exp = scanExpensePrefillFromQuery(rq)!;
+ok("scan-expense prefill total", exp.total_cents === 50000);
+ok("scan-expense prefill merchant", exp.merchant === "Lowes");
+ok("scan-expense prefill date", exp.purchase_date === "2026-01-02");
+ok("scan-expense prefill carries appliance type", exp.appliance_type === "stove");
+ok("scan-expense prefill carries make", exp.make === "Frigidaire");
+// gated on a parseable total: a plate scan (no total) offers no expense
+ok("plate query -> no expense prefill", scanExpensePrefillFromQuery(plateFieldsToQuery(src)) === null);
+ok("no total -> no expense prefill", scanExpensePrefillFromQuery({ sc_merchant: "Lowes" }) === null);
+ok("zero total -> no expense prefill", scanExpensePrefillFromQuery({ sc_total: "0" }) === null);
+ok(
+  "hand-edited junk total rejected",
+  scanExpensePrefillFromQuery({ sc_total: "abc", sc_merchant: "X" }) === null,
+);
+// a total alone (no merchant/date) is still a valid expense offer
+const totalOnly = scanExpensePrefillFromQuery({ sc_total: "1299" })!;
+ok("total-only prefill is offered", totalOnly.total_cents === 1299 && totalOnly.merchant === null);
 
 // --- recommended consumables (manufacturer replacement schedule, S364) -------
 const withConsumables = normalizeAssetDraft({
