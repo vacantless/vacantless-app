@@ -1091,6 +1091,104 @@ export async function sendIncidentReportNotification(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Sender confirmation (capture ingress F4, S379). When a landlord adds a
+// forwarding address to their capture allow-list, it is created UNVERIFIED and
+// this email is sent TO THAT ADDRESS with a one-time link. Clicking it proves
+// control of the address and marks it verified, at which point the inbound
+// webhook will start accepting captures forwarded from it. Best-effort + degrades
+// like the rest (no BREVO_API_KEY => not sent; the row stays pending).
+// ---------------------------------------------------------------------------
+
+export type SenderConfirmationPayload = {
+  to_email: string; // the sender address being confirmed (validated non-empty by caller)
+  token: string; // the raw single-use confirm token
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+};
+
+function senderConfirmUrl(token: string): string {
+  return `${APP_BASE_URL}/capture/confirm-sender?token=${encodeURIComponent(token)}`;
+}
+
+function senderConfirmationHtml(p: SenderConfirmationPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Your property manager");
+  const url = escapeHtml(senderConfirmUrl(p.token));
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Confirm your forwarding address</p>
+      <p style="margin:0 0 16px;">This address was added to <strong>${org}</strong> so you can forward photos of appliance plates and receipts straight into your units. Confirm it to turn forwarding on.</p>
+      <p style="margin:0 0 16px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Confirm this address</a>
+      </p>
+      <p style="margin:0 0 8px;font-size:14px;color:#3f3f46;">If the button does not open, copy and paste this link into your browser:</p>
+      <p style="margin:0 0 16px;padding:12px;background:#f4f4f5;border-radius:8px;font-size:14px;color:#3f3f46;word-break:break-all;">${url}</p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      If you weren't expecting this, you can ignore this email - nothing will be forwarded until the address is confirmed. This link expires in 72 hours.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded sender-confirmation email. Never throws; returns
+ * { sent:false } if BREVO_API_KEY is unset or there's no recipient.
+ */
+export async function sendSenderConfirmation(
+  p: SenderConfirmationPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+
+  const subject = `Confirm your forwarding address for ${p.org_name || "your account"}`;
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: senderConfirmationHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 /**
  * Best-effort branded auto-reply. Never throws — callers can ignore the result.
  */

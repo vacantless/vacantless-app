@@ -220,6 +220,63 @@ export function isAllowedSenderPhone(from: unknown, allowlist: unknown[]): boole
 }
 
 // ---------------------------------------------------------------------------
+// Sender round-trip confirmation (F4 — S379 capture/ingress audit). A sender is
+// added UNVERIFIED and emailed a one-time link; only clicking it sets
+// verified_at, at which point the webhook's allow-list query (verified_at IS NOT
+// NULL) starts admitting it. This is the pure half: mint/hash/shape-check the
+// token, the 72h TTL, and the resend throttle. The DB lookup-by-hash and the
+// verified_at flip live in the confirm server action (impure).
+// ---------------------------------------------------------------------------
+
+/** How long a confirmation link stays valid. */
+export const SENDER_CONFIRM_TTL_HOURS = 72;
+/** Minimum seconds between confirmation resends for one sender (anti-spam). */
+export const SENDER_CONFIRM_RESEND_THROTTLE_SECONDS = 60;
+
+/** A single-use confirmation token: 32 random bytes, url-safe (base64url). It
+ * only ever travels in the emailed link; we store sha256(token), never the raw. */
+export function generateSenderConfirmToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+/** sha256 (hex) of a raw confirm token — what's stored, and the lookup key. */
+export function hashSenderConfirmToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+/** Shape-validate a token from the confirm link before hashing/looking it up
+ * (cheap rejection of garbage; base64url of 32 bytes is 43 chars). */
+export function isValidSenderConfirmToken(raw: unknown): raw is string {
+  return typeof raw === "string" && /^[A-Za-z0-9_-]{32,128}$/.test(raw);
+}
+
+/** Has a confirmation link expired? A missing/unparseable timestamp counts as
+ * expired (fail closed). */
+export function isSenderConfirmExpired(
+  confirmSentAt: string | null | undefined,
+  now: Date = new Date(),
+  ttlHours: number = SENDER_CONFIRM_TTL_HOURS,
+): boolean {
+  if (!confirmSentAt) return true;
+  const sent = Date.parse(confirmSentAt);
+  if (Number.isNaN(sent)) return true;
+  return now.getTime() > sent + ttlHours * 3_600_000;
+}
+
+/** May we resend the confirmation now (throttle since the last send)? No prior
+ * send => yes. */
+export function canResendSenderConfirm(
+  confirmSentAt: string | null | undefined,
+  now: Date = new Date(),
+  throttleSeconds: number = SENDER_CONFIRM_RESEND_THROTTLE_SECONDS,
+): boolean {
+  if (!confirmSentAt) return true;
+  const sent = Date.parse(confirmSentAt);
+  if (Number.isNaN(sent)) return true;
+  return now.getTime() >= sent + throttleSeconds * 1000;
+}
+
+// ---------------------------------------------------------------------------
 // Attachment validation (layer 4). The body is IGNORED entirely — only an
 // attachment whose ACTUAL bytes are a supported image (vision-parseable) or a
 // PDF (stored, not vision-parsed in v1) is accepted.

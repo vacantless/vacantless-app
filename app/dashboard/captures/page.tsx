@@ -18,6 +18,7 @@ import {
   rotateIngestAddress,
   addIngestSender,
   removeIngestSender,
+  resendIngestSenderConfirmation,
   discardCapture,
 } from "./actions";
 
@@ -192,8 +193,9 @@ export default async function CapturesPage({
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-slate-700">Allowed senders</h2>
         <p className="text-sm text-slate-500">
-          Only mail from these addresses creates a capture. Anything else is held
-          aside, not acted on. Add the email address you&rsquo;ll forward from.
+          Only mail from a confirmed address creates a capture. Anything else is
+          held aside, not acted on. Add the email you&rsquo;ll forward from and
+          we&rsquo;ll send it a one-time link to confirm it&rsquo;s yours.
         </p>
 
         <form action={addIngestSender} className="flex flex-wrap items-center gap-2">
@@ -213,13 +215,32 @@ export default async function CapturesPage({
           <p className="text-sm text-slate-400">No senders yet. Add yours above.</p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {senders.map((s: { id: string; address: string }) => (
-              <li key={s.id} className="flex items-center justify-between px-3 py-2">
-                <span className="text-sm text-slate-800">{s.address}</span>
-                <form action={removeIngestSender}>
-                  <input type="hidden" name="id" value={s.id} />
-                  <button className="text-xs font-medium text-slate-400 hover:text-red-600">Remove</button>
-                </form>
+            {senders.map((s: { id: string; address: string; verified_at: string | null }) => (
+              <li key={s.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                <span className="min-w-0 truncate text-sm text-slate-800">{s.address}</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {s.verified_at ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                      Confirmed
+                    </span>
+                  ) : (
+                    <>
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        Pending confirmation
+                      </span>
+                      <form action={resendIngestSenderConfirmation}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button className="text-xs font-medium text-slate-500 hover:text-slate-800">
+                          Resend
+                        </button>
+                      </form>
+                    </>
+                  )}
+                  <form action={removeIngestSender}>
+                    <input type="hidden" name="id" value={s.id} />
+                    <button className="text-xs font-medium text-slate-400 hover:text-red-600">Remove</button>
+                  </form>
+                </div>
               </li>
             ))}
           </ul>
@@ -417,7 +438,10 @@ function flash(sp: Record<string, string | undefined>): string | null {
   if (sp.provisioned === "1") return "Address generated. Forward photos to it from a verified sender.";
   if (sp.provisioned === "already") return "You already have an active address.";
   if (sp.rotated === "1") return "Address rotated. Use the new one from now on.";
-  if (sp.sender === "added") return "Sender added.";
+  if (sp.sender === "pending") return "We emailed that address a one-time link. It can forward captures once it's confirmed.";
+  if (sp.sender === "resent") return "Confirmation link resent.";
+  if (sp.sender === "already") return "That address is already confirmed.";
+  if (sp.sender === "throttled") return "Just sent a link to that address - give it a minute before resending.";
   if (sp.sender === "removed") return "Sender removed.";
   if (sp.sender === "invalid") return "That doesn't look like a valid email address.";
   if (sp.sender === "error") return "Sorry, that didn't work. Please try again.";

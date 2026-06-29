@@ -23,6 +23,12 @@ import {
   readIngestSecretFromAuth,
   ingestDedupeKey,
   decideIngest,
+  generateSenderConfirmToken,
+  hashSenderConfirmToken,
+  isValidSenderConfirmToken,
+  isSenderConfirmExpired,
+  canResendSenderConfirm,
+  SENDER_CONFIRM_TTL_HOURS,
   type IngestAttachmentInput,
 } from "../lib/email-ingest";
 
@@ -340,6 +346,46 @@ const baseAccept = {
   // auth checked before everything (a forged POST with a bad sender still 401s)
   const d = decideIngest({ ...baseAccept, authenticated: false, from: "stranger@evil.com" });
   ok("auth precedes sender check", d.action === "reject");
+}
+
+// --- F4 sender round-trip confirmation -------------------------------------
+{
+  const t1 = generateSenderConfirmToken();
+  const t2 = generateSenderConfirmToken();
+  ok("confirm token is url-safe + valid shape", isValidSenderConfirmToken(t1));
+  ok("confirm tokens are unique", t1 !== t2);
+  ok("confirm token has no url-unsafe chars", !/[^A-Za-z0-9_-]/.test(t1));
+}
+{
+  const raw = generateSenderConfirmToken();
+  const h = hashSenderConfirmToken(raw);
+  ok("hash is 64-hex sha256", /^[0-9a-f]{64}$/.test(h));
+  ok("hash is deterministic", hashSenderConfirmToken(raw) === h);
+  ok("different token -> different hash", hashSenderConfirmToken(generateSenderConfirmToken()) !== h);
+  ok("hash is not the raw token", h !== raw);
+}
+{
+  ok("reject empty token", !isValidSenderConfirmToken(""));
+  ok("reject short token", !isValidSenderConfirmToken("abc"));
+  ok("reject non-string token", !isValidSenderConfirmToken(undefined as unknown));
+  ok("reject token with spaces", !isValidSenderConfirmToken("a".repeat(20) + " " + "b".repeat(20)));
+}
+{
+  const now = new Date("2026-06-29T12:00:00Z");
+  const fresh = new Date(now.getTime() - 60 * 60 * 1000).toISOString(); // 1h ago
+  const stale = new Date(now.getTime() - (SENDER_CONFIRM_TTL_HOURS + 1) * 3600_000).toISOString();
+  ok("fresh confirm link not expired", !isSenderConfirmExpired(fresh, now));
+  ok("link past TTL is expired", isSenderConfirmExpired(stale, now));
+  ok("missing sent-at counts as expired (fail closed)", isSenderConfirmExpired(null, now));
+  ok("garbage sent-at counts as expired", isSenderConfirmExpired("not-a-date", now));
+}
+{
+  const now = new Date("2026-06-29T12:00:00Z");
+  const justNow = new Date(now.getTime() - 5 * 1000).toISOString(); // 5s ago
+  const oldEnough = new Date(now.getTime() - 90 * 1000).toISOString(); // 90s ago
+  ok("no prior send -> can resend", canResendSenderConfirm(null, now));
+  ok("within throttle -> cannot resend", !canResendSenderConfirm(justNow, now));
+  ok("past throttle -> can resend", canResendSenderConfirm(oldEnough, now));
 }
 
 // ---------------------------------------------------------------------------

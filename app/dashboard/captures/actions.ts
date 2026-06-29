@@ -6,7 +6,14 @@ import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { createClient } from "@/lib/supabase/server";
 import { canUseCaptureEmailIn } from "@/lib/billing";
-import { generateIngestToken, normalizeIngestSender } from "@/lib/email-ingest";
+import {
+  generateIngestToken,
+  normalizeIngestSender,
+  generateSenderConfirmToken,
+  hashSenderConfirmToken,
+  canResendSenderConfirm,
+} from "@/lib/email-ingest";
+import { sendSenderConfirmation } from "@/lib/email";
 import { normalizePendingDocId } from "@/lib/asset-capture";
 import { retentionUntil } from "@/lib/document-retention";
 import { DOCUMENTS_BUCKET } from "@/lib/documents-server";
@@ -88,11 +95,12 @@ export async function rotateIngestAddress() {
   redirect(`${BASE}?rotated=1`);
 }
 
-/** Add a verified sender to the allow-list. The address is normalized the SAME
- * way the webhook normalizes an inbound From (so they compare equal). v1 trusts
- * the operator's assertion that this is their own forwarding address, so it is
- * verified immediately (verified_at = now); a future slice can add an email
- * round-trip confirm. on-conflict-do-nothing keeps it idempotent. */
+/** Add a sender to the allow-list. The address is normalized the SAME way the
+ * webhook normalizes an inbound From (so they compare equal). F4 (S379 audit):
+ * the sender is added UNVERIFIED and emailed a one-time confirmation link; it
+ * only becomes trusted (verified_at set, so the webhook admits it) once that link
+ * is clicked. Re-adding an unverified address re-issues + resends the link;
+ * re-adding an already-verified one is a no-op. */
 export async function addIngestSender(formData: FormData) {
   const org = await gateEmailCapture();
   const raw = String(formData.get("address") ?? "");
@@ -100,21 +108,99 @@ export async function addIngestSender(formData: FormData) {
   if (!address) redirect(`${BASE}?sender=invalid`);
 
   const supabase = createClient();
-  const { error } = await supabase
+
+  // What state is this address already in for the org?
+  const { data: existing } = await supabase
     .from("org_ingest_senders")
-    .upsert(
-      {
-        organization_id: org.id,
-        channel: "email",
-        address,
-        verified_at: new Date().toISOString(),
-      },
-      { onConflict: "organization_id,channel,address", ignoreDuplicates: true },
-    );
-  if (error) redirect(`${BASE}?sender=error`);
+    .select("id, verified_at")
+    .eq("organization_id", org.id)
+    .eq("channel", "email")
+    .eq("address", address)
+    .maybeSingle();
+  if (existing?.verified_at) redirect(`${BASE}?sender=already`);
+
+  // Add (or refresh) an UNVERIFIED row with a fresh single-use confirm token. We
+  // store only sha256(token); the raw token lives only in the emailed link.
+  const rawToken = generateSenderConfirmToken();
+  const tokenHash = hashSenderConfirmToken(rawToken);
+  const nowIso = new Date().toISOString();
+
+  if (existing?.id) {
+    const { error } = await supabase
+      .from("org_ingest_senders")
+      .update({ confirm_token_sha256: tokenHash, confirm_sent_at: nowIso })
+      .eq("id", existing.id)
+      .eq("organization_id", org.id);
+    if (error) redirect(`${BASE}?sender=error`);
+  } else {
+    const { error } = await supabase.from("org_ingest_senders").insert({
+      organization_id: org.id,
+      channel: "email",
+      address,
+      verified_at: null,
+      confirm_token_sha256: tokenHash,
+      confirm_sent_at: nowIso,
+    });
+    if (error) redirect(`${BASE}?sender=error`);
+  }
+
+  // Email the address its confirmation link (best-effort; the row is already
+  // pending, and Resend covers a transient send failure).
+  await sendSenderConfirmation({
+    to_email: address,
+    token: rawToken,
+    org_name: org.name,
+    brand_color: org.brand_color,
+    logo_url: org.logo_url,
+    reply_to_email: org.reply_to_email,
+  });
 
   revalidatePath(BASE);
-  redirect(`${BASE}?sender=added`);
+  redirect(`${BASE}?sender=pending`);
+}
+
+/** Resend the confirmation link for a still-pending sender (re-issues the token).
+ * Throttled (canResendSenderConfirm) so the button can't be used to spam the
+ * address. A verified sender needs nothing; a missing row is an error. */
+export async function resendIngestSenderConfirmation(formData: FormData) {
+  const org = await gateEmailCapture();
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect(`${BASE}?sender=error`);
+
+  const supabase = createClient();
+  const { data: row } = await supabase
+    .from("org_ingest_senders")
+    .select("id, address, verified_at, confirm_sent_at")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .eq("channel", "email")
+    .maybeSingle();
+  if (!row) redirect(`${BASE}?sender=error`);
+  if (row.verified_at) redirect(`${BASE}?sender=already`);
+  if (!canResendSenderConfirm(row.confirm_sent_at)) redirect(`${BASE}?sender=throttled`);
+
+  const rawToken = generateSenderConfirmToken();
+  const { error } = await supabase
+    .from("org_ingest_senders")
+    .update({
+      confirm_token_sha256: hashSenderConfirmToken(rawToken),
+      confirm_sent_at: new Date().toISOString(),
+    })
+    .eq("id", row.id)
+    .eq("organization_id", org.id);
+  if (error) redirect(`${BASE}?sender=error`);
+
+  await sendSenderConfirmation({
+    to_email: row.address,
+    token: rawToken,
+    org_name: org.name,
+    brand_color: org.brand_color,
+    logo_url: org.logo_url,
+    reply_to_email: org.reply_to_email,
+  });
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sender=resent`);
 }
 
 /** Remove a verified sender. RLS scopes the delete to the caller's org; the id
