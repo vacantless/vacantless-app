@@ -185,7 +185,7 @@ export default async function BillingPage({
         <div className="mt-6 overflow-hidden rounded-2xl border-2 border-brand bg-white shadow-sm">
           <div className="border-b border-gray-100 bg-gray-50 px-6 py-2.5">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-brand">
-              Recommended to start
+              Recommended · guided start
             </span>
           </div>
           <div className="p-6">
@@ -321,8 +321,16 @@ export default async function BillingPage({
           ? "Continue after your pilot"
           : view.pilotExpired
             ? "Choose a plan to keep going"
-            : "Plans"}
+            : showPilotOffer
+              ? "Or subscribe now and go live"
+              : "Plans"}
       </h3>
+      {showPilotOffer && (
+        <p className="mt-1 text-sm text-gray-500">
+          Prefer to start on your own? Subscribe with a card and go live right
+          away - no setup call needed.
+        </p>
+      )}
       <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {TIER_KEYS.map((key) => {
           const tier = TIERS[key];
