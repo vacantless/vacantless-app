@@ -1865,9 +1865,19 @@ export async function addAppliance(formData: FormData) {
   // Phase 2 (S365): if this add came from a scan that stored the image as a
   // pending capture, PROMOTE that document — link it to the just-created
   // appliance and clear pending_until so it becomes a normal receipt (and is no
-  // longer reapable). Guarded so a stale/forged id can't link a foreign or
-  // already-linked doc: org-scoped (RLS scopes too), only-if-still-pending
-  // (idempotent on re-submit), only-if-unlinked. Best-effort; never blocks the add.
+  // longer reapable). Best-effort; never blocks the add.
+  //
+  // F2 (S369 / Codex 2026-06-29 audit, KI562). The guard is:
+  //   appliance_id IS NULL                                 -- idempotent: don't re-link
+  //   AND (pending_until IS NOT NULL OR expense_id IS NOT NULL)
+  // The OR is the key. A capture's FIRST promote clears pending_until, so if the
+  // landlord logged the EXPENSE first (which set expense_id + cleared pending_until)
+  // and THEN adds the appliance, the old "pending_until IS NOT NULL" guard would
+  // WRONGLY block the second link. Allowing "the other link is already set" lets
+  // the both-promotes ordering complete. And it still refuses to link a plain
+  // vault doc (a lease/person file: pending_until NULL, both links NULL -> the OR
+  // is false), which closes the under-constrained-promote finding. (source can't
+  // distinguish a capture: the in-app scan stores source='uploaded'.)
   const pendingDocId = normalizePendingDocId(formData.get("pending_doc_id"));
   if (created?.id && pendingDocId) {
     await supabase
@@ -1875,8 +1885,8 @@ export async function addAppliance(formData: FormData) {
       .update({ appliance_id: created.id, pending_until: null, updated_at: new Date().toISOString() })
       .eq("id", pendingDocId)
       .eq("organization_id", org.id)
-      .not("pending_until", "is", null)
-      .is("appliance_id", null);
+      .is("appliance_id", null)
+      .or("pending_until.not.is.null,expense_id.not.is.null");
   }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
@@ -2315,11 +2325,18 @@ export async function logScanExpense(formData: FormData) {
 
   // Promote the stored receipt image (if the scan kept one) to this expense:
   // link expense_id + clear pending_until so it becomes a confirmed receipt (no
-  // longer reapable). Mirrors addAppliance's promote — org-scoped (RLS scopes
-  // too), only-if-unlinked-to-an-expense (idempotent on re-submit). Best-effort;
-  // never blocks the expense. The doc may ALSO be linked to an appliance already
-  // (if the landlord added the appliance first) — that's fine, expense_id is an
-  // independent second link.
+  // longer reapable). Best-effort; never blocks the expense.
+  //
+  // F2 (S369 / Codex 2026-06-29 audit, KI562) — mirror of addAppliance's guard:
+  //   expense_id IS NULL                                   -- idempotent: don't re-link
+  //   AND (pending_until IS NOT NULL OR appliance_id IS NOT NULL)
+  // The previous guard was only "expense_id IS NULL", which would link this
+  // expense to ANY org-scoped unlinked doc — including a plain lease/person file
+  // that was never a capture (the under-constrained-promote finding). The added
+  // OR clause requires the doc to be EITHER a still-pending capture OR one already
+  // confirmed against its appliance (the both-promotes ordering, where the
+  // appliance promote already cleared pending_until). A plain vault doc has
+  // pending_until NULL + both links NULL -> the OR is false -> it is left alone.
   const pendingDocId = normalizePendingDocId(formData.get("pending_doc_id"));
   if (pendingDocId) {
     await supabase
@@ -2327,7 +2344,8 @@ export async function logScanExpense(formData: FormData) {
       .update({ expense_id: expense.id, pending_until: null, updated_at: new Date().toISOString() })
       .eq("id", pendingDocId)
       .eq("organization_id", org.id)
-      .is("expense_id", null);
+      .is("expense_id", null)
+      .or("pending_until.not.is.null,appliance_id.not.is.null");
   }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
