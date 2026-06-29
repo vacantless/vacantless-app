@@ -195,6 +195,19 @@ export default async function PublicListingPage({
               Pets: {l.pets_notes.trim()}
             </p>
           )}
+          {/* Bring the booking action above the fold on mobile (Codex design
+              audit #6): a renter sees how to act before scrolling past the photos
+              and description. In-flow anchor jump — no JS, desktop unaffected. */}
+          {isAvailable && (
+            <a
+              href="#book"
+              className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 sm:w-auto"
+              style={{ background: brandBg }}
+            >
+              {days.length > 0 ? "Book a viewing" : "Request a viewing"}
+              <span aria-hidden>↓</span>
+            </a>
+          )}
         </div>
 
         <PhotoGallery address={l.address} photos={photos} available={isAvailable} />
@@ -239,7 +252,10 @@ export default async function PublicListingPage({
           </div>
         )}
 
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div
+          id="book"
+          className="mt-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+        >
           {!isAvailable ? (
             <div className="text-center">
               <h2 className="text-xl font-bold text-gray-900">
