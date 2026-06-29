@@ -19,6 +19,7 @@ export function CopyLink({ url }: { url: string }) {
     <div className="flex flex-wrap items-center gap-2">
       <input
         readOnly
+        aria-label="Public listing link"
         value={url}
         onFocus={(e) => e.currentTarget.select()}
         className="min-w-[18rem] flex-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700"

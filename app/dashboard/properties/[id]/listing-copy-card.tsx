@@ -123,6 +123,7 @@ export function ListingCopyCard({
         </div>
         <input
           readOnly
+          aria-label="Listing title"
           value={current.title}
           onFocus={(e) => e.currentTarget.select()}
           className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800"
@@ -153,6 +154,7 @@ export function ListingCopyCard({
         </div>
         <textarea
           readOnly
+          aria-label="Listing description"
           rows={12}
           value={current.body}
           onFocus={(e) => e.currentTarget.select()}

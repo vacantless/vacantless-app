@@ -247,6 +247,49 @@ ok(
   generic.body.includes("Book a viewing or send an inquiry:"),
 );
 
+// --- structured listing platforms (Rentals.ca / Zumper / Viewit) -----------
+// These have their OWN beds/baths/sqft/amenity fields, so the generated body
+// drops the redundant spec + feature lines and reads as a narrative.
+const rentalsCa = buildListingCopy(fullInput, "rentals_ca");
+ok(
+  "copy: rentals.ca body LEADS with the description",
+  rentalsCa.body.startsWith("Bright corner suite with great light."),
+);
+ok(
+  "copy: rentals.ca drops the redundant spec line (sqft is a structured field)",
+  !rentalsCa.body.includes("850 sq ft"),
+);
+ok(
+  "copy: rentals.ca drops the redundant Features line",
+  !rentalsCa.body.includes("Features:"),
+);
+ok(
+  "copy: rentals.ca keeps price (a useful anchor)",
+  rentalsCa.body.includes("$1,850/month"),
+);
+ok(
+  "copy: rentals.ca keeps the utilities disclosure",
+  rentalsCa.body.includes("Heat & water included in rent."),
+);
+ok(
+  "copy: rentals.ca keeps the inquiry link",
+  rentalsCa.body.includes("https://vacantless-app.vercel.app/r/abc123"),
+);
+ok(
+  "copy: structured platforms use the structured CTA",
+  rentalsCa.body.includes("Book a viewing or ask us a question:"),
+);
+ok(
+  "copy: zumper + viewit also drop the spec line",
+  !buildListingCopy(fullInput, "zumper").body.includes("850 sq ft") &&
+    !buildListingCopy(fullInput, "viewit").body.includes("850 sq ft"),
+);
+// Classifieds keep the full self-contained dump (regression guard).
+ok(
+  "copy: kijiji (classified) STILL includes the spec line + Features",
+  kijiji.body.includes("850 sq ft") && kijiji.body.includes("Features:"),
+);
+
 // Sparse unit still renders cleanly.
 const sparse = buildListingCopy(
   { address: "9 Elm", beds: 1, baths: 1 },

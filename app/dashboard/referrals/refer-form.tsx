@@ -103,6 +103,7 @@ export function ReferAFriendForm() {
           <div className="flex gap-2">
             <input
               readOnly
+              aria-label="Referral link"
               value={result.link}
               onFocus={(e) => e.currentTarget.select()}
               className="w-full rounded-md border border-green-300 bg-white px-2 py-1 text-xs text-slate-700"

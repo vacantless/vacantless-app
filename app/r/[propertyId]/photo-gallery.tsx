@@ -12,9 +12,13 @@ import { useCallback, useEffect, useState } from "react";
 export function PhotoGallery({
   address,
   photos,
+  available = true,
 }: {
   address: string;
   photos: string[];
+  /** When false (an unavailable/leased unit), skip the empty placeholder — a
+   *  "no longer available" page shouldn't promise "Photos coming soon". */
+  available?: boolean;
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const count = photos.length;
@@ -45,7 +49,10 @@ export function PhotoGallery({
 
   // No photos yet: show a calm placeholder rather than a blank gap, so a shared
   // link to a not-yet-photographed unit still reads as intentional (Codex QA).
+  // But on an unavailable (leased) page, the "no longer available" notice is the
+  // message — a "Photos coming soon" promise there is misleading, so render nothing.
   if (count === 0) {
+    if (!available) return null;
     return (
       <div className="mt-6 flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center">
         <span className="text-sm text-gray-400">Photos coming soon</span>

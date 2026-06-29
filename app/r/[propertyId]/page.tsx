@@ -197,7 +197,7 @@ export default async function PublicListingPage({
           )}
         </div>
 
-        <PhotoGallery address={l.address} photos={photos} />
+        <PhotoGallery address={l.address} photos={photos} available={isAvailable} />
 
         {tour && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">

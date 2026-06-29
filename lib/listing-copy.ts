@@ -39,14 +39,26 @@ type PortalProfile = {
   // Marketplace mangles clickable links (and breaks them outright inside DMs),
   // so its CTA tells the renter to message or paste the link rather than tap it.
   cta: string;
+  // CLASSIFIED (Kijiji, Facebook, the portable master) = the platform has no
+  // structured listing fields, so the body must be SELF-CONTAINED: it repeats
+  // beds/baths/sqft/parking and the amenity list inline. STRUCTURED (Rentals.ca,
+  // Zumper, Viewit) = the platform captures those as its own fields, so repeating
+  // them in the description box is redundant clutter. There the body reads as a
+  // narrative (description + price + utilities + CTA) and DROPS the spec + amenity
+  // lines. Utilities stay everywhere (a what's-included disclosure, not always a
+  // structured field).
+  classified: boolean;
 };
 
-// Default CTA shared by every portal whose links render normally.
+// Default CTA shared by classified portals whose links render normally.
 const DEFAULT_CTA = "Book a viewing or send an inquiry:";
+// Listing platforms show the inquiry beneath their own structured fields, so the
+// CTA is a short, direct nudge rather than a self-contained "send an inquiry".
+const STRUCTURED_CTA = "Book a viewing or ask us a question:";
 
 const PORTAL_PROFILES: Record<CopyPortalKey, PortalProfile> = {
-  generic: { label: "Master copy", maxTitle: 120, plainText: true, linkOnOwnLine: true, cta: DEFAULT_CTA },
-  kijiji: { label: "Kijiji", maxTitle: 64, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
+  generic: { label: "Master copy", maxTitle: 120, plainText: true, linkOnOwnLine: true, cta: DEFAULT_CTA, classified: true },
+  kijiji: { label: "Kijiji", maxTitle: 64, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA, classified: true },
   facebook: {
     label: "Facebook Marketplace",
     maxTitle: 100,
@@ -55,10 +67,11 @@ const PORTAL_PROFILES: Record<CopyPortalKey, PortalProfile> = {
     // Marketplace strips inline links and breaks them in Messenger, so point the
     // renter at messaging us or copying the link into a browser instead.
     cta: "Message us to book a viewing, or copy this link into your browser:",
+    classified: true,
   },
-  rentals_ca: { label: "Rentals.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
-  zumper: { label: "Zumper", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
-  viewit: { label: "Viewit.ca", maxTitle: 90, plainText: true, linkOnOwnLine: false, cta: DEFAULT_CTA },
+  rentals_ca: { label: "Rentals.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
+  zumper: { label: "Zumper", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
+  viewit: { label: "Viewit.ca", maxTitle: 90, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
 };
 
 export const COPY_PORTALS: ReadonlyArray<{ key: CopyPortalKey; label: string }> =
@@ -324,17 +337,21 @@ export function buildListingCopy(
   const priceLine = [rent, avail].filter(Boolean).join(" - ");
   if (priceLine) lines.push(priceLine);
 
-  // Spec line (beds/baths/sqft/floor/parking) — reuse the canonical helper.
-  const specs = buildSpecLine({
-    ...features,
-    beds: input.beds,
-    baths: input.baths,
-  });
-  if (specs.length) lines.push(specs.join(" - "));
+  // Spec line (beds/baths/sqft/floor/parking) + amenities are the platform's OWN
+  // structured fields on a listing site (Rentals.ca / Zumper / Viewit), so only
+  // the self-contained classifieds (Kijiji / Facebook / master) repeat them in
+  // the body. On a structured platform they'd just duplicate the form fields.
+  if (profile.classified) {
+    const specs = buildSpecLine({
+      ...features,
+      beds: input.beds,
+      baths: input.baths,
+    });
+    if (specs.length) lines.push(specs.join(" - "));
 
-  // Amenities.
-  const amenities = buildAmenityChips(features);
-  if (amenities.length) lines.push(`Features: ${amenities.join(", ")}.`);
+    const amenities = buildAmenityChips(features);
+    if (amenities.length) lines.push(`Features: ${amenities.join(", ")}.`);
+  }
 
   // Utilities included (derived from the unit's own flags).
   const utils = utilitiesSummary(features);
