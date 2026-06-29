@@ -147,10 +147,16 @@ export default async function PropertiesPage({
             });
             return (
             <li key={p.id} className="px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              {/* Mobile (default): stack so the address/specs get their own
+                  full-width row and the rent/status/actions cluster drops to a
+                  separate wrapping row below — at true phone width the old
+                  single justified row squeezed the address into one-word-per-
+                  line wrapping beside the shrink-0 action cluster (Codex design
+                  follow-up, pre-pilot). sm+ restores the original justified row. */}
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-2">
               <Link
                 href={`/dashboard/properties/${p.id}`}
-                className="min-w-0 flex-1 hover:underline"
+                className="min-w-0 sm:flex-1 hover:underline"
               >
                 <span className="text-gray-900">{p.address}</span>
                 <span className="ml-2 text-xs text-gray-400">
@@ -168,7 +174,7 @@ export default async function PropertiesPage({
                   </span>
                 )}
               </Link>
-              <span className="flex shrink-0 items-center gap-2">
+              <span className="flex shrink-0 flex-wrap items-center gap-2">
                 <span className="text-sm text-gray-500">
                   {p.rent_cents
                     ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
