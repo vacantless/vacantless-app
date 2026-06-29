@@ -104,6 +104,7 @@ import {
   type InsuranceView,
 } from "./insurance-section";
 import { insuranceStatusFor } from "@/lib/tenancy-insurance";
+import { availableReceiptYears, defaultReceiptYear } from "@/lib/rent-receipt";
 import {
   shareLinkStatus,
   executedLeaseVaultEntries,
@@ -393,6 +394,31 @@ export default async function TenancyDetailPage({
   const reconciliation = reconcilePayments(
     payments.map((p): PaymentRow => ({ amount_cents: p.amount_cents, period_month: p.period_month })),
     t.rent_cents,
+  );
+  // Annual rent-receipt (S382): years with logged payments, for the picker; the
+  // receipt itself is rendered by the /receipt route from the same ledger.
+  const receiptYears = availableReceiptYears(
+    payments.map((p) => ({
+      amount_cents: p.amount_cents,
+      method: p.method,
+      paid_on: p.paid_on,
+      period_month: p.period_month,
+      reference: null,
+      note: null,
+    })),
+  );
+  const receiptDefaultYear = defaultReceiptYear(
+    payments.map((p) => ({
+      amount_cents: p.amount_cents,
+      method: p.method,
+      paid_on: p.paid_on,
+      period_month: p.period_month,
+      reference: null,
+      note: null,
+    })),
+    Number(
+      new Date().toLocaleDateString("en-CA", { timeZone: "America/Toronto" }).slice(0, 4),
+    ),
   );
 
   // Maintenance work orders logged against this tenancy (newest first), for the
@@ -1437,6 +1463,47 @@ export default async function TenancyDetailPage({
           money moves here. For automatic pre-authorized debit, use rent
           collection above.
         </p>
+
+        {/* Annual rent receipt (S382) — a year-end Statement of Rent Paid the
+            tenant can use for taxes, built from the payments below. */}
+        {receiptYears.length > 0 && (
+          <form
+            method="get"
+            action={`/dashboard/tenancies/${t.id}/receipt`}
+            target="_blank"
+            className="flex flex-wrap items-end gap-3 rounded-xl border border-gray-100 bg-gray-50/60 p-4"
+          >
+            <div>
+              <label
+                htmlFor="receipt-year"
+                className="block text-xs font-semibold uppercase tracking-wide text-gray-500"
+              >
+                Rent receipt
+              </label>
+              <p className="mt-0.5 text-xs text-gray-500">
+                A year-end statement of rent paid for the tenant&apos;s taxes.
+              </p>
+            </div>
+            <select
+              id="receipt-year"
+              name="year"
+              defaultValue={String(receiptDefaultYear)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+            >
+              {receiptYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              className="rounded-lg border border-brand bg-white px-3 py-2 text-sm font-medium text-brand hover:bg-brand hover:text-white"
+            >
+              Open rent receipt
+            </button>
+          </form>
+        )}
 
         {/* Reconcile summary by rent period */}
         {payments.length > 0 && (
