@@ -92,9 +92,9 @@ export async function addInsurance(formData: FormData) {
 
 // ---------------------------------------------------------------------------
 // Update a policy. Editing the expiry date naturally re-arms the reminder (the
-// lapse_nudged_for stamp keys on the old expiry, so a new expiry no longer
-// matches); we also clear the stamp explicitly so a correction within the same
-// term re-arms cleanly too.
+// phase stamps key on the old expiry, so a new expiry no longer matches); we
+// also clear BOTH phase stamps (expiring_nudged_for + lapse_nudged_for)
+// explicitly so a correction within the same term re-arms both phases cleanly.
 // ---------------------------------------------------------------------------
 export async function updateInsurance(formData: FormData) {
   const tenancyId = s(formData, "tenancy_id");
@@ -111,7 +111,7 @@ export async function updateInsurance(formData: FormData) {
 
   await supabase
     .from("tenancy_insurance")
-    .update({ ...policyFields(formData), lapse_nudged_for: null, updated_at: new Date().toISOString() })
+    .update({ ...policyFields(formData), expiring_nudged_for: null, lapse_nudged_for: null, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("tenancy_id", tenancyId);
 

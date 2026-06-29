@@ -18,7 +18,10 @@ import {
   INSURANCE_URGENCY,
   INSURANCE_LEAD_DAYS,
 } from "@/lib/tenancy-insurance";
-import { decideInsuranceNudge } from "@/lib/tenancy-insurance-sweep";
+import {
+  decideInsuranceNudge,
+  type InsuranceStampColumn,
+} from "@/lib/tenancy-insurance-sweep";
 
 // Per-tenancy renter's-insurance lapse reminder sweep (S382) — the tenancy-
 // scoped sibling of the unit asset reminders (detector-eol / equipment-eol).
@@ -30,10 +33,13 @@ import { decideInsuranceNudge } from "@/lib/tenancy-insurance-sweep";
 // Anchored to each policy's expiry date, this rides the rent-increase-style
 // per-record sweep (NOT the seasonal compliance calendar). Copy/recipients/
 // on-off + branding ride the notification substrate, exactly like every other
-// event. Each policy self-gates to ONCE per term via the stable
-// tenancy_insurance.lapse_nudged_for stamp (the expiry date — see
-// tenancy-insurance-sweep.ts); logging a renewal rolls the expiry forward and
-// re-arms the next term.
+// event. The contract is TWO reminders per term: one ~30 days out
+// (expiring_soon) and one once the policy lapses. Idempotency is PHASE-AWARE —
+// each phase self-gates to ONCE per term via its OWN stamp keyed on the expiry
+// date (expiring_nudged_for for pre-expiry, lapse_nudged_for for lapsed; see
+// tenancy-insurance-sweep.ts), so the earlier email never suppresses the later
+// one. Logging a renewal (new expiry date) mismatches both stamps and re-arms
+// the next term.
 //
 // SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
 // turns the "Renter's insurance expiring or lapsed" event on in Settings ->
@@ -86,6 +92,7 @@ type InsuranceRow = {
   coverage_amount_cents: number | null;
   effective_date: string | null;
   expiry_date: string | null;
+  expiring_nudged_for: string | null;
   lapse_nudged_for: string | null;
   tenancy: {
     id: string;
@@ -99,6 +106,7 @@ type Actionable = {
   expiryDate: string;
   status: "expiring_soon" | "lapsed";
   stampFor: string | null; // non-null only when this policy should be (re)stamped
+  stampColumn: InsuranceStampColumn | null; // which phase column to write (null when not nudging)
 };
 
 /** One human line for the email's {{insurance_list}} token. */
@@ -193,7 +201,7 @@ export async function GET(req: NextRequest) {
         .from("tenancy_insurance")
         .select(
           "id, tenancy_id, provider, policy_number, coverage_amount_cents, " +
-            "effective_date, expiry_date, lapse_nudged_for, " +
+            "effective_date, expiry_date, expiring_nudged_for, lapse_nudged_for, " +
             "tenancy:tenancies(id, property:properties(address), tenants(name, is_primary))",
         )
         .eq("organization_id", org.id);
@@ -212,7 +220,8 @@ export async function GET(req: NextRequest) {
         const decision = decideInsuranceNudge({
           expiryDate,
           status,
-          lastNudgedFor: r.lapse_nudged_for ?? null,
+          expiringNudgedFor: r.expiring_nudged_for ?? null,
+          lapseNudgedFor: r.lapse_nudged_for ?? null,
           force,
         });
         const ten = r.tenancy ?? null;
@@ -226,6 +235,7 @@ export async function GET(req: NextRequest) {
           expiryDate: expiryDate!, // non-null: expiring_soon/lapsed implies a real date
           status,
           stampFor: decision.nudge ? decision.stampFor : null,
+          stampColumn: decision.nudge ? decision.stampColumn : null,
         });
         byTenancy.set(r.tenancy_id, bucket);
       }
@@ -293,7 +303,7 @@ export async function GET(req: NextRequest) {
             tenancy: tenancyId,
             dry: true,
             actionable: group.items.length,
-            would_stamp: toStamp.map((i) => ({ id: i.row.id, expiry: i.stampFor })),
+            would_stamp: toStamp.map((i) => ({ id: i.row.id, expiry: i.stampFor, column: i.stampColumn })),
             recipients,
             subject: rendered.subject,
             body: rendered.body,
@@ -319,11 +329,14 @@ export async function GET(req: NextRequest) {
 
         // Stamp regardless of whether the event ultimately had recipients — the
         // substrate short-circuits a disabled event, and we don't want to rebuild
-        // this nudge on every tick for the rest of the term.
+        // this nudge on every tick for the rest of the term. Each policy stamps the
+        // PHASE's column (expiring_nudged_for vs lapse_nudged_for) so the pre-expiry
+        // email never suppresses the later lapsed email for the same expiry (S384).
         for (const i of toStamp) {
+          if (!i.stampColumn) continue; // defensive: toStamp implies a column
           await admin
             .from("tenancy_insurance")
-            .update({ lapse_nudged_for: i.stampFor })
+            .update({ [i.stampColumn]: i.stampFor })
             .eq("id", i.row.id);
         }
 
@@ -333,7 +346,7 @@ export async function GET(req: NextRequest) {
           tenancy: tenancyId,
           sent: true,
           actionable: group.items.length,
-          stamped: toStamp.map((i) => ({ id: i.row.id, expiry: i.stampFor })),
+          stamped: toStamp.map((i) => ({ id: i.row.id, expiry: i.stampFor, column: i.stampColumn })),
         });
       }
     } catch (e: any) {
