@@ -24,6 +24,8 @@ import { Icons } from "@/components/icons";
 import { LaunchChecklist } from "./launch-checklist";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { RentIncreaseRow } from "@/components/rent-increase-card";
+import { buildTodayLane } from "@/lib/dashboard-today";
+import { TodayLane } from "./today-lane";
 
 export const dynamic = "force-dynamic";
 
@@ -183,6 +185,25 @@ export default async function OverviewPage() {
         ),
     );
 
+  // "Today" action lane (Codex design audit #3): an action-first summary above
+  // the stats, built from counts already derived here. Conditional-visibility —
+  // only nonzero signals appear; an empty lane renders an "all caught up" state.
+  const viewingsToday = upcomingShowings.filter(
+    (s) =>
+      s.scheduled_at &&
+      new Date(s.scheduled_at).toLocaleDateString("en-CA", { timeZone }) ===
+        today,
+  ).length;
+  const todayItems = buildTodayLane({
+    inquiriesNeedingReply: allLeads.filter((l) => needsReply(l.status)).length,
+    viewingsToday,
+    messagesAwaitingApproval: pendingMessageCount ?? 0,
+    rentIncreasesOverdue: rentIncreaseAlerts.filter(
+      (a) => a.result.status === "overdue" || a.result.status === "serve_late",
+    ).length,
+    urgentWorkOrders: urgentWorkOrders.length,
+  });
+
   const checklist = buildLaunchChecklist({
     propertyCount: propertyCount ?? 0,
     availabilityWindowCount: availabilityCount ?? 0,
@@ -206,6 +227,8 @@ export default async function OverviewPage() {
         title="Overview"
         subtitle="Everything that needs your attention, at a glance."
       />
+
+      <TodayLane items={todayItems} />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
