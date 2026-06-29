@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { currentUserCan } from "@/lib/membership";
 import { canUseCaptureEmailIn, canUseCaptureTextIn } from "@/lib/billing";
 import { ingestAddressFromToken, DEFAULT_INGEST_DOMAIN } from "@/lib/email-ingest";
 import { CopyTextButton } from "@/components/copy-text-button";
@@ -46,6 +47,27 @@ export default async function CapturesPage({
     return (
       <div className="mx-auto max-w-3xl py-6">
         <p className="text-sm text-slate-400">Sign in with your landlord account to set up capture.</p>
+      </div>
+    );
+  }
+
+  // A2 (Codex 2026-06-29 audit): gate the PAGE on the capability BEFORE it reads
+  // the private ingest address, the verified-sender list, the pending captures,
+  // and mints 1-hour signed preview URLs. The provisioning/discard actions are
+  // already capability-gated, but the page itself was only org + plan gated, so a
+  // member with the direct URL but without manage_settings (e.g. showing_helper)
+  // could read all of it. currentUserCan() is the non-redirecting check so we
+  // render a forbidden panel instead of looping a redirect back to this page.
+  if (!(await currentUserCan("manage_settings"))) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6 py-6">
+        <Header />
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+          <p className="text-sm text-slate-600">
+            You don&rsquo;t have permission to manage capture settings. Ask an
+            owner or admin on your team to set this up.
+          </p>
+        </div>
       </div>
     );
   }

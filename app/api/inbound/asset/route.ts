@@ -8,9 +8,11 @@ import {
   readIngestSecretFromAuth,
   ingestDedupeKey,
   decideIngest,
+  MAX_INGEST_ATTACHMENT_BYTES,
   type IngestAttachmentInput,
   type IngestLoopHeaders,
 } from "@/lib/email-ingest";
+import { canUseCaptureEmailIn } from "@/lib/billing";
 import { parseAssetImage } from "@/lib/asset-capture-vision";
 import type { AssetDraft } from "@/lib/asset-capture";
 import {
@@ -58,6 +60,13 @@ export const runtime = "nodejs";
 const INGEST_PENDING_GRACE_HOURS = 24 * 7;
 
 const PROVIDER = "inbound";
+
+/** Bound the decode work (Codex 2026-06-29 should-fix): never base64-decode more
+ * than this many attachment entries into memory per message, and skip any entry
+ * whose ENCODED length already implies it exceeds the per-attachment byte cap.
+ * selectIngestAttachment still applies the authoritative magic-byte + size cap;
+ * this just stops us buffering a huge/large-count payload before that runs. */
+const MAX_INBOUND_ATTACHMENTS = 10;
 
 export async function POST(req: NextRequest) {
   const secret = process.env.INBOUND_WEBHOOK_SECRET;
@@ -128,14 +137,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Decode attachments (Postmark: Attachments[].Content is base64).
+  // Decode attachments (Postmark: Attachments[].Content is base64). Bounded:
+  // skip an entry whose encoded length already exceeds the cap (base64 inflates
+  // ~4/3) BEFORE allocating the decoded buffer, and stop after MAX_INBOUND_
+  // ATTACHMENTS successful decodes so a many-attachment message can't make us
+  // buffer unbounded bytes. The authoritative type/size validation is still
+  // selectIngestAttachment (magic bytes + the real cap).
   const attachments: IngestAttachmentInput[] = [];
   const attArr = payload.Attachments;
   if (Array.isArray(attArr)) {
+    const maxEncodedLen = Math.ceil((MAX_INGEST_ATTACHMENT_BYTES * 4) / 3) + 16;
     for (const a of attArr) {
+      if (attachments.length >= MAX_INBOUND_ATTACHMENTS) break;
       if (!a || typeof a !== "object") continue;
       const content = str((a as any).Content);
-      if (!content) continue;
+      if (!content || content.length > maxEncodedLen) continue;
       let bytes: Uint8Array;
       try {
         bytes = new Uint8Array(Buffer.from(content, "base64"));
@@ -160,6 +176,26 @@ export async function POST(req: NextRequest) {
       .eq("active", true)
       .maybeSingle();
     orgId = addr?.organization_id ?? null;
+  }
+
+  // ---- F1 (S369 / Codex 2026-06-29 audit): re-check the plan entitlement at
+  // accept time. The ingest-address row persists across a plan change, so a
+  // Growth->Free downgrade would otherwise keep capturing. Re-checking here (vs.
+  // hooking every downgrade path) makes the webhook authoritative: an unentitled
+  // org drops as a 200 no-op. The provisioning action stays the primary gate;
+  // this is the belt-and-braces so the gate can't be bypassed by a stale address.
+  if (orgId) {
+    const { data: orgRow } = await admin
+      .from("organizations")
+      .select("plan")
+      .eq("id", orgId)
+      .maybeSingle();
+    if (!canUseCaptureEmailIn(orgRow?.plan ?? null)) {
+      console.warn("inbound/asset: org not entitled (plan downgrade)", {
+        orgResolved: true,
+      });
+      return NextResponse.json({ ok: true, handled: "plan_inactive" });
+    }
   }
 
   // ---- Load the per-org verified-sender allow-list (Layer 3) -----------------
@@ -207,6 +243,22 @@ export async function POST(req: NextRequest) {
     messageId,
     `${orgId}:${from}:${decision.attachment.bytes.length}`,
   );
+
+  // A1 (Codex 2026-06-29 audit): dedupe BEFORE the vision parse. A provider retry
+  // or a deliberate replay of the same image (from a holder of the secret + token
+  // + an allowed sender) is a no-op for stored rows, but the parse ran first, so
+  // it still burned an Anthropic call + server time. Short-circuit on the existing
+  // ingest_message_key here, before parseAssetImage. storeIngestCapture keeps its
+  // own pre-check AND the insert-time 23505 unique-violation handling as the race
+  // backstop for two concurrent first-deliveries.
+  const { data: dupe } = await admin
+    .from("documents")
+    .select("id")
+    .eq("ingest_message_key", dedupeKey)
+    .maybeSingle();
+  if (dupe?.id) {
+    return NextResponse.json({ ok: true, handled: "duplicate" });
+  }
 
   // parseAssetImage runs ONLY on a vision-parseable image; a PDF lands as a
   // store-only pending capture (no prefill) — the engine takes images in v1. The
