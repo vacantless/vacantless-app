@@ -97,7 +97,7 @@ import { LifecycleRail } from "./lifecycle-rail";
 import { deriveNextAction } from "@/lib/rental-next-action";
 import { NextActionCard } from "./next-action-card";
 import { CollapsibleSection } from "./collapsible-section";
-import { SectionDeeplinkOpener } from "./section-deeplink-opener";
+import { TabbedSections, TabPanel } from "./tabbed-sections";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
 import { EquipmentSection, type EquipmentView } from "./equipment-section";
@@ -754,10 +754,18 @@ export default async function PropertyDetailPage({
     lifecycle.steps.find((s) => s.step === k);
   const setUpStep = stepOf("set_up");
   const marketStep = stepOf("market");
+  // Default tab mirrors the prior default-open logic for the collapsibles; a
+  // deep-link hash on load overrides it (handled inside TabbedSections).
+  const defaultTab = setUpOpen
+    ? "setup"
+    : marketOpen
+      ? "market"
+      : inquiriesOpen
+        ? "inquiries"
+        : "market";
 
   return (
     <div>
-      <SectionDeeplinkOpener />
       <Link
         href="/dashboard/properties"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
@@ -907,11 +915,12 @@ export default async function PropertyDetailPage({
 
       {nextAction && <NextActionCard action={nextAction} />}
 
-      <CollapsibleSection
-        title="Market"
-        status={marketStep?.detail}
+      <TabbedSections initialTab={defaultTab}>
+
+      <TabPanel
+        tabId="market"
+        label="Market"
         done={marketStep?.state === "done"}
-        defaultOpen={marketOpen}
       >
 
       <div
@@ -1554,14 +1563,13 @@ export default async function PropertyDetailPage({
         </div>
       )}
 
-      </CollapsibleSection>
+      </TabPanel>
 
-      <CollapsibleSection
-        id="rental-details"
-        title="Set up"
-        status={setUpStep?.detail}
+      <TabPanel
+        tabId="setup"
+        label="Set up"
+        anchorId="rental-details"
         done={setUpStep?.state === "done"}
-        defaultOpen={setUpOpen}
       >
 
       <form
@@ -2071,7 +2079,9 @@ export default async function PropertyDetailPage({
         </button>
       </form>
 
-      </CollapsibleSection>
+      </TabPanel>
+
+      <TabPanel tabId="assets" label="Assets">
 
       <CollapsibleSection
         id="detectors"
@@ -2126,12 +2136,14 @@ export default async function PropertyDetailPage({
         />
       </CollapsibleSection>
 
-      <CollapsibleSection
-        id="inquiries"
-        title={`Inquiries (${leadRows.length})`}
-        status={stepOf("inquiries")?.detail}
+      </TabPanel>
+
+      <TabPanel
+        tabId="inquiries"
+        label="Inquiries"
+        anchorId="inquiries"
+        badge={leadRows.length}
         done={stepOf("inquiries")?.state === "done"}
-        defaultOpen={inquiriesOpen}
       >
 
       {leadRows.length === 0 ? (
@@ -2172,7 +2184,9 @@ export default async function PropertyDetailPage({
         </>
       )}
 
-      </CollapsibleSection>
+      </TabPanel>
+
+      </TabbedSections>
     </div>
   );
 }
