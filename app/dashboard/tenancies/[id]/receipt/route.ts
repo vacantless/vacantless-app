@@ -80,6 +80,8 @@ export async function GET(
     landlordName: org.name,
     landlordPhone: org.public_contact_phone ?? null,
     landlordEmail: org.public_contact_email ?? null,
+    landlordLogoUrl: org.logo_url ?? null,
+    brandColor: org.brand_color ?? null,
     tenantNames,
     rentalUnitAddress: tenancy.property?.address ?? null,
     year,

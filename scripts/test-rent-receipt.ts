@@ -117,6 +117,42 @@ ok("escapes landlord script", !xssHtml.includes("<script>bad</script>") && xssHt
 ok("escapes tenant entities", xssHtml.includes("A&amp;B &lt;Co&gt;"));
 ok("escapes reference html", !xssHtml.includes("<img src=x>") && xssHtml.includes("&lt;img src=x&gt;"));
 
+// --- masthead: logo + brand color (S382, official letterhead) ---------------
+const branded = buildRentReceiptModel({
+  landlordName: "North Star Rentals",
+  landlordPhone: "555-1212",
+  landlordEmail: "hi@northstar.test",
+  landlordLogoUrl: "https://cdn.example.com/logo.png",
+  brandColor: "#0a7d3b",
+  tenantNames: ["Liang Wu"],
+  rentalUnitAddress: "18 Shorncliffe Avenue",
+  year: 2025,
+  payments: ledger,
+  generatedAtIso: "2026-06-29T12:00:00.000Z",
+});
+const brandedHtml = renderRentReceiptHtml(branded);
+ok("renders the logo img", brandedHtml.includes('<img class="logo" src="https://cdn.example.com/logo.png"'));
+ok("applies the brand color accent", brandedHtml.includes("#0a7d3b"));
+ok("shows org contact in the masthead", brandedHtml.includes("555-1212") && brandedHtml.includes("hi@northstar.test"));
+ok("model defaults logo/brand to null when omitted", model.landlordLogoUrl === null && model.brandColor === null);
+
+// A non-http(s) logo URL (javascript:) must be dropped, not rendered.
+const evil = buildRentReceiptModel({
+  landlordName: "North Star Rentals",
+  landlordPhone: null,
+  landlordEmail: null,
+  landlordLogoUrl: "javascript:alert(1)",
+  brandColor: "red; } body { display:none } .x{",
+  tenantNames: [],
+  rentalUnitAddress: null,
+  year: 2025,
+  payments: ledger,
+  generatedAtIso: "2026-06-29T12:00:00.000Z",
+});
+const evilHtml = renderRentReceiptHtml(evil);
+ok("drops a javascript: logo url", !evilHtml.includes("javascript:alert"));
+ok("rejects a non-hex brand color (falls back to ink)", !evilHtml.includes("display:none") && evilHtml.includes("#1a1a1a"));
+
 // --- summary ----------------------------------------------------------------
 console.log(`\nrent-receipt: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

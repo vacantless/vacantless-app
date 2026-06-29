@@ -32,6 +32,8 @@ export type RentReceiptModel = {
   landlordName: string;
   landlordPhone: string | null;
   landlordEmail: string | null;
+  landlordLogoUrl: string | null;
+  brandColor: string | null;
   tenantNames: string[];
   rentalUnitAddress: string | null;
   year: number;
@@ -100,6 +102,8 @@ export function buildRentReceiptModel(args: {
   landlordName: string;
   landlordPhone: string | null;
   landlordEmail: string | null;
+  landlordLogoUrl?: string | null;
+  brandColor?: string | null;
   tenantNames: string[];
   rentalUnitAddress: string | null;
   year: number;
@@ -111,6 +115,8 @@ export function buildRentReceiptModel(args: {
     landlordName: args.landlordName,
     landlordPhone: args.landlordPhone,
     landlordEmail: args.landlordEmail,
+    landlordLogoUrl: args.landlordLogoUrl ?? null,
+    brandColor: args.brandColor ?? null,
     tenantNames: args.tenantNames.map((n) => n.trim()).filter((n) => n.length > 0),
     rentalUnitAddress: args.rentalUnitAddress,
     year: args.year,
@@ -128,6 +134,21 @@ function filled(value: string | null | undefined): string {
   return v
     ? `<span class="val">${escapeHtml(v)}</span>`
     : `<span class="blank">&nbsp;</span>`;
+}
+
+/** Only allow an http(s) image URL into the <img src> (block javascript:/data:
+ *  and other schemes). Returns the trimmed URL or null. */
+function safeImageUrl(url: string | null): string | null {
+  if (!url) return null;
+  const v = url.trim();
+  return /^https?:\/\/[^\s"'<>]+$/i.test(v) ? v : null;
+}
+
+/** Only allow a #rgb / #rrggbb hex color into inline CSS; else fall back. */
+function safeColor(color: string | null, fallback: string): string {
+  if (!color) return fallback;
+  const v = color.trim();
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v) ? v : fallback;
 }
 
 /** "2025-03-01" -> "Mar 2025" (the rent month a payment is FOR). */
@@ -155,6 +176,20 @@ export function renderRentReceiptHtml(model: RentReceiptModel): string {
   })();
 
   const tenantLine = model.tenantNames.length ? model.tenantNames.join(", ") : null;
+
+  const accent = safeColor(model.brandColor, "#1a1a1a");
+  const logoUrl = safeImageUrl(model.landlordLogoUrl);
+  const contactBits = [model.landlordPhone, model.landlordEmail]
+    .map((s) => (s && s.trim() ? s.trim() : null))
+    .filter((s): s is string => s != null)
+    .map((s) => escapeHtml(s));
+  const masthead = `<div class="masthead">
+    ${logoUrl ? `<img class="logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(model.landlordName)} logo" />` : ""}
+    <div class="brand">
+      <div class="org-name">${escapeHtml(model.landlordName)}</div>
+      ${contactBits.length ? `<div class="org-contact">${contactBits.join(" &middot; ")}</div>` : ""}
+    </div>
+  </div>`;
 
   const rows = model.payments
     .map(
@@ -195,7 +230,12 @@ export function renderRentReceiptHtml(model: RentReceiptModel): string {
   body { font-family: Georgia, "Times New Roman", serif; color: var(--ink);
     line-height: 1.5; margin: 0; background: #f4f4f5; }
   .sheet { max-width: 7.5in; margin: 24px auto; background: #fff; padding: 0.9in 0.85in;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.12); }
+    box-shadow: 0 1px 6px rgba(0,0,0,0.12); border-top: 6px solid ${accent}; }
+  .masthead { display: flex; align-items: center; gap: 16px; padding-bottom: 14px;
+    margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .masthead .logo { max-height: 56px; max-width: 200px; object-fit: contain; }
+  .masthead .org-name { font-size: 17px; font-weight: bold; color: var(--ink); }
+  .masthead .org-contact { font-family: Arial, sans-serif; font-size: 12px; color: var(--muted); margin-top: 2px; }
   .eyebrow { font-family: Arial, sans-serif; font-size: 12px; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--muted); margin: 0 0 2px; }
   h1 { font-size: 22px; margin: 0 0 2px; }
@@ -246,8 +286,9 @@ export function renderRentReceiptHtml(model: RentReceiptModel): string {
 <body>
 <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
 <div class="sheet">
-  <p class="eyebrow">${escapeHtml(model.landlordName)} &middot; Statement of Rent Paid</p>
-  <h1>Rent Receipt — ${model.year}</h1>
+  ${masthead}
+  <p class="eyebrow">Statement of Rent Paid</p>
+  <h1 style="color:${accent}">Rent Receipt — ${model.year}</h1>
   <p class="sub">For the tenant's income-tax records</p>
 
   ${emptyNote}
