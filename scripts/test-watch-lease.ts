@@ -2,6 +2,7 @@
 // Run: npx tsx scripts/test-watch-lease.ts
 import {
   validateWatchLeaseInput,
+  validateWatchExistingLease,
   watchLeaseErrorMessage,
 } from "../lib/watch-lease";
 
@@ -67,8 +68,41 @@ ok(
   ok("last increase == start -> ok (not before)", r.ok === true);
 }
 
+// --- existing-tenancy (confirm/prefill) mode --------------------------------
+// No address/tenant requirement (the record already holds them); only the
+// start + date-order rules apply.
+ok(
+  "existing: start + no last increase -> ok",
+  validateWatchExistingLease({ startDate: "2024-07-01", lastIncreaseDate: null }).ok === true,
+);
+ok(
+  "existing: last increase after start -> ok",
+  validateWatchExistingLease({ startDate: "2024-07-01", lastIncreaseDate: "2025-07-01" }).ok ===
+    true,
+);
+{
+  const r = validateWatchExistingLease({ startDate: null, lastIncreaseDate: null });
+  ok("existing: missing start -> start", !r.ok && r.code === "start");
+}
+{
+  const r = validateWatchExistingLease({
+    startDate: "2024-07-01",
+    lastIncreaseDate: "2024-01-01",
+  });
+  ok(
+    "existing: last increase before start -> increase_before_start",
+    !r.ok && r.code === "increase_before_start",
+  );
+}
+ok(
+  "existing: last increase == start -> ok (not before)",
+  validateWatchExistingLease({ startDate: "2024-07-01", lastIncreaseDate: "2024-07-01" }).ok ===
+    true,
+);
+
 // --- error messages ---------------------------------------------------------
 ok("message: address", watchLeaseErrorMessage("address") === "Enter the unit's address.");
+ok("message: notfound non-null", !!watchLeaseErrorMessage("notfound"));
 ok("message: increase_before_start non-null", !!watchLeaseErrorMessage("increase_before_start"));
 ok("message: unknown code -> generic", !!watchLeaseErrorMessage("nope"));
 ok("message: undefined -> null", watchLeaseErrorMessage(undefined) === null);

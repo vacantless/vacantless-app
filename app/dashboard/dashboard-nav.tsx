@@ -63,6 +63,13 @@ const UTILITY: NavItem[] = [
 // set (read in the layout, passed as the referralsEnabled prop).
 const REFERRALS: NavItem = { href: "/dashboard/referrals", label: "Refer a landlord" };
 
+// Email/text-in capture review queue (Phase 3 ingress). Ships dark like
+// REFERRALS: the /dashboard/captures page is always reachable by URL (and
+// server-gated on manage_settings), but this link only appears once ingress is
+// live — the layout passes capturesEnabled = INBOUND_WEBHOOK_SECRET is set — so
+// the link surfaces exactly when forwarded photos can actually arrive.
+const CAPTURES: NavItem = { href: "/dashboard/captures", label: "Captures" };
+
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/dashboard") return pathname === "/dashboard";
   if (pathname.startsWith(item.href)) return true;
@@ -77,9 +84,11 @@ function isActive(pathname: string, item: NavItem) {
 export function DashboardNav({
   rentActive = false,
   referralsEnabled = false,
+  capturesEnabled = false,
 }: {
   rentActive?: boolean;
   referralsEnabled?: boolean;
+  capturesEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false); // mobile menu
@@ -87,7 +96,11 @@ export function DashboardNav({
   const moreRef = useRef<HTMLDivElement>(null);
 
   const primary = rentActive ? [...PRIMARY, MONEY] : PRIMARY;
-  const utility = referralsEnabled ? [...UTILITY, REFERRALS] : UTILITY;
+  const utility = [
+    ...UTILITY,
+    ...(capturesEnabled ? [CAPTURES] : []),
+    ...(referralsEnabled ? [REFERRALS] : []),
+  ];
   const utilityActive = utility.some((u) => isActive(pathname, u));
 
   // Close menus whenever the route changes.

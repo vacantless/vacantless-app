@@ -43,11 +43,35 @@ export function validateWatchLeaseInput(v: {
   return { ok: true };
 }
 
+/**
+ * Validate the "confirm an existing tenancy" path — the prefill flow where the
+ * landlord points "watch a lease" at a tenancy that ALREADY exists (created from
+ * the leasing pipeline). The unit/parties already live on the record, so this
+ * mode never re-creates them and never asks for the address again; it only
+ * confirms the lease start and captures the rent-increase-specific fields the
+ * autopilot consumes (last-increase anchor + the owner-asserted exemption).
+ *
+ * Same date rule as the standalone create (a last increase can't precede the
+ * lease start), minus the address/tenant-name requirements that the existing
+ * record already satisfies.
+ */
+export function validateWatchExistingLease(v: {
+  startDate: string | null;
+  lastIncreaseDate: string | null;
+}): WatchLeaseValidation {
+  if (!v.startDate) return { ok: false, code: "start" };
+  if (v.lastIncreaseDate && v.lastIncreaseDate < v.startDate) {
+    return { ok: false, code: "increase_before_start" };
+  }
+  return { ok: true };
+}
+
 const WATCH_LEASE_ERRORS: Record<string, string> = {
   address: "Enter the unit's address.",
   start: "A lease start date is required.",
   tenant: "Add the tenant's name.",
   increase_before_start: "The last rent increase can't be before the lease start.",
+  notfound: "That tenancy could no longer be found.",
   forbidden: "You don't have permission to add a lease.",
 };
 

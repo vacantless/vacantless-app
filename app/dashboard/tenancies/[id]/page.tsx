@@ -23,6 +23,7 @@ import {
   addTenant,
   removeTenant,
   makePrimaryTenant,
+  recordRentIncrease,
 } from "../actions";
 import { createRotessaCustomer, createRotessaSchedule } from "../rotessa-actions";
 import { defaultFirstProcessDate, minProcessDate, formatProcessDate } from "@/lib/rotessa";
@@ -123,6 +124,7 @@ type Tenancy = {
   start_date: string;
   end_date: string | null;
   term_months: number | null;
+  last_rent_increase_date: string | null;
   payment_notes: string | null;
   move_in_notes: string | null;
   notes: string | null;
@@ -138,7 +140,12 @@ type Tenancy = {
   stripe_subscription_id: string | null;
   stripe_subscription_status: string | null;
   report_token: string | null;
-  property: { id: string; address: string } | null;
+  property: {
+    id: string;
+    address: string;
+    rent_control_exempt: boolean | null;
+    first_occupancy_date: string | null;
+  } | null;
   tenants: Tenant[];
 };
 
@@ -303,13 +310,14 @@ export default async function TenancyDetailPage({
     wo_id?: string;
     report?: string;
     docs?: string;
+    increase?: string;
   };
 }) {
   const supabase = createClient();
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, report_token, property:properties(id, address), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, report_token, property:properties(id, address, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -441,16 +449,22 @@ export default async function TenancyDetailPage({
 
   // Rent-increase status (N1 v1, S282). "Today" is anchored to Ontario time —
   // this is an Ontario LTB feature, and server components run UTC on Vercel.
-  // v1 has no stored last-increase date (so the eligible date is start + 12mo)
-  // and no per-unit post-2018 exemption flag yet (v2); shown only for an active
-  // tenancy with a rent set.
+  // The stored last-increase anchor (tenancies.last_rent_increase_date) + the
+  // owner-asserted exemption (properties.rent_control_exempt) are fed in so this
+  // card matches the autopilot sweep exactly — both are set from the "Watch a
+  // lease" confirm flow. Shown only for an active tenancy with a rent set.
   const todayOntario = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Toronto",
   });
   const rentIncrease =
     t.status === "active" && t.rent_cents != null && t.start_date
       ? deriveRentIncrease(
-          { startDate: t.start_date, currentRentCents: t.rent_cents },
+          {
+            startDate: t.start_date,
+            currentRentCents: t.rent_cents,
+            lastIncreaseDate: t.last_rent_increase_date ?? null,
+            exempt: t.property?.rent_control_exempt === true,
+          },
           todayOntario,
         )
       : null;
@@ -792,8 +806,23 @@ export default async function TenancyDetailPage({
   const docsError =
     docsParam && !docsFlash ? (DOCS_ERROR[docsParam] ?? null) : null;
 
+  // Record-rent-increase outcome (?increase=...). `recorded` is success-toned.
+  const INCREASE_ERROR: Record<string, string> = {
+    baddate: "Pick the date the increase takes effect.",
+    before_start: "The increase date can't be before the lease start.",
+  };
+  const increaseFlash =
+    searchParams.increase === "recorded"
+      ? "Rent increase recorded — the next eligible date has moved forward a year."
+      : null;
+  const increaseError =
+    searchParams.increase && !increaseFlash
+      ? (INCREASE_ERROR[searchParams.increase] ?? null)
+      : null;
+
   const flash =
     docsFlash ||
+    increaseFlash ||
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created && FLASH.created) ||
     (searchParams.ended && FLASH.ended) ||
@@ -823,6 +852,7 @@ export default async function TenancyDetailPage({
     (searchParams.wo && !WO_FLASH[searchParams.wo]
       ? workOrderErrorMessage(searchParams.wo)
       : null) ||
+    increaseError ||
     docsError ||
     msgError;
 
@@ -1105,12 +1135,80 @@ export default async function TenancyDetailPage({
           status={RENT_INCREASE_STATUS_LABEL[rentIncrease.status] ?? undefined}
           defaultOpen={openSection === "rent-increase"}
         >
-          <div className="mb-8">
+          <div className="mb-3">
             <RentIncreaseCard
               result={rentIncrease}
               n1Href={`/dashboard/tenancies/${t.id}/n1`}
             />
           </div>
+          {/* Set/confirm the inputs the autopilot derives from. The card +
+              cron read last_rent_increase_date + the property exemption; this
+              links to the prefilled "Watch a lease" confirm flow to set them. */}
+          <p className="mb-8 text-xs text-gray-500">
+            {t.last_rent_increase_date
+              ? `Last increase on file: ${t.last_rent_increase_date}.`
+              : "No last-increase date on file — the clock runs from the lease start."}
+            {t.property?.rent_control_exempt ? " Marked rent-control exempt." : ""}{" "}
+            <Link
+              href={`/dashboard/tenancies/watch?tenancy=${t.id}`}
+              className="font-medium text-brand hover:underline"
+            >
+              Set the rent-increase clock &amp; exemption →
+            </Link>
+          </p>
+
+          {/* Loop-closer: once you've served the increase, record it so the
+              autopilot rolls the anniversary forward and re-arms next year.
+              Prefilled from the derived effective date + new amount; both
+              editable. Hidden for exempt units (no guideline amounts). */}
+          {rentIncrease.status !== "exempt" && (
+            <form
+              action={recordRentIncrease}
+              className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+            >
+              <input type="hidden" name="id" value={t.id} />
+              <p className="text-sm font-semibold text-gray-700">
+                Served this increase?
+              </p>
+              <p className="mb-3 text-xs text-gray-500">
+                Record it to reset the clock — we&apos;ll start counting toward
+                next year&apos;s eligible date from the effective date below.
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className={labelCls}>Effective date</label>
+                  <input
+                    type="date"
+                    name="effective_date"
+                    required
+                    defaultValue={rentIncrease.effectiveDate}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>New monthly rent ($)</label>
+                  <input
+                    type="number"
+                    name="new_rent"
+                    step="1"
+                    min="0"
+                    defaultValue={
+                      rentIncrease.newRentCents != null
+                        ? Math.round(rentIncrease.newRentCents / 100).toString()
+                        : dollars(t.rent_cents)
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className={SECONDARY_ACTION_CLASS}
+                >
+                  Record increase
+                </button>
+              </div>
+            </form>
+          )}
         </CollapsibleSection>
       )}
 

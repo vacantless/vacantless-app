@@ -17,7 +17,10 @@ import {
 } from "@/lib/tenancy";
 import { normalizePhoneE164 } from "@/lib/sms";
 import { resolvePersonId } from "@/lib/persons-server";
-import { validateWatchLeaseInput } from "@/lib/watch-lease";
+import {
+  validateWatchLeaseInput,
+  validateWatchExistingLease,
+} from "@/lib/watch-lease";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 
@@ -208,11 +211,27 @@ export async function createTenancy(formData: FormData) {
 // owner declares, never auto-determine rent-control status.
 // ===========================================================================
 export async function watchLease(formData: FormData) {
-  // Creates a unit AND a tenancy, so it needs both capabilities.
+  // Creates a unit AND a tenancy, so it needs both capabilities. The
+  // confirm-an-existing-tenancy path updates the SAME two records, so the same
+  // pair of capabilities covers it.
   await requireCapability("manage_properties", FORBIDDEN);
   await requireCapability("manage_tenancies", FORBIDDEN);
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+
+  // --- Confirm-an-existing-tenancy (prefill) path ------------------------------
+  // When the form carries a tenancy_id, the landlord is enrolling a lease that
+  // ALREADY exists (created from the leasing pipeline) into the rent-increase
+  // autopilot. The unit + parties are already on file, so we UPDATE the existing
+  // tenancy + its property instead of creating duplicates — pure data reuse, no
+  // new records. (The autopilot already sweeps every active tenancy; what's
+  // missing for a pipeline tenancy is anyone setting the last-increase anchor +
+  // the owner-asserted exemption, which only the watch form captured before.)
+  const existingTenancyId = s(formData, "tenancy_id") || null;
+  if (existingTenancyId) {
+    await watchExistingTenancy(formData, org.id, existingTenancyId);
+    return;
+  }
 
   const address = s(formData, "address");
   const startDate = parseDateOrNull(s(formData, "start_date"));
@@ -290,6 +309,127 @@ export async function watchLease(formData: FormData) {
   revalidatePath("/dashboard/tenancies");
   revalidatePath("/dashboard");
   redirect(`/dashboard/tenancies/${tenancyId}?created=1&watch=1`);
+}
+
+// Confirm-an-existing-tenancy worker for watchLease (NOT a server action — it's
+// an internal helper, so it isn't exported from this "use server" module). It
+// writes the SAME records the autopilot already reads: the lease anchor on the
+// tenancy + the owner-asserted exemption on its property. No new rows.
+async function watchExistingTenancy(
+  formData: FormData,
+  orgId: string,
+  tenancyId: string,
+): Promise<never> {
+  const supabase = createClient();
+
+  // The tenancy must resolve under the caller's org. RLS scopes this SELECT, so
+  // a foreign id simply won't come back — fail closed to the watch picker.
+  const { data: tenancyRow } = await supabase
+    .from("tenancies")
+    .select("id, property_id")
+    .eq("id", tenancyId)
+    .maybeSingle();
+  const propertyId = (tenancyRow as { id: string; property_id: string | null } | null)
+    ?.property_id;
+  if (!tenancyRow || !propertyId) {
+    redirect("/dashboard/tenancies/watch?err=notfound");
+  }
+
+  const startDate = parseDateOrNull(s(formData, "start_date"));
+  const lastIncreaseDate = parseDateOrNull(s(formData, "last_rent_increase_date"));
+  const firstOccupancyDate = parseDateOrNull(s(formData, "first_occupancy_date"));
+  const exempt = s(formData, "rent_control_exempt") === "on";
+
+  const check = validateWatchExistingLease({ startDate, lastIncreaseDate });
+  if (!check.ok) {
+    redirect(`/dashboard/tenancies/watch?tenancy=${tenancyId}&err=${check.code}`);
+  }
+
+  // The lease anchor on the tenancy. Re-arm the autopilot: clearing the
+  // once-per-cycle stamp lets the next sweep re-evaluate against the new
+  // anniversary (recording a different last-increase date shifts the clock).
+  const tenancyUpdate: Record<string, unknown> = {
+    start_date: startDate,
+    last_rent_increase_date: lastIncreaseDate,
+    rent_increase_nudged_for: null,
+    updated_at: new Date().toISOString(),
+  };
+  // Only touch rent when a value was actually entered, so a blanked field can't
+  // silently null an existing rent.
+  const rentCents = parseMoneyToCents(s(formData, "rent"));
+  if (rentCents != null) tenancyUpdate.rent_cents = rentCents;
+
+  await supabase
+    .from("tenancies")
+    .update(tenancyUpdate)
+    .eq("id", tenancyId);
+
+  // The owner-asserted exemption fact lives on the property (where the card +
+  // cron read it). flag-don't-conclude: we store what the owner declares.
+  await supabase
+    .from("properties")
+    .update({
+      rent_control_exempt: exempt,
+      first_occupancy_date: firstOccupancyDate,
+    })
+    .eq("id", propertyId)
+    .eq("organization_id", orgId);
+
+  revalidatePath(`/dashboard/tenancies/${tenancyId}`);
+  revalidatePath("/dashboard/tenancies");
+  revalidatePath("/dashboard");
+  redirect(`/dashboard/tenancies/${tenancyId}?saved=1&watch=1`);
+}
+
+// ===========================================================================
+// Record a rent increase you've served — the loop-closer for the rent-increase
+// autopilot. The sweep nags until the increase is taken, but nothing rolled the
+// anniversary forward once it was: this sets the new last-increase anchor (so
+// next year's eligible date is anchor + 12mo), optionally bumps the stored rent
+// to the new amount, and clears the once-per-cycle nudge stamp so the next sweep
+// re-arms. One tap from the rent-increase card; no new rows, no migration.
+// ===========================================================================
+export async function recordRentIncrease(formData: FormData) {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const id = s(formData, "id");
+  if (!id) redirect("/dashboard/tenancies");
+
+  const effectiveDate = parseDateOrNull(s(formData, "effective_date"));
+  if (!effectiveDate) redirect(`/dashboard/tenancies/${id}?increase=baddate`);
+
+  const supabase = createClient();
+  // Resolve org-scoped (RLS) and validate the new anchor against the lease start
+  // — an effective date before the lease started would corrupt the clock.
+  const { data: row } = await supabase
+    .from("tenancies")
+    .select("id, start_date")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) redirect("/dashboard/tenancies");
+  const startDate = (row as { start_date: string | null }).start_date;
+  if (startDate && effectiveDate < startDate) {
+    redirect(`/dashboard/tenancies/${id}?increase=before_start`);
+  }
+
+  const update: Record<string, unknown> = {
+    last_rent_increase_date: effectiveDate,
+    rent_increase_nudged_for: null,
+    updated_at: new Date().toISOString(),
+  };
+  // Only bump rent when a new amount was entered; a blank field leaves the
+  // stored rent untouched.
+  const newRent = parseMoneyToCents(s(formData, "new_rent"));
+  if (newRent != null) update.rent_cents = newRent;
+
+  await supabase.from("tenancies").update(update).eq("id", id);
+
+  revalidatePath(`/dashboard/tenancies/${id}`);
+  revalidatePath("/dashboard/tenancies");
+  revalidatePath("/dashboard");
+  redirect(`/dashboard/tenancies/${id}?increase=recorded`);
 }
 
 // ===========================================================================

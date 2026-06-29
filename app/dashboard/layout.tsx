@@ -88,6 +88,7 @@ export default async function DashboardLayout({
           <DashboardNav
             rentActive={rentActive}
             referralsEnabled={process.env.REFERRALS_ENABLED === "1"}
+            capturesEnabled={!!process.env.INBOUND_WEBHOOK_SECRET}
           />
         </div>
       </header>
