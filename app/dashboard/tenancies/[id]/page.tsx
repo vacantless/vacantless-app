@@ -109,6 +109,11 @@ import {
   type ViolationView,
 } from "./violation-section";
 import { followupStatusFor } from "@/lib/lease-violations";
+import {
+  TenancyInspectionSection,
+  type InspectionView,
+} from "./inspection-section";
+import { dueStatusFor } from "@/lib/property-inspections";
 import { availableReceiptYears, defaultReceiptYear } from "@/lib/rent-receipt";
 import {
   shareLinkStatus,
@@ -324,6 +329,7 @@ export default async function TenancyDetailPage({
     increase?: string;
     insurance?: string;
     violation?: string;
+    inspection?: string;
   };
 }) {
   const supabase = createClient();
@@ -888,10 +894,26 @@ export default async function TenancyDetailPage({
         ? "That violation could not be found."
         : null;
 
+  const inspectionFlash =
+    searchParams.inspection === "added"
+      ? "Inspection added."
+      : searchParams.inspection === "updated"
+        ? "Inspection updated."
+        : searchParams.inspection === "removed"
+          ? "Inspection removed."
+          : null;
+  const inspectionError =
+    searchParams.inspection === "forbidden"
+      ? "You don't have permission to manage this tenancy's inspections."
+      : searchParams.inspection === "notfound"
+        ? "That inspection could not be found."
+        : null;
+
   const flash =
     docsFlash ||
     insuranceFlash ||
     violationFlash ||
+    inspectionFlash ||
     increaseFlash ||
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created && FLASH.created) ||
@@ -926,6 +948,7 @@ export default async function TenancyDetailPage({
     docsError ||
     insuranceError ||
     violationError ||
+    inspectionError ||
     msgError;
 
   // Section status lines (S283) — shown on each collapsed header so the
@@ -1042,6 +1065,47 @@ export default async function TenancyDetailPage({
         : openViolations > 0
           ? `${openViolations} open`
           : "All clear";
+
+  // Property inspections (S385): the move-in/move-out/periodic inspection log for
+  // this tenancy. RLS scopes the read to this org. The due band (approaching/
+  // overdue, only for SCHEDULED records with a planned date) is computed here so
+  // the section stays presentational and the collapsed header reflects what needs
+  // attention.
+  const { data: inspRows } = await supabase
+    .from("tenancy_inspections")
+    .select(
+      "id, inspection_type, scheduled_for, status, completed_on, condition_notes, notes",
+    )
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false });
+  const inspectionViews: InspectionView[] = ((inspRows ?? []) as any[]).map((r) => ({
+    id: r.id,
+    inspection_type: r.inspection_type ?? null,
+    scheduled_for: r.scheduled_for ?? null,
+    status: r.status ?? null,
+    completed_on: r.completed_on ?? null,
+    condition_notes: r.condition_notes ?? null,
+    notes: r.notes ?? null,
+    due: dueStatusFor(
+      { status: r.status, scheduled_for: r.scheduled_for },
+      todayOntario,
+    ),
+  }));
+  const scheduledInspections = inspectionViews.filter(
+    (v) => (v.status ?? "scheduled") === "scheduled",
+  ).length;
+  const overdueInspections = inspectionViews.filter(
+    (v) => v.due === "overdue",
+  ).length;
+  const inspectionStatusLabel =
+    inspectionViews.length === 0
+      ? "None logged"
+      : overdueInspections > 0
+        ? `${scheduledInspections} scheduled · ${overdueInspections} overdue`
+        : scheduledInspections > 0
+          ? `${scheduledInspections} scheduled`
+          : "All done";
+
   const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
     scheduled: "Scheduled",
     serve_window: "Serve now",
@@ -1291,6 +1355,15 @@ export default async function TenancyDetailPage({
         status={violationStatusLabel}
       >
         <TenancyViolationSection tenancyId={t.id} violations={violationViews} />
+      </CollapsibleSection>
+
+      {/* Property inspections (S385) -------------------------------------- */}
+      <CollapsibleSection
+        id="inspections"
+        title="Inspections"
+        status={inspectionStatusLabel}
+      >
+        <TenancyInspectionSection tenancyId={t.id} inspections={inspectionViews} />
       </CollapsibleSection>
 
       {/* Rent increase (N1 v1) ------------------------------------------- */}

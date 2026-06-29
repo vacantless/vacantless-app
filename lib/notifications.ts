@@ -660,6 +660,27 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "A lease violation you've logged for {{tenant_name}} at {{property_address}} has a remedy deadline that needs follow-up:\n\n{{violation_list}}\n\nCheck whether the tenant has remedied it. If they have, mark it remedied; if not, decide whether to escalate. Acting before the deadline window closes keeps your options open.\n\nReview or update this tenancy's lease violations: {{dashboard_url}}",
     active: true,
   },
+  {
+    // Property-inspection reminder (S385). The tenancy-scoped sibling of the
+    // lease-violation follow-up reminder (landlord_violation_followup): fires off
+    // the scheduled property inspections (tenancy_inspections) that are still
+    // 'scheduled' and carry a planned date (scheduled_for) — anchored to that
+    // date (a per-record sweep, app/api/cron/inspection-reminder), not the
+    // seasonal calendar. Default 7-day lead window plus an overdue fire. Opt-in
+    // per org (isDripEnqueueEnabled) so it ships dark. Goes to the operator,
+    // never the tenant.
+    key: "leasing.landlord_inspection_due",
+    family: "leasing",
+    audience: "operator",
+    label: "Property inspection due",
+    description:
+      "Schedule your move-in, move-out, and periodic inspections on a tenancy with a planned date, and we email you about a week before — and again if the date passes — so you can give the tenant the required written notice and book a time before it slips. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Inspections list; off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_name", "inspection_list", "earliest_due", "dashboard_url"],
+    defaultSubject: "Property inspection coming up — {{property_address}}",
+    defaultBody:
+      "A property inspection you've scheduled for {{tenant_name}} at {{property_address}} is coming up:\n\n{{inspection_list}}\n\nGive your tenant the required written notice of entry and book a time. Once it's done, mark it completed so the record's on file for any future deposit or damage dispute.\n\nReview or update this tenancy's inspections: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
