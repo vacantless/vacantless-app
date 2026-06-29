@@ -104,6 +104,11 @@ import {
   type InsuranceView,
 } from "./insurance-section";
 import { insuranceStatusFor } from "@/lib/tenancy-insurance";
+import {
+  TenancyViolationSection,
+  type ViolationView,
+} from "./violation-section";
+import { followupStatusFor } from "@/lib/lease-violations";
 import { availableReceiptYears, defaultReceiptYear } from "@/lib/rent-receipt";
 import {
   shareLinkStatus,
@@ -318,6 +323,7 @@ export default async function TenancyDetailPage({
     docs?: string;
     increase?: string;
     insurance?: string;
+    violation?: string;
   };
 }) {
   const supabase = createClient();
@@ -867,9 +873,25 @@ export default async function TenancyDetailPage({
         ? "That insurance policy could not be found."
         : null;
 
+  const violationFlash =
+    searchParams.violation === "added"
+      ? "Violation logged."
+      : searchParams.violation === "updated"
+        ? "Violation updated."
+        : searchParams.violation === "removed"
+          ? "Violation removed."
+          : null;
+  const violationError =
+    searchParams.violation === "forbidden"
+      ? "You don't have permission to manage this tenancy's violations."
+      : searchParams.violation === "notfound"
+        ? "That violation could not be found."
+        : null;
+
   const flash =
     docsFlash ||
     insuranceFlash ||
+    violationFlash ||
     increaseFlash ||
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created && FLASH.created) ||
@@ -903,6 +925,7 @@ export default async function TenancyDetailPage({
     increaseError ||
     docsError ||
     insuranceError ||
+    violationError ||
     msgError;
 
   // Section status lines (S283) — shown on each collapsed header so the
@@ -977,6 +1000,48 @@ export default async function TenancyDetailPage({
       : insuranceAttention > 0
         ? `${insuranceAttention} need${insuranceAttention === 1 ? "s" : ""} attention`
         : "Active";
+
+  // Lease violations / notices (S383): the breach + notice log for this tenancy.
+  // RLS scopes the read to this org. The follow-up band (approaching/overdue, only
+  // for OPEN records with a remedy deadline) is computed here so the section stays
+  // presentational and the collapsed header reflects what needs attention.
+  const { data: vioRows } = await supabase
+    .from("tenancy_violations")
+    .select(
+      "id, violation_type, occurred_on, description, notice_type, notice_served_on, remedy_due_on, status, resolved_on, notes",
+    )
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false });
+  const violationViews: ViolationView[] = ((vioRows ?? []) as any[]).map((r) => ({
+    id: r.id,
+    violation_type: r.violation_type ?? null,
+    occurred_on: r.occurred_on ?? null,
+    description: r.description ?? null,
+    notice_type: r.notice_type ?? null,
+    notice_served_on: r.notice_served_on ?? null,
+    remedy_due_on: r.remedy_due_on ?? null,
+    status: r.status ?? null,
+    resolved_on: r.resolved_on ?? null,
+    notes: r.notes ?? null,
+    followup: followupStatusFor(
+      { status: r.status, remedy_due_on: r.remedy_due_on },
+      todayOntario,
+    ),
+  }));
+  const openViolations = violationViews.filter(
+    (v) => (v.status ?? "open") === "open",
+  ).length;
+  const overdueViolations = violationViews.filter(
+    (v) => v.followup === "overdue",
+  ).length;
+  const violationStatusLabel =
+    violationViews.length === 0
+      ? "None logged"
+      : overdueViolations > 0
+        ? `${openViolations} open · ${overdueViolations} overdue`
+        : openViolations > 0
+          ? `${openViolations} open`
+          : "All clear";
   const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
     scheduled: "Scheduled",
     serve_window: "Serve now",
@@ -1217,6 +1282,15 @@ export default async function TenancyDetailPage({
         status={insuranceStatusLabel}
       >
         <TenancyInsuranceSection tenancyId={t.id} policies={insuranceViews} />
+      </CollapsibleSection>
+
+      {/* Lease violations / notices (S383) -------------------------------- */}
+      <CollapsibleSection
+        id="violations"
+        title="Lease violations"
+        status={violationStatusLabel}
+      >
+        <TenancyViolationSection tenancyId={t.id} violations={violationViews} />
       </CollapsibleSection>
 
       {/* Rent increase (N1 v1) ------------------------------------------- */}

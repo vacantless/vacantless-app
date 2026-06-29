@@ -640,6 +640,26 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "The renter's insurance you've logged for {{tenant_name}} at {{property_address}} needs attention:\n\n{{insurance_list}}\n\nReach out to your tenant for renewed proof of insurance before any coverage gap. An uninsured tenant can leave you exposed if there's a fire, flood, or liability claim. Please confirm the policy details on file.\n\nReview or update this tenancy's insurance: {{dashboard_url}}",
     active: true,
   },
+  {
+    // Lease-violation follow-up reminder (S383). The tenancy-scoped sibling of the
+    // renter's-insurance reminder (landlord_insurance_lapse): fires off the logged
+    // lease violations (tenancy_violations) that are still OPEN and carry a remedy
+    // deadline (remedy_due_on) — anchored to that deadline (a per-record sweep,
+    // app/api/cron/violation-followup), not the seasonal calendar. Default 3-day
+    // lead window plus an overdue fire. Opt-in per org (isDripEnqueueEnabled) so it
+    // ships dark. Goes to the operator, never the tenant.
+    key: "leasing.landlord_violation_followup",
+    family: "leasing",
+    audience: "operator",
+    label: "Lease violation follow-up due",
+    description:
+      "When you log a lease violation on a tenancy and give the tenant a remedy deadline, we email you as that deadline approaches — and again if it passes — so you can check whether it was fixed and then close it or escalate, before the window to act on a notice slips. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Lease violations list; off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_name", "violation_list", "earliest_due", "dashboard_url"],
+    defaultSubject: "Lease violation needs follow-up — {{property_address}}",
+    defaultBody:
+      "A lease violation you've logged for {{tenant_name}} at {{property_address}} has a remedy deadline that needs follow-up:\n\n{{violation_list}}\n\nCheck whether the tenant has remedied it. If they have, mark it remedied; if not, decide whether to escalate. Acting before the deadline window closes keeps your options open.\n\nReview or update this tenancy's lease violations: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {
