@@ -12,9 +12,11 @@ import {
   PRIMARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { rentalRowReadiness } from "@/lib/rental-readiness";
 import { addProperty, importPropertyFromMls } from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
 import { MlsPdfImport } from "./mls-pdf-import";
+import { ReadinessChips } from "./readiness-chips";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,7 @@ type PropertyRow = {
   beds: number | null;
   baths: number | null;
   status: string;
+  description: string | null;
 };
 
 export default async function PropertiesPage({
@@ -33,15 +36,26 @@ export default async function PropertiesPage({
   searchParams: { added?: string; import?: string };
 }) {
   const supabase = createClient();
-  const [{ data: properties }, { data: leadRefs }, { data: photoRefs }] =
-    await Promise.all([
-      supabase
-        .from("properties")
-        .select("id, address, rent_cents, beds, baths, status")
-        .order("created_at", { ascending: false }),
-      supabase.from("leads").select("property_id"),
-      supabase.from("property_photos").select("property_id"),
-    ]);
+  const [
+    { data: properties },
+    { data: leadRefs },
+    { data: photoRefs },
+    { count: availabilityCount },
+  ] = await Promise.all([
+    supabase
+      .from("properties")
+      .select("id, address, rent_cents, beds, baths, status, description")
+      .order("created_at", { ascending: false }),
+    supabase.from("leads").select("property_id"),
+    supabase.from("property_photos").select("property_id"),
+    // Org-wide weekly viewing windows — the same signal the property-detail
+    // share-readiness check uses. One count for the whole org (RLS-scoped), so
+    // the "Viewings" readiness chip reflects whether ANY rental can be
+    // self-booked once a renter lands.
+    supabase
+      .from("availability_rules")
+      .select("id", { count: "exact", head: true }),
+  ]);
 
   const rows = (properties ?? []) as PropertyRow[];
 
@@ -120,11 +134,20 @@ export default async function PropertiesPage({
 
       {rows.length > 0 ? (
         <ul className="mb-8 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {rows.map((p) => (
-            <li
-              key={p.id}
-              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3"
-            >
+          {rows.map((p) => {
+            const readiness = rentalRowReadiness({
+              status: p.status,
+              rentCents: p.rent_cents,
+              beds: p.beds,
+              baths: p.baths,
+              address: p.address,
+              description: p.description,
+              photoCount: photoCounts.get(p.id) ?? 0,
+              availabilityWindowCount: availabilityCount ?? 0,
+            });
+            return (
+            <li key={p.id} className="px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <Link
                 href={`/dashboard/properties/${p.id}`}
                 className="min-w-0 flex-1 hover:underline"
@@ -155,20 +178,10 @@ export default async function PropertiesPage({
                   {propertyStatusLabel(p.status)}
                 </StatusChip>
                 {isPublicBookable(p.status) ? (
-                  <span className="flex items-center gap-1.5">
-                    <CopyIntakeButton url={intakeUrl(p.id)} />
-                    {(photoCounts.get(p.id) ?? 0) === 0 && (
-                      // The link works, but a photo-less listing gets far fewer
-                      // inquiries — label it so sharing is an informed choice
-                      // rather than a surprise (Codex QA). Non-blocking.
-                      <span
-                        title="The link works, but listings without photos get far fewer inquiries. Add photos before sharing widely."
-                        className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
-                      >
-                        No photos
-                      </span>
-                    )}
-                  </span>
+                  // The photo-poor warning that used to sit here is now carried
+                  // by the Photos chip in the readiness strip below (Codex design
+                  // audit #5), so this stays a clean Copy action.
+                  <CopyIntakeButton url={intakeUrl(p.id)} />
                 ) : isPubliclyVisible(p.status) ? (
                   // Leased / Paused: the public /r page LOADS but tells renters
                   // the unit is no longer available, so a bare "Copy inquiry
@@ -193,8 +206,15 @@ export default async function PropertiesPage({
                   Edit
                 </Link>
               </span>
+              </div>
+              {/* Readiness strip (Codex design audit #5): the four signals that
+                  decide whether a rental can actually pull inquiries — link,
+                  photos, viewings, feed — surfaced inline so an operator sees
+                  what's missing without opening the rental. */}
+              <ReadinessChips signals={readiness} />
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : (
         <div className="mb-8">
