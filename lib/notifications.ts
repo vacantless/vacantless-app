@@ -620,6 +620,26 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Some appliance consumables you track at {{property_address}} are due for replacement:\n\n{{appliance_list}}\n\nOrder the right part now so it's a quick swap. Once it's done, tap “Mark replaced” on the unit's Appliances list and we'll schedule the next reminder for you.\n\nReview or update this unit's appliances: {{dashboard_url}}",
     active: true,
   },
+  {
+    // Renter's-insurance lapse reminder (S382). The tenancy-scoped sibling of the
+    // unit asset reminders (landlord_equipment_eol / landlord_detector_eol): fires
+    // off the recorded per-tenancy insurance policies (tenancy_insurance) when a
+    // policy is expiring or has lapsed — anchored to each policy's EXPIRY date (a
+    // per-record sweep, app/api/cron/tenancy-insurance), not the seasonal
+    // calendar. Default 30-day lead window. Opt-in per org (isDripEnqueueEnabled)
+    // so it ships dark.
+    key: "leasing.landlord_insurance_lapse",
+    family: "leasing",
+    audience: "operator",
+    label: "Renter's insurance expiring or lapsed",
+    description:
+      "If your lease requires the tenant to carry renter's (contents + liability) insurance, log their policy on the tenancy and we'll email you about a month before it expires — and again if it lapses — so you can ask for renewed proof before there's a coverage gap. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Renter's insurance list; off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_name", "insurance_list", "earliest_expiry", "dashboard_url"],
+    defaultSubject: "Renter's insurance needs attention — {{property_address}}",
+    defaultBody:
+      "The renter's insurance you've logged for {{tenant_name}} at {{property_address}} needs attention:\n\n{{insurance_list}}\n\nReach out to your tenant for renewed proof of insurance before any coverage gap. An uninsured tenant can leave you exposed if there's a fire, flood, or liability claim. Please confirm the policy details on file.\n\nReview or update this tenancy's insurance: {{dashboard_url}}",
+    active: true,
+  },
 ] as const;
 
 export function isNotificationEventKey(key: string): boolean {

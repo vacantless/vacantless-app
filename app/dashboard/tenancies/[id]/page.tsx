@@ -100,6 +100,11 @@ import {
 } from "./documents-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import {
+  TenancyInsuranceSection,
+  type InsuranceView,
+} from "./insurance-section";
+import { insuranceStatusFor } from "@/lib/tenancy-insurance";
+import {
   shareLinkStatus,
   executedLeaseVaultEntries,
   partitionVaultDocuments,
@@ -311,6 +316,7 @@ export default async function TenancyDetailPage({
     report?: string;
     docs?: string;
     increase?: string;
+    insurance?: string;
   };
 }) {
   const supabase = createClient();
@@ -820,8 +826,24 @@ export default async function TenancyDetailPage({
       ? (INCREASE_ERROR[searchParams.increase] ?? null)
       : null;
 
+  const insuranceFlash =
+    searchParams.insurance === "added"
+      ? "Insurance policy added."
+      : searchParams.insurance === "updated"
+        ? "Insurance policy updated."
+        : searchParams.insurance === "removed"
+          ? "Insurance policy removed."
+          : null;
+  const insuranceError =
+    searchParams.insurance === "forbidden"
+      ? "You don't have permission to manage this tenancy's insurance."
+      : searchParams.insurance === "notfound"
+        ? "That insurance policy could not be found."
+        : null;
+
   const flash =
     docsFlash ||
+    insuranceFlash ||
     increaseFlash ||
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created && FLASH.created) ||
@@ -854,6 +876,7 @@ export default async function TenancyDetailPage({
       : null) ||
     increaseError ||
     docsError ||
+    insuranceError ||
     msgError;
 
   // Section status lines (S283) — shown on each collapsed header so the
@@ -894,6 +917,40 @@ export default async function TenancyDetailPage({
   const documentsCount = documents.length + inAppLeaseEntries.length;
   const documentsStatus =
     documentsCount > 0 ? `${documentsCount} stored` : "None stored";
+
+  // Renter's-insurance policies (S382): logged proof-of-insurance for this
+  // tenancy. RLS scopes the read to this org. Each policy's status is computed
+  // here (expiring within the lead window / lapsed past expiry) so the section
+  // stays presentational and the collapsed header reflects what needs attention.
+  const { data: insRows } = await supabase
+    .from("tenancy_insurance")
+    .select(
+      "id, provider, policy_number, coverage_amount_cents, effective_date, expiry_date, notes",
+    )
+    .eq("tenancy_id", t.id)
+    .order("expiry_date", { ascending: true });
+  const insuranceViews: InsuranceView[] = ((insRows ?? []) as any[]).map((r) => ({
+    id: r.id,
+    provider: r.provider ?? null,
+    policy_number: r.policy_number ?? null,
+    coverage_amount_cents: r.coverage_amount_cents ?? null,
+    effective_date: r.effective_date ?? null,
+    expiry_date: r.expiry_date ?? null,
+    notes: r.notes ?? null,
+    status: insuranceStatusFor(
+      { provider: r.provider, expiry_date: r.expiry_date },
+      todayOntario,
+    ),
+  }));
+  const insuranceAttention = insuranceViews.filter(
+    (p) => p.status === "lapsed" || p.status === "expiring_soon",
+  ).length;
+  const insuranceStatusLabel =
+    insuranceViews.length === 0
+      ? "None logged"
+      : insuranceAttention > 0
+        ? `${insuranceAttention} need${insuranceAttention === 1 ? "s" : ""} attention`
+        : "Active";
   const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
     scheduled: "Scheduled",
     serve_window: "Serve now",
@@ -1125,6 +1182,15 @@ export default async function TenancyDetailPage({
             .filter((tn) => (tn.name ?? "").trim().length > 0)
             .map((tn): DocumentTenantOption => ({ id: tn.id, name: tn.name as string }))}
         />
+      </CollapsibleSection>
+
+      {/* Renter's insurance (S382) --------------------------------------- */}
+      <CollapsibleSection
+        id="insurance"
+        title="Renter's insurance"
+        status={insuranceStatusLabel}
+      >
+        <TenancyInsuranceSection tenancyId={t.id} policies={insuranceViews} />
       </CollapsibleSection>
 
       {/* Rent increase (N1 v1) ------------------------------------------- */}

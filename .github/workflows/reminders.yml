@@ -98,3 +98,9 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/appliance-care" \
             -w "\nHTTP %{http_code}\n"
+      - name: Trigger tenancy-insurance sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/tenancy-insurance" \
+            -w "\nHTTP %{http_code}\n"
