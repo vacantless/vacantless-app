@@ -89,7 +89,11 @@ export type PlanFeature =
   // address and it files a pending capture. email-in = Growth+ (cheap to run);
   // text-in = Premium (per-message MMS cost + the premium convenience).
   | "capture_email_in"
-  | "capture_text_in";
+  | "capture_text_in"
+  // Repair-scheduling appointment reminders (S387, Slice 4): the SMS leg of the
+  // 1-day / same-day tenant appointment reminder. Premium+ (per-message SMS cost),
+  // mirroring capture_text_in — the email/in-app legs need no entitlement.
+  | "repair_sms";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -102,6 +106,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "incident_dispatch",
   "capture_email_in",
   "capture_text_in",
+  "repair_sms",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -119,6 +124,7 @@ function noEntitlements(): PlanEntitlements {
     incident_dispatch: false,
     capture_email_in: false,
     capture_text_in: false,
+    repair_sms: false,
   };
 }
 
@@ -148,13 +154,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false },
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false }, // Plaid feed; tenant intake (Slices 1-4); email-in capture
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false }, // Plaid feed; tenant intake (Slices 1-4); email-in capture
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -224,6 +230,14 @@ export function canUseCaptureEmailIn(plan: string | null | undefined): boolean {
 // provisioning; the foundation is tier-agnostic.
 export function canUseCaptureTextIn(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "capture_text_in");
+}
+
+// Whether this plan may send the SMS leg of a repair-appointment reminder
+// (S387). Premium+ (per-message SMS cost), mirroring capture_text_in — the
+// email/in-app reminder legs are ungated. The appointment-reminder cron enforces
+// this server-side before texting the tenant; email always sends regardless.
+export function canUseRepairSms(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "repair_sms");
 }
 
 // --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------

@@ -74,7 +74,10 @@ function tzOffsetMs(utcMs: number, timeZone: string): number {
 }
 
 // Convert a wall-clock time in `timeZone` to the exact UTC instant.
-function zonedWallTimeToUtc(
+// Exported (S387) so the repair-appointment reminder cron can turn a confirmed
+// appointment's (chosen_date, chosen_start_minute) into a UTC instant in the
+// org's timezone, reusing this DST-correct conversion rather than duplicating it.
+export function zonedWallTimeToUtc(
   year: number,
   month1: number, // 1-12
   day: number,

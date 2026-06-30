@@ -172,6 +172,20 @@ export function showingReminderSms(p: SmsCopyInput, kind: "24h" | "2h"): string 
   );
 }
 
+/** Repair-appointment-reminder text (the day before, or the same day). */
+export function repairReminderSms(p: SmsCopyInput, kind: "1d" | "sameday"): string {
+  const org = (p.org_name || "Your property team").trim();
+  const addr = p.property_address ? p.property_address.trim() : "your unit";
+  const lead =
+    kind === "sameday"
+      ? "your repair visit is today"
+      : "a reminder of your repair visit tomorrow";
+  return noEmDash(
+    `${org}: ${lead} at ${addr}, arriving ${p.when_label}. ` +
+      `Please be available, or reply here to reschedule. ${OPT_OUT_LINE}`,
+  );
+}
+
 /**
  * Rough SMS segment count. GSM-7 packs 160 chars (153 per part when concatenated);
  * any non-GSM char forces UCS-2 at 70 (67 per part). Used in tests to keep our

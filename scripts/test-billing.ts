@@ -31,6 +31,7 @@ import {
   canUseIncidentDispatch,
   canUseCaptureEmailIn,
   canUseCaptureTextIn,
+  canUseRepairSms,
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
@@ -450,7 +451,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 10 features", PLAN_FEATURES.length === 10);
+ok("PLAN_FEATURES has 11 features", PLAN_FEATURES.length === 11);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -494,6 +495,15 @@ ok(
     (p) => !canUseCaptureTextIn(p) || canUseCaptureEmailIn(p),
   ),
 );
+
+// --- Repair-appointment-reminder SMS gate (S387: Premium+, mirrors text-in) --
+// The email/in-app reminder legs are ungated; only the SMS leg needs this.
+ok("repair_sms: free false", canUseRepairSms("free") === false);
+ok("repair_sms: growth false (gated to Premium)", canUseRepairSms("growth") === false);
+ok("repair_sms: premium true (upper tier)", canUseRepairSms("premium") === true);
+ok("repair_sms: pilot true (full access)", canUseRepairSms("pilot") === true);
+ok("repair_sms: trial false", canUseRepairSms("trial") === false);
+ok("repair_sms: null false", canUseRepairSms(null) === false);
 
 // --- incident_intake (Growth & up; Option B Slices 1-4) --------------------
 ok("incident_intake: growth true", hasEntitlement("growth", "incident_intake") === true);

@@ -172,6 +172,31 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{trade_name}},\n\n{{org_name}} replied about \"{{job_title}}\" at {{property_address}}:\n\n{{reply}}\n\nView the job and respond: {{job_url}}\n\nThank you,\n{{org_name}}",
     active: true,
   },
+  // Repair-appointment reminder to the tenant (S387, Slice 4). Once an operator
+  // confirms a repair appointment (work_order_appointments.chosen_date + window),
+  // the appointment-reminder cron texts/emails the tenant the DAY BEFORE and the
+  // SAME DAY so they're home for the supplier's arrival window — closing the loop
+  // on the repair-scheduling matcher so the operator stops chasing confirmations.
+  // Audience tenant; the tenant on the work order's tenancy is the recipient.
+  // SHIP DARK: opt-in per org (the cron requires an explicit enabled override via
+  // isDripEnqueueEnabled), so nothing fires until the operator turns it on. The
+  // EMAIL leg needs no entitlement; the SMS leg is Premium (repair_sms) and is
+  // sent separately by the cron with its own opt-out + stamp. {{reminder_lead}}
+  // renders "tomorrow" or "today"; {{appointment_window}} is the arrival window
+  // (e.g. "Jul 1: 8:00 AM - 12:00 PM"). No alert accent (a friendly heads-up).
+  {
+    key: "leasing.repair_appointment_reminder",
+    family: "dispatch",
+    audience: "tenant",
+    label: "Repair visit reminder — notify the tenant",
+    description:
+      "Once you confirm a repair appointment, the tenant gets a reminder the day before and again the same day so they're home for the arrival window. Goes to the tenant on the job's tenancy. The text-message version needs a Premium plan; email is always included. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "tenant_first_name", "job_title", "appointment_window", "reminder_lead"],
+    defaultSubject: "Reminder: your repair visit {{reminder_lead}}",
+    defaultBody:
+      "Hi {{tenant_first_name}},\n\nThis is a reminder that the repair visit for \"{{job_title}}\" at {{property_address}} is scheduled for {{appointment_window}} ({{reminder_lead}}).\n\nThe technician arrives sometime within that window, so please make sure someone can be there to let them in.\n\nIf the time no longer works, just reply to this email and we'll reschedule.\n\nThank you,\n{{org_name}}",
+    active: true,
+  },
   // ---- Leasing (Agile→Vacantless teardown — first leasing event) ----------
   // Replaces Agile's real-time "NEW LEAD — ACTION REQUIRED" Zap (362007976).
   // Audience operator; available to every org but fire-on-data (an org that runs
