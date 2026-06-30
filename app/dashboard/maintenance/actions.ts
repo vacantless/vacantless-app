@@ -47,6 +47,18 @@ import {
   MAX_PHOTOS_PER_WORK_ORDER,
 } from "@/lib/work-order-media";
 import { randomUUID } from "crypto";
+import { timeStrToMinutes } from "@/lib/booking";
+import {
+  validateDayWindow,
+  normalizeWindows,
+  dedupeWindows,
+  windowKey,
+  windowsToRules,
+  datesInPlay,
+  expandRulesToDates,
+  type DayWindow as RsDayWindow,
+  type SupplierWindowRule as RsSupplierRule,
+} from "@/lib/repair-scheduling";
 
 // The public app origin for deep links in notifications (matches lib/email.ts).
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -1201,4 +1213,281 @@ export async function replyToDispatchQuestion(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?disp=replied`);
+}
+
+// --- Repair scheduling (S386, Slice 2) --------------------------------------
+//
+// A per-work-order appointment record holds the supplier's offered windows AND
+// the tenant's availability (JSONB DayWindow arrays); lib/repair-scheduling.ts
+// reconciles them and the operator confirms one agreed slot. We never book the
+// supplier's system (the operator types the windows the supplier offered) and
+// move no money. All guarded on manage_work_orders + org-scoped; the appointment
+// row's organization_id is set from getCurrentOrg and backstopped by RLS (0095).
+// The tenant self-serve pick-your-times link is Slice 3; here the operator can
+// enter the tenant's availability directly.
+
+// Parse a <input type="time"> "HH:MM" to minutes-of-day, or null.
+function timeMin(formData: FormData, name: string): number | null {
+  return timeStrToMinutes(s(formData, name));
+}
+
+// Load the appointment row for a work order the caller's org owns, creating it
+// on first touch. Verifies the work order belongs to the org (RLS-scoped read)
+// before any write. Returns null when the work order isn't the caller's.
+async function loadOrCreateAppointment(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  workOrderId: string,
+): Promise<{
+  id: string;
+  supplier_windows: RsDayWindow[];
+  tenant_availability: RsDayWindow[];
+  status: string;
+} | null> {
+  const { data: wo } = await supabase
+    .from("work_orders")
+    .select("id")
+    .eq("id", workOrderId)
+    .maybeSingle();
+  if (!wo) return null;
+
+  const { data: existing } = await supabase
+    .from("work_order_appointments")
+    .select("id, supplier_windows, tenant_availability, status")
+    .eq("work_order_id", workOrderId)
+    .maybeSingle();
+  if (existing) {
+    const e = existing as {
+      id: string;
+      supplier_windows: unknown;
+      tenant_availability: unknown;
+      status: string;
+    };
+    return {
+      id: e.id,
+      supplier_windows: normalizeWindows(Array.isArray(e.supplier_windows) ? (e.supplier_windows as RsDayWindow[]) : []),
+      tenant_availability: normalizeWindows(Array.isArray(e.tenant_availability) ? (e.tenant_availability as RsDayWindow[]) : []),
+      status: e.status,
+    };
+  }
+
+  const { data: created, error } = await supabase
+    .from("work_order_appointments")
+    .insert({ organization_id: organizationId, work_order_id: workOrderId })
+    .select("id")
+    .single();
+  if (error || !created) return null;
+  return { id: (created as { id: string }).id, supplier_windows: [], tenant_availability: [], status: "collecting" };
+}
+
+// Add one window to either side (supplier offered / tenant available).
+export async function addAppointmentWindow(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const side = s(formData, "side"); // "supplier" | "tenant"
+  if (side !== "supplier" && side !== "tenant") redirect(`${BASE}?sched=bad_side#sched-${workOrderId}`);
+
+  const v = validateDayWindow({
+    date: s(formData, "date"),
+    start_minute: timeMin(formData, "start") ?? -1,
+    end_minute: timeMin(formData, "end") ?? -1,
+    label: s(formData, "label") || null,
+  });
+  if (!v.ok) redirect(`${BASE}?sched=${v.code}#sched-${workOrderId}`);
+
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+
+  const column = side === "supplier" ? "supplier_windows" : "tenant_availability";
+  const current = side === "supplier" ? appt.supplier_windows : appt.tenant_availability;
+  const next = dedupeWindows([...current, v.value]);
+
+  const { error } = await supabase
+    .from("work_order_appointments")
+    .update({ [column]: next, updated_at: new Date().toISOString() })
+    .eq("id", appt.id);
+  if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=added#sched-${workOrderId}`);
+}
+
+// Remove one window (by its date|start|end key) from either side.
+export async function removeAppointmentWindow(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const side = s(formData, "side");
+  const key = s(formData, "window_key");
+  if (side !== "supplier" && side !== "tenant") redirect(`${BASE}?sched=bad_side#sched-${workOrderId}`);
+
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+
+  const column = side === "supplier" ? "supplier_windows" : "tenant_availability";
+  const current = side === "supplier" ? appt.supplier_windows : appt.tenant_availability;
+  const next = current.filter((w) => windowKey(w) !== key);
+
+  const { error } = await supabase
+    .from("work_order_appointments")
+    .update({ [column]: next, updated_at: new Date().toISOString() })
+    .eq("id", appt.id);
+  if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=removed#sched-${workOrderId}`);
+}
+
+// Fill the supplier windows from a trade's REMEMBERED rules, expanded onto the
+// dates the tenant said they're available (the dates in play). Merges with any
+// existing supplier windows. No-op (with a code) when the trade has no saved
+// rules or there are no tenant dates yet.
+export async function fillSupplierWindowsFromRules(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const tradeContactId = s(formData, "trade_contact_id");
+  if (!tradeContactId) redirect(`${BASE}?sched=no_trade#sched-${workOrderId}`);
+
+  const { data: trade } = await supabase
+    .from("trade_contacts")
+    .select("supplier_window_rules")
+    .eq("id", tradeContactId)
+    .maybeSingle();
+  const rules = (trade && Array.isArray((trade as { supplier_window_rules: unknown }).supplier_window_rules)
+    ? ((trade as { supplier_window_rules: RsSupplierRule[] }).supplier_window_rules)
+    : []) as RsSupplierRule[];
+  if (rules.length === 0) redirect(`${BASE}?sched=no_rules#sched-${workOrderId}`);
+
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+
+  const dates = datesInPlay(appt.tenant_availability);
+  if (dates.length === 0) redirect(`${BASE}?sched=no_dates#sched-${workOrderId}`);
+
+  const expanded = expandRulesToDates(rules, dates);
+  const next = dedupeWindows([...appt.supplier_windows, ...expanded]);
+
+  const { error } = await supabase
+    .from("work_order_appointments")
+    .update({ supplier_windows: next, updated_at: new Date().toISOString() })
+    .eq("id", appt.id);
+  if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=filled#sched-${workOrderId}`);
+}
+
+// Remember the job's current supplier windows as this trade's default rules
+// (converted to weekday rules). "Understand these change" — it's a starting
+// default the operator re-edits per job.
+export async function rememberSupplierWindows(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const tradeContactId = s(formData, "trade_contact_id");
+  if (!tradeContactId) redirect(`${BASE}?sched=no_trade#sched-${workOrderId}`);
+
+  // Confirm the trade belongs to the org (RLS-scoped).
+  if (!(await fkOk(supabase, "trade_contacts", tradeContactId))) {
+    redirect(`${BASE}?sched=no_trade#sched-${workOrderId}`);
+  }
+
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+  if (appt.supplier_windows.length === 0) redirect(`${BASE}?sched=no_windows#sched-${workOrderId}`);
+
+  const rules = windowsToRules(appt.supplier_windows);
+  const { error } = await supabase
+    .from("trade_contacts")
+    .update({ supplier_window_rules: rules })
+    .eq("id", tradeContactId);
+  if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=remembered#sched-${workOrderId}`);
+}
+
+// Confirm one agreed appointment (a date + a minute window). Writes chosen_* +
+// status='confirmed', mirrors the date onto work_orders.scheduled_for, and (when
+// the job has an active dispatch) onto the dispatch's scheduled_for.
+export async function confirmAppointment(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const date = s(formData, "chosen_date");
+  const start = timeMin(formData, "chosen_start");
+  const end = timeMin(formData, "chosen_end");
+
+  const v = validateDayWindow({ date, start_minute: start ?? -1, end_minute: end ?? -1 });
+  if (!v.ok) redirect(`${BASE}?sched=${v.code}#sched-${workOrderId}`);
+
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+
+  const { error } = await supabase
+    .from("work_order_appointments")
+    .update({
+      chosen_date: v.value.date,
+      chosen_start_minute: v.value.start_minute,
+      chosen_end_minute: v.value.end_minute,
+      status: "confirmed",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", appt.id);
+  if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+
+  // Mirror the date onto the job + any active dispatch (date-granularity fields).
+  await supabase.from("work_orders").update({ scheduled_for: v.value.date }).eq("id", workOrderId);
+  await supabase
+    .from("work_order_dispatches")
+    .update({ scheduled_for: v.value.date, schedule_confirmed_at: new Date().toISOString() })
+    .eq("work_order_id", workOrderId)
+    .in("dispatch_status", ["offered", "accepted", "quoted", "scheduled"]);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=confirmed#sched-${workOrderId}`);
+}
+
+// Clear a confirmed appointment back to collecting (keeps both window sets).
+export async function clearAppointment(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+
+  const { error } = await supabase
+    .from("work_order_appointments")
+    .update({
+      chosen_date: null,
+      chosen_start_minute: null,
+      chosen_end_minute: null,
+      status: "collecting",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", appt.id);
+  if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=cleared#sched-${workOrderId}`);
 }

@@ -52,6 +52,18 @@ import {
 } from "@/lib/work-order-dispatch";
 import { createIncidentMediaDownloadUrls } from "@/lib/incident-media-server";
 import {
+  normalizeWindows,
+  sortWindows,
+  windowKey,
+  matchSupplierWindows,
+  matchStatusLabel,
+  matchStatusTone,
+  formatWindowClock,
+  formatIsoDateShort,
+  type DayWindow as RsDayWindow,
+  type Interval as RsInterval,
+} from "@/lib/repair-scheduling";
+import {
   operatorSenderLabel,
   awaitsOperatorReply,
   type DispatchMessage,
@@ -77,6 +89,12 @@ import {
   replyToDispatchQuestion,
   uploadWorkOrderPhoto,
   deleteWorkOrderPhoto,
+  addAppointmentWindow,
+  removeAppointmentWindow,
+  fillSupplierWindowsFromRules,
+  rememberSupplierWindows,
+  confirmAppointment,
+  clearAppointment,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -124,6 +142,19 @@ type TradeRow = {
   note: string | null;
   archived: boolean;
   directory_opt_in: boolean;
+  supplier_window_rules?: unknown;
+};
+
+// A per-work-order repair-scheduling record (S386, migration 0095): both sides'
+// window sets + the confirmed appointment.
+type ApptRow = {
+  work_order_id: string;
+  supplier_windows: unknown;
+  tenant_availability: unknown;
+  chosen_date: string | null;
+  chosen_start_minute: number | null;
+  chosen_end_minute: number | null;
+  status: string;
 };
 
 // A directory_trades row as read from the DB (before PII minimization). Carries
@@ -248,6 +279,30 @@ const DISP_SUCCESS: Record<string, string> = {
   replied: "Reply sent to the trade.",
 };
 
+// Repair-scheduling (S386) outcomes. Success/info codes -> neutral banner; the
+// rest -> a short error line (SCHED_ERROR, with a generic fallback).
+const SCHED_SUCCESS: Record<string, string> = {
+  added: "Window added.",
+  removed: "Window removed.",
+  filled: "Filled the supplier's offered windows from their saved times — edit as needed.",
+  remembered: "Saved these windows as this supplier's default.",
+  confirmed: "Visit confirmed. The date is on the work order.",
+  cleared: "Cleared the confirmed visit.",
+};
+const SCHED_ERROR: Record<string, string> = {
+  date: "Enter a valid date.",
+  range: "Enter valid times.",
+  order: "The start time must be before the end time.",
+  bad_side: "Something went wrong adding that window.",
+  no_trade: "Assign a trade to this job first.",
+  no_rules: "This supplier has no saved times yet.",
+  no_dates: "Add the tenant's availability first, then fill the supplier's windows.",
+  no_windows: "Add the supplier's offered windows first.",
+  notfound: "That work order could not be found.",
+  forbidden: "You don't have permission to manage work orders.",
+  save_failed: "Couldn't save. Please try again.",
+};
+
 function fmtDate(d: string | null): string {
   if (!d) return "—";
   // d is a plain "YYYY-MM-DD" date string; render without timezone drift.
@@ -276,6 +331,238 @@ function fmtDateTime(ts: string | null): string {
 
 const STATUS_FILTERS = ["all", "active", ...WORK_ORDER_STATUSES] as const;
 
+// minutes-of-day → "HH:MM" for an <input type="time"> defaultValue.
+function toTimeInput(min: number): string {
+  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+}
+
+// --- Repair-scheduling section (S386, Slice 2) ------------------------------
+// One per work order. Holds the supplier's offered arrival windows + the
+// tenant's availability, shows where they line up (matchSupplierWindows), and
+// lets the operator confirm one slot. The tenant self-serve pick-your-times link
+// is Slice 3; here the operator enters the tenant's availability directly.
+function SchedulingBlock({
+  workOrderId,
+  appt,
+  assignedTradeId,
+  assignedTradeName,
+  assignedTradeHasRules,
+  inputCls,
+  labelCls,
+}: {
+  workOrderId: string;
+  appt: ApptRow | undefined;
+  assignedTradeId: string | null;
+  assignedTradeName: string | null;
+  assignedTradeHasRules: boolean;
+  inputCls: string;
+  labelCls: string;
+}) {
+  const supplier = normalizeWindows(
+    Array.isArray(appt?.supplier_windows) ? (appt!.supplier_windows as RsDayWindow[]) : [],
+  );
+  const tenant = normalizeWindows(
+    Array.isArray(appt?.tenant_availability) ? (appt!.tenant_availability as RsDayWindow[]) : [],
+  );
+  const sortedSupplier = sortWindows(supplier);
+  const sortedTenant = sortWindows(tenant);
+  const matches = matchSupplierWindows(supplier, tenant);
+  const hasChosen =
+    !!appt?.chosen_date && appt.chosen_start_minute != null && appt.chosen_end_minute != null;
+  const startOpen = hasChosen || supplier.length > 0 || tenant.length > 0;
+
+  const windowRow = (w: RsDayWindow, side: "supplier" | "tenant") => (
+    <li key={windowKey(w)} className="flex items-center justify-between gap-2 text-xs">
+      <span>
+        <span className="font-medium">{formatIsoDateShort(w.date)}</span>{" "}
+        {formatWindowClock(w.start_minute, w.end_minute)}
+        {w.label ? <span className="text-gray-500"> · {w.label}</span> : null}
+      </span>
+      <form action={removeAppointmentWindow}>
+        <input type="hidden" name="work_order_id" value={workOrderId} />
+        <input type="hidden" name="side" value={side} />
+        <input type="hidden" name="window_key" value={windowKey(w)} />
+        <button type="submit" className="text-gray-400 hover:text-red-600" aria-label="Remove">
+          ✕
+        </button>
+      </form>
+    </li>
+  );
+
+  const addForm = (side: "supplier" | "tenant") => (
+    <form action={addAppointmentWindow} className="mt-1 flex flex-wrap items-end gap-2">
+      <input type="hidden" name="work_order_id" value={workOrderId} />
+      <input type="hidden" name="side" value={side} />
+      <div>
+        <label className={labelCls}>Date</label>
+        <input type="date" name="date" required className={inputCls} />
+      </div>
+      <div>
+        <label className={labelCls}>From</label>
+        <input type="time" name="start" required className={inputCls} />
+      </div>
+      <div>
+        <label className={labelCls}>To</label>
+        <input type="time" name="end" required className={inputCls} />
+      </div>
+      {side === "supplier" && (
+        <div className="min-w-[7rem]">
+          <label className={labelCls}>Label (optional)</label>
+          <input name="label" placeholder="e.g. Morning" className={inputCls} />
+        </div>
+      )}
+      <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Adding…">
+        Add
+      </SubmitButton>
+    </form>
+  );
+
+  const gapText = (gaps: RsInterval[]) =>
+    gaps.map((g) => formatWindowClock(g.start_minute, g.end_minute)).join(", ");
+
+  return (
+    <div id={`sched-${workOrderId}`} className="mt-4 border-t border-gray-100 pt-4">
+      <details open={startOpen}>
+        <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+          Schedule the visit
+          {hasChosen ? <span className="ml-2 text-xs font-normal text-green-700">· confirmed</span> : null}
+        </summary>
+
+        <div className="mt-3 space-y-4">
+          {hasChosen && (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-green-50 p-2 text-xs">
+              <span>
+                <span className="font-medium text-green-800">Confirmed visit:</span>{" "}
+                {fmtDate(appt!.chosen_date)} ·{" "}
+                {formatWindowClock(appt!.chosen_start_minute!, appt!.chosen_end_minute!)}
+              </span>
+              <form action={clearAppointment}>
+                <input type="hidden" name="work_order_id" value={workOrderId} />
+                <button type="submit" className="font-medium text-gray-500 hover:text-red-600">
+                  Clear
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Tenant availability */}
+          <div>
+            <p className={labelCls}>Tenant availability</p>
+            {sortedTenant.length > 0 ? (
+              <ul className="mt-1 space-y-1">{sortedTenant.map((w) => windowRow(w, "tenant"))}</ul>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">
+                Add the times the tenant is free. (A self-serve tenant link is coming.)
+              </p>
+            )}
+            {addForm("tenant")}
+          </div>
+
+          {/* Supplier offered windows */}
+          <div>
+            <p className={labelCls}>Supplier offered windows</p>
+            {sortedSupplier.length > 0 ? (
+              <ul className="mt-1 space-y-1">{sortedSupplier.map((w) => windowRow(w, "supplier"))}</ul>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">
+                Add the arrival windows the supplier offered for those dates.
+              </p>
+            )}
+            {addForm("supplier")}
+            {(assignedTradeId && (assignedTradeHasRules || sortedSupplier.length > 0)) && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {assignedTradeId && assignedTradeHasRules && (
+                  <form action={fillSupplierWindowsFromRules}>
+                    <input type="hidden" name="work_order_id" value={workOrderId} />
+                    <input type="hidden" name="trade_contact_id" value={assignedTradeId} />
+                    <button type="submit" className="text-xs font-medium text-brand hover:underline">
+                      Fill from {assignedTradeName ?? "the supplier"}&rsquo;s saved times
+                    </button>
+                  </form>
+                )}
+                {assignedTradeId && sortedSupplier.length > 0 && (
+                  <form action={rememberSupplierWindows}>
+                    <input type="hidden" name="work_order_id" value={workOrderId} />
+                    <input type="hidden" name="trade_contact_id" value={assignedTradeId} />
+                    <button type="submit" className="text-xs font-medium text-gray-600 hover:underline">
+                      Remember these for {assignedTradeName ?? "the supplier"}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Match result */}
+          {matches.length > 0 && (
+            <div>
+              <p className={labelCls}>What works for both</p>
+              <ul className="mt-1 space-y-2">
+                {matches.map((m) => {
+                  const prefill =
+                    m.status === "available"
+                      ? { s: m.window.start_minute, e: m.window.end_minute }
+                      : m.covered[0]
+                        ? { s: m.covered[0].start_minute, e: m.covered[0].end_minute }
+                        : null;
+                  return (
+                    <li key={windowKey(m.window)} className="rounded-lg bg-gray-50 p-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          <span className="font-medium">{formatIsoDateShort(m.window.date)}</span>{" "}
+                          {formatWindowClock(m.window.start_minute, m.window.end_minute)}
+                          {m.window.label ? <span className="text-gray-500"> · {m.window.label}</span> : null}
+                        </span>
+                        <StatusChip tone={chipTone(matchStatusTone(m.status))}>
+                          {matchStatusLabel(m.status)}
+                        </StatusChip>
+                      </div>
+                      {m.status === "partial" && m.gaps.length > 0 && (
+                        <p className="mt-1 text-amber-700">
+                          Tenant not free: {gapText(m.gaps)} — ask them to cover the gap.
+                        </p>
+                      )}
+                      {prefill && m.status !== "unavailable" && (
+                        <form action={confirmAppointment} className="mt-2 flex flex-wrap items-end gap-2">
+                          <input type="hidden" name="work_order_id" value={workOrderId} />
+                          <input type="hidden" name="chosen_date" value={m.window.date} />
+                          <div>
+                            <label className={labelCls}>From</label>
+                            <input
+                              type="time"
+                              name="chosen_start"
+                              defaultValue={toTimeInput(prefill.s)}
+                              required
+                              className={inputCls}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelCls}>To</label>
+                            <input
+                              type="time"
+                              name="chosen_end"
+                              defaultValue={toTimeInput(prefill.e)}
+                              required
+                              className={inputCls}
+                            />
+                          </div>
+                          <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Confirming…">
+                            Confirm this time
+                          </SubmitButton>
+                        </form>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export default async function MaintenancePage({
   searchParams,
 }: {
@@ -294,6 +581,7 @@ export default async function MaintenancePage({
     dirType?: string;
     dirArea?: string;
     disp?: string;
+    sched?: string;
   };
 }) {
   const supabase = createClient();
@@ -315,7 +603,7 @@ export default async function MaintenancePage({
       .order("created_at", { ascending: false }),
     supabase
       .from("trade_contacts")
-      .select("id, name, trade_type, phone, email, note, archived, directory_opt_in")
+      .select("id, name, trade_type, phone, email, note, archived, directory_opt_in, supplier_window_rules")
       .order("archived", { ascending: true })
       .order("name", { ascending: true }),
     supabase
@@ -478,6 +766,31 @@ export default async function MaintenancePage({
       }
     }
   }
+
+  // --- Repair scheduling (S386, Slice 2) -------------------------------------
+  // Per-work-order appointment record: both sides' window sets + the confirmed
+  // slot. RLS scopes to the org; we only fetch for the orders just loaded. Ships
+  // inert (no rows until an operator opens scheduling on a job).
+  const appointmentByWo = new Map<string, ApptRow>();
+  if (allOrders.length > 0) {
+    const { data: apptData } = await supabase
+      .from("work_order_appointments")
+      .select(
+        "work_order_id, supplier_windows, tenant_availability, chosen_date, chosen_start_minute, chosen_end_minute, status",
+      )
+      .in(
+        "work_order_id",
+        allOrders.map((o) => o.id),
+      );
+    for (const a of (apptData ?? []) as ApptRow[]) appointmentByWo.set(a.work_order_id, a);
+  }
+  // Which trades have remembered booking rules (so the WO offers "fill from saved").
+  const tradeRuleCount = new Map<string, number>();
+  for (const t of trades) {
+    const rules = Array.isArray(t.supplier_window_rules) ? t.supplier_window_rules : [];
+    tradeRuleCount.set(t.id, rules.length);
+  }
+
   // Trades that can actually receive a dispatch: active + have an email on file.
   const dispatchableTrades = activeTrades.filter(
     (t) => !!t.email && t.email.trim() !== "",
@@ -569,6 +882,14 @@ export default async function MaintenancePage({
   const dispError =
     searchParams.disp && !DISP_SUCCESS[searchParams.disp]
       ? dispatchErrorMessage(searchParams.disp)
+      : null;
+
+  // Repair-scheduling outcomes (S386). Success/info codes show a neutral banner;
+  // the rest map to a short error line.
+  const schedFlash = searchParams.sched ? SCHED_SUCCESS[searchParams.sched] : null;
+  const schedError =
+    searchParams.sched && !SCHED_SUCCESS[searchParams.sched]
+      ? (SCHED_ERROR[searchParams.sched] ?? "Couldn't update the schedule. Check the times and try again.")
       : null;
 
   const editId = searchParams.edit ?? "";
@@ -671,14 +992,14 @@ export default async function MaintenancePage({
         }
       />
 
-      {(woFlash || tradeFlash || dirFlash || reportFlash || dispFlash) && (
+      {(woFlash || tradeFlash || dirFlash || reportFlash || dispFlash || schedFlash) && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {woFlash ?? tradeFlash ?? dirFlash ?? reportFlash ?? dispFlash}
+          {woFlash ?? tradeFlash ?? dirFlash ?? reportFlash ?? dispFlash ?? schedFlash}
         </div>
       )}
-      {(woError || tradeError || dirError || reportError || dispError) && (
+      {(woError || tradeError || dirError || reportError || dispError || schedError) && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {woError ?? tradeError ?? dirError ?? reportError ?? dispError}
+          {woError ?? tradeError ?? dirError ?? reportError ?? dispError ?? schedError}
         </div>
       )}
 
@@ -1318,6 +1639,17 @@ export default async function MaintenancePage({
                       </div>
                     );
                   })()}
+
+                {/* Repair scheduling: reconcile supplier windows + tenant availability (S386) */}
+                <SchedulingBlock
+                  workOrderId={o.id}
+                  appt={appointmentByWo.get(o.id)}
+                  assignedTradeId={o.trade_contact_id}
+                  assignedTradeName={o.trade?.name ?? null}
+                  assignedTradeHasRules={(tradeRuleCount.get(o.trade_contact_id ?? "") ?? 0) > 0}
+                  inputCls={inputCls}
+                  labelCls={labelCls}
+                />
 
                 {/* Inline edit form */}
                 {isEditing && (
