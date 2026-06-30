@@ -14,11 +14,12 @@ import {
   warrantyExpiryDate,
   hasConsumable,
   consumableAnchor,
-  consumableDueDate,
+  consumableNextDue,
   dateStatus,
   warrantyStatusFor,
   consumableStatusFor,
   type ApplianceInput,
+  type ConsumableInput,
 } from "../lib/appliance-care";
 import { decideApplianceNudge } from "../lib/appliance-care-sweep";
 
@@ -112,80 +113,75 @@ ok(
   warrantyStatusFor({ purchase_date: "2025-06-27" }, TODAY) === "unknown",
 );
 
-// --- CONSUMABLE recurring ---------------------------------------------------
-ok(
-  "hasConsumable true with label + interval",
-  hasConsumable({ consumable_label: "Water filter", consumable_interval_months: 6 }),
-);
-ok(
-  "hasConsumable false without label",
-  !hasConsumable({ consumable_interval_months: 6 }),
-);
-ok(
-  "hasConsumable false with blank label",
-  !hasConsumable({ consumable_label: "  ", consumable_interval_months: 6 }),
-);
-ok(
-  "hasConsumable false without interval",
-  !hasConsumable({ consumable_label: "Water filter" }),
-);
+// --- CONSUMABLE recurring (S389: per child row, with a fallback anchor) ------
+// The appliance's purchase anchor used as the fallback when a consumable has no
+// last-replaced date of its own.
+const PURCHASE_ANCHOR_2024 = appliancePurchaseAnchor({ purchase_date: "2024-05-01" }); // "2024-05-01"
 
-// consumable anchor: explicit last-replaced wins, else purchase anchor.
+ok("hasConsumable true with interval", hasConsumable({ interval_months: 6 }));
+ok("hasConsumable false without interval", !hasConsumable({}));
+ok("hasConsumable false with zero interval", !hasConsumable({ interval_months: 0 }));
+ok("hasConsumable false with negative interval", !hasConsumable({ interval_months: -3 }));
+
+// consumable anchor: explicit last-replaced wins, else the appliance fallback.
 ok(
   "consumableAnchor uses explicit last-replaced",
-  consumableAnchor({
-    purchase_date: "2020-01-01",
-    consumable_label: "Filter",
-    consumable_interval_months: 6,
-    consumable_anchor_date: "2026-03-01",
-  }) === "2026-03-01",
+  consumableAnchor({ interval_months: 6, anchor_date: "2026-03-01" }, "2020-01-01") === "2026-03-01",
 );
 ok(
-  "consumableAnchor falls back to purchase anchor",
-  consumableAnchor({
-    purchase_date: "2024-05-01",
-    consumable_label: "Filter",
-    consumable_interval_months: 6,
-  }) === "2024-05-01",
+  "consumableAnchor falls back to the appliance purchase anchor",
+  consumableAnchor({ interval_months: 6 }, PURCHASE_ANCHOR_2024) === "2024-05-01",
+);
+ok(
+  "consumableAnchor null when neither known",
+  consumableAnchor({ interval_months: 6 }, null) === null,
 );
 
 // next due = anchor + one interval.
 ok(
   "consumable due = last-replaced + interval",
-  consumableDueDate({
-    consumable_label: "Water filter",
-    consumable_interval_months: 6,
-    consumable_anchor_date: "2026-06-01",
-  }) === "2026-12-01",
+  consumableNextDue({ interval_months: 6, anchor_date: "2026-06-01" }, null) === "2026-12-01",
 );
 ok(
-  "consumable due null when not configured",
-  consumableDueDate({ purchase_date: "2025-01-01" }) === null,
+  "consumable due uses the fallback anchor when no last-replaced",
+  // fallback 2024-05-01 + 12mo -> 2025-05-01
+  consumableNextDue({ interval_months: 12 }, "2024-05-01") === "2025-05-01",
+);
+ok(
+  "consumable due null when no interval",
+  consumableNextDue({ anchor_date: "2026-06-01" }, "2024-05-01") === null,
+);
+ok(
+  "consumable due null when no interval and no anchor",
+  consumableNextDue({}, null) === null,
+);
+
+// Two consumables on the SAME appliance compute independently (the whole point
+// of S389): a 6-month filter and a 12-month filter off the same purchase anchor.
+ok(
+  "two consumables, different intervals, off the same purchase anchor",
+  consumableNextDue({ interval_months: 6 }, "2026-01-01") === "2026-07-01" &&
+    consumableNextDue({ interval_months: 12 }, "2026-01-01") === "2027-01-01",
 );
 
 // consumable status bands (lead 21d).
 ok(
   "consumable due_soon inside 21d lead",
-  // anchor 2025-12-20 + 6mo -> 2026-06-20, which is 7 days BEFORE today -> overdue.
-  // use anchor 2026-01-10 + 6mo -> 2026-07-10 (~13 days out) -> due_soon.
-  consumableStatusFor(
-    { consumable_label: "Filter", consumable_interval_months: 6, consumable_anchor_date: "2026-01-10" },
-    TODAY,
-  ) === "due_soon",
+  // anchor 2026-01-10 + 6mo -> 2026-07-10 (~13 days out) -> due_soon.
+  consumableStatusFor({ interval_months: 6, anchor_date: "2026-01-10" }, null, TODAY) === "due_soon",
 );
 ok(
   "consumable overdue when last-replaced long ago",
-  consumableStatusFor(
-    { consumable_label: "Filter", consumable_interval_months: 6, consumable_anchor_date: "2025-06-01" },
-    TODAY,
-  ) === "overdue",
+  consumableStatusFor({ interval_months: 6, anchor_date: "2025-06-01" }, null, TODAY) === "overdue",
 );
 ok(
   "consumable ok when recently replaced",
-  consumableStatusFor(
-    { consumable_label: "Filter", consumable_interval_months: 12, consumable_anchor_date: "2026-05-01" },
-    TODAY,
-  ) === "ok",
+  consumableStatusFor({ interval_months: 12, anchor_date: "2026-05-01" }, null, TODAY) === "ok",
+);
+ok(
+  "consumable status uses the fallback anchor (overdue off an old purchase)",
+  // no anchor_date; fallback 2024-05-01 + 6mo -> 2024-11-01 (long past) -> overdue.
+  consumableStatusFor({ interval_months: 6 }, "2024-05-01", TODAY) === "overdue",
 );
 
 // --- shared banding edges (explicit leadDays) -------------------------------
@@ -229,48 +225,49 @@ ok(
 );
 
 // --- CONSUMABLE nudge decision + RE-ARM (the recurrence) --------------------
-function decideConsumable(d: ApplianceInput, lastNudgedFor: string | null, force = false) {
+function decideConsumable(
+  c: ConsumableInput,
+  fallbackAnchor: string | null,
+  lastNudgedFor: string | null,
+  force = false,
+) {
   return decideApplianceNudge({
-    targetDate: consumableDueDate(d),
-    status: consumableStatusFor(d, TODAY),
+    targetDate: consumableNextDue(c, fallbackAnchor),
+    status: consumableStatusFor(c, fallbackAnchor, TODAY),
     lastNudgedFor,
     force,
   });
 }
 // Overdue filter (last replaced 2025-06-01, 6mo interval -> due 2025-12-01).
-const filterOverdue: ApplianceInput = {
-  consumable_label: "Water filter",
-  consumable_interval_months: 6,
-  consumable_anchor_date: "2025-06-01",
-};
-const c1 = decideConsumable(filterOverdue, null);
+const filterOverdue: ConsumableInput = { interval_months: 6, anchor_date: "2025-06-01" };
+const c1 = decideConsumable(filterOverdue, null, null);
 ok("overdue filter nudges", c1.nudge && c1.reason === "due");
 ok("filter stampFor is the next-due date", c1.stampFor === "2025-12-01");
 // Same cycle, already nudged -> suppressed (no nagging every tick).
-const c2 = decideConsumable(filterOverdue, "2025-12-01");
+const c2 = decideConsumable(filterOverdue, null, "2025-12-01");
 ok("filter already-nudged suppressed", !c2.nudge && c2.reason === "already_nudged");
 // MARK REPLACED: anchor rolls to today -> next due 2026-12-27 -> status ok -> not
 // actionable yet, and the old stamp no longer matches (the cycle has advanced).
-const filterReplaced: ApplianceInput = {
-  consumable_label: "Water filter",
-  consumable_interval_months: 6,
-  consumable_anchor_date: TODAY,
-};
-const c3 = decideConsumable(filterReplaced, "2025-12-01");
+const filterReplaced: ConsumableInput = { interval_months: 6, anchor_date: TODAY };
+const c3 = decideConsumable(filterReplaced, null, "2025-12-01");
 ok("after mark-replaced, next cycle not due yet", !c3.nudge && c3.reason.startsWith("not_actionable"));
-ok("after mark-replaced, due date advanced one cycle", consumableDueDate(filterReplaced) === "2026-12-27");
+ok(
+  "after mark-replaced, due date advanced one cycle",
+  consumableNextDue(filterReplaced, null) === "2026-12-27",
+);
 // A NEW cycle later (anchor 2026-01-10 -> due 2026-07-10, due_soon) with a STALE
 // stamp from the PRIOR cycle re-arms (stamp != new due date).
-const filterNextCycle: ApplianceInput = {
-  consumable_label: "Water filter",
-  consumable_interval_months: 6,
-  consumable_anchor_date: "2026-01-10",
-};
-const c4 = decideConsumable(filterNextCycle, "2025-12-01");
+const filterNextCycle: ConsumableInput = { interval_months: 6, anchor_date: "2026-01-10" };
+const c4 = decideConsumable(filterNextCycle, null, "2025-12-01");
 ok("new cycle with stale stamp re-arms", c4.nudge && c4.stampFor === "2026-07-10");
 // Unconfigured consumable never nudges.
-const c5 = decideConsumable({ purchase_date: "2025-01-01" }, null);
+const c5 = decideConsumable({}, null, null);
 ok("unconfigured consumable does not nudge", !c5.nudge && c5.reason === "no_target_date");
+// Two consumables on one appliance decide independently: one due, one ok.
+const cA = decideConsumable({ interval_months: 6, anchor_date: "2025-06-01" }, null, null); // due 2025-12-01 overdue
+const cB = decideConsumable({ interval_months: 12, anchor_date: "2026-05-01" }, null, null); // due 2027-05-01 ok
+ok("multi-consumable: overdue one nudges", cA.nudge && cA.stampFor === "2025-12-01");
+ok("multi-consumable: ok one stays silent", !cB.nudge && cB.reason.startsWith("not_actionable"));
 
 // --- summary ----------------------------------------------------------------
 console.log(`\nappliance-care: ${passed} passed, ${failed} failed`);

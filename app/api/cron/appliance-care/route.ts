@@ -15,7 +15,7 @@ import {
   applianceTypeLabel,
   appliancePurchaseAnchor,
   warrantyExpiryDate,
-  consumableDueDate,
+  consumableNextDue,
   dateStatus,
   WARRANTY_LEAD_DAYS,
   CONSUMABLE_LEAD_DAYS,
@@ -26,17 +26,21 @@ import {
 import { decideApplianceNudge } from "@/lib/appliance-care-sweep";
 
 // Appliance-care reminder sweep — the asset-tracked, per-record sibling of the
-// detector + equipment sweeps (S362). Each appliance logged in unit_appliances
-// (0082) can carry TWO date-anchored reminders, each its own opt-in event:
-//   * WARRANTY (one-shot): purchase anchor + warranty length => an expiry date;
-//     when it nears, ONE email per UNIT lists the appliances whose warranty is
-//     lapsing, so the landlord registers/uses the coverage in time.
-//   * CONSUMABLE (RECURRING): a labelled consumable (e.g. a fridge water filter)
-//     with an interval in months, anchored to the last replacement; when the next
-//     due date nears, ONE email per UNIT lists the due consumables. A one-tap
-//     "Mark replaced" on the unit page rolls the anchor => the next-due date
-//     advances => the reminder re-arms. This is the recurrence the once-per-
-//     lifecycle detector/equipment sweep doesn't cover.
+// detector + equipment sweeps (S362; S389). Two date-anchored reminders ride a
+// unit's appliances, each its own opt-in event:
+//   * WARRANTY (one-shot, per appliance): purchase anchor + warranty length => an
+//     expiry date; when it nears, ONE email per UNIT lists the appliances whose
+//     warranty is lapsing, so the landlord registers/uses the coverage in time.
+//     Reads unit_appliances (0082), stamps unit_appliances.warranty_nudged_for.
+//   * CONSUMABLE (RECURRING, per consumable): a labelled consumable (a fridge
+//     water filter, an air filter, a range-hood charcoal filter) with an interval
+//     in months, anchored to the last replacement. S389: an appliance can carry
+//     MANY consumables, so this pass reads the appliance_consumables CHILD table
+//     (0096), not the appliance row; when a next-due date nears, ONE email per
+//     UNIT lists the due consumables. A one-tap "Mark replaced" rolls that
+//     consumable's anchor => its next-due advances => the reminder re-arms. This
+//     is the recurrence the once-per-lifecycle detector/equipment sweep doesn't
+//     cover. Stamps appliance_consumables.nudged_for.
 //
 // Both kinds: anchored per record (NOT the seasonal calendar), grouped by unit
 // (one email per unit per kind so the trip combines), and self-gate to once per
@@ -47,15 +51,16 @@ import { decideApplianceNudge } from "@/lib/appliance-care-sweep";
 // SHIP DARK: opt-in per org AND per kind (each event has its own
 // isDripEnqueueEnabled) — nothing fires until the org turns the relevant event on
 // in Settings -> Notifications, and nothing exists to fire until a landlord logs
-// an appliance with a warranty / consumable.
+// an appliance with a warranty / a consumable.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
 //   ?org=<id>   limit the sweep to one org
 //   ?force=1    bypass the already-nudged gate (still sends + stamps)
 //   ?dry=1      build + return the rendered reminders WITHOUT sending or stamping
 //
-// Reads unit_appliances across all orgs via the service-role client (RLS hides
-// them from anon/user sessions); see lib/supabase/admin.ts.
+// Reads unit_appliances + appliance_consumables across all orgs via the
+// service-role client (RLS hides them from anon/user sessions); see
+// lib/supabase/admin.ts.
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -90,6 +95,8 @@ function one<T>(rel: T | T[] | null | undefined): T | null {
   return (rel as T) ?? null;
 }
 
+// --- Row shapes --------------------------------------------------------------
+
 type ApplianceRow = {
   id: string;
   property_id: string | null;
@@ -102,72 +109,45 @@ type ApplianceRow = {
   quantity: number | null;
   warranty_months: number | null;
   warranty_nudged_for: string | null;
-  consumable_label: string | null;
-  consumable_interval_months: number | null;
-  consumable_anchor_date: string | null;
-  consumable_nudged_for: string | null;
   property: { address: string | null } | null;
 };
 
-type Actionable = {
-  row: ApplianceRow;
-  targetDate: string;
+// A consumable child row (0096) joined to its appliance (for type/location +
+// purchase anchor fallback) and its unit (for the email address).
+type ConsumableRow = {
+  id: string;
+  property_id: string | null;
+  appliance_id: string;
+  label: string | null;
+  interval_months: number | null;
+  anchor_date: string | null;
+  nudged_for: string | null;
+  appliance: {
+    appliance_type: ApplianceType;
+    location: string | null;
+    make: string | null;
+    model: string | null;
+    purchase_date: string | null;
+    install_year: number | null;
+  } | null;
+  property: { address: string | null } | null;
+};
+
+// One actionable item to emit: the row id + which table/column to stamp, the
+// target date + status, whether it should be (re)stamped this tick, and a fully
+// rendered human line for the email's {{appliance_list}} token.
+type EmitItem = {
+  stampId: string;
   status: "due_soon" | "overdue";
+  targetDate: string;
   stampFor: string | null; // non-null only when this item should be (re)stamped
+  line: string;
 };
 
-// A reminder "kind" = one event + how to read its target/stamp off a row. The two
-// kinds share all the grouping/sending/stamping machinery below.
-type Kind = {
-  eventKey: string;
-  stampColumn: "warranty_nudged_for" | "consumable_nudged_for";
-  // The target date for this kind (null = not configured / unknown anchor).
-  targetDate: (r: ApplianceRow) => string | null;
-  // The lead window for this kind.
-  leadDays: number;
-  // The row's existing stamp for this kind.
-  lastNudgedFor: (r: ApplianceRow) => string | null;
-  // One human line for the email's {{appliance_list}} token.
-  line: (a: Actionable) => string;
-};
-
-function ident(r: ApplianceRow): string {
-  const id = [r.make, r.model].filter((s) => (s ?? "").trim()).join(" ").trim();
+function ident(make: string | null, model: string | null): string {
+  const id = [make, model].filter((s) => (s ?? "").trim()).join(" ").trim();
   return id ? ` (${id})` : "";
 }
-
-const WARRANTY_KIND: Kind = {
-  eventKey: WARRANTY_EVENT,
-  stampColumn: "warranty_nudged_for",
-  targetDate: (r) => warrantyExpiryDate(r),
-  leadDays: WARRANTY_LEAD_DAYS,
-  lastNudgedFor: (r) => r.warranty_nudged_for ?? null,
-  line: (a) => {
-    const r = a.row;
-    const type = applianceTypeLabel(r.appliance_type);
-    const where = (r.location ?? "").trim();
-    const loc = where ? ` — ${where}` : "";
-    const state = a.status === "overdue" ? "WARRANTY LAPSED" : "warranty ending";
-    return `- ${type}${ident(r)}${loc} — warranty ends ${a.targetDate} (${state})`;
-  },
-};
-
-const CONSUMABLE_KIND: Kind = {
-  eventKey: CONSUMABLE_EVENT,
-  stampColumn: "consumable_nudged_for",
-  targetDate: (r) => consumableDueDate(r),
-  leadDays: CONSUMABLE_LEAD_DAYS,
-  lastNudgedFor: (r) => r.consumable_nudged_for ?? null,
-  line: (a) => {
-    const r = a.row;
-    const type = applianceTypeLabel(r.appliance_type);
-    const where = (r.location ?? "").trim();
-    const loc = where ? ` — ${where}` : "";
-    const what = (r.consumable_label ?? "Consumable").trim();
-    const state = a.status === "overdue" ? "OVERDUE" : "due soon";
-    return `- ${type}${loc} — ${what} due ${a.targetDate} (${state})`;
-  },
-};
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) {
@@ -196,10 +176,6 @@ export async function GET(req: NextRequest) {
       { status: 200 },
     );
   }
-  const eventByKey: Record<string, typeof warrantyEvent> = {
-    [WARRANTY_EVENT]: warrantyEvent,
-    [CONSUMABLE_EVENT]: consumableEvent,
-  };
 
   let orgQuery = admin
     .from("organizations")
@@ -227,36 +203,23 @@ export async function GET(req: NextRequest) {
 
       // Which kinds has this org opted into? Each event gates independently, so a
       // landlord can want warranty nudges but not consumable ones (or vice versa).
-      const settingByEvent = new Map<string, NotificationSettingRow | null>();
-      const enabledKinds: Kind[] = [];
-      for (const kind of [WARRANTY_KIND, CONSUMABLE_KIND]) {
+      const getSetting = async (eventKey: string): Promise<NotificationSettingRow | null> => {
         const { data: settingRow } = await admin
           .from("notification_settings")
           .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
           .eq("organization_id", org.id)
-          .eq("event_key", kind.eventKey)
+          .eq("event_key", eventKey)
           .maybeSingle();
-        const setting = (settingRow as NotificationSettingRow | null) ?? null;
-        settingByEvent.set(kind.eventKey, setting);
-        if (isDripEnqueueEnabled(setting)) enabledKinds.push(kind);
-      }
-      if (enabledKinds.length === 0) {
+        return (settingRow as NotificationSettingRow | null) ?? null;
+      };
+      const warrantySetting = await getSetting(WARRANTY_EVENT);
+      const consumableSetting = await getSetting(CONSUMABLE_EVENT);
+      const warrantyOn = isDripEnqueueEnabled(warrantySetting);
+      const consumableOn = isDripEnqueueEnabled(consumableSetting);
+      if (!warrantyOn && !consumableOn) {
         summary.skipped++;
         continue;
       }
-
-      // All appliances for the org (RLS bypassed via the admin client; we filter
-      // by org explicitly). Fetched ONCE and reused across the enabled kinds.
-      const { data: applianceRows } = await admin
-        .from("unit_appliances")
-        .select(
-          "id, property_id, appliance_type, make, model, location, purchase_date, install_year, " +
-            "quantity, warranty_months, warranty_nudged_for, consumable_label, " +
-            "consumable_interval_months, consumable_anchor_date, consumable_nudged_for, " +
-            "property:properties(address)",
-        )
-        .eq("organization_id", org.id);
-      const rows = (applianceRows ?? []) as any[] as ApplianceRow[];
 
       // Operator fallback recipients — resolved lazily (only when something is due
       // for this org) and memoized across kinds.
@@ -279,44 +242,23 @@ export async function GET(req: NextRequest) {
         return operatorFallback;
       };
 
-      for (const kind of enabledKinds) {
-        const event = eventByKey[kind.eventKey];
-        const setting = settingByEvent.get(kind.eventKey) ?? null;
-
-        // Group actionable items by unit; track which ones to (re)stamp.
-        const byUnit = new Map<string, { address: string; items: Actionable[] }>();
-        for (const r of rows) {
-          if (!r.property_id) continue;
-          const targetDate = kind.targetDate(r);
-          const status = dateStatus(targetDate, today, kind.leadDays);
-          if (status !== "due_soon" && status !== "overdue") continue; // not actionable
-          const decision = decideApplianceNudge({
-            targetDate,
-            status,
-            lastNudgedFor: kind.lastNudgedFor(r),
-            force,
-          });
-          const prop = one<{ address: string | null }>(r.property as any);
-          const address = prop?.address?.trim() || "your rental unit";
-          const bucket = byUnit.get(r.property_id) ?? { address, items: [] };
-          bucket.items.push({
-            row: { ...r, property: prop },
-            targetDate: targetDate!, // non-null: due_soon/overdue implies a real date
-            status,
-            stampFor: decision.nudge ? decision.stampFor : null,
-          });
-          byUnit.set(r.property_id, bucket);
-        }
-
-        // A unit is emailed only when it has at least one NEWLY due item for this
-        // kind; already-nudged-only units stay silent. The email still lists EVERY
-        // actionable item of this kind in the unit so the work can be combined.
-        const dueUnits = Array.from(byUnit.entries()).filter(([, u]) =>
+      // Shared emit: from a by-unit grouping of actionable items, email each unit
+      // that has at least one NEWLY due item for this kind (already-nudged-only
+      // units stay silent), then stamp each newly-due item on its own table.
+      const emitKind = async (args: {
+        eventKey: string;
+        event: NonNullable<ReturnType<typeof getNotificationEvent>>;
+        setting: NotificationSettingRow | null;
+        stampTable: "unit_appliances" | "appliance_consumables";
+        stampColumn: "warranty_nudged_for" | "nudged_for";
+        byUnit: Map<string, { address: string; items: EmitItem[] }>;
+      }) => {
+        const dueUnits = Array.from(args.byUnit.entries()).filter(([, u]) =>
           u.items.some((i) => i.stampFor != null),
         );
         if (dueUnits.length === 0) {
-          summary.details.push({ org: org.id, kind: kind.eventKey, due_units: 0 });
-          continue;
+          summary.details.push({ org: org.id, kind: args.eventKey, due_units: 0 });
+          return;
         }
 
         const operators = await resolveOperators();
@@ -335,7 +277,7 @@ export async function GET(req: NextRequest) {
           const vars: Record<string, string> = {
             org_name: org.name ?? "",
             property_address: unit.address,
-            appliance_list: unit.items.map(kind.line).join("\n"),
+            appliance_list: unit.items.map((i) => i.line).join("\n"),
             earliest_date: earliest,
             dashboard_url: dashboardUrl,
           };
@@ -343,20 +285,20 @@ export async function GET(req: NextRequest) {
 
           // --- Dry run: render + report, never send, never stamp ---------------
           if (dry) {
-            const rendered = renderNotification(event, setting, vars);
+            const rendered = renderNotification(args.event, args.setting, vars);
             const recipients = resolveNotificationRecipients({
-              audience: event.audience,
-              configured: setting?.recipients ?? [],
+              audience: args.event.audience,
+              configured: args.setting?.recipients ?? [],
               operatorFallback: operators,
             });
             summary.sent++; // "would send"
             summary.details.push({
               org: org.id,
-              kind: kind.eventKey,
+              kind: args.eventKey,
               property: propertyId,
               dry: true,
               actionable: unit.items.length,
-              would_stamp: toStamp.map((i) => ({ id: i.row.id, target: i.stampFor })),
+              would_stamp: toStamp.map((i) => ({ id: i.stampId, target: i.stampFor })),
               recipients,
               subject: rendered.subject,
               body: rendered.body,
@@ -374,7 +316,7 @@ export async function GET(req: NextRequest) {
               logo_url: org.logo_url,
               reply_to_email: org.reply_to_email,
             },
-            eventKey: kind.eventKey,
+            eventKey: args.eventKey,
             vars,
             operatorFallback: operators,
             action: { label: "Review the unit's appliances", url: dashboardUrl },
@@ -382,21 +324,135 @@ export async function GET(req: NextRequest) {
 
           for (const i of toStamp) {
             await admin
-              .from("unit_appliances")
-              .update({ [kind.stampColumn]: i.stampFor })
-              .eq("id", i.row.id);
+              .from(args.stampTable)
+              .update({ [args.stampColumn]: i.stampFor })
+              .eq("id", i.stampId);
           }
 
           summary.sent++;
           summary.details.push({
             org: org.id,
-            kind: kind.eventKey,
+            kind: args.eventKey,
             property: propertyId,
             sent: true,
             actionable: unit.items.length,
-            stamped: toStamp.map((i) => ({ id: i.row.id, target: i.stampFor })),
+            stamped: toStamp.map((i) => ({ id: i.stampId, target: i.stampFor })),
           });
         }
+      };
+
+      // --- WARRANTY pass (per appliance) -------------------------------------
+      if (warrantyOn) {
+        const { data: applianceRows } = await admin
+          .from("unit_appliances")
+          .select(
+            "id, property_id, appliance_type, make, model, location, purchase_date, install_year, " +
+              "quantity, warranty_months, warranty_nudged_for, property:properties(address)",
+          )
+          .eq("organization_id", org.id);
+        const rows = (applianceRows ?? []) as any[] as ApplianceRow[];
+
+        const byUnit = new Map<string, { address: string; items: EmitItem[] }>();
+        for (const r of rows) {
+          if (!r.property_id) continue;
+          const targetDate = warrantyExpiryDate(r);
+          const status = dateStatus(targetDate, today, WARRANTY_LEAD_DAYS);
+          if (status !== "due_soon" && status !== "overdue") continue;
+          const decision = decideApplianceNudge({
+            targetDate,
+            status,
+            lastNudgedFor: r.warranty_nudged_for ?? null,
+            force,
+          });
+          const prop = one<{ address: string | null }>(r.property as any);
+          const address = prop?.address?.trim() || "your rental unit";
+          const type = applianceTypeLabel(r.appliance_type);
+          const where = (r.location ?? "").trim();
+          const loc = where ? ` — ${where}` : "";
+          const state = status === "overdue" ? "WARRANTY LAPSED" : "warranty ending";
+          const line = `- ${type}${ident(r.make, r.model)}${loc} — warranty ends ${targetDate!} (${state})`;
+          const bucket = byUnit.get(r.property_id) ?? { address, items: [] };
+          bucket.items.push({
+            stampId: r.id,
+            status,
+            targetDate: targetDate!,
+            stampFor: decision.nudge ? decision.stampFor : null,
+            line,
+          });
+          byUnit.set(r.property_id, bucket);
+        }
+
+        await emitKind({
+          eventKey: WARRANTY_EVENT,
+          event: warrantyEvent,
+          setting: warrantySetting,
+          stampTable: "unit_appliances",
+          stampColumn: "warranty_nudged_for",
+          byUnit,
+        });
+      }
+
+      // --- CONSUMABLE pass (per consumable child row, S389) -------------------
+      if (consumableOn) {
+        const { data: consumableRows } = await admin
+          .from("appliance_consumables")
+          .select(
+            "id, property_id, appliance_id, label, interval_months, anchor_date, nudged_for, " +
+              "appliance:unit_appliances(appliance_type, location, make, model, purchase_date, install_year), " +
+              "property:properties(address)",
+          )
+          .eq("organization_id", org.id);
+        const rows = (consumableRows ?? []) as any[] as ConsumableRow[];
+
+        const byUnit = new Map<string, { address: string; items: EmitItem[] }>();
+        for (const r of rows) {
+          if (!r.property_id) continue;
+          const appliance = one<NonNullable<ConsumableRow["appliance"]>>(r.appliance as any);
+          const fallbackAnchor = appliance
+            ? appliancePurchaseAnchor({
+                purchase_date: appliance.purchase_date,
+                install_year: appliance.install_year,
+              })
+            : null;
+          const targetDate = consumableNextDue(
+            { interval_months: r.interval_months, anchor_date: r.anchor_date },
+            fallbackAnchor,
+          );
+          const status = dateStatus(targetDate, today, CONSUMABLE_LEAD_DAYS);
+          if (status !== "due_soon" && status !== "overdue") continue;
+          const decision = decideApplianceNudge({
+            targetDate,
+            status,
+            lastNudgedFor: r.nudged_for ?? null,
+            force,
+          });
+          const prop = one<{ address: string | null }>(r.property as any);
+          const address = prop?.address?.trim() || "your rental unit";
+          const type = appliance ? applianceTypeLabel(appliance.appliance_type) : "Appliance";
+          const where = (appliance?.location ?? "").trim();
+          const loc = where ? ` — ${where}` : "";
+          const what = (r.label ?? "Consumable").trim();
+          const state = status === "overdue" ? "OVERDUE" : "due soon";
+          const line = `- ${type}${loc} — ${what} due ${targetDate!} (${state})`;
+          const bucket = byUnit.get(r.property_id) ?? { address, items: [] };
+          bucket.items.push({
+            stampId: r.id,
+            status,
+            targetDate: targetDate!,
+            stampFor: decision.nudge ? decision.stampFor : null,
+            line,
+          });
+          byUnit.set(r.property_id, bucket);
+        }
+
+        await emitKind({
+          eventKey: CONSUMABLE_EVENT,
+          event: consumableEvent,
+          setting: consumableSetting,
+          stampTable: "appliance_consumables",
+          stampColumn: "nudged_for",
+          byUnit,
+        });
       }
     } catch (e: any) {
       summary.errors++;

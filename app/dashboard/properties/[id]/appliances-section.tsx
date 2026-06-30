@@ -2,6 +2,9 @@ import {
   addAppliance,
   updateAppliance,
   removeAppliance,
+  addConsumable,
+  updateConsumable,
+  removeConsumable,
   markConsumableReplaced,
   uploadApplianceReceipt,
   removeApplianceReceipt,
@@ -30,9 +33,11 @@ import {
 // expiry + recurring-consumable due date + their statuses (lib/appliance-care)
 // and passes them in, so this file stays presentational.
 //
-// Two reminders ride each appliance, shown as two independent chips: WARRANTY
-// (one-shot, before the manufacturer warranty lapses) and CONSUMABLE (recurring,
-// e.g. a fridge water filter every N months). A one-tap "Mark replaced" rolls the
+// Two kinds of reminder ride each appliance: WARRANTY (one-shot, before the
+// manufacturer warranty lapses — one per appliance, shown as a chip) and
+// CONSUMABLE (recurring, e.g. a fridge water filter every N months). S389: an
+// appliance can carry MANY consumables, each its own child row, listed + managed
+// in a per-appliance Consumables block; a one-tap "Mark replaced" rolls that
 // consumable's clock forward one cycle (the recurrence).
 
 /** One receipt / purchase proof attached to an appliance (a document-vault row,
@@ -43,6 +48,19 @@ export type ApplianceReceiptView = {
   title: string;
   mime_type: string;
   signedUrl: string | null;
+};
+
+/** One recurring consumable of an appliance (an appliance_consumables row, 0096).
+ * `due` + `status` are computed by the page from the interval + anchor (falling
+ * back to the appliance's purchase date). */
+export type ConsumableView = {
+  id: string;
+  label: string;
+  interval_months: number | null;
+  anchor_date: string | null;
+  notes: string | null;
+  due: string | null;
+  status: ApplianceStatus;
 };
 
 export type ApplianceView = {
@@ -56,14 +74,10 @@ export type ApplianceView = {
   install_year: number | null;
   quantity: number;
   warranty_months: number | null;
-  consumable_label: string | null;
-  consumable_interval_months: number | null;
-  consumable_anchor_date: string | null;
   notes: string | null;
   warrantyExpiry: string | null;
   warrantyStatus: ApplianceStatus;
-  consumableDue: string | null;
-  consumableStatus: ApplianceStatus;
+  consumables: ConsumableView[];
   receipts: ApplianceReceiptView[];
 };
 
@@ -94,8 +108,19 @@ function TypeSelect({ value }: { value?: ApplianceType }) {
  * `prefill` is set (from a plate/receipt scan, S364) its values seed the inputs
  * that the scan could read — type/make/model/serial/year/warranty — while every
  * field stays editable so the landlord confirms before saving. An existing row
- * (`d`) always wins over a scan prefill. */
-function ApplianceFields({ d, prefill }: { d?: ApplianceView; prefill?: AppliancePrefill | null }) {
+ * (`d`) always wins over a scan prefill. `includeFirstConsumable` shows an
+ * OPTIONAL first-consumable fieldset on the ADD form only (S389): the appliance
+ * and its first consumable are created in one save; further consumables are
+ * managed in the per-appliance Consumables block. */
+function ApplianceFields({
+  d,
+  prefill,
+  includeFirstConsumable = false,
+}: {
+  d?: ApplianceView;
+  prefill?: AppliancePrefill | null;
+  includeFirstConsumable?: boolean;
+}) {
   const installYearVal = d?.install_year ?? prefill?.install_year ?? null;
   const installYear = installYearVal != null ? String(installYearVal) : "";
   const warrantyVal = d?.warranty_months ?? prefill?.warranty_months ?? null;
@@ -200,52 +225,49 @@ function ApplianceFields({ d, prefill }: { d?: ApplianceView; prefill?: Applianc
         </p>
       </fieldset>
 
-      <fieldset className="rounded-xl border border-gray-200 p-3">
-        <legend className="px-1 text-xs font-semibold text-gray-700">
-          Recurring consumable (optional)
-        </legend>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <label className={LABEL_CLS}>What</label>
-            <input
-              name="consumable_label"
-              defaultValue={d?.consumable_label ?? prefill?.consumable_label ?? ""}
-              placeholder="e.g. Water filter"
-              className={INPUT_CLS}
-            />
+      {includeFirstConsumable ? (
+        <fieldset className="rounded-xl border border-gray-200 p-3">
+          <legend className="px-1 text-xs font-semibold text-gray-700">
+            First recurring consumable (optional)
+          </legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label className={LABEL_CLS}>What</label>
+              <input
+                name="consumable_label"
+                defaultValue={prefill?.consumable_label ?? ""}
+                placeholder="e.g. Water filter"
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Every (months)</label>
+              <input
+                name="consumable_interval_months"
+                type="number"
+                min={1}
+                max={120}
+                defaultValue={
+                  prefill?.consumable_interval_months != null
+                    ? String(prefill.consumable_interval_months)
+                    : ""
+                }
+                placeholder="e.g. 6"
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Last replaced (optional)</label>
+              <input name="consumable_anchor_date" type="date" className={INPUT_CLS} />
+            </div>
           </div>
-          <div>
-            <label className={LABEL_CLS}>Every (months)</label>
-            <input
-              name="consumable_interval_months"
-              type="number"
-              min={1}
-              max={120}
-              defaultValue={
-                (d?.consumable_interval_months ?? prefill?.consumable_interval_months) != null
-                  ? String(d?.consumable_interval_months ?? prefill?.consumable_interval_months)
-                  : ""
-              }
-              placeholder="e.g. 6"
-              className={INPUT_CLS}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLS}>Last replaced (optional)</label>
-            <input
-              name="consumable_anchor_date"
-              type="date"
-              defaultValue={d?.consumable_anchor_date ?? ""}
-              className={INPUT_CLS}
-            />
-          </div>
-        </div>
-        <p className="mt-1 text-xs text-gray-500">
-          For things that get replaced on a cycle (a fridge water filter, a range-hood filter). We
-          remind you when it&apos;s due; one tap on &ldquo;Mark replaced&rdquo; rolls the schedule
-          forward. Defaults to counting from the purchase date.
-        </p>
-      </fieldset>
+          <p className="mt-1 text-xs text-gray-500">
+            For things that get replaced on a cycle (a fridge water filter, a range-hood filter). We
+            remind you when it&apos;s due; one tap on &ldquo;Mark replaced&rdquo; rolls the schedule
+            forward. Defaults to counting from the purchase date. You can add more after saving.
+          </p>
+        </fieldset>
+      ) : null}
 
       <div>
         <label className={LABEL_CLS}>Notes (optional)</label>
@@ -352,6 +374,149 @@ function ReceiptsBlock({ d, propertyId }: { d: ApplianceView; propertyId: string
           </p>
         </details>
       </div>
+    </div>
+  );
+}
+
+/** The label/interval/last-replaced/notes grid, reused by the add-consumable and
+ * edit-consumable forms. Field names match consumableFieldsFromForm in actions. */
+function ConsumableFields({ c }: { c?: ConsumableView }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+      <div className="sm:col-span-2">
+        <label className={LABEL_CLS}>What</label>
+        <input
+          name="consumable_label"
+          defaultValue={c?.label ?? ""}
+          placeholder="e.g. Water filter"
+          required
+          className={INPUT_CLS}
+        />
+      </div>
+      <div>
+        <label className={LABEL_CLS}>Every (months)</label>
+        <input
+          name="consumable_interval_months"
+          type="number"
+          min={1}
+          max={120}
+          defaultValue={c?.interval_months != null ? String(c.interval_months) : ""}
+          placeholder="e.g. 6"
+          required
+          className={INPUT_CLS}
+        />
+      </div>
+      <div>
+        <label className={LABEL_CLS}>Last replaced (optional)</label>
+        <input
+          name="consumable_anchor_date"
+          type="date"
+          defaultValue={c?.anchor_date ?? ""}
+          className={INPUT_CLS}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** The recurring consumables of one appliance (S389) — several per appliance.
+ * Lists each with its own status chip + next-due + "Mark replaced" + edit/remove,
+ * and an inline "+ Add consumable" form. Counting from the purchase date when no
+ * last-replaced is set is handled by the page's due/status computation. */
+function ConsumablesBlock({ d, propertyId }: { d: ApplianceView; propertyId: string }) {
+  return (
+    <div className="mt-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-xs font-medium text-gray-600">Consumables:</span>
+        {d.consumables.length === 0 ? (
+          <span className="text-xs text-gray-400">none yet</span>
+        ) : null}
+        <details className="group ml-auto">
+          <summary className="cursor-pointer list-none text-xs font-medium text-brand hover:underline [&::-webkit-details-marker]:hidden">
+            + Add consumable
+          </summary>
+          <form action={addConsumable} className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
+            <input type="hidden" name="appliance_id" value={d.id} />
+            <ConsumableFields />
+            <div className="mt-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:opacity-90"
+              >
+                Add consumable
+              </button>
+            </div>
+          </form>
+        </details>
+      </div>
+
+      {d.consumables.length > 0 ? (
+        <ul className="mt-2 space-y-1.5">
+          {d.consumables.map((c) => {
+            const meta = STATUS_META[c.status];
+            return (
+              <li
+                key={c.id}
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5"
+              >
+                <span className="text-xs font-medium text-gray-900">{c.label}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.cls}`}>
+                  {meta.label}
+                </span>
+                <span className="text-xs text-gray-500">
+                  every {c.interval_months ?? "—"} mo
+                  {c.due ? ` · due ${c.due}` : ""}
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <form action={markConsumableReplaced}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <input type="hidden" name="property_id" value={propertyId} />
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-brand px-2 py-1 text-xs font-medium text-brand hover:bg-brand/5"
+                      title={`Reset the ${c.label} schedule to today`}
+                    >
+                      Mark replaced
+                    </button>
+                  </form>
+                  <details className="group">
+                    <summary className="cursor-pointer list-none text-xs font-medium text-brand hover:underline [&::-webkit-details-marker]:hidden">
+                      Edit
+                    </summary>
+                    <form
+                      action={updateConsumable}
+                      className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3"
+                    >
+                      <input type="hidden" name="id" value={c.id} />
+                      <input type="hidden" name="property_id" value={propertyId} />
+                      <ConsumableFields c={c} />
+                      <div className="mt-2">
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                        >
+                          Save consumable
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+                  <form action={removeConsumable}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <input type="hidden" name="property_id" value={propertyId} />
+                    <button
+                      type="submit"
+                      className="text-xs font-medium text-gray-400 hover:text-red-600"
+                      aria-label={`Remove ${c.label}`}
+                    >
+                      Remove
+                    </button>
+                  </form>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -534,7 +699,17 @@ export function AppliancesSection({
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {appliances.map((d) => {
             const hasWarranty = d.warrantyStatus !== "unknown" || d.warranty_months != null;
-            const hasConsumable = !!(d.consumable_label && d.consumable_interval_months);
+            // Summarize the consumables for the header chip: the most-urgent status
+            // across them (overdue beats due_soon beats the rest), null if none.
+            const worstConsumable: ApplianceStatus | null = d.consumables.some(
+              (c) => c.status === "overdue",
+            )
+              ? "overdue"
+              : d.consumables.some((c) => c.status === "due_soon")
+                ? "due_soon"
+                : d.consumables.length > 0
+                  ? "ok"
+                  : null;
             const ident = [d.make, d.model].filter(Boolean).join(" ");
             return (
               <li key={d.id} className="px-4 py-3">
@@ -546,8 +721,15 @@ export function AppliancesSection({
                         {d.quantity > 1 ? ` ×${d.quantity}` : ""}
                       </span>
                       {hasWarranty ? <Chip prefix="Warranty" status={d.warrantyStatus} /> : null}
-                      {hasConsumable ? (
-                        <Chip prefix={d.consumable_label || "Consumable"} status={d.consumableStatus} />
+                      {worstConsumable ? (
+                        <Chip
+                          prefix={
+                            d.consumables.length > 1
+                              ? `Consumables ×${d.consumables.length}`
+                              : "Consumable"
+                          }
+                          status={worstConsumable}
+                        />
                       ) : null}
                     </div>
                     <div className="mt-0.5 text-xs text-gray-500">
@@ -555,25 +737,9 @@ export function AppliancesSection({
                       {d.location ? `${d.location} · ` : ""}
                       purchased {purchaseLabel(d)}
                       {hasWarranty && d.warrantyExpiry ? ` · warranty to ${d.warrantyExpiry}` : ""}
-                      {hasConsumable && d.consumableDue
-                        ? ` · ${d.consumable_label} due ${d.consumableDue}`
-                        : ""}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {hasConsumable ? (
-                      <form action={markConsumableReplaced}>
-                        <input type="hidden" name="id" value={d.id} />
-                        <input type="hidden" name="property_id" value={propertyId} />
-                        <button
-                          type="submit"
-                          className="rounded-lg border border-brand px-2.5 py-1.5 text-xs font-medium text-brand hover:bg-brand/5"
-                          title={`Reset the ${d.consumable_label} schedule to today`}
-                        >
-                          Mark replaced
-                        </button>
-                      </form>
-                    ) : null}
                     <details className="group">
                       <summary className="cursor-pointer list-none text-sm font-medium text-brand hover:underline [&::-webkit-details-marker]:hidden">
                         Edit
@@ -607,6 +773,7 @@ export function AppliancesSection({
                     </form>
                   </div>
                 </div>
+                <ConsumablesBlock d={d} propertyId={propertyId} />
                 <ReceiptsBlock d={d} propertyId={propertyId} />
               </li>
             );
@@ -656,7 +823,7 @@ export function AppliancesSection({
           {pendingDocId ? (
             <input type="hidden" name="pending_doc_id" value={pendingDocId} />
           ) : null}
-          <ApplianceFields prefill={prefill} />
+          <ApplianceFields prefill={prefill} includeFirstConsumable />
           <div className="mt-3">
             <button
               type="submit"

@@ -1806,7 +1806,10 @@ function normalizeApplianceType(raw: unknown): ApplianceTypeAction {
     : "fridge";
 }
 
-/** The shared field parse for add + update (everything but org/property/id). */
+/** The shared field parse for add + update (everything but org/property/id).
+ * S389: consumables moved to their own child table (appliance_consumables), so
+ * the appliance row no longer carries the embedded consumable_* fields — those
+ * are handled by the consumable actions below. */
 function applianceFieldsFromForm(formData: FormData) {
   return {
     appliance_type: normalizeApplianceType(formData.get("appliance_type")),
@@ -1818,14 +1821,31 @@ function applianceFieldsFromForm(formData: FormData) {
     install_year: parseBoundedIntOrNull(String(formData.get("install_year") ?? ""), 1950, 2100),
     quantity: parseBoundedIntOrNull(String(formData.get("quantity") ?? ""), 1, 999) ?? 1,
     warranty_months: parseBoundedIntOrNull(String(formData.get("warranty_months") ?? ""), 1, 600),
-    consumable_label: String(formData.get("consumable_label") ?? "").trim() || null,
-    consumable_interval_months: parseBoundedIntOrNull(
-      String(formData.get("consumable_interval_months") ?? ""),
-      1,
-      120,
-    ),
-    consumable_anchor_date: parseDateOrNull(String(formData.get("consumable_anchor_date") ?? "")),
     notes: String(formData.get("notes") ?? "").trim() || null,
+  };
+}
+
+/** Parse a consumable's fields (label + interval + last-replaced) from a form.
+ * Returns null when there is no usable consumable (no label OR no interval), so
+ * callers can treat "no consumable entered" cleanly. */
+function consumableFieldsFromForm(formData: FormData): {
+  label: string;
+  interval_months: number;
+  anchor_date: string | null;
+  notes: string | null;
+} | null {
+  const label = String(formData.get("consumable_label") ?? "").trim();
+  const interval = parseBoundedIntOrNull(
+    String(formData.get("consumable_interval_months") ?? ""),
+    1,
+    120,
+  );
+  if (!label || interval == null) return null;
+  return {
+    label,
+    interval_months: interval,
+    anchor_date: parseDateOrNull(String(formData.get("consumable_anchor_date") ?? "")),
+    notes: String(formData.get("consumable_notes") ?? "").trim() || null,
   };
 }
 
@@ -1861,6 +1881,20 @@ export async function addAppliance(formData: FormData) {
     })
     .select("id")
     .single();
+
+  // S389: the Add form carries an OPTIONAL first consumable (also where a plate/
+  // manual scan seeds a recommended one), so the appliance + its first consumable
+  // are created in a single save. Additional consumables are added from the
+  // per-appliance Consumables block. Best-effort; never blocks the add.
+  const firstConsumable = consumableFieldsFromForm(formData);
+  if (created?.id && firstConsumable) {
+    await supabase.from("appliance_consumables").insert({
+      organization_id: org.id,
+      property_id: propertyId,
+      appliance_id: created.id,
+      ...firstConsumable,
+    });
+  }
 
   // Phase 2 (S365): if this add came from a scan that stored the image as a
   // pending capture, PROMOTE that document — link it to the just-created
@@ -1936,10 +1970,99 @@ export async function removeAppliance(formData: FormData) {
   redirect(`/dashboard/properties/${propertyId}?appliance=removed#appliances`);
 }
 
-// One-tap "Mark replaced" for the recurring consumable: roll the anchor to today
-// so the next-due date advances one full interval. Clearing consumable_nudged_for
-// is belt-and-braces — the next-due date changes anyway, so the stamp would no
-// longer match — but nulling it makes the re-arm explicit and obvious in the DB.
+// ---------------------------------------------------------------------------
+// Appliance consumables (S389) — the recurring-consumable child rows of an
+// appliance (appliance_consumables, 0096). An appliance can carry several. RLS
+// scopes reads/writes to the caller's org; we set organization_id + property_id
+// from the parent appliance (looked up org-scoped) on insert so the WITH CHECK
+// passes and the cron can group by unit without a join. No tenant PII.
+// ---------------------------------------------------------------------------
+
+/** Resolve the parent appliance, scoped to the caller's org via RLS, returning
+ * its id + property_id (needed to denormalize onto the consumable + to redirect).
+ * Null when the appliance isn't visible to the caller's org. */
+async function resolveOwnedAppliance(
+  supabase: ReturnType<typeof createClient>,
+  applianceId: string,
+): Promise<{ id: string; property_id: string } | null> {
+  const { data } = await supabase
+    .from("unit_appliances")
+    .select("id, property_id")
+    .eq("id", applianceId)
+    .maybeSingle();
+  if (!data || !data.property_id) return null;
+  return { id: data.id as string, property_id: data.property_id as string };
+}
+
+export async function addConsumable(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const applianceId = String(formData.get("appliance_id") ?? "");
+  if (!applianceId) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  const supabase = createClient();
+  const appliance = await resolveOwnedAppliance(supabase, applianceId);
+  if (!appliance) redirect("/dashboard/properties?notfound=1");
+
+  const fields = consumableFieldsFromForm(formData);
+  if (fields) {
+    await supabase.from("appliance_consumables").insert({
+      organization_id: org.id,
+      property_id: appliance.property_id,
+      appliance_id: appliance.id,
+      ...fields,
+    });
+  }
+
+  revalidatePath(`/dashboard/properties/${appliance.property_id}`);
+  redirect(`/dashboard/properties/${appliance.property_id}?appliance=consumable_added#appliances`);
+}
+
+export async function updateConsumable(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const fields = consumableFieldsFromForm(formData);
+  if (!fields) {
+    // Nothing usable entered (no label or no interval) — bounce back unchanged.
+    redirect(`/dashboard/properties/${propertyId}?appliance=consumable_invalid#appliances`);
+  }
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org; .eq("id") targets one row. The
+  // nudge stamp is NOT cleared here on purpose: it keys on the computed next-due
+  // date, so changing the interval / last-replaced moves the target and re-arms
+  // the cycle automatically (see appliance-care-sweep.ts).
+  await supabase
+    .from("appliance_consumables")
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?appliance=consumable_updated#appliances`);
+}
+
+export async function removeConsumable(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!id || !propertyId) return;
+
+  const supabase = createClient();
+  await supabase.from("appliance_consumables").delete().eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?appliance=consumable_removed#appliances`);
+}
+
+// One-tap "Mark replaced" for a recurring consumable (S389: now a child row):
+// roll anchor_date to today so the next-due date advances one full interval.
+// Clearing nudged_for is belt-and-braces — the next-due date changes anyway, so
+// the stamp would no longer match — but nulling it makes the re-arm explicit and
+// obvious in the DB.
 export async function markConsumableReplaced(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const id = String(formData.get("id") ?? "");
@@ -1949,10 +2072,10 @@ export async function markConsumableReplaced(formData: FormData) {
   const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD' (UTC)
   const supabase = createClient();
   await supabase
-    .from("unit_appliances")
+    .from("appliance_consumables")
     .update({
-      consumable_anchor_date: today,
-      consumable_nudged_for: null,
+      anchor_date: today,
+      nudged_for: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

@@ -19,6 +19,13 @@
 //      before that date. A one-tap "Mark replaced" rolls the anchor to today, so
 //      the next due date advances one cycle and the reminder re-arms. This is the
 //      recurrence the once-per-lifecycle detector/equipment sweep does NOT cover.
+//
+// S389: an appliance can now carry MULTIPLE consumables — they live in their own
+// child table (appliance_consumables, 0096), not embedded on the appliance row.
+// The warranty (one per manufacturer warranty) stays on the appliance; the
+// consumable math below operates on a per-CONSUMABLE input (ConsumableInput),
+// falling back to the appliance's purchase anchor when a consumable has no
+// last-replaced date of its own.
 
 export type ApplianceType =
   | "fridge"
@@ -84,14 +91,20 @@ export function isActionableApplianceStatus(status: ApplianceStatus): boolean {
   return (APPLIANCE_ACTIONABLE_STATUSES as readonly string[]).includes(status);
 }
 
-/** The minimal appliance shape the care math needs (a subset of the DB row). */
+/** The minimal appliance shape the warranty + purchase-anchor math needs (a
+ * subset of the unit_appliances row). Consumables are a separate child input. */
 export type ApplianceInput = {
   purchase_date?: string | null; // 'YYYY-MM-DD'
   install_year?: number | null;
   warranty_months?: number | null;
-  consumable_label?: string | null;
-  consumable_interval_months?: number | null;
-  consumable_anchor_date?: string | null; // 'YYYY-MM-DD'
+};
+
+/** The minimal per-consumable shape the recurring math needs (a subset of an
+ * appliance_consumables row, 0096). `anchor_date` is the last time this specific
+ * consumable was replaced; null => fall back to the appliance's purchase anchor. */
+export type ConsumableInput = {
+  interval_months?: number | null;
+  anchor_date?: string | null; // 'YYYY-MM-DD'
 };
 
 // --- Pure date helpers on 'YYYY-MM-DD' strings (no Date tz pitfalls) ---------
@@ -174,30 +187,34 @@ export function warrantyExpiryDate(d: ApplianceInput): string | null {
   return addMonths(anchor, Math.floor(months));
 }
 
-// --- Consumable (recurring) --------------------------------------------------
+// --- Consumable (recurring, per child row) -----------------------------------
 
-/** Whether a recurring consumable reminder is configured (label + interval). */
-export function hasConsumable(d: ApplianceInput): boolean {
-  const label = (d.consumable_label ?? "").trim();
-  const interval = d.consumable_interval_months;
-  return label.length > 0 && interval != null && Number.isFinite(interval) && interval > 0;
+/** Whether a recurring consumable reminder is configured (a positive interval). */
+export function hasConsumable(c: ConsumableInput): boolean {
+  const interval = c.interval_months;
+  return interval != null && Number.isFinite(interval) && interval > 0;
 }
 
 /**
- * The anchor for the recurring clock as 'YYYY-MM-DD': the explicit
- * consumable_anchor_date (the last time it was replaced) if present, else the
- * purchase anchor. Null when neither is known.
+ * The anchor for one consumable's recurring clock as 'YYYY-MM-DD': the explicit
+ * anchor_date (the last time THIS consumable was replaced) if present, else the
+ * appliance's purchase anchor (supplied by the caller). Null when neither known.
  */
-export function consumableAnchor(d: ApplianceInput): string | null {
-  if (d.consumable_anchor_date && parseYmd(d.consumable_anchor_date) != null) {
-    return d.consumable_anchor_date.trim();
+export function consumableAnchor(
+  c: ConsumableInput,
+  fallbackPurchaseAnchor: string | null,
+): string | null {
+  if (c.anchor_date && parseYmd(c.anchor_date) != null) {
+    return c.anchor_date.trim();
   }
-  return appliancePurchaseAnchor(d);
+  return fallbackPurchaseAnchor;
 }
 
 /**
- * The next-due date for the recurring consumable as 'YYYY-MM-DD' = anchor + one
- * interval. Null when no consumable is configured or there's no anchor.
+ * The next-due date for one consumable as 'YYYY-MM-DD' = anchor + one interval.
+ * `fallbackPurchaseAnchor` is the appliance's purchase anchor, used when the
+ * consumable has no last-replaced date of its own. Null when no interval is set
+ * or there's no anchor at all.
  *
  * Single-interval (not anchor + k*interval): the anchor is the LAST completed
  * replacement, so the next replacement is exactly one interval later. If the
@@ -205,11 +222,14 @@ export function consumableAnchor(d: ApplianceInput): string | null {
  * until they mark it replaced — which rolls the anchor to today and advances the
  * due date one cycle. This is what realises the recurrence (see the sweep).
  */
-export function consumableDueDate(d: ApplianceInput): string | null {
-  if (!hasConsumable(d)) return null;
-  const anchor = consumableAnchor(d);
+export function consumableNextDue(
+  c: ConsumableInput,
+  fallbackPurchaseAnchor: string | null,
+): string | null {
+  if (!hasConsumable(c)) return null;
+  const anchor = consumableAnchor(c, fallbackPurchaseAnchor);
   if (anchor == null) return null;
-  return addMonths(anchor, Math.floor(d.consumable_interval_months as number));
+  return addMonths(anchor, Math.floor(c.interval_months as number));
 }
 
 // --- Shared status banding ---------------------------------------------------
@@ -240,7 +260,12 @@ export function warrantyStatusFor(d: ApplianceInput, today: string): ApplianceSt
   return dateStatus(warrantyExpiryDate(d), today, WARRANTY_LEAD_DAYS);
 }
 
-/** Convenience: the recurring-consumable status straight from an appliance + today. */
-export function consumableStatusFor(d: ApplianceInput, today: string): ApplianceStatus {
-  return dateStatus(consumableDueDate(d), today, CONSUMABLE_LEAD_DAYS);
+/** Convenience: one consumable's recurring status from the consumable + the
+ * appliance's purchase anchor + today. */
+export function consumableStatusFor(
+  c: ConsumableInput,
+  fallbackPurchaseAnchor: string | null,
+  today: string,
+): ApplianceStatus {
+  return dateStatus(consumableNextDue(c, fallbackPurchaseAnchor), today, CONSUMABLE_LEAD_DAYS);
 }

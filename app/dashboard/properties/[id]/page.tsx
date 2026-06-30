@@ -117,12 +117,14 @@ import {
 import {
   AppliancesSection,
   type ApplianceView,
+  type ConsumableView,
   type ApplianceReceiptView,
 } from "./appliances-section";
 import {
   warrantyExpiryDate,
   warrantyStatusFor,
-  consumableDueDate,
+  appliancePurchaseAnchor,
+  consumableNextDue,
   consumableStatusFor,
   type ApplianceType,
 } from "@/lib/appliance-care";
@@ -409,14 +411,15 @@ export default async function PropertyDetailPage({
   ).length;
 
   // Appliance inventory (S362): this unit's logged appliances + each one's
-  // warranty-expiry date + recurring-consumable due date + their statuses
-  // (against the org-local "today"). Shaped here so the section stays
-  // presentational. RLS scopes the read.
+  // warranty-expiry date + status (against the org-local "today"). Shaped here so
+  // the section stays presentational. RLS scopes the read. S389: recurring
+  // consumables moved to their own child table (appliance_consumables) and are
+  // attached below.
   const { data: applianceRows } = await supabase
     .from("unit_appliances")
     .select(
       "id, appliance_type, make, model, serial, location, purchase_date, install_year, quantity, " +
-        "warranty_months, consumable_label, consumable_interval_months, consumable_anchor_date, notes",
+        "warranty_months, notes",
     )
     .eq("property_id", params.id)
     .order("created_at", { ascending: true });
@@ -425,9 +428,6 @@ export default async function PropertyDetailPage({
       purchase_date: r.purchase_date ?? null,
       install_year: r.install_year ?? null,
       warranty_months: r.warranty_months ?? null,
-      consumable_label: r.consumable_label ?? null,
-      consumable_interval_months: r.consumable_interval_months ?? null,
-      consumable_anchor_date: r.consumable_anchor_date ?? null,
     };
     return {
       id: r.id,
@@ -440,17 +440,50 @@ export default async function PropertyDetailPage({
       install_year: r.install_year ?? null,
       quantity: r.quantity ?? 1,
       warranty_months: r.warranty_months ?? null,
-      consumable_label: r.consumable_label ?? null,
-      consumable_interval_months: r.consumable_interval_months ?? null,
-      consumable_anchor_date: r.consumable_anchor_date ?? null,
       notes: r.notes ?? null,
       warrantyExpiry: warrantyExpiryDate(input),
       warrantyStatus: warrantyStatusFor(input, detectorToday),
-      consumableDue: consumableDueDate(input),
-      consumableStatus: consumableStatusFor(input, detectorToday),
+      consumables: [] as ConsumableView[],
       receipts: [] as ApplianceReceiptView[],
     };
   });
+
+  // Consumables (S389): each appliance's recurring consumables live in the child
+  // table (appliance_consumables, 0096). One query for all of this unit's
+  // appliances; compute each row's next-due (falling back to the appliance's
+  // purchase anchor) + status, then attach to its appliance view.
+  if (applianceViews.length > 0) {
+    const applianceById = new Map(applianceViews.map((a) => [a.id, a]));
+    const { data: consumableRows } = await supabase
+      .from("appliance_consumables")
+      .select("id, appliance_id, label, interval_months, anchor_date, notes")
+      .in(
+        "appliance_id",
+        applianceViews.map((a) => a.id),
+      )
+      .order("created_at", { ascending: true });
+    for (const c of (consumableRows ?? []) as any[]) {
+      const appliance = applianceById.get(c.appliance_id);
+      if (!appliance) continue;
+      const fallbackAnchor = appliancePurchaseAnchor({
+        purchase_date: appliance.purchase_date,
+        install_year: appliance.install_year,
+      });
+      const cInput = {
+        interval_months: c.interval_months ?? null,
+        anchor_date: c.anchor_date ?? null,
+      };
+      appliance.consumables.push({
+        id: c.id,
+        label: c.label ?? "",
+        interval_months: c.interval_months ?? null,
+        anchor_date: c.anchor_date ?? null,
+        notes: c.notes ?? null,
+        due: consumableNextDue(cInput, fallbackAnchor),
+        status: consumableStatusFor(cInput, fallbackAnchor, detectorToday),
+      });
+    }
+  }
 
   // Receipts (S363): the purchase proof for each appliance lives in the document
   // vault (documents.appliance_id, 0083) — the private bucket, so each row needs a
@@ -505,8 +538,7 @@ export default async function PropertyDetailPage({
     (d) =>
       d.warrantyStatus === "overdue" ||
       d.warrantyStatus === "due_soon" ||
-      d.consumableStatus === "overdue" ||
-      d.consumableStatus === "due_soon",
+      d.consumables.some((c) => c.status === "overdue" || c.status === "due_soon"),
   ).length;
 
   // Standard-policy profile (0048 org defaults + 0049 per-building override):
