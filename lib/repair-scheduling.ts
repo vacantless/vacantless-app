@@ -252,6 +252,39 @@ export function datesInPlay(list: ReadonlyArray<DayWindow>): string[] {
   return Array.from(new Set(list.map((w) => w.date))).sort((a, b) => a.localeCompare(b));
 }
 
+// --- Tenant self-serve scheduling link (Slice 3) ----------------------------
+//
+// The operator provisions a single-use-ish magic link the tenant opens with no
+// account (the same pattern as the trade /job/[token] + tenant /report/[token]
+// surfaces). The token is the only credential; it scopes the public page to one
+// appointment row. These helpers are pure; token generation + the admin-client
+// lookup live in the server action.
+
+/** The public path a tenant opens to pick their times. */
+export function tenantScheduleLinkPath(token: string): string {
+  return `/repair/${encodeURIComponent(token)}`;
+}
+
+/** True when the link's expiry has passed. A null expiry never expires. */
+export function isTenantScheduleLinkExpired(
+  expiresAtIso: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!expiresAtIso) return false;
+  const t = Date.parse(expiresAtIso);
+  if (Number.isNaN(t)) return true; // unparseable = treat as expired (fail closed)
+  return now.getTime() > t;
+}
+
+/** The windows whose keys are in `keys` (used to turn tenant checkbox picks into availability). */
+export function pickWindowsByKeys(
+  list: ReadonlyArray<DayWindow>,
+  keys: ReadonlyArray<string>,
+): DayWindow[] {
+  const keySet = new Set(keys);
+  return dedupeWindows(list.filter((w) => keySet.has(windowKey(w))));
+}
+
 // --- Interval algebra (single-date) -----------------------------------------
 
 /** Merge a set of intervals into a sorted, disjoint union. Adjacent (touching) intervals merge. */

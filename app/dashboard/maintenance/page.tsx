@@ -60,6 +60,8 @@ import {
   matchStatusTone,
   formatWindowClock,
   formatIsoDateShort,
+  tenantScheduleLinkPath,
+  isTenantScheduleLinkExpired,
   type DayWindow as RsDayWindow,
   type Interval as RsInterval,
 } from "@/lib/repair-scheduling";
@@ -95,7 +97,11 @@ import {
   rememberSupplierWindows,
   confirmAppointment,
   clearAppointment,
+  provisionTenantLink,
 } from "./actions";
+
+// Public app origin for the tenant pick-your-times link (matches lib/email.ts).
+const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
 
 export const dynamic = "force-dynamic";
 
@@ -155,6 +161,8 @@ type ApptRow = {
   chosen_start_minute: number | null;
   chosen_end_minute: number | null;
   status: string;
+  tenant_access_token: string | null;
+  token_expires_at: string | null;
 };
 
 // A directory_trades row as read from the DB (before PII minimization). Carries
@@ -288,6 +296,7 @@ const SCHED_SUCCESS: Record<string, string> = {
   remembered: "Saved these windows as this supplier's default.",
   confirmed: "Visit confirmed. The date is on the work order.",
   cleared: "Cleared the confirmed visit.",
+  link_ready: "Tenant scheduling link ready — copy it below and send it to the tenant.",
 };
 const SCHED_ERROR: Record<string, string> = {
   date: "Enter a valid date.",
@@ -369,7 +378,10 @@ function SchedulingBlock({
   const matches = matchSupplierWindows(supplier, tenant);
   const hasChosen =
     !!appt?.chosen_date && appt.chosen_start_minute != null && appt.chosen_end_minute != null;
-  const startOpen = hasChosen || supplier.length > 0 || tenant.length > 0;
+  const tenantToken = appt?.tenant_access_token ?? null;
+  const tenantLinkExpired = isTenantScheduleLinkExpired(appt?.token_expires_at ?? null);
+  const tenantLink = tenantToken ? `${APP_ORIGIN}${tenantScheduleLinkPath(tenantToken)}` : null;
+  const startOpen = hasChosen || supplier.length > 0 || tenant.length > 0 || !!tenantToken;
 
   const windowRow = (w: RsDayWindow, side: "supplier" | "tenant") => (
     <li key={windowKey(w)} className="flex items-center justify-between gap-2 text-xs">
@@ -452,10 +464,43 @@ function SchedulingBlock({
               <ul className="mt-1 space-y-1">{sortedTenant.map((w) => windowRow(w, "tenant"))}</ul>
             ) : (
               <p className="mt-1 text-xs text-gray-500">
-                Add the times the tenant is free. (A self-serve tenant link is coming.)
+                Add the times the tenant is free, or send them a link to pick their own.
               </p>
             )}
             {addForm("tenant")}
+
+            {/* Self-serve tenant pick-your-times link */}
+            <div className="mt-2">
+              {tenantLink && !tenantLinkExpired ? (
+                <div className="rounded-lg bg-gray-50 p-2">
+                  <p className="text-xs font-medium text-gray-600">Tenant pick-your-times link</p>
+                  <input
+                    readOnly
+                    value={tenantLink}
+                    aria-label="Tenant scheduling link"
+                    className="mt-1 w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+                  />
+                  <div className="mt-1 flex flex-wrap items-center gap-3">
+                    <a href={tenantLink} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand hover:underline">
+                      Open
+                    </a>
+                    <form action={provisionTenantLink}>
+                      <input type="hidden" name="work_order_id" value={workOrderId} />
+                      <button type="submit" className="text-xs font-medium text-gray-500 hover:underline">
+                        Regenerate link
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                <form action={provisionTenantLink}>
+                  <input type="hidden" name="work_order_id" value={workOrderId} />
+                  <button type="submit" className="text-xs font-medium text-brand hover:underline">
+                    {tenantLinkExpired ? "Tenant link expired — get a new one" : "Get a link for the tenant to pick their times"}
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
 
           {/* Supplier offered windows */}
@@ -776,7 +821,7 @@ export default async function MaintenancePage({
     const { data: apptData } = await supabase
       .from("work_order_appointments")
       .select(
-        "work_order_id, supplier_windows, tenant_availability, chosen_date, chosen_start_minute, chosen_end_minute, status",
+        "work_order_id, supplier_windows, tenant_availability, chosen_date, chosen_start_minute, chosen_end_minute, status, tenant_access_token, token_expires_at",
       )
       .in(
         "work_order_id",

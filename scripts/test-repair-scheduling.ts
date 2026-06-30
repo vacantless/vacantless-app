@@ -15,6 +15,9 @@ import {
   dedupeWindows,
   windowsToRules,
   datesInPlay,
+  tenantScheduleLinkPath,
+  isTenantScheduleLinkExpired,
+  pickWindowsByKeys,
   mergeIntervals,
   intersectInterval,
   subtractCovered,
@@ -155,6 +158,30 @@ ok(
     ]),
   ) === JSON.stringify(["2026-06-30", "2026-07-01"]),
 );
+
+// --- tenant self-serve link helpers -----------------------------------------
+ok("tenantScheduleLinkPath builds /repair/<token>", tenantScheduleLinkPath("abc123") === "/repair/abc123");
+ok("tenantScheduleLinkPath url-encodes", tenantScheduleLinkPath("a/b?c") === "/repair/a%2Fb%3Fc");
+ok("null expiry never expires", !isTenantScheduleLinkExpired(null));
+ok(
+  "future expiry not expired",
+  !isTenantScheduleLinkExpired("2026-07-15T00:00:00Z", new Date("2026-06-29T00:00:00Z")),
+);
+ok(
+  "past expiry is expired",
+  isTenantScheduleLinkExpired("2026-06-01T00:00:00Z", new Date("2026-06-29T00:00:00Z")),
+);
+ok("unparseable expiry fails closed", isTenantScheduleLinkExpired("not-a-date"));
+{
+  const list: DayWindow[] = [
+    { date: "2026-07-01", start_minute: H(8), end_minute: H(12), label: "AM" },
+    { date: "2026-07-01", start_minute: H(13), end_minute: H(16), label: "PM" },
+    { date: "2026-07-01", start_minute: H(17), end_minute: H(21), label: "Eve" },
+  ];
+  const picked = pickWindowsByKeys(list, [windowKey(list[0]), windowKey(list[2])]);
+  ok("pickWindowsByKeys returns only the selected windows", picked.length === 2 && picked[0].label === "AM" && picked[1].label === "Eve");
+  ok("pickWindowsByKeys ignores unknown keys", pickWindowsByKeys(list, ["nope"]).length === 0);
+}
 
 // --- interval algebra -------------------------------------------------------
 ok(

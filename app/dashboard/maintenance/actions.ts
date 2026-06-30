@@ -46,7 +46,7 @@ import {
   workOrderMediaStoragePath,
   MAX_PHOTOS_PER_WORK_ORDER,
 } from "@/lib/work-order-media";
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 import { timeStrToMinutes } from "@/lib/booking";
 import {
   validateDayWindow,
@@ -1490,4 +1490,29 @@ export async function clearAppointment(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?sched=cleared#sched-${workOrderId}`);
+}
+
+// Provision (or rotate) the tenant self-serve pick-your-times link (Slice 3). A
+// 192-bit url-safe token + a 14-day expiry, stored on the appointment row; the
+// public /repair/[token] page reads/writes only that row via the admin client.
+export async function provisionTenantLink(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+
+  const token = randomBytes(24).toString("base64url");
+  const expiry = new Date(Date.now() + 14 * 86_400_000).toISOString();
+  const { error } = await supabase
+    .from("work_order_appointments")
+    .update({ tenant_access_token: token, token_expires_at: expiry, updated_at: new Date().toISOString() })
+    .eq("id", appt.id);
+  if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=link_ready#sched-${workOrderId}`);
 }
