@@ -19,6 +19,7 @@ export function MarketingKitCard({
   combinedText,
   postChecklist,
   qrFilename,
+  feedStatus,
 }: {
   // True when the org's plan lacks the listing_marketing entitlement.
   locked: boolean;
@@ -31,6 +32,10 @@ export function MarketingKitCard({
   combinedText: string;
   postChecklist: string[];
   qrFilename: string;
+  // Aggregator-feed status for this rental (Slice A2), from the same feedSignal
+  // the rentals list uses. inFeed = currently syndicating; hint explains the
+  // state (e.g. set it Live, or add a photo) when not.
+  feedStatus: { inFeed: boolean; hint: string } | null;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -127,10 +132,11 @@ export function MarketingKitCard({
               {qrSvg && (
                 <div className="flex flex-col items-center">
                   <div
-                    className="h-[120px] w-[120px] rounded-lg border border-gray-200 bg-white p-1.5"
+                    className="h-[120px] w-[120px] overflow-hidden rounded-lg border border-gray-200 bg-white p-1.5 [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
                     // qrSvg is generated server-side by the qrcode package from
                     // the app's own landing URL — not user input — so the markup
-                    // is trusted.
+                    // is trusted. The child-svg utilities scale the QR (rendered
+                    // at a fixed px size by qrcode) to fit this box.
                     dangerouslySetInnerHTML={{ __html: qrSvg }}
                   />
                   <button
@@ -186,6 +192,28 @@ export function MarketingKitCard({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {feedStatus && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-block h-2 w-2 rounded-full ${
+                    feedStatus.inFeed ? "bg-green-500" : "bg-gray-300"
+                  }`}
+                />
+                <span className="text-xs font-medium text-gray-700">
+                  {feedStatus.inFeed
+                    ? "Syndicating to rental aggregators"
+                    : "Not in the aggregator feed yet"}
+                </span>
+              </div>
+              <p className="mt-1 pl-4 text-[11px] text-gray-500">
+                {feedStatus.inFeed
+                  ? "This rental is included in your listing feed for Rentals.ca, Zumper, and partner sites - no posting needed."
+                  : feedStatus.hint}
+              </p>
             </div>
           )}
         </div>

@@ -50,6 +50,7 @@ import { buildAllFillSheets } from "@/lib/listing-fill-sheet";
 import { FillSheetCard } from "./fill-sheet-card";
 import { DropboxFolderImport } from "./dropbox-folder-import";
 import { buildShareReadiness } from "@/lib/share-readiness";
+import { feedSignal } from "@/lib/rental-readiness";
 import {
   sortPhotos,
   uploadErrorMessage,
@@ -633,6 +634,24 @@ export default async function PropertyDetailPage({
       ? await qrSvg(marketingLandingUrl)
       : null;
   const marketingQrFilename = qrFilename(p.address);
+  // Slice A2: the same aggregator-feed status the rentals list shows, surfaced
+  // in the kit so the landlord sees this rental is already syndicating (or why
+  // not). Reuses feedSignal — one source of truth. Only when entitled.
+  const marketingFeedSignal = marketingEnabled
+    ? feedSignal({
+        status: p.status,
+        rentCents: p.rent_cents,
+        beds: p.beds,
+        baths: typeof p.baths === "number" ? p.baths : null,
+        address: p.address,
+        description: p.description,
+        photoCount: photoRows.length,
+        availabilityWindowCount: 0,
+      })
+    : null;
+  const marketingFeedStatus = marketingFeedSignal
+    ? { inFeed: marketingFeedSignal.ok, hint: marketingFeedSignal.hint }
+    : null;
 
   // Field-by-field "fill sheet" per portal (S262, syndication step 2). Same
   // listing input as the channel copy (title + body are reused from it), plus
@@ -1059,6 +1078,7 @@ export default async function PropertyDetailPage({
         combinedText={marketingKit.combinedText}
         postChecklist={marketingKit.postChecklist}
         qrFilename={marketingQrFilename}
+        feedStatus={marketingFeedStatus}
       />
 
       {/* --- Listing copy for each channel --- */}

@@ -134,7 +134,10 @@ function viewingsSignal(windowCount: number): ReadinessSignal {
   };
 }
 
-function feedSignal(input: RentalReadinessInput): ReadinessSignal {
+// Exported so the listing-marketing kit (S388) can show the same "is this
+// rental in the aggregator feed" status the rentals list shows, from the one
+// source of truth (the list, the detail kit, and the feed RPC never disagree).
+export function feedSignal(input: RentalReadinessInput): ReadinessSignal {
   // Only Live (available) rentals syndicate — mirror the feed RPC's status gate
   // (FEED_LISTABLE_STATUS). A leased/paused/draft rental is intentionally NOT
   // in the feed, so report it as a muted state, not an error.
