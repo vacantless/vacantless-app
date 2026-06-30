@@ -141,3 +141,70 @@ export function isoDaysBetween(fromIso: string, toIso: string): number | null {
   if (a === null || b === null) return null;
   return Math.round((b - a) / 86_400_000);
 }
+
+// ---------------------------------------------------------------------------
+// Post-showing outcome nudge (S391, Slice 1)
+//
+// 94 of our showings booked but only 1 ever had its outcome recorded: logging an
+// outcome is a PULL nobody does, so the back half of the funnel is dark. This
+// turns it into a PUSH — once a showing's time has passed with no outcome, the
+// operator gets ONE "how did the viewing go?" email with a one-tap
+// Attended/No-show/Cancelled link (mirroring the alert-email-link habit).
+//
+// The decision is pure + catch-up safe. A showing earns its single nudge when:
+//   - it is actually over: now >= scheduled_at + GRACE (a viewing plus slack), and
+//   - it is recent: now <= scheduled_at + MAX_AGE, so turning the flag on does
+//     not blast months of historical blank showings, and
+//   - no real outcome is recorded yet (null or the placeholder "scheduled"), and
+//   - the nudge has not already been sent (one stamp, one nudge).
+// The cron stamps outcome_nudge_sent_at after a successful send, so re-running
+// the sweep never double-sends; an infrequent cron still catches it because the
+// window is an elapsed-time band, not a narrow instant.
+// ---------------------------------------------------------------------------
+
+// A viewing is ~30 min; wait 2h after the start so it is genuinely over before
+// asking how it went.
+export const OUTCOME_NUDGE_GRACE_MS = 2 * HOUR_MS;
+// Only nudge showings whose time passed within the last 7 days — bounds the
+// first-enable backlog and avoids chasing stale showings forever.
+export const OUTCOME_NUDGE_MAX_AGE_MS = 7 * 24 * HOUR_MS;
+
+export type OutcomeNudgeDueInput = {
+  scheduledAtMs: number;
+  nowMs: number;
+  outcome: string | null; // showings.outcome — null or "scheduled" means "not recorded"
+  alreadySent: boolean; // outcome_nudge_sent_at is set
+  graceMs?: number;
+  maxAgeMs?: number;
+};
+
+/**
+ * Should this showing get its (single) outcome nudge right now?
+ *
+ *   - alreadySent                         → false (one nudge per showing)
+ *   - a real outcome recorded             → false (attended/no_show/cancelled)
+ *   - elapsed < GRACE                     → false (not over yet)
+ *   - elapsed > MAX_AGE                    → false (too old; backlog bound)
+ *   - otherwise                           → true
+ *
+ * elapsed = now - scheduled_at. Boundaries are inclusive: due exactly at GRACE
+ * and still due exactly at MAX_AGE.
+ */
+export function outcomeNudgeDue(input: OutcomeNudgeDueInput): boolean {
+  const {
+    scheduledAtMs,
+    nowMs,
+    outcome,
+    alreadySent,
+    graceMs = OUTCOME_NUDGE_GRACE_MS,
+    maxAgeMs = OUTCOME_NUDGE_MAX_AGE_MS,
+  } = input;
+  if (alreadySent) return false;
+  if (outcome !== null && outcome !== "scheduled") return false; // outcome already recorded
+  const elapsed = nowMs - scheduledAtMs;
+  if (elapsed < graceMs) return false; // not over yet
+  if (elapsed > maxAgeMs) return false; // too old
+  return true;
+}
+
+export const OUTCOME_NUDGE_SENT_COLUMN = "outcome_nudge_sent_at";

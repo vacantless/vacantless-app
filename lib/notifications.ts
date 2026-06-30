@@ -233,6 +233,28 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     active: true,
     defaultAccent: "#dc2626",
   },
+  // Post-showing outcome nudge (S391). Audience operator; the push half of the
+  // showing funnel — once a showing's time has passed with no outcome recorded,
+  // the operator gets ONE "how did the viewing go?" email with a one-tap
+  // {{outcome_url}} (Attended / No-show / Cancelled), so recording an outcome
+  // stops being a pull nobody does. SHIP DARK: opt-in per org (the cron requires
+  // an explicit enabled override via isDripEnqueueEnabled), so nothing fires
+  // until the operator turns it on. The one-tap page records via POST (never a
+  // GET side-effect) so email link-scanners can't auto-record. Wired by the cron
+  // in a later slice; registered here so Settings can surface + route it per org.
+  {
+    key: "leasing.showing_outcome_nudge",
+    family: "leasing",
+    audience: "operator",
+    label: "Post-showing outcome reminder",
+    description:
+      "After a viewing's time passes with no outcome recorded, your team gets a one-tap reminder to mark it Attended, No-show, or Cancelled — so your pipeline stays accurate and attended viewings advance automatically. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "lead_name", "showing_time", "outcome_url"],
+    defaultSubject: "How did the viewing go? - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nTap to record it - Attended, No-show, or Cancelled: {{outcome_url}}\n\nMarking it Attended advances the lead automatically and keeps your pipeline accurate.",
+    active: true,
+  },
   // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the
   // scheduled daily Zap 365197456). Audience operator; ONE email per weekday at
   // start-of-shift summarizing four buckets, not one-per-event. The scheduled
