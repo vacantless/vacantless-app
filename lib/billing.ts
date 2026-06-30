@@ -93,7 +93,13 @@ export type PlanFeature =
   // Repair-scheduling appointment reminders (S387, Slice 4): the SMS leg of the
   // 1-day / same-day tenant appointment reminder. Premium+ (per-message SMS cost),
   // mirroring capture_text_in — the email/in-app legs need no entitlement.
-  | "repair_sms";
+  | "repair_sms"
+  // Listing-marketing kit (S388, Tier A): the self-serve promotion kit for an
+  // active rental listing — packaged per-channel copy + the /r landing link + a
+  // QR + syndication surfacing. Growth+ (a paid convenience that monetizes the
+  // listing-copy / feed plumbing). The kit surface enforces this; it never runs
+  // or pays for an ad (that is the later Tier B done-for-you boost).
+  | "listing_marketing";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -107,6 +113,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "capture_email_in",
   "capture_text_in",
   "repair_sms",
+  "listing_marketing",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -125,6 +132,7 @@ function noEntitlements(): PlanEntitlements {
     capture_email_in: false,
     capture_text_in: false,
     repair_sms: false,
+    listing_marketing: false,
   };
 }
 
@@ -154,13 +162,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false },
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false }, // Plaid feed; tenant intake (Slices 1-4); email-in capture
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -238,6 +246,16 @@ export function canUseCaptureTextIn(plan: string | null | undefined): boolean {
 // this server-side before texting the tenant; email always sends regardless.
 export function canUseRepairSms(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "repair_sms");
+}
+
+// Whether this plan may use the listing-marketing kit (S388, Tier A): the
+// self-serve promotion package for an active listing (per-channel copy + the
+// /r landing link + a QR + syndication surfacing). Growth+ — a paid convenience
+// over the existing listing-copy / feed plumbing. The kit surface enforces this
+// server-side; an ungated plan sees the locked upsell, never the kit payload.
+// NB: this gates the SELF-SERVE kit only; it never runs or pays for an ad.
+export function canUseListingMarketing(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "listing_marketing");
 }
 
 // --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------

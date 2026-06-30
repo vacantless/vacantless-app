@@ -43,6 +43,9 @@ import {
   copyPortalLabel,
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
+import { MarketingKitCard } from "./marketing-kit-card";
+import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
+import { qrSvg } from "@/lib/qr-svg";
 import { buildAllFillSheets } from "@/lib/listing-fill-sheet";
 import { FillSheetCard } from "./fill-sheet-card";
 import { DropboxFolderImport } from "./dropbox-folder-import";
@@ -53,7 +56,11 @@ import {
 } from "@/lib/photos";
 import { importUrlErrorMessage } from "@/lib/image-url-import";
 import { dropboxImportErrorMessage } from "@/lib/dropbox-import";
-import { photoCapForPlan, storageUpsellNote } from "@/lib/billing";
+import {
+  photoCapForPlan,
+  storageUpsellNote,
+  canUseListingMarketing,
+} from "@/lib/billing";
 import { CopyLink } from "./copy-link";
 import {
   countEligible,
@@ -606,6 +613,27 @@ export default async function PropertyDetailPage({
   // instead of shipping a field-summary ad.
   const descriptionThin = (p.description ?? "").trim().length < 40;
 
+  // --- Marketing kit (S388, Tier A) ---------------------------------------
+  // The paid promotion PACKAGE: bundle the per-channel copy + the public landing
+  // link + a QR + a where-to-post checklist. Gated on listing_marketing (Growth+)
+  // — the card renders a locked upsell for ungated plans, so we always build the
+  // kit (cheap, pure) and let the entitlement decide what the card reveals.
+  const marketingEnabled = canUseListingMarketing(org?.plan ?? null);
+  const marketingLandingUrl = linkIsLive ? publicUrl : null;
+  const marketingKit = buildMarketingKit({
+    businessName: org?.name ?? null,
+    address: p.address,
+    landingUrl: marketingLandingUrl,
+    channels: copyTabs,
+  });
+  // The QR encodes the public landing link; skip generation when unentitled or
+  // not Live (no link to encode). qrSvg never throws (returns null on failure).
+  const marketingQrSvg =
+    marketingEnabled && marketingLandingUrl
+      ? await qrSvg(marketingLandingUrl)
+      : null;
+  const marketingQrFilename = qrFilename(p.address);
+
   // Field-by-field "fill sheet" per portal (S262, syndication step 2). Same
   // listing input as the channel copy (title + body are reused from it), plus
   // the inquiry contact a couple of portals make you re-enter per listing
@@ -1021,6 +1049,17 @@ export default async function PropertyDetailPage({
           </div>
         )}
       </div>
+
+      {/* --- Marketing kit (Tier A, Growth+) --- */}
+      <MarketingKitCard
+        locked={!marketingEnabled}
+        notLive={!linkIsLive}
+        landingUrl={marketingKit.landingUrl}
+        qrSvg={marketingQrSvg}
+        combinedText={marketingKit.combinedText}
+        postChecklist={marketingKit.postChecklist}
+        qrFilename={marketingQrFilename}
+      />
 
       {/* --- Listing copy for each channel --- */}
       <ListingCopyCard

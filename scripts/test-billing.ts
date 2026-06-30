@@ -32,6 +32,7 @@ import {
   canUseCaptureEmailIn,
   canUseCaptureTextIn,
   canUseRepairSms,
+  canUseListingMarketing,
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
@@ -451,7 +452,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 11 features", PLAN_FEATURES.length === 11);
+ok("PLAN_FEATURES has 12 features", PLAN_FEATURES.length === 12);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -504,6 +505,14 @@ ok("repair_sms: premium true (upper tier)", canUseRepairSms("premium") === true)
 ok("repair_sms: pilot true (full access)", canUseRepairSms("pilot") === true);
 ok("repair_sms: trial false", canUseRepairSms("trial") === false);
 ok("repair_sms: null false", canUseRepairSms(null) === false);
+
+ok("listing_marketing: free false", canUseListingMarketing("free") === false);
+ok("listing_marketing: growth true (paid convenience)", canUseListingMarketing("growth") === true);
+ok("listing_marketing: premium true", canUseListingMarketing("premium") === true);
+ok("listing_marketing: pilot true (full access)", canUseListingMarketing("pilot") === true);
+ok("listing_marketing: core false (legacy non-marketing)", canUseListingMarketing("core") === false);
+ok("listing_marketing: trial false", canUseListingMarketing("trial") === false);
+ok("listing_marketing: null false", canUseListingMarketing(null) === false);
 
 // --- incident_intake (Growth & up; Option B Slices 1-4) --------------------
 ok("incident_intake: growth true", hasEntitlement("growth", "incident_intake") === true);
