@@ -22,6 +22,9 @@ name: Vacantless background sweeps
 #   * /api/cron/appointment-reminder — repair-appointment reminders to the tenant
 #     (day-before + same-day) off a confirmed work_order_appointments row; opt-in
 #     per org+event, self-gates via the per-channel reminder_* stamp columns
+#   * /api/cron/showing-outcome-nudge — one "how did the viewing go?" email to the
+#     operator once a showing's time passes with no outcome recorded; opt-in per
+#     org+event, one nudge per showing via the outcome_nudge_sent_at stamp
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -124,4 +127,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/appointment-reminder" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger showing-outcome-nudge sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/showing-outcome-nudge" \
             -w "\nHTTP %{http_code}\n"
