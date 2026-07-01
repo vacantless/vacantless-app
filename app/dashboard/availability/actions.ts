@@ -134,8 +134,17 @@ export async function addDayOff(formData: FormData) {
   const parsed = new Date(`${day}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime())) return;
   if (parsed.toISOString().slice(0, 10) !== day) return; // normalized mismatch => invalid
-  const todayUtc = new Date().toISOString().slice(0, 10);
-  if (day < todayUtc) return;
+  // Compare against "today" in the org's booking timezone, matching the UI's
+  // date-input minimum (page.tsx todayKey). Using UTC here would, in North
+  // American evening hours, reject a valid same-local-day blackout the UI still
+  // offers (UTC has already rolled to tomorrow).
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: org.booking_timezone || "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  if (day < todayKey) return;
 
   const supabase = createClient();
   // Idempotent: the unique (organization_id, day) index means a repeat add is a
