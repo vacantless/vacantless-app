@@ -6,6 +6,8 @@ import {
   updateClusteringSettings,
   addAvailabilityWindow,
   deleteAvailabilityWindow,
+  addDayOff,
+  removeDayOff,
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -46,20 +48,25 @@ export default async function AvailabilityPage() {
   const org = await getCurrentOrg();
   const supabase = createClient();
 
-  const [{ data: orgRow }, { data: rulesData }] = await Promise.all([
-    supabase
-      .from("organizations")
-      .select(
-        "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
-      )
-      .eq("id", org?.id ?? "")
-      .maybeSingle(),
-    supabase
-      .from("availability_rules")
-      .select("id, weekday, start_minute, end_minute")
-      .order("weekday")
-      .order("start_minute"),
-  ]);
+  const [{ data: orgRow }, { data: rulesData }, { data: daysOffData }] =
+    await Promise.all([
+      supabase
+        .from("organizations")
+        .select(
+          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
+        )
+        .eq("id", org?.id ?? "")
+        .maybeSingle(),
+      supabase
+        .from("availability_rules")
+        .select("id, weekday, start_minute, end_minute")
+        .order("weekday")
+        .order("start_minute"),
+      supabase
+        .from("availability_days_off")
+        .select("id, day")
+        .order("day"),
+    ]);
 
   const cfg = (orgRow as OrgBooking) ?? {
     booking_timezone: "America/Toronto",
@@ -71,6 +78,26 @@ export default async function AvailabilityPage() {
     showing_block_capacity: 6,
   };
   const rules = (rulesData ?? []) as Rule[];
+
+  // Days off (date-specific blackouts). Only show today-or-later dates in the
+  // org timezone; a passed blackout is history and can't affect a bookable day.
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: cfg.booking_timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const daysOff = ((daysOffData ?? []) as { id: string; day: string }[]).filter(
+    (d) => d.day >= todayKey,
+  );
+  const fmtDayOff = (day: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(`${day}T00:00:00Z`));
 
   const byDay = new Map<number, Rule[]>();
   for (const r of rules) {
@@ -451,6 +478,63 @@ export default async function AvailabilityPage() {
           </label>
           <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
             Add window
+          </button>
+        </form>
+      </div>
+
+      {/* Days off (date-specific blackouts) */}
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+          Days off
+        </h3>
+        <p className="mb-4 mt-1 text-sm text-gray-500">
+          Block a specific date on top of your weekly schedule, for a day you
+          can&rsquo;t do viewings. Your weekly windows stay as they are; only the
+          dates you add here are closed. Use this for a day off that changes week
+          to week instead of removing a whole weekday.
+        </p>
+
+        {daysOff.length === 0 ? (
+          <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            No days off scheduled. Add one below to close that date for viewings.
+          </div>
+        ) : (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {daysOff.map((d) => (
+              <form key={d.id} action={removeDayOff} className="inline-flex">
+                <input type="hidden" name="id" value={d.id} />
+                <button
+                  title="Remove this day off"
+                  className="group inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-sm text-gray-700 hover:border-red-300 hover:bg-red-50"
+                >
+                  {fmtDayOff(d.day)}
+                  <span className="text-gray-400 group-hover:text-red-500">
+                    ✕
+                  </span>
+                </button>
+              </form>
+            ))}
+          </div>
+        )}
+
+        <form
+          action={addDayOff}
+          className="flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4"
+        >
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-gray-500">
+              Date off
+            </span>
+            <input
+              name="day"
+              type="date"
+              required
+              min={todayKey}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
+            Add day off
           </button>
         </form>
       </div>

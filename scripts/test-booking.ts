@@ -206,5 +206,22 @@ eq("window shorter than a slot yields none", previewSlotStarts(600, 615, 30).len
     wed?.slots.length, previewSlotStarts(600, 720, 30).length);
 }
 
+// --- days off (date-specific blackouts, S398) -----------------------------
+// baseAv is open every Wednesday 10:00-12:00; within horizon from `now`
+// (Mon 2026-06-29) the matching Wednesdays are 2026-07-01 and 2026-07-08.
+const withDayOff = generateSlots({ ...baseAv, days_off: ["2026-07-01"] }, now);
+ok("day off removes exactly that date",
+  !withDayOff.some((d) => d.dayKey === "2026-07-01"));
+ok("day off leaves the other matching weekday open",
+  withDayOff.some((d) => d.dayKey === "2026-07-08"));
+ok("empty days_off is a passthrough (same day count)",
+  generateSlots({ ...baseAv, days_off: [] }, now).length === offDays.length);
+ok("undefined days_off is a passthrough (same day count)",
+  generateSlots({ ...baseAv }, now).length === offDays.length);
+ok("isValidSlot rejects a slot on a day off",
+  !isValidSlot({ ...baseAv, days_off: ["2026-07-01"] }, "2026-07-01T10:00:00.000Z", now));
+ok("isValidSlot still accepts the same weekday when not blocked",
+  isValidSlot({ ...baseAv, days_off: ["2026-07-01"] }, "2026-07-08T10:00:00.000Z", now));
+
 console.log(`\nbooking: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -117,3 +117,47 @@ export async function deleteAvailabilityWindow(formData: FormData) {
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
 }
+
+// Date-specific day off (S398). Blocks a single calendar date on top of the
+// recurring weekly windows — for a rotating day off (e.g. an operator's second
+// job) that changes week to week, so removing the whole weekday would be wrong.
+export async function addDayOff(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+
+  const day = String(formData.get("day") ?? "").trim();
+  // Accept only a real YYYY-MM-DD calendar date, today or later (a past
+  // blackout can never affect a bookable slot). Round-trip through Date to
+  // reject impossible dates like 2026-02-30.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+  const parsed = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return;
+  if (parsed.toISOString().slice(0, 10) !== day) return; // normalized mismatch => invalid
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  if (day < todayUtc) return;
+
+  const supabase = createClient();
+  // Idempotent: the unique (organization_id, day) index means a repeat add is a
+  // no-op rather than an error. RLS scopes the write to the caller's org.
+  await supabase
+    .from("availability_days_off")
+    .upsert(
+      { organization_id: org.id, day },
+      { onConflict: "organization_id,day", ignoreDuplicates: true },
+    );
+
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard");
+}
+
+export async function removeDayOff(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+  const supabase = createClient();
+  // RLS scopes the delete to the caller's org.
+  await supabase.from("availability_days_off").delete().eq("id", id);
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard");
+}

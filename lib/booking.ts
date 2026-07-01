@@ -25,6 +25,11 @@ export type Availability = {
   horizon_days: number;
   rules: AvailabilityRule[];
   booked: string[]; // ISO timestamps already taken
+  // Operator days off (date-specific blackouts), YYYY-MM-DD in the org tz. Any
+  // calendar day whose key is in this set produces no slots — the recurring
+  // weekly rules still stand, this just subtracts specific dates (e.g. a
+  // rotating day off). Absent/empty = no dates blocked.
+  days_off?: string[];
   // --- Showing clustering ("Hero blocks"), all optional / opt-in ---
   clustering_enabled?: boolean;
   clustering_buffer_minutes?: number; // how far adjacent slots may extend an anchor
@@ -151,6 +156,9 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
   const booked = new Set(
     (av.booked || []).map((b) => new Date(b).getTime()),
   );
+  // Date-specific operator days off (YYYY-MM-DD in the org tz). A day whose key
+  // is here is skipped entirely, no matter what the weekly rules offer.
+  const daysOff = new Set(av.days_off || []);
 
   // Rules grouped by weekday for quick lookup.
   const byWeekday = new Map<number, AvailabilityRule[]>();
@@ -168,6 +176,8 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
   for (let d = 0; d <= horizon; d++) {
     const anchorMs = now.getTime() + d * 86_400_000;
     const { year, month, day, weekday } = ymdInTz(anchorMs, tz);
+    const dayKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (daysOff.has(dayKey)) continue; // operator blocked this specific date
     const rules = byWeekday.get(weekday);
     if (!rules || rules.length === 0) continue;
 
@@ -191,7 +201,7 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
       .sort((a, b) => a.iso.localeCompare(b.iso));
 
     days.push({
-      dayKey: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      dayKey,
       dayLabel: fmtDay(anchorMs, tz),
       slots: unique,
     });
