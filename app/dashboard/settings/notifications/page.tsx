@@ -33,18 +33,34 @@ const DEFAULT_ACCENT = "#0f172a";
 
 export const dynamic = "force-dynamic";
 
+// The TRUE inquiry/viewing operator events - a new inquiry, the post-showing
+// outcome nudge, and the daily leads/showings digest. These are the only leasing
+// operator events whose empty-recipients fallback should read "members who manage
+// inquiries". The rest of the `leasing` family that reaches an operator is
+// landlord/compliance/asset reminders (rent increase, insurance review, detector /
+// equipment EOL, appliance warranty, inspections, ...) which do NOT route through
+// inquiry managers - those take the neutral "manage this account" hint.
+const INQUIRY_OPERATOR_EVENTS = new Set<string>([
+  "leasing.new_lead",
+  "leasing.showing_outcome_nudge",
+  "leasing.daily_snapshot",
+]);
+
 // Hint under the recipients field. For operator events the default-recipient
-// wording is FAMILY-aware: a leasing event (new inquiry, post-showing nudge, ...)
-// is renter/inquiry work, so its empty-recipients fallback should read "members
-// who manage inquiries" — not "manage maintenance", which is the dispatch family's
-// mental model and wrongly implied leasing runs through the maintenance path.
+// wording is EVENT-aware, not just family-aware: dispatch (maintenance) events say
+// "manage maintenance"; genuine inquiry/viewing events say "manage inquiries"; every
+// other leasing operator event (compliance/asset/landlord reminders) uses a neutral
+// team hint so it never implies compliance reminders route to inquiry managers.
 // trade/tenant hints are audience-only and unchanged.
 function audienceHint(event: NotificationEvent): string {
   switch (event.audience) {
     case "operator":
-      return event.family === "leasing"
+      if (event.family === "dispatch") {
+        return "Goes to your team. If you leave recipients empty, it goes to members who manage maintenance.";
+      }
+      return INQUIRY_OPERATOR_EVENTS.has(event.key)
         ? "Goes to your team. If you leave recipients empty, it goes to members who manage inquiries."
-        : "Goes to your team. If you leave recipients empty, it goes to members who manage maintenance.";
+        : "Goes to your team. If you leave recipients empty, it goes to members who manage this account.";
     case "trade":
       return "Always goes to the trade on the job. Anyone you add below is cc'd as well.";
     case "tenant":
