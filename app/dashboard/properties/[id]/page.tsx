@@ -748,6 +748,8 @@ export default async function PropertyDetailPage({
   const lifecycle = deriveRentalLifecycle(p.id, {
     propertyStatus: normalizePropertyStatus(p.status),
     hasRent: (p.rent_cents ?? 0) > 0,
+    bedsSet: p.beds != null,
+    bathsSet: p.baths != null,
     photoCount: photoRows.length,
     listingPostCount: postRows.length,
     hasAvailability: (availabilityCount ?? 0) > 0,

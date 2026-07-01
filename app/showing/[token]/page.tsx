@@ -75,7 +75,7 @@ export default async function ShowingOutcomePage({
   const brandBg = brandGradientCss(row.organization?.brand_color, row.organization?.brand_color_secondary);
   const tz = row.organization?.booking_timezone || "America/Toronto";
 
-  const leadName = row.lead?.name?.trim() || "this prospect";
+  const leadName = row.lead?.name?.trim() || "this renter";
   const address = row.property?.address?.trim() || "the property";
   const when = fmtWhen(row.scheduled_at, tz);
 
@@ -115,8 +115,8 @@ export default async function ShowingOutcomePage({
               </p>
               <p className="mt-4 text-sm text-gray-600">
                 {row.outcome === "attended"
-                  ? "The prospect has been advanced in your pipeline. You can close this page."
-                  : "Your pipeline is up to date. You can close this page."}
+                  ? "This renter has been moved forward in your renter list. You can close this page."
+                  : "Your renter list is up to date. You can close this page."}
               </p>
               <div className="mt-6 border-t border-gray-100 pt-5">
                 <p className="text-xs text-gray-500">Picked the wrong one? Change it:</p>

@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -13,11 +14,123 @@ import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import { resolveLeadNotifyEmails, formatLeadScreeningBlock } from "@/lib/leads-notify";
+import { buildTrackedLink } from "@/lib/listing-distribution";
 import type { NotifyMember } from "@/lib/incident-reports";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 const MAX_LEAD_NOTIFY_RECIPIENTS = 10;
+
+// A slot-taken retry (P2c, Best-In-Class QA 2026-07-01) must let the renter pick
+// another time WITHOUT re-submitting personal details (which would create a
+// duplicate lead). We remember the just-saved lead id server-side in a
+// short-lived, httpOnly, per-property cookie — never in the URL — so the retry
+// books against the SAME lead with no IDOR surface (the renter can only rebook
+// the lead we saved for their own session). Cleared once a viewing is booked.
+const SAVED_LEAD_COOKIE_TTL_S = 30 * 60; // 30 minutes
+function savedLeadCookieName(propertyId: string): string {
+  return `vl_lead_${propertyId}`;
+}
+
+// Preserve the tracked-post attribution (?p=) across every redirect so a
+// slot-taken retry (or a refresh of the confirmation) never loses the source.
+// Reuses the canonical tracked-link builder (lib/listing-distribution) rather
+// than re-deriving the append rule.
+function withTracking(path: string, listingPostId: string): string {
+  return buildTrackedLink(path, listingPostId);
+}
+
+// The booking side effect shared by the first submit and the slot-taken retry:
+// re-validate the chosen slot against LIVE availability, book it, and fire the
+// confirmation email (+ SMS when enabled). Pure of the lead-capture concern, so
+// the retry path can reuse it without re-inserting a lead. Returns which of the
+// two terminal states happened; a non-slot booking error surfaces as slotTaken
+// ("pick another time"), matching the original inline behaviour.
+async function attemptBooking(
+  supabase: ReturnType<typeof createClient>,
+  leadId: string,
+  propertyId: string,
+  slot: string,
+): Promise<{ booked: boolean; slotTaken: boolean }> {
+  let booked = false;
+  let slotTaken = false;
+  try {
+    const { data: avData } = await supabase.rpc("get_public_availability", {
+      p_property_id: propertyId,
+    });
+    const av = avData as Availability | null;
+
+    if (av && !isValidSlot(av, slot)) {
+      slotTaken = true;
+    } else if (av && isValidSlot(av, slot)) {
+      const { data: bookData, error: bookErr } = await supabase.rpc(
+        "book_public_showing",
+        { p_lead_id: leadId, p_property_id: propertyId, p_slot: slot },
+      );
+      if (bookErr) {
+        slotTaken = true;
+      }
+      if (!bookErr && bookData) {
+        booked = true;
+        const b = bookData as {
+          scheduled_at: string;
+          timezone: string | null;
+          org_name: string | null;
+          brand_color: string | null;
+          logo_url: string | null;
+          reply_to_email: string | null;
+          property_address: string | null;
+          renter_name: string | null;
+          renter_email: string | null;
+          sms_enabled?: boolean | null;
+          renter_phone?: string | null;
+          sms_opt_out?: boolean | null;
+        };
+        const whenLabel = formatSlotLong(
+          b.scheduled_at,
+          b.timezone || "America/Toronto",
+        );
+        const result = await sendBookingConfirmation({
+          lead_id: leadId,
+          renter_name: b.renter_name,
+          renter_email: b.renter_email,
+          org_name: b.org_name,
+          brand_color: b.brand_color,
+          logo_url: b.logo_url,
+          reply_to_email: b.reply_to_email,
+          property_address: b.property_address,
+          when_label: whenLabel,
+        });
+        if (result.sent) {
+          await supabase.rpc("record_booking_email", {
+            p_lead_id: leadId,
+            p_to: b.renter_email,
+            p_subject: result.subject ?? null,
+          });
+        }
+        if (b.sms_enabled && b.renter_phone && !b.sms_opt_out) {
+          const sms = await sendSms({
+            to: b.renter_phone,
+            body: bookingConfirmationSms({
+              org_name: b.org_name,
+              property_address: b.property_address,
+              when_label: whenLabel,
+            }),
+          });
+          if (sms.sent) {
+            await supabase.rpc("record_booking_sms", {
+              p_lead_id: leadId,
+              p_to: b.renter_phone,
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // swallow — the lead is saved; the caller falls back appropriately.
+  }
+  return { booked, slotTaken };
+}
 
 // Notify the org's leasing team that a new lead came in — the first
 // Agile→Vacantless teardown event (replaces Zap 362007976). Runs on the anon
@@ -167,16 +280,24 @@ export async function submitLead(formData: FormData) {
   });
 
   if (error) {
-    const keep = listingPostId
-      ? `&p=${encodeURIComponent(listingPostId)}`
-      : "";
-    redirect(`/r/${propertyId}?error=1${keep}`);
+    redirect(withTracking(`/r/${propertyId}?error=1`, listingPostId));
   }
 
   const payload = data as AutoReplyPayload | null;
   if (!payload?.lead_id) {
-    redirect(`/r/${propertyId}?submitted=1`);
+    redirect(withTracking(`/r/${propertyId}?submitted=1`, listingPostId));
   }
+
+  // Remember this lead server-side (httpOnly, per-property, short-lived) so a
+  // slot-taken retry can rebook WITHOUT re-collecting details or duplicating the
+  // lead (P2c). Set before any redirect (redirect() throws).
+  cookies().set(savedLeadCookieName(propertyId), payload.lead_id, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: `/r/${propertyId}`,
+    maxAge: SAVED_LEAD_COOKIE_TTL_S,
+  });
 
   // Tell the leasing team a new lead landed (best-effort; never blocks the
   // renter). Fires regardless of whether they also booked a showing below.
@@ -191,100 +312,9 @@ export async function submitLead(formData: FormData) {
 
   // --- Booking path -------------------------------------------------------
   if (slot) {
-    let booked = false;
-    try {
-      // Re-validate the chosen slot server-side against live availability
-      // before booking (the RPC additionally guards recency + double-booking).
-      const { data: avData } = await supabase.rpc("get_public_availability", {
-        p_property_id: propertyId,
-      });
-      const av = avData as Availability | null;
-
-      if (av && !isValidSlot(av, slot)) {
-        // The slot is no longer offered (taken / fell outside the window since
-        // the page loaded). Tell the renter rather than silently dropping it.
-        slotTaken = true;
-      } else if (av && isValidSlot(av, slot)) {
-        const { data: bookData, error: bookErr } = await supabase.rpc(
-          "book_public_showing",
-          {
-            p_lead_id: payload.lead_id,
-            p_property_id: propertyId,
-            p_slot: slot,
-          },
-        );
-        // The RPC raises 'That time was just taken' on the unique-violation race
-        // (two renters, same instant). Any booking error after the slot passed
-        // re-validation means the time is gone, so surface the pick-another state.
-        if (bookErr) {
-          slotTaken = true;
-        }
-        if (!bookErr && bookData) {
-          booked = true;
-          const b = bookData as {
-            scheduled_at: string;
-            timezone: string | null;
-            org_name: string | null;
-            brand_color: string | null;
-            logo_url: string | null;
-            reply_to_email: string | null;
-            property_address: string | null;
-            renter_name: string | null;
-            renter_email: string | null;
-            sms_enabled?: boolean | null;
-            renter_phone?: string | null;
-            sms_opt_out?: boolean | null;
-          };
-          const whenLabel = formatSlotLong(
-            b.scheduled_at,
-            b.timezone || "America/Toronto",
-          );
-          const result = await sendBookingConfirmation({
-            lead_id: payload.lead_id,
-            renter_name: b.renter_name,
-            renter_email: b.renter_email,
-            org_name: b.org_name,
-            brand_color: b.brand_color,
-            logo_url: b.logo_url,
-            reply_to_email: b.reply_to_email,
-            property_address: b.property_address,
-            when_label: whenLabel,
-          });
-          if (result.sent) {
-            await supabase.rpc("record_booking_email", {
-              p_lead_id: payload.lead_id,
-              p_to: b.renter_email,
-              p_subject: result.subject ?? null,
-            });
-          }
-
-          // Parallel booking-confirmation SMS, when the org has SMS on and the
-          // renter left a usable number AND has not opted out (a prior STOP for
-          // this number is inherited onto the new lead at creation). Best-effort
-          // (no_credentials until Twilio is configured); the renter just
-          // consented by booking.
-          if (b.sms_enabled && b.renter_phone && !b.sms_opt_out) {
-            const sms = await sendSms({
-              to: b.renter_phone,
-              body: bookingConfirmationSms({
-                org_name: b.org_name,
-                property_address: b.property_address,
-                when_label: whenLabel,
-              }),
-            });
-            if (sms.sent) {
-              await supabase.rpc("record_booking_sms", {
-                p_lead_id: payload.lead_id,
-                p_to: b.renter_phone,
-              });
-            }
-          }
-        }
-      }
-    } catch {
-      // swallow — the lead is saved; fall through to the auto-reply below.
-    }
-    outcome = booked ? "booked" : "booking_failed";
+    const r = await attemptBooking(supabase, payload.lead_id, propertyId, slot);
+    slotTaken = r.slotTaken;
+    outcome = r.booked ? "booked" : "booking_failed";
   }
 
   // --- Auto-reply path (no slot, or booking failed) -----------------------
@@ -303,7 +333,48 @@ export async function submitLead(formData: FormData) {
     }
   }
 
+  // A booked viewing closes the retry loop — drop the saved-lead cookie.
+  if (outcome === "booked") {
+    cookies().delete(savedLeadCookieName(propertyId));
+  }
+
   const submittedState =
     outcome === "booked" ? "booked" : slotTaken ? "slottaken" : "1";
-  redirect(`/r/${propertyId}?submitted=${submittedState}`);
+  redirect(
+    withTracking(`/r/${propertyId}?submitted=${submittedState}`, listingPostId),
+  );
+}
+
+// Slot-taken retry (P2c): book another time against the lead we already saved,
+// WITHOUT re-collecting personal details or creating a duplicate lead. The lead
+// id comes from the httpOnly per-property cookie set on the first submit — never
+// from the client — so a renter can only rebook their own saved inquiry. Falls
+// back to the full inquiry form if the cookie is gone (expired / cleared).
+export async function rebookSavedLead(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const slot = String(formData.get("slot") ?? "").trim();
+  const listingPostId = String(formData.get("listing_post_id") ?? "").trim();
+
+  const cookieName = savedLeadCookieName(propertyId);
+  const leadId = cookies().get(cookieName)?.value ?? "";
+  if (!leadId) {
+    // No saved lead (cookie expired/cleared) — send them to the full form.
+    redirect(withTracking(`/r/${propertyId}`, listingPostId));
+  }
+  if (!slot) {
+    redirect(
+      withTracking(`/r/${propertyId}?submitted=slottaken`, listingPostId),
+    );
+  }
+
+  const supabase = createClient();
+  const { booked } = await attemptBooking(supabase, leadId, propertyId, slot);
+
+  if (booked) {
+    cookies().delete(cookieName);
+    redirect(withTracking(`/r/${propertyId}?submitted=booked`, listingPostId));
+  }
+  // Still taken (or a race) — keep the cookie so they can try yet another time.
+  redirect(withTracking(`/r/${propertyId}?submitted=slottaken`, listingPostId));
 }

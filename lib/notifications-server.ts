@@ -18,6 +18,14 @@
 // succeeded, so a mail failure (or a missing BREVO key) must never fail or
 // reverse the transition (the Slice 4 notifyOperatorsOfNewReport posture). It
 // also short-circuits silently when the event is off or has no recipients.
+//
+// It DOES return a best-effort delivery report (SendOrgNotificationResult) for
+// callers where the email IS the product action, not a side effect — e.g. the
+// post-showing outcome-nudge cron, which must only stamp a showing as "nudged"
+// when at least one operator email actually sent, or a missing key / provider
+// failure / empty-recipient race would consume the one allowed nudge and
+// permanently suppress retry. Callers that treat the email as a side effect
+// (transition notifications) simply ignore the return, as before.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -57,10 +65,26 @@ export type SendOrgNotificationArgs = {
   action?: { label: string; url: string } | null;
 };
 
-export async function sendOrgNotification(args: SendOrgNotificationArgs): Promise<void> {
+// Best-effort delivery report. `delivered` is the signal a caller acts on when
+// the email IS the product action (stamp only when delivered === true).
+export type SendOrgNotificationResult = {
+  /** At least one recipient send returned sent:true (a real provider ack). */
+  delivered: boolean;
+  /** How many recipient sends returned sent:true. */
+  sentCount: number;
+  /** How many recipient sends were attempted. */
+  attempted: number;
+  /** Why nothing was attempted (when attempted === 0). */
+  skipped?: "event_inactive" | "event_disabled" | "no_recipients" | "threw";
+};
+
+export async function sendOrgNotification(
+  args: SendOrgNotificationArgs,
+): Promise<SendOrgNotificationResult> {
   try {
     const event = getNotificationEvent(args.eventKey);
-    if (!event || !event.active) return;
+    if (!event || !event.active)
+      return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_inactive" };
 
     // The per-org override (absent == defaults). RLS scopes this for the
     // operator client; the explicit org filter scopes it for the admin client.
@@ -72,7 +96,8 @@ export async function sendOrgNotification(args: SendOrgNotificationArgs): Promis
       .maybeSingle();
     const setting = (data as NotificationSettingRow | null) ?? null;
 
-    if (!isEventEnabled(setting)) return;
+    if (!isEventEnabled(setting))
+      return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_disabled" };
 
     const recipients = resolveNotificationRecipients({
       audience: event.audience,
@@ -80,12 +105,13 @@ export async function sendOrgNotification(args: SendOrgNotificationArgs): Promis
       audienceEmail: args.audienceEmail,
       operatorFallback: args.operatorFallback,
     });
-    if (recipients.length === 0) return;
+    if (recipients.length === 0)
+      return { delivered: false, sentCount: 0, attempted: 0, skipped: "no_recipients" };
 
     const rendered = renderNotification(event, setting, args.vars);
     const accent = resolveNotificationAccent(event, setting);
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       recipients.map((to) =>
         sendNotificationEmail({
           to_email: to,
@@ -101,7 +127,13 @@ export async function sendOrgNotification(args: SendOrgNotificationArgs): Promis
         }),
       ),
     );
+
+    const sentCount = results.filter(
+      (r) => r.status === "fulfilled" && r.value?.sent === true,
+    ).length;
+    return { delivered: sentCount > 0, sentCount, attempted: recipients.length };
   } catch {
     // Swallow — the transition already happened; a notification is best-effort.
+    return { delivered: false, sentCount: 0, attempted: 0, skipped: "threw" };
   }
 }

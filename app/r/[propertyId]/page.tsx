@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { submitLead } from "./actions";
+import { submitLead, rebookSavedLead } from "./actions";
 import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
 import { affordabilityHintIncomeCents } from "@/lib/screening";
@@ -123,6 +124,13 @@ export default async function PublicListingPage({
   // The renter's chosen time was taken before we could book it (audit B1). Their
   // inquiry is still saved; we tell them clearly and let them pick another time.
   const slotTaken = searchParams.submitted === "slottaken";
+  // A slot-taken retry can rebook the ALREADY-saved lead (from the httpOnly
+  // per-property cookie the submit action set) without re-collecting details or
+  // duplicating the lead (P2c). Present only right after a slot-taken submit.
+  const savedLeadId = slotTaken
+    ? cookies().get(`vl_lead_${params.propertyId}`)?.value ?? ""
+    : "";
+  const canRebookSaved = Boolean(savedLeadId) && days.length > 0;
 
   return (
     <div
@@ -267,22 +275,83 @@ export default async function PublicListingPage({
               </p>
             </div>
           ) : slotTaken ? (
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-gray-900">
-                That time was just taken
-              </h2>
-              <p className="mt-2 text-sm text-gray-600">
-                Someone booked that slot moments before you. We saved your inquiry,
-                so {l.org_name} can still reach out, but you can grab another time
-                right now.
-              </p>
-              <a
-                href={`/r/${l.id}${trackedPostId ? `?p=${encodeURIComponent(trackedPostId)}` : ""}`}
-                className="mt-4 inline-block rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
-                style={{ background: brandBg }}
-              >
-                Choose another time
-              </a>
+            <div>
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-gray-900">
+                  That time was just taken
+                </h2>
+                <p className="mt-2 text-sm text-gray-600">
+                  Someone booked that slot moments before you. We saved your
+                  inquiry, so {l.org_name} can still reach out
+                  {canRebookSaved
+                    ? " — just pick another time below."
+                    : ", but you can grab another time right now."}
+                </p>
+              </div>
+              {canRebookSaved ? (
+                // Booking-only retry against the saved lead — no personal fields,
+                // no duplicate lead, attribution preserved (P2c).
+                <form action={rebookSavedLead} className="mt-5 space-y-4">
+                  <input type="hidden" name="property_id" value={l.id} />
+                  {trackedPostId && (
+                    <input
+                      type="hidden"
+                      name="listing_post_id"
+                      value={trackedPostId}
+                    />
+                  )}
+                  <fieldset className="rounded-lg border border-gray-200 p-4">
+                    <legend className="px-1 text-sm font-medium text-gray-700">
+                      Choose another viewing time
+                    </legend>
+                    <p className="mb-3 mt-1 text-xs text-gray-400">
+                      Times shown in {av?.timezone?.replace(/_/g, " ")}.
+                    </p>
+                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                      {days.map((day) => (
+                        <div key={day.dayKey}>
+                          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            {day.dayLabel}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {day.slots.map((s) => (
+                              <label key={s.iso} className="cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="slot"
+                                  value={s.iso}
+                                  required
+                                  className="peer sr-only"
+                                />
+                                <span className="block rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:border-gray-400 peer-checked:border-[var(--brand-color)] peer-checked:bg-[var(--brand-color)] peer-checked:text-white">
+                                  {s.label}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <button
+                    type="submit"
+                    className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
+                    style={{ background: brandBg }}
+                  >
+                    Confirm new time
+                  </button>
+                </form>
+              ) : (
+                <div className="text-center">
+                  <a
+                    href={`/r/${l.id}${trackedPostId ? `?p=${encodeURIComponent(trackedPostId)}` : ""}`}
+                    className="mt-4 inline-block rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
+                    style={{ background: brandBg }}
+                  >
+                    Choose another time
+                  </a>
+                </div>
+              )}
             </div>
           ) : searchParams.submitted ? (
             <div className="text-center">

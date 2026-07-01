@@ -248,7 +248,7 @@ export async function GET(req: NextRequest) {
             continue;
           }
 
-          await sendOrgNotification({
+          const result = await sendOrgNotification({
             client: admin,
             org: {
               id: org.id,
@@ -263,8 +263,25 @@ export async function GET(req: NextRequest) {
             action: { label: "Record the outcome", url: vars.outcome_url },
           });
 
-          // Stamp regardless of the substrate's send outcome (it short-circuits a
-          // disabled event best-effort) so the sweep never rebuilds this nudge.
+          // For THIS cron the email IS the product action, so only stamp
+          // outcome_nudge_sent_at when at least one operator email actually sent.
+          // A missing BREVO key / provider failure / disabled-event race / empty
+          // recipient resolution must NOT consume the one allowed nudge and
+          // permanently suppress retry — leave the row unstamped so the next sweep
+          // retries once the cause clears. (P2, Best-In-Class QA 2026-07-01.)
+          if (!result.delivered) {
+            summary.skipped++;
+            summary.details.push({
+              org: org.id,
+              showing: row.id,
+              sent: false,
+              not_stamped: true,
+              reason: result.skipped ?? "send_failed",
+              attempted: result.attempted,
+            });
+            continue;
+          }
+
           await admin
             .from("showings")
             .update({ [OUTCOME_NUDGE_SENT_COLUMN]: new Date().toISOString() })

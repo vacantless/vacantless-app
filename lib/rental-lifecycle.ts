@@ -77,6 +77,15 @@ export type RentalLifecycleInput = {
   propertyStatus: PropertyStatus;
   /** rent_cents is set and positive — the unit's core money fact is entered. */
   hasRent: boolean;
+  /**
+   * beds is set (not null). A studio is legitimately 0 beds, so "set" means the
+   * field is populated, not positive. Part of the setup contract so the rail
+   * agrees with the public-share checklist (lib/share-readiness `beds_baths`),
+   * which REQUIRES beds+baths before a rental can be shared.
+   */
+  bedsSet: boolean;
+  /** baths is set (not null). Paired with bedsSet in the setup contract. */
+  bathsSet: boolean;
   /** property_photos count. */
   photoCount: number;
   /** listing_posts count (where the unit is posted). */
@@ -167,8 +176,13 @@ export function deriveRentalLifecycle(
   const leasedLeads = input.leadStatuses.filter((s) => s === "leased").length;
 
   // Raw, per-step satisfaction straight from the inputs (not yet monotone).
+  // Setup requires the same core facts the public-share checklist REQUIRES
+  // (rent + beds + baths; lib/share-readiness), so the "what's next?" rail never
+  // says "go market/Live" while the share checklist is still blocking on a
+  // missing bed/bath count. (Monotonicity below still lets demonstrable later
+  // progress imply setup, for out-of-order evidence.)
   const raw: Record<LifecycleStep, boolean> = {
-    set_up: input.hasRent,
+    set_up: input.hasRent && input.bedsSet && input.bathsSet,
     market: isLive && input.photoCount >= 1,
     inquiries: totalLeads >= 1,
     viewings: maxLeadRank >= LEAD_RANK.booked,
@@ -202,7 +216,7 @@ export function deriveRentalLifecycle(
   const detailFor = (step: LifecycleStep): string => {
     switch (step) {
       case "set_up":
-        return input.hasRent ? "Details added" : "Add rent & details";
+        return raw.set_up ? "Details added" : "Add rent & details";
       case "market": {
         if (raw.market) {
           const bits = [propertyStatusLabel(input.propertyStatus)];

@@ -130,7 +130,7 @@ function viewingsSignal(windowCount: number): ReadinessSignal {
     ok: false,
     tone: "warn",
     detail: "none",
-    hint: "Set weekly viewing windows in Settings so renters can self-book a viewing once they land on the page.",
+    hint: "Set weekly viewing windows under Leasing → Availability so renters can self-book a viewing once they land on the page.",
   };
 }
 

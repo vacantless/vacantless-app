@@ -248,11 +248,11 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Post-showing outcome reminder",
     description:
-      "After a viewing's time passes with no outcome recorded, your team gets a one-tap reminder to mark it Attended, No-show, or Cancelled — so your pipeline stays accurate and attended viewings advance automatically. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+      "After a viewing's time passes with no outcome recorded, your team gets a one-tap reminder to mark it Attended, No-show, or Cancelled — so your renter list stays accurate and attended viewings move the renter forward automatically. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "lead_name", "showing_time", "outcome_url"],
     defaultSubject: "How did the viewing go? - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nTap to record it - Attended, No-show, or Cancelled: {{outcome_url}}\n\nMarking it Attended advances the lead automatically and keeps your pipeline accurate.",
+      "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nTap to record it - Attended, No-show, or Cancelled: {{outcome_url}}\n\nMarking it Attended moves this renter forward automatically and keeps your renter list accurate.",
     active: true,
   },
   // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the

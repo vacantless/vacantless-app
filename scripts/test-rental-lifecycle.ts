@@ -27,6 +27,10 @@ function inp(over: Partial<RentalLifecycleInput> = {}): RentalLifecycleInput {
   return {
     propertyStatus: "draft",
     hasRent: false,
+    // A set-up unit has beds+baths; default them so downstream-step tests
+    // (which assume a fully set-up unit) stay valid. Setup-gap tests override.
+    bedsSet: true,
+    bathsSet: true,
     photoCount: 0,
     listingPostCount: 0,
     hasAvailability: false,
@@ -70,6 +74,42 @@ ok("rent set -> 1 completed", setUp.completedCount === 1);
 ok(
   "market detail when not live + no photos",
   setUp.steps[1].detail === "Add photos & go live",
+);
+
+// --- rent set but beds/baths missing: setup NOT done (matches share contract) -
+// The public-share checklist REQUIRES beds+baths, so the rail must keep the
+// operator on set_up rather than pointing them at Market/Live while the share
+// checklist is still blocking (P2, Best-In-Class QA 2026-07-01).
+const noBeds = deriveRentalLifecycle(PID, inp({ hasRent: true, bedsSet: false }));
+ok("rent set, no beds -> set_up current", noBeds.currentStep === "set_up");
+ok("rent set, no beds -> set_up not done", stateOf(noBeds, "set_up") === "current");
+ok(
+  "rent set, no beds -> set_up detail still prompts",
+  noBeds.steps[0].detail === "Add rent & details",
+);
+const noBaths = deriveRentalLifecycle(PID, inp({ hasRent: true, bathsSet: false }));
+ok("rent set, no baths -> set_up current", noBaths.currentStep === "set_up");
+const bedsBathsRent = deriveRentalLifecycle(
+  PID,
+  inp({ hasRent: true, bedsSet: true, bathsSet: true }),
+);
+ok(
+  "rent + beds + baths -> set_up done",
+  stateOf(bedsBathsRent, "set_up") === "done",
+);
+ok(
+  "rent + beds + baths -> set_up detail 'Details added'",
+  bedsBathsRent.steps[0].detail === "Details added",
+);
+// Monotonicity: a live+photos unit reads set_up done even if beds/baths were
+// never flagged here (demonstrable later progress implies setup).
+const liveNoBeds = deriveRentalLifecycle(
+  PID,
+  inp({ hasRent: true, bedsSet: false, bathsSet: false, propertyStatus: "available", photoCount: 2 }),
+);
+ok(
+  "live+photos overrides missing beds via monotonicity -> set_up done",
+  stateOf(liveNoBeds, "set_up") === "done",
 );
 
 // --- live with photos: market done, inquiries current -----------------------
