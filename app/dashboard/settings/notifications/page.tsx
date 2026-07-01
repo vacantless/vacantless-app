@@ -33,14 +33,24 @@ const DEFAULT_ACCENT = "#0f172a";
 
 export const dynamic = "force-dynamic";
 
-const AUDIENCE_HINT: Record<NotificationEvent["audience"], string> = {
-  operator:
-    "Goes to your team. If you leave recipients empty, it goes to members who manage maintenance.",
-  trade:
-    "Always goes to the trade on the job. Anyone you add below is cc'd as well.",
-  tenant:
-    "Always goes to the tenant who reported it. Anyone you add below is cc'd as well.",
-};
+// Hint under the recipients field. For operator events the default-recipient
+// wording is FAMILY-aware: a leasing event (new inquiry, post-showing nudge, ...)
+// is renter/inquiry work, so its empty-recipients fallback should read "members
+// who manage inquiries" — not "manage maintenance", which is the dispatch family's
+// mental model and wrongly implied leasing runs through the maintenance path.
+// trade/tenant hints are audience-only and unchanged.
+function audienceHint(event: NotificationEvent): string {
+  switch (event.audience) {
+    case "operator":
+      return event.family === "leasing"
+        ? "Goes to your team. If you leave recipients empty, it goes to members who manage inquiries."
+        : "Goes to your team. If you leave recipients empty, it goes to members who manage maintenance.";
+    case "trade":
+      return "Always goes to the trade on the job. Anyone you add below is cc'd as well.";
+    case "tenant":
+      return "Always goes to the tenant who reported it. Anyone you add below is cc'd as well.";
+  }
+}
 
 // Format a compliance_reminder_log sent_at for the "Last reminded" line, in the
 // org's booking timezone so it matches the operator's calendar (falls back to
@@ -248,7 +258,7 @@ export default async function NotificationsSettingsPage({
                           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:ring-brand"
                         />
                         <p className="mt-1.5 text-xs text-gray-500">
-                          {AUDIENCE_HINT[event.audience]} One address per line (or comma-separated).
+                          {audienceHint(event)} One address per line (or comma-separated).
                         </p>
                       </div>
 

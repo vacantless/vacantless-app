@@ -151,7 +151,11 @@ function QueueRow({
         </p>
       </div>
       <div className="sm:shrink-0">
-        <StatusSelect leadId={l.id} status={l.status} />
+        <StatusSelect
+          leadId={l.id}
+          status={l.status}
+          label={`Stage for ${l.name || l.email || "unnamed renter"}`}
+        />
       </div>
     </li>
   );

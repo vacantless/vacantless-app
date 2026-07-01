@@ -8,9 +8,13 @@ import { updateLeadStatus } from "./actions";
 export function StatusSelect({
   leadId,
   status,
+  label = "Inquiry stage",
 }: {
   leadId: string;
   status: string;
+  // Accessible name for the control (screen readers / keyboard). Callers pass a
+  // per-renter label on list rows; defaults to a generic one on detail.
+  label?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -21,6 +25,7 @@ export function StatusSelect({
         name="status"
         defaultValue={status}
         onChange={() => formRef.current?.requestSubmit()}
+        aria-label={label}
         className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm"
       >
         {PIPELINE_STAGES.map((s) => (

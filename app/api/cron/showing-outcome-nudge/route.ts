@@ -216,7 +216,7 @@ export async function GET(req: NextRequest) {
 
           const lead = one<{ name: string | null }>(row.lead);
           const prop = one<{ address: string | null }>(row.property);
-          const leadName = lead?.name?.trim() || "a prospect";
+          const leadName = lead?.name?.trim() || "a renter";
           const address = prop?.address?.trim() || "the property";
           const vars: Record<string, string> = {
             org_name: org.name ?? "",
