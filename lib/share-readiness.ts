@@ -65,7 +65,7 @@ export function buildShareReadiness(
       label: "Listing is Live",
       ok: isPublicBookable(input.status),
       required: true,
-      hint: "Set the rental to Live (in the form below) so its public link works and renters can inquire and book a viewing.",
+      hint: "Use Publish at the top of the page so its public link works and renters can inquire and book a viewing.",
     },
     {
       key: "address",

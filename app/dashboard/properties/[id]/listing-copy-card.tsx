@@ -21,9 +21,9 @@ export function ListingCopyCard({
   tabs,
   descriptionThin = false,
   notLive = false,
-  notLiveIntro = "Prepare it now; set the rental Live above before you post it.",
+  notLiveIntro = "Prepare it now; use Publish at the top of the page before you post it.",
   notLiveTitle = "This rental isn't live yet.",
-  notLiveBody = "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - set it to Live (above) before you post it anywhere.",
+  notLiveBody = "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - use Publish at the top of the page before you post it anywhere.",
 }: {
   tabs: CopyTab[];
   // True when the saved description is empty/very short. The channel copy below

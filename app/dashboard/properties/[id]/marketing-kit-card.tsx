@@ -15,7 +15,7 @@ export function MarketingKitCard({
   locked,
   notLive = false,
   notLiveTitle = "This rental isn't live yet.",
-  notLiveBody = "Set it to Live (above) to get your public link and QR code; the channel wording below is ready to prepare now.",
+  notLiveBody = "Use Publish at the top of the page to get your public link and QR code; the channel wording below is ready to prepare now.",
   landingUrl,
   qrSvg,
   combinedText,

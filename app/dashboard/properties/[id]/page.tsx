@@ -27,6 +27,7 @@ import { DescriptionGuide } from "@/components/description-guide";
 import { BeforeYouPost } from "@/components/before-you-post";
 import {
   updateProperty,
+  publishProperty,
   duplicateProperty,
   blastPriceDrop,
   addListingPost,
@@ -221,6 +222,10 @@ export default async function PropertyDetailPage({
   params: { id: string };
   searchParams: {
     saved?: string;
+    // One-click Publish (B1): published=1 confirms the rental went Live;
+    // publish=needs means the basics required to share aren't set yet.
+    published?: string;
+    publish?: string;
     blasted?: string;
     post?: string;
     pn?: string; // post-submit nonce that remounts the add-post form (form reset)
@@ -373,11 +378,11 @@ export default async function PropertyDetailPage({
         : {
             title: "This rental isn't live yet.",
             intro:
-              "Prepare it now; set the rental Live above before you post it.",
+              "Prepare it now; use Publish at the top of the page before you post it.",
             body:
-              "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - set it to Live (above) before you post it anywhere.",
+              "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - use Publish at the top of the page before you post it anywhere.",
             kitBody:
-              "Set it to Live (above) to get your public link and QR code; the channel wording below is ready to prepare now.",
+              "Use Publish at the top of the page to get your public link and QR code; the channel wording below is ready to prepare now.",
             missingLinkText:
               "Set this rental Live to include your public listing link.",
             copyFallbackCta: "Contact us for availability details.",
@@ -797,7 +802,7 @@ export default async function PropertyDetailPage({
           tone: "warning" as const,
           text: `This rental is a ${propertyStatusLabel(
             p.status,
-          )}. Its public page isn't live yet — anyone you share the link with will hit a "not found" page. Set it to Live (below) before sharing.`,
+          )}. Its public page isn't live yet — anyone you share the link with will hit a "not found" page. Use Publish at the top of the page before sharing.`,
         };
 
   // Lifecycle rail (IA Step 4 slice 1): derive where this unit sits, empty ->
@@ -916,6 +921,38 @@ export default async function PropertyDetailPage({
           Changes saved.
         </p>
       )}
+
+      {/* One-click Publish (B1): confirm the rental is now Live and point the
+          operator straight at the link to share. */}
+      {searchParams.published && (
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          <strong>Your rental is now Live.</strong> Its public listing page is
+          open to renters - copy the link below to start sharing it.
+        </p>
+      )}
+
+      {/* Publish blocked because the basics required to share aren't set yet. */}
+      {searchParams.publish === "needs" && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <strong>Almost there.</strong> Add the rent and the bed and bath count
+          on the Set up tab, then use Publish again to make this rental Live.
+        </p>
+      )}
+
+      {/* From-scratch draft banner (M8): a quick-add lands as a private Draft,
+          but only ?duplicated / ?imported got an explanatory banner. Explain the
+          Draft state + how to publish for a plain quick-add too. */}
+      {normalizedStatus === "draft" &&
+        !searchParams.duplicated &&
+        !searchParams.imported &&
+        searchParams.publish !== "needs" && (
+          <p className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+            <strong>This rental is a private draft.</strong> Renters can&apos;t
+            see it yet. Add the rent, bed and bath count, and a few photos, then
+            use <strong>Publish</strong> (top of this page) to make its public
+            listing page live.
+          </p>
+        )}
 
       {searchParams.duplicated && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
@@ -1039,6 +1076,23 @@ export default async function PropertyDetailPage({
                 ${(p.rent_cents / 100).toLocaleString()}/mo
               </span>
             ) : null}
+            {/* One-click Publish (B1): the whole app says "set it Live" - this
+                is the primary action that does it, so the operator never has to
+                hunt for the Status dropdown. Shown only when the rental isn't
+                already public and isn't leased. */}
+            {!publicPageIsBookable && normalizedStatus !== "leased" && (
+              <form action={publishProperty}>
+                <input type="hidden" name="id" value={p.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+                >
+                  {normalizedStatus === "paused"
+                    ? "Set Live again"
+                    : "Publish rental"}
+                </button>
+              </form>
+            )}
             <form action={duplicateProperty}>
               <input type="hidden" name="id" value={p.id} />
               <button type="submit" className={SECONDARY_ACTION_CLASS}>
@@ -1057,7 +1111,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="market"
-        label="Market"
+        label="Photos & marketing"
         done={marketStep?.state === "done"}
       >
 

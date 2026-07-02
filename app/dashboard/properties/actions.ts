@@ -330,6 +330,68 @@ export async function updateProperty(formData: FormData) {
 }
 
 /**
+ * One-click PUBLISH (B1, first-paid-pilot friction pass S402): flip a rental to
+ * Live (`available`) in a single action instead of hunting for the small Status
+ * dropdown buried in the edit form. The whole app tells the operator to "set it
+ * Live" — this is the button that does it.
+ *
+ * Guardrails: property-management capability only; RLS-scoped to the caller's
+ * org. Only publishes from a not-yet-public state (draft / paused / off_market)
+ * — an already-Live unit is a no-op, and a `leased` unit is NOT republished this
+ * way (it has a tenancy; relisting is a deliberate separate action). Before
+ * going public we require the same basics `lib/share-readiness` marks required
+ * (address + rent + beds + baths) so the button can't push a bare listing live;
+ * if they're missing we bounce back with `?publish=needs` and the page explains
+ * what to add. The Status dropdown remains as the power-user escape hatch.
+ */
+export async function publishProperty(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const supabase = createClient();
+  const { data: row } = await supabase
+    .from("properties")
+    .select("status, address, rent_cents, beds, baths")
+    .eq("id", id)
+    .maybeSingle();
+  const prop = row as {
+    status: string;
+    address: string | null;
+    rent_cents: number | null;
+    beds: number | null;
+    baths: number | null;
+  } | null;
+  if (!prop) redirect("/dashboard/properties?forbidden=1");
+
+  // Only publish from a not-yet-public state. Already-live -> nothing to do;
+  // leased -> don't silently pull a unit off its tenancy via this path.
+  const publishable =
+    prop.status === "draft" ||
+    prop.status === "paused" ||
+    prop.status === "off_market";
+  if (!publishable) redirect(`/dashboard/properties/${id}`);
+
+  // Gate the one-click path on the required-to-share basics (mirrors the
+  // required checks in lib/share-readiness). Beds/baths can legitimately be 0.
+  const basicsMissing =
+    !prop.address?.trim() ||
+    !(typeof prop.rent_cents === "number" && prop.rent_cents > 0) ||
+    prop.beds == null ||
+    prop.baths == null;
+  if (basicsMissing) redirect(`/dashboard/properties/${id}?publish=needs`);
+
+  await supabase
+    .from("properties")
+    .update({ status: "available" })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/properties/${id}`);
+  revalidatePath("/dashboard/properties");
+  redirect(`/dashboard/properties/${id}?published=1`);
+}
+
+/**
  * Duplicate a rental: clone the property row + all of its 0013 unit-feature
  * fields into a NEW row so an operator with several near-identical units (e.g.
  * units in the same building) doesn't re-enter every amenity/utility flag.
