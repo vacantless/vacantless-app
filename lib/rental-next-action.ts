@@ -170,7 +170,11 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
 
   switch (step) {
     case "set_up": {
-      const gaps: NextActionGap[] = [{ key: "rent", label: "Monthly rent" }];
+      // Only surface a gap for a field that's actually still missing. set_up is
+      // current until rent + beds + baths are all set (mirrors lib/rental-lifecycle),
+      // so any subset of these can be the outstanding one.
+      const gaps: NextActionGap[] = [];
+      if (!input.hasRent) gaps.push({ key: "rent", label: "Monthly rent" });
       if (!input.bedsSet) gaps.push({ key: "beds", label: "Bedrooms" });
       if (!input.bathsSet) gaps.push({ key: "baths", label: "Bathrooms" });
       const blurb =

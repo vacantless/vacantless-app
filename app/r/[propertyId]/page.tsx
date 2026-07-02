@@ -400,10 +400,11 @@ export default async function PublicListingPage({
 
                 <div className="space-y-3">
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                    <label htmlFor="r_name" className="mb-1 block text-sm font-medium text-gray-700">
                       Full name
                     </label>
                     <input
+                      id="r_name"
                       name="name"
                       required
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -411,10 +412,11 @@ export default async function PublicListingPage({
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                      <label htmlFor="r_email" className="mb-1 block text-sm font-medium text-gray-700">
                         Email
                       </label>
                       <input
+                        id="r_email"
                         name="email"
                         type="email"
                         required
@@ -422,10 +424,11 @@ export default async function PublicListingPage({
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                      <label htmlFor="r_phone" className="mb-1 block text-sm font-medium text-gray-700">
                         Phone
                       </label>
                       <input
+                        id="r_phone"
                         name="phone"
                         type="tel"
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -438,10 +441,11 @@ export default async function PublicListingPage({
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                    <label htmlFor="r_move_in" className="mb-1 block text-sm font-medium text-gray-700">
                       Desired move-in date
                     </label>
                     <input
+                      id="r_move_in"
                       name="move_in"
                       type="date"
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -453,7 +457,7 @@ export default async function PublicListingPage({
                         A few quick questions
                       </legend>
                       <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                        <label htmlFor="r_income" className="mb-1 block text-sm font-medium text-gray-700">
                           Approximate monthly household income{" "}
                           <span className="font-normal text-gray-400">(optional)</span>
                         </label>
@@ -462,6 +466,7 @@ export default async function PublicListingPage({
                             $
                           </span>
                           <input
+                            id="r_income"
                             name="screen_income"
                             type="text"
                             inputMode="numeric"
@@ -484,10 +489,11 @@ export default async function PublicListingPage({
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                          <label htmlFor="r_occupants" className="mb-1 block text-sm font-medium text-gray-700">
                             How many people would live here?
                           </label>
                           <input
+                            id="r_occupants"
                             name="screen_occupants"
                             type="number"
                             min={1}
@@ -496,10 +502,11 @@ export default async function PublicListingPage({
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                          <label htmlFor="r_pets_detail" className="mb-1 block text-sm font-medium text-gray-700">
                             Pets?
                           </label>
                           <input
+                            id="r_pets_detail"
                             name="screen_pets_detail"
                             type="text"
                             placeholder="e.g. 1 cat — or leave blank"
@@ -529,7 +536,7 @@ export default async function PublicListingPage({
                         }
                         return (
                         <div key={q.id}>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                          <label htmlFor={`cq_${q.id}`} className="mb-1 block text-sm font-medium text-gray-700">
                             {q.prompt}{" "}
                             {!q.required && (
                               <span className="font-normal text-gray-400">
@@ -539,6 +546,7 @@ export default async function PublicListingPage({
                           </label>
                           {q.qtype === "yesno" ? (
                             <select
+                              id={`cq_${q.id}`}
                               name={`cq_${q.id}`}
                               required={q.required}
                               defaultValue=""
@@ -550,6 +558,7 @@ export default async function PublicListingPage({
                             </select>
                           ) : q.qtype === "choice" || q.qtype === "units" ? (
                             <select
+                              id={`cq_${q.id}`}
                               name={`cq_${q.id}`}
                               required={q.required}
                               defaultValue=""
@@ -566,6 +575,7 @@ export default async function PublicListingPage({
                             </select>
                           ) : (
                             <input
+                              id={`cq_${q.id}`}
                               name={`cq_${q.id}`}
                               type="text"
                               required={q.required}
@@ -579,10 +589,11 @@ export default async function PublicListingPage({
                     </fieldset>
                   )}
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                    <label htmlFor="r_notes" className="mb-1 block text-sm font-medium text-gray-700">
                       Anything else?
                     </label>
                     <textarea
+                      id="r_notes"
                       name="notes"
                       rows={3}
                       placeholder={

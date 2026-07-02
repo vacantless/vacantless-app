@@ -1259,8 +1259,10 @@ export default async function PropertyDetailPage({
             >
               <input type="hidden" name="property_id" value={p.id} />
               <input
+                id="photo-upload"
                 type="file"
                 name="photos"
+                aria-label="Add photos to this rental"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 multiple
                 required

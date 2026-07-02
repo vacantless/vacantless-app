@@ -278,10 +278,11 @@ export default async function PropertiesPage({
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <div className="min-w-[16rem] flex-1">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label htmlFor="add_address" className="mb-1 block text-xs font-medium text-gray-600">
             Address
           </label>
           <input
+            id="add_address"
             name="address"
             required
             placeholder="123 Main St, Unit 4"
@@ -289,10 +290,11 @@ export default async function PropertiesPage({
           />
         </div>
         <div className="w-28">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label htmlFor="add_rent" className="mb-1 block text-xs font-medium text-gray-600">
             Rent ($/mo)
           </label>
           <input
+            id="add_rent"
             name="rent"
             type="number"
             step="1"
@@ -301,10 +303,11 @@ export default async function PropertiesPage({
           />
         </div>
         <div className="w-20">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label htmlFor="add_beds" className="mb-1 block text-xs font-medium text-gray-600">
             Beds
           </label>
           <input
+            id="add_beds"
             name="beds"
             type="number"
             step="1"
@@ -313,10 +316,11 @@ export default async function PropertiesPage({
           />
         </div>
         <div className="w-20">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label htmlFor="add_baths" className="mb-1 block text-xs font-medium text-gray-600">
             Baths
           </label>
           <input
+            id="add_baths"
             name="baths"
             type="number"
             step="0.5"

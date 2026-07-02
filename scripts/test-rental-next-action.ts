@@ -73,10 +73,18 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   ok("set_up cta -> #rental-details", a?.cta.href === `/dashboard/properties/${PID}#rental-details`);
 }
 {
+  // rent still missing (hasRent defaults false) but beds/baths set -> rent gap is the outstanding one
   const a = deriveNextAction(inp({ currentStep: "set_up", bedsSet: true, bathsSet: true }));
   ok("set_up: no beds gap when set", !findGap(a, "beds"));
   ok("set_up: no baths gap when set", !findGap(a, "baths"));
-  ok("set_up: rent gap remains", findGap(a, "rent"));
+  ok("set_up: rent gap remains when rent missing", findGap(a, "rent"));
+}
+{
+  // rent PRESENT but beds/baths missing -> no rent gap, only the missing ones (S400 Codex P3)
+  const a = deriveNextAction(inp({ currentStep: "set_up", hasRent: true }));
+  ok("set_up: no rent gap when rent already set", !findGap(a, "rent"));
+  ok("set_up: beds gap when unset (rent present)", findGap(a, "beds"));
+  ok("set_up: baths gap when unset (rent present)", findGap(a, "baths"));
 }
 
 // --- set up: the cascade (inherited policy facts) ---------------------------
