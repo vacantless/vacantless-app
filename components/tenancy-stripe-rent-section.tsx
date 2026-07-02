@@ -170,8 +170,14 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">First charge date</label>
+                    <label
+                      htmlFor="stripe-rent-first-charge-date"
+                      className="mb-1 block text-xs font-medium text-gray-600"
+                    >
+                      First charge date
+                    </label>
                     <input
+                      id="stripe-rent-first-charge-date"
                       type="date"
                       name="first_charge_date"
                       required

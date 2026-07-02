@@ -153,8 +153,16 @@ export default async function NewTenancyPage({
           {/* Unit + dates ------------------------------------------------- */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className={labelCls}>Rental (unit)</label>
-              <select name="property_id" required defaultValue={defaultPropertyId} className={inputCls}>
+              <label htmlFor="tenancy-property-id" className={labelCls}>
+                Rental (unit)
+              </label>
+              <select
+                id="tenancy-property-id"
+                name="property_id"
+                required
+                defaultValue={defaultPropertyId}
+                className={inputCls}
+              >
                 <option value="">Select a rental…</option>
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -164,20 +172,53 @@ export default async function NewTenancyPage({
               </select>
             </div>
             <div>
-              <label className={labelCls}>Lease start</label>
-              <input type="date" name="start_date" required defaultValue={defaultStart} className={inputCls} />
+              <label htmlFor="tenancy-start-date" className={labelCls}>
+                Lease start
+              </label>
+              <input
+                id="tenancy-start-date"
+                type="date"
+                name="start_date"
+                required
+                defaultValue={defaultStart}
+                className={inputCls}
+              />
             </div>
             <div>
-              <label className={labelCls}>Lease end (optional)</label>
-              <input type="date" name="end_date" className={inputCls} />
+              <label htmlFor="tenancy-end-date" className={labelCls}>
+                Lease end (optional)
+              </label>
+              <input
+                id="tenancy-end-date"
+                type="date"
+                name="end_date"
+                className={inputCls}
+              />
             </div>
             <div>
-              <label className={labelCls}>Term (months — blank = month-to-month)</label>
-              <input type="number" name="term_months" step="1" min="1" placeholder="12" className={inputCls} />
+              <label htmlFor="tenancy-term-months" className={labelCls}>
+                Term (months — blank = month-to-month)
+              </label>
+              <input
+                id="tenancy-term-months"
+                type="number"
+                name="term_months"
+                step="1"
+                min="1"
+                placeholder="12"
+                className={inputCls}
+              />
             </div>
             <div>
-              <label className={labelCls}>Status</label>
-              <select name="status" defaultValue="active" className={inputCls}>
+              <label htmlFor="tenancy-status" className={labelCls}>
+                Status
+              </label>
+              <select
+                id="tenancy-status"
+                name="status"
+                defaultValue="active"
+                className={inputCls}
+              >
                 {TENANCY_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {tenancyStatusLabel(s)}
@@ -190,8 +231,11 @@ export default async function NewTenancyPage({
           {/* Money -------------------------------------------------------- */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className={labelCls}>Monthly rent ($)</label>
+              <label htmlFor="tenancy-rent" className={labelCls}>
+                Monthly rent ($)
+              </label>
               <input
+                id="tenancy-rent"
                 type="number"
                 name="rent"
                 step="1"
@@ -205,8 +249,18 @@ export default async function NewTenancyPage({
               )}
             </div>
             <div>
-              <label className={labelCls}>Deposit ($, optional)</label>
-              <input type="number" name="deposit" step="1" min="0" placeholder="1250" className={inputCls} />
+              <label htmlFor="tenancy-deposit" className={labelCls}>
+                Deposit ($, optional)
+              </label>
+              <input
+                id="tenancy-deposit"
+                type="number"
+                name="deposit"
+                step="1"
+                min="0"
+                placeholder="1250"
+                className={inputCls}
+              />
             </div>
           </div>
 
@@ -231,20 +285,32 @@ export default async function NewTenancyPage({
                     />
                     Primary
                   </label>
+                  <label htmlFor={`tenant-name-${i}`} className="sr-only">
+                    {i === 0 ? "Primary tenant name" : `Co-tenant ${i} name`}
+                  </label>
                   <input
+                    id={`tenant-name-${i}`}
                     name="tenant_name"
                     placeholder={i === 0 ? "Full name" : "Co-tenant name (optional)"}
                     defaultValue={i === 0 ? lead?.name ?? "" : ""}
                     className={inputCls}
                   />
+                  <label htmlFor={`tenant-email-${i}`} className="sr-only">
+                    {i === 0 ? "Primary tenant email" : `Co-tenant ${i} email`}
+                  </label>
                   <input
+                    id={`tenant-email-${i}`}
                     name="tenant_email"
                     type="email"
                     placeholder="Email"
                     defaultValue={i === 0 ? lead?.email ?? "" : ""}
                     className={inputCls}
                   />
+                  <label htmlFor={`tenant-phone-${i}`} className="sr-only">
+                    {i === 0 ? "Primary tenant phone" : `Co-tenant ${i} phone`}
+                  </label>
                   <input
+                    id={`tenant-phone-${i}`}
                     name="tenant_phone"
                     placeholder="Phone"
                     defaultValue={i === 0 ? lead?.phone ?? "" : ""}
@@ -258,16 +324,37 @@ export default async function NewTenancyPage({
           {/* Notes -------------------------------------------------------- */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className={labelCls}>Payment / deposit notes</label>
-              <textarea name="payment_notes" rows={2} className={inputCls} />
+              <label htmlFor="tenancy-payment-notes" className={labelCls}>
+                Payment / deposit notes
+              </label>
+              <textarea
+                id="tenancy-payment-notes"
+                name="payment_notes"
+                rows={2}
+                className={inputCls}
+              />
             </div>
             <div>
-              <label className={labelCls}>Move-in notes</label>
-              <textarea name="move_in_notes" rows={2} className={inputCls} />
+              <label htmlFor="tenancy-move-in-notes" className={labelCls}>
+                Move-in notes
+              </label>
+              <textarea
+                id="tenancy-move-in-notes"
+                name="move_in_notes"
+                rows={2}
+                className={inputCls}
+              />
             </div>
             <div className="sm:col-span-2">
-              <label className={labelCls}>Other notes</label>
-              <textarea name="notes" rows={2} className={inputCls} />
+              <label htmlFor="tenancy-notes" className={labelCls}>
+                Other notes
+              </label>
+              <textarea
+                id="tenancy-notes"
+                name="notes"
+                rows={2}
+                className={inputCls}
+              />
             </div>
           </div>
 

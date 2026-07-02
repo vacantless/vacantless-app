@@ -57,9 +57,10 @@ export function buildCombinedText(opts: {
   businessName: string | null;
   address: string;
   landingUrl: string | null;
+  missingLinkText?: string;
   channels: KitChannel[];
 }): string {
-  const { businessName, address, landingUrl, channels } = opts;
+  const { businessName, address, landingUrl, missingLinkText, channels } = opts;
   const lines: string[] = [];
 
   const header = businessName ? `${businessName} - ${address}` : address;
@@ -67,7 +68,9 @@ export function buildCombinedText(opts: {
   if (landingUrl) {
     lines.push(`Details and apply: ${landingUrl}`);
   } else {
-    lines.push("(Set this rental Live to include your public listing link.)");
+    lines.push(
+      `(${missingLinkText ?? "Set this rental Live to include your public listing link."})`,
+    );
   }
   lines.push("");
 
@@ -94,9 +97,10 @@ export function buildMarketingKit(opts: {
   businessName: string | null;
   address: string;
   landingUrl: string | null;
+  missingLinkText?: string;
   channels: KitChannel[];
 }): MarketingKit {
-  const { businessName, address, landingUrl, channels } = opts;
+  const { businessName, address, landingUrl, missingLinkText, channels } = opts;
   return {
     landingUrl,
     channels,
@@ -104,6 +108,7 @@ export function buildMarketingKit(opts: {
       businessName,
       address,
       landingUrl,
+      missingLinkText,
       channels,
     }),
     postChecklist: buildPostChecklist(channels),

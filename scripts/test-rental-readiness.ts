@@ -64,10 +64,14 @@ const complete: RentalReadinessInput = {
   ok("leased link not ok", sig(leased, "link").ok === false);
   ok("leased link muted", sig(leased, "link").tone === "muted");
   ok("leased link detail", sig(leased, "link").detail === "leased");
+  ok("leased photos muted", sig(leased, "photos").tone === "muted");
+  ok("leased viewings muted", sig(leased, "viewings").tone === "muted");
 
   const paused = { ...complete, status: "paused" };
   ok("paused link muted", sig(paused, "link").tone === "muted");
   ok("paused link detail", sig(paused, "link").detail === "paused");
+  ok("paused photos muted", sig(paused, "photos").tone === "muted");
+  ok("paused viewings muted", sig(paused, "viewings").tone === "muted");
 
   const draft = { ...complete, status: "draft" };
   ok("draft link muted", sig(draft, "link").tone === "muted");
@@ -123,6 +127,10 @@ const complete: RentalReadinessInput = {
 
   const leased = { ...complete, status: "leased" };
   ok("leased feed muted", sig(leased, "feed").tone === "muted");
+  ok("leased feed detail", sig(leased, "feed").detail === "leased");
+
+  const paused = { ...complete, status: "paused" };
+  ok("paused feed detail", sig(paused, "feed").detail === "paused");
 }
 
 // --- empty draft: nothing ready ---------------------------------------------

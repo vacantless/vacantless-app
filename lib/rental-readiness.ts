@@ -55,6 +55,11 @@ const FEED_FIELD_LABEL: Record<string, string> = {
   address: "an address",
 };
 
+function closedPublicStatus(status: string): "leased" | "paused" | null {
+  if (!isPubliclyVisible(status) || isPublicBookable(status)) return null;
+  return status === "leased" ? "leased" : "paused";
+}
+
 function linkSignal(status: string): ReadinessSignal {
   if (isPublicBookable(status)) {
     return {
@@ -89,7 +94,21 @@ function linkSignal(status: string): ReadinessSignal {
   };
 }
 
-function photosSignal(photoCount: number): ReadinessSignal {
+function photosSignal(status: string, photoCount: number): ReadinessSignal {
+  const closed = closedPublicStatus(status);
+  if (closed) {
+    return {
+      key: "photos",
+      label: "Photos",
+      ok: false,
+      tone: "muted",
+      detail: closed,
+      hint:
+        closed === "leased"
+          ? "No photo work is needed while this rental is leased and closed to inquiries."
+          : "No photo work is needed while this rental is paused and closed to inquiries.",
+    };
+  }
   if (photoCount > 0) {
     return {
       key: "photos",
@@ -113,7 +132,21 @@ function photosSignal(photoCount: number): ReadinessSignal {
   };
 }
 
-function viewingsSignal(windowCount: number): ReadinessSignal {
+function viewingsSignal(status: string, windowCount: number): ReadinessSignal {
+  const closed = closedPublicStatus(status);
+  if (closed) {
+    return {
+      key: "viewings",
+      label: "Viewings",
+      ok: false,
+      tone: "muted",
+      detail: closed,
+      hint:
+        closed === "leased"
+          ? "Viewing bookings are closed because this rental is leased."
+          : "Viewing bookings are closed because this rental is paused.",
+    };
+  }
   if (windowCount > 0) {
     return {
       key: "viewings",
@@ -142,13 +175,19 @@ export function feedSignal(input: RentalReadinessInput): ReadinessSignal {
   // (FEED_LISTABLE_STATUS). A leased/paused/draft rental is intentionally NOT
   // in the feed, so report it as a muted state, not an error.
   if (!isPublicBookable(input.status)) {
+    const closed = closedPublicStatus(input.status);
     return {
       key: "feed",
       label: "Feed",
       ok: false,
       tone: "muted",
-      detail: "not live",
-      hint: "Only Live rentals syndicate to the listing feed. Set it Live to include it.",
+      detail: closed ?? "not live",
+      hint:
+        closed === "leased"
+          ? "Leased rentals are not sent to the listing feed. Relist it as Live before advertising it again."
+          : closed === "paused"
+            ? "Paused rentals are not sent to the listing feed. Set it Live again when you are ready to accept inquiries."
+            : "Only Live rentals syndicate to the listing feed. Set it Live to include it.",
     };
   }
   const readiness = listingFeedReadiness({
@@ -190,8 +229,8 @@ export function rentalRowReadiness(
 ): ReadinessSignal[] {
   return [
     linkSignal(input.status),
-    photosSignal(input.photoCount),
-    viewingsSignal(input.availabilityWindowCount),
+    photosSignal(input.status, input.photoCount),
+    viewingsSignal(input.status, input.availabilityWindowCount),
     feedSignal(input),
   ];
 }

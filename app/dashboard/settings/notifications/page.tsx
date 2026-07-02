@@ -187,6 +187,14 @@ export default async function NotificationsSettingsPage({
                 const enabled = row ? row.enabled : true;
                 const recipients = (row?.recipients ?? []).join("\n");
                 const highlight = savedKey === event.key;
+                const fieldIdPrefix = `notification-${event.key.replace(
+                  /[^a-zA-Z0-9_-]/g,
+                  "-",
+                )}`;
+                const enabledId = `${fieldIdPrefix}-enabled`;
+                const subjectId = `${fieldIdPrefix}-subject`;
+                const bodyId = `${fieldIdPrefix}-body`;
+                const recipientsId = `${fieldIdPrefix}-recipients`;
                 return (
                   <form
                     key={event.key}
@@ -215,8 +223,12 @@ export default async function NotificationsSettingsPage({
                           </p>
                         )}
                       </div>
-                      <label className="flex shrink-0 items-center gap-2 text-sm text-gray-700">
+                      <label
+                        htmlFor={enabledId}
+                        className="flex shrink-0 items-center gap-2 text-sm text-gray-700"
+                      >
                         <input
+                          id={enabledId}
                           type="checkbox"
                           name="enabled"
                           defaultChecked={enabled}
@@ -228,10 +240,14 @@ export default async function NotificationsSettingsPage({
 
                     <div className="mt-4 space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">
+                        <label
+                          htmlFor={subjectId}
+                          className="block text-sm font-medium text-gray-700"
+                        >
                           Subject
                         </label>
                         <input
+                          id={subjectId}
                           type="text"
                           name="subject_template"
                           defaultValue={row?.subject_template ?? ""}
@@ -241,10 +257,14 @@ export default async function NotificationsSettingsPage({
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">
+                        <label
+                          htmlFor={bodyId}
+                          className="block text-sm font-medium text-gray-700"
+                        >
                           Message
                         </label>
                         <textarea
+                          id={bodyId}
                           name="body_template"
                           defaultValue={row?.body_template ?? ""}
                           placeholder={event.defaultBody}
@@ -263,10 +283,14 @@ export default async function NotificationsSettingsPage({
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">
+                        <label
+                          htmlFor={recipientsId}
+                          className="block text-sm font-medium text-gray-700"
+                        >
                           {event.audience === "operator" ? "Recipients" : "Also send to (cc)"}
                         </label>
                         <textarea
+                          id={recipientsId}
                           name="recipients"
                           defaultValue={recipients}
                           placeholder={"name@example.com\nanother@example.com"}

@@ -57,10 +57,14 @@ export function ReferAFriendForm() {
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="referral-name"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
               Their name <span className="text-slate-400">(optional)</span>
             </label>
             <input
+              id="referral-name"
               type="text"
               placeholder="e.g. Zak Smith"
               value={name}
@@ -69,10 +73,14 @@ export function ReferAFriendForm() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="referral-email"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
               Their email <span className="text-slate-400">(optional)</span>
             </label>
             <input
+              id="referral-email"
               type="email"
               placeholder="landlord@example.com"
               value={email}

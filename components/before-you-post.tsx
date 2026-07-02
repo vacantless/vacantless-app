@@ -65,10 +65,14 @@ export function BeforeYouPost({
       <div className="border-t border-gray-200 px-4 pb-4 pt-3">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div className="w-52">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label
+              htmlFor="before-you-post-portal"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
               Which portal are you posting on?
             </label>
             <select
+              id="before-you-post-portal"
               value={portal}
               onChange={(e) => onPortalChange(e.target.value as PortalKey)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"

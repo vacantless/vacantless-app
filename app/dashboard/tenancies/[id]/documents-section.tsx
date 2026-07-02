@@ -159,8 +159,14 @@ export function TenancyDocumentsSection({
                         <form action={createDocumentShareLink} className="flex items-center gap-2">
                           <input type="hidden" name="tenancy_id" value={tenancyId} />
                           <input type="hidden" name="document_id" value={pdf.id} />
-                          <label className="text-xs text-gray-500">Share for</label>
+                          <label
+                            htmlFor={`share-days-signed-${pdf.id}`}
+                            className="text-xs text-gray-500"
+                          >
+                            Share for
+                          </label>
                           <select
+                            id={`share-days-signed-${pdf.id}`}
                             name="days"
                             defaultValue={String(SHARE_LINK_DEFAULT_DAYS)}
                             className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
@@ -305,8 +311,14 @@ export function TenancyDocumentsSection({
                   <form action={createDocumentShareLink} className="flex items-center gap-2">
                     <input type="hidden" name="tenancy_id" value={tenancyId} />
                     <input type="hidden" name="document_id" value={d.id} />
-                    <label className="text-xs text-gray-500">Share for</label>
+                    <label
+                      htmlFor={`share-days-uploaded-${d.id}`}
+                      className="text-xs text-gray-500"
+                    >
+                      Share for
+                    </label>
                     <select
+                      id={`share-days-uploaded-${d.id}`}
                       name="days"
                       defaultValue={String(SHARE_LINK_DEFAULT_DAYS)}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-xs"

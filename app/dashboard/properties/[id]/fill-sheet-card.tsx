@@ -76,10 +76,14 @@ export function FillSheetCard({ sheets }: { sheets: FillSheet[] }) {
 
       <div className="border-t border-gray-200 px-4 pb-4 pt-3">
         <div className="mb-3 w-56">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label
+            htmlFor="fill-sheet-portal"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
             Which portal are you filling out?
           </label>
           <select
+            id="fill-sheet-portal"
             value={sheet.portal}
             onChange={(e) => {
               setPortal(e.target.value as FillSheet["portal"]);

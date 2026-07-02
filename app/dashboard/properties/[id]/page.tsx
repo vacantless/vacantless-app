@@ -326,14 +326,69 @@ export default async function PropertyDetailPage({
   const proto = h.get("x-forwarded-proto") ?? "https";
   const publicUrl = host ? `${proto}://${host}/r/${p.id}` : `/r/${p.id}`;
 
-  // Is the public /r page actually reachable? Draft + off_market 404, so the
-  // link is broken and must NOT be handed out anywhere (QA blocker #1).
-  const linkIsLive = isPubliclyVisible(p.status);
+  // Split "the /r page loads" from "this is safe to promote". Leased/paused
+  // pages intentionally load as unavailable, but only available rentals can take
+  // inquiries/bookings and therefore get copyable links, QR codes, or tracked
+  // posting URLs.
+  const normalizedStatus = normalizePropertyStatus(p.status);
+  const publicPageIsBookable = isPublicBookable(normalizedStatus);
+  const publicPageIsVisible = isPubliclyVisible(normalizedStatus);
+  const publicPageShowsUnavailable =
+    publicPageIsVisible && !publicPageIsBookable;
+  const linkIsLive = publicPageIsBookable;
+  const promotionGuard = linkIsLive
+    ? null
+    : normalizedStatus === "leased"
+      ? {
+          title: "This rental is leased.",
+          intro:
+            "Keep this wording for reference or relisting; relist the rental as Live before you post it again.",
+          body:
+            "The copy below does not include your public listing link, and the rental can't take inquiries or viewing bookings while it is leased.",
+          kitBody:
+            "Relist it as Live before sharing a public link, QR code, or bundled channel copy.",
+          missingLinkText:
+            "Relist this rental as Live before adding a public listing link.",
+          copyFallbackCta:
+            "This rental is leased and is not accepting inquiries.",
+          postingBody:
+            "Past post history can stay here for reporting, but tracked sharing is off while the rental is leased.",
+        }
+      : normalizedStatus === "paused"
+        ? {
+            title: "This rental is paused.",
+            intro:
+              "Keep this wording ready; set the rental Live again before you post it.",
+            body:
+              "The copy below does not include your public listing link, and the rental can't take inquiries or viewing bookings while it is paused.",
+            kitBody:
+              "Set it Live again before sharing a public link, QR code, or bundled channel copy.",
+            missingLinkText:
+              "Set this paused rental Live again before adding a public listing link.",
+            copyFallbackCta:
+              "This rental is paused and is not accepting inquiries right now.",
+            postingBody:
+              "Past post history can stay here for reporting, but tracked sharing is off while the rental is paused.",
+          }
+        : {
+            title: "This rental isn't live yet.",
+            intro:
+              "Prepare it now; set the rental Live above before you post it.",
+            body:
+              "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - set it to Live (above) before you post it anywhere.",
+            kitBody:
+              "Set it to Live (above) to get your public link and QR code; the channel wording below is ready to prepare now.",
+            missingLinkText:
+              "Set this rental Live to include your public listing link.",
+            copyFallbackCta: "Contact us for availability details.",
+            postingBody:
+              "Set this rental Live before adding posts or sharing tracked links.",
+          };
 
   // Ready-to-paste per-channel listing copy, built from this unit's real fields.
-  // Omit the public link entirely for a non-live rental so the generated copy
-  // never embeds a URL that 404s; the copy falls back to "Contact us to book a
-  // viewing." until the rental goes Live.
+  // Omit the public link entirely for a non-bookable rental so the generated copy
+  // never embeds a dead or unavailable URL; closed statuses get a safe fallback
+  // line that does not invite bookings.
   const org = await getCurrentOrg();
 
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
@@ -634,6 +689,7 @@ export default async function PropertyDetailPage({
     baths: p.baths,
     description: p.description,
     publicUrl: linkIsLive ? publicUrl : null,
+    fallbackCta: promotionGuard?.copyFallbackCta,
     features: effectiveFeatures,
   }).map((c) => ({
     key: c.portal,
@@ -657,6 +713,7 @@ export default async function PropertyDetailPage({
     businessName: org?.name ?? null,
     address: p.address,
     landingUrl: marketingLandingUrl,
+    missingLinkText: promotionGuard?.missingLinkText,
     channels: copyTabs,
   });
   // The QR encodes the public landing link; skip generation when unentitled or
@@ -723,16 +780,16 @@ export default async function PropertyDetailPage({
 
   // Status-aware guardrail for the share tools (S226 QA-audit): warn the
   // operator before they hand out a link that won't behave the way they expect.
-  //   available           -> fully live, no notice
+  //   available           -> fully bookable, no notice
   //   paused / leased      -> /r LOADS but says "not available" (caution)
   //   draft / off_market   -> /r 404s, the link is broken (warning)
-  const shareNotice = isPublicBookable(p.status)
+  const shareNotice = publicPageIsBookable
     ? null
-    : isPubliclyVisible(p.status)
+    : publicPageIsVisible
       ? {
           tone: "caution" as const,
           text:
-            p.status === "leased"
+            normalizedStatus === "leased"
               ? "This rental is marked Leased. The link still works, but anyone who opens it is told the unit is no longer available — they can't inquire or book a viewing."
               : "This rental is Paused. The link still works, but anyone who opens it is told the unit isn't currently available — they can't inquire or book a viewing.",
         }
@@ -746,7 +803,7 @@ export default async function PropertyDetailPage({
   // Lifecycle rail (IA Step 4 slice 1): derive where this unit sits, empty ->
   // leased, from data already fetched above. Pure — see lib/rental-lifecycle.
   const lifecycle = deriveRentalLifecycle(p.id, {
-    propertyStatus: normalizePropertyStatus(p.status),
+    propertyStatus: normalizedStatus,
     hasRent: (p.rent_cents ?? 0) > 0,
     bedsSet: p.beds != null,
     bathsSet: p.baths != null,
@@ -806,10 +863,10 @@ export default async function PropertyDetailPage({
       pets_dogs: effectiveFeatures.pets_dogs,
     },
     inherited: inheritedNext,
-    isLive: linkIsLive,
+    isLive: publicPageIsBookable,
     photoCount: photoRows.length,
     channelCount: copyTabs.length,
-    linkIsLive,
+    linkIsLive: publicPageIsBookable,
     listingPostCount: postRows.length,
     hasAvailability: (availabilityCount ?? 0) > 0,
     openInquiryCount: leadRows.filter(
@@ -1017,6 +1074,8 @@ export default async function PropertyDetailPage({
         <p className="mb-3 text-xs text-gray-500">
           {linkIsLive
             ? "Share this branded page on Kijiji, Facebook, and email. Inquiries land straight in your renter list."
+            : publicPageShowsUnavailable
+              ? "This public page can be previewed, but it tells renters the unit is unavailable and does not accept inquiries or viewing bookings."
             : "Once this rental is Live, its branded page can be shared on Kijiji, Facebook, and email and inquiries land straight in your renter list."}
         </p>
         {shareNotice && (
@@ -1030,10 +1089,20 @@ export default async function PropertyDetailPage({
             {shareNotice.text}
           </p>
         )}
-        {/* Only expose Copy / Open when the link actually resolves. For a Draft
-            or off-market rental the /r page 404s, so we show the warning above
-            instead of a broken link (QA blocker #1). */}
-        {linkIsLive && <CopyLink url={publicUrl} />}
+        {/* Only expose Copy when the page is bookable. Leased/paused pages can be
+            previewed as unavailable, but should not be handed out as inquiry links. */}
+        {linkIsLive ? (
+          <CopyLink url={publicUrl} />
+        ) : publicPageShowsUnavailable ? (
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={SECONDARY_ACTION_CLASS}
+          >
+            Open unavailable page -&gt;
+          </a>
+        ) : null}
 
         {showReadiness && (
           <div className="mt-4 border-t border-gray-100 pt-4">
@@ -1107,6 +1176,8 @@ export default async function PropertyDetailPage({
       <MarketingKitCard
         locked={!marketingEnabled}
         notLive={!linkIsLive}
+        notLiveTitle={promotionGuard?.title}
+        notLiveBody={promotionGuard?.kitBody}
         landingUrl={marketingKit.landingUrl}
         qrSvg={marketingQrSvg}
         combinedText={marketingKit.combinedText}
@@ -1120,6 +1191,9 @@ export default async function PropertyDetailPage({
         tabs={copyTabs}
         descriptionThin={descriptionThin}
         notLive={!linkIsLive}
+        notLiveIntro={promotionGuard?.intro}
+        notLiveTitle={promotionGuard?.title}
+        notLiveBody={promotionGuard?.body}
       />
 
       {/* --- Photos for this rental --- */}
@@ -1335,34 +1409,53 @@ export default async function PropertyDetailPage({
           </h3>
         </div>
         <p className="mb-4 text-xs text-gray-500">
-          Track each portal you advertise on. Share that portal&apos;s{" "}
-          <strong>tracked link</strong> instead of the plain one, and every
-          inquiry through it is tagged with the channel it came from, so your
-          reports show what&apos;s actually working.
+          {linkIsLive ? (
+            <>
+              Track each portal you advertise on. Share that portal&apos;s{" "}
+              <strong>tracked link</strong> instead of the plain one, and every
+              inquiry through it is tagged with the channel it came from, so your
+              reports show what&apos;s actually working.
+            </>
+          ) : (
+            "Keep post history for reporting here. Tracked sharing turns back on when this rental is Live and accepting inquiries."
+          )}
         </p>
+
+        {!linkIsLive && promotionGuard && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <span className="font-medium">{promotionGuard.title}</span>{" "}
+            {promotionGuard.postingBody}
+          </p>
+        )}
 
         {/* Per-portal "before you post" gotcha checklist (S260). Content, not
             automation — the operator still posts by hand. */}
-        <BeforeYouPost />
+        {linkIsLive && <BeforeYouPost />}
 
         {/* Per-portal field-by-field fill sheet (S262). The values to paste into
             each portal's form, resolved from this rental, with the gotcha on
             each field. Still a reference — nothing is submitted. */}
-        <FillSheetCard sheets={fillSheets} />
+        {linkIsLive && <FillSheetCard sheets={fillSheets} />}
 
         {postRows.length === 0 ? (
           <div className="mb-4">
             <EmptyState
               icon={<Icons.list />}
               title="No posts tracked yet"
-              description="Add the portals you've listed this unit on below to track inquiries by source."
+              description={
+                linkIsLive
+                  ? "Add the portals you've listed this unit on below to track inquiries by source."
+                  : "When this rental is Live, you can track each portal you advertise on here."
+              }
             />
           </div>
         ) : (
           <ul className="mb-4 space-y-3">
             {postRows.map((post) => {
               const count = postCounts.get(post.id) ?? 0;
-              const trackedUrl = buildTrackedLink(publicUrl, post.id);
+              const trackedUrl = linkIsLive
+                ? buildTrackedLink(publicUrl, post.id)
+                : null;
               return (
                 <li
                   key={post.id}
@@ -1396,10 +1489,19 @@ export default async function PropertyDetailPage({
                     )}
                   </div>
 
-                  <p className="mb-1 text-xs font-medium text-gray-500">
-                    Tracked inquiry link for this portal
-                  </p>
-                  <CopyLink url={trackedUrl} />
+                  {trackedUrl ? (
+                    <>
+                      <p className="mb-1 text-xs font-medium text-gray-500">
+                        Tracked inquiry link for this portal
+                      </p>
+                      <CopyLink url={trackedUrl} />
+                    </>
+                  ) : (
+                    <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                      Tracked inquiry links are hidden while this rental is not
+                      Live and accepting inquiries.
+                    </p>
+                  )}
 
                   {post.notes && (
                     <p className="mt-2 text-xs text-gray-500">{post.notes}</p>
@@ -1417,10 +1519,14 @@ export default async function PropertyDetailPage({
                       <input type="hidden" name="post_id" value={post.id} />
                       <div className="flex flex-wrap gap-3">
                         <div className="w-44">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                          <label
+                            htmlFor={`listing-post-${post.id}-portal`}
+                            className="mb-1 block text-xs font-medium text-gray-600"
+                          >
                             Portal
                           </label>
                           <select
+                            id={`listing-post-${post.id}-portal`}
                             name="portal"
                             defaultValue={post.portal}
                             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
@@ -1433,10 +1539,14 @@ export default async function PropertyDetailPage({
                           </select>
                         </div>
                         <div className="w-36">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                          <label
+                            htmlFor={`listing-post-${post.id}-status`}
+                            className="mb-1 block text-xs font-medium text-gray-600"
+                          >
                             Status
                           </label>
                           <select
+                            id={`listing-post-${post.id}-status`}
                             name="status"
                             defaultValue={post.status}
                             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
@@ -1449,10 +1559,14 @@ export default async function PropertyDetailPage({
                           </select>
                         </div>
                         <div className="w-40">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                          <label
+                            htmlFor={`listing-post-${post.id}-posted-on`}
+                            className="mb-1 block text-xs font-medium text-gray-600"
+                          >
                             Posted date
                           </label>
                           <input
+                            id={`listing-post-${post.id}-posted-on`}
                             name="posted_on"
                             type="date"
                             defaultValue={post.posted_on ?? ""}
@@ -1461,10 +1575,14 @@ export default async function PropertyDetailPage({
                         </div>
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                        <label
+                          htmlFor={`listing-post-${post.id}-url`}
+                          className="mb-1 block text-xs font-medium text-gray-600"
+                        >
                           Ad URL
                         </label>
                         <input
+                          id={`listing-post-${post.id}-url`}
                           name="url"
                           defaultValue={post.url ?? ""}
                           placeholder="https://www.kijiji.ca/..."
@@ -1477,13 +1595,17 @@ export default async function PropertyDetailPage({
                       </div>
                       <div className="flex flex-wrap gap-3">
                         <div className="flex-1 min-w-[12rem]">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                          <label
+                            htmlFor={`listing-post-${post.id}-label`}
+                            className="mb-1 block text-xs font-medium text-gray-600"
+                          >
                             Label{" "}
                             <span className="font-normal text-gray-400">
                               (for &quot;Other&quot;)
                             </span>
                           </label>
                           <input
+                            id={`listing-post-${post.id}-label`}
                             name="label"
                             defaultValue={post.label ?? ""}
                             placeholder="PadMapper"
@@ -1491,10 +1613,14 @@ export default async function PropertyDetailPage({
                           />
                         </div>
                         <div className="flex-1 min-w-[12rem]">
-                          <label className="mb-1 block text-xs font-medium text-gray-600">
+                          <label
+                            htmlFor={`listing-post-${post.id}-notes`}
+                            className="mb-1 block text-xs font-medium text-gray-600"
+                          >
                             Notes
                           </label>
                           <input
+                            id={`listing-post-${post.id}-notes`}
                             name="notes"
                             defaultValue={post.notes ?? ""}
                             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -1526,6 +1652,7 @@ export default async function PropertyDetailPage({
           </ul>
         )}
 
+        {linkIsLive && (
         <details>
           <summary className="cursor-pointer text-sm font-medium text-brand">
             + Add a post
@@ -1540,10 +1667,14 @@ export default async function PropertyDetailPage({
             <input type="hidden" name="property_id" value={p.id} />
             <div className="flex flex-wrap gap-3">
               <div className="w-44">
-                <label className="mb-1 block text-xs font-medium text-gray-600">
+                <label
+                  htmlFor="listing-post-new-portal"
+                  className="mb-1 block text-xs font-medium text-gray-600"
+                >
                   Portal
                 </label>
                 <select
+                  id="listing-post-new-portal"
                   name="portal"
                   defaultValue="kijiji"
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
@@ -1556,10 +1687,14 @@ export default async function PropertyDetailPage({
                 </select>
               </div>
               <div className="w-36">
-                <label className="mb-1 block text-xs font-medium text-gray-600">
+                <label
+                  htmlFor="listing-post-new-status"
+                  className="mb-1 block text-xs font-medium text-gray-600"
+                >
                   Status
                 </label>
                 <select
+                  id="listing-post-new-status"
                   name="status"
                   defaultValue="live"
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
@@ -1572,10 +1707,14 @@ export default async function PropertyDetailPage({
                 </select>
               </div>
               <div className="w-40">
-                <label className="mb-1 block text-xs font-medium text-gray-600">
+                <label
+                  htmlFor="listing-post-new-posted-on"
+                  className="mb-1 block text-xs font-medium text-gray-600"
+                >
                   Posted date
                 </label>
                 <input
+                  id="listing-post-new-posted-on"
                   name="posted_on"
                   type="date"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -1583,10 +1722,14 @@ export default async function PropertyDetailPage({
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label
+                htmlFor="listing-post-new-url"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
                 Ad URL
               </label>
               <input
+                id="listing-post-new-url"
                 name="url"
                 placeholder="https://www.kijiji.ca/..."
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -1597,23 +1740,31 @@ export default async function PropertyDetailPage({
             </div>
             <div className="flex flex-wrap gap-3">
               <div className="flex-1 min-w-[12rem]">
-                <label className="mb-1 block text-xs font-medium text-gray-600">
+                <label
+                  htmlFor="listing-post-new-label"
+                  className="mb-1 block text-xs font-medium text-gray-600"
+                >
                   Label{" "}
                   <span className="font-normal text-gray-400">
                     (for &quot;Other&quot;)
                   </span>
                 </label>
                 <input
+                  id="listing-post-new-label"
                   name="label"
                   placeholder="PadMapper"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </div>
               <div className="flex-1 min-w-[12rem]">
-                <label className="mb-1 block text-xs font-medium text-gray-600">
+                <label
+                  htmlFor="listing-post-new-notes"
+                  className="mb-1 block text-xs font-medium text-gray-600"
+                >
                   Notes
                 </label>
                 <input
+                  id="listing-post-new-notes"
                   name="notes"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
@@ -1628,6 +1779,7 @@ export default async function PropertyDetailPage({
             </button>
           </form>
         </details>
+        )}
       </div>
 
       {showBlastCard && (
@@ -1673,10 +1825,14 @@ export default async function PropertyDetailPage({
       >
         <input type="hidden" name="id" value={p.id} />
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label
+            htmlFor="property-address"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
             Address
           </label>
           <input
+            id="property-address"
             name="address"
             required
             defaultValue={p.address}
@@ -1685,10 +1841,14 @@ export default async function PropertyDetailPage({
         </div>
         <div className="flex flex-wrap gap-4">
           <div className="w-32">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label
+              htmlFor="property-rent"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
               Rent ($/mo)
             </label>
             <input
+              id="property-rent"
               name="rent"
               type="number"
               step="1"
@@ -1697,10 +1857,14 @@ export default async function PropertyDetailPage({
             />
           </div>
           <div className="w-20">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label
+              htmlFor="property-beds"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
               Beds
             </label>
             <input
+              id="property-beds"
               name="beds"
               type="number"
               step="1"
@@ -1709,10 +1873,14 @@ export default async function PropertyDetailPage({
             />
           </div>
           <div className="w-20">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label
+              htmlFor="property-baths"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
               Baths
             </label>
             <input
+              id="property-baths"
               name="baths"
               type="number"
               step="0.5"
@@ -1721,10 +1889,14 @@ export default async function PropertyDetailPage({
             />
           </div>
           <div className="w-40">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label
+              htmlFor="property-parking"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
               Parking
             </label>
             <input
+              id="property-parking"
               name="parking"
               defaultValue={p.parking ?? ""}
               placeholder="1 spot"
@@ -1732,10 +1904,14 @@ export default async function PropertyDetailPage({
             />
           </div>
           <div className="w-40">
-            <label className="mb-1 block text-xs font-medium text-gray-600">
+            <label
+              htmlFor="property-status"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
               Status
             </label>
             <select
+              id="property-status"
               name="status"
               defaultValue={p.status}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
@@ -1834,10 +2010,14 @@ export default async function PropertyDetailPage({
           </legend>
           <div className="flex flex-wrap gap-4">
             <div className="w-40">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label
+                htmlFor="property-available-date"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
                 Available date
               </label>
               <input
+                id="property-available-date"
                 name="available_date"
                 type="date"
                 defaultValue={p.available_date ?? ""}
@@ -1846,10 +2026,14 @@ export default async function PropertyDetailPage({
               <p className="mt-1 text-xs text-gray-400">Blank = available now</p>
             </div>
             <div className="w-28">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label
+                htmlFor="property-sqft"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
                 Size (sq ft)
               </label>
               <input
+                id="property-sqft"
                 name="sqft"
                 type="number"
                 step="1"
@@ -1860,10 +2044,14 @@ export default async function PropertyDetailPage({
               />
             </div>
             <div className="w-32">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label
+                htmlFor="property-floor"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
                 Floor
               </label>
               <input
+                id="property-floor"
                 name="floor"
                 defaultValue={p.floor ?? ""}
                 placeholder="2nd"
@@ -1871,10 +2059,14 @@ export default async function PropertyDetailPage({
               />
             </div>
             <div className="w-44">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label
+                htmlFor="property-laundry"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
                 Laundry
               </label>
               <select
+                id="property-laundry"
                 name="laundry"
                 defaultValue={p.laundry ?? ""}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
@@ -1980,7 +2172,11 @@ export default async function PropertyDetailPage({
                 </select>
               </label>
             </div>
+            <label htmlFor="property-pets-notes" className="sr-only">
+              Pet notes
+            </label>
             <input
+              id="property-pets-notes"
               name="pets_notes"
               defaultValue={p.pets_notes ?? ""}
               placeholder="Pet notes (optional), e.g. 1 pet max, no aggressive breeds"
@@ -2248,6 +2444,8 @@ export default async function PropertyDetailPage({
           description={
             linkIsLive
               ? "Share the public listing link above to start collecting inquiries."
+              : publicPageShowsUnavailable
+                ? "This rental is not accepting inquiries in its current status. Set it Live again when you're ready for renters."
               : "Set this rental to Live (in the form above) to share its public link and start collecting inquiries."
           }
         />

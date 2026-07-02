@@ -142,6 +142,15 @@ ok(
   liveNoPhotos.steps[1].detail === "Live · add photos",
 );
 
+const pausedNoPhotos = deriveRentalLifecycle(
+  PID,
+  inp({ hasRent: true, propertyStatus: "paused", photoCount: 0 }),
+);
+ok(
+  "paused rental -> market detail says not accepting inquiries",
+  pausedNoPhotos.steps[1].detail === "Paused - not accepting inquiries",
+);
+
 // --- inquiries in, no viewing yet -------------------------------------------
 const inquired = deriveRentalLifecycle(
   PID,
@@ -292,6 +301,10 @@ ok(
 ok(
   "leased w/o rent -> all done, no current",
   leasedNoRent.completedCount === 7 && leasedNoRent.currentStep === null,
+);
+ok(
+  "leased w/o rent -> market detail says not accepting inquiries",
+  leasedNoRent.steps[1].detail === "Leased - not accepting inquiries",
 );
 
 // --- exactly one 'current' step at any time ---------------------------------
@@ -503,14 +516,19 @@ ok(
   stateOf(endedTenancy, "lease") !== "done",
 );
 
-// --- paused unit still counts as marketed -----------------------------------
+// --- paused unit is previewable but not bookable/promotable ------------------
 const paused = deriveRentalLifecycle(
   PID,
   inp({ hasRent: true, propertyStatus: "paused", photoCount: 2 }),
 );
 ok(
-  "paused + photos -> market done (was published)",
-  stateOf(paused, "market") === "done",
+  "paused + photos -> market not done",
+  stateOf(paused, "market") === "current",
+);
+ok(
+  "paused + photos -> not accepting inquiries detail",
+  paused.steps.find((s) => s.step === "market")!.detail ===
+    "Paused - not accepting inquiries",
 );
 
 // guard: an unknown lead status string doesn't crash the rank reduce

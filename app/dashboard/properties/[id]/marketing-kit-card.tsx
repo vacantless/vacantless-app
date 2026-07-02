@@ -14,6 +14,8 @@ import { useState } from "react";
 export function MarketingKitCard({
   locked,
   notLive = false,
+  notLiveTitle = "This rental isn't live yet.",
+  notLiveBody = "Set it to Live (above) to get your public link and QR code; the channel wording below is ready to prepare now.",
   landingUrl,
   qrSvg,
   combinedText,
@@ -23,9 +25,12 @@ export function MarketingKitCard({
 }: {
   // True when the org's plan lacks the listing_marketing entitlement.
   locked: boolean;
-  // True when the rental is not Live (Draft / off market) so the landing link
-  // is unavailable; the kit is still previewable but framing softens.
+  // True when the rental is not bookable (Draft / off market / paused / leased)
+  // so the landing link is unavailable; the kit is still previewable but framed
+  // as prep/history rather than ready-to-promote.
   notLive?: boolean;
+  notLiveTitle?: string;
+  notLiveBody?: string;
   landingUrl: string | null;
   // The inline SVG markup for the landing-link QR, or null when unavailable.
   qrSvg: string | null;
@@ -38,6 +43,8 @@ export function MarketingKitCard({
   feedStatus: { inFeed: boolean; hint: string } | null;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const shareableLinkId = "marketing-kit-shareable-link";
+  const allWordingId = "marketing-kit-all-wording";
 
   async function copy(text: string, field: string) {
     try {
@@ -96,20 +103,22 @@ export function MarketingKitCard({
         <div className="space-y-4">
           {notLive && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              <span className="font-medium">This rental isn&apos;t live yet.</span>{" "}
-              Set it to Live (above) to get your public link and QR code; the
-              channel wording below is ready to prepare now.
+              <span className="font-medium">{notLiveTitle}</span> {notLiveBody}
             </div>
           )}
 
           {landingUrl && (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
               <div className="min-w-0 flex-1">
-                <label className="mb-1 block text-xs font-medium text-gray-500">
+                <label
+                  htmlFor={shareableLinkId}
+                  className="mb-1 block text-xs font-medium text-gray-500"
+                >
                   Shareable link
                 </label>
                 <div className="flex items-center gap-2">
                   <input
+                    id={shareableLinkId}
                     readOnly
                     aria-label="Shareable listing link"
                     value={landingUrl}
@@ -153,7 +162,10 @@ export function MarketingKitCard({
 
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs font-medium text-gray-500">
+              <label
+                htmlFor={allWordingId}
+                className="text-xs font-medium text-gray-500"
+              >
                 All channel wording
               </label>
               <button
@@ -165,6 +177,7 @@ export function MarketingKitCard({
               </button>
             </div>
             <textarea
+              id={allWordingId}
               readOnly
               aria-label="All channel wording"
               rows={8}
@@ -179,9 +192,9 @@ export function MarketingKitCard({
 
           {postChecklist.length > 0 && (
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-500">
+              <p className="mb-1.5 block text-xs font-medium text-gray-500">
                 Where to post
-              </label>
+              </p>
               <ul className="flex flex-wrap gap-1.5">
                 {postChecklist.map((label) => (
                   <li

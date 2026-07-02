@@ -65,6 +65,14 @@ const draft = buildCombinedText({
 ok("combined draft: header is address only", draft.startsWith("9 Oak Ave"));
 ok("combined draft: no apply link", !draft.includes("Details and apply:"));
 ok("combined draft: prompts to set Live", draft.includes("Set this rental Live"));
+const leased = buildCombinedText({
+  businessName: null,
+  address: "18 Shorncliffe Avenue",
+  landingUrl: null,
+  missingLinkText: "Relist this rental as Live before adding a public listing link.",
+  channels: CHANNELS,
+});
+ok("combined closed: accepts custom missing-link copy", leased.includes("Relist this rental as Live"));
 
 // --- buildMarketingKit -----------------------------------------------------
 const kit = buildMarketingKit({

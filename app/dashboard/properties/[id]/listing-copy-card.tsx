@@ -21,17 +21,22 @@ export function ListingCopyCard({
   tabs,
   descriptionThin = false,
   notLive = false,
+  notLiveIntro = "Prepare it now; set the rental Live above before you post it.",
+  notLiveTitle = "This rental isn't live yet.",
+  notLiveBody = "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - set it to Live (above) before you post it anywhere.",
 }: {
   tabs: CopyTab[];
   // True when the saved description is empty/very short. The channel copy below
   // is built from the description, so a thin one yields a field-summary ad -
   // surface a nudge into the Description Helper instead of letting it ship flat.
   descriptionThin?: boolean;
-  // True when the rental's public /r page doesn't resolve (Draft / off market).
-  // The copy is still preparable, but it omits the public link and the rental
-  // can't take inquiries yet - so we soften the "paste it into your ad" framing
-  // with a guard banner so a Draft isn't posted as if it were Live (Codex QA).
+  // True when the rental is not bookable (Draft / off market / paused / leased).
+  // The copy is still preparable/referenceable, but it omits the public link and
+  // the rental can't take inquiries, so the card avoids ready-to-post framing.
   notLive?: boolean;
+  notLiveIntro?: string;
+  notLiveTitle?: string;
+  notLiveBody?: string;
 }) {
   const [active, setActive] = useState(tabs[0]?.key ?? "generic");
   // Which field was most recently copied, so we can flash "Copied!" on it.
@@ -53,6 +58,8 @@ export function ListingCopyCard({
   if (!current) return null;
 
   const fullText = `${current.title}\n\n${current.body}`;
+  const titleId = "listing-copy-title";
+  const descriptionId = "listing-copy-description";
 
   return (
     <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
@@ -63,18 +70,13 @@ export function ListingCopyCard({
         Ready-to-paste wording built from this rental&apos;s details, formatted
         for each site - the title length, link placement, and call-to-action are
         adjusted per platform.{" "}
-        {notLive
-          ? "Prepare it now; set the rental Live above before you post it."
-          : "Pick a channel, copy, and paste it into your ad."}{" "}
+        {notLive ? notLiveIntro : "Pick a channel, copy, and paste it into your ad."}{" "}
         Edit the rental above and this updates automatically.
       </p>
 
       {notLive && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          <span className="font-medium">This rental isn&apos;t live yet.</span>{" "}
-          You can prepare and copy this wording now, but it doesn&apos;t include
-          your public listing link and the rental can&apos;t take inquiries -
-          set it to Live (above) before you post it anywhere.
+          <span className="font-medium">{notLiveTitle}</span> {notLiveBody}
         </div>
       )}
 
@@ -112,7 +114,9 @@ export function ListingCopyCard({
 
       <div className="mb-3">
         <div className="mb-1 flex items-center justify-between">
-          <label className="text-xs font-medium text-gray-500">Title</label>
+          <label htmlFor={titleId} className="text-xs font-medium text-gray-500">
+            Title
+          </label>
           <button
             type="button"
             onClick={() => copy(current.title, "title")}
@@ -122,6 +126,7 @@ export function ListingCopyCard({
           </button>
         </div>
         <input
+          id={titleId}
           readOnly
           aria-label="Listing title"
           value={current.title}
@@ -132,7 +137,10 @@ export function ListingCopyCard({
 
       <div>
         <div className="mb-1 flex items-center justify-between">
-          <label className="text-xs font-medium text-gray-500">
+          <label
+            htmlFor={descriptionId}
+            className="text-xs font-medium text-gray-500"
+          >
             Description
           </label>
           <div className="flex gap-2">
@@ -153,6 +161,7 @@ export function ListingCopyCard({
           </div>
         </div>
         <textarea
+          id={descriptionId}
           readOnly
           aria-label="Listing description"
           rows={12}

@@ -303,6 +303,20 @@ ok(
 ok("copy: sparse falls back to contact CTA", sparse.body.includes("Contact us to book a viewing."));
 ok("copy: sparse no available-date still says Available now", sparse.body.includes("Available now"));
 
+const closedNoUrl = buildListingCopy(
+  {
+    ...fullInput,
+    publicUrl: null,
+    fallbackCta: "This rental is paused and is not accepting inquiries right now.",
+  },
+  "generic",
+);
+ok(
+  "copy: no-url fallback CTA can be status-safe",
+  closedNoUrl.body.includes("This rental is paused") &&
+    !closedNoUrl.body.includes("Contact us to book a viewing."),
+);
+
 // utilities NOT hardcoded: a unit with no included utilities omits the line.
 const noUtils = buildListingCopy(
   { address: "1 A St", beds: 1, baths: 1, features: { furnished: false } },

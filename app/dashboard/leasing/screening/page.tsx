@@ -346,10 +346,14 @@ export default async function ScreeningSettingsPage({
                         className="flex items-center gap-1.5"
                       >
                         <input type="hidden" name="question_id" value={q.id} />
-                        <label className="text-xs text-gray-500">
+                        <label
+                          htmlFor={`preferred-answer-${q.id}`}
+                          className="text-xs text-gray-500"
+                        >
                           You prefer
                         </label>
                         <select
+                          id={`preferred-answer-${q.id}`}
                           name="preferred_answer"
                           defaultValue={q.preferred_answer ?? ""}
                           className="rounded-lg border border-gray-300 px-2 py-1 text-xs"

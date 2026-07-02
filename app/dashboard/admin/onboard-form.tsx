@@ -58,10 +58,14 @@ export function OnboardLandlordForm() {
         className="space-y-4 rounded-lg border border-slate-200 bg-white p-4"
       >
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label
+            htmlFor="onboard-landlord-email"
+            className="mb-1 block text-sm font-medium text-slate-700"
+          >
             Landlord email
           </label>
           <input
+            id="onboard-landlord-email"
             type="email"
             required
             placeholder="landlord@example.com"
@@ -71,10 +75,14 @@ export function OnboardLandlordForm() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label
+            htmlFor="onboard-org-name"
+            className="mb-1 block text-sm font-medium text-slate-700"
+          >
             Account / organization name
           </label>
           <input
+            id="onboard-org-name"
             type="text"
             required
             placeholder="e.g. Zak Smith"
@@ -84,10 +92,14 @@ export function OnboardLandlordForm() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label
+            htmlFor="onboard-landlord-name"
+            className="mb-1 block text-sm font-medium text-slate-700"
+          >
             Landlord name <span className="text-slate-400">(optional)</span>
           </label>
           <input
+            id="onboard-landlord-name"
             type="text"
             placeholder="Their full name"
             value={landlordName}

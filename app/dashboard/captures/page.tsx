@@ -328,6 +328,7 @@ export default async function CapturesPage({
                     <select
                       name="appliance_type"
                       defaultValue={ap?.appliance_type ?? "other"}
+                      aria-label="Appliance type"
                       className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                     >
                       {APPLIANCE_TYPES.map((t) => (
@@ -340,18 +341,21 @@ export default async function CapturesPage({
                       name="make"
                       defaultValue={ap?.make ?? ""}
                       placeholder="Make"
+                      aria-label="Appliance make"
                       className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
                     />
                     <input
                       name="model"
                       defaultValue={ap?.model ?? ""}
                       placeholder="Model"
+                      aria-label="Appliance model"
                       className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
                     />
                     <input
                       name="serial"
                       defaultValue={ap?.serial ?? ""}
                       placeholder="Serial"
+                      aria-label="Appliance serial number"
                       className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
                     />
                     <button className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">

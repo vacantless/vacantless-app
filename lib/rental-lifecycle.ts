@@ -16,7 +16,7 @@
 // ============================================================================
 
 import {
-  isPubliclyVisible,
+  isPublicBookable,
   propertyStatusLabel,
   type PropertyStatus,
 } from "./listing-state";
@@ -152,8 +152,9 @@ export function deriveRentalLifecycle(
   propertyId: string,
   input: RentalLifecycleInput,
 ): RentalLifecycle {
-  const isLive = isPubliclyVisible(input.propertyStatus);
+  const isLive = isPublicBookable(input.propertyStatus);
   const isLeased = input.propertyStatus === "leased";
+  const isPaused = input.propertyStatus === "paused";
 
   // An actual tenancy is the truth for the Lease/Tenanted steps — NOT lead.status.
   // Only a live (active) or forthcoming (upcoming) tenancy is forward progress;
@@ -218,6 +219,8 @@ export function deriveRentalLifecycle(
       case "set_up":
         return raw.set_up ? "Details added" : "Add rent & details";
       case "market": {
+        if (isLeased) return "Leased - not accepting inquiries";
+        if (isPaused) return "Paused - not accepting inquiries";
         if (raw.market) {
           const bits = [propertyStatusLabel(input.propertyStatus)];
           bits.push(plural(input.photoCount, "photo", "photos"));
