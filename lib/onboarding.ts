@@ -39,7 +39,7 @@ export type LaunchChecklist = {
 export type ChecklistInput = {
   propertyCount: number;
   availabilityWindowCount: number;
-  brandingConfirmed: boolean;
+  replyToConfigured: boolean;
   leadCount: number;
   subscriptionActive: boolean;
   /**
@@ -59,19 +59,17 @@ export type ChecklistInput = {
 };
 
 /**
- * Heuristic: the org has "confirmed branding" once it has customized any brand
- * field away from the defaults — a logo, a reply-to, or a non-default color.
- * Name alone doesn't count (it's set at onboarding), so it isn't a signal that
- * the owner has visited Settings.
+ * The reply-to email is the real trust gate: it's the address renters reply to
+ * on inquiry/viewing emails, and — unlike business name and brand color —
+ * onboarding does NOT capture it. So a landlord who finished onboarding exactly
+ * as designed still has this genuinely to do, which is why the checklist step
+ * is framed around it (not a vague "confirm your branding" that reads as
+ * already-done). Complete once a non-empty reply-to is saved in Settings.
  */
-export function isBrandingConfirmed(org: {
-  brand_color: string | null;
-  logo_url: string | null;
+export function isReplyToConfigured(org: {
   reply_to_email: string | null;
 }): boolean {
-  const color = (org.brand_color ?? "").trim().toLowerCase();
-  const customColor = color !== "" && color !== DEFAULT_BRAND_COLOR;
-  return Boolean(org.logo_url) || Boolean(org.reply_to_email) || customColor;
+  return Boolean((org.reply_to_email ?? "").trim());
 }
 
 type StepDef = Omit<ChecklistStep, "status">;
@@ -94,12 +92,12 @@ const STEP_DEFS: StepDef[] = [
     cta: "Set availability",
   },
   {
-    key: "branding",
-    label: "Confirm your branding",
+    key: "replyto",
+    label: "Set your reply-to email",
     description:
-      "Set your business name, brand color, logo, and reply-to so renter emails look like you.",
+      "Set the email address renters reply to on your inquiry and viewing emails, so their replies reach you.",
     href: "/dashboard/settings",
-    cta: "Open settings",
+    cta: "Set reply-to email",
   },
   {
     key: "intake",
@@ -128,7 +126,7 @@ export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
   const done: boolean[] = [
     input.propertyCount > 0,
     input.availabilityWindowCount > 0,
-    input.brandingConfirmed,
+    input.replyToConfigured,
     input.leadCount > 0,
     input.subscriptionActive,
   ];

@@ -207,8 +207,11 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
     );
     ok("new_lead: all template tokens declared", used.every((t) => declared.has(t)));
     ok("new_lead: declares screening token", declared.has("screening"));
-    ok("new_lead: subject carries alert emoji", ev.defaultSubject.includes("🔴"));
-    ok("new_lead: defaults to alert-red accent", ev.defaultAccent === "#dc2626");
+    // Calmer default (post-S402): no alarmist emoji, no forced red accent — the
+    // stripe falls back to the org brand color unless the landlord picks red.
+    ok("new_lead: subject has no alert emoji", !ev.defaultSubject.includes("🔴"));
+    ok("new_lead: subject reads as a plain new-inquiry line", ev.defaultSubject.startsWith("New inquiry from"));
+    ok("new_lead: no forced default accent", ev.defaultAccent === undefined);
     // Fully-supplied render (incl. a populated screening block) leaves no literal
     // {{...}} behind and inlines the screening text.
     const rendered = renderNotification(ev, null, {
@@ -288,11 +291,18 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       body_template: null, recipients: null, accent_color: "#00ff00",
     }) === "#00ff00",
   );
-  ok("accent: falls back to event default", resolveNotificationAccent(newLead, null) === "#dc2626");
+  // The fallback branch (override absent -> event default) still works, tested
+  // against a synthetic event that carries a code default. (No shipped event
+  // carries one anymore — new_lead's forced red was dropped in the P3 pass.)
+  const withDefault = { ...newLead, defaultAccent: "#dc2626" };
+  ok("accent: falls back to event default", resolveNotificationAccent(withDefault, null) === "#dc2626");
   ok("accent: no default -> null", resolveNotificationAccent(scheduled, null) === null);
+  // Post-S402: new_lead no longer forces a red accent — with no override it
+  // resolves to null so the shell uses the org brand color.
+  ok("accent: new_lead has no forced default", resolveNotificationAccent(newLead, null) === null);
   ok(
     "accent: blank override -> event default",
-    resolveNotificationAccent(newLead, {
+    resolveNotificationAccent(withDefault, {
       event_key: newLead.key, enabled: true, subject_template: null,
       body_template: null, recipients: null, accent_color: "   ",
     }) === "#dc2626",

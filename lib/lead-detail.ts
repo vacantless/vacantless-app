@@ -180,3 +180,25 @@ export function suggestedNextStageOptions(
     label: statusLabel(stage),
   }));
 }
+
+// --- early convert-to-tenancy affordance -----------------------------------
+
+// Stages where a landlord might reasonably have signed (or decided on) a renter
+// and want to create the tenancy right away — before manually walking the lead
+// to Leased. These are the engaged, post-inquiry stages: a viewing is booked or
+// done, or an application is in. Earlier stages (new/replied/contacted) are too
+// speculative to offer a lease bridge, and "leased" already shows the full
+// convert bridge, "lost" is dead.
+const EARLY_TENANCY_STAGES = new Set<LeadStatus>(["booked", "showed", "applied"]);
+
+/**
+ * True when the lead is a viable open lead that should get a lighter-weight
+ * "Ready to lease? Create tenancy" affordance, so the landlord doesn't have to
+ * discover the stage dropdown and set Leased first (post-S402 pilot friction).
+ * "leased" is handled by the primary convert bridge, so it's excluded here.
+ */
+export function canOfferEarlyTenancy(current: string): boolean {
+  return (PIPELINE_STAGES as readonly string[]).includes(current)
+    ? EARLY_TENANCY_STAGES.has(current as LeadStatus)
+    : false;
+}

@@ -208,7 +208,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     key: "leasing.new_lead",
     family: "leasing",
     audience: "operator",
-    label: "New inquiry — action required",
+    label: "New inquiry",
     description:
       "When a new rental inquiry comes in, your leasing team is notified so you can reply fast. Defaults to members who manage inquiries; edit the recipients below.",
     tokens: [
@@ -220,7 +220,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "screening",
       "dashboard_url",
     ],
-    defaultSubject: "🔴 New inquiry: {{lead_name}} — {{property_address}}",
+    defaultSubject: "New inquiry from {{lead_name}} — {{property_address}}",
     // {{screening}} expands to a labeled, multi-line block of whatever the org
     // collected (occupants / pets / income / custom questions like Employment +
     // Other units) so an email-first operator (Aaliyah) sees the screening
@@ -229,9 +229,8 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     // collapse, so the email still reads cleanly. Runs of blank lines collapse
     // into one paragraph break (bodyToParagraphs splits on \n{2,}).
     defaultBody:
-      "New inquiry — action required for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply fast and log the contact in your dashboard: {{dashboard_url}}",
+      "New inquiry from {{lead_name}} for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply when you can and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
-    defaultAccent: "#dc2626",
   },
   // Post-showing outcome nudge (S391). Audience operator; the push half of the
   // showing funnel — once a showing's time has passed with no outcome recorded,

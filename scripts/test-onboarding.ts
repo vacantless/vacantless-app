@@ -2,8 +2,7 @@
 // Run: npx tsx scripts/test-onboarding.ts
 import {
   buildLaunchChecklist,
-  isBrandingConfirmed,
-  DEFAULT_BRAND_COLOR,
+  isReplyToConfigured,
   type ChecklistInput,
 } from "../lib/onboarding";
 
@@ -22,7 +21,7 @@ function ok(name: string, cond: boolean) {
 const EMPTY: ChecklistInput = {
   propertyCount: 0,
   availabilityWindowCount: 0,
-  brandingConfirmed: false,
+  replyToConfigured: false,
   leadCount: 0,
   subscriptionActive: false,
 };
@@ -30,7 +29,7 @@ const EMPTY: ChecklistInput = {
 const ALL: ChecklistInput = {
   propertyCount: 3,
   availabilityWindowCount: 5,
-  brandingConfirmed: true,
+  replyToConfigured: true,
   leadCount: 12,
   subscriptionActive: true,
 };
@@ -42,9 +41,9 @@ const ALL: ChecklistInput = {
   ok("empty -> 0 complete", c.completedCount === 0);
   ok("empty -> not all complete", c.allComplete === false);
   ok(
-    "step order is property,availability,branding,intake,golive",
+    "step order is property,availability,replyto,intake,golive",
     c.steps.map((s) => s.key).join(",") ===
-      "property,availability,branding,intake,golive",
+      "property,availability,replyto,intake,golive",
   );
 }
 
@@ -82,8 +81,8 @@ const ALL: ChecklistInput = {
   });
   ok("property complete", c.steps[0].status === "complete");
   ok("availability complete", c.steps[1].status === "complete");
-  ok("branding is the new current", c.steps[2].status === "current");
-  ok("nextStep advanced to branding", c.nextStep?.key === "branding");
+  ok("reply-to is the new current", c.steps[2].status === "current");
+  ok("nextStep advanced to reply-to", c.nextStep?.key === "replyto");
   ok("completedCount is 2", c.completedCount === 2);
 }
 
@@ -134,54 +133,22 @@ const ALL: ChecklistInput = {
   ok("blank firstPropertyId is ignored", blank.href === "/dashboard/properties");
 }
 
-// --- isBrandingConfirmed ---------------------------------------------------
+// --- isReplyToConfigured ---------------------------------------------------
 ok(
-  "default color + no logo/reply = not confirmed",
-  isBrandingConfirmed({
-    brand_color: DEFAULT_BRAND_COLOR,
-    logo_url: null,
-    reply_to_email: null,
-  }) === false,
+  "no reply-to = not configured",
+  isReplyToConfigured({ reply_to_email: null }) === false,
 );
 ok(
-  "null color + nothing = not confirmed",
-  isBrandingConfirmed({
-    brand_color: null,
-    logo_url: null,
-    reply_to_email: null,
-  }) === false,
+  "empty reply-to = not configured",
+  isReplyToConfigured({ reply_to_email: "" }) === false,
 );
 ok(
-  "custom color = confirmed",
-  isBrandingConfirmed({
-    brand_color: "#0e8c8c",
-    logo_url: null,
-    reply_to_email: null,
-  }) === true,
+  "whitespace reply-to = not configured",
+  isReplyToConfigured({ reply_to_email: "   " }) === false,
 );
 ok(
-  "default color casing ignored",
-  isBrandingConfirmed({
-    brand_color: DEFAULT_BRAND_COLOR.toUpperCase(),
-    logo_url: null,
-    reply_to_email: null,
-  }) === false,
-);
-ok(
-  "logo set = confirmed",
-  isBrandingConfirmed({
-    brand_color: DEFAULT_BRAND_COLOR,
-    logo_url: "https://example.com/logo.png",
-    reply_to_email: null,
-  }) === true,
-);
-ok(
-  "reply-to set = confirmed",
-  isBrandingConfirmed({
-    brand_color: DEFAULT_BRAND_COLOR,
-    logo_url: null,
-    reply_to_email: "leasing@example.com",
-  }) === true,
+  "reply-to set = configured",
+  isReplyToConfigured({ reply_to_email: "leasing@example.com" }) === true,
 );
 
 // --- Report ----------------------------------------------------------------

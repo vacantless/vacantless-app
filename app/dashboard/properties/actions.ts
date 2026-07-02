@@ -53,7 +53,7 @@ import {
   type DropboxEntry,
   type DropboxLeafFolder,
 } from "@/lib/dropbox-import";
-import { photoCapForPlan } from "@/lib/billing";
+import { photoCapForPlan, listingCapForPlan } from "@/lib/billing";
 import { createHash } from "crypto";
 import {
   validateDocumentUpload,
@@ -380,6 +380,25 @@ export async function publishProperty(formData: FormData) {
     prop.beds == null ||
     prop.baths == null;
   if (basicsMissing) redirect(`/dashboard/properties/${id}?publish=needs`);
+
+  // Enforce the plan's live-listing allowance (P3, post-S402). Free advertises
+  // one live rental; without this, publish silently ignored the cap. Count the
+  // org's OTHER currently-live listings (RLS scopes the count to the org) and,
+  // if publishing this one would exceed the cap, bounce with ?publish=plan and
+  // explain the choice. Paid/pilot plans return a null cap (unlimited) so this
+  // never fires for them — e.g. Agile (premium) with several live units.
+  const org = await getCurrentOrg();
+  const cap = listingCapForPlan(org?.plan);
+  if (cap != null) {
+    const { count: liveCount } = await supabase
+      .from("properties")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "available")
+      .neq("id", id);
+    if ((liveCount ?? 0) >= cap) {
+      redirect(`/dashboard/properties/${id}?publish=plan`);
+    }
+  }
 
   await supabase
     .from("properties")

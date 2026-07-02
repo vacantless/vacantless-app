@@ -160,6 +160,23 @@ export async function createTenancy(formData: FormData) {
     revalidatePath("/dashboard/properties");
   }
 
+  // Converting from an inquiry marks that lead Leased so the pipeline reflects
+  // the outcome. This matters most for the post-S402 "Ready to lease?" early
+  // affordance: a landlord can now create the tenancy from a booked/showed/
+  // applied lead without first walking the stage dropdown to Leased, and the
+  // lead still lands in the right stage. Only for a real current/forthcoming
+  // lease (active/upcoming); recording a historical (ended) tenancy leaves the
+  // lead's stage as it is. RLS + the explicit org filter scope the write.
+  if (fromLead && tookUnitOffMarket) {
+    await supabase
+      .from("leads")
+      .update({ status: "leased" })
+      .eq("id", fromLead)
+      .eq("organization_id", org.id);
+    revalidatePath(`/dashboard/leads/${fromLead}`);
+    revalidatePath("/dashboard/leads");
+  }
+
   // Insert the co-tenant child rows (buildTenantList guarantees exactly one
   // primary among them — the future Rotessa payer). Each is resolved to a
   // durable per-org person (the cross-tenancy vault identity) — sequentially so

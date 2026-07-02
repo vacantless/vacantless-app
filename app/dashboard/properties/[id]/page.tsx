@@ -939,6 +939,18 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {/* Publish blocked by the plan's live-listing allowance (Free = 1). */}
+      {searchParams.publish === "plan" && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <strong>Free includes one live rental.</strong> Pause another rental to
+          free up the spot, or{" "}
+          <Link href="/dashboard/billing" className="font-semibold underline">
+            choose Growth
+          </Link>{" "}
+          for unlimited live listings.
+        </p>
+      )}
+
       {/* From-scratch draft banner (M8): a quick-add lands as a private Draft,
           but only ?duplicated / ?imported got an explanatory banner. Explain the
           Draft state + how to publish for a plain quick-add too. */}

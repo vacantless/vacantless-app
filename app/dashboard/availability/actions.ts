@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
@@ -44,6 +45,7 @@ export async function updateBookingSettings(formData: FormData) {
   }
 
   revalidatePath("/dashboard/availability");
+  redirect("/dashboard/availability?saved=settings");
 }
 
 // Showing clustering ("Hero blocks"). Opt-in: when on, the public booking page
@@ -72,6 +74,7 @@ export async function updateClusteringSettings(formData: FormData) {
 
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard/showings");
+  redirect("/dashboard/availability?saved=cluster");
 }
 
 export async function addAvailabilityWindow(formData: FormData) {
@@ -92,7 +95,9 @@ export async function addAvailabilityWindow(formData: FormData) {
     end == null ||
     end <= start
   ) {
-    return; // invalid input — ignore; form re-renders unchanged
+    // Most often an end time at or before the start time. Send the landlord
+    // back with a plain-language explanation instead of a silent no-op refresh.
+    redirect("/dashboard/availability?error=window_invalid");
   }
 
   const supabase = createClient();
@@ -105,6 +110,7 @@ export async function addAvailabilityWindow(formData: FormData) {
 
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
+  redirect("/dashboard/availability?saved=window");
 }
 
 export async function deleteAvailabilityWindow(formData: FormData) {
@@ -130,10 +136,13 @@ export async function addDayOff(formData: FormData) {
   // Accept only a real YYYY-MM-DD calendar date, today or later (a past
   // blackout can never affect a bookable slot). Round-trip through Date to
   // reject impossible dates like 2026-02-30.
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day))
+    redirect("/dashboard/availability?error=dayoff_invalid");
   const parsed = new Date(`${day}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return;
-  if (parsed.toISOString().slice(0, 10) !== day) return; // normalized mismatch => invalid
+  if (Number.isNaN(parsed.getTime()))
+    redirect("/dashboard/availability?error=dayoff_invalid");
+  if (parsed.toISOString().slice(0, 10) !== day)
+    redirect("/dashboard/availability?error=dayoff_invalid"); // normalized mismatch => invalid
   // Compare against "today" in the org's booking timezone, matching the UI's
   // date-input minimum (page.tsx todayKey). Using UTC here would, in North
   // American evening hours, reject a valid same-local-day blackout the UI still
@@ -144,7 +153,8 @@ export async function addDayOff(formData: FormData) {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-  if (day < todayKey) return;
+  if (day < todayKey)
+    redirect("/dashboard/availability?error=dayoff_invalid");
 
   const supabase = createClient();
   // Idempotent: the unique (organization_id, day) index means a repeat add is a
@@ -158,6 +168,7 @@ export async function addDayOff(formData: FormData) {
 
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
+  redirect("/dashboard/availability?saved=dayoff");
 }
 
 export async function removeDayOff(formData: FormData) {

@@ -7,6 +7,7 @@ import {
   followUpLabel,
   suggestedNextStages,
   suggestedNextStageOptions,
+  canOfferEarlyTenancy,
 } from "../lib/lead-detail";
 
 let passed = 0;
@@ -206,6 +207,22 @@ ok(
     );
   })(),
 );
+
+// --- canOfferEarlyTenancy ---------------------------------------------------
+ok("early-tenancy: booked -> true", canOfferEarlyTenancy("booked") === true);
+ok("early-tenancy: showed -> true", canOfferEarlyTenancy("showed") === true);
+ok("early-tenancy: applied -> true", canOfferEarlyTenancy("applied") === true);
+ok("early-tenancy: new -> false (too early)", canOfferEarlyTenancy("new") === false);
+ok(
+  "early-tenancy: contacted -> false (too early)",
+  canOfferEarlyTenancy("contacted") === false,
+);
+ok(
+  "early-tenancy: leased -> false (primary bridge handles it)",
+  canOfferEarlyTenancy("leased") === false,
+);
+ok("early-tenancy: lost -> false", canOfferEarlyTenancy("lost") === false);
+ok("early-tenancy: junk -> false", canOfferEarlyTenancy("zzz") === false);
 
 // ---------------------------------------------------------------------------
 console.log(`\nlead-detail: ${passed} passed, ${failed} failed`);

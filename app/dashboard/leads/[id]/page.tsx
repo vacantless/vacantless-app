@@ -14,6 +14,7 @@ import {
   followUpStatus,
   followUpLabel,
   suggestedNextStageOptions,
+  canOfferEarlyTenancy,
   type FollowUpStatus,
 } from "@/lib/lead-detail";
 import { PageHeader, SectionHeading, EmptyState } from "@/components/ui";
@@ -308,39 +309,53 @@ export default async function LeadDetailPage({
         note={l.next_action_note}
       />
 
-      {/* Convert-to-tenancy bridge: a leased renter moves from the leasing side
-          to the property-management side. Show once the lead is Leased. */}
-      {l.status === "leased" && (
+      {/* Convert-to-tenancy bridge: a signed renter moves from the leasing side
+          to the property-management side.
+          - A tenancy already on file → dedupe to "View tenancy" (any stage).
+          - Leased with no tenancy yet → the primary "Convert to tenancy" bridge.
+          - A viable OPEN lead (booked/showed/applied) → a lighter "Ready to
+            lease?" affordance so the landlord who signed outside the app doesn't
+            have to find the stage dropdown first (post-S402 pilot friction). */}
+      {existingTenancyId ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3">
-          {existingTenancyId ? (
-            <>
-              <p className="text-sm text-gray-700">
-                This renter has a tenancy on file.
-              </p>
-              <Link
-                href={`/dashboard/tenancies/${existingTenancyId}`}
-                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                View tenancy →
-              </Link>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-gray-700">
-                Lease signed? Create the tenancy record to manage rent and tenant
-                messaging.
-              </p>
-              <Link
-                href={`/dashboard/tenancies/new?from=${l.id}`}
-                className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
-              >
-                Convert to tenancy
-              </Link>
-            </>
-          )}
+          <p className="text-sm text-gray-700">
+            This renter has a tenancy on file.
+          </p>
+          <Link
+            href={`/dashboard/tenancies/${existingTenancyId}`}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            View tenancy →
+          </Link>
         </div>
-      )}
+      ) : l.status === "leased" ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3">
+          <p className="text-sm text-gray-700">
+            Lease signed? Create the tenancy record to manage rent and tenant
+            messaging.
+          </p>
+          <Link
+            href={`/dashboard/tenancies/new?from=${l.id}`}
+            className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+          >
+            Convert to tenancy
+          </Link>
+        </div>
+      ) : canOfferEarlyTenancy(l.status) ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+          <p className="text-sm text-gray-700">
+            <span className="font-medium">Ready to lease this renter?</span> You
+            can create the tenancy now — we&apos;ll mark this inquiry Leased.
+          </p>
+          <Link
+            href={`/dashboard/tenancies/new?from=${l.id}`}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Create tenancy
+          </Link>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field

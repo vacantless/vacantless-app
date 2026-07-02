@@ -5,6 +5,8 @@ import { SettingsTabs } from "@/components/settings-tabs";
 import { getCurrentOrg } from "@/lib/org";
 import { currentUserCan } from "@/lib/membership";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import {
   activeNotificationEvents,
   notificationFamilyLabel,
@@ -136,6 +138,33 @@ export default async function NotificationsSettingsPage({
   const reminderByKey = new Map<string, ReminderLogSummary>();
   for (const s of summarizeReminderLog((reminderRows ?? []) as ComplianceReminderLogRow[])) {
     reminderByKey.set(s.eventKey, s);
+  }
+
+  // "Default recipients today" for the new-inquiry alert (P3, post-S402): show
+  // the landlord the exact address(es) that receive the first real inquiry when
+  // they've left the recipients field blank. Resolved the SAME way the send path
+  // does (leasing-role member emails, else reply-to / public contact), so the
+  // preview can't drift from what actually happens. Best-effort: needs the admin
+  // client to read member auth emails; without it we show a generic description.
+  let newLeadDefaultRecipients: string[] = [];
+  const admin = createAdminClient();
+  if (admin) {
+    const { data: memberRows } = await admin
+      .from("memberships")
+      .select("user_id, role")
+      .eq("organization_id", org.id);
+    const members: { role: string | null; email: string | null }[] = [];
+    for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
+      const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+      members.push({ role: m.role, email: u?.user?.email ?? null });
+    }
+    const anyMemberEmail =
+      members.map((m) => m.email).find((e) => e && e.includes("@")) ?? null;
+    newLeadDefaultRecipients = resolveLeadNotifyEmails(members, [
+      org.reply_to_email,
+      org.public_contact_email,
+      anyMemberEmail,
+    ]);
   }
 
   // Group active events by family for display.
@@ -300,6 +329,31 @@ export default async function NotificationsSettingsPage({
                         <p className="mt-1.5 text-xs text-gray-500">
                           {audienceHint(event)} One address per line (or comma-separated).
                         </p>
+                        {event.key === "leasing.new_lead" &&
+                          (() => {
+                            const configured = row?.recipients ?? [];
+                            const resolvedToday =
+                              configured.length > 0
+                                ? configured
+                                : newLeadDefaultRecipients;
+                            return (
+                              <p className="mt-1.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                                <span className="font-medium">
+                                  Default recipients today:
+                                </span>{" "}
+                                {resolvedToday.length > 0
+                                  ? resolvedToday.join(", ")
+                                  : "your leasing team members and your reply-to email"}
+                                {configured.length === 0 && (
+                                  <span className="text-gray-400">
+                                    {" "}
+                                    (from your team and reply-to — add addresses
+                                    above to change this)
+                                  </span>
+                                )}
+                              </p>
+                            );
+                          })()}
                       </div>
 
                       <AccentColorField

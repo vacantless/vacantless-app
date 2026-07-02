@@ -103,7 +103,7 @@ export function OnboardingForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button type="submit" className={AUTH_BUTTON_CLASS}>
-        Create my account
+        Save and continue
       </button>
     </form>
   );

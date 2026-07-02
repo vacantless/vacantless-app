@@ -44,9 +44,32 @@ const TIMEZONES = [
   "America/Los_Angeles",
 ];
 
-export default async function AvailabilityPage() {
+const SAVED_MESSAGES: Record<string, string> = {
+  settings: "Booking settings saved.",
+  cluster: "Grouping settings saved.",
+  window: "Viewing window added.",
+  dayoff: "Day off added.",
+};
+
+const ERROR_MESSAGES: Record<string, string> = {
+  window_invalid: "The end time has to be after the start time.",
+  dayoff_invalid: "Pick a valid date, today or later.",
+};
+
+export default async function AvailabilityPage({
+  searchParams,
+}: {
+  searchParams: { saved?: string; error?: string; forbidden?: string };
+}) {
   const org = await getCurrentOrg();
   const supabase = createClient();
+
+  const savedMessage = searchParams.saved
+    ? SAVED_MESSAGES[searchParams.saved]
+    : null;
+  const errorMessage = searchParams.error
+    ? ERROR_MESSAGES[searchParams.error]
+    : null;
 
   const [{ data: orgRow }, { data: rulesData }, { data: daysOffData }] =
     await Promise.all([
@@ -131,6 +154,24 @@ export default async function AvailabilityPage() {
         title="Viewing Times"
         subtitle="Set the weekly windows when renters can book their own viewings. Open slots are generated from these times minus anything already booked."
       />
+
+      {savedMessage && (
+        <p className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          {savedMessage}
+        </p>
+      )}
+      {errorMessage && (
+        <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          {errorMessage}
+        </p>
+      )}
+      {searchParams.forbidden && (
+        <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          You don&rsquo;t have permission to change viewing times. Ask an account
+          admin to update these.
+        </p>
+      )}
+
       <p className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
         These windows apply to <strong>all of your rentals</strong>, so you keep
         one viewing schedule instead of setting times per unit. To keep visits to

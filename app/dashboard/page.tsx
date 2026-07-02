@@ -9,7 +9,7 @@ import {
 } from "@/lib/pipeline";
 import {
   buildLaunchChecklist,
-  isBrandingConfirmed,
+  isReplyToConfigured,
 } from "@/lib/onboarding";
 import { isSubscriptionActive, pilotStatus } from "@/lib/billing";
 import {
@@ -207,7 +207,7 @@ export default async function OverviewPage() {
   const checklist = buildLaunchChecklist({
     propertyCount: propertyCount ?? 0,
     availabilityWindowCount: availabilityCount ?? 0,
-    brandingConfirmed: org ? isBrandingConfirmed(org) : false,
+    replyToConfigured: org ? isReplyToConfigured(org) : false,
     leadCount: allLeads.length,
     // "Go live" is satisfied by an active paid subscription OR an active pilot.
     subscriptionActive:

@@ -318,9 +318,11 @@ export function storageUpsellNote(
 //   [x] PaidPlanKey = growth|premium; billing page renders TIERS (Core/Plus cards removed).
 //   [x] startCheckout accepts the tier key; webhook maps the price -> growth/premium.
 //   [x] A fresh org defaults to plan='free' at signup (onboarding actions).
-// STILL CONFIG-ONLY (deferred, same discipline as the photo cap): enforcing
-// `listingCapForPlan` in the publish path. Manual step OUTSIDE the code: create
-// the two CAD Stripe products + set the two price-id envs in Vercel.
+// ENFORCED (post-S402): `publishProperty` (app/dashboard/properties/actions.ts)
+// checks `listingCapForPlan` before flipping a rental Live and bounces a
+// Free-plan org that's already at its live-listing allowance with ?publish=plan.
+// Manual step OUTSIDE the code: create the two CAD Stripe products + set the two
+// price-id envs in Vercel.
 // Hard/usage costs (Twilio SMS, ad/portal spend, payment processing) always
 // pass through at cost on top — these monthly prices are the platform fee only.
 export type TierInfo = {
@@ -397,9 +399,9 @@ export function isTierPurchasable(tier: TierInfo): boolean {
 }
 
 // The published-listing allowance for a stored plan (the Free funnel cap; null =
-// unlimited). Config is the source of truth — the publish/uploader path reads
-// this — but enforcement wiring is a follow-up increment (the same config-first
-// discipline as the photo cap). Unknown/missing plan -> the Free cap (never more).
+// unlimited). The publish path (publishProperty) enforces this by counting the
+// org's other live listings before it makes a rental public. Unknown/missing
+// plan -> the Free cap (never more).
 export function listingCapForPlan(plan: string | null | undefined): number | null {
   // Any paid plan (live growth/premium or legacy core/plus) + pilot = unlimited.
   if (isAnyPaidPlan(plan) || isPilotPlan(plan)) return null;
