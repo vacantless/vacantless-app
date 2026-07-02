@@ -148,7 +148,8 @@ export async function createTenancy(formData: FormData) {
   // state (available/paused). It deliberately leaves `off_market` alone so
   // watchLease's private units stay private, and `leased`/`draft` are already
   // non-bookable (no-op).
-  if (tenancyTakesUnitOffMarket(status)) {
+  const tookUnitOffMarket = tenancyTakesUnitOffMarket(status);
+  if (tookUnitOffMarket) {
     await supabase
       .from("properties")
       .update({ status: "leased" })
@@ -190,7 +191,9 @@ export async function createTenancy(formData: FormData) {
 
   revalidatePath("/dashboard/tenancies");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/tenancies/${tenancyId}?created=1`);
+  redirect(
+    `/dashboard/tenancies/${tenancyId}?created=1${tookUnitOffMarket ? "&offmarket=1" : ""}`,
+  );
 }
 
 // ===========================================================================

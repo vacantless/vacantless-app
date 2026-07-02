@@ -58,7 +58,7 @@ export default async function BillingPage({
 
   const errorCopy: Record<string, string> = {
     not_configured:
-      "Billing isn't connected yet. Add your Stripe keys in Vercel to enable subscriptions.",
+      "Card subscriptions aren't available yet. Your pilot access is unaffected - you can start a pilot with full access below.",
     plan: "That plan isn't recognized. Please choose Growth or Premium and try again.",
     checkout: "Couldn't start checkout. Please try again.",
     portal:
@@ -175,8 +175,10 @@ export default async function BillingPage({
 
       {!configured && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Billing isn&apos;t connected yet. Once your Stripe keys are set in Vercel,
-          the subscribe buttons below go live, with no other change needed.
+          Card subscriptions aren&apos;t switched on for your account yet - you
+          can still start a pilot with full access below. When subscriptions are
+          ready, the plan buttons here go live automatically, with nothing else
+          for you to do.
         </div>
       )}
 

@@ -225,6 +225,13 @@ export default async function NewTenancyPage({
                   </option>
                 ))}
               </select>
+              {/* B2 / M14: the Status choice silently decides whether the unit
+                  comes off the market. Say so at the point of decision. */}
+              <p className="mt-1 text-xs text-gray-500">
+                Active or Upcoming takes this rental off its public listing page
+                and stops new inquiries. Ended records a past lease and leaves
+                the listing as it is.
+              </p>
             </div>
           </div>
 

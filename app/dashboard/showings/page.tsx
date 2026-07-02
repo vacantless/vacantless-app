@@ -150,7 +150,7 @@ export default async function ShowingsPage() {
           <EmptyState
             icon={<Icons.check className="h-5 w-5" />}
             title="No past viewings yet"
-            description="Once renters attend, mark each outcome here to keep your renter list accurate and send feedback requests."
+            description="Once renters attend, mark each outcome here (attended, no-show, or cancelled) to keep your renter list accurate."
           />
         }
         timeZone={timeZone}

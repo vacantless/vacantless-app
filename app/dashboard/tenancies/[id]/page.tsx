@@ -309,6 +309,8 @@ export default async function TenancyDetailPage({
   searchParams: {
     saved?: string;
     created?: string;
+    // Set when creating this tenancy took its rental off the public page (B2).
+    offmarket?: string;
     ended?: string;
     tenant?: string;
     err?: string;
@@ -916,7 +918,10 @@ export default async function TenancyDetailPage({
     inspectionFlash ||
     increaseFlash ||
     (searchParams.saved && FLASH.saved) ||
-    (searchParams.created && FLASH.created) ||
+    (searchParams.created &&
+      (searchParams.offmarket
+        ? "Tenancy created. This rental is now marked Leased and off its public listing page - it won't take new inquiries or viewing bookings."
+        : FLASH.created)) ||
     (searchParams.ended && FLASH.ended) ||
     (searchParams.tenant && TENANT_FLASH[searchParams.tenant]) ||
     (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
