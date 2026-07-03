@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { VacantlessMark } from "../components/vacantless-mark";
 
 export const metadata = {
@@ -8,7 +10,17 @@ export const metadata = {
     "One simple place to collect rental inquiries, reply fast, let renters book their own viewings, and turn interest into signed leases.",
 };
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  // Logged-in visitors skip the public marketing page and go straight to their
+  // dashboard; logged-out visitors see the landing page below.
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) redirect("/dashboard");
+
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <SiteHeader />
