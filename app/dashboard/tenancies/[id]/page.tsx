@@ -1604,6 +1604,33 @@ export default async function TenancyDetailPage({
           </div>
         )}
       </div>
+
+      {/* Chexy — tenant-initiated credit-card pay (a hand-off, NOT a pull
+          rail). Opens Chexy in a new tab with our referral code; no money or
+          bank data touches Vacantless. TODO: swap ?ref=vacantless for the real
+          Chexy partner code once they provide it. */}
+      <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
+            Pay by credit card
+          </span>
+          <span className="text-sm font-medium text-gray-900">Chexy</span>
+        </div>
+        <p className="text-sm text-gray-600">
+          Let {primary?.name || "your tenant"} pay rent by Visa or Amex and earn
+          card rewards. Chexy charges the renter about 1.75%; you receive rent as
+          usual with no setup. Chexy is a third-party service and Vacantless
+          charges nothing for this.
+        </p>
+        <a
+          href="https://chexy.co/?ref=vacantless"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50"
+        >
+          Set up with Chexy →
+        </a>
+      </div>
       </CollapsibleSection>
 
       {/* Manual payments (e-transfer / cheque / cash) -------------------- */}
