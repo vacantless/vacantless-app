@@ -7,13 +7,13 @@ import { VacantlessMark } from "../components/vacantless-mark";
 export const metadata = {
   title: "Vacantless - Fill your next rental",
   description:
-    "Create a rental page, share it safely, set viewing times, collect inquiries, and move the right renter into a tenancy record. A calm leasing workspace for small landlords.",
+    "A calm leasing workspace for small landlords. Post the rental page, share it safely, set viewing times, collect inquiries, and move the right renter into a tenancy record.",
 };
 
 export const dynamic = "force-dynamic";
 
-// Contact target for "get help launching" CTAs (brief: /signup primary, mailto
-// secondary). Kept in one place so it is easy to swap for a help route later.
+// Contact target for "get help launching" CTAs. Kept in one place so it is easy
+// to swap for a help route later.
 const CONTACT_HREF = "mailto:hello@vacantless.com";
 const CONTACT_LABEL = "Get help launching";
 const SIGNUP_LABEL = "Start with one rental free";
@@ -32,10 +32,13 @@ export default async function Home() {
       <SiteHeader />
       <main>
         <Hero />
+        <TrustStrip />
+        <WhyReplaces />
         <Workflow />
         <SafeSharing />
-        <BuiltForOperators />
-        <Pilot />
+        <Pricing />
+        <FounderBand />
+        <ClosingCta />
       </main>
       <SiteFooter />
     </div>
@@ -56,7 +59,7 @@ function PrimaryButton({
   return (
     <Link
       href={href}
-      className={`inline-flex min-h-[42px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-4 text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c] ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-[18px] text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c] ${className}`}
     >
       {children}
     </Link>
@@ -75,7 +78,7 @@ function SecondaryButton({
   return (
     <Link
       href={href}
-      className={`inline-flex min-h-[42px] items-center justify-center whitespace-nowrap rounded-lg border border-[#d9e1dc] bg-white px-4 text-[0.92rem] font-bold text-[#203029] transition hover:bg-[#f4f7f5] ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#d9e1dc] bg-white px-[18px] text-[0.92rem] font-bold text-[#203029] transition hover:bg-[#f4f7f5] ${className}`}
     >
       {children}
     </Link>
@@ -96,12 +99,15 @@ function SiteHeader() {
           <a href="#workflow" className="hover:text-[#15211d]">
             Workflow
           </a>
-          <a href="#sharing" className="hover:text-[#15211d]">
-            Safe sharing
+          <a href="#why" className="hover:text-[#15211d]">
+            Why Vacantless
           </a>
-          <a href="#pilot" className="hover:text-[#15211d]">
-            Pilot
+          <a href="#pricing" className="hover:text-[#15211d]">
+            Pricing
           </a>
+          <Link href="/about" className="hover:text-[#15211d]">
+            About
+          </Link>
         </nav>
         <div className="flex flex-shrink-0 items-center gap-2.5">
           <SecondaryButton href="/login" className="hidden sm:inline-flex">
@@ -144,43 +150,25 @@ function Hero() {
       <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-12 py-14 sm:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         {/* Left: copy */}
         <div className="max-w-[570px]">
-          <Eyebrow>Vacancy-to-tenancy leasing workspace</Eyebrow>
-          <h1 className="mb-4 max-w-[11ch] text-[clamp(2.75rem,6vw,4.5rem)] font-extrabold leading-[0.98] tracking-tight">
-            Fill your next rental
+          <Eyebrow>Leasing workspace for small landlords</Eyebrow>
+          <h1 className="mb-[18px] max-w-[14ch] text-[clamp(2.6rem,5.4vw,4.15rem)] font-extrabold leading-[1] tracking-tight">
+            Fill your next rental without the scramble.
           </h1>
-          <p className="mb-7 max-w-xl text-[clamp(1.08rem,1.8vw,1.28rem)] leading-relaxed text-[#384a42]">
-            Create a rental page, share it safely, set viewing times, collect
-            inquiries, and move the right renter into a tenancy record.
+          <p className="mb-[26px] max-w-[33rem] text-[clamp(1.06rem,1.7vw,1.24rem)] leading-[1.55] text-[#384a42]">
+            One calm place to post the rental, share it safely, book viewings,
+            and move the right renter into a signed tenancy. No more juggling a
+            spreadsheet, your inbox, and a dozen back-and-forth texts.
           </p>
-          <div className="mb-7 flex flex-wrap items-center gap-3">
+          <div className="mb-3.5 flex flex-wrap items-center gap-3">
             <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
             <SecondaryButton href={CONTACT_HREF}>
               {CONTACT_LABEL}
             </SecondaryButton>
           </div>
-
-          <div
-            className="grid max-w-[520px] grid-cols-1 border-y border-[#d9e1dc] sm:grid-cols-3"
-            aria-label="Current product scope"
-          >
-            {HERO_PROOFS.map((p, i) => (
-              <div
-                key={p.value}
-                className={`py-3.5 sm:pr-4 ${
-                  i < HERO_PROOFS.length - 1
-                    ? "border-b border-[#d9e1dc] sm:border-b-0 sm:border-r"
-                    : ""
-                } ${i > 0 ? "sm:pl-4" : ""}`}
-              >
-                <span className="mb-1 block text-[1.01rem] font-extrabold leading-tight">
-                  {p.value}
-                </span>
-                <span className="block text-[0.78rem] font-semibold leading-snug text-[#59655f]">
-                  {p.label}
-                </span>
-              </div>
-            ))}
-          </div>
+          <p className="text-[0.83rem] font-semibold text-[#59655f]">
+            <span className="text-[#176044]">Free to start.</span> One live
+            rental page, no card needed.
+          </p>
         </div>
 
         {/* Right: product preview */}
@@ -190,25 +178,16 @@ function Hero() {
   );
 }
 
-const HERO_PROOFS: { value: string; label: string }[] = [
-  { value: "Rental page", label: "A shareable home base for one listing." },
-  { value: "Viewing times", label: "Let renters book into windows you set." },
-  {
-    value: "Tenancy record",
-    label: 'Keep the handoff after "yes" in one place.',
-  },
-];
-
 /* The hero product preview — a tangible dashboard so a landlord sees what the
-   product actually does. Real app concepts (rental status, task tiles, inquiry
-   list, renter viewing picker), no rent-collection/accounting claims. */
+   product actually does. Fictional demo data; no rent-collection/accounting
+   claims. */
 function ProductPreview() {
   return (
     <div className="relative min-h-[520px] lg:pl-6">
       {/* Main dashboard screen */}
       <div className="relative z-[2] ml-auto w-full max-w-[670px] overflow-hidden rounded-lg border border-[#a4b5ac]/85 bg-white shadow-[0_16px_44px_rgba(28,43,36,0.14)]">
         <div className="flex min-h-[52px] items-center justify-between border-b border-[#d9e1dc] bg-[#fbfcfb] px-4">
-          <span className="text-[0.86rem] font-extrabold">506 Manning Ave</span>
+          <span className="text-[0.86rem] font-extrabold">48 Maple Court</span>
           <StatusPill tone="live">Live - bookable</StatusPill>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[190px_minmax(0,1fr)]">
@@ -221,9 +200,7 @@ function ProductPreview() {
               <div
                 key={n.label}
                 className={`mb-2 flex min-h-[34px] items-center justify-between rounded-lg px-2.5 text-[0.78rem] font-semibold ${
-                  n.active
-                    ? "bg-[#e2f0ea] text-[#174c42]"
-                    : "text-[#59655f]"
+                  n.active ? "bg-[#e2f0ea] text-[#174c42]" : "text-[#59655f]"
                 }`}
               >
                 {n.label} <NavBadge>{n.count}</NavBadge>
@@ -235,10 +212,10 @@ function ProductPreview() {
             <div className="flex items-start justify-between gap-4 border-b border-[#d9e1dc] pb-4">
               <div>
                 <p className="mb-1.5 font-extrabold leading-tight">
-                  506 Manning Ave, Main Floor
+                  48 Maple Court, Upper Suite
                 </p>
                 <p className="text-[0.82rem] leading-snug text-[#59655f]">
-                  $4,018.33 / mo · 2 bed · 1 bath · available Aug 1
+                  $2,150 / mo · 2 bed · 1 bath · available Sep 1
                 </p>
               </div>
               <StatusPill tone="safe">Safe to share</StatusPill>
@@ -297,12 +274,13 @@ function ProductPreview() {
           </span>
         </div>
         <div className="p-4">
-          <div className="grid gap-2.5">
-            <div className="h-[11px] w-[78%] rounded-full bg-[#e3ebe6]" />
-            <div className="h-[11px] rounded-full bg-[#e3ebe6]" />
-            <div className="h-[11px] w-[62%] rounded-full bg-[#e3ebe6]" />
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <p className="mb-0.5 text-[0.9rem] font-extrabold">
+            48 Maple Court, Upper Suite
+          </p>
+          <p className="mb-2 text-[0.79rem] text-[#59655f]">
+            Pick a viewing time that works for you
+          </p>
+          <div className="grid grid-cols-3 gap-2">
             {PREVIEW_SLOTS.map((s) => (
               <span
                 key={s.time}
@@ -338,7 +316,7 @@ const PREVIEW_TASKS: { title: string; body: string; line: string }[] = [
   },
   {
     title: "Viewing times",
-    body: "Evening and weekend windows are available to book.",
+    body: "Evening and weekend windows are open to book.",
     line: "Slots open",
   },
   {
@@ -362,6 +340,37 @@ const PREVIEW_SLOTS: { time: string; selected?: boolean }[] = [
   { time: "Sun 12:00" },
 ];
 
+/* ------------------------------------------------------------- Trust strip */
+
+function TrustStrip() {
+  return (
+    <section className="border-b border-[#d9e1dc] bg-white">
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-4 py-[26px] md:grid-cols-[auto_1fr] md:gap-[34px]">
+        <p className="max-w-[16ch] text-[0.82rem] font-extrabold uppercase tracking-[0.06em] text-[#59655f]">
+          Operator-built, on real rentals
+        </p>
+        <div className="grid gap-3.5 sm:grid-cols-3">
+          {TRUST_ITEMS.map((t) => (
+            <div
+              key={t}
+              className="flex items-start gap-2.5 text-[0.92rem] font-semibold text-[#273832]"
+            >
+              <span className="mt-[3px] h-[15px] w-[15px] flex-none rounded bg-[#1f8a5b]" />
+              {t}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const TRUST_ITEMS: string[] = [
+  "Built by working landlords, not a software team guessing at the job.",
+  "~9 in 10 viewings self-booked by renters. No phone tag.",
+  "Around 100 renter inquiries handled every month, on our own rentals.",
+];
+
 /* ---------------------------------------------------------------- Section head */
 
 function SectionHead({
@@ -372,8 +381,8 @@ function SectionHead({
   children: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end sm:gap-6">
-      <h2 className="max-w-[12ch] text-[clamp(1.9rem,4vw,3rem)] font-extrabold leading-[1.04]">
+    <div className="mb-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end sm:gap-7">
+      <h2 className="max-w-[20ch] text-[clamp(1.9rem,3.6vw,2.9rem)] font-extrabold leading-[1.05]">
         {title}
       </h2>
       <p className="max-w-[34rem] text-base leading-relaxed text-[#59655f]">
@@ -383,14 +392,110 @@ function SectionHead({
   );
 }
 
+/* ------------------------------------------------------------ Why / replaces */
+
+function CheckMark() {
+  return (
+    <svg className="mt-0.5 h-4 w-4 flex-none" viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10" cy="10" r="9" fill="#e4f4ed" />
+      <path
+        d="M6 10.5l2.5 2.5L14 7.5"
+        fill="none"
+        stroke="#1f8a5b"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CrossMark() {
+  return (
+    <svg className="mt-0.5 h-4 w-4 flex-none" viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10" cy="10" r="9" fill="#efe7e4" />
+      <path
+        d="M6.5 6.5l7 7M13.5 6.5l-7 7"
+        stroke="#b4726a"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function WhyReplaces() {
+  return (
+    <section
+      id="why"
+      className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
+    >
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Stop running your leasing out of five different apps.">
+          Everything it takes to fill a rental, in one place, instead of
+          scattered across tools that were never built for it.
+        </SectionHead>
+        <div className="grid gap-4 md:grid-cols-2">
+          <article className="rounded-lg border border-[#d9e1dc] bg-[#fbfaf9] p-[22px]">
+            <h3 className="mb-4 text-[1.02rem] font-semibold">
+              The usual scramble
+            </h3>
+            <ul className="grid list-none gap-3 p-0">
+              {SCRAMBLE.map((x) => (
+                <li
+                  key={x}
+                  className="flex items-start gap-2.5 text-[0.93rem] leading-snug text-[#384a42]"
+                >
+                  <CrossMark />
+                  {x}
+                </li>
+              ))}
+            </ul>
+          </article>
+          <article className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
+            <h3 className="mb-4 text-[1.02rem] font-semibold">
+              With Vacantless
+            </h3>
+            <ul className="grid list-none gap-3 p-0">
+              {WITH_VACANTLESS.map((x) => (
+                <li
+                  key={x}
+                  className="flex items-start gap-2.5 text-[0.93rem] leading-snug text-[#273832]"
+                >
+                  <CheckMark />
+                  {x}
+                </li>
+              ))}
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const SCRAMBLE: string[] = [
+  "A listing link you cannot pause or take down once it is out there.",
+  "Inquiries buried across your inbox and Marketplace chats.",
+  "Viewing times settled over a dozen texts, with double-bookings and no-shows.",
+  "No clean record of who you picked once the unit is finally leased.",
+];
+
+const WITH_VACANTLESS: string[] = [
+  "A rental page you set Live, Paused, or Leased in one click, so the link always tells the truth.",
+  "Every inquiry in one list, right next to the booking activity.",
+  "Renters self-book into the windows you set. No phone tag.",
+  "The chosen renter moves straight into a clean tenancy record.",
+];
+
 /* ------------------------------------------------------------------ Workflow */
 
 function Workflow() {
   return (
     <section id="workflow" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="One rental, one path">
-          Keep the leasing work around one vacancy in a single flow: prepare the
+        <SectionHead title="One rental, one clear path.">
+          Keep the whole job around a single vacancy in one flow: prepare the
           rental, share it, coordinate viewings, and carry the chosen renter
           forward.
         </SectionHead>
@@ -423,24 +528,24 @@ function Workflow() {
 
 const WORKFLOW_STEPS: { title: string; body: string }[] = [
   {
-    title: "Create the rental page",
-    body: "Enter the address, rent, core details, photos, and availability date.",
+    title: "Post the rental page",
+    body: "Address, rent, photos, and the date it is available. Ready to share in minutes.",
   },
   {
-    title: "Know what is safe to share",
-    body: "Draft, Live, Paused, and Leased states keep links honest.",
+    title: "Share it safely",
+    body: "Draft, Live, Paused, and Leased states mean the link renters see always matches reality.",
   },
   {
     title: "Open viewing windows",
-    body: "Set times renters can book without turning the week into chaos.",
+    body: "Set the times that suit you. Renters book themselves in, without the week turning into chaos.",
   },
   {
-    title: "Work the inquiry list",
-    body: "Track renter messages, booking activity, and follow-up in one view.",
+    title: "Work one inquiry list",
+    body: "Messages, bookings, and follow-ups sit together, so no promising renter slips through.",
   },
   {
-    title: "Convert to tenancy",
-    body: "Move the selected renter into the tenancy record when the lease is set.",
+    title: "Hand off to a tenancy",
+    body: "When you pick the renter, carry them straight into a tenancy record. The handoff is done.",
   },
 ];
 
@@ -455,12 +560,13 @@ function SafeSharing() {
       <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-stretch gap-8 lg:grid-cols-[minmax(0,0.84fr)_minmax(0,1.16fr)]">
         <div>
           <Eyebrow>Safer landlord operations</Eyebrow>
-          <h2 className="mb-4 max-w-[12ch] text-[clamp(1.9rem,4vw,3rem)] font-extrabold leading-[1.04]">
+          <h2 className="mb-4 max-w-[13ch] text-[clamp(1.9rem,3.6vw,2.9rem)] font-extrabold leading-[1.05]">
             Share the right link at the right time
           </h2>
           <p className="text-base leading-relaxed text-[#59655f]">
-            Vacantless gives landlords clarity: know when a rental page is
-            private, accepting inquiries, paused, or no longer available.
+            Vacantless keeps you clear on exactly what a renter can see and do:
+            whether a page is still private, open for inquiries, paused, or
+            closed for good.
           </p>
           <p className="mt-4 border-l-4 border-[#16756a] pl-4 text-[1.15rem] font-semibold leading-snug text-[#273832]">
             The promise is not &quot;manage everything.&quot; It is &quot;do not
@@ -505,7 +611,7 @@ const SHARING_STATES: {
 }[] = [
   {
     name: "Draft",
-    body: "Prepare copy and details before renters see the page.",
+    body: "Prepare copy and details before renters ever see the page.",
     action: "Keep private",
   },
   {
@@ -526,88 +632,33 @@ const SHARING_STATES: {
   },
 ];
 
-/* ------------------------------------------------------- Built for operators */
+/* --------------------------------------------------------------------- Pricing */
 
-function BuiltForOperators() {
+function Pricing() {
   return (
-    <section className="py-16 sm:py-[76px]">
+    <section id="pricing" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Built for small operators">
-          Vacantless is for landlords who need one practical place to run the
-          leasing work around a live vacancy.
-        </SectionHead>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {OPERATOR_PANELS.map((p) => (
-            <article
-              key={p.title}
-              className="min-h-[230px] rounded-lg border border-[#d9e1dc] bg-white p-5"
-            >
-              <h3 className="mb-2.5 text-[1.05rem] font-semibold">{p.title}</h3>
-              <ul className="mt-4 grid list-none gap-2.5 p-0">
-                {p.items.map((it) => (
-                  <li
-                    key={it}
-                    className="flex items-start gap-2.5 text-[0.92rem] leading-snug text-[#405047]"
-                  >
-                    <span className="mt-[3px] h-3.5 w-3.5 flex-none rounded bg-[#1f8a5b]" />
-                    {it}
-                  </li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const OPERATOR_PANELS: { title: string; items: string[] }[] = [
-  {
-    title: "Before the listing goes out",
-    items: [
-      "Prepare the rental page and core details.",
-      "Keep draft listings private while they are still being checked.",
-      "See when the rental is ready to accept renter inquiries.",
-      "Set the viewing windows renters can choose from.",
-    ],
-  },
-  {
-    title: "Once renters respond",
-    items: [
-      "Keep inquiries and viewing activity beside the rental.",
-      "Follow the renter from first message to booked viewing.",
-      "Pause or close the public page when the rental is no longer available.",
-      "Create the tenancy record when the right renter is chosen.",
-    ],
-  },
-];
-
-/* --------------------------------------------------------------------- Pilot */
-
-function Pilot() {
-  return (
-    <section
-      id="pilot"
-      className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
-    >
-      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Start with one rental">
-          Launch a single rental page first, then add more live rentals when the
-          workflow is working for you.
+        <SectionHead title="Start with one rental. Grow when you are ready.">
+          Launch a single rental page first. Add more live rentals once the
+          workflow is earning its place.
         </SectionHead>
         <div className="grid gap-4 lg:grid-cols-3">
           {PLANS.map((p) => (
             <article
               key={p.name}
-              className={`min-h-[246px] rounded-lg border bg-white p-5 ${
+              className={`flex min-h-[250px] flex-col rounded-lg border bg-white p-[22px] ${
                 p.featured
                   ? "border-[#6ca58d] shadow-[0_12px_32px_rgba(32,92,66,0.12)]"
                   : "border-[#d9e1dc]"
               }`}
             >
+              {p.ribbon ? (
+                <span className="mb-2.5 inline-flex self-start rounded-full bg-[#e4f4ed] px-2.5 py-1 text-[0.68rem] font-extrabold uppercase tracking-[0.06em] text-[#16756a]">
+                  {p.ribbon}
+                </span>
+              ) : null}
               <h3 className="mb-2 text-[1.08rem] font-semibold">{p.name}</h3>
-              <span className="my-3 block text-[1.9rem] font-extrabold leading-tight">
+              <span className="my-1.5 block text-[1.9rem] font-extrabold leading-tight">
                 {p.price}
                 {p.priceNote ? (
                   <small className="text-[0.86rem] font-bold text-[#59655f]">
@@ -616,7 +667,7 @@ function Pilot() {
                   </small>
                 ) : null}
               </span>
-              <p className="mb-5 text-[0.92rem] leading-relaxed text-[#59655f]">
+              <p className="mb-5 flex-1 text-[0.92rem] leading-relaxed text-[#59655f]">
                 {p.body}
               </p>
               {p.featured ? (
@@ -627,6 +678,16 @@ function Pilot() {
             </article>
           ))}
         </div>
+        <p className="mt-[18px] text-[0.86rem] text-[#59655f]">
+          Prices in CAD, flat monthly. Prefer we set it up with you?{" "}
+          <Link
+            href={CONTACT_HREF}
+            className="font-bold text-[#16756a] hover:underline"
+          >
+            Get help launching
+          </Link>
+          .
+        </p>
       </div>
     </section>
   );
@@ -640,31 +701,108 @@ const PLANS: {
   cta: string;
   href: string;
   featured?: boolean;
+  ribbon?: string;
 }[] = [
   {
     name: "Free",
     price: "$0",
     priceNote: "/ month",
-    body: "Use one live rental page to collect inquiries and viewing bookings.",
+    body: "One live rental page to collect inquiries and viewing bookings. No card needed to start.",
     cta: "Start free",
     href: "/signup",
   },
   {
-    name: "Guided pilot",
-    price: "Setup help",
-    body: "Work with Vacantless to launch a real rental and tune the flow.",
-    cta: CONTACT_LABEL,
-    href: CONTACT_HREF,
+    name: "Growth",
+    price: "$99",
+    priceNote: "/ month",
+    body: "Run more than one live rental at a time, with the full vacancy-to-tenancy workflow.",
+    cta: "Choose Growth",
+    href: "/signup",
     featured: true,
+    ribbon: "Most popular",
   },
   {
-    name: "Growth",
-    price: "More rentals",
-    body: "For operators who need more than one live rental at a time.",
-    cta: "Choose Growth",
+    name: "Premium",
+    price: "$249",
+    priceNote: "/ month",
+    body: "For operators running a portfolio who want the whole leasing workspace in one place.",
+    cta: "Choose Premium",
     href: "/signup",
   },
 ];
+
+/* ---------------------------------------------------------------- Founder band */
+
+function FounderBand() {
+  return (
+    <section
+      id="about"
+      className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
+    >
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-6 md:grid-cols-[auto_1fr] md:gap-9">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/founder.jpg"
+          alt="Noam Muscovitch, founder of Vacantless"
+          className="h-[104px] w-[104px] flex-none rounded-full object-cover shadow-[0_12px_32px_rgba(28,43,36,0.1)]"
+        />
+        <div>
+          <Eyebrow>From the operator who built it</Eyebrow>
+          <p className="mb-3.5 max-w-[44ch] text-[clamp(1.2rem,2.2vw,1.6rem)] font-semibold leading-snug text-[#273832]">
+            &quot;I run my own rentals. Vacantless is the system I built to fill
+            them without the chaos, now opened up for other small landlords.&quot;
+          </p>
+          <p className="text-base font-extrabold">
+            Noam Muscovitch
+            <span className="mt-0.5 block text-[0.86rem] font-semibold text-[#59655f]">
+              Founder &amp; Operator
+            </span>
+          </p>
+          <Link
+            href="/about"
+            className="mt-3.5 inline-block font-bold text-[#16756a] hover:underline"
+          >
+            Read the story &rarr;
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- Closing CTA */
+
+function ClosingCta() {
+  return (
+    <section className="bg-gradient-to-br from-[#17362f] to-[#1f4a3f] text-white">
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-5 py-14 md:grid-cols-[1fr_auto]">
+        <div>
+          <h2 className="max-w-[18ch] text-[clamp(1.8rem,3.4vw,2.7rem)] font-extrabold leading-[1.06]">
+            Ready to fill your next rental?
+          </h2>
+          <p className="mt-2.5 max-w-[40ch] text-[#cfe0d8]">
+            Start with one rental page, free. Add more when it is working for
+            you.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/signup"
+            className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg bg-white px-[18px] text-[0.92rem] font-bold text-[#17362f] transition hover:bg-[#eef4f1]"
+          >
+            {SIGNUP_LABEL}
+          </Link>
+          <Link
+            href={CONTACT_HREF}
+            className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-white/40 px-[18px] text-[0.92rem] font-bold text-white transition hover:bg-white/10"
+          >
+            {CONTACT_LABEL}
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 /* -------------------------------------------------------------------- Footer */
 
@@ -677,10 +815,19 @@ function SiteFooter() {
           Rental page, safe sharing, viewing times, inquiries, tenancy handoff.
         </span>
         <div className="flex items-center gap-4">
+          <Link href="/about" className="hover:text-[#15211d]">
+            About
+          </Link>
+          <a href={CONTACT_HREF} className="hover:text-[#15211d]">
+            hello@vacantless.com
+          </a>
           <Link href="/login" className="hover:text-[#15211d]">
             Log in
           </Link>
-          <Link href="/signup" className="font-semibold text-[#17362f] hover:underline">
+          <Link
+            href="/signup"
+            className="font-semibold text-[#17362f] hover:underline"
+          >
             Start free
           </Link>
         </div>
