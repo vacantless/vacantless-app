@@ -245,7 +245,7 @@ export default async function NewTenancyPage({
                 id="tenancy-rent"
                 type="number"
                 name="rent"
-                step="1"
+                step="0.01"
                 min="0"
                 placeholder="1250"
                 defaultValue={defaultRent}
@@ -263,7 +263,7 @@ export default async function NewTenancyPage({
                 id="tenancy-deposit"
                 type="number"
                 name="deposit"
-                step="1"
+                step="0.01"
                 min="0"
                 placeholder="1250"
                 className={inputCls}

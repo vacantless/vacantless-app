@@ -1281,11 +1281,11 @@ export default async function TenancyDetailPage({
           </div>
           <div>
             <label className={labelCls}>Monthly rent ($)</label>
-            <input type="number" name="rent" step="1" min="0" defaultValue={dollars(t.rent_cents)} className={inputCls} />
+            <input type="number" name="rent" step="0.01" min="0" defaultValue={dollars(t.rent_cents)} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>Deposit ($)</label>
-            <input type="number" name="deposit" step="1" min="0" defaultValue={dollars(t.deposit_cents)} className={inputCls} />
+            <input type="number" name="deposit" step="0.01" min="0" defaultValue={dollars(t.deposit_cents)} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>Payment / deposit notes</label>
@@ -1434,11 +1434,11 @@ export default async function TenancyDetailPage({
                   <input
                     type="number"
                     name="new_rent"
-                    step="1"
+                    step="0.01"
                     min="0"
                     defaultValue={
                       rentIncrease.newRentCents != null
-                        ? Math.round(rentIncrease.newRentCents / 100).toString()
+                        ? (rentIncrease.newRentCents / 100).toFixed(2)
                         : dollars(t.rent_cents)
                     }
                     className={inputCls}

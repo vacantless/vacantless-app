@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 
-/** Dollars string for a date/number input default (cents -> "1250"). */
+/** Dollars string for a number input default (cents -> "1250" or "1250.50"). */
 function dollars(cents: number | null): string {
-  return cents != null ? Math.round(cents / 100).toString() : "";
+  return cents != null ? (cents / 100).toString() : "";
 }
 
 type ExistingTenancy = {
@@ -121,7 +121,7 @@ export default async function WatchLeasePage({
                 <input
                   type="number"
                   name="rent"
-                  step="1"
+                  step="0.01"
                   min="0"
                   defaultValue={dollars(t.rent_cents)}
                   className={inputCls}
@@ -282,7 +282,7 @@ export default async function WatchLeasePage({
             <input
               type="number"
               name="rent"
-              step="1"
+              step="0.01"
               min="0"
               placeholder="1250"
               className={inputCls}

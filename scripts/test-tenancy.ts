@@ -46,6 +46,7 @@ ok("unknown status does NOT take unit off-market", tenancyTakesUnitOffMarket("ev
 // --- parseMoneyToCents ------------------------------------------------------
 ok("money plain", parseMoneyToCents("1250") === 125000);
 ok("money decimals", parseMoneyToCents("1250.50") === 125050);
+ok("decimal rent persists exact cents", parseMoneyToCents("4018.33") === 401833);
 ok("money with $ and comma", parseMoneyToCents("$1,250") === 125000);
 ok("money blank -> null", parseMoneyToCents("") === null);
 ok("money null -> null", parseMoneyToCents(null) === null);

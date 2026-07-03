@@ -107,7 +107,10 @@ function SiteHeader() {
           <SecondaryButton href="/login" className="hidden sm:inline-flex">
             Log in
           </SecondaryButton>
-          <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
+          <PrimaryButton href="/signup">
+            <span className="sm:hidden">Start free</span>
+            <span className="hidden sm:inline">{SIGNUP_LABEL}</span>
+          </PrimaryButton>
         </div>
       </div>
     </header>
