@@ -5,12 +5,18 @@ import { createClient } from "@/lib/supabase/server";
 import { VacantlessMark } from "../components/vacantless-mark";
 
 export const metadata = {
-  title: "Vacantless - Catch every rental opportunity",
+  title: "Vacantless - Fill your next rental",
   description:
-    "One simple place to collect rental inquiries, reply fast, let renters book their own viewings, and turn interest into signed leases.",
+    "Create a rental page, share it safely, set viewing times, collect inquiries, and move the right renter into a tenancy record. A calm leasing workspace for small landlords.",
 };
 
 export const dynamic = "force-dynamic";
+
+// Contact target for "get help launching" CTAs (brief: /signup primary, mailto
+// secondary). Kept in one place so it is easy to swap for a help route later.
+const CONTACT_HREF = "mailto:hello@vacantless.com";
+const CONTACT_LABEL = "Get help launching";
+const SIGNUP_LABEL = "Start with one rental free";
 
 export default async function Home() {
   // Logged-in visitors skip the public marketing page and go straight to their
@@ -22,41 +28,86 @@ export default async function Home() {
   if (user) redirect("/dashboard");
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-white text-[#15211d]">
       <SiteHeader />
       <main>
         <Hero />
-        <OpportunityBand />
-        <HowItWorks />
-        <EverythingInOnePlace />
-        <WhoItIsFor />
-        <FinalCta />
+        <Workflow />
+        <SafeSharing />
+        <BuiltForOperators />
+        <Pilot />
       </main>
       <SiteFooter />
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ Header */
+/* ------------------------------------------------------------------ Buttons */
+
+function PrimaryButton({
+  href,
+  children,
+  className = "",
+}: {
+  href: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex min-h-[42px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-4 text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c] ${className}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function SecondaryButton({
+  href,
+  children,
+  className = "",
+}: {
+  href: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex min-h-[42px] items-center justify-center whitespace-nowrap rounded-lg border border-[#d9e1dc] bg-white px-4 text-[0.92rem] font-bold text-[#203029] transition hover:bg-[#f4f7f5] ${className}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/* ------------------------------------------------------------------- Header */
 
 function SiteHeader() {
   return (
-    <header className="sticky top-0 z-20 border-b border-gray-100 bg-white/85 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
+    <header className="sticky top-0 z-20 border-b border-[#d9e1dc]/80 bg-white/90 backdrop-blur">
+      <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] items-center justify-between gap-4 py-3.5">
         <Wordmark />
-        <div className="flex items-center gap-2.5">
-          <Link
-            href="/login"
-            className="hidden rounded-lg px-3.5 py-2 text-sm font-medium text-gray-600 transition hover:text-gray-900 sm:inline-block"
-          >
+        <nav
+          className="hidden items-center gap-[18px] text-[0.91rem] font-semibold text-[#59655f] md:flex"
+          aria-label="Marketing sections"
+        >
+          <a href="#workflow" className="hover:text-[#15211d]">
+            Workflow
+          </a>
+          <a href="#sharing" className="hover:text-[#15211d]">
+            Safe sharing
+          </a>
+          <a href="#pilot" className="hover:text-[#15211d]">
+            Pilot
+          </a>
+        </nav>
+        <div className="flex flex-shrink-0 items-center gap-2.5">
+          <SecondaryButton href="/login" className="hidden sm:inline-flex">
             Log in
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-lg bg-gradient-to-r from-indigo-600 to-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-          >
-            Start a 30-day pilot
-          </Link>
+          </SecondaryButton>
+          <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
         </div>
       </div>
     </header>
@@ -65,12 +116,20 @@ function SiteHeader() {
 
 function Wordmark() {
   return (
-    <span className="flex items-center gap-2">
-      <VacantlessMark variant="black" className="h-7 w-7" />
-      <span className="text-lg font-bold tracking-tight text-gray-900">
+    <span className="inline-flex items-center gap-2.5">
+      <VacantlessMark variant="black" className="h-[30px] w-[30px]" />
+      <span className="text-[1.02rem] font-bold tracking-tight text-[#15211d]">
         Vacantless
       </span>
     </span>
+  );
+}
+
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-4 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[#16756a]">
+      {children}
+    </p>
   );
 }
 
@@ -78,366 +137,355 @@ function Wordmark() {
 
 function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      {/* layered background for depth */}
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-b from-indigo-50 via-white to-white" />
-        <div className="absolute -left-28 -top-28 h-80 w-80 rounded-full bg-indigo-300/30 blur-3xl" />
-        <div className="absolute right-0 top-10 h-96 w-96 rounded-full bg-teal-300/30 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-violet-200/30 blur-3xl" />
-      </div>
-
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 sm:py-24 lg:grid-cols-2">
+    <section className="relative isolate border-b border-[#d9e1dc] bg-gradient-to-b from-white to-[#edf5f0]/90">
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-12 py-14 sm:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         {/* Left: copy */}
-        <div>
-          <VacantlessMark variant="gradient" className="mb-5 h-12 w-12" />
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand shadow-sm backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-teal-500" />
-            Vacantless
-          </p>
-          <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-gray-900 sm:text-[3.25rem]">
-            Catch every{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-teal-500 bg-clip-text text-transparent">
-              rental opportunity
-            </span>
-            .
+        <div className="max-w-[570px]">
+          <Eyebrow>Vacancy-to-tenancy leasing workspace</Eyebrow>
+          <h1 className="mb-4 max-w-[11ch] text-[clamp(2.75rem,6vw,4.5rem)] font-extrabold leading-[0.98] tracking-tight">
+            Fill your next rental
           </h1>
-          <p className="mt-5 max-w-xl text-lg leading-relaxed text-gray-600">
-            Vacantless gives you one simple place to collect rental inquiries,
-            reply fast, let renters book their own viewing times, and turn
-            interest into signed leases.
+          <p className="mb-7 max-w-xl text-[clamp(1.08rem,1.8vw,1.28rem)] leading-relaxed text-[#384a42]">
+            Create a rental page, share it safely, set viewing times, collect
+            inquiries, and move the right renter into a tenancy record.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href="/signup"
-              className="rounded-lg bg-gradient-to-r from-indigo-600 to-teal-500 px-5 py-3 font-semibold text-white shadow-md transition hover:opacity-90"
-            >
-              Start a 30-day pilot
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-lg border border-gray-300 bg-white px-5 py-3 font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Log in
-            </Link>
+          <div className="mb-7 flex flex-wrap items-center gap-3">
+            <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
+            <SecondaryButton href={CONTACT_HREF}>
+              {CONTACT_LABEL}
+            </SecondaryButton>
           </div>
 
-          {/* graphic proof strip */}
-          <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3">
-            {PROOFS.map((p) => (
-              <span
-                key={p.label}
-                className="inline-flex items-center gap-2 text-sm font-medium text-gray-600"
+          <div
+            className="grid max-w-[520px] grid-cols-1 border-y border-[#d9e1dc] sm:grid-cols-3"
+            aria-label="Current product scope"
+          >
+            {HERO_PROOFS.map((p, i) => (
+              <div
+                key={p.value}
+                className={`py-3.5 sm:pr-4 ${
+                  i < HERO_PROOFS.length - 1
+                    ? "border-b border-[#d9e1dc] sm:border-b-0 sm:border-r"
+                    : ""
+                } ${i > 0 ? "sm:pl-4" : ""}`}
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-brand">
-                  {p.icon}
+                <span className="mb-1 block text-[1.01rem] font-extrabold leading-tight">
+                  {p.value}
                 </span>
-                {p.label}
-              </span>
+                <span className="block text-[0.78rem] font-semibold leading-snug text-[#59655f]">
+                  {p.label}
+                </span>
+              </div>
             ))}
           </div>
         </div>
 
         {/* Right: product preview */}
-        <div className="relative">
-          {/* glowing halo behind the mockup for pizazz */}
-          <div className="pointer-events-none absolute inset-0 -z-10 mx-auto h-full w-full max-w-md rounded-[2rem] bg-gradient-to-tr from-indigo-200/50 to-teal-200/50 blur-2xl" />
-          <RenterListMockup />
-        </div>
+        <ProductPreview />
       </div>
     </section>
   );
 }
 
-const PROOFS: { label: string; icon: ReactNode }[] = [
-  { label: "Reply in seconds", icon: <BoltIcon /> },
-  { label: "One link to share", icon: <LinkIcon /> },
-  { label: "Every renter tracked", icon: <CheckIcon /> },
+const HERO_PROOFS: { value: string; label: string }[] = [
+  { value: "Rental page", label: "A shareable home base for one listing." },
+  { value: "Viewing times", label: "Let renters book into windows you set." },
+  {
+    value: "Tenancy record",
+    label: 'Keep the handoff after "yes" in one place.',
+  },
 ];
 
-/* The hero product mockup — a tangible "renter list" so a landlord can see
-   what the product actually does without any jargon. */
-function RenterListMockup() {
+/* The hero product preview — a tangible dashboard so a landlord sees what the
+   product actually does. Real app concepts (rental status, task tiles, inquiry
+   list, renter viewing picker), no rent-collection/accounting claims. */
+function ProductPreview() {
   return (
-    <div className="relative mx-auto max-w-md">
-      {/* floating accent card */}
-      <div className="absolute -right-3 -top-5 z-10 hidden rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-lg sm:block">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-100 text-teal-700">
-            <CheckIcon />
-          </span>
-          <div>
-            <p className="text-xs font-semibold text-gray-900">Viewing booked</p>
-            <p className="text-[11px] text-gray-500">Saturday, 2:00 PM</p>
+    <div className="relative min-h-[520px] lg:pl-6">
+      {/* Main dashboard screen */}
+      <div className="relative z-[2] ml-auto w-full max-w-[670px] overflow-hidden rounded-lg border border-[#a4b5ac]/85 bg-white shadow-[0_16px_44px_rgba(28,43,36,0.14)]">
+        <div className="flex min-h-[52px] items-center justify-between border-b border-[#d9e1dc] bg-[#fbfcfb] px-4">
+          <span className="text-[0.86rem] font-extrabold">506 Manning Ave</span>
+          <StatusPill tone="live">Live - bookable</StatusPill>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-[190px_minmax(0,1fr)]">
+          {/* Sidebar */}
+          <aside
+            className="hidden border-r border-[#d9e1dc] bg-[#f8faf8] p-4 sm:block"
+            aria-label="Dashboard preview navigation"
+          >
+            {PREVIEW_NAV.map((n) => (
+              <div
+                key={n.label}
+                className={`mb-2 flex min-h-[34px] items-center justify-between rounded-lg px-2.5 text-[0.78rem] font-semibold ${
+                  n.active
+                    ? "bg-[#e2f0ea] text-[#174c42]"
+                    : "text-[#59655f]"
+                }`}
+              >
+                {n.label} <NavBadge>{n.count}</NavBadge>
+              </div>
+            ))}
+          </aside>
+          {/* Workspace */}
+          <div className="p-[18px]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#d9e1dc] pb-4">
+              <div>
+                <p className="mb-1.5 font-extrabold leading-tight">
+                  506 Manning Ave, Main Floor
+                </p>
+                <p className="text-[0.82rem] leading-snug text-[#59655f]">
+                  $4,018.33 / mo · 2 bed · 1 bath · available Aug 1
+                </p>
+              </div>
+              <StatusPill tone="safe">Safe to share</StatusPill>
+            </div>
+            <div className="my-4 grid grid-cols-2 gap-3">
+              {PREVIEW_TASKS.map((t) => (
+                <div
+                  key={t.title}
+                  className="min-h-[95px] rounded-lg border border-[#d9e1dc] bg-white p-3"
+                >
+                  <strong className="mb-1.5 block text-[0.87rem]">
+                    {t.title}
+                  </strong>
+                  <span className="text-[0.78rem] leading-snug text-[#59655f]">
+                    {t.body}
+                  </span>
+                  <div className="mt-2.5 flex items-center gap-2 text-[0.75rem] font-semibold text-[#31584d]">
+                    <span className="inline-block h-[15px] w-[15px] rounded bg-[#1f8a5b]" />
+                    {t.line}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-2.5">
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-[#d9e1dc] bg-white px-3 py-2.5">
+                <div>
+                  <strong className="block text-[0.82rem]">Maya Chen</strong>
+                  <span className="text-[0.78rem] text-[#59655f]">
+                    Booked Tue 6:30 PM
+                  </span>
+                </div>
+                <StatusPill tone="lease">Ready to lease</StatusPill>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-[#d9e1dc] bg-white px-3 py-2.5">
+                <div>
+                  <strong className="block text-[0.82rem]">Daniel Park</strong>
+                  <span className="text-[0.78rem] text-[#59655f]">
+                    Asked about parking
+                  </span>
+                </div>
+                <NavBadge>New</NavBadge>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-xl">
-        {/* window chrome */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
-            <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
-            <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
-          </div>
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
-            Your renter list
+      {/* Side renter-view screen */}
+      <div className="relative z-[3] mt-4 w-full max-w-[330px] overflow-hidden rounded-lg border border-[#a4b5ac]/85 bg-white shadow-[0_16px_44px_rgba(28,43,36,0.14)] lg:absolute lg:-left-6 lg:bottom-0 lg:mt-0 lg:w-[54%]">
+        <div className="flex min-h-[52px] items-center justify-between border-b border-[#d9e1dc] bg-[#fbfcfb] px-4">
+          <span className="text-[0.86rem] font-extrabold">Renter view</span>
+          <span className="flex gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-[#cad6cf]" />
+            <span className="h-2 w-2 rounded-full bg-[#a9c8bc]" />
+            <span className="h-2 w-2 rounded-full bg-[#d3b777]" />
           </span>
         </div>
-
-        <div className="divide-y divide-gray-100">
-          {MOCK_RENTERS.map((r) => (
-            <div key={r.name} className="flex items-center gap-3 px-4 py-3">
+        <div className="p-4">
+          <div className="grid gap-2.5">
+            <div className="h-[11px] w-[78%] rounded-full bg-[#e3ebe6]" />
+            <div className="h-[11px] rounded-full bg-[#e3ebe6]" />
+            <div className="h-[11px] w-[62%] rounded-full bg-[#e3ebe6]" />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {PREVIEW_SLOTS.map((s) => (
               <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${r.avatarClass}`}
+                key={s.time}
+                className={`rounded-lg border px-2 py-2 text-center text-[0.72rem] font-semibold ${
+                  s.selected
+                    ? "border-[#5ba184] bg-[#e6f4ed] text-[#18583e]"
+                    : "border-[#d9e1dc] bg-white text-[#37504a]"
+                }`}
               >
-                {r.initials}
+                {s.time}
               </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-gray-900">
-                  {r.name}
-                </p>
-                <p className="truncate text-xs text-gray-500">{r.detail}</p>
-              </div>
-              <StatusPill tone={r.tone}>{r.status}</StatusPill>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-const MOCK_RENTERS: {
-  name: string;
-  initials: string;
-  detail: string;
-  status: string;
-  tone: PillTone;
-  avatarClass: string;
-}[] = [
-  {
-    name: "Maria S.",
-    initials: "MS",
-    detail: "Wants to move in by Aug 1",
-    status: "New inquiry",
-    tone: "blue",
-    avatarClass: "bg-indigo-100 text-brand",
-  },
-  {
-    name: "James T.",
-    initials: "JT",
-    detail: "Viewing Sat at 2:00 PM",
-    status: "Booked",
-    tone: "teal",
-    avatarClass: "bg-teal-100 text-teal-700",
-  },
-  {
-    name: "Priya K.",
-    initials: "PK",
-    detail: "Replied 2 days ago",
-    status: "Follow-up",
-    tone: "amber",
-    avatarClass: "bg-amber-100 text-amber-700",
-  },
-  {
-    name: "Daniel O.",
-    initials: "DO",
-    detail: "Application received",
-    status: "Applied",
-    tone: "violet",
-    avatarClass: "bg-violet-100 text-violet-700",
-  },
-  {
-    name: "The Nguyen family",
-    initials: "TN",
-    detail: "Lease signed",
-    status: "Leased",
-    tone: "green",
-    avatarClass: "bg-emerald-100 text-emerald-700",
-  },
+const PREVIEW_NAV: { label: string; count: string; active?: boolean }[] = [
+  { label: "Overview", count: "3" },
+  { label: "Rentals", count: "1", active: true },
+  { label: "Inquiries", count: "8" },
+  { label: "Viewings", count: "4" },
+  { label: "Tenants", count: "2" },
 ];
 
-/* ------------------------------------------------------------- Opportunity band */
-
-function OpportunityBand() {
-  return (
-    <section className="relative overflow-hidden bg-gradient-to-r from-indigo-600 to-teal-500">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-10 top-0 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-        <div className="absolute -bottom-10 right-10 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
-      </div>
-      <div className="relative mx-auto max-w-4xl px-6 py-14 text-center">
-        <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-          Make the most of every renter who reaches out.
-        </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-white/90">
-          Every call, message, and inquiry from Facebook Marketplace, Kijiji,
-          email, and text lands in one place, gets a fast reply, and stays on
-          your list until the unit is leased.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-/* ---------------------------------------------------------------- How it works */
-
-function HowItWorks() {
-  return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
-      <div className="mx-auto max-w-2xl text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-          How it works
-        </h2>
-        <p className="mt-3 text-lg text-gray-600">
-          Three simple pieces. No technical setup.
-        </p>
-      </div>
-
-      <div className="mt-12 grid gap-6 lg:grid-cols-3">
-        {STEPS.map((s, i) => (
-          <div
-            key={s.title}
-            className="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-teal-500 text-white shadow-sm">
-                {s.icon}
-              </span>
-              <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Step {i + 1}
-              </span>
-            </div>
-            <h3 className="mt-4 text-lg font-semibold text-gray-900">
-              {s.title}
-            </h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-gray-600">
-              {s.body}
-            </p>
-            <div className="mt-5 flex-1">{s.preview}</div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-const STEPS: {
-  title: string;
-  body: string;
-  icon: ReactNode;
-  preview: ReactNode;
-}[] = [
+const PREVIEW_TASKS: { title: string; body: string; line: string }[] = [
   {
-    title: "Your rental inquiry page",
-    body: "Share one simple link. Renters ask about the unit, leave their contact details, and tell you when they want to move.",
-    icon: <PageIcon />,
-    preview: (
-      <div className="overflow-hidden rounded-xl border border-gray-200">
-        <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-teal-500 px-3 py-2">
-          <span className="h-4 w-4 rounded bg-white/70" />
-          <span className="text-xs font-bold text-white">
-            Riverside Apartments
-          </span>
-        </div>
-        <div className="space-y-2 p-3">
-          <div className="h-2 w-3/4 rounded bg-gray-200" />
-          <div className="h-2 w-1/2 rounded bg-gray-200" />
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <div className="h-7 rounded border border-gray-200 bg-gray-50" />
-            <div className="h-7 rounded border border-gray-200 bg-gray-50" />
-          </div>
-          <div className="mt-1 h-8 rounded-lg bg-gradient-to-r from-indigo-600 to-teal-500" />
-        </div>
-      </div>
-    ),
-  },
-  {
-    title: "Your renter list",
-    body: "See every interested renter in one place: new, contacted, booked, showed, applied, or leased.",
-    icon: <ListIcon />,
-    preview: (
-      <div className="space-y-2 rounded-xl border border-gray-200 p-3">
-        {[
-          { n: "w-2/3", tone: "bg-indigo-100 text-brand", t: "New" },
-          { n: "w-1/2", tone: "bg-teal-100 text-teal-700", t: "Booked" },
-          { n: "w-3/5", tone: "bg-amber-100 text-amber-700", t: "Follow-up" },
-        ].map((row) => (
-          <div key={row.t} className="flex items-center gap-2">
-            <span className="h-6 w-6 shrink-0 rounded-full bg-gray-100" />
-            <span className={`h-2 rounded bg-gray-200 ${row.n}`} />
-            <span
-              className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.tone}`}
-            >
-              {row.t}
-            </span>
-          </div>
-        ))}
-      </div>
-    ),
+    title: "Rental page",
+    body: "Public page is live with the details renters need.",
+    line: "Link ready",
   },
   {
     title: "Viewing times",
-    body: "Set your available times. Renters choose a viewing without all the back-and-forth.",
-    icon: <CalendarIcon />,
-    preview: (
-      <div className="rounded-xl border border-gray-200 p-3">
-        <div className="mb-2 text-[11px] font-medium text-gray-400">
-          Saturday
-        </div>
-        <div className="grid grid-cols-3 gap-1.5">
-          {["10:00", "10:30", "11:00", "1:30", "2:00", "2:30"].map((t, i) => (
-            <div
-              key={t}
-              className={`rounded-md px-1 py-1.5 text-center text-[11px] font-medium ${
-                i === 4
-                  ? "bg-gradient-to-r from-indigo-600 to-teal-500 text-white shadow-sm"
-                  : "border border-gray-200 text-gray-600"
+    body: "Evening and weekend windows are available to book.",
+    line: "Slots open",
+  },
+  {
+    title: "Inquiries",
+    body: "New renter messages land beside booking activity.",
+    line: "8 active",
+  },
+  {
+    title: "Tenancy",
+    body: "One strong renter is ready for the lease handoff.",
+    line: "Convert next",
+  },
+];
+
+const PREVIEW_SLOTS: { time: string; selected?: boolean }[] = [
+  { time: "Tue 6:00" },
+  { time: "Tue 6:30", selected: true },
+  { time: "Thu 5:30" },
+  { time: "Sat 10:00" },
+  { time: "Sat 10:30" },
+  { time: "Sun 12:00" },
+];
+
+/* ---------------------------------------------------------------- Section head */
+
+function SectionHead({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mb-7 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end sm:gap-6">
+      <h2 className="max-w-[12ch] text-[clamp(1.9rem,4vw,3rem)] font-extrabold leading-[1.04]">
+        {title}
+      </h2>
+      <p className="max-w-[34rem] text-base leading-relaxed text-[#59655f]">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Workflow */
+
+function Workflow() {
+  return (
+    <section id="workflow" className="py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="One rental, one path">
+          Keep the leasing work around one vacancy in a single flow: prepare the
+          rental, share it, coordinate viewings, and carry the chosen renter
+          forward.
+        </SectionHead>
+        <div className="grid overflow-hidden rounded-lg border border-[#d9e1dc] bg-white lg:grid-cols-5">
+          {WORKFLOW_STEPS.map((s, i) => (
+            <article
+              key={s.title}
+              className={`min-h-[200px] p-5 ${
+                i < WORKFLOW_STEPS.length - 1
+                  ? "border-b border-[#d9e1dc] lg:border-b-0 lg:border-r"
+                  : ""
               }`}
             >
-              {t}
-            </div>
-          ))}
-        </div>
-      </div>
-    ),
-  },
-];
-
-/* -------------------------------------------------------- Everything in one place */
-
-function EverythingInOnePlace() {
-  return (
-    <section className="bg-gray-50 py-20">
-      <div className="mx-auto max-w-5xl px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-            Everything in one place
-          </h2>
-          <p className="mt-3 text-lg text-gray-600">
-            From the first message to the signed lease, Vacantless keeps every
-            opportunity moving forward.
-          </p>
-        </div>
-
-        <div className="mt-12 grid gap-5 sm:grid-cols-2">
-          {WINS.map((w) => (
-            <div
-              key={w.title}
-              className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-teal-500 text-white">
-                {w.icon}
+              <span className="mb-5 grid h-[34px] w-[34px] place-items-center rounded-lg bg-[#17362f] text-[0.84rem] font-extrabold text-white">
+                {i + 1}
               </span>
-              <div>
-                <h3 className="font-semibold text-gray-900">{w.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                  {w.body}
-                </p>
-              </div>
+              <h3 className="mb-2.5 text-[1.06rem] font-semibold leading-tight">
+                {s.title}
+              </h3>
+              <p className="text-[0.91rem] leading-relaxed text-[#59655f]">
+                {s.body}
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const WORKFLOW_STEPS: { title: string; body: string }[] = [
+  {
+    title: "Create the rental page",
+    body: "Enter the address, rent, core details, photos, and availability date.",
+  },
+  {
+    title: "Know what is safe to share",
+    body: "Draft, Live, Paused, and Leased states keep links honest.",
+  },
+  {
+    title: "Open viewing windows",
+    body: "Set times renters can book without turning the week into chaos.",
+  },
+  {
+    title: "Work the inquiry list",
+    body: "Track renter messages, booking activity, and follow-up in one view.",
+  },
+  {
+    title: "Convert to tenancy",
+    body: "Move the selected renter into the tenancy record when the lease is set.",
+  },
+];
+
+/* -------------------------------------------------------------- Safe sharing */
+
+function SafeSharing() {
+  return (
+    <section
+      id="sharing"
+      className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
+    >
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-stretch gap-8 lg:grid-cols-[minmax(0,0.84fr)_minmax(0,1.16fr)]">
+        <div>
+          <Eyebrow>Safer landlord operations</Eyebrow>
+          <h2 className="mb-4 max-w-[12ch] text-[clamp(1.9rem,4vw,3rem)] font-extrabold leading-[1.04]">
+            Share the right link at the right time
+          </h2>
+          <p className="text-base leading-relaxed text-[#59655f]">
+            Vacantless gives landlords clarity: know when a rental page is
+            private, accepting inquiries, paused, or no longer available.
+          </p>
+          <p className="mt-4 border-l-4 border-[#16756a] pl-4 text-[1.15rem] font-semibold leading-snug text-[#273832]">
+            The promise is not &quot;manage everything.&quot; It is &quot;do not
+            lose the thread while filling this rental.&quot;
+          </p>
+        </div>
+        <div
+          className="grid gap-3 rounded-lg border border-[#d9e1dc] bg-white p-4 shadow-[0_12px_32px_rgba(28,43,36,0.08)]"
+          aria-label="Rental status sharing model"
+        >
+          {SHARING_STATES.map((s) => (
+            <div
+              key={s.name}
+              className="grid grid-cols-1 items-center gap-3 rounded-lg border border-[#d9e1dc] bg-white p-3 sm:grid-cols-[118px_minmax(0,1fr)_auto]"
+            >
+              <strong className="text-[0.9rem]">{s.name}</strong>
+              <span className="text-[0.84rem] leading-snug text-[#59655f]">
+                {s.body}
+              </span>
+              <span
+                className={`inline-flex min-h-[34px] min-w-[94px] items-center justify-center whitespace-nowrap rounded-lg border px-3 text-[0.75rem] font-extrabold ${
+                  s.on
+                    ? "border-[#2f8562] bg-[#e4f4ed] text-[#176044]"
+                    : "border-[#d9e1dc] bg-white text-[#53615c]"
+                }`}
+              >
+                {s.action}
+              </span>
             </div>
           ))}
         </div>
@@ -446,143 +494,191 @@ function EverythingInOnePlace() {
   );
 }
 
-const WINS: { title: string; body: string; icon: ReactNode }[] = [
+const SHARING_STATES: {
+  name: string;
+  body: string;
+  action: string;
+  on?: boolean;
+}[] = [
   {
-    title: "One inquiry page renters fill out",
-    body: "Share a single link everywhere you post. Every interested renter comes in the same clean way.",
-    icon: <PageIcon />,
+    name: "Draft",
+    body: "Prepare copy and details before renters see the page.",
+    action: "Keep private",
   },
   {
-    title: "Fast, automatic replies",
-    body: "Renters hear back right away, so you stay top of the list while their interest is fresh.",
-    icon: <BoltIcon />,
+    name: "Live",
+    body: "Public page can collect inquiries and viewing bookings.",
+    action: "Copy link",
+    on: true,
   },
   {
-    title: "Renters book their own viewings",
-    body: "Set your available times once. Renters pick a slot, with no back-and-forth messaging.",
-    icon: <CalendarIcon />,
+    name: "Paused",
+    body: "Keep the record, stop new renter bookings for now.",
+    action: "Not bookable",
   },
   {
-    title: "An organized renter list",
-    body: "See everyone at a glance, from new inquiry to signed lease, and know exactly who needs follow-up.",
-    icon: <ListIcon />,
-  },
-];
-
-/* ----------------------------------------------------------------- Who it's for */
-
-function WhoItIsFor() {
-  return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
-      <div className="mx-auto max-w-2xl text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-          Who it&apos;s for
-        </h2>
-        <p className="mt-3 text-lg text-gray-600">
-          A simple system, without a big property-management platform.
-        </p>
-      </div>
-
-      <div className="mx-auto mt-12 grid max-w-4xl gap-4 sm:grid-cols-2">
-        {AUDIENCE.map((a) => (
-          <div
-            key={a.title}
-            className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-              {a.icon}
-            </span>
-            <div>
-              <h3 className="font-semibold text-gray-900">{a.title}</h3>
-              <p className="mt-1 text-sm text-gray-600">{a.body}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-const AUDIENCE: { title: string; body: string; icon: ReactNode }[] = [
-  {
-    title: "Small landlords",
-    body: "Owners renting out a few units who want to catch every inquiry.",
-    icon: <KeyIcon />,
-  },
-  {
-    title: "Family-run portfolios",
-    body: "Families managing several rentals who want everyone on the same page.",
-    icon: <UsersIcon />,
-  },
-  {
-    title: "Owners with multiple units",
-    body: "Keep every unit's inquiries, viewings, and follow-ups organized.",
-    icon: <BuildingIcon />,
-  },
-  {
-    title: "Marketplace & Kijiji renters",
-    body: "Already posting on Facebook, Kijiji, email, calls, and texts? Bring it all together.",
-    icon: <ChatIcon />,
+    name: "Leased",
+    body: "Show renters the unit is no longer available.",
+    action: "Unavailable",
   },
 ];
 
-/* -------------------------------------------------------------------- Final CTA */
+/* ------------------------------------------------------- Built for operators */
 
-function FinalCta() {
+function BuiltForOperators() {
   return (
-    <section className="px-6 pb-20">
-      <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 to-teal-500 px-6 py-14 text-center shadow-lg">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-16 -top-16 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
-          <div className="absolute -bottom-20 right-0 h-64 w-64 rounded-full bg-white/15 blur-2xl" />
-        </div>
-        <div className="relative">
-          <h2 className="mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Ready to fill your next vacancy?
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-white/90">
-            Start a 30-day pilot and set up your first rental inquiry page in
-            minutes.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link
-              href="/signup"
-              className="rounded-lg bg-white px-6 py-3 font-semibold text-brand shadow-sm transition hover:bg-gray-50"
+    <section className="py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Built for small operators">
+          Vacantless is for landlords who need one practical place to run the
+          leasing work around a live vacancy.
+        </SectionHead>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {OPERATOR_PANELS.map((p) => (
+            <article
+              key={p.title}
+              className="min-h-[230px] rounded-lg border border-[#d9e1dc] bg-white p-5"
             >
-              Start a 30-day pilot
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-lg border border-white/50 px-6 py-3 font-medium text-white transition hover:bg-white/10"
-            >
-              Log in
-            </Link>
-          </div>
+              <h3 className="mb-2.5 text-[1.05rem] font-semibold">{p.title}</h3>
+              <ul className="mt-4 grid list-none gap-2.5 p-0">
+                {p.items.map((it) => (
+                  <li
+                    key={it}
+                    className="flex items-start gap-2.5 text-[0.92rem] leading-snug text-[#405047]"
+                  >
+                    <span className="mt-[3px] h-3.5 w-3.5 flex-none rounded bg-[#1f8a5b]" />
+                    {it}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-/* ----------------------------------------------------------------------- Footer */
+const OPERATOR_PANELS: { title: string; items: string[] }[] = [
+  {
+    title: "Before the listing goes out",
+    items: [
+      "Prepare the rental page and core details.",
+      "Keep draft listings private while they are still being checked.",
+      "See when the rental is ready to accept renter inquiries.",
+      "Set the viewing windows renters can choose from.",
+    ],
+  },
+  {
+    title: "Once renters respond",
+    items: [
+      "Keep inquiries and viewing activity beside the rental.",
+      "Follow the renter from first message to booked viewing.",
+      "Pause or close the public page when the rental is no longer available.",
+      "Create the tenancy record when the right renter is chosen.",
+    ],
+  },
+];
+
+/* --------------------------------------------------------------------- Pilot */
+
+function Pilot() {
+  return (
+    <section
+      id="pilot"
+      className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
+    >
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Start with one rental">
+          Launch a single rental page first, then add more live rentals when the
+          workflow is working for you.
+        </SectionHead>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {PLANS.map((p) => (
+            <article
+              key={p.name}
+              className={`min-h-[246px] rounded-lg border bg-white p-5 ${
+                p.featured
+                  ? "border-[#6ca58d] shadow-[0_12px_32px_rgba(32,92,66,0.12)]"
+                  : "border-[#d9e1dc]"
+              }`}
+            >
+              <h3 className="mb-2 text-[1.08rem] font-semibold">{p.name}</h3>
+              <span className="my-3 block text-[1.9rem] font-extrabold leading-tight">
+                {p.price}
+                {p.priceNote ? (
+                  <small className="text-[0.86rem] font-bold text-[#59655f]">
+                    {" "}
+                    {p.priceNote}
+                  </small>
+                ) : null}
+              </span>
+              <p className="mb-5 text-[0.92rem] leading-relaxed text-[#59655f]">
+                {p.body}
+              </p>
+              {p.featured ? (
+                <PrimaryButton href={p.href}>{p.cta}</PrimaryButton>
+              ) : (
+                <SecondaryButton href={p.href}>{p.cta}</SecondaryButton>
+              )}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const PLANS: {
+  name: string;
+  price: string;
+  priceNote?: string;
+  body: string;
+  cta: string;
+  href: string;
+  featured?: boolean;
+}[] = [
+  {
+    name: "Free",
+    price: "$0",
+    priceNote: "/ month",
+    body: "Use one live rental page to collect inquiries and viewing bookings.",
+    cta: "Start free",
+    href: "/signup",
+  },
+  {
+    name: "Guided pilot",
+    price: "Setup help",
+    body: "Work with Vacantless to launch a real rental and tune the flow.",
+    cta: CONTACT_LABEL,
+    href: CONTACT_HREF,
+    featured: true,
+  },
+  {
+    name: "Growth",
+    price: "More rentals",
+    body: "For operators who need more than one live rental at a time.",
+    cta: "Choose Growth",
+    href: "/signup",
+  },
+];
+
+/* -------------------------------------------------------------------- Footer */
 
 function SiteFooter() {
   return (
-    <footer className="border-t border-gray-100 bg-white">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
+    <footer className="border-t border-[#d9e1dc] py-8 text-[0.86rem] text-[#59655f]">
+      <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <Wordmark />
-        <p className="text-sm text-gray-500">
-          Faster replies. More viewings. Filled vacancies.
-        </p>
-        <div className="flex items-center gap-4 text-sm">
-          <Link href="/login" className="text-gray-500 hover:text-gray-900">
+        <span>
+          Rental page, safe sharing, viewing times, inquiries, tenancy handoff.
+        </span>
+        <div className="flex items-center gap-4">
+          <Link href="/login" className="hover:text-[#15211d]">
             Log in
           </Link>
-          <Link
-            href="/signup"
-            className="font-medium text-brand hover:underline"
-          >
-            Start a pilot
+          <Link href="/signup" className="font-semibold text-[#17362f] hover:underline">
+            Start free
           </Link>
         </div>
       </div>
@@ -592,7 +688,7 @@ function SiteFooter() {
 
 /* --------------------------------------------------------- Status pill helper */
 
-type PillTone = "blue" | "teal" | "amber" | "violet" | "green";
+type PillTone = "live" | "safe" | "lease";
 
 function StatusPill({
   tone,
@@ -602,198 +698,23 @@ function StatusPill({
   children: ReactNode;
 }) {
   const tones: Record<PillTone, string> = {
-    blue: "bg-indigo-50 text-brand",
-    teal: "bg-teal-50 text-teal-700",
-    amber: "bg-amber-50 text-amber-700",
-    violet: "bg-violet-50 text-violet-700",
-    green: "bg-emerald-50 text-emerald-700",
+    live: "bg-[#dcf3e9] text-[#176044]",
+    safe: "bg-[#f8edd5] text-[#80510c]",
+    lease: "bg-[#e3edf7] text-[#244f78]",
   };
   return (
     <span
-      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tones[tone]}`}
+      className={`inline-flex min-h-[30px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 text-[0.75rem] font-extrabold ${tones[tone]}`}
     >
       {children}
     </span>
   );
 }
 
-/* ------------------------------------------------------------------- Icons (inline,
-   one consistent line style: 1.6 stroke, rounded) */
-
-function CheckIcon() {
+function NavBadge({ children }: { children: ReactNode }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
-      <path
-        d="m5 12.5 4.5 4.5L19 7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function BoltIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
-      <path
-        d="M13 3 5 13h6l-1 8 8-10h-6l1-8Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function LinkIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
-      <path
-        d="M9.5 14.5 14.5 9.5M10 6.5l1.2-1.2a4 4 0 0 1 5.7 5.7L15.5 12M14 17.5l-1.2 1.2a4 4 0 0 1-5.7-5.7L8.5 12"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PageIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <rect
-        x="5"
-        y="3"
-        width="14"
-        height="18"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M9 8h6M9 12h6M9 16h3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <path
-        d="M8 6h12M8 12h12M8 18h12"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-      <circle cx="4" cy="6" r="1.3" fill="currentColor" />
-      <circle cx="4" cy="12" r="1.3" fill="currentColor" />
-      <circle cx="4" cy="18" r="1.3" fill="currentColor" />
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <rect
-        x="4"
-        y="5"
-        width="16"
-        height="16"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M4 9h16M8 3v4M16 3v4"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="14" r="1.6" fill="currentColor" />
-    </svg>
-  );
-}
-
-function KeyIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <circle cx="8" cy="8" r="4" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="m11 11 8 8m-3-3 2-2m-4 0 2-2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function UsersIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <circle cx="9" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="M3.5 19a5.5 5.5 0 0 1 11 0"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-      <path
-        d="M16 5.2a3.2 3.2 0 0 1 0 5.6M17 14.2a5.5 5.5 0 0 1 3.5 4.8"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function BuildingIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <rect
-        x="5"
-        y="3"
-        width="14"
-        height="18"
-        rx="1.5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M10 21v-3h4v3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function ChatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <path
-        d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 3v-3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M8 9.5h8M8 12.5h5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
+    <span className="inline-flex h-[22px] min-w-[24px] items-center justify-center rounded-full border border-[#d9e1dc] bg-white px-1 text-[0.72rem] font-extrabold text-[#4d5b55]">
+      {children}
+    </span>
   );
 }
