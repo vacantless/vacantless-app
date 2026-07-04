@@ -67,8 +67,12 @@ export function InquiryForm({
   const [selectedSlot, setSelectedSlot] = useState("");
   const [showAllDays, setShowAllDays] = useState(false);
 
+  // moveInChoice tracks WHICH pill is selected (by label, or "custom"); moveIn is
+  // the value actually submitted (an ISO date, or "" for Flexible/none). Tracking
+  // the choice separately lets "Flexible" (empty value) be visibly selected
+  // without colliding with the unselected state.
+  const [moveInChoice, setMoveInChoice] = useState<string | null>(null);
   const [moveIn, setMoveIn] = useState("");
-  const [moveInCustom, setMoveInCustom] = useState(false);
 
   const [occupants, setOccupants] = useState("");
   const [petsChoice, setPetsChoice] = useState<string | null>(null);
@@ -84,7 +88,18 @@ export function InquiryForm({
     () => ["No pets", "Cat", "Small dog", "Dog", "Other"],
     [],
   );
-  const occupantPills = useMemo(() => ["1", "2", "3", "4", "5+"], []);
+  // Labels are display-only; values must parse to an integer (parseCount rejects
+  // "5+"), so the 5+ pill submits "5" into the display-only screen_occupants field.
+  const occupantPills = useMemo(
+    () => [
+      { label: "1", value: "1" },
+      { label: "2", value: "2" },
+      { label: "3", value: "3" },
+      { label: "4", value: "4" },
+      { label: "5+", value: "5" },
+    ],
+    [],
+  );
 
   const selectedSlotLabel = useMemo(() => {
     if (!selectedSlot) return null;
@@ -269,15 +284,20 @@ export function InquiryForm({
             <p className="mb-1.5 text-sm text-gray-600">Ideal move-in</p>
             <div className="flex flex-wrap gap-2">
               {moveInPills.map((p) => {
-                const active = !moveInCustom && moveIn === p.value;
+                const active = moveInChoice === p.label;
                 return (
                   <button
-                    key={p.value}
+                    key={p.label}
                     type="button"
                     aria-pressed={active}
                     onClick={() => {
-                      setMoveInCustom(false);
-                      setMoveIn(active ? "" : p.value);
+                      if (active) {
+                        setMoveInChoice(null);
+                        setMoveIn("");
+                      } else {
+                        setMoveInChoice(p.label);
+                        setMoveIn(p.value);
+                      }
                     }}
                     className={chipClass(active)}
                     style={chipStyle(active)}
@@ -288,18 +308,18 @@ export function InquiryForm({
               })}
               <button
                 type="button"
-                aria-pressed={moveInCustom}
+                aria-pressed={moveInChoice === "custom"}
                 onClick={() => {
-                  setMoveInCustom(true);
+                  setMoveInChoice("custom");
                   setMoveIn("");
                 }}
-                className={chipClass(moveInCustom)}
-                style={chipStyle(moveInCustom)}
+                className={chipClass(moveInChoice === "custom")}
+                style={chipStyle(moveInChoice === "custom")}
               >
                 Pick a date
               </button>
             </div>
-            {moveInCustom && (
+            {moveInChoice === "custom" && (
               <input
                 type="date"
                 aria-label="Desired move-in date"
@@ -314,17 +334,17 @@ export function InquiryForm({
             <p className="mb-1.5 text-sm text-gray-600">How many people?</p>
             <div className="flex flex-wrap gap-2">
               {occupantPills.map((o) => {
-                const active = occupants === o;
+                const active = occupants === o.value;
                 return (
                   <button
-                    key={o}
+                    key={o.label}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => setOccupants(active ? "" : o)}
+                    onClick={() => setOccupants(active ? "" : o.value)}
                     className={chipClass(active)}
                     style={chipStyle(active)}
                   >
-                    {o}
+                    {o.label}
                   </button>
                 );
               })}

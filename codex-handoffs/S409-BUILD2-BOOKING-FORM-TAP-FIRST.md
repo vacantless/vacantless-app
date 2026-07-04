@@ -33,14 +33,21 @@ field NAME the action reads is preserved, so the same data lands:
 - `name` (required), `email` (required), `phone` (optional) - plain inputs.
 - `slot` - native `<input type="radio" name="slot">` (controlled by React state
   but still a real radio, so it submits and works without JS).
-- `move_in` - hidden input fed by the move-in pills / "Pick a date". The action
-  stores `move_in` as **free text** (`p_move_in: moveInRaw || null`), so pill
-  values like "As soon as possible" / "Aug 2026" / "Flexible" / an ISO date are
-  all valid.
-- `screen_occupants` - hidden input fed by numeric pills (1/2/3/4/5+). (Chosen
-  over the spec's categorical labels because the column is a display-only integer
-  and no schema change is allowed this build - so numeric loses no data. Noam
-  delegated this call.)
+- `move_in` - hidden input fed by the move-in pills / "Pick a date". The RPC's
+  `p_move_in` is a **DATE** (and feeds the move-in-window qualify-out check), so
+  every pill VALUE is an ISO date computed server-side and the label is display
+  only: "As soon as possible" = today, the two month pills = the 1st of the next
+  two months, "Pick a date" = the date input, and "Flexible" submits an empty
+  value (-> `p_move_in` null). The client tracks the selected pill by label
+  (`moveInChoice`) separately from the submitted date so "Flexible" (empty value)
+  is visibly selectable without colliding with "unselected". (Live QA caught the
+  first pass, which submitted the labels as `move_in` and errored the RPC date
+  cast.)
+- `screen_occupants` - hidden input fed by numeric pills (1/2/3/4/5+). The "5+"
+  pill submits "5" because `parseCount` rejects "5+". (Numeric chosen over the
+  spec's categorical labels because the column is a display-only integer and no
+  schema change is allowed this build, so numeric loses no data. Noam delegated
+  this call.)
 - `screen_pets_detail` + `screen_has_pets` - fed by the pets pills. "No pets"
   submits an EMPTY `screen_pets_detail` and no `screen_has_pets` (a non-empty
   detail is exactly what the action treats as "has a pet"); any real-pet pill

@@ -123,8 +123,16 @@ export default async function PublicListingPage({
 
   // Move-in pill choices for the tap-first booking form (S409 BUILD 2). Computed
   // server-side (not in the client component) so the two upcoming month labels
-  // don't cause a hydration mismatch. move_in is stored as free text by the submit
-  // action, so a label like "Aug 2026" or "Flexible" is a valid value.
+  // don't cause a hydration mismatch. CRITICAL: the submit RPC's p_move_in is a
+  // DATE (used in the move-in-window qualify-out), so every pill VALUE must be an
+  // ISO date or empty — the human label is display-only. "As soon as possible" =
+  // today; the two month pills = the 1st of the next two months; "Flexible" = no
+  // date (empty -> null), distinguished from "unselected" by the pill's own key
+  // in the client component.
+  const isoDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
   const nowForMoveIn = new Date();
   const monthPill = (offset: number) => {
     const d = new Date(
@@ -132,14 +140,16 @@ export default async function PublicListingPage({
       nowForMoveIn.getMonth() + offset,
       1,
     );
-    const label = d.toLocaleString("en-US", { month: "short", year: "numeric" });
-    return { label, value: label };
+    return {
+      label: d.toLocaleString("en-US", { month: "short", year: "numeric" }),
+      value: isoDate(d),
+    };
   };
   const moveInPills = [
-    { label: "As soon as possible", value: "As soon as possible" },
+    { label: "As soon as possible", value: isoDate(nowForMoveIn) },
     monthPill(1),
     monthPill(2),
-    { label: "Flexible", value: "Flexible" },
+    { label: "Flexible", value: "" },
   ];
 
   const booked = searchParams.submitted === "booked";
