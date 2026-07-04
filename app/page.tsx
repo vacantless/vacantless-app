@@ -818,6 +818,12 @@ function SiteFooter() {
           <Link href="/about" className="hover:text-[#15211d]">
             About
           </Link>
+          <Link href="/privacy" className="hover:text-[#15211d]">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-[#15211d]">
+            Terms
+          </Link>
           <a href={CONTACT_HREF} className="hover:text-[#15211d]">
             hello@vacantless.com
           </a>
