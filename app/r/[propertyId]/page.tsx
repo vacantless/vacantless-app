@@ -108,6 +108,20 @@ export default async function PublicListingPage({
   // Photos come pre-ordered from the RPC (cover first, then sort order).
   const photos = Array.isArray(l.photos) ? l.photos : [];
 
+  // S408 leaned the screening block into a default-closed "(optional)" panel to
+  // stop the public form reading like a rental application (conversion leak).
+  // But if an org configured a custom question as required, hiding it inside a
+  // collapsed "optional" panel means a name+email-only renter gets browser-blocked
+  // by a field they can't see (S409/Codex P2). So: only collapse+call it optional
+  // when nothing inside is actually required. A required custom question forces the
+  // panel open and flips the wording to honest "required" copy. A 'units' question
+  // with zero choices renders nothing, so it never counts as a blocking requirement.
+  const hasRequiredScreening = (l.screening_questions ?? []).some(
+    (q) =>
+      q.required &&
+      !(q.qtype === "units" && (q.choices?.length ?? 0) === 0),
+  );
+
   // Virtual tour / video (item S). Re-validated here against the host allow-list
   // so a value that somehow slipped past the write path can never inject an
   // arbitrary iframe; embeddable hosts get an <iframe>, others a plain link.
@@ -455,12 +469,20 @@ export default async function PublicListingPage({
                   {l.screening_enabled && (
                     // Screening questions are collapsed by default (S408): the
                     // public form should read as a quick inquiry, not a rental
-                    // application, or renters bounce. Everything inside is
-                    // optional; anyone who wants faster matching can expand it.
+                    // application, or renters bounce. When nothing inside is
+                    // required, the panel stays closed and reads "(optional)".
+                    // But if the org made a custom question required (S409/Codex
+                    // P2), keep it truly required — force the panel open and label
+                    // it honestly so the renter isn't blocked by a hidden field.
                     // Native <details> so it works with no client JS.
-                    <details className="rounded-lg border border-gray-200 bg-gray-50/60">
+                    <details
+                      open={hasRequiredScreening}
+                      className="rounded-lg border border-gray-200 bg-gray-50/60"
+                    >
                       <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700">
-                        Add a few details to help us match you faster (optional)
+                        {hasRequiredScreening
+                          ? "A few questions from the landlord (required)"
+                          : "Add a few details to help us match you faster (optional)"}
                       </summary>
                       <fieldset className="space-y-3 border-t border-gray-200 p-4">
                         <legend className="sr-only">A few quick questions</legend>
