@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { submitLead, rebookSavedLead } from "./actions";
+import { InquiryForm } from "./inquiry-form";
 import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
 import { affordabilityHintIncomeCents } from "@/lib/screening";
@@ -108,20 +109,6 @@ export default async function PublicListingPage({
   // Photos come pre-ordered from the RPC (cover first, then sort order).
   const photos = Array.isArray(l.photos) ? l.photos : [];
 
-  // S408 leaned the screening block into a default-closed "(optional)" panel to
-  // stop the public form reading like a rental application (conversion leak).
-  // But if an org configured a custom question as required, hiding it inside a
-  // collapsed "optional" panel means a name+email-only renter gets browser-blocked
-  // by a field they can't see (S409/Codex P2). So: only collapse+call it optional
-  // when nothing inside is actually required. A required custom question forces the
-  // panel open and flips the wording to honest "required" copy. A 'units' question
-  // with zero choices renders nothing, so it never counts as a blocking requirement.
-  const hasRequiredScreening = (l.screening_questions ?? []).some(
-    (q) =>
-      q.required &&
-      !(q.qtype === "units" && (q.choices?.length ?? 0) === 0),
-  );
-
   // Virtual tour / video (item S). Re-validated here against the host allow-list
   // so a value that somehow slipped past the write path can never inject an
   // arbitrary iframe; embeddable hosts get an <iframe>, others a plain link.
@@ -133,6 +120,27 @@ export default async function PublicListingPage({
   // the RPC). Null when rent is unknown, so the tip simply doesn't render.
   const incomeHintCents = affordabilityHintIncomeCents(l.rent_cents);
   const rentMonthly = l.rent_cents ? Math.round(l.rent_cents / 100) : null;
+
+  // Move-in pill choices for the tap-first booking form (S409 BUILD 2). Computed
+  // server-side (not in the client component) so the two upcoming month labels
+  // don't cause a hydration mismatch. move_in is stored as free text by the submit
+  // action, so a label like "Aug 2026" or "Flexible" is a valid value.
+  const nowForMoveIn = new Date();
+  const monthPill = (offset: number) => {
+    const d = new Date(
+      nowForMoveIn.getFullYear(),
+      nowForMoveIn.getMonth() + offset,
+      1,
+    );
+    const label = d.toLocaleString("en-US", { month: "short", year: "numeric" });
+    return { label, value: label };
+  };
+  const moveInPills = [
+    { label: "As soon as possible", value: "As soon as possible" },
+    monthPill(1),
+    monthPill(2),
+    { label: "Flexible", value: "Flexible" },
+  ];
 
   const booked = searchParams.submitted === "booked";
   // The renter's chosen time was taken before we could book it (audit B1). Their
@@ -385,311 +393,24 @@ export default async function PublicListingPage({
               </p>
             </div>
           ) : (
-            <>
-              <h2 className="text-lg font-bold text-gray-900">
-                {days.length > 0 ? "Book a viewing" : "Request a viewing"}
-              </h2>
-              <p className="mb-1 mt-1 text-sm text-gray-500">
-                {days.length > 0
-                  ? "Pick a time that works for you, or just send your details and we'll reach out."
-                  : "Tell us a bit about you and we'll reach out to book a time."}
-              </p>
-              <p className="mb-4 text-sm text-gray-500">
-                This is an in-person viewing (not a phone call). You will visit the home at the address above.
-              </p>
-              {searchParams.error && (
-                <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  Sorry, something went wrong. Please try again.
-                </p>
-              )}
-              <form action={submitLead} className="space-y-4">
-                <input type="hidden" name="property_id" value={l.id} />
-                {trackedPostId && (
-                  <input
-                    type="hidden"
-                    name="listing_post_id"
-                    value={trackedPostId}
-                  />
-                )}
-
-                <div className="space-y-3">
-                  <div>
-                    <label htmlFor="r_name" className="mb-1 block text-sm font-medium text-gray-700">
-                      Full name
-                    </label>
-                    <input
-                      id="r_name"
-                      name="name"
-                      required
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label htmlFor="r_email" className="mb-1 block text-sm font-medium text-gray-700">
-                        Email
-                      </label>
-                      <input
-                        id="r_email"
-                        name="email"
-                        type="email"
-                        required
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="r_phone" className="mb-1 block text-sm font-medium text-gray-700">
-                        Phone
-                      </label>
-                      <input
-                        id="r_phone"
-                        name="phone"
-                        type="tel"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      />
-                      <span className="mt-1 block text-xs text-gray-400">
-                        If you share your number we may text you about this
-                        viewing (such as a confirmation and reminders). Message
-                        and data rates may apply. Reply STOP anytime to opt out.
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="r_move_in" className="mb-1 block text-sm font-medium text-gray-700">
-                      Desired move-in date{" "}
-                      <span className="font-normal text-gray-400">(optional)</span>
-                    </label>
-                    <input
-                      id="r_move_in"
-                      name="move_in"
-                      type="date"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  {l.screening_enabled && (
-                    // Screening questions are collapsed by default (S408): the
-                    // public form should read as a quick inquiry, not a rental
-                    // application, or renters bounce. When nothing inside is
-                    // required, the panel stays closed and reads "(optional)".
-                    // But if the org made a custom question required (S409/Codex
-                    // P2), keep it truly required — force the panel open and label
-                    // it honestly so the renter isn't blocked by a hidden field.
-                    // Native <details> so it works with no client JS.
-                    <details
-                      open={hasRequiredScreening}
-                      className="rounded-lg border border-gray-200 bg-gray-50/60"
-                    >
-                      <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700">
-                        {hasRequiredScreening
-                          ? "A few questions from the landlord (required)"
-                          : "Add a few details to help us match you faster (optional)"}
-                      </summary>
-                      <fieldset className="space-y-3 border-t border-gray-200 p-4">
-                        <legend className="sr-only">A few quick questions</legend>
-                      <div>
-                        <label htmlFor="r_income" className="mb-1 block text-sm font-medium text-gray-700">
-                          Approximate monthly household income{" "}
-                          <span className="font-normal text-gray-400">(optional)</span>
-                        </label>
-                        <div className="relative">
-                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-                            $
-                          </span>
-                          <input
-                            id="r_income"
-                            name="screen_income"
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="4,500"
-                            className="w-full rounded-lg border border-gray-300 py-2 pl-7 pr-3 text-sm"
-                          />
-                        </div>
-                        <span className="mt-1 block text-xs text-gray-400">
-                          Helps us confirm the home fits your budget. Combined
-                          household, before tax.
-                        </span>
-                        {incomeHintCents != null && rentMonthly != null && (
-                          <span className="mt-1 block text-xs text-gray-500">
-                            Tip: for a ${rentMonthly.toLocaleString()}/mo home,
-                            renters often have a household income around $
-                            {(incomeHintCents / 100).toLocaleString()}/mo. This
-                            is a general guideline, not a strict requirement.
-                          </span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label htmlFor="r_occupants" className="mb-1 block text-sm font-medium text-gray-700">
-                            How many people would live here?{" "}
-                            <span className="font-normal text-gray-400">(optional)</span>
-                          </label>
-                          <input
-                            id="r_occupants"
-                            name="screen_occupants"
-                            type="number"
-                            min={1}
-                            max={20}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="r_pets_detail" className="mb-1 block text-sm font-medium text-gray-700">
-                            Pets?{" "}
-                            <span className="font-normal text-gray-400">(optional)</span>
-                          </label>
-                          <input
-                            id="r_pets_detail"
-                            name="screen_pets_detail"
-                            type="text"
-                            placeholder="e.g. 1 cat — or leave blank"
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                          />
-                          <label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
-                            <input
-                              name="screen_has_pets"
-                              type="checkbox"
-                              value="1"
-                              className="h-4 w-4 rounded border-gray-300"
-                            />
-                            I have a pet
-                          </label>
-                        </div>
-                      </div>
-                      {/* Operator-authored custom questions (S291). Field names
-                          are cq_<id>; the submit action collects them and the RPC
-                          re-validates against the org's active questions. */}
-                      {(l.screening_questions ?? []).map((q) => {
-                        // A 'units' question (S331) renders its dynamic option
-                        // list of the org's OTHER available units. When there are
-                        // none right now, the option list is empty — render
-                        // nothing rather than an empty dropdown.
-                        if (q.qtype === "units" && (q.choices?.length ?? 0) === 0) {
-                          return null;
-                        }
-                        return (
-                        <div key={q.id}>
-                          <label htmlFor={`cq_${q.id}`} className="mb-1 block text-sm font-medium text-gray-700">
-                            {q.prompt}{" "}
-                            {!q.required && (
-                              <span className="font-normal text-gray-400">
-                                (optional)
-                              </span>
-                            )}
-                          </label>
-                          {q.qtype === "yesno" ? (
-                            <select
-                              id={`cq_${q.id}`}
-                              name={`cq_${q.id}`}
-                              required={q.required}
-                              defaultValue=""
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-40"
-                            >
-                              <option value="">Select…</option>
-                              <option value="yes">Yes</option>
-                              <option value="no">No</option>
-                            </select>
-                          ) : q.qtype === "choice" || q.qtype === "units" ? (
-                            <select
-                              id={`cq_${q.id}`}
-                              name={`cq_${q.id}`}
-                              required={q.required}
-                              defaultValue=""
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                            >
-                              <option value="">
-                                {q.qtype === "units" ? "Select a unit…" : "Select…"}
-                              </option>
-                              {(q.choices ?? []).map((opt) => (
-                                <option key={opt} value={opt}>
-                                  {opt}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              id={`cq_${q.id}`}
-                              name={`cq_${q.id}`}
-                              type="text"
-                              required={q.required}
-                              maxLength={500}
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                            />
-                          )}
-                        </div>
-                        );
-                      })}
-                      </fieldset>
-                    </details>
-                  )}
-                  <div>
-                    <label htmlFor="r_notes" className="mb-1 block text-sm font-medium text-gray-700">
-                      Anything else?
-                    </label>
-                    <textarea
-                      id="r_notes"
-                      name="notes"
-                      rows={3}
-                      placeholder={
-                        l.screening_enabled
-                          ? "Questions, or anything you'd like us to know…"
-                          : "Number of occupants, pets, questions…"
-                      }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-
-                {days.length > 0 && (
-                  <fieldset className="rounded-lg border border-gray-200 p-4">
-                    <legend className="px-1 text-sm font-medium text-gray-700">
-                      Choose a viewing time{" "}
-                      <span className="font-normal text-gray-400">(optional)</span>
-                    </legend>
-                    <p className="mb-3 mt-1 text-xs text-gray-400">
-                      Times shown in {av?.timezone?.replace(/_/g, " ")}.
-                    </p>
-                    {hasClustered && (
-                      <p className="mb-3 -mt-2 text-xs text-gray-500">
-                        These times group your visit with other viewings at this
-                        building.
-                      </p>
-                    )}
-                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
-                      {days.map((day) => (
-                        <div key={day.dayKey}>
-                          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                            {day.dayLabel}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {day.slots.map((s) => (
-                              <label key={s.iso} className="cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name="slot"
-                                  value={s.iso}
-                                  className="peer sr-only"
-                                />
-                                <span className="block rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 transition hover:border-gray-400 peer-checked:border-[var(--brand-color)] peer-checked:bg-[var(--brand-color)] peer-checked:text-white">
-                                  {s.label}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </fieldset>
-                )}
-
-                <button
-                  type="submit"
-                  className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
-                  style={{ background: brandBg }}
-                >
-                  {days.length > 0 ? "Confirm" : "Request a viewing"}
-                </button>
-              </form>
-            </>
+            <InquiryForm
+              action={submitLead}
+              propertyId={l.id}
+              trackedPostId={trackedPostId}
+              orgName={l.org_name}
+              brandBg={brandBg}
+              brandColor={brand}
+              timezone={av?.timezone}
+              days={days}
+              hasClustered={hasClustered}
+              showError={Boolean(searchParams.error)}
+              screeningEnabled={l.screening_enabled}
+              screeningQuestions={l.screening_questions ?? []}
+              incomeHintCents={incomeHintCents}
+              rentMonthly={rentMonthly}
+              moveInPills={moveInPills}
+              petFriendly={l.pet_friendly}
+            />
           )}
         </div>
 
