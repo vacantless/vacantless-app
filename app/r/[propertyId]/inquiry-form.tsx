@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { DaySlots } from "@/lib/booking";
+import {
+  type DaySlots,
+  selectedSlotIsRendered,
+  visibleBookingDays,
+} from "@/lib/booking";
 
 type ScreeningQuestion = {
   id: string;
@@ -110,7 +114,18 @@ export function InquiryForm({
     return null;
   }, [selectedSlot, days]);
 
-  const visibleDays = showAllDays ? days : days.slice(0, 3);
+  const visibleDays = visibleBookingDays(days, showAllDays);
+
+  // A slot selected from a day that is currently collapsed (day 4+ while
+  // "More times" is closed) has its radio UNMOUNTED, so it would drop out of the
+  // submitted FormData and silently downgrade a "Confirm viewing" to an inquiry.
+  // Track whether the selected slot's radio is actually rendered; if not, a
+  // hidden fallback below keeps it in the submission (single "slot" value: the
+  // unmounted radio submits nothing, so there is no collision).
+  const selectedSlotVisible = useMemo(
+    () => selectedSlotIsRendered(days, showAllDays, selectedSlot),
+    [days, showAllDays, selectedSlot],
+  );
 
   const confirmLabel = !hasSlots
     ? "Request a viewing"
@@ -165,6 +180,10 @@ export function InquiryForm({
         <input type="hidden" name="screen_occupants" value={occupants} />
         <input type="hidden" name="screen_pets_detail" value={petsDetail} />
         {hasPet && <input type="hidden" name="screen_has_pets" value="1" />}
+        {/* Fallback so a slot chosen from a now-collapsed day still submits. */}
+        {hasSlots && selectedSlot && !selectedSlotVisible && (
+          <input type="hidden" name="slot" value={selectedSlot} />
+        )}
 
         {/* STEP 1 — Choose a viewing time (primary action, first) ------------ */}
         {hasSlots && (

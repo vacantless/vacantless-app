@@ -50,6 +50,33 @@ export type DaySlots = {
   slots: Slot[];
 };
 
+// How many days the renter booking form shows before "More times" is expanded.
+export const COLLAPSED_DAY_COUNT = 3;
+
+// The subset of days whose slot radios are actually rendered. When collapsed we
+// only render the first COLLAPSED_DAY_COUNT days.
+export function visibleBookingDays(
+  days: DaySlots[],
+  showAll: boolean,
+): DaySlots[] {
+  return showAll ? days : days.slice(0, COLLAPSED_DAY_COUNT);
+}
+
+// True when the selected slot's radio is currently mounted. When it is NOT (the
+// slot was chosen from a day that is now collapsed out of view), the booking
+// form must submit a hidden fallback so the choice is not silently dropped and
+// the booking downgraded to an inquiry.
+export function selectedSlotIsRendered(
+  days: DaySlots[],
+  showAll: boolean,
+  selectedSlotIso: string,
+): boolean {
+  if (!selectedSlotIso) return false;
+  return visibleBookingDays(days, showAll).some((d) =>
+    d.slots.some((s) => s.iso === selectedSlotIso),
+  );
+}
+
 // Offset (ms) of `timeZone` at the given UTC instant. Positive = ahead of UTC.
 function tzOffsetMs(utcMs: number, timeZone: string): number {
   const dtf = new Intl.DateTimeFormat("en-US", {
