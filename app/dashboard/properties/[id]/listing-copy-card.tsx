@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 
 /**
  * "Listing copy for each channel" card. Shows ready-to-paste title + body copy
@@ -45,14 +46,19 @@ export function ListingCopyCard({
   const current = tabs.find((t) => t.key === active) ?? tabs[0];
 
   async function copy(text: string, field: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(field);
-      setTimeout(() => setCopied((c) => (c === field ? null : c)), 1500);
-    } catch {
-      // Clipboard may be unavailable; the textarea below is selectable as a
-      // fallback so the operator can still copy manually.
-    }
+    const ok = await copyToClipboard(text);
+    const key = ok ? field : `${field}:manual`;
+    setCopied(key);
+    setTimeout(() => setCopied((c) => (c === key ? null : c)), ok ? 1500 : 2500);
+  }
+
+  // Button label for a copy target: "Copied!" on success, "Copy failed" when
+  // both clipboard paths were blocked (the selectable field beside it is the
+  // manual fallback), otherwise the resting label.
+  function copyLabel(field: string, base: string) {
+    if (copied === field) return "Copied!";
+    if (copied === `${field}:manual`) return "Copy failed";
+    return base;
   }
 
   if (!current) return null;
@@ -122,7 +128,7 @@ export function ListingCopyCard({
             onClick={() => copy(current.title, "title")}
             className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
-            {copied === "title" ? "Copied!" : "Copy title"}
+            {copyLabel("title", "Copy title")}
           </button>
         </div>
         <input
@@ -149,14 +155,14 @@ export function ListingCopyCard({
               onClick={() => copy(current.body, "body")}
               className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
-              {copied === "body" ? "Copied!" : "Copy description"}
+              {copyLabel("body", "Copy description")}
             </button>
             <button
               type="button"
               onClick={() => copy(fullText, "all")}
               className="rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-white"
             >
-              {copied === "all" ? "Copied!" : "Copy all"}
+              {copyLabel("all", "Copy all")}
             </button>
           </div>
         </div>

@@ -227,11 +227,15 @@ export default async function PropertiesPage({
           <EmptyState
             icon={<Icons.building />}
             title="No rentals yet"
-            description="Add your first rental below to create its public inquiry page and start collecting inquiries."
+            description="Add your first rental to create its public inquiry page and start collecting inquiries — it takes a couple of minutes."
+            cta={{ href: "#add-rental", label: "Add your first rental" }}
           />
         </div>
       )}
 
+      {/* Scroll target for the empty-state "Add your first rental" CTA so a
+          brand-new org jumps straight to the add-a-rental section. */}
+      <div id="add-rental" className="scroll-mt-4" />
       <SectionHeading>Add a rental</SectionHeading>
 
       {/* Realtor onboarding wedge (item M): paste an existing MLS / realtor.ca

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 
 /**
  * "Marketing kit" card (S388, Tier A). The paid promotion PACKAGE for an active
@@ -47,13 +48,19 @@ export function MarketingKitCard({
   const allWordingId = "marketing-kit-all-wording";
 
   async function copy(text: string, field: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(field);
-      setTimeout(() => setCopied((c) => (c === field ? null : c)), 1500);
-    } catch {
-      // Clipboard may be unavailable; nothing else to do.
-    }
+    const ok = await copyToClipboard(text);
+    const key = ok ? field : `${field}:manual`;
+    setCopied(key);
+    setTimeout(() => setCopied((c) => (c === key ? null : c)), ok ? 1500 : 2500);
+  }
+
+  // Button label for a copy target: "Copied!" on success, "Copy failed" when
+  // both clipboard paths were blocked (the selectable field beside it is the
+  // manual fallback), otherwise the resting label.
+  function copyLabel(field: string, base: string) {
+    if (copied === field) return "Copied!";
+    if (copied === `${field}:manual`) return "Copy failed";
+    return base;
   }
 
   function downloadQr() {
@@ -130,7 +137,7 @@ export function MarketingKitCard({
                     onClick={() => copy(landingUrl, "link")}
                     className="shrink-0 rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    {copied === "link" ? "Copied!" : "Copy link"}
+                    {copyLabel("link", "Copy link")}
                   </button>
                 </div>
                 <p className="mt-1 text-[11px] text-gray-400">
@@ -173,7 +180,7 @@ export function MarketingKitCard({
                 onClick={() => copy(combinedText, "all")}
                 className="rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-white"
               >
-                {copied === "all" ? "Copied!" : "Copy everything"}
+                {copyLabel("all", "Copy everything")}
               </button>
             </div>
             <textarea

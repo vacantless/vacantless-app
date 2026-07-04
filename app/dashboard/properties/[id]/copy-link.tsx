@@ -1,23 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 
 export function CopyLink({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "manual">("idle");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard may be unavailable; the input is selectable as a fallback.
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setState("copied");
+      setTimeout(() => setState("idle"), 1500);
+    } else {
+      // Both the Clipboard API and the execCommand fallback were blocked:
+      // select the field so the operator can finish with Ctrl/Cmd-C, and
+      // flag it on the button rather than silently doing nothing.
+      inputRef.current?.focus();
+      inputRef.current?.select();
+      setState("manual");
+      setTimeout(() => setState("idle"), 2500);
     }
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <input
+        ref={inputRef}
         readOnly
         aria-label="Public listing link"
         value={url}
@@ -29,7 +38,11 @@ export function CopyLink({ url }: { url: string }) {
         onClick={copy}
         className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white"
       >
-        {copied ? "Copied!" : "Copy link"}
+        {state === "copied"
+          ? "Copied!"
+          : state === "manual"
+            ? "Copy failed"
+            : "Copy link"}
       </button>
       <a
         href={url}
