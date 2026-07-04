@@ -51,9 +51,11 @@ says ("Selected viewing: ...") and is the smaller surprise.
 - `npx eslint --no-cache` on `inquiry-form.tsx`, `lib/booking.ts`,
   `scripts/test-slot-fallback.ts` - green (exit 0).
 - Regression `scripts/test-booking.ts` - 40/0.
-- Not yet live-smoked: reproducing needs a listing with >3 days of open slots.
-  Recommended post-deploy smoke is in the deploy script (pick a day-4+ slot, Show
-  fewer, Confirm -> should book, not inquiry).
+- Live-smoked on prod (a9b73fb), North Star QA 506 Manning `/r` (renders 4 days):
+  More times -> select Sat Jul 18 10:00 AM (day 4) -> Show fewer (its radio
+  unmounts) -> Confirm -> "Your viewing is booked!". DB: lead booked with a showing
+  at 2026-07-18 14:00:00Z (the collapsed-day slot survived via the hidden fallback;
+  no downgrade to inquiry). Test showing cancelled afterward.
 
 ## Unrelated but confirmed healthy
 
