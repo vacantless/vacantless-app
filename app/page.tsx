@@ -151,13 +151,14 @@ function Hero() {
         {/* Left: copy */}
         <div className="max-w-[570px]">
           <Eyebrow>Leasing workspace for small landlords</Eyebrow>
-          <h1 className="mb-[18px] max-w-[14ch] text-[clamp(2.6rem,5.4vw,4.15rem)] font-extrabold leading-[1] tracking-tight">
-            Fill your next rental without the scramble.
+          <h1 className="mb-[18px] max-w-[15ch] text-[clamp(2.6rem,5.4vw,4.15rem)] font-extrabold leading-[1] tracking-tight">
+            Fill your next rental without losing the thread.
           </h1>
           <p className="mb-[26px] max-w-[33rem] text-[clamp(1.06rem,1.7vw,1.24rem)] leading-[1.55] text-[#384a42]">
-            One calm place to post the rental, share it safely, book viewings,
-            and move the right renter into a signed tenancy. No more juggling a
-            spreadsheet, your inbox, and a dozen back-and-forth texts.
+            One calm place to post the rental, share it safely, collect every
+            inquiry, let renters self-book viewings, and move the right one into a
+            signed tenancy. No more juggling your inbox, Marketplace, and a dozen
+            back-and-forth texts.
           </p>
           <div className="mb-3.5 flex flex-wrap items-center gap-3">
             <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
@@ -475,17 +476,17 @@ function WhyReplaces() {
 }
 
 const SCRAMBLE: string[] = [
-  "A listing link you cannot pause or take down once it is out there.",
-  "Inquiries buried across your inbox and Marketplace chats.",
-  "Viewing times settled over a dozen texts, with double-bookings and no-shows.",
-  "No clean record of who you picked once the unit is finally leased.",
+  "A listing link you cannot easily pause or take down once it is out there.",
+  "Inquiries scattered across your inbox, Marketplace, texts, and phone calls.",
+  "Viewing times pinned down over too many messages, with double-bookings and no-shows.",
+  "No clean record of the renter you chose once the unit is finally leased.",
 ];
 
 const WITH_VACANTLESS: string[] = [
-  "A rental page you set Live, Paused, or Leased in one click, so the link always tells the truth.",
-  "Every inquiry in one list, right next to the booking activity.",
+  "A rental page you set Draft, Live, Paused, or Leased, so the public link always tells the truth.",
+  "Every inquiry in one list, right beside the booking activity.",
   "Renters self-book into the windows you set. No phone tag.",
-  "The chosen renter moves straight into a clean tenancy record.",
+  "The renter you choose moves straight into a clean tenancy record.",
 ];
 
 /* ------------------------------------------------------------------ Workflow */
@@ -678,15 +679,20 @@ function Pricing() {
             </article>
           ))}
         </div>
-        <p className="mt-[18px] text-[0.86rem] text-[#59655f]">
-          Prices in CAD, flat monthly. Prefer we set it up with you?{" "}
-          <Link
-            href={CONTACT_HREF}
-            className="font-bold text-[#16756a] hover:underline"
-          >
+        <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">
+          <div>
+            <strong className="block text-[1rem]">Get help launching</strong>
+            <span className="text-[0.9rem] leading-snug text-[#59655f]">
+              Rather not do it yourself? We will get your first rental live and
+              walk you through the workflow.
+            </span>
+          </div>
+          <SecondaryButton href={CONTACT_HREF} className="flex-none">
             Get help launching
-          </Link>
-          .
+          </SecondaryButton>
+        </div>
+        <p className="mt-3.5 text-[0.86rem] text-[#59655f]">
+          Prices in CAD, flat monthly. Cancel anytime.
         </p>
       </div>
     </section>
@@ -780,9 +786,9 @@ function ClosingCta() {
           <h2 className="max-w-[18ch] text-[clamp(1.8rem,3.4vw,2.7rem)] font-extrabold leading-[1.06]">
             Ready to fill your next rental?
           </h2>
-          <p className="mt-2.5 max-w-[40ch] text-[#cfe0d8]">
-            Start with one rental page, free. Add more when it is working for
-            you.
+          <p className="mt-2.5 max-w-[42ch] text-[#cfe0d8]">
+            Start with one rental page, free. Fill it without losing a single
+            inquiry, viewing, or follow-up.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">

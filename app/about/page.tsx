@@ -155,9 +155,12 @@ function Body() {
         Where it is headed
       </h2>
       <p className="max-w-[64ch] leading-relaxed text-[#384a42]">
-        Vacantless is early and deliberately small. It is being opened to other
-        small landlords who want the same calm way to fill their rentals. If
-        that is you, the best way to see it is to start with one rental, free.
+        Vacantless is early and deliberately focused. It is not trying to manage
+        your entire rental business. It helps you fill the rental in front of
+        you without losing inquiries, viewings, follow-up, or the final handoff.
+        It is being opened to other small landlords who want that same calm way
+        to fill their rentals. If that is you, the best way to see it is to start
+        with one rental, free.
       </p>
     </div>
   );
