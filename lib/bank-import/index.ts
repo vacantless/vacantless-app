@@ -26,7 +26,8 @@ export type ImportParseResult =
   | {
       ok: true;
       format: ImportFormat;
-      accountMask: string | null;
+      accountMask: string | null; // last-4 only, for display + rule matching
+      accountKey: string | null; // non-reversible durable account id (HMAC), or null
       accountType: string | null;
       currency: string;
       txns: NormalizedTxn[];
@@ -36,18 +37,23 @@ export type ImportParseResult =
   | { ok: false; reason: "unknown_format" | "csv_unsupported" | "empty" | "no_transactions" };
 
 /** Parse an uploaded transaction export into NormalizedTxn[]. Pure — the caller
- * reads the file bytes and persists the result. */
-export function parseImportFile(input: { filename: string; content: string }): ImportParseResult {
+ * reads the file bytes and persists the result. `accountKeySecret` (passed by the
+ * server action) keys the per-account HMAC so distinct accounts never merge. */
+export function parseImportFile(
+  input: { filename: string; content: string },
+  opts: { accountKeySecret?: string | null } = {},
+): ImportParseResult {
   const format = detectImportFormat(input.filename, input.content);
   if (format === null) return { ok: false, reason: "unknown_format" };
   if (format === "csv") return { ok: false, reason: "csv_unsupported" }; // Slice 3
 
-  const parsed = parseOfx(input.content);
+  const parsed = parseOfx(input.content, { accountKeySecret: opts.accountKeySecret });
   if (!parsed.ok) return { ok: false, reason: parsed.reason };
   return {
     ok: true,
     format: "ofx",
     accountMask: parsed.accountMask,
+    accountKey: parsed.accountKey,
     accountType: parsed.accountType,
     currency: parsed.currency,
     txns: parsed.txns,
@@ -56,18 +62,24 @@ export function parseImportFile(input: { filename: string; content: string }): I
   };
 }
 
-/** A stable, deterministic external_id for the SYNTHETIC (provider='csv')
+/**
+ * A stable, deterministic external_id for the SYNTHETIC (provider='csv')
  * connection an import hangs off, so re-importing the same account reuses the
- * same connection (and therefore dedupes). Keys on the account mask when the
- * file carries one, else a normalized form of the label the owner typed. */
+ * same connection (and therefore dedupes) while two DISTINCT accounts never
+ * merge. Keys on the non-reversible per-account HMAC (`accountKey`) when the file
+ * carried an account id + a secret was configured (`ofx:a:<hmac>`); otherwise
+ * falls back to a normalized form of the owner-typed label (`ofx:l:<label>`) -
+ * a deliberately user-controlled key (two same-named imports intentionally
+ * merge; distinct accounts need distinct labels in that fallback). The last-4
+ * mask is NEVER the key (it collides across accounts) - it stays display-only.
+ */
 export function importConnectionExternalId(
   format: ImportFormat,
-  accountMask: string | null,
+  accountKey: string | null,
   labelFallback: string,
 ): string {
-  const masked = (accountMask ?? "").trim();
-  const key = masked !== "" ? masked : normalizeLabelKey(labelFallback);
-  return `${format}:${key}`;
+  const key = (accountKey ?? "").trim();
+  return key !== "" ? `${format}:a:${key}` : `${format}:l:${normalizeLabelKey(labelFallback)}`;
 }
 
 function normalizeLabelKey(s: string): string {

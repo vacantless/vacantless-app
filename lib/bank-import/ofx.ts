@@ -15,12 +15,19 @@
 // PII: OFX <ACCTID> can be a FULL account number. We NEVER keep it — only a
 // derived last-4 mask is returned; the raw ACCTID is dropped after masking.
 
+import { createHmac } from "crypto";
 import { normalizeAmount, type NormalizedTxn } from "../bank-feed";
 
 export type OfxParseResult =
   | {
       ok: true;
       accountMask: string | null; // last 4 only — NEVER the full ACCTID
+      // A NON-REVERSIBLE, stable per-account key (keyed HMAC of the raw ACCTID)
+      // used as the synthetic connection's durable id, so two accounts sharing a
+      // last-4 mask never collapse into one connection. null when there is no
+      // ACCTID or no secret (caller falls back to a label key). The raw ACCTID
+      // itself is dropped after this is computed and is never on this object.
+      accountKey: string | null;
       accountType: string | null; // e.g. "CHECKING" / "CREDITCARD" (advisory)
       currency: string; // ISO 4217, default "CAD"
       txns: NormalizedTxn[];
@@ -82,6 +89,29 @@ export function maskAccountId(acctId: string | null | undefined): string | null 
   return alnum.slice(-4);
 }
 
+/**
+ * Derive a NON-REVERSIBLE, stable per-account key from the raw account id, so
+ * two DISTINCT accounts that happen to share the same last-4 mask never collapse
+ * into one synthetic connection (the S411 P2). A keyed HMAC, not a bare digest,
+ * because a card/account number is low-entropy and a plain hash of it (with the
+ * last-4 already known) is brute-forceable; the HMAC secret makes the stored key
+ * a one-way token, not a recoverable account number. The raw ACCTID is consumed
+ * here and then dropped by the caller - never returned or persisted. Returns null
+ * when there is no ACCTID or no secret, so the caller falls back to a
+ * user-controlled label key.
+ */
+export function deriveAccountKey(
+  rawAcctId: string | null | undefined,
+  acctType: string | null | undefined,
+  secret: string | null | undefined,
+): string | null {
+  const id = (rawAcctId ?? "").trim();
+  const key = (secret ?? "").trim();
+  if (id === "" || key === "") return null;
+  const material = `${(acctType ?? "").trim().toUpperCase()}|${id}`;
+  return createHmac("sha256", key).update(material).digest("hex").slice(0, 24);
+}
+
 /** Split the OFX body into <STMTTRN> content blocks. Handles both the closed
  * form (`<STMTTRN>...</STMTTRN>`) and the rare unclosed SGML form (content runs
  * to the next <STMTTRN> or the end of the transaction list). */
@@ -104,12 +134,19 @@ function stmtTrnBlocks(text: string): string[] {
  * provider enrichment) so the rules engine degrades to the merchant-name
  * fallback, which bestRuleForTxn already handles.
  */
-export function parseOfx(text: string): OfxParseResult {
+export function parseOfx(
+  text: string,
+  opts: { accountKeySecret?: string | null } = {},
+): OfxParseResult {
   if ((text ?? "").trim() === "") return { ok: false, reason: "empty" };
 
   const currency = (ofxTagValue(text, "CURDEF") ?? "CAD").toUpperCase();
-  const accountMask = maskAccountId(ofxTagValue(text, "ACCTID"));
+  const rawAcctId = ofxTagValue(text, "ACCTID");
   const accountType = ofxTagValue(text, "ACCTTYPE");
+  const accountMask = maskAccountId(rawAcctId);
+  // Derive the durable per-account key from the raw ACCTID, then let it fall out
+  // of scope - it is never placed on the returned object or persisted.
+  const accountKey = deriveAccountKey(rawAcctId, accountType, opts.accountKeySecret);
 
   const blocks = stmtTrnBlocks(text);
   const txns: NormalizedTxn[] = [];
@@ -145,5 +182,5 @@ export function parseOfx(text: string): OfxParseResult {
   if (blocks.length === 0 && txns.length === 0) {
     return { ok: false, reason: "no_transactions" };
   }
-  return { ok: true, accountMask, accountType, currency, txns, totalBlocks: blocks.length, skipped };
+  return { ok: true, accountMask, accountKey, accountType, currency, txns, totalBlocks: blocks.length, skipped };
 }

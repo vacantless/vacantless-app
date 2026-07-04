@@ -113,8 +113,53 @@ rows. Verified both in the unit tests and the DB replay below.
   held); 2 debits surfaced as pending for triage; then deleted the connection + rows
   (QA reset to 0 csv connections, verified).
 
-## NOT done here (post-deploy)
+## Live smoke (done after the initial commit)
 
-- Live UI smoke: dropping a real `.ofx` on the deployed Expenses page and walking
-  triage end to end needs this commit deployed first. Recommended as the first
-  post-deploy check on North Star QA (Growth), then real use on 506 Manning / MBNA.
+Live-smoked end to end on North Star QA (Growth) with a real MBNA QFX: imported 6
+txns (5 debits to triage, 1 credit filtered), connection badged "Imported from OFX";
+re-import staged 0 ("all 6 already imported"), no duplicate connection; then wiped QA.
+
+---
+
+## S411b - P2 FIX: distinct accounts sharing a last-4 no longer merge (2026-07-04)
+
+Responds to Codex's review of `c96f23f` (the one P2). **Bug:** the synthetic
+connection key was the last-4 mask, so two DIFFERENT accounts ending in e.g. `1234`
+upserted into one `provider='csv'` row and FITID dedupe ran in that shared bucket.
+
+**Fix (Codex's recommended approach - a non-raw durable account key):**
+- `lib/bank-import/ofx.ts` - new `deriveAccountKey(rawAcctId, acctType, secret)` =
+  `HMAC-SHA256(secret, "<ACCTTYPE>|<rawAcctId>")` truncated to 24 hex. Keyed HMAC,
+  not a bare digest, so a low-entropy card/account number (with the last-4 already
+  stored) can't be brute-forced back out of the stored key. `parseOfx(text, { accountKeySecret })`
+  computes `accountKey` from the raw ACCTID and then the raw value falls out of scope -
+  it is NEVER placed on the returned object. `accountMask` stays last-4 for display.
+- `lib/bank-import/index.ts` - `parseImportFile(input, { accountKeySecret })` threads
+  the secret; `importConnectionExternalId(format, accountKey, label)` now keys on the
+  HMAC (`ofx:a:<hmac>`) and, only when there's no ACCTID/secret, falls back to a
+  tagged user-label key (`ofx:l:<label>`) - the last-4 mask is NEVER the key.
+- `app/dashboard/expenses/import-actions.ts` - keys the HMAC with
+  `BANK_IMPORT_ACCOUNT_HMAC_KEY || SUPABASE_SERVICE_ROLE_KEY` (the service-role key is
+  always set in prod, so this is correct out of the box; a dedicated key can override).
+  `account_external_id` still stores only the last-4 mask.
+
+**Privacy:** the raw ACCTID is used only to compute the HMAC and is dropped; only the
+last-4 mask and the one-way HMAC are persisted. A unit test asserts the raw ACCTID
+never appears in the parsed output.
+
+**Regression coverage added (`scripts/test-bank-import.ts`, now 68/0):** two OFX files
+with different full ACCTIDs sharing the same last-4 produce DIFFERENT `accountKey` and
+DIFFERENT connection external_ids; the raw ACCTID never leaks into the parsed output;
+the same account re-parsed yields the same key (idempotent reuse); no secret -> null
+key -> label fallback; `deriveAccountKey` is deterministic, 24-hex, and never contains
+the raw id.
+
+**No migration** - `bank_connections.external_id` is already free-form text under the
+`unique(organization_id, provider, external_id)` constraint; distinct keys therefore
+persist as distinct rows. There are 0 `provider='csv'` connections in prod, so no
+backfill/re-key concern.
+
+**Verification (here):** tsc clean; eslint green on the changed files;
+`test-bank-import` 68/0; regressions `test-bank-feed` 25/0, `test-expenses` 60/0.
+Unit tests + the DB unique constraint prove the separation; a live two-file
+same-last-4 smoke is an optional post-deploy check.

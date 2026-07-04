@@ -42,7 +42,12 @@ export async function importTransactionsFromFile(formData: FormData) {
     redirect(`${BASE}?import=unreadable`);
   }
 
-  const parsed = parseImportFile({ filename: file.name, content });
+  // Key the per-account HMAC with a stable server-only secret so two distinct
+  // accounts sharing a last-4 never merge (S411 P2). The service-role key is
+  // always set in prod; a dedicated BANK_IMPORT_ACCOUNT_HMAC_KEY can override it.
+  const accountKeySecret =
+    process.env.BANK_IMPORT_ACCOUNT_HMAC_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const parsed = parseImportFile({ filename: file.name, content }, { accountKeySecret });
   if (!parsed.ok) redirect(`${BASE}?import=${parsed.reason}`);
   if (parsed.txns.length === 0) redirect(`${BASE}?import=no_transactions`);
 
@@ -54,7 +59,7 @@ export async function importTransactionsFromFile(formData: FormData) {
   // Create/reuse the synthetic import connection. Keyed on the account mask (or a
   // normalized label) so re-importing the same account reuses this row and its
   // staged transactions — which is what makes re-import idempotent.
-  const externalId = importConnectionExternalId(parsed.format, parsed.accountMask, label);
+  const externalId = importConnectionExternalId(parsed.format, parsed.accountKey, label);
   const { data: conn, error: connErr } = await supabase
     .from("bank_connections")
     .upsert(

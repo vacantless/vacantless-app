@@ -5,6 +5,7 @@ import {
   ofxDateToIso,
   ofxAmountToCents,
   maskAccountId,
+  deriveAccountKey,
 } from "../lib/bank-import/ofx";
 import {
   parseImportFile,
@@ -111,6 +112,44 @@ if (r.ok && again.ok) {
   ok("fully-overlapping re-import stages nothing", none.length === 0);
 }
 
+// --- P2: per-account key separation (two accounts sharing a last-4) ----------
+const SECRET = "test-hmac-secret-key";
+// Same last-4 (1234) as OFX (ACCTID 5412345678901234), DIFFERENT full number.
+const OFX_SAME_LAST4 = OFX.replace("5412345678901234", "9999888877771234");
+
+ok("deriveAccountKey null without a secret", deriveAccountKey("5412345678901234", "CREDITCARD", "") === null);
+ok("deriveAccountKey null without an acctid", deriveAccountKey("", "CREDITCARD", SECRET) === null);
+ok("deriveAccountKey is 24 hex chars", /^[0-9a-f]{24}$/.test(deriveAccountKey("5412345678901234", "CREDITCARD", SECRET) || ""));
+ok(
+  "deriveAccountKey deterministic for the same account",
+  deriveAccountKey("5412345678901234", "CREDITCARD", SECRET) === deriveAccountKey("5412345678901234", "CREDITCARD", SECRET),
+);
+ok(
+  "deriveAccountKey differs for different full numbers with the SAME last-4",
+  deriveAccountKey("5412345678901234", "CREDITCARD", SECRET) !== deriveAccountKey("9999888877771234", "CREDITCARD", SECRET),
+);
+ok(
+  "deriveAccountKey never contains the raw acctid",
+  !(deriveAccountKey("5412345678901234", "CREDITCARD", SECRET) || "").includes("5412345678901234"),
+);
+
+const keyed = parseOfx(OFX, { accountKeySecret: SECRET });
+const keyedSame4 = parseOfx(OFX_SAME_LAST4, { accountKeySecret: SECRET });
+if (keyed.ok && keyedSame4.ok) {
+  ok("keyed parse sets a 24-hex accountKey", typeof keyed.accountKey === "string" && /^[0-9a-f]{24}$/.test(keyed.accountKey));
+  ok("both files share the same last-4 mask", keyed.accountMask === "1234" && keyedSame4.accountMask === "1234");
+  ok("P2: same last-4 + different account -> DIFFERENT accountKey", keyed.accountKey !== keyedSame4.accountKey);
+  ok(
+    "P2: -> different connection external_id (no merge)",
+    importConnectionExternalId("ofx", keyed.accountKey, "MBNA") !== importConnectionExternalId("ofx", keyedSame4.accountKey, "MBNA"),
+  );
+  ok("raw acctid never leaks into the keyed parse output", !JSON.stringify(keyed).includes("5412345678901234"));
+  const keyedAgain = parseOfx(OFX, { accountKeySecret: SECRET });
+  ok("same account re-import reuses the same key (idempotent)", keyedAgain.ok && keyedAgain.accountKey === keyed.accountKey);
+}
+const unkeyed = parseOfx(OFX); // no secret -> falls back to the label key downstream
+ok("no secret -> accountKey null", unkeyed.ok && unkeyed.accountKey === null);
+
 // --- Empty / no-transaction bodies -------------------------------------------
 ok("parseOfx empty -> not ok", parseOfx("   ").ok === false);
 const noTxn = parseOfx("<OFX><BANKTRANLIST></BANKTRANLIST></OFX>");
@@ -132,14 +171,18 @@ ok("parseImportFile unknown -> unknown_format", pfUnknown.ok === false && pfUnkn
 
 // --- Connection identity + labels --------------------------------------------
 ok(
-  "connection external_id keys on mask (stable across re-import)",
-  importConnectionExternalId("ofx", "1234", "whatever") === importConnectionExternalId("ofx", "1234", "different label"),
+  "connection external_id keys on the account key (stable across re-import)",
+  importConnectionExternalId("ofx", "abc123", "whatever") === importConnectionExternalId("ofx", "abc123", "different label"),
+);
+ok("connection external_id from an account key is tagged a:", importConnectionExternalId("ofx", "abc123", "x") === "ofx:a:abc123");
+ok(
+  "connection external_id falls back to a tagged label key when no account key",
+  importConnectionExternalId("ofx", null, "MBNA Mastercard!") === "ofx:l:mbna-mastercard",
 );
 ok(
-  "connection external_id falls back to normalized label when no mask",
-  importConnectionExternalId("ofx", null, "MBNA Mastercard!") === "ofx:mbna-mastercard",
+  "two different account keys never collide",
+  importConnectionExternalId("ofx", "keyAAA", "x") !== importConnectionExternalId("ofx", "keyBBB", "x"),
 );
-ok("connection external_id includes format", importConnectionExternalId("ofx", "1234", "x") === "ofx:1234");
 ok("defaultImportLabel card + mask", defaultImportLabel("1234", "CREDITCARD") === "Imported card ····1234");
 ok("defaultImportLabel account fallback", defaultImportLabel(null, "CHECKING") === "Imported account");
 
