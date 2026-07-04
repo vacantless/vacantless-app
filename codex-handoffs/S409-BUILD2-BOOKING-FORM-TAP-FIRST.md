@@ -95,6 +95,9 @@ field NAME the action reads is preserved, so the same data lands:
 - `npx eslint --no-cache` on both files - green (exit 0).
 - Suites: `test-booking` 40/0, `test-screening` 120/0, `test-screening-questions`
   116/0, `test-leads-notify` 20/0, `test-lead-detail` 44/0.
-- Live North Star QA test: [to be run post-deploy - open a Live listing's /r page,
-  tap a time, fill name+email, tap a couple pills, add a note, confirm; verify the
-  lead + booking land with move_in/occupants/pets/notes populated].
+- Live North Star QA test: VERIFIED on prod (commit 828e0b3). Opened a Live
+  listing's /r page, chose a time, filled name+email, tapped Aug 2026 + occupants
+  "5+" + Cat, confirmed -> "Your viewing is booked!". DB row confirms the pills
+  landed on the right columns: move_in=2026-08-01, screen_occupants=5,
+  screen_has_pets=true, screen_pets_detail="Cat", qualified_out=false. (The first
+  pass errored on the p_move_in date cast; fixed in 828e0b3.)
