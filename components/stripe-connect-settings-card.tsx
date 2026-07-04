@@ -85,6 +85,11 @@ export default function StripeConnectSettingsCard({
         funds settle directly to you. Vacantless schedules and tracks payments
         and never holds your money or stores bank account numbers.
       </p>
+      <p className="mt-2 text-xs text-gray-500">
+        Stripe charges its standard per-payment processing fee (bank debit is its
+        lowest-cost method); the fee is set by Stripe and deducted by Stripe.
+        Vacantless adds no fee of its own.
+      </p>
 
       {!stripeConfigured && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

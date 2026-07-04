@@ -250,6 +250,14 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
           </form>
         </div>
       )}
+
+      {view.stripeConfigured && view.connectExists && (
+        <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-400">
+          Stripe charges its standard per-payment processing fee (bank debit /
+          PAD is its lowest-cost method); the fee is set and deducted by Stripe.
+          Vacantless adds no fee of its own.
+        </p>
+      )}
     </div>
   );
 }
