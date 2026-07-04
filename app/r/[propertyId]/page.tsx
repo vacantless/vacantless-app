@@ -442,7 +442,8 @@ export default async function PublicListingPage({
                   </div>
                   <div>
                     <label htmlFor="r_move_in" className="mb-1 block text-sm font-medium text-gray-700">
-                      Desired move-in date
+                      Desired move-in date{" "}
+                      <span className="font-normal text-gray-400">(optional)</span>
                     </label>
                     <input
                       id="r_move_in"
@@ -452,10 +453,17 @@ export default async function PublicListingPage({
                     />
                   </div>
                   {l.screening_enabled && (
-                    <fieldset className="space-y-3 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
-                      <legend className="px-1 text-sm font-medium text-gray-700">
-                        A few quick questions
-                      </legend>
+                    // Screening questions are collapsed by default (S408): the
+                    // public form should read as a quick inquiry, not a rental
+                    // application, or renters bounce. Everything inside is
+                    // optional; anyone who wants faster matching can expand it.
+                    // Native <details> so it works with no client JS.
+                    <details className="rounded-lg border border-gray-200 bg-gray-50/60">
+                      <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700">
+                        Add a few details to help us match you faster (optional)
+                      </summary>
+                      <fieldset className="space-y-3 border-t border-gray-200 p-4">
+                        <legend className="sr-only">A few quick questions</legend>
                       <div>
                         <label htmlFor="r_income" className="mb-1 block text-sm font-medium text-gray-700">
                           Approximate monthly household income{" "}
@@ -490,7 +498,8 @@ export default async function PublicListingPage({
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
                           <label htmlFor="r_occupants" className="mb-1 block text-sm font-medium text-gray-700">
-                            How many people would live here?
+                            How many people would live here?{" "}
+                            <span className="font-normal text-gray-400">(optional)</span>
                           </label>
                           <input
                             id="r_occupants"
@@ -503,7 +512,8 @@ export default async function PublicListingPage({
                         </div>
                         <div>
                           <label htmlFor="r_pets_detail" className="mb-1 block text-sm font-medium text-gray-700">
-                            Pets?
+                            Pets?{" "}
+                            <span className="font-normal text-gray-400">(optional)</span>
                           </label>
                           <input
                             id="r_pets_detail"
@@ -586,7 +596,8 @@ export default async function PublicListingPage({
                         </div>
                         );
                       })}
-                    </fieldset>
+                      </fieldset>
+                    </details>
                   )}
                   <div>
                     <label htmlFor="r_notes" className="mb-1 block text-sm font-medium text-gray-700">
