@@ -30,9 +30,6 @@ import {
   publishProperty,
   duplicateProperty,
   blastPriceDrop,
-  addListingPost,
-  updateListingPost,
-  removeListingPost,
   uploadPropertyPhotos,
   importPropertyPhotosFromUrls,
   setCoverPhoto,
@@ -87,10 +84,6 @@ import {
   type PolicyProfile,
 } from "@/lib/policy-profile";
 import {
-  PORTALS,
-  LISTING_POST_STATUSES,
-  portalLabel,
-  listingPostStatusLabel,
   listingPostErrorMessage,
   buildTrackedLink,
   countLeadsByPost,
@@ -107,6 +100,15 @@ import { deriveNextAction } from "@/lib/rental-next-action";
 import { NextActionCard } from "./next-action-card";
 import { CollapsibleSection } from "./collapsible-section";
 import { TabbedSections, TabPanel } from "./tabbed-sections";
+import {
+  DISTRIBUTION_CHANNELS,
+  computeChannelStatus,
+} from "@/lib/distribution-channels";
+import {
+  DistributeTab,
+  type DistributeChannelCard,
+  type DistributePostRow,
+} from "./distribute-tab";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
 import { EquipmentSection, type EquipmentView } from "./equipment-section";
@@ -782,6 +784,69 @@ export default async function PropertyDetailPage({
     availabilityWindowCount: availabilityCount ?? 0,
     replyToEmail: org?.reply_to_email ?? null,
   });
+
+  // --- Distribute command center (S412, Slice 1) --------------------------
+  // Fold the per-channel copy + the where-posted tracker + share-readiness into
+  // one channel-card model. Pure lib (lib/distribution-channels) decides the
+  // status; here we just gather the inputs it needs. No new tables/actions.
+  const distributeToday = detectorToday; // org-tz "today", already computed above
+  // Listing-level, channel-agnostic blockers surfaced on every card. "live" is
+  // injected by computeChannelStatus itself; viewing_times + reply_to are soft
+  // recommendations, not per-channel blockers.
+  const channelBlockers: string[] = [];
+  for (const c of readiness.checks) {
+    if (c.ok || c.key === "live") continue;
+    if (c.key === "photos") channelBlockers.push("Add at least one photo");
+    else if (c.key === "rent") channelBlockers.push("Set the monthly rent");
+    else if (c.key === "beds_baths") channelBlockers.push("Add beds and baths");
+    else if (c.key === "address") channelBlockers.push("Add the address");
+  }
+  const postsByPortal = new Map<PortalKey, ListingPostRow[]>();
+  for (const post of postRows) {
+    const arr = postsByPortal.get(post.portal) ?? [];
+    arr.push(post);
+    postsByPortal.set(post.portal, arr);
+  }
+  const toDistributePost = (post: ListingPostRow): DistributePostRow => ({
+    id: post.id,
+    status: post.status,
+    label: post.label,
+    url: post.url,
+    posted_on: post.posted_on,
+    notes: post.notes,
+    trackedUrl: linkIsLive ? buildTrackedLink(publicUrl, post.id) : null,
+    inquiryCount: postCounts.get(post.id) ?? 0,
+  });
+  const copyByKey = new Map(copyTabs.map((t) => [t.key, t]));
+  const distributeChannelCards: DistributeChannelCard[] =
+    DISTRIBUTION_CHANNELS.map((channel) => {
+      const posts = (postsByPortal.get(channel.key) ?? []).map(toDistributePost);
+      const status = computeChannelStatus({
+        linkIsLive,
+        blockers: channelBlockers,
+        posts: posts.map((p) => ({
+          status: p.status,
+          url: p.url,
+          posted_on: p.posted_on,
+          inquiryCount: p.inquiryCount,
+        })),
+        today: distributeToday,
+      });
+      const copyTab = channel.copyKey ? copyByKey.get(channel.copyKey) : null;
+      return {
+        channel,
+        status,
+        copy: copyTab ? { title: copyTab.title, body: copyTab.body } : null,
+        feed:
+          channel.feedEligible && marketingFeedStatus
+            ? { inFeed: marketingFeedStatus.inFeed, hint: marketingFeedStatus.hint }
+            : null,
+        posts,
+      };
+    });
+  const distributeOtherPosts = (postsByPortal.get("other") ?? []).map(
+    toDistributePost,
+  );
 
   // Status-aware guardrail for the share tools (S226 QA-audit): warn the
   // operator before they hand out a link that won't behave the way they expect.
@@ -1466,25 +1531,20 @@ export default async function PropertyDetailPage({
         )}
       </div>
 
-      {/* --- Where this is posted (listing distribution / source tracking) --- */}
+      {/* --- Posting reference (S412): the copy + fill sheet + gotchas live here
+          as asset prep; WHERE the listing goes (channel cards + tracked posts)
+          moved to the Distribute tab. --- */}
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-center gap-2.5">
           <IconTile size="sm"><Icons.list className="h-4 w-4" /></IconTile>
           <h3 className="text-sm font-semibold text-gray-900">
-            Where this is posted
+            Posting reference
           </h3>
         </div>
         <p className="mb-4 text-xs text-gray-500">
-          {linkIsLive ? (
-            <>
-              Track each portal you advertise on. Share that portal&apos;s{" "}
-              <strong>tracked link</strong> instead of the plain one, and every
-              inquiry through it is tagged with the channel it came from, so your
-              reports show what&apos;s actually working.
-            </>
-          ) : (
-            "Keep post history for reporting here. Tracked sharing turns back on when this rental is Live and accepting inquiries."
-          )}
+          {linkIsLive
+            ? "The field-by-field values and the per-portal gotchas to have open while you post. When you're ready to actually distribute this rental and track where it's live, head to the Distribute tab."
+            : "Prepare your posting reference here. Posting and tracking turn on in the Distribute tab once this rental is Live and accepting inquiries."}
         </p>
 
         {!linkIsLive && promotionGuard && (
@@ -1503,349 +1563,25 @@ export default async function PropertyDetailPage({
             each field. Still a reference — nothing is submitted. */}
         {linkIsLive && <FillSheetCard sheets={fillSheets} />}
 
-        {postRows.length === 0 ? (
-          <div className="mb-4">
-            <EmptyState
-              icon={<Icons.list />}
-              title="No posts tracked yet"
-              description={
-                linkIsLive
-                  ? "Add the portals you've listed this unit on below to track inquiries by source."
-                  : "When this rental is Live, you can track each portal you advertise on here."
-              }
-            />
+        {/* Bridge to the Distribute command center (S412). */}
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              Ready to publish?
+            </p>
+            <p className="text-xs text-gray-600">
+              Your copy, photos, and field sheet are here. The Distribute tab is
+              where you post to each channel and track what&apos;s live.
+            </p>
           </div>
-        ) : (
-          <ul className="mb-4 space-y-3">
-            {postRows.map((post) => {
-              const count = postCounts.get(post.id) ?? 0;
-              const trackedUrl = linkIsLive
-                ? buildTrackedLink(publicUrl, post.id)
-                : null;
-              return (
-                <li
-                  key={post.id}
-                  className="rounded-xl border border-gray-200 p-4"
-                >
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-900">
-                      {portalLabel(post.portal)}
-                      {post.portal === "other" && post.label
-                        ? ` · ${post.label}`
-                        : ""}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        post.status === "live"
-                          ? "bg-green-50 text-green-700"
-                          : post.status === "draft"
-                            ? "bg-gray-100 text-gray-600"
-                            : "bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {listingPostStatusLabel(post.status)}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {count} {count === 1 ? "inquiry" : "inquiries"}
-                    </span>
-                    {post.posted_on && (
-                      <span className="text-xs text-gray-400">
-                        posted {post.posted_on}
-                      </span>
-                    )}
-                  </div>
-
-                  {trackedUrl ? (
-                    <>
-                      <p className="mb-1 text-xs font-medium text-gray-500">
-                        Tracked inquiry link for this portal
-                      </p>
-                      <CopyLink url={trackedUrl} />
-                    </>
-                  ) : (
-                    <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                      Tracked inquiry links are hidden while this rental is not
-                      Live and accepting inquiries.
-                    </p>
-                  )}
-
-                  {post.notes && (
-                    <p className="mt-2 text-xs text-gray-500">{post.notes}</p>
-                  )}
-
-                  <details className="mt-2">
-                    <summary className="cursor-pointer text-xs font-medium text-brand">
-                      Edit / remove
-                    </summary>
-                    <form
-                      action={updateListingPost}
-                      className="mt-3 space-y-3 border-t border-gray-100 pt-3"
-                    >
-                      <input type="hidden" name="property_id" value={p.id} />
-                      <input type="hidden" name="post_id" value={post.id} />
-                      <div className="flex flex-wrap gap-3">
-                        <div className="w-44">
-                          <label
-                            htmlFor={`listing-post-${post.id}-portal`}
-                            className="mb-1 block text-xs font-medium text-gray-600"
-                          >
-                            Portal
-                          </label>
-                          <select
-                            id={`listing-post-${post.id}-portal`}
-                            name="portal"
-                            defaultValue={post.portal}
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                          >
-                            {PORTALS.map((opt) => (
-                              <option key={opt.key} value={opt.key}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="w-36">
-                          <label
-                            htmlFor={`listing-post-${post.id}-status`}
-                            className="mb-1 block text-xs font-medium text-gray-600"
-                          >
-                            Status
-                          </label>
-                          <select
-                            id={`listing-post-${post.id}-status`}
-                            name="status"
-                            defaultValue={post.status}
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                          >
-                            {LISTING_POST_STATUSES.map((s) => (
-                              <option key={s} value={s}>
-                                {listingPostStatusLabel(s)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="w-40">
-                          <label
-                            htmlFor={`listing-post-${post.id}-posted-on`}
-                            className="mb-1 block text-xs font-medium text-gray-600"
-                          >
-                            Posted date
-                          </label>
-                          <input
-                            id={`listing-post-${post.id}-posted-on`}
-                            name="posted_on"
-                            type="date"
-                            defaultValue={post.posted_on ?? ""}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label
-                          htmlFor={`listing-post-${post.id}-url`}
-                          className="mb-1 block text-xs font-medium text-gray-600"
-                        >
-                          Ad URL
-                        </label>
-                        <input
-                          id={`listing-post-${post.id}-url`}
-                          name="url"
-                          defaultValue={post.url ?? ""}
-                          placeholder="https://www.kijiji.ca/..."
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                        />
-                        <p className="mt-1 text-xs text-gray-400">
-                          Required once the post is Live, so its tracked link
-                          works.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <div className="flex-1 min-w-[12rem]">
-                          <label
-                            htmlFor={`listing-post-${post.id}-label`}
-                            className="mb-1 block text-xs font-medium text-gray-600"
-                          >
-                            Label{" "}
-                            <span className="font-normal text-gray-400">
-                              (for &quot;Other&quot;)
-                            </span>
-                          </label>
-                          <input
-                            id={`listing-post-${post.id}-label`}
-                            name="label"
-                            defaultValue={post.label ?? ""}
-                            placeholder="PadMapper"
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-[12rem]">
-                          <label
-                            htmlFor={`listing-post-${post.id}-notes`}
-                            className="mb-1 block text-xs font-medium text-gray-600"
-                          >
-                            Notes
-                          </label>
-                          <input
-                            id={`listing-post-${post.id}-notes`}
-                            name="notes"
-                            defaultValue={post.notes ?? ""}
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        type="submit"
-                        className={PRIMARY_ACTION_CLASS}
-                        style={{ backgroundColor: "var(--brand-color)" }}
-                      >
-                        Save post
-                      </button>
-                    </form>
-                    <form action={removeListingPost} className="mt-2">
-                      <input type="hidden" name="property_id" value={p.id} />
-                      <input type="hidden" name="post_id" value={post.id} />
-                      <button
-                        type="submit"
-                        className="text-xs font-medium text-red-600 hover:text-red-700"
-                      >
-                        Remove this post
-                      </button>
-                    </form>
-                  </details>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {linkIsLive && (
-        <details>
-          <summary className="cursor-pointer text-sm font-medium text-brand">
-            + Add a post
-          </summary>
-          <form
-            // Keyed on the post-submit nonce so a successful add REMOUNTS this
-            // form and clears its uncontrolled inputs (S226 QA-audit form-reset).
-            key={`add-post-${searchParams.pn ?? "new"}`}
-            action={addListingPost}
-            className="mt-3 space-y-3 border-t border-gray-100 pt-3"
+          <a
+            href="#distribute-header"
+            className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-white"
+            style={{ backgroundColor: "var(--brand-color)" }}
           >
-            <input type="hidden" name="property_id" value={p.id} />
-            <div className="flex flex-wrap gap-3">
-              <div className="w-44">
-                <label
-                  htmlFor="listing-post-new-portal"
-                  className="mb-1 block text-xs font-medium text-gray-600"
-                >
-                  Portal
-                </label>
-                <select
-                  id="listing-post-new-portal"
-                  name="portal"
-                  defaultValue="kijiji"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  {PORTALS.map((opt) => (
-                    <option key={opt.key} value={opt.key}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="w-36">
-                <label
-                  htmlFor="listing-post-new-status"
-                  className="mb-1 block text-xs font-medium text-gray-600"
-                >
-                  Status
-                </label>
-                <select
-                  id="listing-post-new-status"
-                  name="status"
-                  defaultValue="live"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  {LISTING_POST_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {listingPostStatusLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="w-40">
-                <label
-                  htmlFor="listing-post-new-posted-on"
-                  className="mb-1 block text-xs font-medium text-gray-600"
-                >
-                  Posted date
-                </label>
-                <input
-                  id="listing-post-new-posted-on"
-                  name="posted_on"
-                  type="date"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <label
-                htmlFor="listing-post-new-url"
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Ad URL
-              </label>
-              <input
-                id="listing-post-new-url"
-                name="url"
-                placeholder="https://www.kijiji.ca/..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <p className="mt-1 text-xs text-gray-400">
-                Required once the post is Live, so its tracked link works.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <div className="flex-1 min-w-[12rem]">
-                <label
-                  htmlFor="listing-post-new-label"
-                  className="mb-1 block text-xs font-medium text-gray-600"
-                >
-                  Label{" "}
-                  <span className="font-normal text-gray-400">
-                    (for &quot;Other&quot;)
-                  </span>
-                </label>
-                <input
-                  id="listing-post-new-label"
-                  name="label"
-                  placeholder="PadMapper"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="flex-1 min-w-[12rem]">
-                <label
-                  htmlFor="listing-post-new-notes"
-                  className="mb-1 block text-xs font-medium text-gray-600"
-                >
-                  Notes
-                </label>
-                <input
-                  id="listing-post-new-notes"
-                  name="notes"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <button
-              type="submit"
-              className={PRIMARY_ACTION_CLASS}
-              style={{ backgroundColor: "var(--brand-color)" }}
-            >
-              Add post
-            </button>
-          </form>
-        </details>
-        )}
+            Go to Distribute →
+          </a>
+        </div>
       </div>
 
       {showBlastCard && (
@@ -1876,6 +1612,28 @@ export default async function PropertyDetailPage({
         </div>
       )}
 
+      </TabPanel>
+
+      <TabPanel
+        tabId="distribute"
+        label="Distribute"
+        anchorId="distribute"
+        done={distributeChannelCards.some(
+          (c) =>
+            c.status.value === "posted" || c.status.value === "needs_refresh",
+        )}
+      >
+        <DistributeTab
+          propertyId={p.id}
+          linkIsLive={linkIsLive}
+          addFormKey={String(searchParams.pn ?? "new")}
+          today={distributeToday}
+          readyToShare={readiness.readyToShare}
+          requiredOutstanding={readiness.requiredOutstanding}
+          channelCards={distributeChannelCards}
+          otherPosts={distributeOtherPosts}
+          promotionNote={promotionGuard?.postingBody ?? null}
+        />
       </TabPanel>
 
       <TabPanel
