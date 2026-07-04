@@ -63,3 +63,22 @@ A real FB Marketplace lead (Pillette Unit 20, Agile prod) came through the
 tap-first form today and booked correctly: `move_in=2026-08-01` (ISO), occupants
 `2`, no pets, income captured, `qualified_out=false`, showing scheduled. Happy path
 is validated in production; this P2 only affects the collapse edge case.
+
+## Codex review outcome (2026-07-04) - ACCEPTED, no findings
+
+Codex reviewed `a9b73fb` (source fix) + `97d40f4` (doc-only) on `main`/`origin/main`
+and **accepted with no P1/P2**. Confirmed:
+
+- `lib/booking.ts` centralizes `COLLAPSED_DAY_COUNT=3` + `visibleBookingDays()` +
+  `selectedSlotIsRendered()`.
+- `inquiry-form.tsx` emits the hidden `name="slot"` input only when `selectedSlot`
+  exists AND its radio is currently unmounted - no duplicate slot value when the
+  selected radio is rendered.
+- `submitLead` / qualify-out RPC / field names unchanged.
+- The collapsed day-4+ selection survives Show fewer and submits as a booking,
+  matching the UI.
+
+Codex verification rerun (independent): `tsc --noEmit` pass; eslint pass on
+`inquiry-form.tsx`, `lib/booking.ts`, `scripts/test-slot-fallback.ts`;
+`test-slot-fallback.ts` 12/0; `test-booking.ts` 40/0; `git diff --check
+828e0b3..97d40f4` pass. No further S410 code changes required.
