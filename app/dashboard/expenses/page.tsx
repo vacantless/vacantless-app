@@ -26,6 +26,7 @@ import { formatMoneyCents } from "@/lib/payments";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { PlaidConnectButton } from "./PlaidConnectButton";
 import { syncConnection, assignTransaction, ignoreTransaction } from "./actions";
+import { importTransactionsFromFile } from "./import-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ type ConnRow = {
   institution_name: string | null;
   status: string;
   last_synced_at: string | null;
+  import_format: string | null;
 };
 
 type TxnRow = {
@@ -133,6 +135,21 @@ function connTone(status: string): ChipTone {
   return "neutral";
 }
 
+const IMPORT_ERROR_TEXT: Record<string, string> = {
+  nofile: "Choose a file to import first.",
+  toobig: "That file is too large. Export a shorter date range and try again.",
+  unreadable: "That file couldn't be read. Make sure it's a plain .ofx/.qfx export.",
+  unknown_format: "Unsupported file. Upload an OFX or QFX transaction export.",
+  csv_unsupported: "CSV import is coming soon — for now, download an OFX/QFX export from your bank.",
+  empty: "That file was empty.",
+  no_transactions: "No transactions were found in that file.",
+  save: "Couldn't save the import. Please try again.",
+};
+
+function importErrorText(code: string): string {
+  return IMPORT_ERROR_TEXT[code] ?? "That file couldn't be imported. Please check it and try again.";
+}
+
 function fmtDate(d: string | null): string {
   if (!d) return "never";
   const [y, m, day] = String(d).slice(0, 10).split("-").map((n) => parseInt(n, 10));
@@ -143,7 +160,16 @@ function fmtDate(d: string | null): string {
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: { synced?: string; assigned?: string; ignored?: string; bank?: string; exp?: string };
+  searchParams: {
+    synced?: string;
+    assigned?: string;
+    ignored?: string;
+    bank?: string;
+    exp?: string;
+    imported?: string;
+    skipped?: string;
+    import?: string;
+  };
 }) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
@@ -173,7 +199,7 @@ export default async function ExpensesPage({
     await Promise.all([
       supabase
         .from("bank_connections")
-        .select("id, provider, institution_name, status, last_synced_at")
+        .select("id, provider, institution_name, status, last_synced_at, import_format")
         .order("created_at", { ascending: true }),
       supabase
         .from("bank_transactions")
@@ -218,6 +244,21 @@ export default async function ExpensesPage({
     }
     if (searchParams.assigned) return { tone: "success" as const, text: "Expense logged." };
     if (searchParams.ignored) return { tone: "neutral" as const, text: "Transaction ignored." };
+    if (searchParams.imported != null) {
+      const n = parseInt(searchParams.imported, 10) || 0;
+      const sk = parseInt(searchParams.skipped ?? "0", 10) || 0;
+      if (n > 0) {
+        return {
+          tone: "success" as const,
+          text: `Imported ${n} new transaction${n === 1 ? "" : "s"}${sk > 0 ? ` (${sk} already imported)` : ""}.`,
+        };
+      }
+      return {
+        tone: "neutral" as const,
+        text: sk > 0 ? `No new transactions — all ${sk} were already imported.` : "No transactions found in that file.",
+      };
+    }
+    if (searchParams.import) return { tone: "danger" as const, text: importErrorText(searchParams.import) };
     if (searchParams.bank === "forbidden") return { tone: "danger" as const, text: "You don't have permission to manage bank sync." };
     if (searchParams.bank === "locked") return { tone: "danger" as const, text: "Bank sync isn't available on your plan." };
     if (searchParams.bank) return { tone: "danger" as const, text: "That transaction or connection could not be found." };
@@ -259,27 +300,75 @@ export default async function ExpensesPage({
             </p>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {connections.map((c) => (
+              {connections.map((c) => {
+                const isImported = c.provider === "csv";
+                return (
                 <li key={c.id} className="flex items-center justify-between py-3">
                   <div>
                     <p className="font-medium text-gray-900">{c.institution_name ?? "Bank"}</p>
-                    <p className="text-xs text-gray-500">Last synced {fmtDate(c.last_synced_at)}</p>
+                    <p className="text-xs text-gray-500">
+                      {isImported
+                        ? `Imported${c.import_format ? ` from ${c.import_format.toUpperCase()}` : ""} · last import ${fmtDate(c.last_synced_at)}`
+                        : `Last synced ${fmtDate(c.last_synced_at)}`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <StatusChip tone={connTone(c.status)}>{c.status.replace("_", " ")}</StatusChip>
-                    <form action={syncConnection}>
-                      <input type="hidden" name="connection_id" value={c.id} />
-                      <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Syncing…">
-                        Sync now
-                      </SubmitButton>
-                    </form>
+                    {isImported ? (
+                      <StatusChip tone="neutral">imported</StatusChip>
+                    ) : (
+                      <>
+                        <StatusChip tone={connTone(c.status)}>{c.status.replace("_", " ")}</StatusChip>
+                        <form action={syncConnection}>
+                          <input type="hidden" name="connection_id" value={c.id} />
+                          <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Syncing…">
+                            Sync now
+                          </SubmitButton>
+                        </form>
+                      </>
+                    )}
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
           <div className="mt-4">
             <PlaidConnectButton className={PRIMARY_ACTION_CLASS} />
+          </div>
+
+          {/* Import from a file — for cards the live feed can't connect (e.g. MBNA).
+              Download an OFX/QFX export from your bank and drop it here; re-importing
+              an overlapping range only adds genuinely new transactions. */}
+          <div className="mt-6 border-t border-gray-100 pt-4">
+            <p className="text-sm font-medium text-gray-900">Import from a file</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Bank or card not in the list above? Download an OFX/QFX transaction export from your bank and import it here.
+            </p>
+            <form action={importTransactionsFromFile} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">File (.ofx / .qfx)</span>
+                <input
+                  type="file"
+                  name="file"
+                  accept=".ofx,.qfx"
+                  required
+                  className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700"
+                />
+              </label>
+              <label className="text-sm sm:flex-1">
+                <span className="mb-1 block text-gray-600">Account label (optional)</span>
+                <input
+                  type="text"
+                  name="account_label"
+                  placeholder="e.g. MBNA Mastercard"
+                  maxLength={80}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+              </label>
+              <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Importing…">
+                Import file
+              </SubmitButton>
+            </form>
           </div>
         </Card>
       </div>

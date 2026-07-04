@@ -117,6 +117,17 @@ export function hasLiveBankFeed(entitlements: PlanEntitlements): boolean {
   return availableProviders(entitlements).length > 0;
 }
 
+/**
+ * True when the org may IMPORT transactions from a file (OFX/QFX, CSV later).
+ * File import is an alternative INPUT to the same paid expense module — for cards
+ * the live aggregators don't support (e.g. MBNA) — so it gates on the same
+ * `bank_feed` entitlement as the live feed (Growth+). Kept as its own predicate
+ * so the Free-tier-wedge option (see spec §6) can be flipped here alone later.
+ */
+export function canImportTransactions(entitlements: PlanEntitlements): boolean {
+  return hasLiveBankFeed(entitlements);
+}
+
 // --- Normalization helpers (pure) -------------------------------------------
 
 /**
