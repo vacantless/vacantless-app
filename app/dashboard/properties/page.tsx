@@ -279,6 +279,7 @@ export default async function PropertiesPage({
         // the typed values — S226 QA-audit form-reset fix).
         key={`add-rental-${searchParams.added ?? "new"}`}
         action={addProperty}
+        encType="multipart/form-data"
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <div className="min-w-[16rem] flex-1">
@@ -330,6 +331,23 @@ export default async function PropertiesPage({
             step="0.5"
             placeholder="1"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="w-full">
+          <label htmlFor="add_photos" className="mb-1 block text-xs font-medium text-gray-600">
+            Photos{" "}
+            <span className="font-normal text-gray-400">
+              (optional — add them now so it&apos;s ready to share the moment you
+              publish, or add them later)
+            </span>
+          </label>
+          <input
+            id="add_photos"
+            name="photos"
+            type="file"
+            accept="image/*"
+            multiple
+            className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
           />
         </div>
         <button

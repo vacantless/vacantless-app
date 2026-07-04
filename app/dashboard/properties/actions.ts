@@ -134,17 +134,42 @@ export async function addProperty(formData: FormData) {
   // default ('available'). This matches the MLS-import path, which already lands
   // as a draft "so nothing goes public until the operator reviews". The operator
   // sets it Live from the edit form once the listing is complete.
-  await supabase.from("properties").insert({
-    organization_id: org.id,
-    status: "draft",
-    address,
-    rent_cents: parseRentCents(String(formData.get("rent") ?? "")),
-    beds: parseIntOrNull(String(formData.get("beds") ?? "")),
-    baths: parseFloatOrNull(String(formData.get("baths") ?? "")),
-  });
+  const { data: inserted } = await supabase
+    .from("properties")
+    .insert({
+      organization_id: org.id,
+      status: "draft",
+      address,
+      rent_cents: parseRentCents(String(formData.get("rent") ?? "")),
+      beds: parseIntOrNull(String(formData.get("beds") ?? "")),
+      baths: parseFloatOrNull(String(formData.get("baths") ?? "")),
+    })
+    .select("id")
+    .single();
 
   revalidatePath("/dashboard/properties");
   revalidatePath("/dashboard");
+
+  // S409: if the operator picked photos on the add form, attach them in the SAME
+  // step so a new listing never launches photoless (the diagnosed S408 conversion
+  // leak — the hand-fix was uploading them separately afterward). The unit still
+  // lands as a DRAFT regardless; photos are best-effort and never block the
+  // create. When photos land, send the operator to the review page (like the MLS
+  // import) to see the draft + Publish, reusing the existing ?photos / ?photoerr
+  // banners; otherwise keep the list redirect that remounts + clears the form.
+  const newId = (inserted as { id: string } | null)?.id ?? null;
+  const files = photoFilesFromForm(formData);
+  if (newId && files.length > 0) {
+    const result = await uploadPhotosForProperty(supabase, org, newId, files, []);
+    revalidatePath(`/dashboard/properties/${newId}`);
+    if (result.ok) {
+      redirect(`/dashboard/properties/${newId}?photos=${result.uploaded}`);
+    }
+    // Draft was still created; land on the review page with the reason so the
+    // operator can re-add photos there via the uploader.
+    redirect(`/dashboard/properties/${newId}?photoerr=${result.reason}`);
+  }
+
   // Redirect (not just revalidate) so the add form REMOUNTS and its uncontrolled
   // inputs clear — otherwise the typed values linger and invite a duplicate
   // unit on the next submit (live QA finding S192). The `added` value is a fresh
@@ -808,48 +833,54 @@ export async function removeListingPost(formData: FormData) {
 
 type PhotoRow = PhotoLike & { storage_path: string };
 
-export async function uploadPropertyPhotos(formData: FormData) {
-  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
-  const propertyId = String(formData.get("property_id") ?? "");
-  if (!propertyId) return;
-
-  const org = await getCurrentOrg();
-  if (!org) redirect("/onboarding");
-
-  const fail = (reason: string) =>
-    redirect(`/dashboard/properties/${propertyId}?photoerr=${reason}`);
-
-  // Browser File objects arrive as FormData entries named "photos".
-  const files = formData
+/**
+ * Pull the browser File objects out of a FormData "photos" field, dropping the
+ * 0-byte entry an empty file input yields. Shared by the upload action and the
+ * create-with-photos flow.
+ */
+function photoFilesFromForm(formData: FormData): File[] {
+  return formData
     .getAll("photos")
     .filter(
       (f): f is File =>
         typeof f === "object" && f !== null && "size" in f && "type" in f,
     )
-    .filter((f) => f.size > 0); // empty file input yields a 0-byte entry
+    .filter((f) => f.size > 0);
+}
 
-  if (files.length === 0) fail("none");
+type UploadPhotosOutcome =
+  | { ok: true; uploaded: number }
+  | { ok: false; reason: string };
 
-  const supabase = createClient();
-
-  // Enforce the per-unit cap against what's already stored.
-  const { data: existing } = await supabase
-    .from("property_photos")
-    .select("id, sort_order, is_cover")
-    .eq("property_id", propertyId);
-  const existingRows = (existing ?? []) as PhotoLike[];
+/**
+ * Shared photo-upload core (S409): validate + cap + store + insert a batch of
+ * photo files onto an EXISTING property. Extracted from uploadPropertyPhotos so
+ * the create-a-rental flow can attach photos in the same step — a listing should
+ * never launch photoless (the diagnosed S408 conversion leak). Routing-free: the
+ * caller owns its own redirect/revalidate. Best-effort per file (a failed
+ * upload/insert is skipped and its orphaned object rolled back); returns the
+ * count actually stored, or a reason string the caller maps to a ?photoerr code.
+ */
+async function uploadPhotosForProperty(
+  supabase: ReturnType<typeof createClient>,
+  org: NonNullable<Awaited<ReturnType<typeof getCurrentOrg>>>,
+  propertyId: string,
+  files: File[],
+  existingRows: PhotoLike[],
+): Promise<UploadPhotosOutcome> {
+  if (files.length === 0) return { ok: false, reason: "none" };
 
   // The per-rental photo allowance is plan-scoped (Premium gets more). Every
   // current plan resolves to the base cap, so this is behavior-identical today.
   if (existingRows.length + files.length > photoCapForPlan(org.plan)) {
-    fail("max");
+    return { ok: false, reason: "max" };
   }
 
   // Reject the whole batch on the first bad file so the operator re-picks with
   // a clear message rather than getting a confusing partial upload.
   for (const f of files) {
     const v = validatePhotoUpload({ type: f.type, size: f.size });
-    if (!v.ok) fail(v.reason);
+    if (!v.ok) return { ok: false, reason: v.reason };
   }
 
   let order = nextSortOrder(existingRows);
@@ -902,9 +933,45 @@ export async function uploadPropertyPhotos(formData: FormData) {
     uploaded += 1;
   }
 
+  if (uploaded === 0) return { ok: false, reason: "failed" };
+  return { ok: true, uploaded };
+}
+
+export async function uploadPropertyPhotos(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const fail = (reason: string): never =>
+    redirect(`/dashboard/properties/${propertyId}?photoerr=${reason}`);
+
+  // Browser File objects arrive as FormData entries named "photos".
+  const files = photoFilesFromForm(formData);
+  if (files.length === 0) return fail("none");
+
+  const supabase = createClient();
+
+  // Enforce the per-unit cap against what's already stored.
+  const { data: existing } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover")
+    .eq("property_id", propertyId);
+  const existingRows = (existing ?? []) as PhotoLike[];
+
+  const result = await uploadPhotosForProperty(
+    supabase,
+    org,
+    propertyId,
+    files,
+    existingRows,
+  );
+  if (!result.ok) return fail(result.reason);
+
   revalidatePath(`/dashboard/properties/${propertyId}`);
-  if (uploaded === 0) redirect(`/dashboard/properties/${propertyId}?photoerr=failed`);
-  redirect(`/dashboard/properties/${propertyId}?photos=${uploaded}`);
+  redirect(`/dashboard/properties/${propertyId}?photos=${result.uploaded}`);
 }
 
 // ---------------------------------------------------------------------------
