@@ -193,7 +193,7 @@ function LegalFooter() {
         <Link href="/" className="font-semibold text-[#15211d]">
           Vacantless
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link href="/about" className="hover:text-[#15211d]">About</Link>
           <Link href="/privacy" className="hover:text-[#15211d]">Privacy</Link>
           <Link href="/terms" className="hover:text-[#15211d]">Terms</Link>

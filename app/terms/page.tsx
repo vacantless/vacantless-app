@@ -28,7 +28,7 @@ export default function TermsPage() {
 
         <P>
           These Terms govern your use of the Vacantless leasing workspace and
-          website (the &quot;Service&quot;), operated by {LEGAL_ENTITY}
+          website (the &quot;Service&quot;), operated by {LEGAL_ENTITY}{" "}
           (&quot;Vacantless,&quot; &quot;we,&quot; &quot;us&quot;). By creating an
           account or using the Service, you agree to these Terms.
         </P>
@@ -210,7 +210,7 @@ function LegalFooter() {
         <Link href="/" className="font-semibold text-[#15211d]">
           Vacantless
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link href="/about" className="hover:text-[#15211d]">About</Link>
           <Link href="/privacy" className="hover:text-[#15211d]">Privacy</Link>
           <Link href="/terms" className="hover:text-[#15211d]">Terms</Link>
