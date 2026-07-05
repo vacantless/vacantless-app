@@ -71,11 +71,17 @@ built by cloning the existing outcome-nudge magic-link pattern
   flipped to `cancelled`; lead stayed `booked`; exactly ONE cancel note; second
   cancel => `already:true` (no 2nd note); bad token => `{ok:false,not_found}`.
   QA wiped to baseline (4 showings / 10 leads).
-- **NOT yet browser/email-smoked on the deployed page** (can't deploy from here).
-  Post-deploy: open a booking-confirmation cancel link on North Star QA, tap
-  Cancel, confirm the operator email lands at the QA inbox + the rebook link
-  works. The email-send leg rides the same proven `sendOrgNotification` substrate
-  as `leasing.new_lead`.
+- **Browser + email smoke on the DEPLOYED app (prod `cdc1c9e`), North Star QA -
+  PASSED end to end [2026-07-05]:** booked a viewing through the deployed
+  `app.vacantless.com/r/<833-Pillette-QA>` page (renter noam@royallepage.ca);
+  the confirmation email carried the brand-styled "Cancel this viewing" link;
+  the deployed `/showing/cancel/[token]` page rendered the confirm state; tapping
+  "Yes, cancel my viewing" flipped it to "Your viewing is cancelled" + the
+  "Book a new viewing" rebook button; the operator `leasing.showing_cancelled`
+  email ("Viewing cancelled - S418 Cancel Smoke at 833 Pillette...") landed in
+  the inbox (temporary recipient override to a readable box, removed after); DB
+  confirmed showing `cancelled` / lead stage unchanged / one note. QA wiped to
+  baseline (4 showings / 10 leads, override deleted).
 
 ## Blast radius on deploy (Agile is live)
 Ships live to ALL orgs. A real renter cancellation on Agile will now email the
