@@ -84,8 +84,22 @@ card. `city` is best-guessed from the address's 2nd comma segment.
   19/0, distribution-analytics 26/0, listing-quality 25/0, post-publish-qa 24/0.
 - Regressions: distribution-channels 79/0, listing-distribution 66/0,
   listing-marketing 26/0, booking 40/0.
-- Slice 1 was already live-smoked + Codex-accepted (`ed1cd0c`). Batch live-smoke on
-  North Star QA: PENDING (after deploy).
+- Slice 1 was already live-smoked + Codex-accepted (`ed1cd0c`).
+- **Batch live-smoked on North Star QA (prod `c447679`, 833 Pillette):** started a
+  launch run (Facebook + Kijiji) -> the run rendered channel-specific step
+  checklists (Facebook got the unique-photo/QR note + its gotcha count; Kijiji got
+  "cover photo first"); marked Facebook **Done** with a live URL -> the header
+  flipped to "1 channel posted", progress advanced to "1 of 2", the run produced a
+  `listing_posts` row + its tracked `?p=` link, AND the Facebook channel card below
+  flipped to **Posted** (the run-to-attribution reuse, proven end to end).
+  Slice 3: Rentals.ca + Zumper show "FEED PARTNER · Not started" + next step +
+  setup form. Slice 4: the "What's working" table showed Direct/untracked 3 leads /
+  1 advanced + Facebook live 0 leads, each with its suggestion. Slice 5: the
+  quality panel = Fair 75/100 + "Strengthen" + the missing-detail list. Slice 6:
+  the QA checker ran live on a pasted ad -> "3 to fix, 3 to check" with correct
+  severities (city/rent/booking-link critical, hydro/furnishing/phone warning,
+  email + Kijiji-pin tips). Then WIPED QA back to baseline (0 runs / 0 items /
+  0 posts / 0 partner rows) [verified execute_sql].
 
 ## Not built (parked, spec'd separately)
 Browser sidecar extension (`DISTRIBUTION-SIDECAR-SPEC.md`) — a separate Chrome
