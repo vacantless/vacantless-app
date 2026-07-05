@@ -82,6 +82,15 @@ export default async function CancelShowingPage({
   // The viewing is off - either just cancelled via the button, or it was already
   // cancelled before this visit. Either way, show the done state (with rebook).
   const isCancelled = status === "cancelled" || row.outcome === "cancelled";
+  // Terminal, operator-recorded outcome ('attended'/'no_show'): the viewing can
+  // no longer be cancelled here. A stale email link must NOT show the cancel
+  // form (it would corrupt history and re-notify - the 0109 fix). Show a
+  // read-only "already closed" state instead, with a rebook option.
+  const isClosed =
+    !isCancelled &&
+    (status === "closed" ||
+      row.outcome === "attended" ||
+      row.outcome === "no_show");
 
   return (
     <div
@@ -112,6 +121,29 @@ export default async function CancelShowingPage({
               {rebookUrl && (
                 <div className="mt-6">
                   <p className="text-sm text-gray-600">Changed your mind or want a different time?</p>
+                  <a
+                    href={rebookUrl}
+                    className="mt-3 inline-flex items-center justify-center rounded-xl px-4 py-3 text-base font-semibold text-white shadow-sm"
+                    style={{ background: brandBg }}
+                  >
+                    Book a new viewing
+                  </a>
+                </div>
+              )}
+            </>
+          ) : isClosed ? (
+            <>
+              <h1 className="text-xl font-semibold text-gray-900">
+                This viewing can no longer be cancelled
+              </h1>
+              <p className="mt-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+                Your viewing at <span className="font-medium">{address}</span> ({when}) has
+                already been closed by the team, so there&apos;s nothing to cancel here. If you
+                think that&apos;s a mistake, just reply to your confirmation email.
+              </p>
+              {rebookUrl && (
+                <div className="mt-6">
+                  <p className="text-sm text-gray-600">Want to book another time?</p>
                   <a
                     href={rebookUrl}
                     className="mt-3 inline-flex items-center justify-center rounded-xl px-4 py-3 text-base font-semibold text-white shadow-sm"

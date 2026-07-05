@@ -42,6 +42,8 @@ function fmtShowingTime(iso: string | null, tz: string): string {
 
 type CancelResult = {
   ok?: boolean;
+  // 'cancelled_now' | 'already_cancelled' | 'closed' | 'not_found' (0109).
+  state?: string;
   reason?: string;
   already?: boolean;
   organization_id?: string | null;
@@ -126,15 +128,36 @@ export async function cancelShowingFromToken(formData: FormData) {
   });
   const result = (data as CancelResult | null) ?? null;
 
-  if (error || !result?.ok) {
-    redirect(path(token, result?.reason === "not_found" ? "invalid" : "error"));
+  if (error || !result) {
+    redirect(path(token, "error"));
   }
 
-  // Only alert the operator for a fresh cancellation; a second tap (already
-  // cancelled) is an idempotent no-op and must not double-notify.
+  // Branch on the precise state the RPC reports (0109). Terminal outcomes
+  // ('attended'/'no_show') come back as 'closed' - the showing was NOT touched,
+  // so we must NOT notify and must NOT claim it was cancelled; we show the
+  // non-cancellable state instead. Only a fresh cancellation notifies the
+  // operator; an already-cancelled showing is an idempotent no-op.
+  if (result.state === "cancelled_now") {
+    await notifyOperatorsOfCancellation(result);
+    redirect(path(token, "cancelled"));
+  }
+  if (result.state === "already_cancelled") {
+    redirect(path(token, "cancelled"));
+  }
+  if (result.state === "closed") {
+    redirect(path(token, "closed"));
+  }
+  if (result.state === "not_found") {
+    redirect(path(token, "invalid"));
+  }
+
+  // Older RPC (pre-0109) with no `state`: fall back to the ok/already contract so
+  // a mixed deploy still behaves.
+  if (!result.ok) {
+    redirect(path(token, result.reason === "not_found" ? "invalid" : "error"));
+  }
   if (!result.already) {
     await notifyOperatorsOfCancellation(result);
   }
-
   redirect(path(token, "cancelled"));
 }
