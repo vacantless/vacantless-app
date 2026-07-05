@@ -50,8 +50,16 @@ export async function GET(req: NextRequest) {
   const to = sp.get("to");
   const status = sp.get("status");
 
+  // Rotessa's transaction_report requires a start_date; called without one it
+  // errors, which is why the plain export link (no query params) failed with
+  // ?rotessa=exportfail. Default to a wide historical window (well before any
+  // Rotessa account existed) so the button works out of the box; an explicit
+  // ?from still overrides. Note: the report is paginated at 1000 rows/page and
+  // this pulls page 1 only — a portfolio exceeding that would need pagination.
+  const defaultFrom = `${new Date().getFullYear() - 15}-01-01`;
+
   const result = await fetchTransactionReport(apiKey, normalizeEnvironment(row.environment), {
-    startDate: from && ISO.test(from) ? from : null,
+    startDate: from && ISO.test(from) ? from : defaultFrom,
     endDate: to && ISO.test(to) ? to : null,
     status: status || null,
   });
