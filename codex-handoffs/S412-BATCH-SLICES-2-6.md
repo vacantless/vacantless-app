@@ -132,8 +132,14 @@ So "already-tracked Facebook, then guided-launch Facebook done" reuses the one
 tracker (no duplicate card/link), honoring the same-tracker promise.
 
 Verification: `tsc` clean, eslint clean on `actions.ts`, existing 144 lib tests
-unaffected (actions.ts is not unit-tested). Live-smoke of the dedupe on North Star
-QA: [fill in after deploy].
+unaffected (actions.ts is not unit-tested). **Dedupe live-smoked on North Star QA
+(prod `9c9e07c`):** seeded a Facebook `listing_posts` row via SQL (a Slice-1
+tracker), then started a guided launch and marked Facebook done with a DIFFERENT
+URL. Result [verified execute_sql]: `facebook_post_count = 1` — the run UPDATED the
+seeded post (its url became the new value) instead of inserting a second, and the
+run item linked to that same post. QA wiped to baseline afterward. The P2#1 guard
+is enforced by the RLS-scoped `ownedProperty` / run re-selects (a tampered foreign
+`property_id` returns null and the action aborts with `?forbidden=1`).
 
 ## Not built (parked, spec'd separately)
 Browser sidecar extension (`DISTRIBUTION-SIDECAR-SPEC.md`) — a separate Chrome
