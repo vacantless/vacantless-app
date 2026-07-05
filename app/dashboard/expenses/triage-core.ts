@@ -72,8 +72,18 @@ export type StagedTxn = {
  * Insert an expense from a staged transaction and mark the transaction assigned.
  * Shared by manual triage (assignTransaction) and rule auto-filing
  * (autoApplyRules). Returns the new expense id, or null when validation/insert
- * fails. Does NOT re-check property/building ownership — callers that take a raw
- * form value must (assignTransaction does); rule values were validated on save.
+ * fails or the transaction was already claimed. Does NOT re-check
+ * property/building ownership — callers that take a raw form value must
+ * (assignTransaction does); rule values were validated on save.
+ *
+ * CLAIMS THE TRANSACTION FIRST. The retroactive queue sweep (and the standalone
+ * "Apply saved rules" button) can run concurrently with the import-time pass or
+ * a second sweep, all reading the same "pending" rows. To stop two runs from
+ * both filing the same line into duplicate expenses, we flip the transaction
+ * pending→assigned in a single guarded, org-scoped update BEFORE inserting the
+ * expense: only one run's `triage_status = 'pending'` predicate matches, the
+ * loser gets zero rows back and returns null (skips). If the expense insert then
+ * fails we release the claim so the line stays retryable.
  */
 export async function insertExpenseAndAssign(
   supabase: DbClient,
@@ -93,6 +103,17 @@ export async function insertExpenseAndAssign(
   });
   if (!check.ok) return null;
 
+  // Atomically claim the pending transaction (org-scoped). If no row comes back,
+  // another run already claimed it - skip so we never double-file.
+  const { data: claimed } = await supabase
+    .from("bank_transactions")
+    .update({ triage_status: "assigned" })
+    .eq("id", txn.id)
+    .eq("organization_id", orgId)
+    .eq("triage_status", "pending")
+    .select("id");
+  if (!claimed || claimed.length === 0) return null;
+
   const { data: expense, error } = await supabase
     .from("expenses")
     .insert({
@@ -109,12 +130,21 @@ export async function insertExpenseAndAssign(
     })
     .select("id")
     .single();
-  if (error || !expense) return null;
+  if (error || !expense) {
+    // Insert failed after claiming - release the transaction so it stays retryable.
+    await supabase
+      .from("bank_transactions")
+      .update({ triage_status: "pending", expense_id: null })
+      .eq("id", txn.id)
+      .eq("organization_id", orgId);
+    return null;
+  }
 
   await supabase
     .from("bank_transactions")
-    .update({ triage_status: "assigned", expense_id: expense.id })
-    .eq("id", txn.id);
+    .update({ expense_id: expense.id })
+    .eq("id", txn.id)
+    .eq("organization_id", orgId);
   return expense.id;
 }
 
@@ -134,7 +164,13 @@ export async function insertExpenseAndAssign(
 export async function autoApplyRules(orgId: string): Promise<number> {
   const supabase = createClient();
 
-  const { data: ruleData } = await supabase.from("categorization_rules").select(RULE_COLUMNS);
+  // Explicitly scope both reads to the passed org (defense in depth beyond RLS):
+  // a user who belongs to more than one org must never have another org's rule
+  // match another org's pending line and file the expense under this org.id.
+  const { data: ruleData } = await supabase
+    .from("categorization_rules")
+    .select(RULE_COLUMNS)
+    .eq("organization_id", orgId);
   const ruleRows = (ruleData ?? []) as RuleRow[];
   if (ruleRows.length === 0) return 0;
   const rules = ruleRows.map(mapRuleRow);
@@ -143,6 +179,7 @@ export async function autoApplyRules(orgId: string): Promise<number> {
   const { data: pendData } = await supabase
     .from("bank_transactions")
     .select("id, amount_cents, posted_on, merchant, merchant_entity_id, stream_id, account_external_id")
+    .eq("organization_id", orgId)
     .eq("triage_status", "pending")
     .eq("direction", "debit");
   const pending = (pendData ?? []) as (StagedTxn & {
