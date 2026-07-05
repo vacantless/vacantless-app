@@ -301,6 +301,10 @@ export async function assignTransaction(formData: FormData) {
   // owner filed to a unit/building, remember it as "this recurring charge → that
   // scope" (auto-files next time); if category-only, remember it as a broad
   // "this merchant → that category" (pre-fills). Best-effort; never blocks assign.
+  // A scoped rule (unit/building) auto-files matching debits; a broad
+  // merchant→category rule only pre-fills. Track whether we saved a scoped rule
+  // so we can retroactively sweep the rest of the queue below.
+  let savedScopedRule = false;
   if (s(formData, "remember") !== "") {
     const scopeKind =
       check.value.propertyId != null || check.value.buildingKey != null ? "stream" : "merchant";
@@ -324,7 +328,7 @@ export async function assignTransaction(formData: FormData) {
     if (draft) {
       const rule = validateRuleInput(draft);
       if (rule.ok) {
-        await supabase.from("categorization_rules").insert({
+        const { error: ruleErr } = await supabase.from("categorization_rules").insert({
           organization_id: org.id,
           scope_kind: rule.value.scopeKind,
           merchant_entity_id: rule.value.merchantEntityId,
@@ -339,12 +343,43 @@ export async function assignTransaction(formData: FormData) {
           property_id: rule.value.propertyId,
           building_key: rule.value.buildingKey,
         });
+        if (!ruleErr && (rule.value.propertyId != null || rule.value.buildingKey != null)) {
+          savedScopedRule = true;
+        }
       }
     }
   }
 
+  // Retroactive apply: a scoped Remember-this used to help only FUTURE imports;
+  // the sibling lines already in the queue stayed manual (the busy-first-import
+  // pain). Now sweep the pending queue immediately so every other line matching
+  // the new rule files in one action. The just-assigned txn is already `assigned`
+  // so the sweep (pending-only) never touches it. Best-effort; never blocks.
+  let swept = 0;
+  if (savedScopedRule) {
+    swept = await autoApplyRules(org.id);
+  }
+
   revalidatePath(BASE);
-  redirect(`${BASE}?assigned=1`);
+  redirect(`${BASE}?assigned=1&swept=${swept}`);
+}
+
+// --- Triage: apply saved rules to the lines already in the queue -------------
+// "Remember this" auto-files matching debits at IMPORT time, so the very first
+// import of a busy account is all-manual (no rules exist yet). Once the owner
+// has taught a few rules, this button re-runs the same scoped auto-file over the
+// pending queue so every already-staged line a rule now matches files at once.
+// Same engine as the import-time sweep (autoApplyRules); pending-only + scoped-
+// only, so it never re-touches assigned lines or guesses a unit. Never moves money.
+export async function applyRulesToQueue() {
+  await requireCapability("manage_work_orders", `${BASE}?bank=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const swept = await autoApplyRules(org.id);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?swept=${swept}`);
 }
 
 // --- Triage: ignore a staged transaction (not an expense) --------------------

@@ -26,7 +26,13 @@ import { formatMoneyCents } from "@/lib/payments";
 import { isRentFromBankEnabled, prefillRentSplit, rentFromBankErrorMessage } from "@/lib/rent-from-bank";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { PlaidConnectButton } from "./PlaidConnectButton";
-import { syncConnection, assignTransaction, ignoreTransaction, recordRentFromTransaction } from "./actions";
+import {
+  syncConnection,
+  assignTransaction,
+  ignoreTransaction,
+  recordRentFromTransaction,
+  applyRulesToQueue,
+} from "./actions";
 import { importTransactionsFromFile } from "./import-actions";
 
 export const dynamic = "force-dynamic";
@@ -164,6 +170,7 @@ export default async function ExpensesPage({
   searchParams: {
     synced?: string;
     assigned?: string;
+    swept?: string;
     ignored?: string;
     bank?: string;
     exp?: string;
@@ -287,7 +294,26 @@ export default async function ExpensesPage({
       const n = parseInt(searchParams.synced, 10) || 0;
       return { tone: "success" as const, text: n > 0 ? `Synced ${n} new transaction${n === 1 ? "" : "s"}.` : "Up to date — no new transactions." };
     }
-    if (searchParams.assigned) return { tone: "success" as const, text: "Expense logged." };
+    if (searchParams.assigned) {
+      const n = parseInt(searchParams.swept ?? "0", 10) || 0;
+      return {
+        tone: "success" as const,
+        text:
+          n > 0
+            ? `Expense logged — and filed ${n} more matching line${n === 1 ? "" : "s"} automatically.`
+            : "Expense logged.",
+      };
+    }
+    if (searchParams.swept != null) {
+      const n = parseInt(searchParams.swept, 10) || 0;
+      return {
+        tone: n > 0 ? ("success" as const) : ("neutral" as const),
+        text:
+          n > 0
+            ? `Filed ${n} matching line${n === 1 ? "" : "s"} from your saved rules.`
+            : "No lines in the queue matched a saved rule.",
+      };
+    }
     if (searchParams.ignored) return { tone: "neutral" as const, text: "Transaction ignored." };
     if (searchParams.rent != null) {
       const n = parseInt(searchParams.rent, 10);
@@ -513,7 +539,16 @@ export default async function ExpensesPage({
 
       {/* --- Triage ----------------------------------------------------------- */}
       <div className="mt-8">
-        <SectionHeading>To review</SectionHeading>
+        <div className="flex items-center justify-between gap-3">
+          <SectionHeading>To review</SectionHeading>
+          {pending.length > 0 && rules.length > 0 && (
+            <form action={applyRulesToQueue}>
+              <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Sorting…">
+                Apply saved rules
+              </SubmitButton>
+            </form>
+          )}
+        </div>
         {pending.length === 0 ? (
           <EmptyState
             icon={<Icons.check />}
@@ -592,7 +627,7 @@ export default async function ExpensesPage({
                     </SubmitButton>
                     <label className="flex items-center gap-2 text-sm text-gray-600">
                       <input type="checkbox" name="remember" value="1" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
-                      Remember this — auto-sort future {t.merchant ? t.merchant : "matching"} charges
+                      Remember this — auto-sort matching {t.merchant ? t.merchant : ""} charges, now and going forward
                     </label>
                   </div>
                 </form>

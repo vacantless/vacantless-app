@@ -124,13 +124,19 @@ export async function insertExpenseAndAssign(
  * pre-fill at triage (the page computes that, so the owner still confirms the
  * unit). Bumps times_applied/last_applied_at on each rule that fires. Best-effort
  * and idempotent: a txn already assigned is skipped because we only read pending.
+ *
+ * Returns the number of pending debits it filed this run. The count powers the
+ * "also filed N more matching lines" feedback when the sweep runs RETROACTIVELY
+ * over lines already in the queue (a fresh Remember-this, or the standalone
+ * "Apply saved rules" button), not just at import/sync time. Existing callers
+ * ignore the return, so widening void→number is backward-compatible.
  */
-export async function autoApplyRules(orgId: string): Promise<void> {
+export async function autoApplyRules(orgId: string): Promise<number> {
   const supabase = createClient();
 
   const { data: ruleData } = await supabase.from("categorization_rules").select(RULE_COLUMNS);
   const ruleRows = (ruleData ?? []) as RuleRow[];
-  if (ruleRows.length === 0) return;
+  if (ruleRows.length === 0) return 0;
   const rules = ruleRows.map(mapRuleRow);
   const baseCount = new Map(ruleRows.map((r) => [r.id, r.times_applied]));
 
@@ -146,6 +152,7 @@ export async function autoApplyRules(orgId: string): Promise<void> {
   })[];
 
   const fired = new Map<string, number>();
+  let filed = 0;
   for (const t of pending) {
     const matchTxn: MatchableTxn = {
       merchantEntityId: t.merchant_entity_id,
@@ -159,7 +166,10 @@ export async function autoApplyRules(orgId: string): Promise<void> {
     if (!rule || !rule.id || !ruleAutoFiles(rule)) continue; // only scoped rules auto-file
     const asg = resolveRuleAssignment(rule);
     const expId = await insertExpenseAndAssign(supabase, orgId, t, asg);
-    if (expId) fired.set(rule.id, (fired.get(rule.id) ?? 0) + 1);
+    if (expId) {
+      fired.set(rule.id, (fired.get(rule.id) ?? 0) + 1);
+      filed += 1;
+    }
   }
 
   const now = new Date().toISOString();
@@ -169,4 +179,5 @@ export async function autoApplyRules(orgId: string): Promise<void> {
       .update({ times_applied: (baseCount.get(ruleId) ?? 0) + count, last_applied_at: now })
       .eq("id", ruleId);
   }
+  return filed;
 }
