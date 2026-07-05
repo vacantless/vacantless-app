@@ -1,5 +1,15 @@
 # S419 - Codex P2 fix: gate the public cancel RPC to non-terminal outcomes
 
+> **CODEX-ACCEPTED 2026-07-05 (S420).** Reviewed the fix delta `62f9cf8..8b52dd7`
+> only (not the homepage reposition commit underneath). No P1/P2. Confirmed:
+> `0109` returns `closed` for `attended`/`no_show` without mutating; `actions.ts`
+> only notifies on `cancelled_now`; `page.tsx` suppresses the cancel form for
+> terminal outcomes. `git diff --check` + ESLint (changed cancel page/action) +
+> full `tsc` passed; tests re-run via `node -r sucrase/register` (local esbuild
+> platform mismatch on `npx tsx`): booking 40/0, leads-notify 20/0,
+> notifications 90/0. The open scope call (gate on outcome STATE, not
+> `scheduled_at > now()`) was upheld - no time gate added. Loop CLOSED.
+
 **Context:** Codex's review of S418 `cdc1c9e` flagged one P2 on
 `cancel_showing_from_token`. This is the fix.
 
