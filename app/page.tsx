@@ -36,6 +36,7 @@ export default async function Home() {
         <WhyReplaces />
         <Workflow />
         <SafeSharing />
+        <RentCollection />
         <Pricing />
         <FounderBand />
         <ClosingCta />
@@ -633,6 +634,114 @@ const SHARING_STATES: {
   },
 ];
 
+/* ----------------------------------------------------------- Rent collection */
+
+function RentCollection() {
+  return (
+    <section
+      id="rent"
+      className="border-t border-[#d9e1dc] py-16 sm:py-[76px]"
+    >
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+          {/* Left: the story */}
+          <div>
+            <Eyebrow>Rent collection</Eyebrow>
+            <h2 className="mb-4 max-w-[16ch] text-[clamp(1.9rem,3.6vw,2.9rem)] font-extrabold leading-[1.05]">
+              Stop chasing cheques before it becomes a negotiation.
+            </h2>
+            <p className="mb-3.5 text-base leading-relaxed text-[#384a42]">
+              Cheques and manual reminders create small, awkward touchpoints every
+              month. Miss one at the wrong moment - say, while a repair is already
+              a sore spot - and a simple &quot;rent is late&quot; turns into a
+              conversation about a discount you never meant to offer.
+            </p>
+            <p className="mb-3.5 text-base leading-relaxed text-[#384a42]">
+              Automatic rent collection takes those moments off your plate. Once
+              your tenant authorizes their bank account, rent runs on schedule
+              every month, and you can see what came in without a single follow-up
+              text.
+            </p>
+            <p className="mb-5 text-base leading-relaxed text-[#384a42]">
+              On <strong className="font-bold text-[#17362f]">Growth</strong>, you
+              set up rent collection by bank debit through Stripe, or through your
+              own Rotessa account. Vacantless schedules and tracks each payment;
+              Stripe or Rotessa handles the payment rails.
+            </p>
+            <p className="border-l-4 border-[#16756a] bg-[#f4f7f5] py-2.5 pl-4 pr-3 text-[0.86rem] leading-snug text-[#37504a]">
+              Rent is only ever debited after your tenant authorizes their bank
+              account. Vacantless never holds your funds and never stores tenant
+              bank-account numbers, and adds no fee of its own on rent payments -
+              the processor&apos;s fee is separate and passes straight through.
+            </p>
+          </div>
+
+          {/* Right: how it works */}
+          <div className="rounded-lg border border-[#d9e1dc] bg-white p-5 shadow-[0_12px_32px_rgba(28,43,36,0.08)] sm:p-6">
+            <h3 className="mb-4 text-[1.06rem] font-semibold">
+              How rent collection works
+            </h3>
+            <ol className="grid list-none gap-0 p-0">
+              {RENT_STEPS.map((step, i) => (
+                <li
+                  key={step.title}
+                  className={`flex gap-3.5 ${
+                    i < RENT_STEPS.length - 1 ? "pb-4" : ""
+                  }`}
+                >
+                  <div className="flex flex-col items-center">
+                    <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-[#17362f] text-[0.8rem] font-extrabold text-white">
+                      {i + 1}
+                    </span>
+                    {i < RENT_STEPS.length - 1 ? (
+                      <span className="mt-1 w-px flex-1 bg-[#d9e1dc]" aria-hidden="true" />
+                    ) : null}
+                  </div>
+                  <div className="pb-1">
+                    <strong className="block text-[0.94rem] leading-tight">
+                      {step.title}
+                    </strong>
+                    <span className="mt-0.5 block text-[0.85rem] leading-snug text-[#59655f]">
+                      {step.body}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const RENT_STEPS: { title: string; body: string }[] = [
+  {
+    title: "Choose the right plan",
+    body: "Automatic rent collection is included on Growth and Premium.",
+  },
+  {
+    title: "Add the tenancy",
+    body: "Create the tenancy record with the tenant and monthly rent amount.",
+  },
+  {
+    title: "Connect Stripe or Rotessa",
+    body: "Use Vacantless's Stripe rail, or connect your own Rotessa account.",
+  },
+  {
+    title: "Tenant authorizes their bank",
+    body: "Your tenant confirms their bank account through the processor. Nothing is debited until they do.",
+  },
+  {
+    title: "Schedule monthly rent",
+    body: "Pick the first payment date and the amount pulls automatically each month.",
+  },
+  {
+    title: "Rent runs on its own",
+    body: "Payments continue every month until you change or cancel the schedule.",
+  },
+];
+
 /* --------------------------------------------------------------------- Pricing */
 
 function Pricing() {
@@ -668,9 +777,20 @@ function Pricing() {
                   </small>
                 ) : null}
               </span>
-              <p className="mb-5 flex-1 text-[0.92rem] leading-relaxed text-[#59655f]">
+              <p className="mb-4 text-[0.92rem] leading-relaxed text-[#59655f]">
                 {p.body}
               </p>
+              <ul className="mb-5 grid flex-1 list-none content-start gap-2 p-0">
+                {p.includes.map((f) => (
+                  <li
+                    key={f}
+                    className="flex items-start gap-2 text-[0.86rem] leading-snug text-[#273832]"
+                  >
+                    <CheckMark />
+                    {f}
+                  </li>
+                ))}
+              </ul>
               {p.featured ? (
                 <PrimaryButton href={p.href}>{p.cta}</PrimaryButton>
               ) : (
@@ -704,6 +824,7 @@ const PLANS: {
   price: string;
   priceNote?: string;
   body: string;
+  includes: string[];
   cta: string;
   href: string;
   featured?: boolean;
@@ -713,7 +834,12 @@ const PLANS: {
     name: "Free",
     price: "$0",
     priceNote: "/ month",
-    body: "One live rental page to collect inquiries and viewing bookings. No card needed to start.",
+    body: "Fill one vacancy at a time. Post the page, collect inquiries, and book viewings - no card needed.",
+    includes: [
+      "One live rental page",
+      "Inquiries and viewing bookings in one list",
+      "Email replies and reminders (no texting)",
+    ],
     cta: "Start free",
     href: "/signup",
   },
@@ -721,7 +847,14 @@ const PLANS: {
     name: "Growth",
     price: "$99",
     priceNote: "/ month",
-    body: "Run more than one live rental at a time, with the full vacancy-to-tenancy workflow.",
+    body: "The plan for a landlord who wants to stop chasing rent. Everything in Free, plus automatic rent collection and full tenant management.",
+    includes: [
+      "Unlimited live rentals",
+      "Automatic rent collection (Stripe / Rotessa)",
+      "Tenant records and payment ledger",
+      "Renter screening, plus email and text",
+      "Listing distribution and year-end tax export",
+    ],
     cta: "Choose Growth",
     href: "/signup",
     featured: true,
@@ -731,7 +864,13 @@ const PLANS: {
     name: "Premium",
     price: "$249",
     priceNote: "/ month",
-    body: "For operators running a portfolio who want the whole leasing workspace in one place.",
+    body: "For a portfolio. Everything in Growth, plus your books, repairs, and automatic reminders in one place.",
+    includes: [
+      "Everything in Growth",
+      "Full accounting and live bank feed",
+      "Maintenance and repair dispatch",
+      "Automatic reminders and priority support",
+    ],
     cta: "Choose Premium",
     href: "/signup",
   },
