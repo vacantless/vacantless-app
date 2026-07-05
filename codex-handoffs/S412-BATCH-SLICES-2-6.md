@@ -101,6 +101,40 @@ card. `city` is best-guessed from the address's 2nd comma segment.
   email + Kijiji-pin tips). Then WIPED QA back to baseline (0 runs / 0 items /
   0 posts / 0 partner rows) [verified execute_sql].
 
+## S412b — Codex batch review follow-up (both P2s fixed)
+
+Codex reviewed `ed1cd0c..c447679` and raised two P2s; both fixed in this commit.
+No migration, no env, no pure-lib change (actions.ts only).
+
+**P2 #1 — cross-org write via a tampered `property_id`.** The run/listing_post
+writes took `property_id` straight from the form while `organization_id` came from
+`getCurrentOrg()`, so a foreign UUID could create an org-A row pointing at an
+org-B property (and the public lead RPC resolves tracked posts by
+`listing_posts.property_id`). Fix:
+- New `ownedProperty(supabase, propertyId)` helper — selects the property under
+  RLS (`properties` is scoped to `user_org_ids()`), returns `{id, organization_id}`
+  or null. `startDistributionRun` + `addListingPost` (the pre-existing path had the
+  identical latent bug) now call it and abort with `?forbidden=1` if null, and use
+  the **property's** org as the authoritative `organization_id`.
+- `updateRunItem` no longer trusts the form: it re-selects the item's RUN under
+  RLS and derives `property_id` + `organization_id` from the run for the
+  `listing_posts` write + the redirect. `addRunChannel` + `cancelDistributionRun`
+  likewise re-select the run under RLS (abort if null) and derive the property.
+  So a `listing_posts` row can no longer be created with mismatched org/property
+  through any of these paths, and the public RPC can't be fed a cross-org post.
+
+**P2 #2 — duplicate `listing_posts` for an already-tracked channel.** Marking a
+run channel done inserted a NEW post whenever the run item had no `listing_post_id`
+— even if Slice 1 already had a live post for that channel. Fix: before inserting,
+`updateRunItem` looks up the most-recent **non-removed** `listing_posts` row for
+`(property_id, portal)` and, if found, UPDATES + links it instead of inserting.
+So "already-tracked Facebook, then guided-launch Facebook done" reuses the one
+tracker (no duplicate card/link), honoring the same-tracker promise.
+
+Verification: `tsc` clean, eslint clean on `actions.ts`, existing 144 lib tests
+unaffected (actions.ts is not unit-tested). Live-smoke of the dedupe on North Star
+QA: [fill in after deploy].
+
 ## Not built (parked, spec'd separately)
 Browser sidecar extension (`DISTRIBUTION-SIDECAR-SPEC.md`) — a separate Chrome
 extension repo + Web Store policy review; must be user-driven, no scraping /

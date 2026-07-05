@@ -741,6 +741,26 @@ export async function blastPriceDrop(formData: FormData) {
 // every write to the caller's org; the FK + check constraints are the backstop.
 // ===========================================================================
 
+/**
+ * Return the property (id + org) ONLY when it belongs to the caller's org
+ * (properties RLS scopes the select to user_org_ids()), else null. Every write
+ * that carries a form `property_id` must pass through this first, so a tampered
+ * foreign UUID can never create a row that cross-links one org to another org's
+ * property. Returns the property's org as the authoritative organization_id.
+ */
+async function ownedProperty(
+  supabase: ReturnType<typeof createClient>,
+  propertyId: string,
+): Promise<{ id: string; organization_id: string } | null> {
+  if (!propertyId) return null;
+  const { data } = await supabase
+    .from("properties")
+    .select("id, organization_id")
+    .eq("id", propertyId)
+    .maybeSingle();
+  return (data as { id: string; organization_id: string } | null) ?? null;
+}
+
 export async function addListingPost(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
@@ -758,8 +778,11 @@ export async function addListingPost(formData: FormData) {
   }
 
   const supabase = createClient();
+  // The property must belong to the caller's org (guards a tampered property_id).
+  const prop = await ownedProperty(supabase, propertyId);
+  if (!prop) redirect("/dashboard/properties?forbidden=1");
   await supabase.from("listing_posts").insert({
-    organization_id: org.id,
+    organization_id: prop.organization_id,
     property_id: propertyId,
     portal,
     label: normalizeText(formData.get("label")),
@@ -863,6 +886,11 @@ export async function startDistributionRun(formData: FormData) {
   }
 
   const supabase = createClient();
+  // The property must belong to the caller's org (guards a tampered property_id);
+  // use the property's org as the authoritative organization_id for every insert.
+  const prop = await ownedProperty(supabase, propertyId);
+  if (!prop) redirect("/dashboard/properties?forbidden=1");
+  const orgId = prop.organization_id;
   // One active run per property: reuse an existing active run, else open one.
   const { data: existing } = await supabase
     .from("distribution_runs")
@@ -875,7 +903,7 @@ export async function startDistributionRun(formData: FormData) {
   if (!runId) {
     const { data: run } = await supabase
       .from("distribution_runs")
-      .insert({ organization_id: org.id, property_id: propertyId, status: "active" })
+      .insert({ organization_id: orgId, property_id: propertyId, status: "active" })
       .select("id")
       .single();
     runId = run?.id as string | undefined;
@@ -883,7 +911,7 @@ export async function startDistributionRun(formData: FormData) {
   if (runId) {
     await supabase.from("distribution_run_items").upsert(
       channels.map((channel) => ({
-        organization_id: org.id,
+        organization_id: orgId,
         run_id: runId,
         channel,
         status: "pending",
@@ -898,9 +926,9 @@ export async function startDistributionRun(formData: FormData) {
 
 export async function updateRunItem(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
-  const propertyId = String(formData.get("property_id") ?? "");
+  const propertyIdForm = String(formData.get("property_id") ?? "");
   const itemId = String(formData.get("item_id") ?? "");
-  if (!propertyId || !itemId) return;
+  if (!propertyIdForm || !itemId) return;
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
@@ -914,10 +942,22 @@ export async function updateRunItem(formData: FormData) {
     .from("distribution_run_items")
     .select("id, run_id, channel, listing_post_id")
     .eq("id", itemId)
-    .single();
+    .maybeSingle();
   if (!item) {
-    redirect(`/dashboard/properties/${propertyId}?runerr=notfound#distribute-header`);
+    redirect(`/dashboard/properties/${propertyIdForm}?runerr=notfound#distribute-header`);
   }
+  // Authoritative property + org come from the run (RLS-scoped), never the form,
+  // so a tampered property_id can't cross-link this listing_post to another org.
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("property_id, organization_id")
+    .eq("id", item.run_id)
+    .maybeSingle();
+  if (!run) {
+    redirect(`/dashboard/properties/${propertyIdForm}?runerr=notfound#distribute-header`);
+  }
+  const propertyId = run.property_id as string;
+  const orgId = run.organization_id as string;
 
   // Marking a channel done WITH a live URL produces or refreshes its tracked
   // listing_posts row so the run feeds attribution + the Distribute cards.
@@ -926,6 +966,21 @@ export async function updateRunItem(formData: FormData) {
     const portal = normalizePortal(item.channel);
     const check = validateListingPost({ portal, status: "live", url });
     if (check.ok) {
+      // Reuse the existing tracker for this property+channel (most-recent
+      // non-removed post) rather than inserting a SECOND post for a channel
+      // Slice 1 already tracks - keeps the "same tracker, no duplicate" promise.
+      if (!listingPostId) {
+        const { data: existingPost } = await supabase
+          .from("listing_posts")
+          .select("id")
+          .eq("property_id", propertyId)
+          .eq("portal", portal)
+          .neq("status", "removed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existingPost?.id) listingPostId = existingPost.id as string;
+      }
       if (listingPostId) {
         await supabase
           .from("listing_posts")
@@ -935,7 +990,7 @@ export async function updateRunItem(formData: FormData) {
         const { data: post } = await supabase
           .from("listing_posts")
           .insert({
-            organization_id: org.id,
+            organization_id: orgId,
             property_id: propertyId,
             portal,
             url,
@@ -982,16 +1037,31 @@ export async function updateRunItem(formData: FormData) {
 
 export async function addRunChannel(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
-  const propertyId = String(formData.get("property_id") ?? "");
   const runId = String(formData.get("run_id") ?? "");
-  if (!propertyId || !runId) return;
+  if (!runId) return;
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
   const channel = normalizeRunChannel(formData.get("channel"));
+
+  const supabase = createClient();
+  // The run must belong to the caller's org (RLS-scoped); derive its property +
+  // org rather than trusting the form.
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("property_id, organization_id")
+    .eq("id", runId)
+    .maybeSingle();
+  if (!run) redirect("/dashboard/properties?forbidden=1");
+  const propertyId = run.property_id as string;
+
   if (channel) {
-    const supabase = createClient();
     await supabase.from("distribution_run_items").upsert(
-      { organization_id: org.id, run_id: runId, channel, status: "pending" },
+      {
+        organization_id: run.organization_id as string,
+        run_id: runId,
+        channel,
+        status: "pending",
+      },
       { onConflict: "run_id,channel", ignoreDuplicates: true },
     );
     // Adding a channel reopens a completed run.
@@ -1007,10 +1077,18 @@ export async function addRunChannel(formData: FormData) {
 
 export async function cancelDistributionRun(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
-  const propertyId = String(formData.get("property_id") ?? "");
   const runId = String(formData.get("run_id") ?? "");
-  if (!propertyId || !runId) return;
+  if (!runId) return;
   const supabase = createClient();
+  // Derive the property from the run (RLS-scoped); the update is org-gated by RLS
+  // anyway, but this also keeps the redirect on the caller's own property.
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("property_id")
+    .eq("id", runId)
+    .maybeSingle();
+  if (!run) redirect("/dashboard/properties?forbidden=1");
+  const propertyId = run.property_id as string;
   await supabase
     .from("distribution_runs")
     .update({ status: "cancelled", completed_at: new Date().toISOString() })
