@@ -487,7 +487,7 @@ const PRODUCT_GROUPS: { n: string; title: string; items: string[] }[] = [
       "Rent roll and an income-and-expense view",
       "Cap-rate and NOI-style reporting, where available",
       "Portfolio reports",
-      "Rent-increase reminders and important dates",
+      "Rent-increase notices prepared for you to review and send, with reminders for the key dates",
     ],
   },
 ];
