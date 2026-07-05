@@ -749,7 +749,7 @@ const RENT_STEPS: { title: string; body: string }[] = [
 /* ------------------------------------------------------------- Operating stack */
 
 /* The whole small-landlord operating stack in one view. Positioning: Vacantless
-   does NOT claim to replace every specialist tool — it shows that a landlord
+   does NOT claim to replace every specialist tool - it shows that a landlord
    otherwise stitches the job across many disconnected tools, and gives them one
    rental-specific workspace that connects it. Every "With Vacantless" cell maps
    to a real, shipped capability (verified against lib/billing.ts TIERS +
@@ -770,7 +770,7 @@ function StackTable() {
           maintenance, and owner reporting.
         </SectionHead>
         <div className="overflow-hidden rounded-lg border border-[#d9e1dc] bg-white shadow-[0_12px_32px_rgba(28,43,36,0.08)]">
-          {/* Column headings — desktop only; mobile uses per-cell labels below. */}
+          {/* Column headings - desktop only; mobile uses per-cell labels below. */}
           <div className="hidden gap-4 border-b border-[#d9e1dc] bg-[#fbfcfb] px-5 py-3 text-[0.72rem] font-extrabold uppercase tracking-[0.06em] text-[#59655f] md:grid md:grid-cols-[minmax(0,0.82fr)_minmax(0,1.02fr)_minmax(0,1.16fr)]">
             <span>The job</span>
             <span>Usually stitched together</span>
