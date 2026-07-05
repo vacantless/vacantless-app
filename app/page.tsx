@@ -37,6 +37,7 @@ export default async function Home() {
         <Workflow />
         <SafeSharing />
         <RentCollection />
+        <StackTable />
         <Pricing />
         <FounderBand />
         <ClosingCta />
@@ -742,6 +743,177 @@ const RENT_STEPS: { title: string; body: string }[] = [
   {
     title: "Rent runs on its own",
     body: "Payments continue every month until you change or cancel the schedule.",
+  },
+];
+
+/* ------------------------------------------------------------- Operating stack */
+
+/* The whole small-landlord operating stack in one view. Positioning: Vacantless
+   does NOT claim to replace every specialist tool — it shows that a landlord
+   otherwise stitches the job across many disconnected tools, and gives them one
+   rental-specific workspace that connects it. Every "With Vacantless" cell maps
+   to a real, shipped capability (verified against lib/billing.ts TIERS +
+   entitlements). Language stays "coordinates / tracks / organizes / connects";
+   no replacement claims about FreshBooks, DocuSign, Rotessa, Stripe, lawyers, or
+   official Ontario forms. Payment guardrail restated in the footnote. */
+function StackTable() {
+  return (
+    <section
+      id="stack"
+      className="border-t border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
+    >
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="One rental workflow instead of six disconnected tools.">
+          Vacantless does not replace every specialist tool. It gives small
+          landlords one rental-specific workspace that connects the job: listing,
+          inquiries, viewings, lease and admin records, rent collection,
+          maintenance, and owner reporting.
+        </SectionHead>
+        <div className="overflow-hidden rounded-lg border border-[#d9e1dc] bg-white shadow-[0_12px_32px_rgba(28,43,36,0.08)]">
+          {/* Column headings — desktop only; mobile uses per-cell labels below. */}
+          <div className="hidden gap-4 border-b border-[#d9e1dc] bg-[#fbfcfb] px-5 py-3 text-[0.72rem] font-extrabold uppercase tracking-[0.06em] text-[#59655f] md:grid md:grid-cols-[minmax(0,0.82fr)_minmax(0,1.02fr)_minmax(0,1.16fr)]">
+            <span>The job</span>
+            <span>Usually stitched together</span>
+            <span>With Vacantless</span>
+          </div>
+          {STACK_GROUPS.map((group) => (
+            <div key={group.label}>
+              <div className="border-b border-[#d9e1dc] bg-[#eef3f0] px-5 py-2 text-[0.7rem] font-extrabold uppercase tracking-[0.07em] text-[#16756a]">
+                {group.label}
+              </div>
+              {group.rows.map((row) => (
+                <div
+                  key={row.job}
+                  className="grid gap-x-4 gap-y-2.5 border-b border-[#eaefec] px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,0.82fr)_minmax(0,1.02fr)_minmax(0,1.16fr)] md:items-start"
+                >
+                  <strong className="text-[0.92rem] leading-snug text-[#15211d]">
+                    {row.job}
+                  </strong>
+                  <div className="text-[0.86rem] leading-snug text-[#59655f]">
+                    <span className="mb-0.5 block text-[0.66rem] font-extrabold uppercase tracking-[0.05em] text-[#98938d] md:hidden">
+                      Usually
+                    </span>
+                    {row.usual}
+                  </div>
+                  <div className="text-[0.86rem] leading-snug text-[#273832]">
+                    <span className="mb-0.5 block text-[0.66rem] font-extrabold uppercase tracking-[0.05em] text-[#16756a] md:hidden">
+                      With Vacantless
+                    </span>
+                    <span className="flex items-start gap-2">
+                      <span className="hidden md:block">
+                        <CheckMark />
+                      </span>
+                      <span>{row.vacantless}</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 max-w-[62rem] text-[0.86rem] leading-relaxed text-[#59655f]">
+          Vacantless organizes and tracks this work in one place and works
+          alongside your existing tools rather than replacing them. Rent
+          collection runs through Stripe or your own Rotessa account, only after
+          your tenant authorizes their bank account. Vacantless never holds your
+          funds and never stores tenant bank-account numbers. Official Ontario
+          forms, your accountant, and your signing tool stay yours - Vacantless
+          keeps the records organized around them.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+const STACK_GROUPS: {
+  label: string;
+  rows: { job: string; usual: string; vacantless: string }[];
+}[] = [
+  {
+    label: "Fill the vacancy",
+    rows: [
+      {
+        job: "Rental page and listing",
+        usual: "Kijiji, Facebook, and separate listing sites.",
+        vacantless:
+          "A branded rental page with Draft, Live, Paused, and Leased safety.",
+      },
+      {
+        job: "Listing content",
+        usual: "MLS sheets and ad copy written from scratch each time.",
+        vacantless:
+          "Listing-copy generator and MLS data-sheet import.",
+      },
+      {
+        job: "Inquiry capture",
+        usual: "Inquiries scattered across Gmail, texts, and spreadsheets.",
+        vacantless:
+          "One inquiry list with renter details and follow-ups.",
+      },
+      {
+        job: "Screening",
+        usual: "Standalone forms or a separate screening tool.",
+        vacantless: "Renter pre-screening questions on your page.",
+      },
+      {
+        job: "Viewings",
+        usual: "Calendar links or a separate showing scheduler.",
+        vacantless:
+          "Viewing windows, renter self-booking, and grouped viewings.",
+      },
+    ],
+  },
+  {
+    label: "Sign and move in",
+    rows: [
+      {
+        job: "Tenancy handoff",
+        usual: "Spreadsheets and shared folders per renter.",
+        vacantless:
+          "Tenancy records, people records, and a payment ledger.",
+      },
+      {
+        job: "Lease and admin docs",
+        usual: "DocuSign and folders of PDFs.",
+        vacantless:
+          "Lease clauses, generated lease documents, and a document vault.",
+      },
+    ],
+  },
+  {
+    label: "Run the tenancy",
+    rows: [
+      {
+        job: "Ontario rent admin",
+        usual: "LTB forms and a rent-increase date tracked by hand.",
+        vacantless:
+          "Rent-increase guideline calculator with a pre-filled N1.",
+      },
+      {
+        job: "Rent collection",
+        usual: "Rotessa, Stripe, or e-transfer, tracked separately.",
+        vacantless:
+          "Rent collection set up and tracked through Stripe or Rotessa.",
+      },
+      {
+        job: "Accounting records",
+        usual: "FreshBooks, QuickBooks, or spreadsheets.",
+        vacantless:
+          "Bank feed, expenses, tax and rent export, and owner statements.",
+      },
+      {
+        job: "Maintenance",
+        usual: "Texts to trades, tracked in your head or a spreadsheet.",
+        vacantless:
+          "Tenant issue intake, work orders, and repair dispatch.",
+      },
+      {
+        job: "Portfolio reporting",
+        usual: "Numbers pulled together by hand in a spreadsheet.",
+        vacantless:
+          "Rent roll, a cap-rate and NOI package, and portfolio reports.",
+      },
+    ],
   },
 ];
 
