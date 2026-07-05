@@ -254,6 +254,30 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nTap to record it - Attended, No-show, or Cancelled: {{outcome_url}}\n\nMarking it Attended moves this renter forward automatically and keeps your renter list accurate.",
     active: true,
   },
+  // Renter-initiated cancellation (S418, KI632). Audience operator; the missing
+  // half of the showing loop. A "Cancel this viewing" link in the renter booking
+  // confirmation email flips the showing to cancelled and fires THIS event to the
+  // operator recipient list, so a called-off viewing is a STRUCTURED signal
+  // instead of a free-text reply that dead-ends at reply_to_email. The lead stage
+  // is left unchanged (the operator decides the next step). Amber accent: worth
+  // attention (the slot is free, follow up) but not a red new-lead alarm. Fires
+  // from the /showing/cancel/[token] POST action via sendOrgNotification; the
+  // one-tap page cancels via POST only (never a GET side-effect) so email
+  // link-scanners can't auto-cancel (KI585).
+  {
+    key: "leasing.showing_cancelled",
+    family: "leasing",
+    audience: "operator",
+    label: "Viewing cancelled",
+    description:
+      "When a renter cancels their booked viewing from the confirmation email, your team is notified so you can free the slot and follow up. Defaults to members who manage inquiries; edit the recipients below.",
+    tokens: [...COMMON_TOKENS, "lead_name", "showing_time", "dashboard_url"],
+    defaultSubject: "Viewing cancelled - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "{{lead_name}} cancelled their viewing at {{property_address}} ({{showing_time}}).\n\nThe time slot is now free. You may want to follow up with the renter or offer another time.\n\nOpen the inquiry: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the
   // scheduled daily Zap 365197456). Audience operator; ONE email per weekday at
   // start-of-shift summarizing four buckets, not one-per-event. The scheduled

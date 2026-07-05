@@ -138,6 +138,11 @@ export type BookingPayload = {
   reply_to_email: string | null;
   property_address: string | null;
   when_label: string; // already formatted in the org timezone
+  // Self-serve "Cancel this viewing" link (S418). When present, the email offers
+  // a one-tap cancel that fires a structured leasing.showing_cancelled event to
+  // the operator, instead of relying on a free-text reply that dead-ends at
+  // reply_to_email. Optional/back-compat: absent => the reply-only wording.
+  cancel_url?: string | null;
 };
 
 function bookingHtml(p: BookingPayload): string {
@@ -165,7 +170,15 @@ function bookingHtml(p: BookingPayload): string {
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
         <p style="margin:0;color:#3f3f46;">This is an in-person viewing (not a phone call). Please come to the address above.</p>
       </div>
-      <p style="margin:0 0 16px;">If you need to change or cancel, just reply to this email and we'll sort it out.</p>
+      ${
+        p.cancel_url
+          ? `<p style="margin:0 0 16px;">Need to change your plans? <a href="${escapeHtml(
+              p.cancel_url
+            )}" style="color:${escapeHtml(
+              brand
+            )};font-weight:600;">Cancel this viewing</a>. To reschedule, cancel and pick a new time, or just reply to this email.</p>`
+          : `<p style="margin:0 0 16px;">If you need to change or cancel, just reply to this email and we'll sort it out.</p>`
+      }
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">

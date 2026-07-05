@@ -82,6 +82,7 @@ async function attemptBooking(
           property_address: string | null;
           renter_name: string | null;
           renter_email: string | null;
+          cancel_token?: string | null;
           sms_enabled?: boolean | null;
           renter_phone?: string | null;
           sms_opt_out?: boolean | null;
@@ -100,6 +101,9 @@ async function attemptBooking(
           reply_to_email: b.reply_to_email,
           property_address: b.property_address,
           when_label: whenLabel,
+          cancel_url: b.cancel_token
+            ? `${APP_URL}/showing/cancel/${b.cancel_token}`
+            : null,
         });
         if (result.sent) {
           await supabase.rpc("record_booking_email", {
