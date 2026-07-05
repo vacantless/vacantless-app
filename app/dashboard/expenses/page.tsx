@@ -23,9 +23,10 @@ import {
   type MatchableTxn,
 } from "@/lib/categorization-rules";
 import { formatMoneyCents } from "@/lib/payments";
+import { isRentFromBankEnabled, prefillRentSplit, rentFromBankErrorMessage } from "@/lib/rent-from-bank";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { PlaidConnectButton } from "./PlaidConnectButton";
-import { syncConnection, assignTransaction, ignoreTransaction } from "./actions";
+import { syncConnection, assignTransaction, ignoreTransaction, recordRentFromTransaction } from "./actions";
 import { importTransactionsFromFile } from "./import-actions";
 
 export const dynamic = "force-dynamic";
@@ -169,6 +170,7 @@ export default async function ExpensesPage({
     imported?: string;
     skipped?: string;
     import?: string;
+    rent?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -227,6 +229,49 @@ export default async function ExpensesPage({
   const properties = (propData ?? []) as PropertyRef[];
   const rules = ((ruleData ?? []) as RuleRow[]).map(ruleFromRow);
 
+  // --- "Is any of this rent?" — money-in lane (dark behind RENT_FROM_BANK) ----
+  // The import stores incoming money as credits but the triage above only shows
+  // debits, so a rent deposit had no path to "Rent collected". Here the owner
+  // splits a credit across active tenancies into rent_payments the statement sums.
+  const rentFromBank = isRentFromBankEnabled();
+  let credits: TxnRow[] = [];
+  let activeTenancies: { id: string; rentCents: number | null; label: string }[] = [];
+  if (rentFromBank) {
+    const [{ data: creditData }, { data: tenData }] = await Promise.all([
+      supabase
+        .from("bank_transactions")
+        .select(
+          "id, posted_on, amount_cents, merchant, description, raw_category, account_name, currency, merchant_entity_id, stream_id, account_external_id",
+        )
+        .eq("triage_status", "pending")
+        .eq("direction", "credit")
+        .order("posted_on", { ascending: false })
+        .limit(100),
+      supabase
+        .from("tenancies")
+        .select("id, rent_cents, property_id, properties(address), tenants(name, is_primary)")
+        .eq("status", "active"),
+    ]);
+    credits = (creditData ?? []) as TxnRow[];
+    const propAddr = new Map(properties.map((p) => [p.id, p.address]));
+    type TenRow = {
+      id: string;
+      rent_cents: number | null;
+      property_id: string;
+      properties: { address: string } | { address: string }[] | null;
+      tenants: { name: string; is_primary: boolean }[] | null;
+    };
+    activeTenancies = ((tenData ?? []) as unknown as TenRow[]).map((t) => {
+      const propJoin = Array.isArray(t.properties) ? t.properties[0] : t.properties;
+      const address = propJoin?.address ?? propAddr.get(t.property_id) ?? "Unit";
+      const tenants = t.tenants ?? [];
+      const primary = tenants.find((x) => x.is_primary) ?? tenants[0] ?? null;
+      const unit = splitAddressUnit(address).unit ?? address;
+      const label = primary?.name ? `${unit} · ${primary.name}` : unit;
+      return { id: t.id, rentCents: t.rent_cents, label };
+    });
+  }
+
   // Building options (street label per building_key), like the maintenance form.
   const buildingLabels = new Map<string, string>();
   for (const p of properties) {
@@ -244,6 +289,14 @@ export default async function ExpensesPage({
     }
     if (searchParams.assigned) return { tone: "success" as const, text: "Expense logged." };
     if (searchParams.ignored) return { tone: "neutral" as const, text: "Transaction ignored." };
+    if (searchParams.rent != null) {
+      const n = parseInt(searchParams.rent, 10);
+      if (Number.isFinite(n) && n > 0) {
+        return { tone: "success" as const, text: `Rent recorded across ${n} tenanc${n === 1 ? "y" : "ies"}.` };
+      }
+      const msg = rentFromBankErrorMessage(searchParams.rent);
+      return { tone: "danger" as const, text: msg ?? "Could not record the rent." };
+    }
     if (searchParams.imported != null) {
       const n = parseInt(searchParams.imported, 10) || 0;
       const sk = parseInt(searchParams.skipped ?? "0", 10) || 0;
@@ -372,6 +425,91 @@ export default async function ExpensesPage({
           </div>
         </Card>
       </div>
+
+      {/* --- Money in: is any of this rent? (dark behind RENT_FROM_BANK) ------- */}
+      {rentFromBank && credits.length > 0 && (
+        <div className="mt-8">
+          <SectionHeading>Money in — is any of this rent?</SectionHeading>
+          <p className="mb-3 text-sm text-gray-600">
+            Deposits from your bank. Record one as rent to count it on your owner statement — split it across the
+            tenancies it covers. Vacantless never moves money; it only records what already landed.
+          </p>
+          {activeTenancies.length === 0 ? (
+            <EmptyState
+              icon={<Icons.list />}
+              title="No active tenancies yet"
+              description="Add an active tenancy first, then you can record a deposit as rent against it."
+            />
+          ) : (
+            <div className="space-y-3">
+              {credits.map((c) => {
+                const prefill = new Map(
+                  prefillRentSplit(
+                    c.amount_cents,
+                    activeTenancies.map((t) => ({ tenancyId: t.id, rentCents: t.rentCents })),
+                  ).map((a) => [a.tenancyId, a.amountCents]),
+                );
+                return (
+                  <Card key={c.id}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900">{c.merchant ?? c.description ?? "Deposit"}</p>
+                        <p className="text-xs text-gray-500">
+                          {fmtDate(c.posted_on)}
+                          {c.account_name ? ` · ${c.account_name}` : ""}
+                          {c.raw_category ? ` · ${c.raw_category}` : ""}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-lg font-semibold text-emerald-700">
+                        + {formatMoneyCents(c.amount_cents)}
+                        {c.currency && c.currency !== "CAD" ? ` ${c.currency}` : ""}
+                      </p>
+                    </div>
+
+                    <form action={recordRentFromTransaction} className="mt-4">
+                      <input type="hidden" name="transaction_id" value={c.id} />
+                      <p className="mb-2 text-sm text-gray-600">Rent for each tenancy (edit or clear any that don&apos;t apply):</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {activeTenancies.map((t) => {
+                          const cents = prefill.get(t.id) ?? 0;
+                          return (
+                            <label key={t.id} className="text-sm">
+                              <span className="mb-1 block text-gray-600">{t.label}</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-400">$</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  name={`alloc_${t.id}`}
+                                  defaultValue={cents > 0 ? (cents / 100).toFixed(2) : ""}
+                                  placeholder="0.00"
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                                />
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-4">
+                        <SubmitButton className={PRIMARY_ACTION_CLASS} pendingLabel="Recording…">
+                          Record as rent
+                        </SubmitButton>
+                      </div>
+                    </form>
+
+                    <form action={ignoreTransaction} className="mt-2">
+                      <input type="hidden" name="transaction_id" value={c.id} />
+                      <SubmitButton className="text-sm text-gray-500 underline" pendingLabel="…">
+                        Not rent
+                      </SubmitButton>
+                    </form>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* --- Triage ----------------------------------------------------------- */}
       <div className="mt-8">

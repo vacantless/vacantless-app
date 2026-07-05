@@ -11,6 +11,8 @@ import { providerForPlan, filterNewTransactions } from "@/lib/bank-feed";
 import { getBankFeedProvider } from "@/lib/bank-feed/plaid";
 import { validateExpenseInput } from "@/lib/expenses";
 import { draftRuleFromAssignment, validateRuleInput } from "@/lib/categorization-rules";
+import { normalizePeriodMonth, parseAmountToCents } from "@/lib/payments";
+import { isRentFromBankEnabled, validateRentSplit } from "@/lib/rent-from-bank";
 import { autoApplyRules, insertExpenseAndAssign } from "./triage-core";
 
 // Bank-feed + expense triage actions (bank-feed module, Slice 2b — see
@@ -363,4 +365,84 @@ export async function ignoreTransaction(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?ignored=1`);
+}
+
+// --- Triage: record a CREDIT (money in) as rent income -----------------------
+// A rent deposit lands as one bank credit but can cover several tenancies (a
+// Rotessa lump), so the operator splits it across the org's active tenancies
+// into `rent_payments` rows that the owner statement already sums as "Rent
+// collected". We never move money — this only records what already arrived.
+// Dark behind RENT_FROM_BANK; guarded on manage_tenancies + the bank_feed plan.
+export async function recordRentFromTransaction(formData: FormData) {
+  await requireCapability("manage_tenancies", `${BASE}?rent=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!isRentFromBankEnabled() || providerForPlan(planEntitlements(org.plan)) === null) {
+    redirect(`${BASE}?rent=locked`);
+  }
+
+  const txnId = s(formData, "transaction_id");
+  if (!txnId) redirect(`${BASE}?bank=notfound`);
+
+  const supabase = createClient();
+  // Must be a PENDING CREDIT in the caller's org (RLS scopes the read).
+  const { data: txn } = await supabase
+    .from("bank_transactions")
+    .select("id, amount_cents, posted_on, direction, triage_status")
+    .eq("id", txnId)
+    .maybeSingle();
+  if (!txn) redirect(`${BASE}?bank=notfound`);
+  if (txn.direction !== "credit" || txn.triage_status !== "pending") {
+    redirect(`${BASE}?bank=already`);
+  }
+
+  // The org's active tenancies (RLS-scoped) are the only valid split targets.
+  const { data: tenData } = await supabase
+    .from("tenancies")
+    .select("id")
+    .eq("status", "active");
+  const validIds = new Set(((tenData ?? []) as { id: string }[]).map((t) => t.id));
+
+  // Per-tenancy allocations arrive as alloc_<tenancyId> dollar amounts.
+  const allocations: { tenancyId: string; amountCents: number }[] = [];
+  for (const id of validIds) {
+    const cents = parseAmountToCents(s(formData, `alloc_${id}`));
+    if (cents && cents > 0) allocations.push({ tenancyId: id, amountCents: cents });
+  }
+
+  const check = validateRentSplit(txn.amount_cents, allocations);
+  if (!check.ok) redirect(`${BASE}?rent=${check.code}`);
+
+  // Claim the credit (pending -> assigned) FIRST so a double submit can't
+  // double-record it; expense_id stays null because this is income, not a cost.
+  const { data: claimed } = await supabase
+    .from("bank_transactions")
+    .update({ triage_status: "assigned" })
+    .eq("id", txn.id)
+    .eq("triage_status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (!claimed) redirect(`${BASE}?bank=already`);
+
+  const periodMonth = normalizePeriodMonth(txn.posted_on);
+  const rows = check.value.map((a) => ({
+    organization_id: org.id,
+    tenancy_id: a.tenancyId,
+    amount_cents: a.amountCents,
+    method: "other",
+    paid_on: txn.posted_on,
+    period_month: periodMonth,
+    source: "bank",
+    bank_transaction_id: txn.id,
+    note: "Recorded from a bank deposit",
+  }));
+  const { error } = await supabase.from("rent_payments").insert(rows);
+  if (error) {
+    // Roll the claim back so the operator can retry.
+    await supabase.from("bank_transactions").update({ triage_status: "pending" }).eq("id", txn.id);
+    redirect(`${BASE}?rent=save`);
+  }
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?rent=${check.value.length}`);
 }
