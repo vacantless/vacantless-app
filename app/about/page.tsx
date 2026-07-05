@@ -53,10 +53,11 @@ function SiteHeader() {
         </nav>
         <Link
           href="/signup"
+          aria-label={SIGNUP_LABEL}
           className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-[18px] text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c]"
         >
-          <span className="sm:hidden">Start free</span>
-          <span className="hidden sm:inline">{SIGNUP_LABEL}</span>
+          <span aria-hidden className="sm:hidden">Start free</span>
+          <span aria-hidden className="hidden sm:inline">{SIGNUP_LABEL}</span>
         </Link>
       </div>
     </header>

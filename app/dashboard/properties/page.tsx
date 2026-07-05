@@ -279,7 +279,6 @@ export default async function PropertiesPage({
         // the typed values — S226 QA-audit form-reset fix).
         key={`add-rental-${searchParams.added ?? "new"}`}
         action={addProperty}
-        encType="multipart/form-data"
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <div className="min-w-[16rem] flex-1">

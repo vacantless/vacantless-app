@@ -458,7 +458,6 @@ export default async function SettingsPage({
 
               <form
                 action={uploadOrgLogo}
-                encType="multipart/form-data"
                 className="flex flex-wrap items-center gap-2"
               >
                 <input
@@ -503,15 +502,35 @@ export default async function SettingsPage({
             </p>
           </div>
 
-          {/* --- Listing syndication feed (S242) --- */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="flex items-center gap-2.5">
+          {/* --- Listing syndication feed (S242) — collapsed by default so the
+              brand tab reads as a set of guided jobs (brand, logo, renter page)
+              rather than one long admin drawer. The readiness + missing-phone
+              chips keep status visible while collapsed (Codex QA #3). */}
+          <details
+            className="group rounded-2xl border border-gray-200 bg-white shadow-sm"
+            open={Boolean(searchParams.feed) || feedSummary.orgPhoneMissing}
+          >
+            <summary className="flex cursor-pointer flex-wrap items-center gap-2.5 p-5 [&::-webkit-details-marker]:hidden">
               <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
               <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
                 Listing feed for rental sites
               </h3>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
+              {feedSummary.total > 0 && (
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                  {feedSummary.readyCount} of {feedSummary.total} ready
+                </span>
+              )}
+              {feedSummary.orgPhoneMissing && (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Add contact phone
+                </span>
+              )}
+              <span className="ml-auto text-xs font-medium text-brand group-open:hidden">
+                Set up →
+              </span>
+            </summary>
+            <div className="border-t border-gray-100 p-5 pt-4">
+            <p className="text-sm text-gray-500">
               Your Live listings are published as a single feed that rental sites
               (like Zumper, PadMapper, or Rentsync) can pull from to list them.
               Add a contact phone below, then send the feed link to the rental
@@ -673,7 +692,8 @@ export default async function SettingsPage({
                 listings are never sent to rental sites.
               </p>
             </div>
-          </div>
+            </div>
+          </details>
 
           {/* IA Step 3 (S275): Renter pre-screening + Building standard policy
               MOVED OUT of this tab to their point-of-use (the brand tab was

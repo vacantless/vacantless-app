@@ -52,14 +52,17 @@ function PrimaryButton({
   href,
   children,
   className = "",
+  ariaLabel,
 }: {
   href: string;
   children: ReactNode;
   className?: string;
+  ariaLabel?: string;
 }) {
   return (
     <Link
       href={href}
+      aria-label={ariaLabel}
       className={`inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-[18px] text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c] ${className}`}
     >
       {children}
@@ -114,9 +117,9 @@ function SiteHeader() {
           <SecondaryButton href="/login" className="hidden sm:inline-flex">
             Log in
           </SecondaryButton>
-          <PrimaryButton href="/signup">
-            <span className="sm:hidden">Start free</span>
-            <span className="hidden sm:inline">{SIGNUP_LABEL}</span>
+          <PrimaryButton href="/signup" ariaLabel={SIGNUP_LABEL}>
+            <span aria-hidden className="sm:hidden">Start free</span>
+            <span aria-hidden className="hidden sm:inline">{SIGNUP_LABEL}</span>
           </PrimaryButton>
         </div>
       </div>

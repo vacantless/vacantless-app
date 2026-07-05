@@ -1387,16 +1387,31 @@ export default async function PropertyDetailPage({
           </a>
         ) : null}
 
-        {showReadiness && (
+        {showReadiness && (() => {
+          // Photos aren't a hard share gate (a live, described rental is still
+          // shareable), but a photo-less page is weak for broad distribution, so
+          // we surface it distinctly rather than as a quiet "recommended" row.
+          const photosMissing =
+            readiness.checks.find((c) => c.key === "photos")?.ok === false;
+          return (
           <div className="mt-4 border-t border-gray-100 pt-4">
             <div className="mb-2.5 flex items-center gap-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                 Before you share
               </h4>
               {readiness.readyToShare ? (
-                <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-                  Ready to share
-                </span>
+                photosMissing ? (
+                  // Required checks pass, but a photo-less page reads poorly when
+                  // shared widely, so don't present a flat "Ready to share" - flag
+                  // photos as the gap before broad distribution (Codex QA #5).
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    Add photos before sharing widely
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                    Ready to share
+                  </span>
+                )
               ) : (
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                   {readiness.requiredOutstanding}{" "}
@@ -1413,7 +1428,7 @@ export default async function PropertyDetailPage({
                     className={`mt-px font-semibold ${
                       c.ok
                         ? "text-green-600"
-                        : c.required
+                        : c.required || c.key === "photos"
                           ? "text-amber-600"
                           : "text-gray-300"
                     }`}
@@ -1452,7 +1467,8 @@ export default async function PropertyDetailPage({
               ))}
             </ul>
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* --- Marketing kit (Tier A, Growth+) --- */}

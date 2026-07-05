@@ -77,13 +77,21 @@ export default async function ShowingsPage() {
       s.scheduled_at != null &&
       new Date(s.scheduled_at).getTime() >= now,
   );
+  const byRecent = (a: ShowingRow, b: ShowingRow) =>
+    new Date(b.scheduled_at ?? 0).getTime() -
+    new Date(a.scheduled_at ?? 0).getTime();
+  // Cancelled viewings are pulled into their own group: a cancelled viewing whose
+  // date is still in the future reads as misleading under a date-based "Past"
+  // heading, so it never belongs there regardless of when it was scheduled.
+  const cancelled = all
+    .filter((s) => s.outcome === "cancelled")
+    .sort(byRecent);
+  // Past & closed = everything that isn't upcoming and isn't cancelled: viewings
+  // that already happened (attended / no-show) plus scheduled ones whose time
+  // has passed. This grouping is now genuinely "done", not just "before now".
   const past = all
-    .filter((s) => !upcoming.includes(s))
-    .sort(
-      (a, b) =>
-        new Date(b.scheduled_at ?? 0).getTime() -
-        new Date(a.scheduled_at ?? 0).getTime(),
-    );
+    .filter((s) => !upcoming.includes(s) && s.outcome !== "cancelled")
+    .sort(byRecent);
 
   // Route view: when clustering is on, group upcoming showings into building+day
   // blocks (2+ showings) so the agent sees what's grouped where.
@@ -144,17 +152,20 @@ export default async function ShowingsPage() {
         timeZone={timeZone}
       />
       <Section
-        title="Past"
+        title="Past & closed"
         rows={past}
         empty={
           <EmptyState
             icon={<Icons.check className="h-5 w-5" />}
             title="No past viewings yet"
-            description="Once renters attend, mark each outcome here (attended, no-show, or cancelled) to keep your renter list accurate."
+            description="Once renters attend, mark each outcome here (attended or no-show) to keep your renter list accurate."
           />
         }
         timeZone={timeZone}
       />
+      {cancelled.length > 0 && (
+        <Section title={`Cancelled (${cancelled.length})`} rows={cancelled} timeZone={timeZone} />
+      )}
     </div>
   );
 }
@@ -167,14 +178,14 @@ function Section({
 }: {
   title: string;
   rows: ShowingRow[];
-  empty: React.ReactNode;
+  empty?: React.ReactNode;
   timeZone: string;
 }) {
   return (
     <div className="mb-8">
       <SectionHeading>{title}</SectionHeading>
       {rows.length === 0 ? (
-        empty
+        empty ?? null
       ) : (
         <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white shadow-sm">
           {rows.map((s) => {

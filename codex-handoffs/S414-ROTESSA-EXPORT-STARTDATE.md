@@ -1,5 +1,11 @@
 # S414 - Rotessa rent CSV export: default a start_date
 
+> **CODEX ACCEPTED 2026-07-05 — P1: none, P2: none.** Reviewed `a493531..499352a`;
+> gate + server-side key + generic redirect intact, default `startDate` applies only
+> when `?from` is missing/invalid. 1000-row pagination stays a follow-up. `499352a`
+> stands as prod head; no re-deploy. See `QA-NOTE-S414-CODEX-ACCEPTED.md`.
+
+
 ## What / why
 Dogfooding a real landlord org (506 Manning on live Rotessa) surfaced that the
 **"Rotessa rent CSV" export failed**: clicking it redirected to

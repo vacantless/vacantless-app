@@ -13,7 +13,7 @@ import {
   matchesScreenFilter,
   type ScreenFilter,
 } from "@/lib/screening";
-import { BrandBanner, EmptyState } from "@/components/ui";
+import { PageHeader, EmptyState } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { TriageQueue } from "./triage-queue";
 
@@ -88,7 +88,7 @@ export default async function LeadsPage({
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         icon={<Icons.chat />}
         eyebrow="Renters"
         title="Inquiries"

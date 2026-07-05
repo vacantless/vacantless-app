@@ -217,9 +217,20 @@ export default async function OverviewPage() {
       (availablePropertyRows as { id: string }[] | null)?.[0]?.id ?? null,
   });
 
+  // A brand-new org (nothing done yet) sees the full setup card up top — that's
+  // the whole job on day one. Once setup is under way, demote it: the Overview
+  // banner + "Today" lane own the first fold and the checklist becomes a slim
+  // collapsible strip below, so a returning landlord lands on what needs them
+  // today rather than a setup checklist (Codex QA #1).
+  const setupStarted = checklist.completedCount > 0 && !checklist.allComplete;
+  const showFullChecklistOnTop =
+    !checklist.allComplete && checklist.completedCount === 0;
+
   return (
     <div>
-      <LaunchChecklist checklist={checklist} />
+      {showFullChecklistOnTop && (
+        <LaunchChecklist checklist={checklist} variant="full" />
+      )}
 
       <BrandBanner
         icon={<Icons.home />}
@@ -229,6 +240,10 @@ export default async function OverviewPage() {
       />
 
       <TodayLane items={todayItems} />
+
+      {setupStarted && (
+        <LaunchChecklist checklist={checklist} variant="compact" />
+      )}
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
