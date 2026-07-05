@@ -1,5 +1,16 @@
 # S420 - Codex review: homepage view-layer commits (app/page.tsx)
 
+> **CODEX-ACCEPTED 2026-07-05 (S420).** No P1/P2. All three commits (`62f9cf8`,
+> `a72031b`, `962c33e`) touch only `app/page.tsx` - no lib/billing/entitlement/
+> Stripe/Rotessa/migration/server-action/dashboard change. Confirmed: Free/Growth/
+> Premium stay $0/$99/$249; Free does not advertise rent collection; payment
+> guardrails hold; the rent-increase line stays accurate against the pre-filled /
+> review / print N1 route; "your signing tool stays yours" stays consistent; no em
+> dashes. QA: git diff --check + eslint --no-cache app/page.tsx + tsc --noEmit +
+> browser smoke at 1280x720 and 390x844 (no horizontal overflow before/after the
+> cost details, all six cost rows render, 0 console warnings/errors). Loop CLOSED -
+> no active code-review queue for the session.
+
 **Why this note:** the S419 cancel-fix review covered only the `62f9cf8..8b52dd7`
 delta, so the homepage commits underneath were never reviewed separately. This
 note scopes that pass. All three commits are marketing view-layer only.
