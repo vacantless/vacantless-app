@@ -25,6 +25,8 @@ import {
   normalizeDate,
   validateListingPost,
 } from "@/lib/listing-distribution";
+import { normalizeRunItemStatus } from "@/lib/distribution-run";
+import { normalizePartnerStatus } from "@/lib/distribution-partner";
 import {
   validatePhotoUpload,
   extForType,
@@ -820,6 +822,242 @@ export async function removeListingPost(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?post=removed`);
+}
+
+// ===========================================================================
+// Distribution launch runs (S412 Slice 2) — a saved, resumable posting session.
+// Runs reuse the SAME listing_posts tracker: marking a channel "done" with a
+// live URL produces (or refreshes) that channel's listing_posts row, so a run
+// feeds source attribution + the Distribute cards with no separate write path.
+// ===========================================================================
+const RUN_CHANNEL_KEYS = [
+  "kijiji",
+  "facebook",
+  "rentals_ca",
+  "zumper",
+  "viewit",
+  "realtor_ca",
+  "other",
+] as const;
+
+function normalizeRunChannel(raw: unknown): string | null {
+  const v = String(raw ?? "").trim();
+  return (RUN_CHANNEL_KEYS as readonly string[]).includes(v) ? v : null;
+}
+
+export async function startDistributionRun(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const channels = Array.from(new Set(
+    formData
+      .getAll("channels")
+      .map(normalizeRunChannel)
+      .filter((c): c is string => c !== null),
+  ));
+  if (channels.length === 0) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=nochannels#distribute-header`);
+  }
+
+  const supabase = createClient();
+  // One active run per property: reuse an existing active run, else open one.
+  const { data: existing } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  let runId = existing?.id as string | undefined;
+  if (!runId) {
+    const { data: run } = await supabase
+      .from("distribution_runs")
+      .insert({ organization_id: org.id, property_id: propertyId, status: "active" })
+      .select("id")
+      .single();
+    runId = run?.id as string | undefined;
+  }
+  if (runId) {
+    await supabase.from("distribution_run_items").upsert(
+      channels.map((channel) => ({
+        organization_id: org.id,
+        run_id: runId,
+        channel,
+        status: "pending",
+      })),
+      { onConflict: "run_id,channel", ignoreDuplicates: true },
+    );
+  }
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?run=started#distribute-header`);
+}
+
+export async function updateRunItem(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  if (!propertyId || !itemId) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const status = normalizeRunItemStatus(formData.get("status"));
+  const url = normalizeUrl(formData.get("external_url"));
+  const notes = normalizeText(formData.get("notes"));
+
+  const supabase = createClient();
+  // RLS scopes this to the caller's org.
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("id, run_id, channel, listing_post_id")
+    .eq("id", itemId)
+    .single();
+  if (!item) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=notfound#distribute-header`);
+  }
+
+  // Marking a channel done WITH a live URL produces or refreshes its tracked
+  // listing_posts row so the run feeds attribution + the Distribute cards.
+  let listingPostId = (item.listing_post_id as string | null) ?? null;
+  if (status === "done" && url) {
+    const portal = normalizePortal(item.channel);
+    const check = validateListingPost({ portal, status: "live", url });
+    if (check.ok) {
+      if (listingPostId) {
+        await supabase
+          .from("listing_posts")
+          .update({ url, status: "live" })
+          .eq("id", listingPostId);
+      } else {
+        const { data: post } = await supabase
+          .from("listing_posts")
+          .insert({
+            organization_id: org.id,
+            property_id: propertyId,
+            portal,
+            url,
+            status: "live",
+          })
+          .select("id")
+          .single();
+        listingPostId = (post?.id as string | undefined) ?? null;
+      }
+    }
+  }
+
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      status,
+      external_url: url,
+      notes,
+      listing_post_id: listingPostId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", itemId);
+
+  // Complete the run once every item is resolved (done/skipped); reopen if not.
+  const { data: siblings } = await supabase
+    .from("distribution_run_items")
+    .select("status")
+    .eq("run_id", item.run_id);
+  const rows = (siblings ?? []) as { status: string }[];
+  const allResolved =
+    rows.length > 0 &&
+    rows.every((s) => s.status === "done" || s.status === "skipped");
+  await supabase
+    .from("distribution_runs")
+    .update({
+      status: allResolved ? "completed" : "active",
+      completed_at: allResolved ? new Date().toISOString() : null,
+    })
+    .eq("id", item.run_id);
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?run=saved#distribute-header`);
+}
+
+export async function addRunChannel(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const runId = String(formData.get("run_id") ?? "");
+  if (!propertyId || !runId) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const channel = normalizeRunChannel(formData.get("channel"));
+  if (channel) {
+    const supabase = createClient();
+    await supabase.from("distribution_run_items").upsert(
+      { organization_id: org.id, run_id: runId, channel, status: "pending" },
+      { onConflict: "run_id,channel", ignoreDuplicates: true },
+    );
+    // Adding a channel reopens a completed run.
+    await supabase
+      .from("distribution_runs")
+      .update({ status: "active", completed_at: null })
+      .eq("id", runId)
+      .eq("status", "completed");
+  }
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?run=saved#distribute-header`);
+}
+
+export async function cancelDistributionRun(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const runId = String(formData.get("run_id") ?? "");
+  if (!propertyId || !runId) return;
+  const supabase = createClient();
+  await supabase
+    .from("distribution_runs")
+    .update({ status: "cancelled", completed_at: new Date().toISOString() })
+    .eq("id", runId);
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?run=cancelled#distribute-header`);
+}
+
+// ===========================================================================
+// Feed-partner onboarding (S412 Slice 3) — ORG-level upsert. One account per
+// (org, channel); edited from a feed-eligible channel card on any listing.
+// ===========================================================================
+const PARTNER_CHANNEL_KEYS = [
+  "rentals_ca",
+  "zumper",
+  "viewit",
+  "realtor_ca",
+  "other",
+] as const;
+
+export async function upsertPartnerAccount(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const channel = String(formData.get("channel") ?? "").trim();
+  if (!(PARTNER_CHANNEL_KEYS as readonly string[]).includes(channel)) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+  await supabase.from("distribution_partner_accounts").upsert(
+    {
+      organization_id: org.id,
+      channel,
+      status: normalizePartnerStatus(formData.get("status")),
+      feed_url: normalizeUrl(formData.get("feed_url")),
+      partner_contact: normalizeText(formData.get("partner_contact")),
+      submitted_on: normalizeDate(formData.get("submitted_on")),
+      accepted_on: normalizeDate(formData.get("accepted_on")),
+      last_checked_on: normalizeDate(formData.get("last_checked_on")),
+      notes: normalizeText(formData.get("notes")),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "organization_id,channel" },
+  );
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?partner=saved#distribute-header`);
 }
 
 // ===========================================================================

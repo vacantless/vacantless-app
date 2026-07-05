@@ -105,10 +105,30 @@ import {
   computeChannelStatus,
 } from "@/lib/distribution-channels";
 import {
+  buildRunSteps,
+  runProgress,
+  selectableRunChannels,
+  type RunItemStatus,
+} from "@/lib/distribution-run";
+import { guardrailsForPortal } from "@/lib/listing-guardrails";
+import { computeChannelAnalytics } from "@/lib/distribution-analytics";
+import {
+  scoreListing,
+  fairHousingLint,
+  missingDetails,
+} from "@/lib/listing-quality";
+import type { QaExpected } from "@/lib/post-publish-qa";
+import {
   DistributeTab,
   type DistributeChannelCard,
   type DistributePostRow,
+  type LaunchRunData,
+  type ReplyInputs,
+  type PartnerAccountView,
+  type QualityView,
 } from "./distribute-tab";
+import { normalizePartnerStatus } from "@/lib/distribution-partner";
+import type { RunItemView } from "./launch-run-panel";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
 import { EquipmentSection, type EquipmentView } from "./equipment-section";
@@ -818,6 +838,33 @@ export default async function PropertyDetailPage({
     inquiryCount: postCounts.get(post.id) ?? 0,
   });
   const copyByKey = new Map(copyTabs.map((t) => [t.key, t]));
+  // Org-level feed-partner accounts (Slice 3), keyed by channel.
+  const { data: partnerRows } = await supabase
+    .from("distribution_partner_accounts")
+    .select(
+      "channel, status, feed_url, partner_contact, submitted_on, accepted_on, last_checked_on, notes",
+    );
+  const partnerByChannel = new Map<string, PartnerAccountView>();
+  for (const row of (partnerRows ?? []) as Array<{
+    channel: string;
+    status: string;
+    feed_url: string | null;
+    partner_contact: string | null;
+    submitted_on: string | null;
+    accepted_on: string | null;
+    last_checked_on: string | null;
+    notes: string | null;
+  }>) {
+    partnerByChannel.set(row.channel, {
+      status: normalizePartnerStatus(row.status),
+      feedUrl: row.feed_url,
+      partnerContact: row.partner_contact,
+      submittedOn: row.submitted_on,
+      acceptedOn: row.accepted_on,
+      lastCheckedOn: row.last_checked_on,
+      notes: row.notes,
+    });
+  }
   const distributeChannelCards: DistributeChannelCard[] =
     DISTRIBUTION_CHANNELS.map((channel) => {
       const posts = (postsByPortal.get(channel.key) ?? []).map(toDistributePost);
@@ -841,12 +888,117 @@ export default async function PropertyDetailPage({
           channel.feedEligible && marketingFeedStatus
             ? { inFeed: marketingFeedStatus.inFeed, hint: marketingFeedStatus.hint }
             : null,
+        partner: channel.feedEligible
+          ? partnerByChannel.get(channel.key) ?? null
+          : null,
         posts,
       };
     });
   const distributeOtherPosts = (postsByPortal.get("other") ?? []).map(
     toDistributePost,
   );
+
+  // --- Guided launch run (S412 Slice 2) -----------------------------------
+  const { data: activeRunRow } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", p.id)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  const activeRun = activeRunRow ? { id: activeRunRow.id as string } : null;
+  type RunItemRow = {
+    id: string;
+    channel: string;
+    status: RunItemStatus;
+    external_url: string | null;
+    notes: string | null;
+    listing_post_id: string | null;
+  };
+  let runItemRows: RunItemRow[] = [];
+  if (activeRun) {
+    const { data: ri } = await supabase
+      .from("distribution_run_items")
+      .select("id, channel, status, external_url, notes, listing_post_id")
+      .eq("run_id", activeRun.id)
+      .order("created_at", { ascending: true });
+    runItemRows = (ri ?? []) as RunItemRow[];
+  }
+  const channelLabelByKey = new Map<string, string>(
+    DISTRIBUTION_CHANNELS.map((c) => [c.key, c.label]),
+  );
+  channelLabelByKey.set("other", "Other");
+  const runItems: RunItemView[] = runItemRows.map((r) => ({
+    id: r.id,
+    channel: r.channel,
+    channelLabel: channelLabelByKey.get(r.channel) ?? r.channel,
+    status: r.status,
+    externalUrl: r.external_url,
+    trackedUrl:
+      linkIsLive && r.listing_post_id
+        ? buildTrackedLink(publicUrl, r.listing_post_id)
+        : null,
+    notes: r.notes,
+    steps: buildRunSteps(r.channel, {
+      guardrailCount: guardrailsForPortal(r.channel).length,
+    }),
+  }));
+  const alreadyInRun = new Set(runItems.map((i) => i.channel));
+  const launchRun: LaunchRunData = {
+    run: activeRun,
+    items: runItems,
+    progress: runProgress(runItems),
+    selectable: selectableRunChannels(DISTRIBUTION_CHANNELS, alreadyInRun),
+    startChannels: selectableRunChannels(DISTRIBUTION_CHANNELS, new Set()),
+  };
+  const replyInputs: ReplyInputs = {
+    address: p.address,
+    bookingUrl: linkIsLive ? publicUrl : null,
+    rentLabel: formatRentLabel(p.rent_cents),
+  };
+  // --- Listing quality (S412 Slice 5) -------------------------------------
+  const hasFeatures = Object.values(
+    (effectiveFeatures ?? {}) as Record<string, unknown>,
+  ).some((v) => v !== null && v !== undefined && v !== false && v !== "");
+  const listingQuality: QualityView = {
+    listing: scoreListing({
+      description: p.description,
+      photoCount: photoRows.length,
+      beds: p.beds,
+      baths: typeof p.baths === "number" ? p.baths : null,
+      rentCents: p.rent_cents,
+      hasFeatures,
+    }),
+    fairFlags: fairHousingLint(p.description),
+    missing: missingDetails(p.description),
+  };
+  // --- Post-publish QA expected values (S412 Slice 6) ---------------------
+  const addressParts = p.address.split(",").map((s) => s.trim());
+  const qaCity = addressParts.length >= 2 ? addressParts[1] : null;
+  const qaExpected: QaExpected = {
+    city: qaCity && /[a-z]/i.test(qaCity) ? qaCity : null,
+    rentLabel: formatRentLabel(p.rent_cents),
+    requireHydroDisclosure: true,
+    requireUnfurnishedDisclosure: true,
+    bookingUrl: linkIsLive ? publicUrl : null,
+    phone: org?.public_contact_phone ?? null,
+    email: org?.public_contact_email ?? org?.reply_to_email ?? null,
+  };
+
+  // --- Distribution analytics (S412 Slice 4) ------------------------------
+  const distributionAnalytics = computeChannelAnalytics({
+    leads: leadRows.map((l) => ({
+      listing_post_id: l.listing_post_id,
+      status: l.status,
+    })),
+    posts: postRows.map((post) => ({
+      id: post.id,
+      portal: post.portal,
+      status: post.status,
+      posted_on: post.posted_on,
+    })),
+    today: distributeToday,
+  });
 
   // Status-aware guardrail for the share tools (S226 QA-audit): warn the
   // operator before they hand out a link that won't behave the way they expect.
@@ -1633,6 +1785,11 @@ export default async function PropertyDetailPage({
           channelCards={distributeChannelCards}
           otherPosts={distributeOtherPosts}
           promotionNote={promotionGuard?.postingBody ?? null}
+          launchRun={launchRun}
+          replyInputs={replyInputs}
+          analytics={distributionAnalytics}
+          quality={listingQuality}
+          qaExpected={qaExpected}
         />
       </TabPanel>
 
