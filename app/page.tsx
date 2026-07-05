@@ -5,9 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { VacantlessMark } from "../components/vacantless-mark";
 
 export const metadata = {
-  title: "Vacantless - Fill your next rental",
+  title: "Vacantless - Collect rent automatically",
   description:
-    "A calm leasing workspace for small landlords. Post the rental page, share it safely, set viewing times, collect inquiries, and move the right renter into a tenancy record.",
+    "Collect rent automatically from your tenant's bank account. Stop chasing cheques and e-transfers. Built for landlords with one unit up to a small portfolio. Vacantless takes no cut of your rent.",
 };
 
 export const dynamic = "force-dynamic";
@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 // Contact target for "get help launching" CTAs. Kept in one place so it is easy
 // to swap for a help route later.
 const CONTACT_HREF = "mailto:hello@vacantless.com";
-const CONTACT_LABEL = "Get help launching";
-const SIGNUP_LABEL = "Start with one rental free";
+const CONTACT_LABEL = "Talk to Noam";
+const SIGNUP_LABEL = "Start free";
 
 export default async function Home() {
   // Logged-in visitors skip the public marketing page and go straight to their
@@ -32,12 +32,11 @@ export default async function Home() {
       <SiteHeader />
       <main>
         <Hero />
-        <TrustStrip />
-        <WhyReplaces />
-        <Workflow />
-        <SafeSharing />
-        <RentCollection />
-        <StackTable />
+        <TrustLine />
+        <CostSection />
+        <OldWay />
+        <RentHowItWorks />
+        <ProductDepth />
         <Pricing />
         <FounderBand />
         <ClosingCta />
@@ -101,14 +100,14 @@ function SiteHeader() {
           className="hidden items-center gap-[18px] text-[0.91rem] font-semibold text-[#59655f] md:flex"
           aria-label="Marketing sections"
         >
-          <a href="#workflow" className="hover:text-[#15211d]">
-            Workflow
+          <a href="#cost" className="hover:text-[#15211d]">
+            What it costs
           </a>
-          <a href="#why" className="hover:text-[#15211d]">
-            Why Vacantless
+          <a href="#product" className="hover:text-[#15211d]">
+            What you get
           </a>
           <a href="#pricing" className="hover:text-[#15211d]">
-            Pricing
+            Plans
           </a>
           <Link href="/about" className="hover:text-[#15211d]">
             About
@@ -118,9 +117,8 @@ function SiteHeader() {
           <SecondaryButton href="/login" className="hidden sm:inline-flex">
             Log in
           </SecondaryButton>
-          <PrimaryButton href="/signup" ariaLabel={SIGNUP_LABEL}>
-            <span aria-hidden className="sm:hidden">Start free</span>
-            <span aria-hidden className="hidden sm:inline">{SIGNUP_LABEL}</span>
+          <PrimaryButton href="/signup" ariaLabel="Start free with one rental">
+            Start free
           </PrimaryButton>
         </div>
       </div>
@@ -152,18 +150,22 @@ function Eyebrow({ children }: { children: ReactNode }) {
 function Hero() {
   return (
     <section className="relative isolate border-b border-[#d9e1dc] bg-gradient-to-b from-white to-[#edf5f0]/90">
-      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-12 py-14 sm:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-12 py-14 sm:py-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         {/* Left: copy */}
-        <div className="max-w-[570px]">
-          <Eyebrow>Leasing workspace for small landlords</Eyebrow>
-          <h1 className="mb-[18px] max-w-[15ch] text-[clamp(2.6rem,5.4vw,4.15rem)] font-extrabold leading-[1] tracking-tight">
-            Fill your next rental without losing the thread.
+        <div className="max-w-[590px]">
+          <Eyebrow>Rent collection for small landlords</Eyebrow>
+          <h1 className="mb-[18px] max-w-[16ch] text-[clamp(2.5rem,5.2vw,4rem)] font-extrabold leading-[1.02] tracking-tight">
+            Collect rent automatically.
           </h1>
-          <p className="mb-[26px] max-w-[33rem] text-[clamp(1.06rem,1.7vw,1.24rem)] leading-[1.55] text-[#384a42]">
-            One calm place to post the rental, share it safely, collect every
-            inquiry, let renters self-book viewings, and move the right one into a
-            signed tenancy. No more juggling your inbox, Marketplace, and a dozen
-            back-and-forth texts.
+          <p className="mb-[22px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
+            Stop chasing cheques and e-transfers.
+          </p>
+          <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
+            Vacantless is built for landlords with one unit, a duplex, triplex,
+            fourplex, fiveplex, sixplex, or a small portfolio. After your tenant
+            authorizes their bank account, Vacantless helps pull rent on schedule,
+            tracks what came in, and keeps the rest of your rental work organized
+            in one place.
           </p>
           <div className="mb-3.5 flex flex-wrap items-center gap-3">
             <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
@@ -171,9 +173,10 @@ function Hero() {
               {CONTACT_LABEL}
             </SecondaryButton>
           </div>
-          <p className="text-[0.83rem] font-semibold text-[#59655f]">
-            <span className="text-[#176044]">Free to start.</span> One live
-            rental page, no card needed.
+          <p className="max-w-[34rem] text-[0.86rem] font-semibold leading-snug text-[#59655f]">
+            <span className="text-[#176044]">Free to start.</span> Automatic rent
+            collection is part of the Growth plan, and you set it up when you and
+            your tenant are ready.
           </p>
         </div>
 
@@ -184,17 +187,17 @@ function Hero() {
   );
 }
 
-/* The hero product preview — a tangible dashboard so a landlord sees what the
-   product actually does. Fictional demo data; no rent-collection/accounting
-   claims. */
+/* The hero product preview - a tangible dashboard so a landlord sees what the
+   product actually does. Fictional demo data; the rent figures are illustrative
+   only and make no availability or guaranteed-collection claim. */
 function ProductPreview() {
   return (
-    <div className="relative min-h-[520px] lg:pl-6">
+    <div className="relative min-h-[480px] lg:pl-6">
       {/* Main dashboard screen */}
       <div className="relative z-[2] ml-auto w-full max-w-[670px] overflow-hidden rounded-lg border border-[#a4b5ac]/85 bg-white shadow-[0_16px_44px_rgba(28,43,36,0.14)]">
         <div className="flex min-h-[52px] items-center justify-between border-b border-[#d9e1dc] bg-[#fbfcfb] px-4">
-          <span className="text-[0.86rem] font-extrabold">48 Maple Court</span>
-          <StatusPill tone="live">Live - bookable</StatusPill>
+          <span className="text-[0.86rem] font-extrabold">Rent this month</span>
+          <StatusPill tone="live">On track</StatusPill>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[190px_minmax(0,1fr)]">
           {/* Sidebar */}
@@ -218,51 +221,38 @@ function ProductPreview() {
             <div className="flex items-start justify-between gap-4 border-b border-[#d9e1dc] pb-4">
               <div>
                 <p className="mb-1.5 font-extrabold leading-tight">
-                  48 Maple Court, Upper Suite
+                  48 Maple Court, 3 units
                 </p>
                 <p className="text-[0.82rem] leading-snug text-[#59655f]">
-                  $2,150 / mo · 2 bed · 1 bath · available Sep 1
+                  Collected $6,450 of $6,450 · next pull Aug 1
                 </p>
               </div>
-              <StatusPill tone="safe">Safe to share</StatusPill>
+              <StatusPill tone="lease">No cut taken</StatusPill>
             </div>
-            <div className="my-4 grid grid-cols-2 gap-3">
-              {PREVIEW_TASKS.map((t) => (
+            <div className="my-4 grid gap-2.5">
+              {PREVIEW_RENT.map((r) => (
                 <div
-                  key={t.title}
-                  className="min-h-[95px] rounded-lg border border-[#d9e1dc] bg-white p-3"
+                  key={r.unit}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-[#d9e1dc] bg-white px-3 py-2.5"
                 >
-                  <strong className="mb-1.5 block text-[0.87rem]">
-                    {t.title}
-                  </strong>
-                  <span className="text-[0.78rem] leading-snug text-[#59655f]">
-                    {t.body}
-                  </span>
-                  <div className="mt-2.5 flex items-center gap-2 text-[0.75rem] font-semibold text-[#31584d]">
-                    <span className="inline-block h-[15px] w-[15px] rounded bg-[#1f8a5b]" />
-                    {t.line}
+                  <div>
+                    <strong className="block text-[0.82rem]">{r.unit}</strong>
+                    <span className="text-[0.78rem] text-[#59655f]">
+                      {r.tenant} · {r.amount}
+                    </span>
                   </div>
+                  {r.paid ? (
+                    <StatusPill tone="live">Paid</StatusPill>
+                  ) : (
+                    <NavBadge>Scheduled</NavBadge>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="grid gap-2.5">
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-[#d9e1dc] bg-white px-3 py-2.5">
-                <div>
-                  <strong className="block text-[0.82rem]">Maya Chen</strong>
-                  <span className="text-[0.78rem] text-[#59655f]">
-                    Booked Tue 6:30 PM
-                  </span>
-                </div>
-                <StatusPill tone="lease">Ready to lease</StatusPill>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-lg border border-[#d9e1dc] bg-white px-3 py-2.5">
-                <div>
-                  <strong className="block text-[0.82rem]">Daniel Park</strong>
-                  <span className="text-[0.78rem] text-[#59655f]">
-                    Asked about parking
-                  </span>
-                </div>
-                <NavBadge>New</NavBadge>
+            <div className="rounded-lg border border-[#d9e1dc] bg-[#f8faf8] p-3">
+              <div className="flex items-center gap-2 text-[0.78rem] font-semibold text-[#31584d]">
+                <span className="inline-block h-[15px] w-[15px] rounded bg-[#1f8a5b]" />
+                Pulled from the tenant&apos;s bank after they authorize it
               </div>
             </div>
           </div>
@@ -272,7 +262,7 @@ function ProductPreview() {
       {/* Side renter-view screen */}
       <div className="relative z-[3] mt-4 w-full max-w-[330px] overflow-hidden rounded-lg border border-[#a4b5ac]/85 bg-white shadow-[0_16px_44px_rgba(28,43,36,0.14)] lg:absolute lg:-left-6 lg:bottom-0 lg:mt-0 lg:w-[54%]">
         <div className="flex min-h-[52px] items-center justify-between border-b border-[#d9e1dc] bg-[#fbfcfb] px-4">
-          <span className="text-[0.86rem] font-extrabold">Renter view</span>
+          <span className="text-[0.86rem] font-extrabold">Tenant view</span>
           <span className="flex gap-1.5">
             <span className="h-2 w-2 rounded-full bg-[#cad6cf]" />
             <span className="h-2 w-2 rounded-full bg-[#a9c8bc]" />
@@ -281,22 +271,23 @@ function ProductPreview() {
         </div>
         <div className="p-4">
           <p className="mb-0.5 text-[0.9rem] font-extrabold">
-            48 Maple Court, Upper Suite
+            Authorize rent payments
           </p>
           <p className="mb-2 text-[0.79rem] text-[#59655f]">
-            Pick a viewing time that works for you
+            Rent is only pulled after you approve it
           </p>
-          <div className="grid grid-cols-3 gap-2">
-            {PREVIEW_SLOTS.map((s) => (
+          <div className="grid gap-2">
+            {PREVIEW_AUTH.map((s) => (
               <span
-                key={s.time}
-                className={`rounded-lg border px-2 py-2 text-center text-[0.72rem] font-semibold ${
-                  s.selected
+                key={s.label}
+                className={`flex items-center justify-between rounded-lg border px-2.5 py-2 text-[0.74rem] font-semibold ${
+                  s.done
                     ? "border-[#5ba184] bg-[#e6f4ed] text-[#18583e]"
                     : "border-[#d9e1dc] bg-white text-[#37504a]"
                 }`}
               >
-                {s.time}
+                {s.label}
+                <span>{s.done ? "Done" : "..."}</span>
               </span>
             ))}
           </div>
@@ -307,75 +298,48 @@ function ProductPreview() {
 }
 
 const PREVIEW_NAV: { label: string; count: string; active?: boolean }[] = [
-  { label: "Overview", count: "3" },
-  { label: "Rentals", count: "1", active: true },
-  { label: "Inquiries", count: "8" },
-  { label: "Viewings", count: "4" },
-  { label: "Tenants", count: "2" },
+  { label: "Rent", count: "3", active: true },
+  { label: "Tenants", count: "3" },
+  { label: "Expenses", count: "9" },
+  { label: "Rentals", count: "1" },
+  { label: "Reports", count: "2" },
 ];
 
-const PREVIEW_TASKS: { title: string; body: string; line: string }[] = [
-  {
-    title: "Rental page",
-    body: "Public page is live with the details renters need.",
-    line: "Link ready",
-  },
-  {
-    title: "Viewing times",
-    body: "Evening and weekend windows are open to book.",
-    line: "Slots open",
-  },
-  {
-    title: "Inquiries",
-    body: "New renter messages land beside booking activity.",
-    line: "8 active",
-  },
-  {
-    title: "Tenancy",
-    body: "One strong renter is ready for the lease handoff.",
-    line: "Convert next",
-  },
+const PREVIEW_RENT: {
+  unit: string;
+  tenant: string;
+  amount: string;
+  paid?: boolean;
+}[] = [
+  { unit: "Unit 1", tenant: "Maya Chen", amount: "$2,150", paid: true },
+  { unit: "Unit 2", tenant: "Daniel Park", amount: "$2,150", paid: true },
+  { unit: "Unit 3", tenant: "Priya Shah", amount: "$2,150" },
 ];
 
-const PREVIEW_SLOTS: { time: string; selected?: boolean }[] = [
-  { time: "Tue 6:00" },
-  { time: "Tue 6:30", selected: true },
-  { time: "Thu 5:30" },
-  { time: "Sat 10:00" },
-  { time: "Sat 10:30" },
-  { time: "Sun 12:00" },
+const PREVIEW_AUTH: { label: string; done?: boolean }[] = [
+  { label: "Connect bank account", done: true },
+  { label: "Confirm rent amount", done: true },
+  { label: "Approve monthly pull", done: true },
 ];
 
-/* ------------------------------------------------------------- Trust strip */
+/* ------------------------------------------------------------- Trust line */
 
-function TrustStrip() {
+function TrustLine() {
   return (
-    <section className="border-b border-[#d9e1dc] bg-white">
-      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-4 py-[26px] md:grid-cols-[auto_1fr] md:gap-[34px]">
-        <p className="max-w-[16ch] text-[0.82rem] font-extrabold uppercase tracking-[0.06em] text-[#59655f]">
-          Operator-built, on real rentals
+    <section className="border-b border-[#d9e1dc] bg-[#17362f] text-white">
+      <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] flex-col items-start gap-3 py-7 sm:flex-row sm:items-center sm:gap-6">
+        <p className="text-[1.02rem] font-extrabold leading-snug">
+          Vacantless does not take a cut of your rent.
         </p>
-        <div className="grid gap-3.5 sm:grid-cols-3">
-          {TRUST_ITEMS.map((t) => (
-            <div
-              key={t}
-              className="flex items-start gap-2.5 text-[0.92rem] font-semibold text-[#273832]"
-            >
-              <span className="mt-[3px] h-[15px] w-[15px] flex-none rounded bg-[#1f8a5b]" />
-              {t}
-            </div>
-          ))}
-        </div>
+        <p className="text-[0.94rem] leading-snug text-[#cfe0d8]">
+          Stripe or Rotessa processor fees pass straight through. Vacantless
+          makes money from your monthly plan, not from marking up your rent
+          payments.
+        </p>
       </div>
     </section>
   );
 }
-
-const TRUST_ITEMS: string[] = [
-  "Built by working landlords, not a software team guessing at the job.",
-  "~9 in 10 viewings self-booked by renters. No phone tag.",
-  "Around 100 renter inquiries handled every month, on our own rentals.",
-];
 
 /* ---------------------------------------------------------------- Section head */
 
@@ -398,8 +362,6 @@ function SectionHead({
   );
 }
 
-/* ------------------------------------------------------------ Why / replaces */
-
 function CheckMark() {
   return (
     <svg className="mt-0.5 h-4 w-4 flex-none" viewBox="0 0 20 20" aria-hidden="true">
@@ -416,275 +378,233 @@ function CheckMark() {
   );
 }
 
-function CrossMark() {
-  return (
-    <svg className="mt-0.5 h-4 w-4 flex-none" viewBox="0 0 20 20" aria-hidden="true">
-      <circle cx="10" cy="10" r="9" fill="#efe7e4" />
-      <path
-        d="M6.5 6.5l7 7M13.5 6.5l-7 7"
-        stroke="#b4726a"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+/* ----------------------------------------------------------------- Cost */
 
-function WhyReplaces() {
+/* What rent collection actually costs, in plain numbers. Growth is a flat
+   CA$99/month; Stripe's Canadian pre-authorized debit fee is 1% + CA$0.40 per
+   payment, capped at CA$5, so typical rents hit the CA$5 cap. Framing: this is
+   one flat plan for the whole rental job, not a per-tenant rent-collection fee,
+   and the per-unit cost falls as the landlord scales. No guaranteed-savings or
+   instant-availability claim; Rotessa is offered as a cheaper own-account
+   alternative. */
+function CostSection() {
   return (
-    <section
-      id="why"
-      className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
-    >
+    <section id="cost" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Stop running your leasing out of five different apps.">
-          Everything it takes to fill a rental, in one place, instead of
-          scattered across tools that were never built for it.
+        <SectionHead title="What it costs to have your rent pulled.">
+          One flat plan, no matter how many units. The Growth plan is CA$99 a
+          month. Stripe adds about CA$5 per payment it pulls. Vacantless takes no
+          cut of your rent.
         </SectionHead>
-        <div className="grid gap-4 md:grid-cols-2">
-          <article className="rounded-lg border border-[#d9e1dc] bg-[#fbfaf9] p-[22px]">
-            <h3 className="mb-4 text-[1.02rem] font-semibold">
-              The usual scramble
-            </h3>
-            <ul className="grid list-none gap-3 p-0">
-              {SCRAMBLE.map((x) => (
-                <li
-                  key={x}
-                  className="flex items-start gap-2.5 text-[0.93rem] leading-snug text-[#384a42]"
-                >
-                  <CrossMark />
-                  {x}
-                </li>
-              ))}
-            </ul>
-          </article>
-          <article className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
-            <h3 className="mb-4 text-[1.02rem] font-semibold">
-              With Vacantless
-            </h3>
-            <ul className="grid list-none gap-3 p-0">
-              {WITH_VACANTLESS.map((x) => (
-                <li
-                  key={x}
-                  className="flex items-start gap-2.5 text-[0.93rem] leading-snug text-[#273832]"
-                >
-                  <CheckMark />
-                  {x}
-                </li>
-              ))}
-            </ul>
-          </article>
-        </div>
-      </div>
-    </section>
-  );
-}
 
-const SCRAMBLE: string[] = [
-  "A listing link you cannot easily pause or take down once it is out there.",
-  "Inquiries scattered across your inbox, Marketplace, texts, and phone calls.",
-  "Viewing times pinned down over too many messages, with double-bookings and no-shows.",
-  "No clean record of the renter you chose once the unit is finally leased.",
-];
-
-const WITH_VACANTLESS: string[] = [
-  "A rental page you set Draft, Live, Paused, or Leased, so the public link always tells the truth.",
-  "Every inquiry in one list, right beside the booking activity.",
-  "Renters self-book into the windows you set. No phone tag.",
-  "The renter you choose moves straight into a clean tenancy record.",
-];
-
-/* ------------------------------------------------------------------ Workflow */
-
-function Workflow() {
-  return (
-    <section id="workflow" className="py-16 sm:py-[76px]">
-      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="One rental, one clear path.">
-          Keep the whole job around a single vacancy in one flow: prepare the
-          rental, share it, coordinate viewings, and carry the chosen renter
-          forward.
-        </SectionHead>
-        <div className="grid overflow-hidden rounded-lg border border-[#d9e1dc] bg-white lg:grid-cols-5">
-          {WORKFLOW_STEPS.map((s, i) => (
-            <article
-              key={s.title}
-              className={`min-h-[200px] p-5 ${
-                i < WORKFLOW_STEPS.length - 1
-                  ? "border-b border-[#d9e1dc] lg:border-b-0 lg:border-r"
-                  : ""
-              }`}
-            >
-              <span className="mb-5 grid h-[34px] w-[34px] place-items-center rounded-lg bg-[#17362f] text-[0.84rem] font-extrabold text-white">
-                {i + 1}
-              </span>
-              <h3 className="mb-2.5 text-[1.06rem] font-semibold leading-tight">
-                {s.title}
-              </h3>
-              <p className="text-[0.91rem] leading-relaxed text-[#59655f]">
-                {s.body}
-              </p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const WORKFLOW_STEPS: { title: string; body: string }[] = [
-  {
-    title: "Post the rental page",
-    body: "Address, rent, photos, and the date it is available. Ready to share in minutes.",
-  },
-  {
-    title: "Share it safely",
-    body: "Draft, Live, Paused, and Leased states mean the link renters see always matches reality.",
-  },
-  {
-    title: "Open viewing windows",
-    body: "Set the times that suit you. Renters book themselves in, without the week turning into chaos.",
-  },
-  {
-    title: "Work one inquiry list",
-    body: "Messages, bookings, and follow-ups sit together, so no promising renter slips through.",
-  },
-  {
-    title: "Hand off to a tenancy",
-    body: "When you pick the renter, carry them straight into a tenancy record. The handoff is done.",
-  },
-];
-
-/* -------------------------------------------------------------- Safe sharing */
-
-function SafeSharing() {
-  return (
-    <section
-      id="sharing"
-      className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
-    >
-      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-stretch gap-8 lg:grid-cols-[minmax(0,0.84fr)_minmax(0,1.16fr)]">
-        <div>
-          <Eyebrow>Safer landlord operations</Eyebrow>
-          <h2 className="mb-4 max-w-[13ch] text-[clamp(1.9rem,3.6vw,2.9rem)] font-extrabold leading-[1.05]">
-            Share the right link at the right time
-          </h2>
-          <p className="text-base leading-relaxed text-[#59655f]">
-            Vacantless keeps you clear on exactly what a renter can see and do:
-            whether a page is still private, open for inquiries, paused, or
-            closed for good.
-          </p>
-          <p className="mt-4 border-l-4 border-[#16756a] pl-4 text-[1.15rem] font-semibold leading-snug text-[#273832]">
-            The promise is not &quot;manage everything.&quot; It is &quot;do not
-            lose the thread while filling this rental.&quot;
-          </p>
-        </div>
-        <div
-          className="grid gap-3 rounded-lg border border-[#d9e1dc] bg-white p-4 shadow-[0_12px_32px_rgba(28,43,36,0.08)]"
-          aria-label="Rental status sharing model"
-        >
-          {SHARING_STATES.map((s) => (
+        {/* Desktop table + mobile cards share the same data */}
+        <div className="overflow-hidden rounded-lg border border-[#d9e1dc] bg-white shadow-[0_12px_32px_rgba(28,43,36,0.08)]">
+          <div className="hidden border-b border-[#d9e1dc] bg-[#fbfcfb] px-5 py-3 text-[0.72rem] font-extrabold uppercase tracking-[0.06em] text-[#59655f] md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] md:gap-4">
+            <span>Your property</span>
+            <span>Stripe + Growth</span>
+            <span>Per month</span>
+            <span>Per unit</span>
+          </div>
+          {COST_ROWS.map((r) => (
             <div
-              key={s.name}
-              className="grid grid-cols-1 items-center gap-3 rounded-lg border border-[#d9e1dc] bg-white p-3 sm:grid-cols-[118px_minmax(0,1fr)_auto]"
+              key={r.property}
+              className="grid gap-x-4 gap-y-1.5 border-b border-[#eaefec] px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] md:items-center"
             >
-              <strong className="text-[0.9rem]">{s.name}</strong>
-              <span className="text-[0.84rem] leading-snug text-[#59655f]">
-                {s.body}
-              </span>
-              <span
-                className={`inline-flex min-h-[34px] min-w-[94px] items-center justify-center whitespace-nowrap rounded-lg border px-3 text-[0.75rem] font-extrabold ${
-                  s.on
-                    ? "border-[#2f8562] bg-[#e4f4ed] text-[#176044]"
-                    : "border-[#d9e1dc] bg-white text-[#53615c]"
-                }`}
-              >
-                {s.action}
-              </span>
+              <strong className="text-[0.94rem] leading-snug text-[#15211d]">
+                {r.property}
+              </strong>
+              <div className="text-[0.86rem] leading-snug text-[#59655f]">
+                <span className="mb-0.5 block text-[0.66rem] font-extrabold uppercase tracking-[0.05em] text-[#98938d] md:hidden">
+                  Stripe + Growth
+                </span>
+                {r.breakdown}
+              </div>
+              <div className="text-[0.94rem] font-extrabold text-[#15211d]">
+                <span className="mb-0.5 block text-[0.66rem] font-extrabold uppercase tracking-[0.05em] text-[#98938d] md:hidden">
+                  Per month
+                </span>
+                {r.perMonth}
+              </div>
+              <div className="text-[0.94rem] font-bold text-[#176044]">
+                <span className="mb-0.5 block text-[0.66rem] font-extrabold uppercase tracking-[0.05em] text-[#16756a] md:hidden">
+                  Per unit
+                </span>
+                {r.perUnit}
+              </div>
             </div>
           ))}
         </div>
+
+        <p className="mt-5 max-w-[60rem] text-[0.98rem] font-semibold leading-relaxed text-[#273832]">
+          The more units you run, the less each one costs. Vacantless is one flat
+          plan for the whole rental job, not a fee on every tenant.
+        </p>
+
+        <ul className="mt-4 grid list-none gap-1.5 p-0 text-[0.82rem] leading-relaxed text-[#59655f]">
+          {COST_SMALL_PRINT.map((line) => (
+            <li key={line} className="flex items-start gap-2">
+              <span className="mt-[7px] h-[4px] w-[4px] flex-none rounded-full bg-[#9aa7a1]" />
+              {line}
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
 }
 
-const SHARING_STATES: {
-  name: string;
-  body: string;
-  action: string;
-  on?: boolean;
+const COST_ROWS: {
+  property: string;
+  breakdown: string;
+  perMonth: string;
+  perUnit: string;
 }[] = [
   {
-    name: "Draft",
-    body: "Prepare copy and details before renters ever see the page.",
-    action: "Keep private",
+    property: "1 unit (condo or basement unit)",
+    breakdown: "CA$5 Stripe + CA$99 Growth",
+    perMonth: "CA$104",
+    perUnit: "CA$104.00 / unit",
   },
   {
-    name: "Live",
-    body: "Public page can collect inquiries and viewing bookings.",
-    action: "Copy link",
-    on: true,
+    property: "2 units (duplex)",
+    breakdown: "CA$10 Stripe + CA$99 Growth",
+    perMonth: "CA$109",
+    perUnit: "CA$54.50 / unit",
   },
   {
-    name: "Paused",
-    body: "Keep the record, stop new renter bookings for now.",
-    action: "Not bookable",
+    property: "3 units (triplex)",
+    breakdown: "CA$15 Stripe + CA$99 Growth",
+    perMonth: "CA$114",
+    perUnit: "CA$38.00 / unit",
   },
   {
-    name: "Leased",
-    body: "Show renters the unit is no longer available.",
-    action: "Unavailable",
+    property: "4 units (fourplex)",
+    breakdown: "CA$20 Stripe + CA$99 Growth",
+    perMonth: "CA$119",
+    perUnit: "CA$29.75 / unit",
+  },
+  {
+    property: "5 units (fiveplex)",
+    breakdown: "CA$25 Stripe + CA$99 Growth",
+    perMonth: "CA$124",
+    perUnit: "CA$24.80 / unit",
+  },
+  {
+    property: "20 units (small portfolio)",
+    breakdown: "CA$100 Stripe + CA$99 Growth",
+    perMonth: "CA$199",
+    perUnit: "CA$9.95 / unit",
   },
 ];
 
-/* ----------------------------------------------------------- Rent collection */
+const COST_SMALL_PRINT: string[] = [
+  "Estimates assume the CA$5 Stripe cap per successful payment. They exclude tax and any failed, disputed, or verification fees.",
+  "If you connect your own Rotessa account, Rotessa pricing applies instead. Rotessa may be cheaper depending on your account and transaction volume.",
+  "Vacantless does not mark up processor fees. The processor's fee passes straight through.",
+  "Rent collection is set up once your Stripe or Rotessa account is connected and your tenant authorizes their bank account.",
+];
 
-function RentCollection() {
+/* --------------------------------------------------------------- Old way */
+
+/* The cost of the old way, framed as money leaks rather than guaranteed savings.
+   No bank-specific cheque pricing (deliberately kept out of public copy). The
+   money story is non-identifying. Safe language only: "leaving on the table",
+   "reduce common money leaks". */
+function OldWay() {
   return (
-    <section
-      id="rent"
-      className="border-t border-[#d9e1dc] py-16 sm:py-[76px]"
-    >
+    <section className="border-y border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]">
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-start gap-9 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div>
+          <Eyebrow>The old way</Eyebrow>
+          <h2 className="mb-4 max-w-[15ch] text-[clamp(1.9rem,3.6vw,2.9rem)] font-extrabold leading-[1.05]">
+            How much are you leaving on the table?
+          </h2>
+          <p className="mb-3.5 text-base leading-relaxed text-[#384a42]">
+            Cheques have a visible cost. Late rent has a hidden one. A cheque
+            book costs real money before you count the time spent writing,
+            depositing, tracking, and following up.
+          </p>
+          <p className="mb-3.5 text-base leading-relaxed text-[#384a42]">
+            E-transfers avoid the cheque book, but they still rely on someone
+            remembering to send rent every month. One missed reminder, one repair
+            dispute, or one awkward rent conversation can quietly cost you.
+          </p>
+          <p className="text-base leading-relaxed text-[#384a42]">
+            One landlord missed the right moment for a rent increase while repair
+            issues were going on, and ended up giving a free month to keep the
+            peace. Automatic rent collection cannot solve every problem, but it
+            removes one common friction point: rent is scheduled, authorized,
+            pulled, and recorded.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-[#d9e1dc] bg-white p-6 shadow-[0_12px_32px_rgba(28,43,36,0.08)]">
+          <p className="mb-4 border-l-4 border-[#16756a] pl-4 text-[1.18rem] font-semibold leading-snug text-[#273832]">
+            The cheque book is the small cost. The missed rent conversation is
+            the expensive one.
+          </p>
+          <p className="mb-3.5 text-[0.94rem] font-semibold text-[#37504a]">
+            Vacantless helps reduce common money leaks:
+          </p>
+          <ul className="grid list-none gap-2.5 p-0">
+            {MONEY_LEAKS.map((x) => (
+              <li
+                key={x}
+                className="flex items-start gap-2.5 text-[0.92rem] leading-snug text-[#273832]"
+              >
+                <CheckMark />
+                {x}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const MONEY_LEAKS: string[] = [
+  "Late rent follow-up, chased month after month.",
+  "Missed rent increases and important tenancy dates.",
+  "Repair costs with no clear record behind them.",
+  "Missing receipts at tax time.",
+  "Unclear records when you need to know who paid what.",
+];
+
+/* ----------------------------------------------------------- Rent how it works */
+
+function RentHowItWorks() {
+  return (
+    <section id="rent" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           {/* Left: the story */}
           <div>
-            <Eyebrow>Rent collection</Eyebrow>
+            <Eyebrow>How rent collection works</Eyebrow>
             <h2 className="mb-4 max-w-[16ch] text-[clamp(1.9rem,3.6vw,2.9rem)] font-extrabold leading-[1.05]">
-              Stop chasing cheques before it becomes a negotiation.
+              Set it up once. Rent comes in on its own.
             </h2>
             <p className="mb-3.5 text-base leading-relaxed text-[#384a42]">
-              Cheques and manual reminders create small, awkward touchpoints every
-              month. Miss one at the wrong moment - say, while a repair is already
-              a sore spot - and a simple &quot;rent is late&quot; turns into a
-              conversation about a discount you never meant to offer.
-            </p>
-            <p className="mb-3.5 text-base leading-relaxed text-[#384a42]">
-              Automatic rent collection takes those moments off your plate. Once
-              your tenant authorizes their bank account, rent runs on schedule
-              every month, and you can see what came in without a single follow-up
-              text.
+              Once your tenant authorizes their bank account, rent runs on
+              schedule every month, and you can see what came in without a single
+              follow-up text.
             </p>
             <p className="mb-5 text-base leading-relaxed text-[#384a42]">
               On <strong className="font-bold text-[#17362f]">Growth</strong>, you
               set up rent collection by bank debit through Stripe, or through your
-              own Rotessa account. Vacantless schedules and tracks each payment;
-              Stripe or Rotessa handles the payment rails.
+              own Rotessa account. Vacantless schedules and tracks each payment.
+              Stripe or Rotessa handles the payment processing.
             </p>
             <p className="border-l-4 border-[#16756a] bg-[#f4f7f5] py-2.5 pl-4 pr-3 text-[0.86rem] leading-snug text-[#37504a]">
               Rent is only ever debited after your tenant authorizes their bank
-              account. Vacantless never holds your funds and never stores tenant
-              bank-account numbers, and adds no fee of its own on rent payments -
-              the processor&apos;s fee is separate and passes straight through.
+              account. Vacantless never holds your funds, never stores tenant
+              bank-account numbers, and adds no fee of its own on rent. The
+              processor&apos;s fee is separate and passes straight through.
             </p>
           </div>
 
           {/* Right: how it works */}
           <div className="rounded-lg border border-[#d9e1dc] bg-white p-5 shadow-[0_12px_32px_rgba(28,43,36,0.08)] sm:p-6">
-            <h3 className="mb-4 text-[1.06rem] font-semibold">
-              How rent collection works
-            </h3>
             <ol className="grid list-none gap-0 p-0">
               {RENT_STEPS.map((step, i) => (
                 <li
@@ -721,198 +641,166 @@ function RentCollection() {
 
 const RENT_STEPS: { title: string; body: string }[] = [
   {
-    title: "Choose the right plan",
+    title: "Choose the Growth plan",
     body: "Automatic rent collection is included on Growth and Premium.",
   },
   {
     title: "Add the tenancy",
-    body: "Create the tenancy record with the tenant and monthly rent amount.",
+    body: "Create the tenancy record with the tenant and the monthly rent amount.",
   },
   {
     title: "Connect Stripe or Rotessa",
-    body: "Use Vacantless's Stripe rail, or connect your own Rotessa account.",
+    body: "Use Vacantless's Stripe setup, or connect your own Rotessa account.",
   },
   {
     title: "Tenant authorizes their bank",
-    body: "Your tenant confirms their bank account through the processor. Nothing is debited until they do.",
+    body: "Your tenant confirms their bank account. Nothing is debited until they do.",
   },
   {
-    title: "Schedule monthly rent",
-    body: "Pick the first payment date and the amount pulls automatically each month.",
+    title: "Schedule the monthly rent",
+    body: "Pick the first payment date, and the amount pulls automatically each month.",
   },
   {
-    title: "Rent runs on its own",
-    body: "Payments continue every month until you change or cancel the schedule.",
+    title: "See what came in",
+    body: "Payments continue every month, tracked in one place, until you change or cancel the schedule.",
   },
 ];
 
-/* ------------------------------------------------------------- Operating stack */
+/* ------------------------------------------------------------- Product depth */
 
-/* The whole small-landlord operating stack in one view. Positioning: Vacantless
-   does NOT claim to replace every specialist tool - it shows that a landlord
-   otherwise stitches the job across many disconnected tools, and gives them one
-   rental-specific workspace that connects it. Every "With Vacantless" cell maps
-   to a real, shipped capability (verified against lib/billing.ts TIERS +
-   entitlements). Language stays "coordinates / tracks / organizes / connects";
-   no replacement claims about FreshBooks, DocuSign, Rotessa, Stripe, lawyers, or
-   official Ontario forms. Payment guardrail restated in the footnote. */
-function StackTable() {
+/* The complete product in landlord language, grouped by job so nothing is
+   hidden. Availability of individual features varies by plan; hedged with
+   "where available" / "by plan" rather than tier badges. Every group maps to a
+   real, shipped capability (verified against lib/billing.ts TIERS +
+   entitlements). No replacement claims about FreshBooks, DocuSign, Rotessa,
+   Stripe, lawyers, or official Ontario forms. */
+function ProductDepth() {
   return (
     <section
-      id="stack"
+      id="product"
       className="border-t border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
     >
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="One rental workflow instead of six disconnected tools.">
-          Vacantless does not replace every specialist tool. It gives small
-          landlords one rental-specific workspace that connects the job: listing,
-          inquiries, viewings, lease and admin records, rent collection,
-          maintenance, and owner reporting.
+        <SectionHead title="The whole rental, from empty to earning.">
+          Rent collection is the reason most landlords start. Everything else is
+          here too, in plain landlord language, so the whole job lives in one
+          place instead of a dozen apps.
         </SectionHead>
-        <div className="overflow-hidden rounded-lg border border-[#d9e1dc] bg-white shadow-[0_12px_32px_rgba(28,43,36,0.08)]">
-          {/* Column headings - desktop only; mobile uses per-cell labels below. */}
-          <div className="hidden gap-4 border-b border-[#d9e1dc] bg-[#fbfcfb] px-5 py-3 text-[0.72rem] font-extrabold uppercase tracking-[0.06em] text-[#59655f] md:grid md:grid-cols-[minmax(0,0.82fr)_minmax(0,1.02fr)_minmax(0,1.16fr)]">
-            <span>The job</span>
-            <span>Usually stitched together</span>
-            <span>With Vacantless</span>
-          </div>
-          {STACK_GROUPS.map((group) => (
-            <div key={group.label}>
-              <div className="border-b border-[#d9e1dc] bg-[#eef3f0] px-5 py-2 text-[0.7rem] font-extrabold uppercase tracking-[0.07em] text-[#16756a]">
-                {group.label}
+        <div className="grid gap-4 md:grid-cols-2">
+          {PRODUCT_GROUPS.map((g) => (
+            <article
+              key={g.title}
+              className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]"
+            >
+              <div className="mb-3.5 flex items-baseline gap-2.5">
+                <span className="grid h-[26px] w-[26px] flex-none place-items-center rounded-lg bg-[#17362f] text-[0.76rem] font-extrabold text-white">
+                  {g.n}
+                </span>
+                <h3 className="text-[1.06rem] font-semibold leading-tight">
+                  {g.title}
+                </h3>
               </div>
-              {group.rows.map((row) => (
-                <div
-                  key={row.job}
-                  className="grid gap-x-4 gap-y-2.5 border-b border-[#eaefec] px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,0.82fr)_minmax(0,1.02fr)_minmax(0,1.16fr)] md:items-start"
-                >
-                  <strong className="text-[0.92rem] leading-snug text-[#15211d]">
-                    {row.job}
-                  </strong>
-                  <div className="text-[0.86rem] leading-snug text-[#59655f]">
-                    <span className="mb-0.5 block text-[0.66rem] font-extrabold uppercase tracking-[0.05em] text-[#98938d] md:hidden">
-                      Usually
-                    </span>
-                    {row.usual}
-                  </div>
-                  <div className="text-[0.86rem] leading-snug text-[#273832]">
-                    <span className="mb-0.5 block text-[0.66rem] font-extrabold uppercase tracking-[0.05em] text-[#16756a] md:hidden">
-                      With Vacantless
-                    </span>
-                    <span className="flex items-start gap-2">
-                      <span className="hidden md:block">
-                        <CheckMark />
-                      </span>
-                      <span>{row.vacantless}</span>
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+              <ul className="grid list-none gap-2 p-0">
+                {g.items.map((it) => (
+                  <li
+                    key={it}
+                    className="flex items-start gap-2 text-[0.9rem] leading-snug text-[#273832]"
+                  >
+                    <CheckMark />
+                    {it}
+                  </li>
+                ))}
+              </ul>
+            </article>
           ))}
         </div>
-        <p className="mt-4 max-w-[62rem] text-[0.86rem] leading-relaxed text-[#59655f]">
-          Vacantless organizes and tracks this work in one place and works
-          alongside your existing tools rather than replacing them. Rent
-          collection runs through Stripe or your own Rotessa account, only after
-          your tenant authorizes their bank account. Vacantless never holds your
-          funds and never stores tenant bank-account numbers. Official Ontario
-          forms, your accountant, and your signing tool stay yours - Vacantless
-          keeps the records organized around them.
+        <p className="mt-5 max-w-[62rem] text-[0.86rem] leading-relaxed text-[#59655f]">
+          Some features depend on your plan. Vacantless organizes and tracks this
+          work in one place and works alongside your existing tools. Official
+          Ontario forms, your accountant, and your signing tool stay yours.
+          Vacantless keeps the records organized around them.
         </p>
       </div>
     </section>
   );
 }
 
-const STACK_GROUPS: {
-  label: string;
-  rows: { job: string; usual: string; vacantless: string }[];
-}[] = [
+const PRODUCT_GROUPS: { n: string; title: string; items: string[] }[] = [
   {
-    label: "Fill the vacancy",
-    rows: [
-      {
-        job: "Rental page and listing",
-        usual: "Kijiji, Facebook, and separate listing sites.",
-        vacantless:
-          "A branded rental page with Draft, Live, Paused, and Leased safety.",
-      },
-      {
-        job: "Listing content",
-        usual: "MLS sheets and ad copy written from scratch each time.",
-        vacantless:
-          "Listing-copy generator and MLS data-sheet import.",
-      },
-      {
-        job: "Inquiry capture",
-        usual: "Inquiries scattered across Gmail, texts, and spreadsheets.",
-        vacantless:
-          "One inquiry list with renter details and follow-ups.",
-      },
-      {
-        job: "Screening",
-        usual: "Standalone forms or a separate screening tool.",
-        vacantless: "Renter pre-screening questions on your page.",
-      },
-      {
-        job: "Viewings",
-        usual: "Calendar links or a separate showing scheduler.",
-        vacantless:
-          "Viewing windows, renter self-booking, and grouped viewings.",
-      },
+    n: "1",
+    title: "Advertise the rental",
+    items: [
+      "A branded rental page for each unit",
+      "Listing copy to post with",
+      "A listing hub that prepares your listing for more rental sites",
     ],
   },
   {
-    label: "Sign and move in",
-    rows: [
-      {
-        job: "Tenancy handoff",
-        usual: "Spreadsheets and shared folders per renter.",
-        vacantless:
-          "Tenancy records, people records, and a payment ledger.",
-      },
-      {
-        job: "Lease and admin docs",
-        usual: "DocuSign and folders of PDFs.",
-        vacantless:
-          "Lease clauses, generated lease documents, and a document vault.",
-      },
+    n: "2",
+    title: "Book showings",
+    items: [
+      "Showing windows you set",
+      "Renters self-book their own viewing time",
+      "Showing reminders",
+      "Follow-up after the showing",
     ],
   },
   {
-    label: "Run the tenancy",
-    rows: [
-      {
-        job: "Ontario rent admin",
-        usual: "LTB forms and a rent-increase date tracked by hand.",
-        vacantless:
-          "Rent-increase guideline calculator with a pre-filled N1.",
-      },
-      {
-        job: "Rent collection",
-        usual: "Rotessa, Stripe, or e-transfer, tracked separately.",
-        vacantless:
-          "Rent collection set up and tracked through Stripe or Rotessa.",
-      },
-      {
-        job: "Accounting records",
-        usual: "FreshBooks, QuickBooks, or spreadsheets.",
-        vacantless:
-          "Bank feed, expenses, tax and rent export, and owner statements.",
-      },
-      {
-        job: "Maintenance",
-        usual: "Texts to trades, tracked in your head or a spreadsheet.",
-        vacantless:
-          "Tenant issue intake, work orders, and repair dispatch.",
-      },
-      {
-        job: "Portfolio reporting",
-        usual: "Numbers pulled together by hand in a spreadsheet.",
-        vacantless:
-          "Rent roll, a cap-rate and NOI package, and portfolio reports.",
-      },
+    n: "3",
+    title: "Manage renter conversations",
+    items: [
+      "Every inquiry in one list",
+      "Screening questions on your page",
+      "Notes on each renter",
+      "Email and text follow-up, where available by plan",
+    ],
+  },
+  {
+    n: "4",
+    title: "Choose the renter",
+    items: [
+      "Renter details in one place",
+      "Tenant records once you pick someone",
+      "Documents and important details attached to the rental",
+    ],
+  },
+  {
+    n: "5",
+    title: "Collect rent",
+    items: [
+      "Tenant-authorized bank debit",
+      "Stripe bank debit, or your own Rotessa account",
+      "A rent ledger and payment status",
+      "Bank-fed rent matching, where enabled",
+    ],
+  },
+  {
+    n: "6",
+    title: "Track money",
+    items: [
+      "Rent ledger, expenses, and receipts",
+      "A bank feed, similar in spirit to FreshBooks-style expense tracking",
+      "Year-end tax export",
+      "Owner statements",
+    ],
+  },
+  {
+    n: "7",
+    title: "Handle repairs",
+    items: [
+      "Tenant repair requests",
+      "Work orders",
+      "Repair dispatch and reminders, where available",
+    ],
+  },
+  {
+    n: "8",
+    title: "See reports and protect ROI",
+    items: [
+      "Rent roll and an income-and-expense view",
+      "Cap-rate and NOI-style reporting, where available",
+      "Portfolio reports",
+      "Rent-increase reminders and important dates",
     ],
   },
 ];
@@ -923,9 +811,9 @@ function Pricing() {
   return (
     <section id="pricing" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Start with one rental. Grow when you are ready.">
-          Launch a single rental page first. Add more live rentals once the
-          workflow is earning its place.
+        <SectionHead title="Three plans. Rent collection starts on Growth.">
+          Start free to fill a vacancy. Move to Growth when you want to collect
+          rent automatically. Premium adds your books, repairs, and reminders.
         </SectionHead>
         <div className="grid gap-4 lg:grid-cols-3">
           {PLANS.map((p) => (
@@ -976,18 +864,19 @@ function Pricing() {
         </div>
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">
           <div>
-            <strong className="block text-[1rem]">Get help launching</strong>
+            <strong className="block text-[1rem]">Get help getting started</strong>
             <span className="text-[0.9rem] leading-snug text-[#59655f]">
-              Rather not do it yourself? We will get your first rental live and
-              walk you through the workflow.
+              Rather not set it up yourself? I will get your first rental and your
+              rent collection going, and walk you through it.
             </span>
           </div>
           <SecondaryButton href={CONTACT_HREF} className="flex-none">
-            Get help launching
+            Talk to Noam
           </SecondaryButton>
         </div>
         <p className="mt-3.5 text-[0.86rem] text-[#59655f]">
-          Prices in CAD, flat monthly. Cancel anytime.
+          Prices in CAD, flat monthly. Cancel anytime. Processor fees for rent
+          collection are separate and pass straight through.
         </p>
       </div>
     </section>
@@ -1009,7 +898,7 @@ const PLANS: {
     name: "Free",
     price: "$0",
     priceNote: "/ month",
-    body: "Fill one vacancy at a time. Post the page, collect inquiries, and book viewings - no card needed.",
+    body: "Fill one vacancy at a time. Post the page, collect inquiries, and book viewings. No card needed.",
     includes: [
       "One live rental page",
       "Inquiries and viewing bookings in one list",
@@ -1069,8 +958,9 @@ function FounderBand() {
         <div>
           <Eyebrow>From the operator who built it</Eyebrow>
           <p className="mb-3.5 max-w-[44ch] text-[clamp(1.2rem,2.2vw,1.6rem)] font-semibold leading-snug text-[#273832]">
-            &quot;I run my own rentals. Vacantless is the system I built to fill
-            them without the chaos, now opened up for other small landlords.&quot;
+            &quot;I run my own rentals. Vacantless is the system I built to
+            collect the rent and fill the units without the chaos, now opened up
+            for other small landlords.&quot;
           </p>
           <p className="text-base font-extrabold">
             Noam Muscovitch
@@ -1098,11 +988,11 @@ function ClosingCta() {
       <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-5 py-14 md:grid-cols-[1fr_auto]">
         <div>
           <h2 className="max-w-[18ch] text-[clamp(1.8rem,3.4vw,2.7rem)] font-extrabold leading-[1.06]">
-            Ready to fill your next rental?
+            Ready to stop chasing rent?
           </h2>
           <p className="mt-2.5 max-w-[42ch] text-[#cfe0d8]">
-            Start with one rental page, free. Fill it without losing a single
-            inquiry, viewing, or follow-up.
+            Start free with one rental. Add automatic rent collection on Growth
+            when you and your tenant are ready.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -1132,7 +1022,7 @@ function SiteFooter() {
       <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <Wordmark />
         <span>
-          Rental page, safe sharing, viewing times, inquiries, tenancy handoff.
+          Rent collection, rental pages, viewings, tenant records, and reports.
         </span>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link href="/about" className="hover:text-[#15211d]">
