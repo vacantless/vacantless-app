@@ -10,6 +10,7 @@ import { PageHeader, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { createTenancy } from "../actions";
 import { isPubliclyVisible } from "@/lib/listing-state";
+import { LeaseUploadPrefill } from "./lease-upload-prefill";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,12 @@ export default async function NewTenancyPage({
 
   const errMsg = tenancyErrorMessage(searchParams.err);
 
+  // Lease-OCR prefill ships DARK behind its OWN flag (not just the shared
+  // ANTHROPIC_API_KEY, which already powers appliance-scan) so it can't auto-go-
+  // live before the synthetic-lease QA. Noam sets LEASE_OCR_ENABLED=1 in Vercel
+  // to turn the uploader on; the model call additionally needs ANTHROPIC_API_KEY.
+  const leaseOcrEnabled = process.env.LEASE_OCR_ENABLED === "1";
+
   return (
     <div>
       <Link
@@ -144,6 +151,12 @@ export default async function NewTenancyPage({
           </Link>
         </div>
       ) : (
+        <>
+        {leaseOcrEnabled && (
+          <LeaseUploadPrefill
+            properties={properties.map((p) => ({ id: p.id, address: p.address }))}
+          />
+        )}
         <form
           action={createTenancy}
           className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
@@ -381,6 +394,7 @@ export default async function NewTenancyPage({
             </Link>
           </div>
         </form>
+        </>
       )}
     </div>
   );

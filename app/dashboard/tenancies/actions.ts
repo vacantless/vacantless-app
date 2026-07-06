@@ -21,8 +21,27 @@ import {
   validateWatchLeaseInput,
   validateWatchExistingLease,
 } from "@/lib/watch-lease";
+import { parseLease } from "@/lib/lease-extract-vision";
+import type { LeaseParseResult } from "@/lib/lease-extract";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
+
+// ===========================================================================
+// Lease-OCR prefill (S425) — read an uploaded lease's first pages into a draft
+// the New-Tenancy form prefills. The client extracts the PDF text on-device
+// (pdfjs, first 8 pages) and calls this; we send it to the model and return the
+// normalized, PII-guarded draft. Returns a value (no redirect) so the client
+// island can prefill the form fields directly — no tenant contact info in a URL.
+// Ships DARK: parseLease returns {ok:false,reason:"unconfigured"} with no
+// ANTHROPIC_API_KEY, and the page only renders the uploader when the key is set.
+// ===========================================================================
+export async function extractLeaseFromText(text: string): Promise<LeaseParseResult> {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, reason: "unconfigured" };
+  if (typeof text !== "string" || !text.trim()) return { ok: false, reason: "empty" };
+  return parseLease({ kind: "text", text });
+}
 
 function s(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
