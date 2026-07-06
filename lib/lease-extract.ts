@@ -219,8 +219,10 @@ const PII_PATTERNS: RegExp[] = [
   // they carry NO trailing word-boundary (a `\b` would not hold after "#").
   // Covers "SIN #", "Licence no", "account number", "transit #", "DL:".
   /\b(sin|ssn|licen[cs]e|dl|account|transit|institution)\s*(no|number|#|:)/i,
-  // "DL" as a bare driver's-licence abbreviation (e.g. "DL A1234-56789").
-  /\bdl\b/i,
+  // "DL" / "D/L" / "D.L." as a bare driver's-licence abbreviation, with or
+  // without slash/dot separators (Codex QA S426b: "D/L A1234-56789",
+  // "D.L. A1234-56789", "D/L # ...").
+  /\bd[./]?l\b/i,
   // SIN / SSN grouped 9-digit forms: 123-456-789, 123 45 6789, 123456789.
   /\b\d{3}[-\s]?\d{2,3}[-\s]?\d{3,4}\b/,
   // Credit-card-like 13-19 digit runs (allow spaces/dashes between groups).

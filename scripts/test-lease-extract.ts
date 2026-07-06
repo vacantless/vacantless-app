@@ -60,6 +60,9 @@ ok("label 'birthdate' stripped", redactPII("Tenant birthdate 1991-05-12") === nu
 ok("label 'birth date' stripped", redactPII("Birth date on file") === null);
 ok("label 'born <date>' stripped", redactPII("Tenant born 1991-05-12") === null);
 ok("label 'DL' abbreviation stripped", redactPII("DL A1234-56789") === null);
+ok("label 'D/L' slash form stripped", redactPII("Tenant D/L A1234-56789") === null);
+ok("label 'D.L.' dotted form stripped", redactPII("D.L. A1234-56789") === null);
+ok("label 'D/L #' stripped", redactPII("D/L # A1234-56789") === null);
 ok("label 'licence #' stripped", redactPII("Licence # provided") === null);
 // Near-boundary identifier: detection runs on the FULL string before truncating,
 // so a SIN pushed past the length ceiling can't be sliced past the guard.

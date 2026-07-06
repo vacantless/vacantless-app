@@ -38,3 +38,7 @@ LIVE QA on North Star Rentals QA (`b733a191`, Growth) with `LEASE_OCR_ENABLED=1`
 - Prefill correct: rent $5,500, start 2025-11-13, primary tenant name + email, full clause summary in notes; unit unmatched (expected - not a North Star unit).
 - Created the tenancy, then scanned the persisted `tenancies` (notes/payment_notes/move_in_notes), `tenants` (name/email/phone), and `persons` (full_name/email/phone/notes) rows: pii_label_hit=false, nine_digit_run_hit=false, sin_format_hit=false, licence_format_hit=false across all three. Only name + email persisted.
 - Test rows wiped (tenancy/tenants/person = 0), unit restored to `available`, `LEASE_OCR_ENABLED` removed from Vercel + redeployed dark.
+
+## S426b follow-up (your re-review P2 - licence slash/dot forms)
+
+You flagged that `D/L`, `D.L.`, and `D/L #` slipped through (the new patterns caught bare `DL` and `licence #` but not separator forms). Fixed in `lib/lease-extract.ts`: the bare-abbreviation pattern is now `/\bd[./]?l\b/i` (was `/\bdl\b/i`), which matches `DL`, `D/L`, and `D.L.` with or without the trailing separator; the `#`/number qualifier is handled by the existing label+qualifier pattern, so `D/L # A1234-56789` is covered by the `\bd[./]?l\b` hit on `D/L`. Added tests for `D/L A1234-56789`, `D.L. A1234-56789`, and `D/L # A1234-56789`. Suite now `89/0`; tsc clean. `normalizeLeaseDraft({ notes: "Tenant D/L A1234-56789" })` now returns null. No new over-match vs the prior `\bdl\b` (same word-boundary behaviour, one optional separator).
