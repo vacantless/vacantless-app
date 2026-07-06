@@ -611,7 +611,7 @@ const PRODUCT_GROUPS: { n: string; title: string; items: string[] }[] = [
     items: [
       "Tenant repair requests",
       "Work orders",
-      "Repair dispatch and reminders, where available",
+      "Repair coordination and reminders, where available",
     ],
   },
   {
@@ -1021,7 +1021,7 @@ const PLANS: {
     includes: [
       "Everything in Growth",
       "Full accounting and live bank feed",
-      "Maintenance and repair dispatch",
+      "Maintenance and repair coordination",
       "Automatic reminders and priority support",
     ],
     cta: "Choose Premium",
