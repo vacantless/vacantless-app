@@ -4,6 +4,15 @@
 
 :root {
   --brand-color: #4f46e5;
+
+  /* Vacantless marketing brand - themeable primary. Forest green is the default
+     (validated direction, S426); a white-label customer overrides --color-primary
+     and the derived roles follow. Neutrals/greys are intentionally NOT tokenized
+     - they stay constant across themes. */
+  --color-primary: #17362f;
+  --color-primary-hover: #1f463c;
+  --color-accent: #16756a;
+  --color-accent-strong: #176044;
 }
 
 html,

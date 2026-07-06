@@ -3,11 +3,12 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { VacantlessMark } from "../components/vacantless-mark";
+import { Icons } from "../components/icons";
 
 export const metadata = {
-  title: "Vacantless - Run your rentals in one place",
+  title: "Vacantless - Never miss the landlord work that costs you money",
   description:
-    "Advertise the unit, screen renters, collect the rent, and track the money, all in one place. Built by a working landlord. Vacantless takes no cut of your rent.",
+    "Vacantless keeps the recurring landlord work - filling the unit, showing follow-up, rent increases, renewals, repairs, and rent - from slipping. Built by a working landlord. Vacantless takes no cut of your rent.",
 };
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ export default async function Home() {
       <SiteHeader />
       <main>
         <Hero />
+        <LeasingProof />
+        <NeverMiss />
         <ProductDepth />
         <TrustLine />
         <RentSection />
@@ -61,7 +64,7 @@ function PrimaryButton({
     <Link
       href={href}
       aria-label={ariaLabel}
-      className={`inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-[18px] text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c] ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)] px-[18px] text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[var(--color-primary-hover)] ${className}`}
     >
       {children}
     </Link>
@@ -137,7 +140,7 @@ function Wordmark() {
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <p className="mb-4 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[#16756a]">
+    <p className="mb-4 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
       {children}
     </p>
   );
@@ -152,17 +155,19 @@ function Hero() {
         {/* Left: copy */}
         <div className="max-w-[590px]">
           <Eyebrow>For small landlords</Eyebrow>
-          <h1 className="mb-[16px] max-w-[16ch] text-[clamp(2.4rem,5vw,3.85rem)] font-extrabold leading-[1.03] tracking-tight">
-            Everything it takes to run your rentals.
+          <h1 className="mb-[16px] max-w-[19ch] text-[clamp(2.2rem,4.6vw,3.4rem)] font-extrabold leading-[1.04] tracking-tight">
+            Never miss the landlord work that quietly costs you money.
           </h1>
           <p className="mb-[18px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
-            Fill the unit. Collect the rent. Track the money.
+            Fill the unit, track every showing, and keep rent increases,
+            renewals, and repairs from slipping.
           </p>
           <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
-            Vacantless is built for landlords with one unit up to a small
-            portfolio. Advertise the rental, book showings, screen renters,
-            collect rent after your tenant authorizes it, and keep the books, all
-            in one calm place instead of a dozen apps.
+            A forgotten rent increase, a showing you never followed up on, a
+            repair with no record - the small things landlords let slip are the
+            expensive ones. Vacantless is built for one unit up to a small
+            portfolio, and keeps the recurring work on track in one calm place
+            instead of a dozen apps.
           </p>
           <div className="mb-3.5 flex flex-wrap items-center gap-3">
             <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
@@ -171,7 +176,7 @@ function Hero() {
             </SecondaryButton>
           </div>
           <p className="max-w-[34rem] text-[0.86rem] font-semibold leading-snug text-[#59655f]">
-            <span className="text-[#176044]">Free to start</span> with one rental.
+            <span className="text-[var(--color-accent-strong)]">Free to start</span> with one rental.
             Automatic rent collection is part of Growth, set up when you and your
             tenant are ready.
           </p>
@@ -356,6 +361,135 @@ function CheckMark() {
   );
 }
 
+/* ---------------------------------------------------------- Leasing proof (1) */
+
+/* The FIRST proof beneath the "nothing slips" hero: the leasing engine is the
+   only pillar with hard, verified numbers, so it carries the proof. Stats mirror
+   the /about page verbatim and stay framed as the operator's OWN rentals (never
+   a customer-wide or guaranteed claim). Design reuses the /about stat-card
+   treatment for a consistent look. */
+function LeasingProof() {
+  return (
+    <section id="leasing" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="It starts by filling the unit - usually on its own.">
+          Renters find your page, book their own viewing time, and land in one
+          list. Here is how that plays out across our own rentals.
+        </SectionHead>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {LEASING_STATS.map((s) => (
+            <div
+              key={s.label}
+              className="rounded-lg border border-[#d9e1dc] bg-[#f4f7f5] p-6"
+            >
+              <b className="block text-[clamp(2rem,3.4vw,2.5rem)] font-extrabold leading-none text-[#15211d]">
+                {s.value}
+              </b>
+              <span className="mt-2.5 block text-[0.92rem] leading-snug text-[#59655f]">
+                {s.label}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-[0.82rem] leading-relaxed text-[#59655f]">
+          Figures are from the operator&apos;s own rental portfolio, where
+          Vacantless runs day to day. Your own results will vary.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+const LEASING_STATS: { value: string; label: string }[] = [
+  {
+    value: "~9 in 10",
+    label: "viewings self-booked by renters, without phone tag.",
+  },
+  { value: "~100 / mo", label: "renter inquiries handled in one place." },
+  {
+    value: "50+ / mo",
+    label: "viewings booked and coordinated, no back-and-forth.",
+  },
+];
+
+/* ------------------------------------------------------- Never-miss pillars (2) */
+
+/* What makes the new hero HONEST: the recurring work that quietly costs money.
+   Every pillar maps to a shipped capability (rent-increase autopilot, watch-a-
+   lease, showing follow-up, repair thread). Guardrails: notices are "prepared to
+   review and send" (NOT e-signed / served / filed), repairs are "tracked" (NOT
+   guaranteed dispatch), and the closing line disclaims replacing lawyer / signing
+   tool / official Ontario forms. Distinct teal square marker (the /about motif)
+   keeps it visually separate from the numbered Product-depth grid below. */
+function NeverMiss() {
+  return (
+    <section
+      id="never-miss"
+      className="border-b border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]"
+    >
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Then it keeps the recurring work from slipping.">
+          Filling the unit is the start. The money leaks later - a missed rent
+          increase, a repair with no record, a showing nobody followed up on.
+          Vacantless watches the dates and keeps the trail.
+        </SectionHead>
+        <div className="grid gap-4 md:grid-cols-2">
+          {NEVER_MISS.map((p) => (
+            <article
+              key={p.title}
+              className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]"
+            >
+              <div className="mb-3 flex items-center gap-3">
+                <span className="grid h-10 w-10 flex-none place-items-center rounded-lg bg-[#e4f4ed] text-[var(--color-primary)]">
+                  <p.icon className="h-[21px] w-[21px]" />
+                </span>
+                <h3 className="text-[1.06rem] font-semibold leading-tight">
+                  {p.title}
+                </h3>
+              </div>
+              <p className="text-[0.92rem] leading-relaxed text-[#384a42]">
+                {p.body}
+              </p>
+            </article>
+          ))}
+        </div>
+        <p className="mt-5 max-w-[62rem] text-[0.86rem] leading-relaxed text-[#59655f]">
+          Vacantless prepares and reminds. It does not replace your lawyer, your
+          signing tool, or the official Ontario forms. Rent-increase notices are
+          drafted for you to review and send, with the key dates tracked for you.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+const NEVER_MISS: {
+  title: string;
+  body: string;
+  icon: (typeof Icons)[keyof typeof Icons];
+}[] = [
+  {
+    icon: Icons.calendar,
+    title: "Rent increases you never forget",
+    body: "An annual reminder when a unit becomes eligible, the notice prepared for you to review and send, and the date tracked so next year comes back around on its own.",
+  },
+  {
+    icon: Icons.clock,
+    title: "Renewals and key tenancy dates",
+    body: "Watch any lease and Vacantless keeps an eye on renewals, insurance, and the seasonal dates that are easy to let slide.",
+  },
+  {
+    icon: Icons.users,
+    title: "Showings that get followed up",
+    body: "Renters self-book, you track where each one stands, and the follow-up does not get lost. The renter you choose moves straight into a tenancy record.",
+  },
+  {
+    icon: Icons.wrench,
+    title: "Repairs with a clear paper trail",
+    body: "Tenant requests, work orders, and vendor hand-offs tracked in one thread, so every repair has a record behind it.",
+  },
+];
+
 /* ------------------------------------------------------------- Product depth */
 
 /* The complete product in landlord language, grouped by job so nothing is
@@ -380,7 +514,7 @@ function ProductDepth() {
               className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]"
             >
               <div className="mb-3.5 flex items-baseline gap-2.5">
-                <span className="grid h-[26px] w-[26px] flex-none place-items-center rounded-lg bg-[#17362f] text-[0.76rem] font-extrabold text-white">
+                <span className="grid h-[26px] w-[26px] flex-none place-items-center rounded-lg bg-[var(--color-primary)] text-[0.76rem] font-extrabold text-white">
                   {g.n}
                 </span>
                 <h3 className="text-[1.06rem] font-semibold leading-tight">
@@ -496,7 +630,7 @@ const PRODUCT_GROUPS: { n: string; title: string; items: string[] }[] = [
 
 function TrustLine() {
   return (
-    <section className="border-y border-[#d9e1dc] bg-[#17362f] text-white">
+    <section className="border-y border-[#d9e1dc] bg-[var(--color-primary)] text-white">
       <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] flex-col items-start gap-3 py-7 sm:flex-row sm:items-center sm:gap-6">
         <p className="text-[1.02rem] font-extrabold leading-snug">
           Vacantless does not take a cut of your rent.
@@ -550,7 +684,7 @@ function RentSection() {
               one common friction point: rent is scheduled, authorized, pulled,
               and recorded.
             </p>
-            <p className="mb-4 border-l-4 border-[#16756a] pl-4 text-[1.12rem] font-semibold leading-snug text-[#273832]">
+            <p className="mb-4 border-l-4 border-[var(--color-accent)] pl-4 text-[1.12rem] font-semibold leading-snug text-[#273832]">
               The cheque book is the small cost. The missed rent conversation is
               the expensive one.
             </p>
@@ -584,7 +718,7 @@ function RentSection() {
                   }`}
                 >
                   <div className="flex flex-col items-center">
-                    <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-[#17362f] text-[0.8rem] font-extrabold text-white">
+                    <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-[var(--color-primary)] text-[0.8rem] font-extrabold text-white">
                       {i + 1}
                     </span>
                     {i < RENT_STEPS.length - 1 ? (
@@ -602,7 +736,7 @@ function RentSection() {
                 </li>
               ))}
             </ol>
-            <p className="mt-4 border-l-4 border-[#16756a] bg-[#f4f7f5] py-2.5 pl-4 pr-3 text-[0.82rem] leading-snug text-[#37504a]">
+            <p className="mt-4 border-l-4 border-[var(--color-accent)] bg-[#f4f7f5] py-2.5 pl-4 pr-3 text-[0.82rem] leading-snug text-[#37504a]">
               Rent is only ever debited after your tenant authorizes their bank
               account. Vacantless never holds your funds, never stores tenant
               bank-account numbers, and adds no fee of its own on rent.
@@ -620,7 +754,7 @@ function RentSection() {
             costs.
           </p>
           <details className="mt-4 rounded-lg border border-[#d9e1dc] bg-[#fbfcfb]">
-            <summary className="cursor-pointer list-none px-4 py-3 text-[0.9rem] font-bold text-[#17362f] [&::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none px-4 py-3 text-[0.9rem] font-bold text-[var(--color-primary)] [&::-webkit-details-marker]:hidden">
               See the cost per unit
             </summary>
             <div className="border-t border-[#d9e1dc] px-1 pb-2">
@@ -650,8 +784,8 @@ function RentSection() {
                     </span>
                     {r.perMonth}
                   </div>
-                  <div className="text-[0.9rem] font-bold text-[#176044]">
-                    <span className="mb-0.5 block text-[0.64rem] font-extrabold uppercase tracking-[0.05em] text-[#16756a] md:hidden">
+                  <div className="text-[0.9rem] font-bold text-[var(--color-accent-strong)]">
+                    <span className="mb-0.5 block text-[0.64rem] font-extrabold uppercase tracking-[0.05em] text-[var(--color-accent)] md:hidden">
                       Per unit
                     </span>
                     {r.perUnit}
@@ -781,7 +915,7 @@ function Pricing() {
               }`}
             >
               {p.ribbon ? (
-                <span className="mb-2.5 inline-flex self-start rounded-full bg-[#e4f4ed] px-2.5 py-1 text-[0.68rem] font-extrabold uppercase tracking-[0.06em] text-[#16756a]">
+                <span className="mb-2.5 inline-flex self-start rounded-full bg-[#e4f4ed] px-2.5 py-1 text-[0.68rem] font-extrabold uppercase tracking-[0.06em] text-[var(--color-accent)]">
                   {p.ribbon}
                 </span>
               ) : null}
@@ -925,7 +1059,7 @@ function FounderBand() {
           </p>
           <Link
             href="/about"
-            className="mt-3.5 inline-block font-bold text-[#16756a] hover:underline"
+            className="mt-3.5 inline-block font-bold text-[var(--color-accent)] hover:underline"
           >
             Read the story &rarr;
           </Link>
@@ -939,7 +1073,7 @@ function FounderBand() {
 
 function ClosingCta() {
   return (
-    <section className="bg-gradient-to-br from-[#17362f] to-[#1f4a3f] text-white">
+    <section className="bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white">
       <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-5 py-14 md:grid-cols-[1fr_auto]">
         <div>
           <h2 className="max-w-[18ch] text-[clamp(1.8rem,3.4vw,2.7rem)] font-extrabold leading-[1.06]">
@@ -953,7 +1087,7 @@ function ClosingCta() {
         <div className="flex flex-wrap gap-3">
           <Link
             href="/signup"
-            className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg bg-white px-[18px] text-[0.92rem] font-bold text-[#17362f] transition hover:bg-[#eef4f1]"
+            className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg bg-white px-[18px] text-[0.92rem] font-bold text-[var(--color-primary)] transition hover:bg-[#eef4f1]"
           >
             {SIGNUP_LABEL}
           </Link>
@@ -997,7 +1131,7 @@ function SiteFooter() {
           </Link>
           <Link
             href="/signup"
-            className="font-semibold text-[#17362f] hover:underline"
+            className="font-semibold text-[var(--color-primary)] hover:underline"
           >
             Start free
           </Link>
@@ -1019,7 +1153,7 @@ function StatusPill({
   children: ReactNode;
 }) {
   const tones: Record<PillTone, string> = {
-    live: "bg-[#dcf3e9] text-[#176044]",
+    live: "bg-[#dcf3e9] text-[var(--color-accent-strong)]",
     safe: "bg-[#f8edd5] text-[#80510c]",
     lease: "bg-[#e3edf7] text-[#244f78]",
   };
