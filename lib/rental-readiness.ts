@@ -52,6 +52,7 @@ const FEED_FIELD_LABEL: Record<string, string> = {
   price: "rent",
   photo: "a photo",
   description: "a description",
+  description_short: "a longer description",
   address: "an address",
 };
 

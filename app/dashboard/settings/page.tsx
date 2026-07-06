@@ -248,6 +248,7 @@ export default async function SettingsPage({
     price: "monthly rent",
     photo: "at least one photo",
     description: "a description",
+    description_short: "a longer description (50+ characters)",
     address: "the address",
   };
 

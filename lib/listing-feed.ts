@@ -41,6 +41,13 @@ export const DEFAULT_PROPERTY_TYPE = "apartment" as const;
 export const MAX_DESCRIPTION_CHARS = 3500;
 export const MAX_PHOTOS = 50;
 
+// Minimum description length an aggregator accepts. Zumper's custom-feed spec
+// (verified 2026-07-06) requires a description of at least 2-3 sentences /
+// 50 characters; a one-line stub is rejected at ingest. We gate on it in
+// readiness so the operator sees WHY a listing is held back rather than the
+// aggregator silently dropping it downstream.
+export const MIN_DESCRIPTION_CHARS = 50;
+
 // Default country for the address block. Ontario small-landlord ICP.
 export const DEFAULT_COUNTRY = "CA" as const;
 
@@ -162,7 +169,12 @@ export function stripLinks(value: string): string {
 // operator sees WHY a unit isn't going out, instead of a silently short feed.
 // ---------------------------------------------------------------------------
 
-export type FeedMissingField = "price" | "photo" | "description" | "address";
+export type FeedMissingField =
+  | "price"
+  | "photo"
+  | "description"
+  | "description_short"
+  | "address";
 
 export type ListingReadiness = {
   id: string;
@@ -177,7 +189,9 @@ export function listingFeedReadiness(
   if (rentDollars(listing.rent_cents) == null) missing.push("price");
   if (!Array.isArray(listing.photos) || listing.photos.length === 0)
     missing.push("photo");
-  if (clampDescription(listing.description) == null) missing.push("description");
+  const desc = clampDescription(listing.description);
+  if (desc == null) missing.push("description");
+  else if (desc.length < MIN_DESCRIPTION_CHARS) missing.push("description_short");
   if (!listing.address || !listing.address.trim()) missing.push("address");
   return { id: listing.id, ready: missing.length === 0, missing };
 }
@@ -234,6 +248,25 @@ function listEl(
     .join("\n");
   if (!inner) return "";
   return `    <${wrapper}>\n${inner}\n    </${wrapper}>`;
+}
+
+/**
+ * The `<contact>` block for one org/provider (name + phone + email). Returns
+ * the element indented at `indent` spaces, or "" when there is nothing to show.
+ * Shared by the single-org feed and each provider block of the network feed so
+ * the two can never drift.
+ */
+export function buildContactBlockXml(org: FeedOrgInput, indent = "  "): string {
+  const inner: string[] = [];
+  const pad = indent + "  ";
+  if (org.name && org.name.trim()) inner.push(`${pad}${tag("name", org.name.trim())}`);
+  if (org.contact_phone && org.contact_phone.trim())
+    inner.push(`${pad}${tag("phone", org.contact_phone.trim())}`);
+  if (org.contact_email && org.contact_email.trim())
+    inner.push(`${pad}${tag("email", org.contact_email.trim())}`);
+  const lines = inner.filter(Boolean);
+  if (!lines.length) return "";
+  return `${indent}<contact>\n${lines.join("\n")}\n${indent}</contact>`;
 }
 
 export type BuildFeedOptions = {
@@ -339,15 +372,8 @@ export function buildListingFeedXml(opts: BuildFeedOptions): string {
   const provider = opts.org.name ?? "";
   const providerId = opts.org.slug ?? "";
 
-  const contactInner: string[] = [];
-  if (provider) contactInner.push(`    ${tag("name", provider)}`);
-  if (opts.org.contact_phone && opts.org.contact_phone.trim())
-    contactInner.push(`    ${tag("phone", opts.org.contact_phone.trim())}`);
-  if (opts.org.contact_email && opts.org.contact_email.trim())
-    contactInner.push(`    ${tag("email", opts.org.contact_email.trim())}`);
-  const contactBlock = contactInner.length
-    ? `  <contact>\n${contactInner.filter(Boolean).join("\n")}\n  </contact>\n`
-    : "";
+  const contact = buildContactBlockXml(opts.org, "  ");
+  const contactBlock = contact ? `${contact}\n` : "";
 
   const header =
     `<rental_listings source="Vacantless"` +
@@ -361,6 +387,106 @@ export function buildListingFeedXml(opts: BuildFeedOptions): string {
     `${header}\n` +
     contactBlock +
     (items ? `${items}\n` : "") +
+    `</rental_listings>\n`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NETWORK (cross-org aggregate) feed - the platform-aggregator lever.
+//
+// The strategic gap the per-org feed can't fill: destination portals gate on
+// VOLUME (Zumper's custom feed wants 50+ properties; Rentsync leans multifamily).
+// A single small landlord can't clear that gate alone, but Vacantless can, by
+// presenting EVERY customer's active listings as one feed. This builder wraps
+// each org's ready listings in a <provider> block carrying that org's own
+// <contact> (each landlord is a distinct advertiser), reusing the exact same
+// per-listing builder + readiness so the network feed can never drift from the
+// per-org feed. The serving route (app/api/feed/network) is TOKEN-GATED and
+// reads via the service-role client, so this whole surface is dark until a
+// partner is handed the URL + token, so it exposes nothing publicly.
+// ---------------------------------------------------------------------------
+
+/** One org and its listings, exactly as get_network_listing_feed returns each. */
+export type NetworkFeedProvider = {
+  org: FeedOrgInput;
+  listings: FeedListingInput[];
+};
+
+export type BuildNetworkFeedOptions = {
+  providers: ReadonlyArray<NetworkFeedProvider>;
+  baseUrl: string;
+  generatedAt: string;
+  propertyType?: string;
+  country?: string;
+};
+
+/**
+ * Build one <provider> block: the org's <contact> + its READY <listing>s.
+ * Returns "" when the org has no ready listing (an empty provider is omitted so
+ * the feed never advertises a landlord with nothing live).
+ */
+export function buildProviderBlockXml(
+  entry: NetworkFeedProvider,
+  opts: { baseUrl: string; propertyType: string; country: string },
+): string {
+  const summary = summarizeFeed(entry.org, entry.listings);
+  if (summary.readyCount === 0) return "";
+
+  const items = summary.ready
+    .map((l) => buildListingItemXml(l, opts))
+    .join("\n");
+
+  const providerId = entry.org.slug ?? "";
+  const name = entry.org.name ?? "";
+  const contact = buildContactBlockXml(entry.org, "    ");
+
+  const open =
+    `  <provider provider_id="${escapeXmlAttr(providerId)}"` +
+    ` name="${escapeXmlAttr(name)}"` +
+    ` count="${summary.readyCount}">`;
+
+  return (
+    `${open}\n` +
+    (contact ? `${contact}\n` : "") +
+    `${items}\n` +
+    `  </provider>`
+  );
+}
+
+/**
+ * Build the full network feed: many <provider> blocks under one root. Only
+ * providers with >=1 ready listing appear; the header carries the provider +
+ * total ready-listing counts so a partner can sanity-check volume at a glance.
+ */
+export function buildNetworkFeedXml(opts: BuildNetworkFeedOptions): string {
+  const propertyType = opts.propertyType ?? DEFAULT_PROPERTY_TYPE;
+  const country = opts.country ?? DEFAULT_COUNTRY;
+
+  const blocks: string[] = [];
+  let providerCount = 0;
+  let listingCount = 0;
+  for (const entry of opts.providers) {
+    const block = buildProviderBlockXml(entry, {
+      baseUrl: opts.baseUrl,
+      propertyType,
+      country,
+    });
+    if (!block) continue;
+    providerCount += 1;
+    listingCount += summarizeFeed(entry.org, entry.listings).readyCount;
+    blocks.push(block);
+  }
+
+  const header =
+    `<rental_listings source="Vacantless" network="true"` +
+    ` generated_at="${escapeXmlAttr(opts.generatedAt)}"` +
+    ` provider_count="${providerCount}"` +
+    ` count="${listingCount}">`;
+
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `${header}\n` +
+    (blocks.length ? `${blocks.join("\n")}\n` : "") +
     `</rental_listings>\n`
   );
 }

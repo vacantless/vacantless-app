@@ -13,10 +13,15 @@ import {
   summarizeFeed,
   buildListingItemXml,
   buildListingFeedXml,
+  buildContactBlockXml,
+  buildProviderBlockXml,
+  buildNetworkFeedXml,
   MAX_DESCRIPTION_CHARS,
   MAX_PHOTOS,
+  MIN_DESCRIPTION_CHARS,
   type FeedListingInput,
   type FeedOrgInput,
+  type NetworkFeedProvider,
 } from "../lib/listing-feed";
 
 let passed = 0;
@@ -100,7 +105,8 @@ const fullListing: FeedListingInput = {
   rent_cents: 125000,
   beds: 2,
   baths: 1.5,
-  description: "Bright 2-bed unit with parking.",
+  description:
+    "Bright and spacious 2-bedroom unit with parking, in-suite laundry, and a private balcony.",
   photos: ["https://cdn/x/cover.jpg", "https://cdn/x/2.jpg"],
   available_date: "2026-07-01",
   sqft: 800,
@@ -132,6 +138,22 @@ const noDesc = { ...fullListing, description: "  " };
 ok(
   "missing description not ready",
   listingFeedReadiness(noDesc).missing.includes("description"),
+);
+// A present-but-too-short description (< 50 chars, Zumper's floor) is held back
+// as description_short, distinct from a wholly missing description.
+const shortDesc = { ...fullListing, description: "Nice unit." };
+ok("short description not ready", listingFeedReadiness(shortDesc).ready === false);
+ok(
+  "short description reason is description_short",
+  listingFeedReadiness(shortDesc).missing.includes("description_short"),
+);
+ok(
+  "short description not reported as fully missing",
+  !listingFeedReadiness(shortDesc).missing.includes("description"),
+);
+ok(
+  "50-char description is accepted",
+  listingFeedReadiness({ ...fullListing, description: "x".repeat(50) }).ready === true,
 );
 const noAddr = { ...fullListing, address: null };
 ok("missing address not ready", listingFeedReadiness(noAddr).missing.includes("address"));
@@ -300,6 +322,110 @@ for (const name of ["rental_listings", "listing", "address", "photos", "contact"
   });
   ok("feed has no virtual_tour when unset", !noTour.includes("<virtual_tour>"));
 }
+
+// ----------------------------------------------------------------------------
+// --- contact block helper ---------------------------------------------------
+ok("MIN_DESCRIPTION_CHARS is 50", MIN_DESCRIPTION_CHARS === 50);
+{
+  const c = buildContactBlockXml(org, "  ");
+  ok("contact block has name", c.includes("<name>Agile Real Estate Group</name>"));
+  ok("contact block has phone", c.includes("<phone>+1 226-773-7555</phone>"));
+  ok("contact block has email", c.includes("<email>rentals@agileonline.ca</email>"));
+  ok("contact block wraps in <contact>", c.trim().startsWith("<contact>") && c.trim().endsWith("</contact>"));
+}
+ok(
+  "contact block empty when nothing to show",
+  buildContactBlockXml({ name: null, slug: null, contact_phone: null, contact_email: null }) === "",
+);
+
+// ----------------------------------------------------------------------------
+// --- network (cross-org aggregate) feed -------------------------------------
+const orgB: FeedOrgInput = {
+  name: "Manning Ave Rentals",
+  slug: "manning",
+  contact_phone: "+1 416-555-0100",
+  contact_email: "manning@example.com",
+};
+const listingB: FeedListingInput = {
+  ...fullListing,
+  id: "b1",
+  address: "506 Manning Ave, Unit 2, Toronto ON",
+  rent_cents: 240000,
+};
+
+// One provider block: contact + only-ready listings.
+{
+  const block = buildProviderBlockXml(
+    { org, listings: [fullListing, noPrice] },
+    { baseUrl: "https://x.test", propertyType: "apartment", country: "CA" },
+  );
+  ok("provider block opens with provider_id", block.includes('provider_id="agile"'));
+  ok("provider block carries name attr", block.includes('name="Agile Real Estate Group"'));
+  ok("provider block count only ready", block.includes('count="1"'));
+  ok("provider block has its own contact", block.includes("<phone>+1 226-773-7555</phone>"));
+  ok("provider block has exactly one listing", (block.match(/<listing>/g) ?? []).length === 1);
+}
+// A provider with no ready listing is omitted entirely.
+ok(
+  "empty provider block is dropped",
+  buildProviderBlockXml(
+    { org, listings: [noPrice] },
+    { baseUrl: "https://x.test", propertyType: "apartment", country: "CA" },
+  ) === "",
+);
+
+const network = buildNetworkFeedXml({
+  providers: [
+    { org, listings: [fullListing, noPrice] },
+    { org: orgB, listings: [listingB] },
+    { org: { name: "Empty Co", slug: "empty", contact_phone: null, contact_email: null }, listings: [noPrice] },
+  ],
+  baseUrl: "https://vacantless-app.vercel.app",
+  generatedAt: "2026-07-06T12:00:00.000Z",
+});
+ok("network feed xml declaration", network.startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
+ok("network feed marked network=true", network.includes('network="true"'));
+ok("network feed source Vacantless", network.includes('source="Vacantless"'));
+ok("network feed provider_count excludes empty org", network.includes('provider_count="2"'));
+ok("network feed total ready count", network.includes('count="2"'));
+ok("network feed has both provider blocks", (network.match(/<provider /g) ?? []).length === 2);
+ok("network feed includes provider A", network.includes('provider_id="agile"'));
+ok("network feed includes provider B", network.includes('provider_id="manning"'));
+ok("network feed excludes empty provider", !network.includes('provider_id="empty"'));
+ok("network feed carries per-provider contacts", network.includes("<phone>+1 416-555-0100</phone>"));
+ok("network feed listing count across providers", (network.match(/<listing>/g) ?? []).length === 2);
+ok("network feed closes root", network.trim().endsWith("</rental_listings>"));
+for (const name of ["rental_listings", "provider", "listing", "contact"]) {
+  const [o, c] = countTag(network, name);
+  ok(`network ${name} tags balanced`, o === c);
+}
+// Fully-empty network (no ready listings anywhere) is still well-formed.
+const emptyNetwork = buildNetworkFeedXml({
+  providers: [{ org, listings: [noPrice] }],
+  baseUrl: "https://x.test",
+  generatedAt: "2026-07-06T00:00:00.000Z",
+});
+ok("empty network provider_count 0", emptyNetwork.includes('provider_count="0"'));
+ok("empty network count 0", emptyNetwork.includes('count="0"'));
+ok("empty network has no <provider", !emptyNetwork.includes("<provider "));
+ok("empty network closes root", emptyNetwork.trim().endsWith("</rental_listings>"));
+
+// Injection safety carries into the network header/attrs too.
+const evilNet = buildNetworkFeedXml({
+  providers: [
+    {
+      org: { name: `Evil" onload="x`, slug: `s"&<x`, contact_phone: null, contact_email: null },
+      listings: [{ ...fullListing, id: "e1" }],
+    },
+  ],
+  baseUrl: "https://x.test",
+  generatedAt: "2026-07-06T00:00:00.000Z",
+});
+ok("network escapes provider name attr", !evilNet.includes(`name="Evil" onload=`));
+ok("network escapes provider_id attr amp", evilNet.includes("&amp;"));
+
+const _networkProviders: NetworkFeedProvider[] = [{ org, listings: [fullListing] }];
+ok("NetworkFeedProvider type usable", _networkProviders.length === 1);
 
 console.log(`listing-feed: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

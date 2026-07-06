@@ -29,7 +29,7 @@ const complete: RentalReadinessInput = {
   beds: 2,
   baths: 1,
   address: "123 Main St",
-  description: "Bright two-bedroom with in-suite laundry.",
+  description: "Bright two-bedroom with in-suite laundry, parking, and a private balcony.",
   photoCount: 4,
   availabilityWindowCount: 3,
 };
