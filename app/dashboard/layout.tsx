@@ -3,7 +3,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
-import { isRentCollectionActive } from "@/lib/rent-status";
 import { DashboardNav } from "./dashboard-nav";
 import { VacantlessMark } from "@/components/vacantless-mark";
 
@@ -34,20 +33,6 @@ export default async function DashboardLayout({
   // primitive (icon tiles, banners, CTAs) carries the depth, while --brand-color
   // stays the solid for anything that needs a single color.
   const brandGradient = brandGradientCss(org.brand_color, org.brand_color_secondary);
-
-  // Conditional "Money" nav item (IA Step 1, S274): show it only when rent
-  // collection is actually active — Stripe charges_enabled OR Rotessa connected.
-  // RLS scopes both reads to this org; we select only the status fields needed.
-  const [{ data: stripeRows }, { data: rotessaRows }] = await Promise.all([
-    supabase.from("stripe_connect_accounts").select("charges_enabled").limit(1),
-    supabase.from("rotessa_accounts").select("connection_status").limit(1),
-  ]);
-  const rentActive = isRentCollectionActive({
-    stripeChargesEnabled: (stripeRows?.[0] as { charges_enabled?: boolean } | undefined)
-      ?.charges_enabled ?? null,
-    rotessaConnectionStatus: (rotessaRows?.[0] as { connection_status?: string } | undefined)
-      ?.connection_status ?? null,
-  });
 
   return (
     <div
@@ -86,7 +71,7 @@ export default async function DashboardLayout({
             </div>
           </div>
           <DashboardNav
-            rentActive={rentActive}
+            orgName={org.name}
             referralsEnabled={process.env.REFERRALS_ENABLED === "1"}
             capturesEnabled={!!process.env.INBOUND_WEBHOOK_SECRET}
           />

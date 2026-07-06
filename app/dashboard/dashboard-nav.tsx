@@ -5,23 +5,25 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 // ============================================================================
-// Dashboard navigation — IA Step 1 (S274).
+// Dashboard navigation - IA v2 (S427).
 //
-// Reorganized from a flat 10-item bar to a PRIMARY set of intent-areas + a
-// utility/account dropdown ("More ▾"), per VACANTLESS-IA-AUDIT-2026-06-20.md.
+// The primary bar is now SACRED: daily landlord work only. Account/utility
+// items moved out of the old "More ▾" dropdown (which mixed core work beside
+// account settings) into a right-side ORG MENU keyed to the org name.
 //
-//   PRIMARY:  Overview · Rentals · Leasing · Tenants · [Money — conditional]
-//   MORE ▾ :  Maintenance · Reports · Settings · Your plan
+//   PRIMARY:  Overview · Rentals · Leasing · Tenants · Money · Maintenance
+//   ORG ▾  :  Settings · Your plan · [Refer] · [Captures] · Sign out
 //
-// Leasing and Tenants are hub pages that tab across the existing routes
-// (Inquiries/Viewings/Availability and Tenancies/People). The old routes are
-// preserved, so each hub item stays highlighted while you're on a child route —
-// that's what `match` (extra prefixes) is for.
+// Leasing, Tenants and Money are hub landings that tab across existing routes
+// (via `match` prefixes, so a hub item stays lit while you're on a child route).
+//   • Leasing  → Inquiries / Viewings / Availability / Pre-screening
+//   • Tenants  → Tenancies / People
+//   • Money    → Rent / Expenses / Reports
 //
-// Money is shown only when rent collection is active for the org (Stripe
-// charges_enabled OR Rotessa connected — see lib/rent-status); until then rent
-// setup lives inside Tenants / the rental spine. It reuses /dashboard/rent and
-// is simply labelled "Money".
+// Money is ALWAYS visible now (S427): Expenses and Reports are useful without
+// active rent collection, so the money surface never disappears - the Money hub
+// itself shows a locked/empty Rent card when no rail is connected. Maintenance
+// is a recurring landlord job, so it is a first-class primary tab, not a utility.
 // ============================================================================
 
 type NavItem = {
@@ -44,16 +46,17 @@ const PRIMARY: NavItem[] = [
     label: "Tenants",
     match: ["/dashboard/tenancies", "/dashboard/people"],
   },
+  {
+    href: "/dashboard/money",
+    label: "Money",
+    match: ["/dashboard/rent", "/dashboard/expenses", "/dashboard/reports"],
+  },
+  { href: "/dashboard/maintenance", label: "Maintenance" },
 ];
 
-// Conditional primary item (appended when rentActive).
-const MONEY: NavItem = { href: "/dashboard/rent", label: "Money" };
-
-// Utility / account menu (behind "More ▾" on desktop; inline on mobile).
-const UTILITY: NavItem[] = [
-  { href: "/dashboard/maintenance", label: "Maintenance" },
-  { href: "/dashboard/expenses", label: "Expenses" },
-  { href: "/dashboard/reports", label: "Reports" },
+// Org / account menu (behind the org pill on desktop; inline on mobile). These
+// are NOT daily work - they configure or step outside the operating surface.
+const ACCOUNT: NavItem[] = [
   { href: "/dashboard/settings", label: "Settings" },
   { href: "/dashboard/billing", label: "Your plan" },
 ];
@@ -66,8 +69,7 @@ const REFERRALS: NavItem = { href: "/dashboard/referrals", label: "Refer a landl
 // Email/text-in capture review queue (Phase 3 ingress). Ships dark like
 // REFERRALS: the /dashboard/captures page is always reachable by URL (and
 // server-gated on manage_settings), but this link only appears once ingress is
-// live — the layout passes capturesEnabled = INBOUND_WEBHOOK_SECRET is set — so
-// the link surfaces exactly when forwarded photos can actually arrive.
+// live - the layout passes capturesEnabled = INBOUND_WEBHOOK_SECRET is set.
 const CAPTURES: NavItem = { href: "/dashboard/captures", label: "Captures" };
 
 function isActive(pathname: string, item: NavItem) {
@@ -77,48 +79,48 @@ function isActive(pathname: string, item: NavItem) {
 }
 
 /**
- * Responsive dashboard nav. On md+ the primary links sit inline with a "More ▾"
- * dropdown for utility items; on small screens everything collapses behind a
- * Menu toggle. The mobile menu lists primary + utility together.
+ * Responsive dashboard nav. On md+ the primary links sit inline with an ORG
+ * pill ("{orgName} ▾") that opens the account menu; on small screens everything
+ * collapses behind a Menu toggle listing primary + account together.
  */
 export function DashboardNav({
-  rentActive = false,
+  orgName,
   referralsEnabled = false,
   capturesEnabled = false,
 }: {
-  rentActive?: boolean;
+  orgName: string;
   referralsEnabled?: boolean;
   capturesEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false); // mobile menu
-  const [moreOpen, setMoreOpen] = useState(false); // desktop "More ▾"
-  const moreRef = useRef<HTMLDivElement>(null);
+  const [accountOpen, setAccountOpen] = useState(false); // desktop org menu
+  const accountRef = useRef<HTMLDivElement>(null);
 
-  const primary = rentActive ? [...PRIMARY, MONEY] : PRIMARY;
-  const utility = [
-    ...UTILITY,
-    ...(capturesEnabled ? [CAPTURES] : []),
+  const account = [
+    ...ACCOUNT,
     ...(referralsEnabled ? [REFERRALS] : []),
+    ...(capturesEnabled ? [CAPTURES] : []),
   ];
-  const utilityActive = utility.some((u) => isActive(pathname, u));
+  const accountActive = account.some((u) => isActive(pathname, u));
+  const initial = (orgName.trim()[0] ?? "V").toUpperCase();
 
   // Close menus whenever the route changes.
   useEffect(() => {
     setOpen(false);
-    setMoreOpen(false);
+    setAccountOpen(false);
   }, [pathname]);
 
-  // Close the desktop dropdown on outside click / Escape.
+  // Close the desktop org menu on outside click / Escape.
   useEffect(() => {
-    if (!moreOpen) return;
+    if (!accountOpen) return;
     function onDown(e: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
       }
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMoreOpen(false);
+      if (e.key === "Escape") setAccountOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -126,7 +128,7 @@ export function DashboardNav({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [moreOpen]);
+  }, [accountOpen]);
 
   const linkCls = (active: boolean) =>
     `rounded-lg px-3 py-1.5 font-medium transition ${
@@ -135,9 +137,9 @@ export function DashboardNav({
 
   return (
     <>
-      {/* Desktop: inline primary links + More dropdown */}
+      {/* Desktop: inline primary links + org account pill */}
       <div className="hidden items-center gap-1 text-sm md:flex">
-        {primary.map((item) => (
+        {PRIMARY.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -147,29 +149,37 @@ export function DashboardNav({
           </Link>
         ))}
 
-        {/* More ▾ utility dropdown */}
-        <div className="relative" ref={moreRef}>
+        {/* Org pill → account menu */}
+        <div className="relative ml-2" ref={accountRef}>
           <button
             type="button"
-            onClick={() => setMoreOpen((v) => !v)}
-            aria-expanded={moreOpen}
+            onClick={() => setAccountOpen((v) => !v)}
+            aria-expanded={accountOpen}
             aria-haspopup="menu"
-            className={`flex items-center gap-1 ${linkCls(utilityActive && !moreOpen)}`}
+            className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 transition ${
+              accountActive || accountOpen ? "bg-white/25" : "bg-white/10 hover:bg-white/20"
+            }`}
           >
-            More
             <span
               aria-hidden
-              className={`transition ${moreOpen ? "rotate-180" : ""}`}
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-white/30 text-xs font-bold"
+            >
+              {initial}
+            </span>
+            <span className="max-w-[9rem] truncate font-medium">{orgName}</span>
+            <span
+              aria-hidden
+              className={`transition ${accountOpen ? "rotate-180" : ""}`}
             >
               ▾
             </span>
           </button>
-          {moreOpen && (
+          {accountOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full z-30 mt-1 min-w-44 overflow-hidden rounded-lg border border-black/5 bg-white py-1 text-gray-700 shadow-lg"
+              className="absolute right-0 top-full z-30 mt-1 min-w-48 overflow-hidden rounded-lg border border-black/5 bg-white py-1 text-gray-700 shadow-lg"
             >
-              {utility.map((item) => (
+              {account.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -181,15 +191,18 @@ export function DashboardNav({
                   {item.label}
                 </Link>
               ))}
+              <div className="my-1 border-t border-gray-100" />
+              <form action="/auth/signout" method="post">
+                <button
+                  role="menuitem"
+                  className="block w-full px-4 py-2 text-left font-medium text-gray-700 transition hover:bg-gray-100"
+                >
+                  Sign out
+                </button>
+              </form>
             </div>
           )}
         </div>
-
-        <form action="/auth/signout" method="post" className="ml-2">
-          <button className="rounded-lg bg-white/20 px-3 py-1.5 font-medium hover:bg-white/30">
-            Sign out
-          </button>
-        </form>
       </div>
 
       {/* Mobile: toggle button */}
@@ -203,11 +216,11 @@ export function DashboardNav({
         {open ? "Close" : "Menu"}
       </button>
 
-      {/* Mobile: dropdown panel (primary + utility together) */}
+      {/* Mobile: dropdown panel (primary + account together) */}
       {open && (
         <div className="absolute left-0 right-0 top-full z-20 border-t border-white/20 bg-brand shadow-lg md:hidden">
           <nav className="mx-auto flex max-w-5xl flex-col gap-1 px-6 py-3 text-sm">
-            {primary.map((item) => (
+            {PRIMARY.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -219,7 +232,10 @@ export function DashboardNav({
               </Link>
             ))}
             <div className="my-1 border-t border-white/15" />
-            {utility.map((item) => (
+            <p className="px-3 pb-0.5 pt-1 text-xs uppercase tracking-wider text-white/60">
+              {orgName}
+            </p>
+            {account.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
