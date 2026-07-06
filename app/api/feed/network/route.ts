@@ -57,11 +57,15 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await admin.rpc("get_network_listing_feed");
-  if (error) {
+  // The RPC always returns a jsonb array (coalesced to '[]'). An error OR any
+  // non-array success shape is unexpected: fail with 503 rather than serving a
+  // misleadingly-empty 200 (preserves the "never partial data" guarantee). An
+  // empty array is legitimate "zero providers" and still serves a valid 200.
+  if (error || !Array.isArray(data)) {
     return new Response("Feed temporarily unavailable", { status: 503 });
   }
 
-  const providers = (Array.isArray(data) ? data : []) as NetworkFeedProvider[];
+  const providers = data as NetworkFeedProvider[];
   const xml = buildNetworkFeedXml({
     providers,
     baseUrl: BASE_URL,
