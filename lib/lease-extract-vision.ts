@@ -60,10 +60,20 @@ export function isVisionImageType(mime: unknown): mime is VisionImageType {
   return typeof mime === "string" && (VISION_IMAGE_TYPES as readonly string[]).includes(mime);
 }
 
-/** The two ways lease content arrives. */
+/** Cap the number of page images sent so a big located window can't blow up the
+ * request (the locator already bounds the window to LEASE_WINDOW_PAGES). */
+const MAX_IMAGES = 8;
+
+/** The ways lease content arrives. TEXT = extracted PDF text (fast path for clean
+ * text leases). IMAGE(S) = page rasters the client made from the LOCATED lease
+ * pages - the robust path for signed/flattened OREA forms whose filled values
+ * scramble in text extraction, since the model sees each value beside its label
+ * (Noam, S425, 50 Glenrose). */
+export type LeaseImage = { base64: string; mimeType: VisionImageType };
 export type LeaseSource =
   | { kind: "text"; text: string }
-  | { kind: "image"; bytes: Buffer; mimeType: string };
+  | { kind: "image"; bytes: Buffer; mimeType: string }
+  | { kind: "images"; images: LeaseImage[] };
 
 /**
  * Parse lease content into a LeaseDraft. Never throws - every failure maps to a
@@ -157,7 +167,18 @@ function buildUserContent(
     const clean = source.text.trim().slice(0, MAX_INPUT_CHARS);
     if (!clean) return null;
     return [
-      { type: "text", text: "Lease text (first pages):\n\n" + clean },
+      { type: "text", text: "Lease text (located pages):\n\n" + clean },
+      { type: "text", text: buildExtractionPrompt() },
+    ];
+  }
+  if (source.kind === "images") {
+    const imgs = source.images.filter((im) => isVisionImageType(im.mimeType)).slice(0, MAX_IMAGES);
+    if (imgs.length === 0) return null;
+    return [
+      ...imgs.map((im) => ({
+        type: "image",
+        source: { type: "base64", media_type: im.mimeType, data: im.base64 },
+      })),
       { type: "text", text: buildExtractionPrompt() },
     ];
   }

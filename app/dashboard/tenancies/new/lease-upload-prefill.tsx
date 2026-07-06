@@ -17,11 +17,16 @@
 
 import { useRef, useState } from "react";
 import { assembleDocumentText, type PdfTextItemLike } from "@/lib/pdf-text";
-import { extractLeaseFromText } from "../actions";
+import { extractLeaseFromText, extractLeaseFromImages } from "../actions";
 import type { LeaseDraft } from "@/lib/lease-extract";
+import { locateLeasePages, leaseAnchorLabel, MAX_SCAN_PAGES } from "@/lib/lease-locator";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB
-const FIRST_PAGES = 8; // Noam S425: material terms + the additional-terms schedule.
+const FIRST_PAGES = 8; // fallback window when no lease document is located.
+/** Cap raster width so the page images stay small (bounds the API image tokens). */
+const RASTER_MAX_WIDTH = 1600;
+/** JPEG quality for the page rasters - readable text at a fraction of PNG size. */
+const RASTER_QUALITY = 0.8;
 
 type PropertyOpt = { id: string; address: string };
 
@@ -29,7 +34,13 @@ type Status =
   | { kind: "idle" }
   | { kind: "reading"; fileName: string }
   | { kind: "thinking"; fileName: string }
-  | { kind: "done"; fileName: string; draft: LeaseDraft; matchedAddress: string | null }
+  | {
+      kind: "done";
+      fileName: string;
+      draft: LeaseDraft;
+      matchedAddress: string | null;
+      located: string | null;
+    }
   | { kind: "empty" }
   | { kind: "error"; message: string };
 
@@ -153,45 +164,91 @@ export function LeaseUploadPrefill({ properties }: { properties: PropertyOpt[] }
     }
 
     setStatus({ kind: "reading", fileName: file.name });
-    let text = "";
+
+    // 1) Read the WHOLE bundle's text (up to the scan cap) so we can LOCATE the
+    //    lease document inside it - real packages bury the lease behind a RECO
+    //    guide / rep agreement, in a varying order (S425).
+    let located: string | null = null;
+    const windowPages: number[] = []; // 1-based page numbers to send the model
+    let windowText = "";
+    const images: Array<{ base64: string; mimeType: string }> = [];
     try {
       const pdfjs = await loadPdfJs();
       const data = new Uint8Array(await file.arrayBuffer());
       const doc = await pdfjs.getDocument({ data }).promise;
-      const pageCount = Math.min(doc.numPages, FIRST_PAGES);
-      const pages: PdfTextItemLike[][] = [];
-      for (let p = 1; p <= pageCount; p++) {
+      const scanCount = Math.min(doc.numPages, MAX_SCAN_PAGES);
+
+      const itemsByPage: PdfTextItemLike[][] = [];
+      const pageTexts: string[] = [];
+      for (let p = 1; p <= scanCount; p++) {
         const page = await doc.getPage(p);
         const content = await page.getTextContent();
-        pages.push(
-          (content.items as Array<Partial<PdfTextItemLike>>).filter(
-            (it): it is PdfTextItemLike => typeof it.str === "string",
-          ),
+        const items = (content.items as Array<Partial<PdfTextItemLike>>).filter(
+          (it): it is PdfTextItemLike => typeof it.str === "string",
         );
+        itemsByPage.push(items);
+        pageTexts.push(assembleDocumentText([items]).trim());
       }
-      text = assembleDocumentText(pages).trim();
+
+      // 2) Locate the lease; window from the anchor. If nothing is recognised
+      //    (e.g. an unusual custom agreement), fall back to the first pages.
+      const loc = locateLeasePages(pageTexts);
+      if (loc) {
+        located = `${leaseAnchorLabel(loc.anchor)}, from page ${loc.startPage + 1}`;
+        for (let i = 0; i < loc.pageCount; i++) windowPages.push(loc.startPage + i + 1);
+      } else {
+        const end = Math.min(doc.numPages, FIRST_PAGES);
+        for (let p = 1; p <= end; p++) windowPages.push(p);
+      }
+
+      windowText = assembleDocumentText(windowPages.map((p) => itemsByPage[p - 1] ?? [])).trim();
+
+      // 3) Rasterize the located pages to JPEGs (default path) so the model reads
+      //    each filled value beside its label - signed OREA forms scramble in
+      //    text extraction (S425, 50 Glenrose).
+      setStatus({ kind: "thinking", fileName: file.name });
+      for (const p of windowPages) {
+        const page = await doc.getPage(p);
+        const base = page.getViewport({ scale: 1 });
+        const scale = base.width > 0 ? Math.min(2, RASTER_MAX_WIDTH / base.width) : 1;
+        const viewport = page.getViewport({ scale: scale > 0 ? scale : 1 });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const dataUrl = canvas.toDataURL("image/jpeg", RASTER_QUALITY);
+        const comma = dataUrl.indexOf(",");
+        if (comma >= 0) images.push({ base64: dataUrl.slice(comma + 1), mimeType: "image/jpeg" });
+      }
     } catch {
-      setStatus({ kind: "error", message: "Couldn't read that PDF (it may be a scanned image). Fill the form manually below." });
-      return;
-    }
-    if (!text) {
-      setStatus({ kind: "error", message: "Couldn't read any text from that PDF (it may be a scanned image). Fill the form manually below." });
+      setStatus({ kind: "error", message: "Couldn't read that PDF. Fill the form manually below." });
       return;
     }
 
+    if (images.length === 0 && !windowText) {
+      setStatus({ kind: "error", message: "Couldn't read any content from that PDF. Fill the form manually below." });
+      return;
+    }
+
+    // 4) Extract: images first (robust for signed forms); fall back to the text of
+    //    the located window if the image path is unavailable or fails.
     setStatus({ kind: "thinking", fileName: file.name });
     try {
-      const result = await extractLeaseFromText(text);
-      if (!result.ok) {
-        if (result.reason === "empty") {
-          setStatus({ kind: "empty" });
-        } else {
-          setStatus({ kind: "error", message: "Couldn't pull the lease details automatically. Fill the form manually below." });
-        }
+      let result = images.length > 0 ? await extractLeaseFromImages(images) : null;
+      if ((!result || !result.ok) && windowText) {
+        const textResult = await extractLeaseFromText(windowText);
+        // Prefer a successful text result over a failed image result.
+        if (!result || (!result.ok && textResult.ok)) result = textResult;
+      }
+      if (!result || !result.ok) {
+        if (result && result.reason === "empty") setStatus({ kind: "empty" });
+        else setStatus({ kind: "error", message: "Couldn't pull the lease details automatically. Fill the form manually below." });
         return;
       }
       const matchedAddress = applyDraft(result.draft);
-      setStatus({ kind: "done", fileName: file.name, draft: result.draft, matchedAddress });
+      setStatus({ kind: "done", fileName: file.name, draft: result.draft, matchedAddress, located });
     } catch {
       setStatus({ kind: "error", message: "Something went wrong reading the lease. Fill the form manually below." });
     }
@@ -236,7 +293,7 @@ export function LeaseUploadPrefill({ properties }: { properties: PropertyOpt[] }
         } ${busy ? "pointer-events-none opacity-60" : ""}`}
       >
         <p className="text-sm font-medium text-gray-700">Drop the lease PDF here, or click to choose</p>
-        <p className="mt-1 text-xs text-gray-500">We read the first {FIRST_PAGES} pages on your device.</p>
+        <p className="mt-1 text-xs text-gray-500">We find the lease inside the file (even in a big package) and read its key pages on your device.</p>
         <input
           ref={inputRef}
           type="file"
@@ -270,6 +327,9 @@ export function LeaseUploadPrefill({ properties }: { properties: PropertyOpt[] }
           <p className="text-xs font-medium text-green-700">
             Pre-filled from {status.fileName}. Review every field below before saving.
           </p>
+          {status.located && (
+            <p className="mt-1 text-xs text-gray-500">Found the {status.located}.</p>
+          )}
           {status.matchedAddress ? (
             <p className="mt-1 text-xs text-gray-500">Matched unit: {status.matchedAddress} (confirm it&apos;s right).</p>
           ) : (

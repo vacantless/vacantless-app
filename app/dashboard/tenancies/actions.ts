@@ -21,17 +21,17 @@ import {
   validateWatchLeaseInput,
   validateWatchExistingLease,
 } from "@/lib/watch-lease";
-import { parseLease } from "@/lib/lease-extract-vision";
+import { parseLease, type LeaseImage } from "@/lib/lease-extract-vision";
 import type { LeaseParseResult } from "@/lib/lease-extract";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 
 // ===========================================================================
-// Lease-OCR prefill (S425) — read an uploaded lease's first pages into a draft
+// Lease-OCR prefill (S425) - read an uploaded lease's first pages into a draft
 // the New-Tenancy form prefills. The client extracts the PDF text on-device
 // (pdfjs, first 8 pages) and calls this; we send it to the model and return the
 // normalized, PII-guarded draft. Returns a value (no redirect) so the client
-// island can prefill the form fields directly — no tenant contact info in a URL.
+// island can prefill the form fields directly - no tenant contact info in a URL.
 // Ships DARK: parseLease returns {ok:false,reason:"unconfigured"} with no
 // ANTHROPIC_API_KEY, and the page only renders the uploader when the key is set.
 // ===========================================================================
@@ -41,6 +41,25 @@ export async function extractLeaseFromText(text: string): Promise<LeaseParseResu
   if (!org) return { ok: false, reason: "unconfigured" };
   if (typeof text !== "string" || !text.trim()) return { ok: false, reason: "empty" };
   return parseLease({ kind: "text", text });
+}
+
+// IMAGE path (S425 Slice 1a): for signed / flattened OREA forms whose filled
+// values scramble in text extraction, the client rasterizes ONLY the LOCATED
+// lease pages (the lease-locator window) to JPEGs and sends them here, so the
+// model reads each value beside its label. Same guard, same PII-guarded return.
+export async function extractLeaseFromImages(
+  images: Array<{ base64: string; mimeType: string }>,
+): Promise<LeaseParseResult> {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, reason: "unconfigured" };
+  if (!Array.isArray(images) || images.length === 0) return { ok: false, reason: "empty" };
+  return parseLease({
+    kind: "images",
+    images: images
+      .filter((im) => im && typeof im.base64 === "string" && typeof im.mimeType === "string")
+      .map((im) => ({ base64: im.base64, mimeType: im.mimeType as LeaseImage["mimeType"] })),
+  });
 }
 
 function s(formData: FormData, name: string): string {
