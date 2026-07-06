@@ -51,3 +51,7 @@ DEPLOYED-UI QA SMOKE PASSED on North Star Rentals QA (`b733a191`, Growth) then w
 - All 4 scoped to `18 shorncliffe avenue, toronto, on` / `utilities` (wrong_scope = 0); the saved rule is org=`b733a191`, scope_kind `stream`.
 - 2 TIM HORTONS untouched (different merchant, no rule).
 - cross_org_leak = 0 (no seed-entity HYDRO rows outside the QA org). The `applyRulesToQueue` button path calls the same org-scoped `autoApplyRules(org.id)` exercised here.
+
+## S422 ACCEPTED (Codex, 2026-07-06) - loop CLOSED
+
+Codex reviewed `ca85277..33125e7` against this note = **ACCEPTED, no findings**. Both prior P2s confirmed closed in `triage-core.ts`: `autoApplyRules(orgId)` scopes both reads to `organization_id = orgId`; `insertExpenseAndAssign` claims `pending -> assigned` (keyed on `id + organization_id + triage_status='pending'`) before inserting, returns null if already claimed, rolls back on insert failure, keeps the final txn update org-scoped. Codex verification passed: `git diff --check`, eslint, `tsc --noEmit`, test-categorization-rules 47/0, test-bank-import 68/0, test-rent-from-bank 22/0. Codex did not rerun the deployed UI smoke; treated this note's deployed QA smoke as supporting evidence. **S421 + S422 accepted together - no open code-review queue on the bank-triage lane.**
