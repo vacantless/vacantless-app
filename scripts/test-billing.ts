@@ -33,6 +33,10 @@ import {
   canUseCaptureTextIn,
   canUseRepairSms,
   canUseListingMarketing,
+  canUseLeaseOcr,
+  leaseOcrMonthlyCap,
+  LEASE_OCR_CAP_GROWTH,
+  LEASE_OCR_CAP_PREMIUM,
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
@@ -452,7 +456,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 12 features", PLAN_FEATURES.length === 12);
+ok("PLAN_FEATURES has 13 features", PLAN_FEATURES.length === 13);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -513,6 +517,20 @@ ok("listing_marketing: pilot true (full access)", canUseListingMarketing("pilot"
 ok("listing_marketing: core false (legacy non-marketing)", canUseListingMarketing("core") === false);
 ok("listing_marketing: trial false", canUseListingMarketing("trial") === false);
 ok("listing_marketing: null false", canUseListingMarketing(null) === false);
+
+// --- lease_ocr (Growth & up; S425 paid time-saver, monthly-capped) ----------
+ok("lease_ocr: free false", canUseLeaseOcr("free") === false);
+ok("lease_ocr: growth true", canUseLeaseOcr("growth") === true);
+ok("lease_ocr: premium true", canUseLeaseOcr("premium") === true);
+ok("lease_ocr: pilot true (full access)", canUseLeaseOcr("pilot") === true);
+ok("lease_ocr: core false", canUseLeaseOcr("core") === false);
+ok("lease_ocr: trial false", canUseLeaseOcr("trial") === false);
+ok("lease_ocr: null false", canUseLeaseOcr(null) === false);
+ok("lease_ocr cap: free 0", leaseOcrMonthlyCap("free") === 0);
+ok("lease_ocr cap: growth = growth cap", leaseOcrMonthlyCap("growth") === LEASE_OCR_CAP_GROWTH);
+ok("lease_ocr cap: premium = premium cap", leaseOcrMonthlyCap("premium") === LEASE_OCR_CAP_PREMIUM);
+ok("lease_ocr cap: pilot = premium cap", leaseOcrMonthlyCap("pilot") === LEASE_OCR_CAP_PREMIUM);
+ok("lease_ocr cap: premium > growth", LEASE_OCR_CAP_PREMIUM > LEASE_OCR_CAP_GROWTH);
 
 // --- incident_intake (Growth & up; Option B Slices 1-4) --------------------
 ok("incident_intake: growth true", hasEntitlement("growth", "incident_intake") === true);

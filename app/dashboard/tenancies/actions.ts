@@ -23,6 +23,7 @@ import {
 } from "@/lib/watch-lease";
 import { parseLease, type LeaseImage } from "@/lib/lease-extract-vision";
 import type { LeaseParseResult } from "@/lib/lease-extract";
+import { canUseLeaseOcr, leaseOcrMonthlyCap } from "@/lib/billing";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 
@@ -35,31 +36,57 @@ const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 // Ships DARK: parseLease returns {ok:false,reason:"unconfigured"} with no
 // ANTHROPIC_API_KEY, and the page only renders the uploader when the key is set.
 // ===========================================================================
-export async function extractLeaseFromText(text: string): Promise<LeaseParseResult> {
+// ONE guarded action for the whole extraction (S425 Slice 1b). The client sends
+// the LOCATED lease pages as images (robust for signed forms) AND the located
+// window's text (fallback); the server tries images first, then text. Doing both
+// in ONE action means the monthly cap is claimed EXACTLY ONCE per user action
+// (an earlier two-action design double-counted the image->text fallback).
+// Enforces, in order: manage_tenancies, the lease_ocr entitlement (Growth+), and
+// the monthly per-org cap (Growth 25 / Premium 100) via an atomic claim RPC.
+export async function extractLease(input: {
+  images?: Array<{ base64: string; mimeType: string }>;
+  text?: string;
+}): Promise<LeaseParseResult> {
   await requireCapability("manage_tenancies", FORBIDDEN);
   const org = await getCurrentOrg();
   if (!org) return { ok: false, reason: "unconfigured" };
-  if (typeof text !== "string" || !text.trim()) return { ok: false, reason: "empty" };
-  return parseLease({ kind: "text", text });
-}
 
-// IMAGE path (S425 Slice 1a): for signed / flattened OREA forms whose filled
-// values scramble in text extraction, the client rasterizes ONLY the LOCATED
-// lease pages (the lease-locator window) to JPEGs and sends them here, so the
-// model reads each value beside its label. Same guard, same PII-guarded return.
-export async function extractLeaseFromImages(
-  images: Array<{ base64: string; mimeType: string }>,
-): Promise<LeaseParseResult> {
-  await requireCapability("manage_tenancies", FORBIDDEN);
-  const org = await getCurrentOrg();
-  if (!org) return { ok: false, reason: "unconfigured" };
-  if (!Array.isArray(images) || images.length === 0) return { ok: false, reason: "empty" };
-  return parseLease({
-    kind: "images",
-    images: images
-      .filter((im) => im && typeof im.base64 === "string" && typeof im.mimeType === "string")
-      .map((im) => ({ base64: im.base64, mimeType: im.mimeType as LeaseImage["mimeType"] })),
+  // Tier gate: Free/legacy see the locked upsell, never the extraction.
+  if (!canUseLeaseOcr(org.plan)) return { ok: false, reason: "locked" };
+
+  // Monthly cost backstop: atomically claim one scan credit BEFORE the paid model
+  // call (the cost is in the call, so a claim-before-call meters the real cost).
+  const period = new Date().toISOString().slice(0, 7); // YYYY-MM (UTC)
+  const cap = leaseOcrMonthlyCap(org.plan);
+  const supabase = createClient();
+  const { data: claimData, error: claimErr } = await supabase.rpc("claim_lease_ocr_scan", {
+    p_org: org.id,
+    p_period: period,
+    p_cap: cap,
   });
+  if (claimErr) {
+    console.error("extractLease: claim RPC failed", { error: claimErr.message });
+    return { ok: false, reason: "failed" };
+  }
+  const claim = Array.isArray(claimData) ? claimData[0] : claimData;
+  if (!claim || claim.allowed !== true) return { ok: false, reason: "limit" };
+
+  // Try images first (robust for signed/flattened forms), then the located text.
+  const imgs = (input.images ?? []).filter(
+    (im) => im && typeof im.base64 === "string" && typeof im.mimeType === "string",
+  );
+  let result: LeaseParseResult | null = null;
+  if (imgs.length > 0) {
+    result = await parseLease({
+      kind: "images",
+      images: imgs.map((im) => ({ base64: im.base64, mimeType: im.mimeType as LeaseImage["mimeType"] })),
+    });
+  }
+  if ((!result || !result.ok) && typeof input.text === "string" && input.text.trim()) {
+    const textResult = await parseLease({ kind: "text", text: input.text });
+    if (!result || (!result.ok && textResult.ok)) result = textResult;
+  }
+  return result ?? { ok: false, reason: "empty" };
 }
 
 function s(formData: FormData, name: string): string {

@@ -106,7 +106,7 @@ export interface LeaseDraft {
  * was read (all fields null) - the UI should fall back to the manual form. */
 export type LeaseParseResult =
   | { ok: true; draft: LeaseDraft }
-  | { ok: false; reason: "unconfigured" | "failed" | "empty" };
+  | { ok: false; reason: "unconfigured" | "failed" | "empty" | "locked" | "limit" };
 
 // ---------------------------------------------------------------------------
 // The prompt (kept here so the contract + wording are versioned together)

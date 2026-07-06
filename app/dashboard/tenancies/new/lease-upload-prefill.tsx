@@ -17,7 +17,7 @@
 
 import { useRef, useState } from "react";
 import { assembleDocumentText, type PdfTextItemLike } from "@/lib/pdf-text";
-import { extractLeaseFromText, extractLeaseFromImages } from "../actions";
+import { extractLease } from "../actions";
 import type { LeaseDraft } from "@/lib/lease-extract";
 import { locateLeasePages, leaseAnchorLabel, MAX_SCAN_PAGES } from "@/lib/lease-locator";
 
@@ -120,10 +120,31 @@ function digestLines(d: LeaseDraft): string[] {
   return lines;
 }
 
-export function LeaseUploadPrefill({ properties }: { properties: PropertyOpt[] }) {
+export function LeaseUploadPrefill({
+  properties,
+  entitled = true,
+}: {
+  properties: PropertyOpt[];
+  entitled?: boolean;
+}) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Tier gate: an un-entitled plan (Free/legacy) sees the feature LOCKED with an
+  // upsell, never hidden (the standing visibility rule). The server action also
+  // enforces this, so this is purely the surface.
+  if (!entitled) {
+    return (
+      <div className="mb-5 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+        <p className="text-sm font-semibold text-gray-700">Pre-fill a tenancy from the signed lease</p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Upload the lease and we read the key terms into this form for you. Available on the Growth and
+          Premium plans.
+        </p>
+      </div>
+    );
+  }
 
   function applyDraft(d: LeaseDraft): string | null {
     if (d.start_date) setVal("tenancy-start-date", d.start_date);
@@ -232,19 +253,24 @@ export function LeaseUploadPrefill({ properties }: { properties: PropertyOpt[] }
       return;
     }
 
-    // 4) Extract: images first (robust for signed forms); fall back to the text of
-    //    the located window if the image path is unavailable or fails.
+    // 4) Extract in ONE server call (images preferred, text fallback) so the
+    //    monthly cap is claimed exactly once.
     setStatus({ kind: "thinking", fileName: file.name });
     try {
-      let result = images.length > 0 ? await extractLeaseFromImages(images) : null;
-      if ((!result || !result.ok) && windowText) {
-        const textResult = await extractLeaseFromText(windowText);
-        // Prefer a successful text result over a failed image result.
-        if (!result || (!result.ok && textResult.ok)) result = textResult;
-      }
-      if (!result || !result.ok) {
-        if (result && result.reason === "empty") setStatus({ kind: "empty" });
-        else setStatus({ kind: "error", message: "Couldn't pull the lease details automatically. Fill the form manually below." });
+      const result = await extractLease({
+        images: images.length > 0 ? images : undefined,
+        text: windowText || undefined,
+      });
+      if (!result.ok) {
+        if (result.reason === "empty") {
+          setStatus({ kind: "empty" });
+        } else if (result.reason === "locked") {
+          setStatus({ kind: "error", message: "Lease import is available on the Growth and Premium plans. Fill the form manually below." });
+        } else if (result.reason === "limit") {
+          setStatus({ kind: "error", message: "You've reached this month's lease-import limit. Fill the form manually below, or try again next month." });
+        } else {
+          setStatus({ kind: "error", message: "Couldn't pull the lease details automatically. Fill the form manually below." });
+        }
         return;
       }
       const matchedAddress = applyDraft(result.draft);

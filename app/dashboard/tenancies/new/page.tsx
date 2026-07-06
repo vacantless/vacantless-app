@@ -11,6 +11,8 @@ import { Icons } from "@/components/icons";
 import { createTenancy } from "../actions";
 import { isPubliclyVisible } from "@/lib/listing-state";
 import { LeaseUploadPrefill } from "./lease-upload-prefill";
+import { getCurrentOrg } from "@/lib/org";
+import { canUseLeaseOcr } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +110,10 @@ export default async function NewTenancyPage({
   // live before the synthetic-lease QA. Noam sets LEASE_OCR_ENABLED=1 in Vercel
   // to turn the uploader on; the model call additionally needs ANTHROPIC_API_KEY.
   const leaseOcrEnabled = process.env.LEASE_OCR_ENABLED === "1";
+  // Tier gate: entitled plans (Growth+) get the working uploader; others see the
+  // locked upsell (the server action enforces this too).
+  const org = leaseOcrEnabled ? await getCurrentOrg() : null;
+  const leaseOcrEntitled = canUseLeaseOcr(org?.plan);
 
   return (
     <div>
@@ -155,6 +161,7 @@ export default async function NewTenancyPage({
         {leaseOcrEnabled && (
           <LeaseUploadPrefill
             properties={properties.map((p) => ({ id: p.id, address: p.address }))}
+            entitled={leaseOcrEntitled}
           />
         )}
         <form

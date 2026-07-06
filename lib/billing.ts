@@ -99,7 +99,12 @@ export type PlanFeature =
   // QR + syndication surfacing. Growth+ (a paid convenience that monetizes the
   // listing-copy / feed plumbing). The kit surface enforces this; it never runs
   // or pays for an ad (that is the later Tier B done-for-you boost).
-  | "listing_marketing";
+  | "listing_marketing"
+  // Lease-OCR prefill (S425): upload a signed lease and pre-fill the tenancy from
+  // it. Growth+ (a paid time-saver over manual tenancy entry). It carries a real
+  // per-use model/API cost, so the gate is paired with a monthly per-org cap
+  // (see LEASE_OCR_MONTHLY_CAP). The extractLease* actions enforce both.
+  | "lease_ocr";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -114,6 +119,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "capture_text_in",
   "repair_sms",
   "listing_marketing",
+  "lease_ocr",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -133,6 +139,7 @@ function noEntitlements(): PlanEntitlements {
     capture_text_in: false,
     repair_sms: false,
     listing_marketing: false,
+    lease_ocr: false,
   };
 }
 
@@ -162,13 +169,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false },
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -256,6 +263,27 @@ export function canUseRepairSms(plan: string | null | undefined): boolean {
 // NB: this gates the SELF-SERVE kit only; it never runs or pays for an ad.
 export function canUseListingMarketing(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "listing_marketing");
+}
+
+// Whether this plan may use lease-OCR prefill (S425): upload a signed lease and
+// pre-fill the tenancy from it. Growth+. A paid time-saver over manual entry that
+// carries a real per-use model/API cost, so it is ALSO metered by a monthly
+// per-org cap (leaseOcrMonthlyCap). The extractLease* actions enforce both the
+// entitlement and the cap server-side; an ungated plan sees the locked upsell.
+export function canUseLeaseOcr(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "lease_ocr");
+}
+
+// Monthly per-org lease-OCR scan cap (a runaway/abuse backstop, not a meter -
+// generous for real use: a landlord signs a handful of leases a year). Premium
+// gets a higher ceiling than Growth. 0 for ungated plans. (Noam, S425.)
+export const LEASE_OCR_CAP_GROWTH = 25;
+export const LEASE_OCR_CAP_PREMIUM = 100;
+export function leaseOcrMonthlyCap(plan: string | null | undefined): number {
+  if (!canUseLeaseOcr(plan)) return 0;
+  // Premium (and the founder pilot) get the higher ceiling; every other gated
+  // plan (Growth) gets the standard one.
+  return plan === "premium" || plan === "pilot" ? LEASE_OCR_CAP_PREMIUM : LEASE_OCR_CAP_GROWTH;
 }
 
 // --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------
