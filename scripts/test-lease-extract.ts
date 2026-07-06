@@ -55,6 +55,18 @@ ok("bank account run stripped", redactPII("Acct 001234567") === null);
 ok("7-digit run stripped", redactPII("ref 1234567") === null);
 ok("label 'social insurance' stripped", redactPII("Social Insurance Number on file") === null);
 ok("label 'date of birth' stripped", redactPII("Date of birth: shown") === null);
+// DOB aliases + licence abbreviations (Codex QA S425).
+ok("label 'birthdate' stripped", redactPII("Tenant birthdate 1991-05-12") === null);
+ok("label 'birth date' stripped", redactPII("Birth date on file") === null);
+ok("label 'born <date>' stripped", redactPII("Tenant born 1991-05-12") === null);
+ok("label 'DL' abbreviation stripped", redactPII("DL A1234-56789") === null);
+ok("label 'licence #' stripped", redactPII("Licence # provided") === null);
+// Near-boundary identifier: detection runs on the FULL string before truncating,
+// so a SIN pushed past the length ceiling can't be sliced past the guard.
+ok(
+  "near-boundary identifier stripped before truncation",
+  redactPII("A".repeat(118) + " SIN 123456789") === null,
+);
 ok("label 'driver's licence' stripped", redactPII("Driver's Licence provided") === null);
 ok("label 'void cheque' stripped", redactPII("void cheque attached") === null);
 ok("label 'bank account' stripped", redactPII("bank account details enclosed") === null);

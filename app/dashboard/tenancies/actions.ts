@@ -47,6 +47,12 @@ export async function extractLease(input: {
   images?: Array<{ base64: string; mimeType: string }>;
   text?: string;
 }): Promise<LeaseParseResult> {
+  // Ships DARK behind its OWN flag, enforced SERVER-SIDE here (Codex QA S425).
+  // The page (new/page.tsx) hides the uploader when LEASE_OCR_ENABLED !== "1",
+  // but a crafted POST could still reach this action while ANTHROPIC_API_KEY is
+  // already present for other OCR. Gate the flag BEFORE claiming a scan credit or
+  // sending any lease content to the model, so the feature cannot leak on early.
+  if (process.env.LEASE_OCR_ENABLED !== "1") return { ok: false, reason: "unconfigured" };
   await requireCapability("manage_tenancies", FORBIDDEN);
   const org = await getCurrentOrg();
   if (!org) return { ok: false, reason: "unconfigured" };

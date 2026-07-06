@@ -210,8 +210,17 @@ export function extractJsonObject(text: unknown): Record<string, unknown> | null
  * always preferable to persisting an identifier. These run regardless of the
  * prompt, so a model regression can't leak. */
 const PII_PATTERNS: RegExp[] = [
-  // Explicit labels a lease uses around sensitive data.
-  /\b(social insurance|sin\s*(no|number|#|:)|ssn|date of birth|d\.?o\.?b\.?|driver'?s?\s*licen[cs]e|void\s*cheque|pre-?authorized\s*debit|bank\s*account|account\s*(no|number|#)|transit\s*(no|number|#)|institution\s*(no|number|#)|passport)\b/i,
+  // Whole-word sensitive-data labels. DOB aliases (birthdate / birth date / born)
+  // are included so a labelled value like "Tenant birthdate 1991-05-12" is
+  // dropped even when the bare date itself doesn't trip a numeric pattern
+  // (Codex QA S425).
+  /\b(social insurance|ssn|date of birth|birth\s*-?\s*date|born|d\.?o\.?b\.?|driver'?s?\s*licen[cs]e|void\s*cheque|pre-?authorized\s*debit|bank\s*account|passport)\b/i,
+  // Label + a number-ish qualifier. These may END in punctuation ("#"/":"), so
+  // they carry NO trailing word-boundary (a `\b` would not hold after "#").
+  // Covers "SIN #", "Licence no", "account number", "transit #", "DL:".
+  /\b(sin|ssn|licen[cs]e|dl|account|transit|institution)\s*(no|number|#|:)/i,
+  // "DL" as a bare driver's-licence abbreviation (e.g. "DL A1234-56789").
+  /\bdl\b/i,
   // SIN / SSN grouped 9-digit forms: 123-456-789, 123 45 6789, 123456789.
   /\b\d{3}[-\s]?\d{2,3}[-\s]?\d{3,4}\b/,
   // Credit-card-like 13-19 digit runs (allow spaces/dashes between groups).
@@ -227,13 +236,18 @@ const PII_PATTERNS: RegExp[] = [
  * the tests can assert the boundary directly. */
 export function redactPII(v: unknown, maxLen: number = MAX_TEXT_LEN): string | null {
   if (typeof v !== "string") return null;
-  const t = v.trim().replace(/\s+/g, " ").slice(0, maxLen).trim();
-  if (!t) return null;
-  if (/^(null|n\/a|na|none|unknown|unspecified|not stated|-)$/i.test(t)) return null;
+  const collapsed = v.trim().replace(/\s+/g, " ");
+  if (!collapsed) return null;
+  if (/^(null|n\/a|na|none|unknown|unspecified|not stated|-)$/i.test(collapsed)) return null;
+  // Run PII detection on the FULL collapsed string BEFORE truncating (Codex QA
+  // S425): a near-boundary identifier must not be sliced past the guard, leaving
+  // a truncated-but-still-sensitive fragment. Only after the string clears every
+  // pattern do we clamp it to the field's length ceiling.
   for (const re of PII_PATTERNS) {
-    if (re.test(t)) return null;
+    if (re.test(collapsed)) return null;
   }
-  return t;
+  const t = collapsed.slice(0, maxLen).trim();
+  return t || null;
 }
 
 // ---------------------------------------------------------------------------
