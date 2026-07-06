@@ -61,7 +61,7 @@ export function DescriptionGuide({
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="text-xs font-medium text-indigo-600 hover:underline"
+          className="text-xs font-medium text-emerald-700 hover:underline"
         >
           {open ? "Hide helper" : "Help me write this"}
         </button>
@@ -81,7 +81,7 @@ export function DescriptionGuide({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="font-medium text-indigo-600 hover:underline"
+            className="font-medium text-emerald-700 hover:underline"
           >
             Help me write this
           </button>
@@ -89,7 +89,7 @@ export function DescriptionGuide({
       )}
 
       {open && (
-        <div className="mt-2 space-y-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-xs text-gray-600">
+        <div className="mt-2 space-y-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 text-xs text-gray-600">
           <p className="text-gray-700">
             Answer a few quick prompts and we&apos;ll draft a clear rental
             description. Skip anything that doesn&apos;t apply.
@@ -136,7 +136,7 @@ export function DescriptionGuide({
             <button
               type="button"
               onClick={generate}
-              className="rounded-lg bg-indigo-600 px-2.5 py-1 font-medium text-white hover:bg-indigo-700"
+              className="rounded-lg bg-emerald-700 px-2.5 py-1 font-medium text-white hover:bg-emerald-800"
             >
               {preview ? "Regenerate" : "Generate starter draft"}
             </button>

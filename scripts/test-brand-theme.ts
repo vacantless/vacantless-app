@@ -134,7 +134,7 @@ eq("text on invalid -> default(indigo) = white", readableTextColor("nope"), "#ff
 
 // --- default-color alias is the single source of truth ---
 eq("DEFAULT_BRAND aliases DEFAULT_BRAND_COLOR", DEFAULT_BRAND, DEFAULT_BRAND_COLOR);
-eq("DEFAULT_BRAND_COLOR is indigo-600", DEFAULT_BRAND_COLOR, "#4f46e5");
+eq("DEFAULT_BRAND_COLOR is forest green", DEFAULT_BRAND_COLOR, "#17362f");
 
 // --- isGradientBrand ---
 ok("solid: no secondary -> not gradient", !isGradientBrand("#4f46e5", null));
@@ -166,13 +166,13 @@ eq("decorative invalid primary -> default", decorativeGradientCss("nope", null),
 ok("decorative ombre keeps raw teal", decorativeGradientCss("#4f46e5", "#14b8a6").includes("#14b8a6"));
 
 // --- presets are well-formed + AA-safe where it matters ---
-ok("8 solid presets", SOLID_PRESETS.length === 8);
-ok("default indigo is first solid preset", SOLID_PRESETS[0].hex === DEFAULT_BRAND_COLOR);
+ok("9 solid presets", SOLID_PRESETS.length === 9);
+ok("default forest is first solid preset", SOLID_PRESETS[0].hex === DEFAULT_BRAND_COLOR);
 for (const p of SOLID_PRESETS) {
   ok(`solid preset ${p.name} is valid hex`, /^#[0-9a-f]{6}$/.test(p.hex));
   ok(`solid preset ${p.name} clears AA with white text`, !isBrandColorTooLight(p.hex));
 }
-ok("6 gradient presets", GRADIENT_PRESETS.length === 6);
+ok("7 gradient presets", GRADIENT_PRESETS.length === 7);
 for (const g of GRADIENT_PRESETS) {
   ok(`gradient preset ${g.name} from is valid hex`, /^#[0-9a-f]{6}$/.test(g.from));
   ok(`gradient preset ${g.name} to is valid hex`, /^#[0-9a-f]{6}$/.test(g.to));

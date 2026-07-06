@@ -23,22 +23,26 @@ export interface RGB {
 }
 
 /**
- * The single source of truth for the default brand color (Tailwind indigo-600,
- * the left anchor of the marketing homepage's indigo->teal gradient). Every
- * other module imports this rather than re-typing the literal.
+ * The single source of truth for the default brand color: forest green, the
+ * marketing site's --color-primary (S427). It is the base of the homepage
+ * forest-green ombre and the fallback every UNBRANDED surface uses, so the
+ * pre-auth chrome, onboarding, and any org that has not picked a brand all read
+ * as one product identity. Every other module imports this rather than
+ * re-typing the literal; kept in sync with --brand-color / --color-primary in
+ * globals.css and the Tailwind brand.DEFAULT fallback.
  */
-export const DEFAULT_BRAND_COLOR = "#4f46e5";
+export const DEFAULT_BRAND_COLOR = "#17362f";
 
 /**
- * The default SECOND ombre stop (Tailwind teal-500, the right anchor of the
- * marketing homepage's indigo->teal gradient). A brand-new org defaults to the
- * homepage ombre (`DEFAULT_BRAND_COLOR` -> `DEFAULT_BRAND_SECONDARY`) rather than
- * a flat solid; the tenant can still switch to a solid or any other ombre. This
- * is the tenant's editable STARTING brand that happens to match the homepage —
- * not the marketing gradient overriding a chosen color (see
+ * The default SECOND ombre stop: the marketing --color-accent green. A brand-new
+ * org defaults to the homepage forest-green ombre
+ * (`DEFAULT_BRAND_COLOR` -> `DEFAULT_BRAND_SECONDARY`) rather than a flat solid;
+ * the tenant can still switch to a solid or any other ombre. This is the
+ * tenant's editable STARTING brand that happens to match the homepage, not the
+ * marketing gradient overriding a chosen color (see
  * feedback_tenant_brand_not_marketing_gradient).
  */
-export const DEFAULT_BRAND_SECONDARY = "#14b8a6";
+export const DEFAULT_BRAND_SECONDARY = "#16756a";
 
 /** @deprecated Back-compat alias of {@link DEFAULT_BRAND_COLOR}. */
 export const DEFAULT_BRAND = DEFAULT_BRAND_COLOR;
@@ -259,14 +263,15 @@ export function decorativeGradientCss(
 
 /**
  * Curated SOLID brand presets. Every one clears WCAG AA with white text as-is
- * (no surprise darkening), sampled across a tasteful range with the homepage
- * indigo as the default-first option.
+ * (no surprise darkening), sampled across a tasteful range with the default
+ * forest green as the default-first option.
  */
 export const SOLID_PRESETS: { name: string; hex: string }[] = [
-  { name: "Indigo", hex: "#4f46e5" },
-  { name: "Blue", hex: "#1d4ed8" },
-  { name: "Teal", hex: "#0f766e" },
+  { name: "Forest", hex: "#17362f" },
   { name: "Green", hex: "#166534" },
+  { name: "Teal", hex: "#0f766e" },
+  { name: "Blue", hex: "#1d4ed8" },
+  { name: "Indigo", hex: "#4f46e5" },
   { name: "Violet", hex: "#7c3aed" },
   { name: "Rose", hex: "#be123c" },
   { name: "Orange", hex: "#c2410c" },
@@ -279,10 +284,11 @@ export const SOLID_PRESETS: { name: string; hex: string }[] = [
  * text they are legibility-guarded by `accessibleStops`/`brandGradientCss`.
  */
 export const GRADIENT_PRESETS: { name: string; from: string; to: string }[] = [
-  { name: "Indigo to Teal", from: "#4f46e5", to: "#14b8a6" },
+  { name: "Forest", from: "#17362f", to: "#16756a" },
+  { name: "Evergreen", from: "#15803d", to: "#0d9488" },
   { name: "Ocean", from: "#2563eb", to: "#06b6d4" },
+  { name: "Indigo to Teal", from: "#4f46e5", to: "#14b8a6" },
   { name: "Violet", from: "#7c3aed", to: "#4f46e5" },
   { name: "Sunset", from: "#db2777", to: "#ea580c" },
-  { name: "Forest", from: "#15803d", to: "#0d9488" },
   { name: "Berry", from: "#be123c", to: "#7c3aed" },
 ];

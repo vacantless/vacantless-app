@@ -6,7 +6,7 @@ import { InquiryForm } from "./inquiry-form";
 import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
 import { affordabilityHintIncomeCents } from "@/lib/screening";
-import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { Icons } from "@/components/icons";
 import {
   buildSpecLine,
@@ -89,7 +89,7 @@ export default async function PublicListingPage({
   const isAvailable = l.status === "available";
   // Guardrail: keep white-on-brand (header, button) and brand-on-white (price)
   // legible even when the tenant picked a pale color.
-  const brand = accessibleBrand(l.brand_color || "#4f46e5");
+  const brand = accessibleBrand(l.brand_color || DEFAULT_BRAND_COLOR);
   // Ombre brand surface (header band, primary buttons) when the tenant picked a
   // second stop; a solid otherwise. Both stops are legibility-guarded.
   const brandBg = brandGradientCss(l.brand_color, l.brand_color_secondary);

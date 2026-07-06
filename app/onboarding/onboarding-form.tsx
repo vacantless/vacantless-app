@@ -30,7 +30,7 @@ export function OnboardingForm({
   referralToken?: string;
 }) {
   const [name, setName] = useState("");
-  // A brand-new org starts on the homepage ombre (indigo -> teal); the picker
+  // A brand-new org starts on the homepage forest-green ombre; the picker
   // opens in Ombre mode seeded to match. The tenant can switch to a solid or
   // any other ombre before creating the account.
   const [primary, setPrimary] = useState(DEFAULT_BRAND_COLOR);

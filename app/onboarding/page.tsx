@@ -31,7 +31,7 @@ export default async function OnboardingPage({
     >
       {/* gradient step indicator */}
       <div className="mb-6 flex items-center gap-2" aria-hidden>
-        <span className="h-1.5 flex-1 rounded-full bg-gradient-to-r from-indigo-600 to-teal-500" />
+        <span className="h-1.5 flex-1 rounded-full bg-gradient-to-r from-[#17362f] to-[#16756a]" />
         <span className="h-1.5 flex-1 rounded-full bg-gray-200" />
       </div>
 

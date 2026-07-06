@@ -9,7 +9,7 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "var(--brand-color, #4f46e5)",
+          DEFAULT: "var(--brand-color, #17362f)",
         },
       },
     },

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { renderLeaseDocumentHtml, type LeaseRenderModel } from "@/lib/lease-render";
 import { SignatureForm } from "./signature-form";
 
@@ -58,7 +58,7 @@ export default async function SignLeasePage({
   if (!data) notFound();
   const c = data as Context;
 
-  const brand = accessibleBrand(c.brand_color || "#4f46e5");
+  const brand = accessibleBrand(c.brand_color || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(c.brand_color, c.brand_color_secondary);
   const justSigned = searchParams.signed === "1";
   const done = justSigned || c.already_signed;

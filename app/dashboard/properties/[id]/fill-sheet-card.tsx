@@ -26,7 +26,7 @@ const SOURCE_BADGE: Record<
 > = {
   // A plain copy-paste field needs no badge — the value speaks for itself.
   listing: null,
-  preset: { label: "Recommended", cls: "bg-indigo-50 text-indigo-700" },
+  preset: { label: "Recommended", cls: "bg-emerald-50 text-emerald-800" },
   manual: { label: "You enter this", cls: "bg-amber-50 text-amber-700" },
 };
 
@@ -69,7 +69,7 @@ export function FillSheetCard({ sheets }: { sheets: FillSheet[] }) {
     <details className="mb-4 rounded-xl border border-gray-200 bg-gray-50/60">
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-sm font-medium text-gray-900">
         <span>Fill sheet — field-by-field for each portal</span>
-        <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
           {prefilled}/{fromListing} pre-filled
         </span>
       </summary>

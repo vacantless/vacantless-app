@@ -3,12 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --brand-color: #4f46e5;
+  /* Default tenant/app brand fallback. Forest green (S427) so every UNBRANDED
+     surface - the pre-auth chrome, the onboarding flow, and any org that has not
+     set its own brand_color - reads as the same product identity as the
+     marketing site. A white-label org's saved brand_color still overrides this
+     via the inline --brand-color the dashboard layout sets per request; this is
+     only the fallback. Kept in sync with --color-primary below and with
+     DEFAULT_BRAND_COLOR in lib/brand-theme.ts + the Tailwind brand.DEFAULT fallback. */
+  --brand-color: #17362f;
 
-  /* Vacantless marketing brand - themeable primary. Forest green is the default
-     (validated direction, S426); a white-label customer overrides --color-primary
-     and the derived roles follow. Neutrals/greys are intentionally NOT tokenized
-     - they stay constant across themes. */
+  /* Vacantless marketing brand ramp - forest green (validated direction, S426).
+     These are FOUR independent role tokens, not one seed that derives the rest:
+     --color-primary is the base; -hover is a slightly lighter press/hover state;
+     -accent / -accent-strong are the companion greens used for tiles + emphasis.
+     A white-label customer overrides this whole ramp (typically primary + the two
+     accents) to re-skin the marketing surfaces. Neutrals/greys are intentionally
+     NOT tokenized - they stay constant across themes. */
   --color-primary: #17362f;
   --color-primary-hover: #1f463c;
   --color-accent: #16756a;

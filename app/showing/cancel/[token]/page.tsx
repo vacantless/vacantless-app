@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { cancelShowingFromToken } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +66,7 @@ export default async function CancelShowingPage({
   const row = data as unknown as Row;
 
   const orgName = row.organization?.name || "Your leasing team";
-  const brand = accessibleBrand(row.organization?.brand_color || "#4f46e5");
+  const brand = accessibleBrand(row.organization?.brand_color || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(
     row.organization?.brand_color,
     row.organization?.brand_color_secondary,

@@ -165,7 +165,7 @@ export default function BrandColorField({
   }, [primary, secondaryOut]);
 
   function reset() {
-    // The default brand is the homepage ombre (indigo -> teal), so reset
+    // The default brand is the homepage forest-green ombre, so reset
     // restores that, not a flat solid.
     setMode("ombre");
     setPrimary(DEFAULT_BRAND_COLOR);

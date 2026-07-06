@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createDocumentDownloadUrl } from "@/lib/documents-server";
-import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { isShareLinkValid, formatBytes, documentTypeLabel } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
@@ -137,7 +137,7 @@ export default async function SharedDocumentPage({
   const info = await resolveShare(params.token);
   if (!info) notFound();
 
-  const brand = accessibleBrand(info.brandColor || "#4f46e5");
+  const brand = accessibleBrand(info.brandColor || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(info.brandColor, info.brandColorSecondary);
   const isImage = info.mimeType.startsWith("image/");
 

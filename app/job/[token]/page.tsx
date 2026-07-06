@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createIncidentMediaDownloadUrls } from "@/lib/incident-media-server";
-import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { workOrderCategoryLabel, workOrderPriorityLabel } from "@/lib/work-orders";
 import {
   dispatchStatusLabel,
@@ -77,7 +77,7 @@ export default async function TradeJobPage({
   if (!data) notFound();
   const c = data as Context;
 
-  const brand = accessibleBrand(c.brand_color || "#4f46e5");
+  const brand = accessibleBrand(c.brand_color || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(c.brand_color, c.brand_color_secondary);
 
   const Header = (

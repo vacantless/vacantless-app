@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
+import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { ReportForm } from "./report-form";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export default async function ReportIncidentPage({
   if (!data) notFound();
   const c = data as Context;
 
-  const brand = accessibleBrand(c.brand_color || "#4f46e5");
+  const brand = accessibleBrand(c.brand_color || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(c.brand_color, c.brand_color_secondary);
   const submitted = searchParams.submitted === "1";
 
