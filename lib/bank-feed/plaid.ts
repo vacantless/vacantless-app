@@ -56,6 +56,17 @@ function countryCodesFromEnv(): CountryCode[] {
   return raw.map((c) => c as CountryCode);
 }
 
+// OAuth redirect URI (production). Canadian institutions (RBC, TD, Amex CA) and
+// many US banks use OAuth: Plaid Link redirects the browser to the bank and back
+// to this exact URI, which MUST also be registered in the Plaid dashboard
+// (Team Settings -> API -> Allowed redirect URIs). Undefined when unset so
+// sandbox (no OAuth) stays byte-identical - passing an unregistered redirect_uri
+// would make linkTokenCreate throw.
+function redirectUriFromEnv(): string | undefined {
+  const raw = (process.env.PLAID_REDIRECT_URI || "").trim();
+  return raw ? raw : undefined;
+}
+
 function plaidClient(): PlaidApi {
   const clientId = process.env.PLAID_CLIENT_ID;
   const secret = process.env.PLAID_SECRET;
@@ -83,12 +94,16 @@ export class PlaidProvider implements BankFeedProvider {
 
   async startConnect(orgId: string): Promise<ConnectHandoff> {
     const client = plaidClient();
+    const redirectUri = redirectUriFromEnv();
     const res = await client.linkTokenCreate({
       user: { client_user_id: orgId },
       client_name: CLIENT_NAME,
       products: productsFromEnv(),
       country_codes: countryCodesFromEnv(),
       language: "en",
+      // Only sent in production once a redirect URI is registered; omitting the
+      // key entirely (vs. passing undefined) keeps the sandbox request identical.
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     });
     return {
       provider: "plaid",
