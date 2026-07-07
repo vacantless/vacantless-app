@@ -1,5 +1,16 @@
 # S430 - Feature B Slice 2: AI listing import from IMAGE(S)
 
+**Status: Codex-ACCEPTED at source/test level 2026-07-06 (range dcfd82c..a08f085), no P1/P2.**
+Confirmed: text path byte-identical after the `finishListingImport` extraction; image path
+dark behind `LISTING_AI_IMPORT_ENABLED` + `canUseListingAiImport(org.plan)` on both page and
+action (hand-posts redirect to `?import=unavailable` before `parseListing`); `selectListingImages`
+correct + order-preserving; `VisionImageType` cast safe post-selection; image drafts merge onto
+`emptyParsedListing()` so nothing deterministic is overwritten; pets out of contract. Gates green
+(81/0 - 254/0 - 108/0, tsc + eslint clean). REMAINING PROOF = the North Star QA flag-flip for the
+live Anthropic image call (Codex did not exercise the live model / browser upload). Feature stays
+DARK in prod until that QA passes.
+
+
 Review scope: the commit range handed with this note (5 files, no migration, no
 schema change). Ships DARK behind env `LISTING_AI_IMPORT_ENABLED` (unset in prod)
 AND the Growth+ `listing_ai_import` entitlement - same gate as the S428/S429 text
