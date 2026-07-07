@@ -29,6 +29,12 @@ const SECTIONS: Section[] = [
     icon: "building",
   },
   {
+    href: "/dashboard/messages",
+    title: "Messages",
+    desc: "Tenant courtesy notes waiting for approval. Review, edit, send, or dismiss them before anything leaves your account.",
+    icon: "mail",
+  },
+  {
     href: "/dashboard/people",
     title: "People",
     desc: "Everyone you've leased to, across tenancies — the contact record behind each tenant.",

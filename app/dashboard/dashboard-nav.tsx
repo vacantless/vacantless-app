@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 // Leasing, Tenants and Money are hub landings that tab across existing routes
 // (via `match` prefixes, so a hub item stays lit while you're on a child route).
 //   • Leasing  → Inquiries / Viewings / Availability / Pre-screening / Reports
-//   • Tenants  → Tenancies / People
+//   • Tenants  → Tenancies / People / Messages
 //   • Money    → Rent (+ statement / rent-roll) / Expenses
 //
 // Money is ALWAYS visible now (S427): Expenses and Reports are useful without
@@ -51,7 +51,7 @@ const PRIMARY: NavItem[] = [
   {
     href: "/dashboard/tenants",
     label: "Tenants",
-    match: ["/dashboard/tenancies", "/dashboard/people"],
+    match: ["/dashboard/tenancies", "/dashboard/people", "/dashboard/messages"],
   },
   {
     href: "/dashboard/money",
