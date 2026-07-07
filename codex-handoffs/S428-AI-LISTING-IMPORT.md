@@ -112,7 +112,15 @@ Folded the one P2:
   in the repo (Codex hit this too); ran via `node -r sucrase/register`. Doc-drift
   to reconcile - either add the shim or update the header + KI652.
 
-## S429b - Codex re-review P2 folded (high-end bare dollar rents)
+## S429b - Codex re-review P2 folded (high-end bare dollar rents) [ACCEPTED 2026-07-06, e753850..8107c07]
+
+**Status: Codex-ACCEPTED, loop CLOSED at source/test level (prod 8107c07).** No P1/P2 in
+scope. Codex confirmed the $500 crossover is inside the only valid single-threshold
+interval (>$120/mo so 12000 scales, <=$900/mo so 90000 stays cents), found no cleaner
+alternative and no other over-scale class, verified base-always-wins and the dark gate
+intact, and re-ran the full gate (listing-extract 75/0, billing 254/0, mls-import 108/0,
+tsc + eslint clean). Feature remains DARK.
+
 
 Codex re-review of `e753850..0250de2` accepted the merge but flagged a residual **P2**:
 the S429 `clampRentCents` only dollar-scaled a bare integer when its cents reading
