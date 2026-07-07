@@ -246,6 +246,22 @@ export type OwnerStatement = {
   hasUnassigned: boolean;
 };
 
+/**
+ * True when a building group is really just ONE standalone unit — a single unit
+ * row, no siblings, and no building-wide shared cost. The By-building table
+ * renders these as a single line instead of a bold building-header row PLUS a
+ * nested unit row for the identical figures (the "double-row" of KI631, S433).
+ * The "Unassigned / overhead" bucket (buildingKey == null) is excluded: it is a
+ * special catch-all, not a building, and keeps its own header treatment.
+ */
+export function isStandaloneUnit(b: StatementBuildingRow): boolean {
+  return (
+    b.buildingKey != null &&
+    b.unitRows.length === 1 &&
+    b.sharedMaintenanceCents === 0
+  );
+}
+
 const UNASSIGNED_LABEL = "Unassigned";
 const OVERHEAD_LABEL = "Unassigned / overhead";
 

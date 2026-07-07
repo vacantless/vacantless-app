@@ -325,6 +325,23 @@ ok("split: '#808'", splitAddressUnit("123 Spadina Ave #808").unit === "808");
   const a = splitAddressUnit(null);
   ok("split: null in -> both null", a.street === null && a.unit === null);
 }
+// --- unit-adjacent parenthetical alias (S433, mirrors migration 0112) ------
+{
+  // "Unit 1 (Main)" is one unit designation: the alias strips WITH the token so
+  // the triplex's three units land on one building street label.
+  const a = splitAddressUnit("506 Manning Avenue, Unit 1 (Main), Toronto, ON M6G 2V7");
+  ok("split: unit-adjacent (Main) stripped from street", a.street === "506 Manning Avenue, Toronto, ON M6G 2V7");
+  ok("split: unit token still extracted alongside alias", a.unit === "1");
+}
+ok(
+  "split: (Upper) alias variant collapses to the same street",
+  splitAddressUnit("506 Manning Avenue, Unit 2 (Upper), Toronto, ON M6G 2V7").street ===
+    "506 Manning Avenue, Toronto, ON M6G 2V7",
+);
+ok(
+  "split: STANDALONE parenthetical (no unit token) is left intact",
+  splitAddressUnit("123 Main St (North Tower), Toronto").street === "123 Main St (North Tower), Toronto",
+);
 
 // --- stripLeadingListMarkers (S264 finding #8) -----------------------------
 ok(

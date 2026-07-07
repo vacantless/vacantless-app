@@ -24,6 +24,7 @@ import {
   describeRange,
   buildOwnerStatement,
   buildMonthlyStatement,
+  isStandaloneUnit,
   formatMoneyCents,
   type RentRow,
   type PropertyRef,
@@ -265,7 +266,28 @@ export default async function StatementPage({
                   <th className="px-4 py-3 text-right font-medium">Net</th>
                 </tr>
               </thead>
-              {statement.buildings.map((b) => (
+              {statement.buildings.map((b) => {
+                // A standalone unit (one unit, no siblings, no shared cost) is
+                // shown as a SINGLE row using its own full address — not a bold
+                // building-header row plus a redundant nested unit row for the
+                // same figures (the KI631 "double-row", S433). Real multi-unit
+                // buildings keep the header + nested rows.
+                if (isStandaloneUnit(b)) {
+                  const r = b.unitRows[0];
+                  return (
+                    <tbody key={b.buildingKey} className="border-b border-gray-100 last:border-0">
+                      <tr>
+                        <td className="px-4 py-2.5 text-gray-900">{r.address}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{formatMoneyCents(r.rentInCents)}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{formatMoneyCents(r.maintenanceOutCents)}</td>
+                        <td className={`px-4 py-2.5 text-right tabular-nums ${r.netCents < 0 ? "text-red-600" : "text-gray-900"}`}>
+                          {formatMoneyCents(r.netCents)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  );
+                }
+                return (
                 <tbody key={b.buildingKey ?? "overhead"} className="border-b border-gray-100 last:border-0">
                   {b.buildingKey != null ? (
                     <tr className="bg-gray-50/70">
@@ -300,7 +322,8 @@ export default async function StatementPage({
                     </tr>
                   )}
                 </tbody>
-              ))}
+                );
+              })}
               <tfoot>
                 <tr className="bg-gray-50 font-semibold text-gray-900">
                   <td className="px-4 py-3">Total</td>

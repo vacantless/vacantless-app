@@ -30,6 +30,7 @@ import {
   syncConnection,
   assignTransaction,
   ignoreTransaction,
+  ignoreAllPending,
   recordRentFromTransaction,
   applyRulesToQueue,
 } from "./actions";
@@ -172,6 +173,7 @@ export default async function ExpensesPage({
     assigned?: string;
     swept?: string;
     ignored?: string;
+    ignored_bulk?: string;
     bank?: string;
     exp?: string;
     imported?: string;
@@ -315,6 +317,13 @@ export default async function ExpensesPage({
       };
     }
     if (searchParams.ignored) return { tone: "neutral" as const, text: "Transaction ignored." };
+    if (searchParams.ignored_bulk != null) {
+      const n = parseInt(searchParams.ignored_bulk, 10) || 0;
+      return {
+        tone: "neutral" as const,
+        text: n > 0 ? `Ignored ${n} remaining line${n === 1 ? "" : "s"}.` : "No lines left to ignore.",
+      };
+    }
     if (searchParams.rent != null) {
       const n = parseInt(searchParams.rent, 10);
       if (Number.isFinite(n) && n > 0) {
@@ -647,6 +656,20 @@ export default async function ExpensesPage({
               </Card>
               );
             })}
+            {/* Bulk-ignore the personal remainder of a commingled import (S433).
+                Placed AFTER the list so the operator files real property costs
+                first; "ignore" is a soft status, so nothing is deleted. */}
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-gray-200 px-4 py-3">
+              <p className="text-xs text-gray-500">
+                Imported a personal account too? Sort the property costs above, then clear the rest in one step.
+              </p>
+              <form action={ignoreAllPending}>
+                <input type="hidden" name="confirm" value="1" />
+                <SubmitButton className="shrink-0 text-sm font-medium text-gray-600 underline" pendingLabel="Ignoring…">
+                  Ignore remaining {pending.length}
+                </SubmitButton>
+              </form>
+            </div>
           </div>
         )}
       </div>

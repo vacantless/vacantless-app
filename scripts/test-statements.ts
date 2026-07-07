@@ -9,6 +9,7 @@ import {
   groupRentByProperty,
   buildOwnerStatement,
   buildMonthlyStatement,
+  isStandaloneUnit,
   statementToCsv,
   type RentRow,
   type PropertyRef,
@@ -290,6 +291,52 @@ ok("csv unit line under building", bcsv.includes("100 King St Unit 1,Unit,2000.0
 ok("csv building-wide shared line", bcsv.includes("Building-wide (shared),Shared,0.00,500.00,-500.00"));
 ok("csv overhead unscoped line", bcsv.includes("Unassigned,Unassigned,0.00,70.00,-70.00"));
 ok("csv building tier TOTAL", bcsv.includes("TOTAL,,3800.00,870.00,2930.00"));
+
+// --- isStandaloneUnit: the By-building double-row collapse (S433 item d) -----
+{
+  // A two-unit building is NOT standalone (keeps the header + nested rows).
+  ok("standalone: multi-unit building is not standalone", isStandaloneUnit(bRow) === false);
+  // The overhead bucket (buildingKey null) is never standalone.
+  ok("standalone: overhead bucket is not standalone", isStandaloneUnit(overhead) === false);
+
+  // A keyed single-unit building with no shared cost IS standalone.
+  const SOLO = "50 glenrose ave, toronto, on m4t 1k4";
+  const soloProps: PropertyRef[] = [
+    { id: "22222222-0000-0000-0000-000000000001", address: "50 Glenrose Ave, Unit 4, Toronto, ON", buildingKey: SOLO },
+  ];
+  const soloStmt = buildOwnerStatement(
+    [{ amount_cents: 200000, paid_on: "2026-01-05", property_id: "22222222-0000-0000-0000-000000000001" }],
+    [],
+    soloProps,
+    year2026,
+  );
+  const soloRow = soloStmt.buildings.find((b) => b.buildingKey === SOLO)!;
+  ok("standalone: keyed single-unit building IS standalone", isStandaloneUnit(soloRow) === true);
+
+  // A single-unit building that DOES carry a shared cost is NOT standalone (the
+  // shared line still needs to show under a building header).
+  const sharedStmt = buildOwnerStatement(
+    [{ amount_cents: 200000, paid_on: "2026-01-05", property_id: "22222222-0000-0000-0000-000000000001" }],
+    [{ property_id: null, building_key: SOLO, category: "landscaping", status: "completed", cost_cents: 12000, completed_on: "2026-02-01" }],
+    soloProps,
+    year2026,
+  );
+  const sharedRow = sharedStmt.buildings.find((b) => b.buildingKey === SOLO)!;
+  ok("standalone: single unit WITH a shared cost is not standalone", isStandaloneUnit(sharedRow) === false);
+
+  // A keyless unit (synthetic prop: key) with no siblings/shared IS standalone.
+  const keylessProps: PropertyRef[] = [
+    { id: "33333333-0000-0000-0000-000000000001", address: "9 Bay St", buildingKey: null },
+  ];
+  const keylessStmt = buildOwnerStatement(
+    [{ amount_cents: 150000, paid_on: "2026-01-05", property_id: "33333333-0000-0000-0000-000000000001" }],
+    [],
+    keylessProps,
+    year2026,
+  );
+  const keylessRow = keylessStmt.buildings.find((b) => b.buildingKey !== null)!;
+  ok("standalone: keyless single unit IS standalone", isStandaloneUnit(keylessRow) === true);
+}
 
 // --- Expenses fold into the statement (the bank-feed wiring contract) --------
 //

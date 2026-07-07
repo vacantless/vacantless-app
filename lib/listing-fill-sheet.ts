@@ -228,6 +228,13 @@ function textOrNull(s: string | null | undefined): string | null {
  * that segment (and its adjoining comma) out of the street value, and tidies the
  * leftover comma/space artifacts. When no unit token is present the street is
  * returned unchanged and unit is null (a genuinely unit-less address).
+ *
+ * An immediately-following parenthetical alias is treated as part of the same
+ * unit designation, so "Unit 1 (Main)" strips whole (S433, mirrors the SQL
+ * building_key() change in migration 0112) — this is what collapses a triplex
+ * entered as "…, Unit 1 (Main), …" / "…, Unit 2 (Upper), …" onto one building
+ * label. A STANDALONE parenthetical with no unit token ("123 Main St (North
+ * Tower)") is left intact so genuinely distinct buildings never merge.
  */
 export function splitAddressUnit(address: string | null | undefined): {
   street: string | null;
@@ -236,10 +243,10 @@ export function splitAddressUnit(address: string | null | undefined): {
   const raw = textOrNull(address);
   if (!raw) return { street: null, unit: null };
   // Match an optional leading comma/space, then a unit designator, then the
-  // unit token. `unit|suite|ste|apt|apartment` need word boundaries; `#` is
-  // punctuation so it stands alone.
+  // unit token, then an OPTIONAL adjacent "(...)" alias. `unit|suite|ste|apt|
+  // apartment` need word boundaries; `#` is punctuation so it stands alone.
   const re =
-    /[,\s]*(?:\b(?:unit|suite|ste|apt|apartment)\b\.?|#)\s*([A-Za-z0-9-]+)/i;
+    /[,\s]*(?:\b(?:unit|suite|ste|apt|apartment)\b\.?|#)\s*([A-Za-z0-9-]+)(?:\s*\([^)]*\))?/i;
   const m = re.exec(raw);
   if (!m) return { street: raw, unit: null };
   const unit = m[1];

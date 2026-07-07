@@ -402,6 +402,35 @@ export async function ignoreTransaction(formData: FormData) {
   redirect(`${BASE}?ignored=1`);
 }
 
+// --- Triage: bulk-ignore every pending debit still in the queue --------------
+// A commingled personal account (an OFX import of a chequing account that mixes
+// household + rental spend) dumps dozens of personal debits into the queue with
+// no way to clear them at once (KI631a, S433 item (c)). The operator's workflow
+// is: file the few real property costs first (manual, or via a saved rule /
+// "Apply saved rules"), then clear the personal remainder in one action.
+// "Ignore" is a SOFT status — no expense is created and nothing is deleted; a
+// line can still be reconsidered later. Org-scoped + pending + debit only, so it
+// never touches the credits (rent) lane, another org, or already-filed lines.
+export async function ignoreAllPending(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?bank=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  // Confirmation token from the button's form — guards against a stray submit.
+  if (s(formData, "confirm") !== "1") redirect(BASE);
+
+  const supabase = createClient();
+  const { data: cleared } = await supabase
+    .from("bank_transactions")
+    .update({ triage_status: "ignored" })
+    .eq("organization_id", org.id)
+    .eq("triage_status", "pending")
+    .eq("direction", "debit")
+    .select("id");
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?ignored_bulk=${cleared?.length ?? 0}`);
+}
+
 // --- Triage: record a CREDIT (money in) as rent income -----------------------
 // A rent deposit lands as one bank credit but can cover several tenancies (a
 // Rotessa lump), so the operator splits it across the org's active tenancies
