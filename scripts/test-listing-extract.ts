@@ -2,8 +2,10 @@
 // normalizer (clamping, alias keys, tri-state booleans, laundry/date coercion),
 // the empty-draft guard, and the MERGE (applyAiListing - the heart of this
 // build: deterministic base always wins, AI fills only gaps, booleans only fill
-// a `true` the regex missed). The impure vision call
-// (lib/listing-extract-vision.ts) is NOT tested here - it live-proves on deploy.
+// a `true` the regex missed), plus the PURE image-selection helper
+// (selectListingImages, Slice 2). The impure vision NETWORK call
+// (parseListing in lib/listing-extract-vision.ts) is NOT tested here - it
+// live-proves on deploy.
 // Run: node --experimental-strip-types --import ./ts-register.mjs scripts/test-listing-extract.ts
 import {
   normalizeListingDraft,
@@ -17,6 +19,12 @@ import {
   MAX_ROOMS,
   type ListingDraft,
 } from "../lib/listing-extract";
+import {
+  selectListingImages,
+  MAX_IMAGES,
+  MAX_IMAGE_BYTES,
+  MAX_TOTAL_IMAGE_BYTES,
+} from "../lib/listing-extract-vision";
 import { emptyParsedListing, type ParsedListing } from "../lib/mls-import";
 
 let passed = 0;
@@ -203,6 +211,46 @@ ok("system prompt forbids pet inference", /pet/i.test(LISTING_SYSTEM_PROMPT));
 ok("extraction prompt names the keys", (() => {
   const p = buildListingExtractionPrompt();
   return p.includes('"rentCents"') && p.includes('"laundry"') && !p.includes("pets");
+})());
+
+// --- selectListingImages (Slice 2, pure) ------------------------------------
+const jpg = (n: number) => ({ mimeType: "image/png", sizeBytes: n });
+ok("select keeps a supported image", (() => {
+  const r = selectListingImages([jpg(1000)]);
+  return r.keep.length === 1 && r.keep[0] === 0 && r.skipped.length === 0;
+})());
+ok("select drops an unsupported type", (() => {
+  const r = selectListingImages([{ mimeType: "application/pdf", sizeBytes: 1000 }]);
+  return r.keep.length === 0 && r.skipped[0]?.reason === "type";
+})());
+ok("select drops an oversized image but keeps a good one after it", (() => {
+  const r = selectListingImages([jpg(MAX_IMAGE_BYTES + 1), jpg(1000)]);
+  return (
+    r.keep.length === 1 &&
+    r.keep[0] === 1 &&
+    r.skipped.length === 1 &&
+    r.skipped[0].reason === "too_large"
+  );
+})());
+ok("select caps at MAX_IMAGES, preserving leading order", (() => {
+  const r = selectListingImages(Array.from({ length: MAX_IMAGES + 2 }, () => jpg(1000)));
+  return (
+    r.keep.length === MAX_IMAGES &&
+    r.keep[0] === 0 &&
+    r.skipped.length === 2 &&
+    r.skipped.every((s) => s.reason === "over_cap")
+  );
+})());
+ok("select enforces the total-byte ceiling", (() => {
+  // Each is under the per-image ceiling, but three together exceed the total, so
+  // the third is dropped as over_cap (not too_large).
+  const big = 7 * 1024 * 1024;
+  const r = selectListingImages([jpg(big), jpg(big), jpg(big)]);
+  return r.keep.length === 2 && r.skipped.length === 1 && r.skipped[0].reason === "over_cap";
+})());
+ok("select of empty list is empty", (() => {
+  const r = selectListingImages([]);
+  return r.keep.length === 0 && r.skipped.length === 0;
 })());
 
 // --- report -----------------------------------------------------------------

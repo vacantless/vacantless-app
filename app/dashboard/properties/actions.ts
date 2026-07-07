@@ -15,9 +15,10 @@ import {
   normalizeSmoking,
   normalizeAcType,
 } from "@/lib/property-features";
-import { parseMlsListing } from "@/lib/mls-import";
+import { parseMlsListing, emptyParsedListing, type ParsedListing } from "@/lib/mls-import";
 import { applyAiListing } from "@/lib/listing-extract";
-import { parseListing } from "@/lib/listing-extract-vision";
+import { parseListing, selectListingImages, type ListingImage } from "@/lib/listing-extract-vision";
+import type { VisionImageType } from "@/lib/lease-extract-vision";
 import { normalizeVirtualTourUrl } from "@/lib/virtual-tour";
 import {
   normalizePortal,
@@ -234,6 +235,24 @@ export async function importPropertyFromMls(formData: FormData) {
     }
   }
 
+  // Land the draft (or bounce with a hint if nothing parsed) via the shared
+  // finisher — the same insert + review-redirect the image path uses.
+  await finishListingImport(org, parsed, aiAdded);
+}
+
+/**
+ * Insert a reviewed-later DRAFT property from a parsed listing and redirect to
+ * the review surface, or bounce the operator back with a hint when nothing
+ * usable parsed out. Shared by both import paths (pasted MLS/PDF text and the
+ * AI image import) so the 17-column insert and the redirect contract live in
+ * ONE place. `aiAdded` = how many fields the AI backfill contributed (0 for a
+ * pure deterministic parse). Always ends in a redirect (returns `never`).
+ */
+async function finishListingImport(
+  org: { id: string },
+  parsed: ParsedListing,
+  aiAdded: number,
+): Promise<never> {
   // Nothing usable parsed out (even after any AI backfill) — send the operator
   // back with a hint rather than creating an empty draft they have to delete.
   if (parsed.foundFields.length === 0) {
@@ -285,6 +304,73 @@ export async function importPropertyFromMls(formData: FormData) {
   redirect(
     `/dashboard/properties/${id}?imported=${parsed.foundFields.length}&ai=${aiAdded}`,
   );
+}
+
+/**
+ * AI listing import from IMAGE(S) (Feature B Slice 2, S430). The operator uploads
+ * a photo / screenshot of a listing that only exists as a picture (no MLS text to
+ * paste); a model reads the image(s) into the SAME ListingDraft the text path
+ * produces, and we land a private Draft for review. There is no deterministic
+ * base to fall back on for an image, so this whole path is AI-only and therefore
+ * DARK behind LISTING_AI_IMPORT_ENABLED + the Growth+ entitlement, re-checked
+ * here server-side (the UI only renders when enabled, but never trust the client).
+ * Pets are NOT imported (RTA s.14 operator decision), same as the text path.
+ */
+export async function importListingFromImages(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  // Defense in depth: the page only renders this form when the flag + entitlement
+  // are on, but a hand-posted request must hit the same gate.
+  if (!process.env.LISTING_AI_IMPORT_ENABLED || !canUseListingAiImport(org.plan)) {
+    redirect("/dashboard/properties?import=unavailable");
+  }
+
+  // Uploaded files arrive as web File objects; keep only non-empty ones.
+  const files = formData
+    .getAll("listing_images")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) {
+    redirect("/dashboard/properties?import=empty");
+  }
+
+  // Pure selection decides which files (type/size/count/total caps) to send.
+  const { keep } = selectListingImages(
+    files.map((f) => ({ mimeType: f.type, sizeBytes: f.size })),
+  );
+  if (keep.length === 0) {
+    redirect("/dashboard/properties?import=badimage");
+  }
+
+  const images: ListingImage[] = [];
+  for (const i of keep) {
+    const f = files[i];
+    const bytes = Buffer.from(await f.arrayBuffer());
+    // selectListingImages already validated the mime against VisionImageType.
+    images.push({ base64: bytes.toString("base64"), mimeType: f.type as VisionImageType });
+  }
+
+  const result = await parseListing({ kind: "images", images });
+  if (!result.ok) {
+    // unconfigured => the key isn't set (still dark) or the images were unusable;
+    // empty => the model read nothing; failed => network/HTTP. Map each to a
+    // distinct, honest banner rather than a generic error.
+    const reason =
+      result.reason === "unconfigured"
+        ? "unavailable"
+        : result.reason === "empty"
+          ? "aiempty"
+          : "aifailed";
+    redirect(`/dashboard/properties?import=${reason}`);
+  }
+
+  // No deterministic base for an image, so merge onto an empty ParsedListing; the
+  // whole draft comes from the AI. finishListingImport handles the empty-guard,
+  // insert, and review redirect. `added.length` == the fields the AI filled.
+  const { merged, added } = applyAiListing(emptyParsedListing(), result.draft);
+  await finishListingImport(org, merged, added.length);
 }
 
 export async function updateProperty(formData: FormData) {

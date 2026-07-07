@@ -49,7 +49,13 @@ const TIMEOUT_MS = 30_000;
  * can't blow the request up. */
 const MAX_INPUT_CHARS = 40_000;
 /** Cap the number of page images sent. */
-const MAX_IMAGES = 4;
+export const MAX_IMAGES = 4;
+/** Per-image byte ceiling. A screenshot / phone photo of a listing is comfortably
+ * under this; anything larger is almost certainly the wrong file. */
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+/** Total byte ceiling across all selected images, so a handful of large photos
+ * can't build an oversized request. */
+export const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024;
 
 /** The ways listing content arrives. */
 export type ListingImage = { base64: string; mimeType: VisionImageType };
@@ -57,6 +63,41 @@ export type ListingSource =
   | { kind: "text"; text: string }
   | { kind: "image"; bytes: Buffer; mimeType: string }
   | { kind: "images"; images: ListingImage[] };
+
+/** Lightweight descriptor for an uploaded file - just what selection needs, so
+ * the decision is pure and unit-testable without a real File/Buffer. */
+export type ListingImageMeta = { mimeType: string; sizeBytes: number };
+
+/**
+ * Decide which uploaded images to send, in order. PURE: given each file's mime
+ * type and size, return the indices to KEEP and, for each dropped file, why. An
+ * image is kept when its type is model-supported, it is within the per-image
+ * byte ceiling, and adding it stays within both the count (MAX_IMAGES) and the
+ * total-byte ceilings. First-come order is preserved so the operator's leading
+ * image (usually the most informative) always makes the cut.
+ */
+export function selectListingImages(metas: ListingImageMeta[]): {
+  keep: number[];
+  skipped: Array<{ index: number; reason: "type" | "too_large" | "over_cap" }>;
+} {
+  const keep: number[] = [];
+  const skipped: Array<{ index: number; reason: "type" | "too_large" | "over_cap" }> = [];
+  let total = 0;
+  for (let i = 0; i < metas.length; i++) {
+    const m = metas[i];
+    if (!isVisionImageType(m.mimeType)) {
+      skipped.push({ index: i, reason: "type" });
+    } else if (m.sizeBytes > MAX_IMAGE_BYTES) {
+      skipped.push({ index: i, reason: "too_large" });
+    } else if (keep.length >= MAX_IMAGES || total + m.sizeBytes > MAX_TOTAL_IMAGE_BYTES) {
+      skipped.push({ index: i, reason: "over_cap" });
+    } else {
+      keep.push(i);
+      total += m.sizeBytes;
+    }
+  }
+  return { keep, skipped };
+}
 
 /**
  * Parse listing content into a ListingDraft. Never throws - every failure maps

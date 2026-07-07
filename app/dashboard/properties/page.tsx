@@ -13,9 +13,12 @@ import {
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { rentalRowReadiness } from "@/lib/rental-readiness";
-import { addProperty, importPropertyFromMls } from "./actions";
+import { getCurrentOrg } from "@/lib/org";
+import { canUseListingAiImport } from "@/lib/billing";
+import { addProperty, importPropertyFromMls, importListingFromImages } from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
 import { MlsPdfImport } from "./mls-pdf-import";
+import { ListingImageImport } from "./listing-image-import";
 import { ReadinessChips } from "./readiness-chips";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +61,14 @@ export default async function PropertiesPage({
   ]);
 
   const rows = (properties ?? []) as PropertyRow[];
+
+  // AI image import (Feature B Slice 2) is DARK: only surface the image-drop
+  // path when the env flag is set AND the org's plan carries the entitlement
+  // (Growth+). Off => the card isn't rendered and the page behaves exactly as
+  // before. The server action re-checks this gate.
+  const org = await getCurrentOrg();
+  const aiImageImportEnabled =
+    !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org?.plan);
 
   // Per-property inquiry counts (RLS already scopes both reads to this org).
   const leadCounts = new Map<string, number>();
@@ -109,6 +120,30 @@ export default async function PropertiesPage({
       {searchParams.import === "failed" && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           Something went wrong creating the rental. Please try again.
+        </p>
+      )}
+      {searchParams.import === "badimage" && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Those files weren&apos;t usable images. Upload a JPG, PNG, WebP, or GIF
+          screenshot or photo of the listing (up to 8 MB each).
+        </p>
+      )}
+      {searchParams.import === "aiempty" && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Couldn&apos;t read any listing details from those images. Try a clearer
+          shot, or use &ldquo;Start fresh&rdquo; below.
+        </p>
+      )}
+      {searchParams.import === "aifailed" && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          Reading the images didn&apos;t work just now. Please try again in a
+          moment, or paste the listing text above.
+        </p>
+      )}
+      {searchParams.import === "unavailable" && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Image import isn&apos;t available on your plan right now. Paste the
+          listing text above, or use &ldquo;Start fresh&rdquo; below.
         </p>
       )}
 
@@ -268,6 +303,29 @@ export default async function PropertiesPage({
           }
         />
       </form>
+
+      {/* AI image import (Feature B Slice 2) - only for a listing that exists as
+          a picture. Rendered only when the flag + entitlement are on (DARK by
+          default); the action re-checks the gate. */}
+      {aiImageImportEnabled && (
+        <form
+          key={`img-import-${searchParams.import ?? "new"}`}
+          action={importListingFromImages}
+          encType="multipart/form-data"
+          className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        >
+          <p className="mb-1 block text-sm font-medium text-gray-800">
+            Only have a picture of the listing? Upload it to prefill
+          </p>
+          <p className="mb-3 text-xs text-gray-500">
+            A screenshot of a Facebook or Kijiji post, a photo of a flyer, or a
+            saved listing image, and we read the details into a Draft for you to
+            review. Photos don&apos;t come across, so you&apos;ll add those after.
+            Your own listing only.
+          </p>
+          <ListingImageImport />
+        </form>
+      )}
 
       <p className="mb-4 text-center text-xs font-medium uppercase tracking-wide text-gray-400">
         or start fresh
