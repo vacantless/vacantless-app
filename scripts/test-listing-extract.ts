@@ -79,11 +79,26 @@ ok("beds alias bedrooms", normalizeListingDraft({ bedrooms: 2 })?.beds === 2);
 ok("sqft alias square_feet", normalizeListingDraft({ square_feet: 700 })?.sqft === 700);
 
 // --- date -------------------------------------------------------------------
-ok("iso date kept", normalizeListingDraft({ availableDate: "2026-09-01" })?.availableDate === "2026-09-01");
-ok("date alias available_date", normalizeListingDraft({ available_date: "2026-09-01" })?.availableDate === "2026-09-01");
-ok("bad date -> null", normalizeListingDraft({ availableDate: "Sept 1" })?.availableDate === null);
-ok("out-of-range year -> null", normalizeListingDraft({ availableDate: "1980-01-01" })?.availableDate === null);
-ok("impossible month -> null", normalizeListingDraft({ availableDate: "2026-13-01" })?.availableDate === null);
+// A fixed reference clock keeps the past-date guard deterministic (and the whole
+// block future-proof - literal future dates won't rot into the past as the real
+// wall clock advances).
+const NOW = new Date("2026-07-07T12:00:00Z");
+ok("iso date (future) kept", normalizeListingDraft({ availableDate: "2026-09-01" }, NOW)?.availableDate === "2026-09-01");
+ok("date alias available_date", normalizeListingDraft({ available_date: "2026-09-01" }, NOW)?.availableDate === "2026-09-01");
+ok("bad date -> null", normalizeListingDraft({ availableDate: "Sept 1" }, NOW)?.availableDate === null);
+ok("out-of-range year -> null", normalizeListingDraft({ availableDate: "1980-01-01" }, NOW)?.availableDate === null);
+ok("impossible month -> null", normalizeListingDraft({ availableDate: "2026-13-01" }, NOW)?.availableDate === null);
+// Past-date guard: a wrong-year inference (last year's same month/day) is nulled;
+// a recent past date inside the grace window is kept.
+ok("stale past year -> null", normalizeListingDraft({ availableDate: "2024-09-01" }, NOW)?.availableDate === null);
+ok("last year same month -> null", normalizeListingDraft({ availableDate: "2025-09-01" }, NOW)?.availableDate === null);
+ok("recent past within grace kept", normalizeListingDraft({ availableDate: "2026-06-15" }, NOW)?.availableDate === "2026-06-15");
+ok("today kept", normalizeListingDraft({ availableDate: "2026-07-07" }, NOW)?.availableDate === "2026-07-07");
+// Grace boundary = 90 days before today = 2026-04-08 (inclusive kept, day before nulled).
+ok("grace boundary (inclusive) kept", normalizeListingDraft({ availableDate: "2026-04-08" }, NOW)?.availableDate === "2026-04-08");
+ok("just past grace -> null", normalizeListingDraft({ availableDate: "2026-04-07" }, NOW)?.availableDate === null);
+// The default clock path still functions (a clearly-future date passes with no `now` arg).
+ok("default-now future kept", normalizeListingDraft({ availableDate: "2099-01-01" })?.availableDate === "2099-01-01");
 
 // --- tri-state booleans -----------------------------------------------------
 ok("ac true", normalizeListingDraft({ airConditioning: true })?.airConditioning === true);

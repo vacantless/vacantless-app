@@ -64,6 +64,16 @@ export const MAX_SQFT = 100_000;
 /** Calendar-year bounds for an availability date. */
 export const MIN_LISTING_YEAR = 2000;
 export const MAX_LISTING_YEAR = 2100;
+/** Grace window (days) an availability date may sit in the PAST before it's
+ * treated as a wrong-year inference rather than a genuine "available now". A
+ * rental's availability is forward-looking; when a source says a bare
+ * "September 1st" the model must guess a year, and it can pick a PAST one
+ * (e.g. last year's 2024-09-01), which the 2000-2100 range check happily lets
+ * through and would persist a broken past date onto the draft. Anything more
+ * than this many days before today is nulled (leaving the field for the
+ * operator) rather than kept; the grace preserves a real date dated a few
+ * weeks ago. */
+export const AVAILABILITY_PAST_GRACE_DAYS = 90;
 
 // ---------------------------------------------------------------------------
 // The result contract
@@ -232,8 +242,10 @@ function clampHalf(v: unknown, max: number): number | null {
   return h;
 }
 
-/** Coerce a model value to an ISO 'YYYY-MM-DD' in range, or null. */
-function cleanIsoDate(v: unknown): string | null {
+/** Coerce a model value to an ISO 'YYYY-MM-DD' in range, or null. Rejects a
+ * stale past date (older than AVAILABILITY_PAST_GRACE_DAYS before `now`) as a
+ * likely wrong-year inference. `now` is injectable for deterministic tests. */
+function cleanIsoDate(v: unknown, now: Date): string | null {
   if (typeof v !== "string") return null;
   const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return null;
@@ -244,6 +256,13 @@ function cleanIsoDate(v: unknown): string | null {
   if (yr < MIN_LISTING_YEAR || yr > MAX_LISTING_YEAR) return null;
   if (mon < 1 || mon > 12) return null;
   if (day < 1 || day > 31) return null;
+  // Null a stale past date (a wrong-year inference); a small grace keeps a
+  // genuine "available now" date dated a few weeks ago.
+  const parsed = Date.UTC(yr, mon - 1, day);
+  const floor =
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
+    AVAILABILITY_PAST_GRACE_DAYS * 86_400_000;
+  if (parsed < floor) return null;
   return `${y}-${mo}-${d}`;
 }
 
@@ -295,7 +314,7 @@ function cleanLaundry(v: unknown): Laundry | null {
  * null only when `raw` isn't an object at all. Tolerates a handful of alias keys
  * so a model that returns snake_case still maps cleanly.
  */
-export function normalizeListingDraft(raw: unknown): ListingDraft | null {
+export function normalizeListingDraft(raw: unknown, now: Date = new Date()): ListingDraft | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
 
@@ -307,7 +326,7 @@ export function normalizeListingDraft(raw: unknown): ListingDraft | null {
     sqft: clampInt(o.sqft ?? o.square_feet ?? o.size, 1, MAX_SQFT),
     parking: cleanText(o.parking),
     description: cleanDescription(o.description ?? o.summary),
-    availableDate: cleanIsoDate(o.availableDate ?? o.available_date ?? o.available),
+    availableDate: cleanIsoDate(o.availableDate ?? o.available_date ?? o.available, now),
     airConditioning: cleanTriBool(o.airConditioning ?? o.air_conditioning ?? o.ac),
     balcony: cleanTriBool(o.balcony),
     furnished: cleanTriBool(o.furnished),
