@@ -965,7 +965,11 @@ function Pricing() {
         </div>
         <p className="mt-3.5 text-[0.86rem] text-[#59655f]">
           Prices in CAD, flat monthly. Cancel anytime. Processor fees for rent
-          collection are separate and pass straight through.
+          collection are separate and pass straight through. Running a larger
+          portfolio, past 150 doors?{" "}
+          <Link href={CONTACT_HREF} className="font-semibold text-[var(--color-accent)] underline">
+            Talk to us about a Portfolio plan.
+          </Link>
         </p>
       </div>
     </section>
