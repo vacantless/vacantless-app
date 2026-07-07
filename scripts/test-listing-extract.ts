@@ -39,7 +39,15 @@ ok("empty object -> all null draft", (() => {
 
 // --- money / rooms / sqft clamping ------------------------------------------
 ok("rent cents integer", normalizeListingDraft({ rentCents: 185000 })?.rentCents === 185000);
-ok("rent from string with $ and commas", normalizeListingDraft({ rent: "$1,850" })?.rentCents === 1850);
+// Dollar-denominated model output must scale to cents, never persist 100x too
+// low (Codex P2, S429). "$1,850" is $1,850/mo -> 185000 cents, not 1850.
+ok("rent from string with $ and commas -> cents", normalizeListingDraft({ rent: "$1,850" })?.rentCents === 185000);
+ok("rent from bare dollar integer -> cents", normalizeListingDraft({ rent: 1850 })?.rentCents === 185000);
+ok("rent from dollar string no $ -> cents", normalizeListingDraft({ rentCents: "1850" })?.rentCents === 185000);
+ok("rent from dollars with decimal -> cents", normalizeListingDraft({ rent: "1850.00" })?.rentCents === 185000);
+ok("rent from dollars fractional -> cents", normalizeListingDraft({ rent: "1850.50" })?.rentCents === 185050);
+ok("rent already in cents kept", normalizeListingDraft({ rentCents: 90000 })?.rentCents === 90000);
+ok("rent low dollar figure scaled", normalizeListingDraft({ rentCents: 900 })?.rentCents === 90000);
 ok("rent over ceiling -> null", normalizeListingDraft({ rentCents: MAX_RENT_CENTS + 1 })?.rentCents === null);
 ok("rent zero -> null", normalizeListingDraft({ rentCents: 0 })?.rentCents === null);
 ok("beds studio 0 kept", normalizeListingDraft({ beds: 0 })?.beds === 0);

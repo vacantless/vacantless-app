@@ -46,6 +46,11 @@ export const MAX_TEXT_LEN = 120;
 export const MAX_DESCRIPTION_LEN = 4000;
 /** Monthly rent sanity ceiling, in cents ($100,000/mo). */
 export const MAX_RENT_CENTS = 10_000_000;
+/** Monthly rent sanity FLOOR, in cents ($100/mo). A monthly residential rent
+ * below this is implausible; a bare integer that low was almost certainly the
+ * model returning DOLLARS despite the "integer cents" contract, so it is scaled
+ * up by 100 rather than persisted 100x too low. */
+export const MIN_RENT_CENTS = 10_000;
 /** Bedroom / bathroom count ceiling (a small residential rental). */
 export const MAX_ROOMS = 20;
 /** Square-footage sanity ceiling. */
@@ -171,6 +176,39 @@ function clampInt(v: unknown, min: number, max: number): number | null {
   return i;
 }
 
+/**
+ * Coerce a model rent value to integer CENTS in [1, MAX_RENT_CENTS], or null.
+ * The prompt asks for integer cents, but models frequently return a DOLLAR
+ * figure instead ("$1,850", "1850", "1850.00"). Left to clampInt those would
+ * persist 100x too low ("$1,850" -> 1850 cents = $18.50), so detect the dollar
+ * case and scale:
+ *  - an explicit "$" in the string, or a genuine fractional part (cents are
+ *    whole numbers; a fraction means the value is in dollars) => scale x100;
+ *  - a bare integer that, read as cents, is below MIN_RENT_CENTS ($100/mo) is
+ *    implausibly low for a monthly rent => it was dollars => scale x100.
+ * Otherwise the integer is taken as cents per the contract. Deliberately biased
+ * toward the dollar reading because a 100x-too-low rent is the dangerous error.
+ */
+function clampRentCents(v: unknown): number | null {
+  let dollars = false;
+  let n: number;
+  if (typeof v === "number") {
+    n = v;
+  } else if (typeof v === "string") {
+    if (v.includes("$")) dollars = true;
+    n = Number(v.replace(/[, $]/g, ""));
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (!Number.isInteger(n)) dollars = true; // a fractional value is dollars, not cents
+  let cents = Math.round(dollars ? n * 100 : n);
+  // A bare integer that reads as an implausibly low monthly rent was dollars.
+  if (!dollars && cents < MIN_RENT_CENTS) cents = cents * 100;
+  if (cents < 1 || cents > MAX_RENT_CENTS) return null;
+  return cents;
+}
+
 /** Coerce a bathroom count to the nearest 0.5 in [0,max], or null. */
 function clampHalf(v: unknown, max: number): number | null {
   const n =
@@ -250,7 +288,7 @@ export function normalizeListingDraft(raw: unknown): ListingDraft | null {
 
   return {
     address: cleanText(o.address ?? o.unit_address, MAX_TEXT_LEN),
-    rentCents: clampInt(o.rentCents ?? o.rent_cents ?? o.rent, 1, MAX_RENT_CENTS),
+    rentCents: clampRentCents(o.rentCents ?? o.rent_cents ?? o.rent),
     beds: clampInt(o.beds ?? o.bedrooms, 0, MAX_ROOMS),
     baths: clampHalf(o.baths ?? o.bathrooms, MAX_ROOMS),
     sqft: clampInt(o.sqft ?? o.square_feet ?? o.size, 1, MAX_SQFT),
