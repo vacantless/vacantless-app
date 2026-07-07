@@ -82,3 +82,27 @@ real property costs first; `?ignored_bulk=N` banner.
 tsc clean; eslint clean on touched files; test-statements 103→**107/0**,
 test-listing-fill-sheet 209→**213/0**, test-rent-from-bank 22/0,
 test-bank-feed 34/0.
+
+## S433b — folded Codex's one P2 (bulk-ignore scope/count mismatch)
+
+Codex ACCEPTED S433 except one P2: the To-review queue renders only the 100 most
+recent pending debits (`.limit(100)`), but the "Ignore remaining {pending.length}"
+button called an action that ignored EVERY pending debit for the org. On a >100
+line import the operator would silently ignore unseen rows that could include real
+property costs (and ignored rows don't show in the normal UI). Fixed:
+
+- `app/dashboard/expenses/actions.ts` — `ignoreAllPending` now reads the submitted
+  line IDs (`formData.getAll("ids")`) and ignores ONLY those via `.in("id", ids)`.
+  The org + pending + debit predicates stay as defense in depth (a stale/foreign
+  id, a credit, or an already-filed line can never flip). Empty ids → no-op.
+- `app/dashboard/expenses/page.tsx` — the bulk form now emits a hidden
+  `<input name="ids">` per VISIBLE line, so it clears exactly what's on screen;
+  button relabelled "Ignore these {N}". Added a true `pendingTotal` head-count;
+  when more pending debits exist than the 100 shown, the helper text says so
+  ("Showing the N most recent — M older lines will appear after you clear these"),
+  and clearing the page reveals the next batch to sort. The action can never touch
+  a line the operator hasn't seen.
+
+Range for the fold: `b04083a..<HEAD after DEPLOY-S433b>`. Gates re-run: tsc clean,
+eslint clean on the two touched files (pure-lib test suites unaffected — no lib
+changed).

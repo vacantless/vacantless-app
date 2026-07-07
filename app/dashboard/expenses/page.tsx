@@ -206,8 +206,14 @@ export default async function ExpensesPage({
   }
 
   const supabase = createClient();
-  const [{ data: connData }, { data: txnData }, { data: propData }, { data: ruleData }, { count: assignedCount }] =
-    await Promise.all([
+  const [
+    { data: connData },
+    { data: txnData },
+    { data: propData },
+    { data: ruleData },
+    { count: assignedCount },
+    { count: pendingTotal },
+  ] = await Promise.all([
       supabase
         .from("bank_connections")
         .select("id, provider, institution_name, status, last_synced_at, import_format")
@@ -231,10 +237,19 @@ export default async function ExpensesPage({
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
         .eq("triage_status", "assigned"),
+      // True count of ALL pending debits (the visible list is capped at 100) so
+      // the bulk-ignore control can tell the operator when more lines exist
+      // beyond the ones on screen (S433b P2).
+      supabase
+        .from("bank_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("triage_status", "pending")
+        .eq("direction", "debit"),
     ]);
 
   const connections = (connData ?? []) as ConnRow[];
   const pending = (txnData ?? []) as TxnRow[];
+  const pendingBeyondView = Math.max(0, (pendingTotal ?? 0) - pending.length);
   const properties = (propData ?? []) as PropertyRef[];
   const rules = ((ruleData ?? []) as RuleRow[]).map(ruleFromRow);
 
@@ -658,15 +673,24 @@ export default async function ExpensesPage({
             })}
             {/* Bulk-ignore the personal remainder of a commingled import (S433).
                 Placed AFTER the list so the operator files real property costs
-                first; "ignore" is a soft status, so nothing is deleted. */}
+                first; "ignore" is a soft status, so nothing is deleted. The form
+                submits the VISIBLE line IDs, and the action ignores ONLY those —
+                it never clears a pending line the operator couldn't see on screen
+                (S433b P2). When more lines exist beyond the first 100, we say so;
+                clearing this page reveals the next batch to sort. */}
             <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-gray-200 px-4 py-3">
               <p className="text-xs text-gray-500">
                 Imported a personal account too? Sort the property costs above, then clear the rest in one step.
+                {pendingBeyondView > 0
+                  ? ` Showing the ${pending.length} most recent — ${pendingBeyondView} older line${pendingBeyondView === 1 ? "" : "s"} will appear after you clear these.`
+                  : ""}
               </p>
               <form action={ignoreAllPending}>
-                <input type="hidden" name="confirm" value="1" />
+                {pending.map((t) => (
+                  <input key={t.id} type="hidden" name="ids" value={t.id} />
+                ))}
                 <SubmitButton className="shrink-0 text-sm font-medium text-gray-600 underline" pendingLabel="Ignoring…">
-                  Ignore remaining {pending.length}
+                  Ignore these {pending.length}
                 </SubmitButton>
               </form>
             </div>

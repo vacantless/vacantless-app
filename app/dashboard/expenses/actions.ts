@@ -409,14 +409,22 @@ export async function ignoreTransaction(formData: FormData) {
 // is: file the few real property costs first (manual, or via a saved rule /
 // "Apply saved rules"), then clear the personal remainder in one action.
 // "Ignore" is a SOFT status — no expense is created and nothing is deleted; a
-// line can still be reconsidered later. Org-scoped + pending + debit only, so it
-// never touches the credits (rent) lane, another org, or already-filed lines.
+// line can still be reconsidered later.
+//
+// SCOPED TO THE VISIBLE IDS the form submits (S433b P2): the queue only renders
+// the 100 most recent pending debits, so ignoring "all pending debits for the
+// org" could silently clear lines the operator never saw — which might include
+// real property costs. Instead the button submits exactly the on-screen line IDs
+// and we ignore only those. The org + pending + debit predicates still apply as
+// defense in depth, so a stale or foreign id can never flip: another org's row,
+// a credit, or an already-filed line is untouched.
 export async function ignoreAllPending(formData: FormData) {
   await requireCapability("manage_work_orders", `${BASE}?bank=forbidden`);
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  // Confirmation token from the button's form — guards against a stray submit.
-  if (s(formData, "confirm") !== "1") redirect(BASE);
+
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  if (ids.length === 0) redirect(BASE);
 
   const supabase = createClient();
   const { data: cleared } = await supabase
@@ -425,6 +433,7 @@ export async function ignoreAllPending(formData: FormData) {
     .eq("organization_id", org.id)
     .eq("triage_status", "pending")
     .eq("direction", "debit")
+    .in("id", ids)
     .select("id");
 
   revalidatePath(BASE);
