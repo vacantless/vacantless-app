@@ -46,11 +46,17 @@ export const MAX_TEXT_LEN = 120;
 export const MAX_DESCRIPTION_LEN = 4000;
 /** Monthly rent sanity ceiling, in cents ($100,000/mo). */
 export const MAX_RENT_CENTS = 10_000_000;
-/** Monthly rent sanity FLOOR, in cents ($100/mo). A monthly residential rent
- * below this is implausible; a bare integer that low was almost certainly the
- * model returning DOLLARS despite the "integer cents" contract, so it is scaled
- * up by 100 rather than persisted 100x too low. */
-export const MIN_RENT_CENTS = 10_000;
+/** Dollar-vs-cents crossover, in cents ($500/mo). A bare integer the model
+ * returns is ambiguous - it could be integer cents (the contract) or a dollar
+ * figure. Read as cents, anything below this is an implausibly low monthly rent
+ * for a whole unit, so it was almost certainly DOLLARS and is scaled up by 100
+ * rather than persisted 100x too low. The threshold sits deliberately between
+ * the two readings the heuristic must split: above $120/mo (a $12,000/mo rent
+ * the model returned as the bare integer 12000, which must scale) and at or
+ * below $900/mo (a genuine $900/mo rent correctly returned as 90000 cents, which
+ * must NOT scale). Not a hard validity floor - a final rent below this is still
+ * allowed once the reading is settled; it only steers the dollar-vs-cents call. */
+export const MIN_RENT_CENTS = 50_000;
 /** Bedroom / bathroom count ceiling (a small residential rental). */
 export const MAX_ROOMS = 20;
 /** Square-footage sanity ceiling. */
@@ -184,10 +190,17 @@ function clampInt(v: unknown, min: number, max: number): number | null {
  * case and scale:
  *  - an explicit "$" in the string, or a genuine fractional part (cents are
  *    whole numbers; a fraction means the value is in dollars) => scale x100;
- *  - a bare integer that, read as cents, is below MIN_RENT_CENTS ($100/mo) is
- *    implausibly low for a monthly rent => it was dollars => scale x100.
- * Otherwise the integer is taken as cents per the contract. Deliberately biased
- * toward the dollar reading because a 100x-too-low rent is the dangerous error.
+ *  - a bare integer that, read as cents, is below MIN_RENT_CENTS ($500/mo) is
+ *    implausibly low for a whole unit => it was dollars => scale x100. This band
+ *    now catches high-end dollar rents (12000 -> $12,000/mo, 10000 -> $10,000/mo)
+ *    that the old $100/mo floor let through as $120 / $100.
+ * Otherwise the integer is taken as cents per the contract, so a genuine cents
+ * value (90000 -> $900/mo, 185000 -> $1,850/mo) is preserved. Deliberately biased
+ * toward the dollar reading because a 100x-too-low rent is the dangerous error;
+ * the residual cost is that a real sub-$500/mo unit returned in compliant cents
+ * would over-scale, a rarer and self-evidently-wrong case. Scaling a bare integer
+ * (max 49999) can never breach MAX_RENT_CENTS, and the final clamp still nulls
+ * any reading over the ceiling.
  */
 function clampRentCents(v: unknown): number | null {
   let dollars = false;

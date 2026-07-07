@@ -111,3 +111,32 @@ Folded the one P2:
 - Note: the `ts-register.mjs` shim referenced in the test header comment is absent
   in the repo (Codex hit this too); ran via `node -r sucrase/register`. Doc-drift
   to reconcile - either add the shim or update the header + KI652.
+
+## S429b - Codex re-review P2 folded (high-end bare dollar rents)
+
+Codex re-review of `e753850..0250de2` accepted the merge but flagged a residual **P2**:
+the S429 `clampRentCents` only dollar-scaled a bare integer when its cents reading
+was below the old `MIN_RENT_CENTS` = $100/mo floor. That fixed normal rents (`1850`
+-> $1,850) but let high-end bare dollar output through unscaled: `12000` -> $120/mo,
+`10000` -> $100/mo, for a rental Vacantless allows up to $100,000/mo.
+
+- **Root cause:** the constraint is non-monotonic against the existing suite - `12000`
+  must scale to $12,000 while a tested case pins `90000` -> $900/mo (kept as cents).
+  The only rule satisfying both is a single crossover between $120/mo and $900/mo.
+- **Fix (`lib/listing-extract.ts`):** raise the dollar-vs-cents crossover
+  `MIN_RENT_CENTS` from `10_000` ($100/mo) to `50_000` ($500/mo). A bare integer whose
+  cents reading is below $500/mo (no whole unit rents that low) is read as DOLLARS and
+  scaled x100; at or above, it is kept as cents. Function body unchanged - only the
+  threshold constant and its doc. Still biased to the dollar reading (a 100x-too-low
+  rent is the dangerous error). Residual: a real sub-$500/mo unit returned in compliant
+  cents would over-scale - rarer and self-evidently wrong. A bare integer maxes at
+  49999 pre-scale, so scaling can never breach `MAX_RENT_CENTS`; the final clamp still
+  nulls any reading over the ceiling.
+- **Verified:** `10000` -> $10,000, `12000` -> $12,000 (fixed); `90000` -> $900,
+  `185000` -> $1,850, `50000` -> $500 (kept); `49999` -> $49,999 (scaled);
+  `"185000.0"` -> $1,850 (trailing .0 not fractional); `"$100,000.01"` -> null (ceiling).
+- **Tests:** `test-listing-extract` 68/0 -> 75/0 (+7: high bare `12000`/`10000`, explicit
+  `$12,000` string, crossover `50000` kept + `49999` scaled, `185000.0` integer, dollar
+  ceiling null). `test-billing` 254/0, `test-mls-import` 108/0, tsc clean, eslint clean
+  on both touched files. Feature still ships DARK (`LISTING_AI_IMPORT_ENABLED` unset +
+  Growth+ entitlement). Same two-file scope, no migration.

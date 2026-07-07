@@ -48,7 +48,18 @@ ok("rent from dollars with decimal -> cents", normalizeListingDraft({ rent: "185
 ok("rent from dollars fractional -> cents", normalizeListingDraft({ rent: "1850.50" })?.rentCents === 185050);
 ok("rent already in cents kept", normalizeListingDraft({ rentCents: 90000 })?.rentCents === 90000);
 ok("rent low dollar figure scaled", normalizeListingDraft({ rentCents: 900 })?.rentCents === 90000);
+// High-end bare dollar rents: the old $100/mo floor let 12000/10000 through as
+// $120/$100. The $500/mo crossover now scales them to $12,000/$10,000 (S429b).
+ok("rent high bare dollar 12000 -> $12,000/mo", normalizeListingDraft({ rent: 12000 })?.rentCents === 1_200_000);
+ok("rent high bare dollar 10000 -> $10,000/mo", normalizeListingDraft({ rentCents: 10000 })?.rentCents === 1_000_000);
+ok("rent explicit $12,000 string -> cents", normalizeListingDraft({ rent: "$12,000" })?.rentCents === 1_200_000);
+// Crossover boundary: >=50000 cents is a plausible rent, kept; just below scales.
+ok("rent at crossover 50000 cents kept", normalizeListingDraft({ rentCents: 50000 })?.rentCents === 50000);
+ok("rent just under crossover 49999 -> scaled", normalizeListingDraft({ rentCents: 49999 })?.rentCents === 4_999_900);
+// Trailing .0 is not a fractional part -> stays integer cents, not scaled.
+ok("rent 185000.0 string stays integer cents", normalizeListingDraft({ rent: "185000.0" })?.rentCents === 185000);
 ok("rent over ceiling -> null", normalizeListingDraft({ rentCents: MAX_RENT_CENTS + 1 })?.rentCents === null);
+ok("rent dollar input cannot exceed ceiling", normalizeListingDraft({ rent: "$100,000.01" })?.rentCents === null);
 ok("rent zero -> null", normalizeListingDraft({ rentCents: 0 })?.rentCents === null);
 ok("beds studio 0 kept", normalizeListingDraft({ beds: 0 })?.beds === 0);
 ok("beds over ceiling -> null", normalizeListingDraft({ beds: MAX_ROOMS + 5 })?.beds === null);
