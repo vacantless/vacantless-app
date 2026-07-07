@@ -6,9 +6,17 @@ dark behind `LISTING_AI_IMPORT_ENABLED` + `canUseListingAiImport(org.plan)` on b
 action (hand-posts redirect to `?import=unavailable` before `parseListing`); `selectListingImages`
 correct + order-preserving; `VisionImageType` cast safe post-selection; image drafts merge onto
 `emptyParsedListing()` so nothing deterministic is overwritten; pets out of contract. Gates green
-(81/0 - 254/0 - 108/0, tsc + eslint clean). REMAINING PROOF = the North Star QA flag-flip for the
-live Anthropic image call (Codex did not exercise the live model / browser upload). Feature stays
-DARK in prod until that QA passes.
+(81/0 - 254/0 - 108/0, tsc + eslint clean).
+
+**LIVE QA VERIFIED 2026-07-06 on North Star Rentals QA (Growth).** Flipped LISTING_AI_IMPORT_ENABLED=1
+on Vercel (ANTHROPIC_API_KEY already set) + redeployed, uploaded a synthetic listing screenshot, and
+the image path landed a Draft with ?imported=13&ai=13 - every field correct: address, rent $1,750
+(scaled right, NOT $17.50), 2bd/1ba, 850 sqft, available 2025-09-01, in-suite laundry, A/C + balcony
+checked (furnished off), utilities heat=included / hydro=tenant-pays / water=included, description
+filled, and PETS LEFT TO INHERIT despite the image saying "Pet friendly" (RTA s.14 no-inference holds
+on the image path). Landed private (Draft). Then reverted: removed the env var + redeployed, confirmed
+the image-import card no longer renders (DARK), and retired the QA draft Off market. S430 is now
+proven live end-to-end; the loop is fully CLOSED. Feature remains DARK in prod.
 
 
 Review scope: the commit range handed with this note (5 files, no migration, no
