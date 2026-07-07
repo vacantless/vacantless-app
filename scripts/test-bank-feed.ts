@@ -7,6 +7,7 @@ import {
   isExpenseCandidate,
   dedupeKey,
   filterNewTransactions,
+  txnDetailLine,
   type NormalizedTxn,
 } from "../lib/bank-feed";
 import { PLAN_ENTITLEMENTS } from "../lib/billing";
@@ -82,6 +83,18 @@ ok("filters already-staged", !fresh.some((t) => t.externalId === "a"));
 ok("keeps new b + c once each", fresh.length === 2 && fresh.filter((t) => t.externalId === "b").length === 1);
 ok("empty existing keeps all distinct", filterNewTransactions([txn("x"), txn("y")], new Set()).length === 2);
 ok("all existing -> none", filterNewTransactions([txn("a")], new Set(["a"])).length === 0);
+
+// --- txnDetailLine: surface the hidden counterparty/MEMO --------------------
+// RBC OFX pattern: merchant = generic TYPE, description = real counterparty.
+ok("rbc e-transfer surfaces payee", txnDetailLine("e-Transfer sent", "Kathy Boose XMVQS7") === "Kathy Boose XMVQS7");
+ok("rbc rent credit surfaces payer", txnDetailLine("Misc Payment", "AGILE REAL ESTA") === "AGILE REAL ESTA");
+ok("null description -> none", txnDetailLine("e-Transfer sent", null) === null);
+ok("empty merchant -> none (description is primary)", txnDetailLine(null, "Kathy Boose") === null);
+ok("duplicate -> none", txnDetailLine("Mortgage payment", "Mortgage payment") === null);
+ok("duplicate case/space-insensitive -> none", txnDetailLine("Enbridge Gas", "  enbridge gas ") === null);
+ok("both empty -> none", txnDetailLine("", "") === null);
+ok("undefined args -> none", txnDetailLine(undefined, undefined) === null);
+ok("trims returned value", txnDetailLine("Bill Payment", "  Hydro One  ") === "Hydro One");
 
 console.log(`\nbank-feed: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -15,7 +15,7 @@ import { Icons } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { getCurrentOrg } from "@/lib/org";
 import { planEntitlements } from "@/lib/billing";
-import { providerForPlan } from "@/lib/bank-feed";
+import { providerForPlan, txnDetailLine } from "@/lib/bank-feed";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/expenses";
 import {
   bestRuleForTxn,
@@ -480,6 +480,9 @@ export default async function ExpensesPage({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900">{c.merchant ?? c.description ?? "Deposit"}</p>
+                        {txnDetailLine(c.merchant, c.description) && (
+                          <p className="text-sm text-gray-700">{txnDetailLine(c.merchant, c.description)}</p>
+                        )}
                         <p className="text-xs text-gray-500">
                           {fmtDate(c.posted_on)}
                           {c.account_name ? ` · ${c.account_name}` : ""}
@@ -564,6 +567,9 @@ export default async function ExpensesPage({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900">{t.merchant ?? t.description ?? "Transaction"}</p>
+                    {txnDetailLine(t.merchant, t.description) && (
+                      <p className="text-sm text-gray-700">{txnDetailLine(t.merchant, t.description)}</p>
+                    )}
                     <p className="text-xs text-gray-500">
                       {fmtDate(t.posted_on)}
                       {t.account_name ? ` · ${t.account_name}` : ""}

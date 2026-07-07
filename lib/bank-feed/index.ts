@@ -178,3 +178,32 @@ export function filterNewTransactions(
   }
   return out;
 }
+
+/**
+ * The secondary detail line to show under a transaction's primary label.
+ *
+ * A row's primary label is `merchant ?? description`. Some banks (notably RBC's
+ * OFX export) put the generic transaction TYPE in `merchant` (NAME) — "e-Transfer
+ * sent", "Misc Payment", "Bill Payment" — and the actual COUNTERPARTY in
+ * `description` (MEMO) — "Kathy Boose", "AGILE REAL ESTA", "Enbridge Gas". With
+ * only the primary label shown, the counterparty (who paid / who was paid) is
+ * hidden, which makes triage — especially "is this credit rent?" — impossible.
+ *
+ * Returns the counterparty/memo string to render as a secondary line, or null
+ * when there is nothing useful to add: no description, or the description merely
+ * repeats the merchant (case-insensitive, trimmed), or the merchant is empty so
+ * the description is ALREADY the primary label. Pure so it can be unit-tested and
+ * is provider-safe (Plaid, where merchant is already the good field and often
+ * duplicates the description, yields null = no clutter).
+ */
+export function txnDetailLine(
+  merchant: string | null | undefined,
+  description: string | null | undefined,
+): string | null {
+  const m = (merchant ?? "").trim();
+  const d = (description ?? "").trim();
+  if (d === "") return null; // nothing to add
+  if (m === "") return null; // description is already the primary label
+  if (d.toLowerCase() === m.toLowerCase()) return null; // duplicate of the primary
+  return d;
+}
