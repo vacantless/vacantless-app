@@ -34,6 +34,7 @@ import {
   canUseRepairSms,
   canUseListingMarketing,
   canUseLeaseOcr,
+  canUseListingAiImport,
   leaseOcrMonthlyCap,
   LEASE_OCR_CAP_GROWTH,
   LEASE_OCR_CAP_PREMIUM,
@@ -456,7 +457,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 13 features", PLAN_FEATURES.length === 13);
+ok("PLAN_FEATURES has 14 features", PLAN_FEATURES.length === 14);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -526,6 +527,15 @@ ok("lease_ocr: pilot true (full access)", canUseLeaseOcr("pilot") === true);
 ok("lease_ocr: core false", canUseLeaseOcr("core") === false);
 ok("lease_ocr: trial false", canUseLeaseOcr("trial") === false);
 ok("lease_ocr: null false", canUseLeaseOcr(null) === false);
+// --- listing_ai_import (Growth & up; S428 AI listing-import backfill) --------
+ok("listing_ai_import: free false", canUseListingAiImport("free") === false);
+ok("listing_ai_import: growth true", canUseListingAiImport("growth") === true);
+ok("listing_ai_import: premium true", canUseListingAiImport("premium") === true);
+ok("listing_ai_import: pilot true (full access)", canUseListingAiImport("pilot") === true);
+ok("listing_ai_import: core false", canUseListingAiImport("core") === false);
+ok("listing_ai_import: plus false", canUseListingAiImport("plus") === false);
+ok("listing_ai_import: trial false", canUseListingAiImport("trial") === false);
+ok("listing_ai_import: null false", canUseListingAiImport(null) === false);
 ok("lease_ocr cap: free 0", leaseOcrMonthlyCap("free") === 0);
 ok("lease_ocr cap: growth = growth cap", leaseOcrMonthlyCap("growth") === LEASE_OCR_CAP_GROWTH);
 ok("lease_ocr cap: premium = premium cap", leaseOcrMonthlyCap("premium") === LEASE_OCR_CAP_PREMIUM);

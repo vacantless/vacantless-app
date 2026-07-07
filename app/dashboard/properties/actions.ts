@@ -16,6 +16,8 @@ import {
   normalizeAcType,
 } from "@/lib/property-features";
 import { parseMlsListing } from "@/lib/mls-import";
+import { applyAiListing } from "@/lib/listing-extract";
+import { parseListing } from "@/lib/listing-extract-vision";
 import { normalizeVirtualTourUrl } from "@/lib/virtual-tour";
 import {
   normalizePortal,
@@ -55,7 +57,7 @@ import {
   type DropboxEntry,
   type DropboxLeafFolder,
 } from "@/lib/dropbox-import";
-import { photoCapForPlan, listingCapForPlan } from "@/lib/billing";
+import { photoCapForPlan, listingCapForPlan, canUseListingAiImport } from "@/lib/billing";
 import { createHash } from "crypto";
 import {
   validateDocumentUpload,
@@ -200,15 +202,43 @@ export async function importPropertyFromMls(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const pasted = String(formData.get("mls_text") ?? "");
 
-  const parsed = parseMlsListing(pasted);
-  // Nothing usable parsed out — send the operator back with a hint rather than
-  // creating an empty draft they have to delete.
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  // Deterministic parse first (conservative, proven, no network) - always the
+  // base. It fills whatever the MLS / realtor.ca label + column formats expose.
+  let parsed = parseMlsListing(pasted);
+  let aiAdded = 0;
+
+  // AI listing-import backfill (Feature B, S428): DARK behind
+  // LISTING_AI_IMPORT_ENABLED and gated on the org's plan entitlement (Growth+).
+  // When enabled, a model reads the SAME pasted text and fills ONLY the fields
+  // the deterministic parse left unset (applyAiListing — the regex result always
+  // wins, the model never overwrites a confident value). This is the coverage
+  // path for a NON-MLS source (a Kijiji / Facebook / PM-page blurb) whose free
+  // prose the label/column parser can't read. Any model outcome other than a
+  // usable draft (unconfigured / failed / empty) is swallowed and the operator
+  // still gets their deterministic draft — the AI is strictly additive, never a
+  // failure surface. When the flag is unset this block is inert and the action's
+  // behavior is byte-identical to before.
+  if (
+    process.env.LISTING_AI_IMPORT_ENABLED &&
+    canUseListingAiImport(org.plan) &&
+    pasted.trim().length > 0
+  ) {
+    const result = await parseListing({ kind: "text", text: pasted });
+    if (result.ok) {
+      const { merged, added } = applyAiListing(parsed, result.draft);
+      parsed = merged;
+      aiAdded = added.length;
+    }
+  }
+
+  // Nothing usable parsed out (even after any AI backfill) — send the operator
+  // back with a hint rather than creating an empty draft they have to delete.
   if (parsed.foundFields.length === 0) {
     redirect("/dashboard/properties?import=empty");
   }
-
-  const org = await getCurrentOrg();
-  if (!org) redirect("/onboarding");
 
   const supabase = createClient();
   // organization_id is the caller's own org; RLS WITH CHECK re-enforces it.
@@ -249,8 +279,11 @@ export async function importPropertyFromMls(formData: FormData) {
   }
   const id = (inserted as { id: string }).id;
   // Land on the edit page (the review surface) with the prefilled-field count.
+  // `ai` = how many of those fields the AI backfill contributed (0 when the flag
+  // is off / no entitlement / nothing added); the review page can surface it, and
+  // an unknown param is harmless if it doesn't.
   redirect(
-    `/dashboard/properties/${id}?imported=${parsed.foundFields.length}`,
+    `/dashboard/properties/${id}?imported=${parsed.foundFields.length}&ai=${aiAdded}`,
   );
 }
 

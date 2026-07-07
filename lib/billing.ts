@@ -104,7 +104,13 @@ export type PlanFeature =
   // it. Growth+ (a paid time-saver over manual tenancy entry). It carries a real
   // per-use model/API cost, so the gate is paired with a monthly per-org cap
   // (see LEASE_OCR_MONTHLY_CAP). The extractLease* actions enforce both.
-  | "lease_ocr";
+  | "lease_ocr"
+  // AI listing import (Feature B, S428): paste a non-MLS listing (a Kijiji /
+  // Facebook / PM-page blurb, or a photo) and have a model backfill the property
+  // fields the deterministic MLS parser can't read. Growth+ (a paid time-saver
+  // over re-keying, sibling to lease_ocr). Carries a real per-use model/API cost;
+  // the import action enforces the entitlement server-side.
+  | "listing_ai_import";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -120,6 +126,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "repair_sms",
   "listing_marketing",
   "lease_ocr",
+  "listing_ai_import",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -140,6 +147,7 @@ function noEntitlements(): PlanEntitlements {
     repair_sms: false,
     listing_marketing: false,
     lease_ocr: false,
+    listing_ai_import: false,
   };
 }
 
@@ -169,13 +177,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false },
+  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // founder pilot = full access
+  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false },
+  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill
+  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import
+  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -272,6 +280,16 @@ export function canUseListingMarketing(plan: string | null | undefined): boolean
 // entitlement and the cap server-side; an ungated plan sees the locked upsell.
 export function canUseLeaseOcr(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "lease_ocr");
+}
+
+// Whether this plan may use the AI listing import (Feature B, S428): paste a
+// non-MLS listing (or a photo) and have a model backfill the property fields the
+// deterministic MLS parser can't read. Growth+. A paid time-saver over re-keying
+// that carries a real per-use model/API cost; the import action enforces the
+// entitlement server-side, and an ungated plan simply gets the deterministic
+// parse (no AI backfill), never an error.
+export function canUseListingAiImport(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "listing_ai_import");
 }
 
 // Monthly per-org lease-OCR scan cap (a runaway/abuse backstop, not a meter -

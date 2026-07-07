@@ -724,7 +724,10 @@ function extractUtilities(lines: string[], rawText: string): {
 
 // --- main -------------------------------------------------------------------
 
-const FIELD_LABELS: Record<keyof Omit<ParsedListing, "foundFields">, string> = {
+// Exported so the AI listing-import merge (lib/listing-extract.applyAiListing,
+// S428) can label the fields it backfills with the SAME human labels the
+// deterministic review banner uses.
+export const FIELD_LABELS: Record<keyof Omit<ParsedListing, "foundFields">, string> = {
   address: "Address",
   rentCents: "Rent",
   beds: "Beds",
