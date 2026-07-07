@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 // Money hub (IA v2, S427) - the cross-unit "front door" for the money side of
 // the operation: collecting rent, tracking what you spend, and seeing where the
 // portfolio stands. A thin landing that routes into the existing pages
-// (Rent / Expenses / Reports); it does NOT duplicate their content.
+// (Rent / Expenses / Owner statement); it does NOT duplicate their content.
+// The leasing FUNNEL report (/dashboard/reports) is not money - it lives under
+// the Leasing hub, not here.
 //
 // Money is ALWAYS in the primary nav now - Expenses and Reports are useful with
 // or without active rent collection. When no rent rail is connected, the Rent
@@ -33,9 +35,9 @@ const SECTIONS: Section[] = [
     icon: "list",
   },
   {
-    href: "/dashboard/reports",
-    title: "Reports",
-    desc: "Owner statements, rent roll, and the numbers that show how the portfolio is doing - ready to share or export.",
+    href: "/dashboard/rent/statement",
+    title: "Owner statement",
+    desc: "Your owner statement and rent roll - money in, money out, and net across the portfolio, ready to share or export.",
     icon: "chart",
   },
 ];

@@ -79,6 +79,23 @@ match prefixes don't collide with anything; no other importer referenced the old
 `rentActive` prop (verified: only layout imports DashboardNav; only rent + money
 import rent-status).
 
+## S427b - Codex P2 fold-in (review of dc0908d)
+Codex reviewed `8f774f4..dc0908d` and ACCEPTED all of the priority list (saved
+brand_color still overrides; the public-page fallback is centralized through
+DEFAULT_BRAND_COLOR; no rentActive references remain; homepage/token fixes present).
+ONE P2: the Money hub "Reports" card described owner statements/rent roll but linked
+to `/dashboard/reports`, which is the LEASING FUNNEL report (`buildFunnel` /
+`buildShowingReport` / `buildLeaseTiming`); nav also marked `/dashboard/reports` a
+Money child, so Money lit up on a non-money page. Fix (commit in `DEPLOY-S427b`):
+- `money/page.tsx`: the third card is now "Owner statement" -> `/dashboard/rent/statement`
+  (the real money report; rent-roll is its sibling under `/dashboard/rent`).
+- `dashboard-nav.tsx`: removed `/dashboard/reports` from Money's `match`; added it to
+  Leasing's `match` (the funnel report is leasing analytics).
+- `leasing/page.tsx`: added a "Reports" hub card -> `/dashboard/reports` so the funnel
+  report has a home under Leasing.
+Gate: tsc + eslint clean. Codex's other checks (git diff, tsc, lint, both test suites
+135/0 + 82/0) all passed on dc0908d.
+
 ## Org brand data reset (done, per Noam - "start fresh, no true customers yet")
 Separately from the code: all 9 orgs' saved `brand_color`/`brand_color_secondary` were
 reset to the new green default `#17362f`/`#16756a` via a single SQL update (they were a

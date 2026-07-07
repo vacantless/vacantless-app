@@ -16,9 +16,9 @@ import { useEffect, useRef, useState } from "react";
 //
 // Leasing, Tenants and Money are hub landings that tab across existing routes
 // (via `match` prefixes, so a hub item stays lit while you're on a child route).
-//   • Leasing  → Inquiries / Viewings / Availability / Pre-screening
+//   • Leasing  → Inquiries / Viewings / Availability / Pre-screening / Reports
 //   • Tenants  → Tenancies / People
-//   • Money    → Rent / Expenses / Reports
+//   • Money    → Rent (+ statement / rent-roll) / Expenses
 //
 // Money is ALWAYS visible now (S427): Expenses and Reports are useful without
 // active rent collection, so the money surface never disappears - the Money hub
@@ -39,7 +39,14 @@ const PRIMARY: NavItem[] = [
   {
     href: "/dashboard/leasing",
     label: "Leasing",
-    match: ["/dashboard/leads", "/dashboard/showings", "/dashboard/availability"],
+    // /dashboard/reports is the leasing FUNNEL report (inquiries/viewings/
+    // channels/lease-timing), so it lights up Leasing, not Money.
+    match: [
+      "/dashboard/leads",
+      "/dashboard/showings",
+      "/dashboard/availability",
+      "/dashboard/reports",
+    ],
   },
   {
     href: "/dashboard/tenants",
@@ -49,7 +56,8 @@ const PRIMARY: NavItem[] = [
   {
     href: "/dashboard/money",
     label: "Money",
-    match: ["/dashboard/rent", "/dashboard/expenses", "/dashboard/reports"],
+    // /dashboard/rent covers its children (statement, rent-roll) via startsWith.
+    match: ["/dashboard/rent", "/dashboard/expenses"],
   },
   { href: "/dashboard/maintenance", label: "Maintenance" },
 ];

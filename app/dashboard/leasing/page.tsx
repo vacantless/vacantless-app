@@ -49,6 +49,14 @@ const SECTIONS: Section[] = [
     desc: "Add qualifying questions to your inquiry form and auto-flag renters who likely don't fit. You always decide.",
     icon: "users",
   },
+  {
+    // The leasing FUNNEL report (inquiries -> viewings -> leases, by channel).
+    // Money reports (owner statement / rent roll) live under the Money hub.
+    href: "/dashboard/reports",
+    title: "Reports",
+    desc: "Your leasing funnel across all rentals - inquiries, viewings, channels, and how long units take to lease.",
+    icon: "chart",
+  },
 ];
 
 export default function LeasingHubPage() {
