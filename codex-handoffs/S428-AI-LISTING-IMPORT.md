@@ -82,3 +82,32 @@ listing is public marketing copy, not a tenant record.
 Set `LISTING_AI_IMPORT_ENABLED=1` + confirm `ANTHROPIC_API_KEY` in Vercel, paste a
 real non-MLS Kijiji/FB blurb, confirm the draft pre-fills fields the regex missed
 (and that a normal MLS paste is unchanged), then unset the flag to return DARK.
+
+## S429 - Codex review folded (P2, deploy DEPLOY-S429-AI-LISTING-CODEX-P2.sh)
+Codex reviewed c96b677..e753850 and found NO P1. The named invariants all held:
+`applyAiListing` returns a new object, clones/dedupes `foundFields`, never
+overwrites a non-null base scalar or a base-found boolean, and fills a boolean
+`true` only when the base didn't find it; the flag+entitlement gate, the
+never-throw parse, the ASCII-key guard, and the deliberate no-PII / no-pet posture
+were all confirmed. One accepted caveat: with the flag off the parse stays
+deterministic but is not literally byte-identical (redirect appends `&ai=0` and
+`getCurrentOrg()` runs before the empty-parse redirect) - harmless, left as-is.
+
+Folded the one P2:
+- **P2 (rent 100x too low):** `normalizeListingDraft` ran `rentCents` through
+  `clampInt`, which strips `$`/`,` but does NOT scale dollars->cents. A model that
+  returns a dollar figure despite the "integer cents" contract ("$1,850", "1850",
+  "1850.00") therefore persisted 100x too low ("$1,850" -> 1850 cents = $18.50/mo).
+  Fix: a dedicated `clampRentCents` that reads the value as DOLLARS (x100) when it
+  carries a `$`, has a genuine fractional part (cents are whole), or is a bare
+  integer implausibly low as cents (< `MIN_RENT_CENTS` = $100/mo); otherwise it is
+  taken as cents per the contract. Biased toward the dollar reading because a
+  100x-too-low rent is the dangerous error. `MIN_RENT_CENTS` exported alongside
+  `MAX_RENT_CENTS`.
+- Tests: `test-listing-extract` 62/0 -> 68/0 (the old assertion that encoded the
+  bug - `"$1,850"` -> 1850 - was corrected to 185000; +5 cases: bare dollar int,
+  dollar string sans `$`, decimal, fractional, already-in-cents kept, low-dollar
+  scaled). `test-billing` 254/0, `test-mls-import` 108/0, tsc clean, eslint clean.
+- Note: the `ts-register.mjs` shim referenced in the test header comment is absent
+  in the repo (Codex hit this too); ran via `node -r sucrase/register`. Doc-drift
+  to reconcile - either add the shim or update the header + KI652.
