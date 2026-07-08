@@ -2,8 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { isShowingOutcome, showingOutcomeLabel } from "@/lib/pipeline";
+import { canAssignShowing } from "@/lib/showing-agents";
+import { sendOrgNotification } from "@/lib/notifications-server";
 
 // Operator sets the outcome of a showing. RLS scopes everything to the org.
 // attended -> advance the lead to 'showed'; the change is logged to the lead
@@ -48,6 +51,126 @@ export async function updateShowingOutcome(formData: FormData) {
     });
 
     revalidatePath(`/dashboard/leads/${s.lead_id}`);
+  }
+
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+}
+
+// Route a viewing to one of the org's showing agents (S436, multi-operator
+// routing Slice 1). Gated on manage_leads: routing is a lead-agent decision
+// (owner_admin + operator), NOT something a showing_helper does — a helper only
+// acts on the viewings routed to them. An empty agent_id UNASSIGNS. On a real
+// assignment we stamp assigned_at, log the routing to the lead timeline (so
+// oversight has a trail), and fire the leasing.showing_assigned hand-off email
+// to the agent. A CANCELLED viewing can't be assigned (canAssignShowing).
+export async function assignShowing(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/showings?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const rawAgentId = String(formData.get("agent_id") ?? "").trim();
+  if (!id) return;
+  const agentId = rawAgentId === "" ? null : rawAgentId;
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  // Read the current showing (RLS-scoped) to validate state + build the note.
+  const { data: showingRow } = await supabase
+    .from("showings")
+    .select(
+      "id, outcome, scheduled_at, assigned_agent_id, lead:leads(id, name, email), property:properties(id, address)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!showingRow) return;
+  const showing = showingRow as unknown as {
+    outcome: string | null;
+    scheduled_at: string | null;
+    assigned_agent_id: string | null;
+    lead: { id: string; name: string | null; email: string | null } | null;
+    property: { id: string; address: string } | null;
+  };
+  if (!canAssignShowing(showing.outcome)) return;
+
+  // If assigning, the target agent must be a live (non-archived) agent in THIS
+  // org. RLS already scopes the read to the org; we additionally reject archived.
+  let agent: { id: string; name: string; email: string | null } | null = null;
+  if (agentId) {
+    const { data: agentRow } = await supabase
+      .from("showing_agents")
+      .select("id, name, email, archived")
+      .eq("id", agentId)
+      .maybeSingle();
+    if (!agentRow) return;
+    const a = agentRow as { id: string; name: string; email: string | null; archived: boolean };
+    if (a.archived) return;
+    agent = { id: a.id, name: a.name, email: a.email };
+  }
+
+  const { data: updated } = await supabase
+    .from("showings")
+    .update({
+      assigned_agent_id: agentId,
+      assigned_at: agentId ? new Date().toISOString() : null,
+    })
+    .eq("id", id)
+    .select("id, organization_id, lead_id")
+    .maybeSingle();
+  if (!updated) return;
+  const u = updated as { organization_id: string; lead_id: string | null };
+
+  // Log the routing to the lead timeline for oversight.
+  if (u.lead_id) {
+    await supabase.from("messages").insert({
+      organization_id: u.organization_id,
+      lead_id: u.lead_id,
+      channel: "note",
+      direction: "outbound",
+      body: agent
+        ? `Viewing assigned to ${agent.name}.`
+        : "Viewing assignment cleared.",
+    });
+    revalidatePath(`/dashboard/leads/${u.lead_id}`);
+  }
+
+  // Fire the hand-off email to the assigned agent (best-effort; never blocks).
+  if (agent) {
+    const timeZone = org.booking_timezone ?? "America/Toronto";
+    const showingTime = showing.scheduled_at
+      ? new Date(showing.scheduled_at).toLocaleString("en-US", {
+          timeZone,
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        })
+      : "a time to be confirmed";
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await sendOrgNotification({
+      client: supabase,
+      org: {
+        id: org.id,
+        name: org.name,
+        brand_color: org.brand_color,
+        logo_url: org.logo_url,
+        reply_to_email: org.reply_to_email,
+      },
+      eventKey: "leasing.showing_assigned",
+      operatorFallback: agent.email ? [agent.email] : [],
+      vars: {
+        org_name: org.name ?? "Your property manager",
+        property_address: showing.property?.address ?? "the property",
+        agent_name: agent.name,
+        lead_name: showing.lead?.name || showing.lead?.email || "a renter",
+        showing_time: showingTime,
+        assigned_by: user?.email ?? "The lead agent",
+      },
+    });
   }
 
   revalidatePath("/dashboard/showings");

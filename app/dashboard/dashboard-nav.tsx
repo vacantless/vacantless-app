@@ -44,6 +44,7 @@ const PRIMARY: NavItem[] = [
     match: [
       "/dashboard/leads",
       "/dashboard/showings",
+      "/dashboard/showing-agents",
       "/dashboard/availability",
       "/dashboard/reports",
     ],

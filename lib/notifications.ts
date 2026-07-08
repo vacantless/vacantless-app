@@ -278,6 +278,29 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // Showing assigned to an agent (S436, multi-operator routing Slice 1 — see
+  // DOGFOOD-MULTI-OPERATOR-ROUTING-2026-07-07.md). Audience operator; fired when
+  // the lead agent routes a viewing to one of the org's showing agents. The
+  // assigned agent is account-less (no login), so this email IS the hand-off:
+  // it carries the renter, property, and time, and asks the agent to coordinate
+  // and CC the lead agent — exactly the manual text Noam sent when he delegated
+  // to Odette. Defaults to the assigned agent's own email (operatorFallback);
+  // an org can add standing CC recipients (e.g. the lead agent) in Settings for
+  // oversight. No portal link in Slice 1 (the tokenized /agent view is a later
+  // slice). Informational hand-off, no alarm accent.
+  {
+    key: "leasing.showing_assigned",
+    family: "leasing",
+    audience: "operator",
+    label: "Viewing assigned to an agent",
+    description:
+      "When you assign a viewing to one of your showing agents, they get an email with the renter, property, and time so they can coordinate it. Defaults to the assigned agent; add recipients below to CC the lead agent on every assignment for oversight.",
+    tokens: [...COMMON_TOKENS, "agent_name", "lead_name", "showing_time", "assigned_by"],
+    defaultSubject: "Viewing assigned to you - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
+    active: true,
+  },
   // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the
   // scheduled daily Zap 365197456). Audience operator; ONE email per weekday at
   // start-of-shift summarizing four buckets, not one-per-event. The scheduled

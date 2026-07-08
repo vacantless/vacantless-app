@@ -4,7 +4,9 @@ import { getCurrentOrg } from "@/lib/org";
 import { EmptyState, PageHeader, SectionHeading } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { groupShowingsIntoBlocks } from "@/lib/booking";
+import { agentDisplayLabel, canAssignShowing } from "@/lib/showing-agents";
 import { OutcomeSelect } from "./outcome-select";
+import { AssignSelect } from "./assign-select";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +14,14 @@ type ShowingRow = {
   id: string;
   scheduled_at: string | null;
   outcome: string;
+  assigned_agent_id: string | null;
   lead: { id: string; name: string | null; email: string | null } | null;
   property: { id: string; address: string } | null;
   feedback: { rating: number | null; comments: string | null }[] | null;
 };
+
+type AgentRow = { id: string; name: string; tier: string | null; archived: boolean };
+type AgentOption = { id: string; label: string };
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -65,11 +71,23 @@ export default async function ShowingsPage() {
   const { data } = await supabase
     .from("showings")
     .select(
-      "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(id, address), feedback(rating, comments)",
+      "id, scheduled_at, outcome, assigned_agent_id, lead:leads(id, name, email), property:properties(id, address), feedback(rating, comments)",
     )
     .order("scheduled_at", { ascending: true });
 
   const all = (data ?? []) as unknown as ShowingRow[];
+
+  // Showing-agent roster (S436). Active agents populate the assignment picker;
+  // the full map labels a row whose assigned agent has since been archived.
+  const { data: agentData } = await supabase
+    .from("showing_agents")
+    .select("id, name, tier, archived")
+    .order("name", { ascending: true });
+  const agents = (agentData ?? []) as AgentRow[];
+  const activeAgentOptions: AgentOption[] = agents
+    .filter((a) => !a.archived)
+    .map((a) => ({ id: a.id, label: agentDisplayLabel(a) }));
+  const agentLabelById = new Map(agents.map((a) => [a.id, agentDisplayLabel(a)]));
   const now = Date.now();
   const upcoming = all.filter(
     (s) =>
@@ -113,6 +131,15 @@ export default async function ShowingsPage() {
         subtitle="Viewings renters booked online, plus ones you scheduled. Mark the outcome after each one to keep your renter list accurate."
       />
 
+      <div className="mb-6 -mt-2">
+        <Link
+          href="/dashboard/showing-agents"
+          className="text-sm font-medium text-brand hover:underline"
+        >
+          Manage showing agents →
+        </Link>
+      </div>
+
       {blocks.length > 0 && (
         <div className="mb-8">
           <SectionHeading>Grouped by building</SectionHeading>
@@ -150,6 +177,8 @@ export default async function ShowingsPage() {
           />
         }
         timeZone={timeZone}
+        agentOptions={activeAgentOptions}
+        agentLabelById={agentLabelById}
       />
       <Section
         title="Past & closed"
@@ -162,9 +191,17 @@ export default async function ShowingsPage() {
           />
         }
         timeZone={timeZone}
+        agentOptions={activeAgentOptions}
+        agentLabelById={agentLabelById}
       />
       {cancelled.length > 0 && (
-        <Section title={`Cancelled (${cancelled.length})`} rows={cancelled} timeZone={timeZone} />
+        <Section
+          title={`Cancelled (${cancelled.length})`}
+          rows={cancelled}
+          timeZone={timeZone}
+          agentOptions={activeAgentOptions}
+          agentLabelById={agentLabelById}
+        />
       )}
     </div>
   );
@@ -175,11 +212,15 @@ function Section({
   rows,
   empty,
   timeZone,
+  agentOptions,
+  agentLabelById,
 }: {
   title: string;
   rows: ShowingRow[];
   empty?: React.ReactNode;
   timeZone: string;
+  agentOptions: AgentOption[];
+  agentLabelById: Map<string, string>;
 }) {
   return (
     <div className="mb-8">
@@ -190,6 +231,23 @@ function Section({
         <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white shadow-sm">
           {rows.map((s) => {
             const fb = s.feedback?.[0];
+            // The assignment picker offers active agents; if this viewing is
+            // assigned to an agent who's since been archived, surface that agent
+            // as an extra option so the row reads correctly (not "Unassigned").
+            const assignedLabel = s.assigned_agent_id
+              ? agentLabelById.get(s.assigned_agent_id)
+              : null;
+            const rowAgentOptions =
+              s.assigned_agent_id &&
+              !agentOptions.some((o) => o.id === s.assigned_agent_id)
+                ? [
+                    ...agentOptions,
+                    {
+                      id: s.assigned_agent_id,
+                      label: `${assignedLabel ?? "Agent"} (archived)`,
+                    },
+                  ]
+                : agentOptions;
             return (
               <li
                 key={s.id}
@@ -221,7 +279,16 @@ function Section({
                     </p>
                   )}
                 </div>
-                <OutcomeSelect showingId={s.id} outcome={s.outcome} />
+                <div className="flex flex-wrap items-center gap-2">
+                  {canAssignShowing(s.outcome) && (
+                    <AssignSelect
+                      showingId={s.id}
+                      assignedAgentId={s.assigned_agent_id}
+                      agents={rowAgentOptions}
+                    />
+                  )}
+                  <OutcomeSelect showingId={s.id} outcome={s.outcome} />
+                </div>
               </li>
             );
           })}
