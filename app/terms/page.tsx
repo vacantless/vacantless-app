@@ -11,7 +11,7 @@ export const metadata = {
 // Best-guess operator + address (confirm at legal review; swap the street in
 // when you have it).
 const LEGAL_ENTITY = "Vacantless";
-const MAILING_ADDRESS = "Windsor, Ontario, Canada";
+const MAILING_ADDRESS = "Ontario, Canada";
 const GOVERNING_LAW = "the Province of Ontario, Canada";
 const LAST_UPDATED = "July 3, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
