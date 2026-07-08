@@ -436,7 +436,7 @@ export default async function ExpensesPage({
             </ul>
           )}
           <div className="mt-4">
-            <PlaidConnectButton className={PRIMARY_ACTION_CLASS} />
+            <PlaidConnectButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} />
           </div>
 
           {/* Import from a file — for cards the live feed can't connect (e.g. MBNA).
@@ -544,7 +544,7 @@ export default async function ExpensesPage({
                         })}
                       </div>
                       <div className="mt-4">
-                        <SubmitButton className={PRIMARY_ACTION_CLASS} pendingLabel="Recording…">
+                        <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Recording…">
                           Record as rent
                         </SubmitButton>
                       </div>
@@ -652,7 +652,7 @@ export default async function ExpensesPage({
                     </select>
                   </label>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:col-span-4">
-                    <SubmitButton className={PRIMARY_ACTION_CLASS} pendingLabel="Saving…">
+                    <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Saving…">
                       Log expense
                     </SubmitButton>
                     <label className="flex items-center gap-2 text-sm text-gray-600">
