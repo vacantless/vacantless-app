@@ -20,7 +20,7 @@ type ShowingRow = {
   feedback: { rating: number | null; comments: string | null }[] | null;
 };
 
-type AgentRow = { id: string; name: string; tier: string | null; archived: boolean };
+type AgentRow = { id: string; name: string; tier: string | null; phone: string | null; archived: boolean };
 type AgentOption = { id: string; label: string };
 
 function Stars({ rating }: { rating: number }) {
@@ -81,13 +81,19 @@ export default async function ShowingsPage() {
   // the full map labels a row whose assigned agent has since been archived.
   const { data: agentData } = await supabase
     .from("showing_agents")
-    .select("id, name, tier, archived")
+    .select("id, name, tier, phone, archived")
     .order("name", { ascending: true });
   const agents = (agentData ?? []) as AgentRow[];
   const activeAgentOptions: AgentOption[] = agents
     .filter((a) => !a.archived)
     .map((a) => ({ id: a.id, label: agentDisplayLabel(a) }));
   const agentLabelById = new Map(agents.map((a) => [a.id, agentDisplayLabel(a)]));
+  // Assigned-agent contact (Slice 1.5): tap-to-text / tap-to-call the person
+  // running THIS viewing, so a renter's "running late" note can be relayed to
+  // whoever is covering - not a hardcoded office number.
+  const agentContactById = new Map(
+    agents.map((a) => [a.id, { name: a.name, phone: a.phone }]),
+  );
   const now = Date.now();
   const upcoming = all.filter(
     (s) =>
@@ -179,6 +185,7 @@ export default async function ShowingsPage() {
         timeZone={timeZone}
         agentOptions={activeAgentOptions}
         agentLabelById={agentLabelById}
+        agentContactById={agentContactById}
       />
       <Section
         title="Past & closed"
@@ -193,6 +200,7 @@ export default async function ShowingsPage() {
         timeZone={timeZone}
         agentOptions={activeAgentOptions}
         agentLabelById={agentLabelById}
+        agentContactById={agentContactById}
       />
       {cancelled.length > 0 && (
         <Section
@@ -201,6 +209,7 @@ export default async function ShowingsPage() {
           timeZone={timeZone}
           agentOptions={activeAgentOptions}
           agentLabelById={agentLabelById}
+          agentContactById={agentContactById}
         />
       )}
     </div>
@@ -214,6 +223,7 @@ function Section({
   timeZone,
   agentOptions,
   agentLabelById,
+  agentContactById,
 }: {
   title: string;
   rows: ShowingRow[];
@@ -221,6 +231,7 @@ function Section({
   timeZone: string;
   agentOptions: AgentOption[];
   agentLabelById: Map<string, string>;
+  agentContactById: Map<string, { name: string; phone: string | null }>;
 }) {
   return (
     <div className="mb-8">
@@ -248,6 +259,14 @@ function Section({
                     },
                   ]
                 : agentOptions;
+            const contact = s.assigned_agent_id
+              ? agentContactById.get(s.assigned_agent_id)
+              : null;
+            // tel:/sms: want just digits and a leading +; the stored phone is
+            // free text so strip everything else.
+            const contactDigits = contact?.phone
+              ? contact.phone.replace(/[^\d+]/g, "")
+              : "";
             return (
               <li
                 key={s.id}
@@ -279,15 +298,35 @@ function Section({
                     </p>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {canAssignShowing(s.outcome) && (
-                    <AssignSelect
-                      showingId={s.id}
-                      assignedAgentId={s.assigned_agent_id}
-                      agents={rowAgentOptions}
-                    />
+                <div className="flex flex-col items-end gap-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canAssignShowing(s.outcome) && (
+                      <AssignSelect
+                        showingId={s.id}
+                        assignedAgentId={s.assigned_agent_id}
+                        agents={rowAgentOptions}
+                      />
+                    )}
+                    <OutcomeSelect showingId={s.id} outcome={s.outcome} />
+                  </div>
+                  {contact && contactDigits !== "" && (
+                    <p className="text-xs text-gray-500">
+                      {contact.name}:{" "}
+                      <a
+                        href={`sms:${contactDigits}`}
+                        className="font-medium text-brand hover:underline"
+                      >
+                        Text
+                      </a>
+                      {" · "}
+                      <a
+                        href={`tel:${contactDigits}`}
+                        className="font-medium text-brand hover:underline"
+                      >
+                        Call
+                      </a>
+                    </p>
                   )}
-                  <OutcomeSelect showingId={s.id} outcome={s.outcome} />
                 </div>
               </li>
             );
