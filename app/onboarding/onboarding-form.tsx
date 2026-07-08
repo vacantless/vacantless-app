@@ -52,7 +52,7 @@ export function OnboardingForm({
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Agile Real Estate Group"
+          placeholder="Your rental business"
           className={AUTH_INPUT_CLASS}
         />
       </div>

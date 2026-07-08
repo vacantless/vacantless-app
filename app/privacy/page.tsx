@@ -10,7 +10,7 @@ export const metadata = {
 
 // Best-guess operator + address (confirm at legal review; swap the street in
 // when you have it).
-const LEGAL_ENTITY = "Agile Real Estate Group";
+const LEGAL_ENTITY = "Vacantless";
 const MAILING_ADDRESS = "Windsor, Ontario, Canada";
 const LAST_UPDATED = "July 3, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
@@ -26,8 +26,8 @@ export default function PrivacyPage() {
         <p className="mt-2 text-sm text-[#59655f]">Last updated: {LAST_UPDATED}</p>
 
         <P>
-          This Privacy Policy explains how {LEGAL_ENTITY} (&quot;Vacantless,&quot;
-          &quot;we,&quot; &quot;us&quot;) collects, uses, discloses, and protects
+          This Privacy Policy explains how {LEGAL_ENTITY} (&quot;we,&quot;
+          &quot;us&quot;) collects, uses, discloses, and protects
           personal information when you use the Vacantless leasing workspace and
           website (the &quot;Service&quot;). We handle personal information in
           accordance with applicable Canadian privacy law, including PIPEDA.

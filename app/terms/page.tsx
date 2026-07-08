@@ -10,7 +10,7 @@ export const metadata = {
 
 // Best-guess operator + address (confirm at legal review; swap the street in
 // when you have it).
-const LEGAL_ENTITY = "Agile Real Estate Group";
+const LEGAL_ENTITY = "Vacantless";
 const MAILING_ADDRESS = "Windsor, Ontario, Canada";
 const GOVERNING_LAW = "the Province of Ontario, Canada";
 const LAST_UPDATED = "July 3, 2026";
@@ -29,7 +29,7 @@ export default function TermsPage() {
         <P>
           These Terms govern your use of the Vacantless leasing workspace and
           website (the &quot;Service&quot;), operated by {LEGAL_ENTITY}{" "}
-          (&quot;Vacantless,&quot; &quot;we,&quot; &quot;us&quot;). By creating an
+          (&quot;we,&quot; &quot;us&quot;). By creating an
           account or using the Service, you agree to these Terms.
         </P>
 
