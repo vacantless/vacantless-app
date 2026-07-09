@@ -181,6 +181,7 @@ type Property = {
   baths: number | null;
   parking: string | null;
   description: string | null;
+  showing_instructions: string | null;
   status: string;
   price_drop_pending_cents: number | null;
   available_date: string | null;
@@ -279,7 +280,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, address, rent_cents, beds, baths, parking, description, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, address, rent_cents, beds, baths, parking, description, showing_instructions, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1938,6 +1939,27 @@ export default async function PropertyDetailPage({
             ))}
           </ul>
         </details>
+        <div>
+          <label
+            htmlFor="property-showing-instructions"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
+            Showing &amp; access instructions{" "}
+            <span className="font-normal text-gray-400">(shared with the assigned agent)</span>
+          </label>
+          <textarea
+            id="property-showing-instructions"
+            name="showing_instructions"
+            defaultValue={p.showing_instructions ?? ""}
+            rows={3}
+            placeholder="e.g. Lockbox on the gas meter, code 4821. Buzz unit 20 to be let in. Park in visitor spots out front."
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Only shown to a showing agent you assign a viewing to, on their private link. Not shown
+            to renters.
+          </p>
+        </div>
         <div id="listing-description" className="scroll-mt-6">
         <DescriptionGuide
           defaultValue={p.description ?? ""}

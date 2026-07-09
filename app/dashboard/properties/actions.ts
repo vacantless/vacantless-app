@@ -439,6 +439,10 @@ export async function updateProperty(formData: FormData) {
       baths: parseFloatOrNull(String(formData.get("baths") ?? "")),
       parking: String(formData.get("parking") ?? "").trim() || null,
       description: String(formData.get("description") ?? "").trim() || null,
+      // Showing/access instructions for the assigned agent's handoff packet
+      // (/agent/[token], Slice 3). Free-text: lockbox location, buzzer, parking,
+      // "text before arriving", etc. Blank clears it.
+      showing_instructions: String(formData.get("showing_instructions") ?? "").trim() || null,
       status,
       price_drop_pending_cents: nextPending,
       // Unit-level fields

@@ -295,10 +295,41 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     label: "Viewing assigned to an agent",
     description:
       "When you assign a viewing to one of your showing agents, they get an email with the renter, property, and time so they can coordinate it. Defaults to the assigned agent; add recipients below to CC the lead agent on every assignment for oversight.",
-    tokens: [...COMMON_TOKENS, "agent_name", "lead_name", "showing_time", "assigned_by"],
+    tokens: [
+      ...COMMON_TOKENS,
+      "agent_name",
+      "lead_name",
+      "showing_time",
+      "assigned_by",
+      "agent_url",
+    ],
     defaultSubject: "Viewing assigned to you - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
+      "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\n\nOpen your viewings page for the renter's contact, access instructions, and a one-tap Confirm: {{agent_url}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
+    active: true,
+  },
+  // Pre-showing UNCONFIRMED nudge (S440, showing routing Slice 3). Audience
+  // operator; the mirror of the outcome nudge. When an assigned viewing is coming
+  // up (within ~24h) and hasn't been confirmed with the renter yet, the ASSIGNED
+  // AGENT gets ONE reminder with a one-tap {{agent_url}} link to their shared
+  // calendar, so an unconfirmed viewing doesn't silently slip and the lead agent
+  // doesn't have to chase. Defaults to the assigned agent (always included via
+  // audienceEmail, like leasing.showing_assigned); add recipients to CC the lead
+  // agent for oversight. SHIP DARK: opt-in per org (the cron requires an explicit
+  // enabled override via isDripEnqueueEnabled). Amber accent: worth attention, not
+  // a red alarm.
+  {
+    key: "leasing.showing_unconfirmed_nudge",
+    family: "leasing",
+    audience: "operator",
+    label: "Unconfirmed viewing reminder",
+    description:
+      "Before an assigned viewing, if it hasn't been confirmed with the renter yet, the assigned agent gets a one-tap reminder to confirm it — so nothing slips through the cracks. Defaults to the assigned agent; add recipients below to CC the lead agent for oversight. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "agent_name", "lead_name", "showing_time", "agent_url"],
+    defaultSubject: "Please confirm your viewing - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "Hi {{agent_name}}, your viewing with {{lead_name}} at {{property_address}} ({{showing_time}}) is coming up and hasn't been confirmed with the renter yet.\n\nConfirm it in one tap from your viewings page: {{agent_url}}\n\nThis lets the lead agent know the viewing is covered.",
+    defaultAccent: "#d97706",
     active: true,
   },
   // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the

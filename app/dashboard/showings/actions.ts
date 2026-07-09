@@ -12,6 +12,8 @@ import {
 } from "@/lib/showing-agents";
 import { sendOrgNotification } from "@/lib/notifications-server";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
+
 // Operator sets the outcome of a showing. RLS scopes everything to the org.
 // attended -> advance the lead to 'showed'; the change is logged to the lead
 // timeline so the pipeline history stays complete (the audit gap M3 closes).
@@ -103,18 +105,24 @@ export async function assignShowing(formData: FormData) {
   // If assigning, the target agent must be a live (non-archived) agent in THIS
   // org - explicit org filter so an agent from another org can never be attached
   // (the DB trigger enforces this too, migration 0114).
-  let agent: { id: string; name: string; email: string | null } | null = null;
+  let agent: { id: string; name: string; email: string | null; agent_token: string } | null = null;
   if (agentId) {
     const { data: agentRow } = await supabase
       .from("showing_agents")
-      .select("id, name, email, archived")
+      .select("id, name, email, archived, agent_token")
       .eq("id", agentId)
       .eq("organization_id", org.id)
       .maybeSingle();
     if (!agentRow) return;
-    const a = agentRow as { id: string; name: string; email: string | null; archived: boolean };
+    const a = agentRow as {
+      id: string;
+      name: string;
+      email: string | null;
+      archived: boolean;
+      agent_token: string;
+    };
     if (a.archived) return;
-    agent = { id: a.id, name: a.name, email: a.email };
+    agent = { id: a.id, name: a.name, email: a.email, agent_token: a.agent_token };
   }
 
   // Guard the UPDATE itself, not just the pre-read: org scope + reject a viewing
@@ -192,6 +200,7 @@ export async function assignShowing(formData: FormData) {
         lead_name: showing.lead?.name || showing.lead?.email || "a renter",
         showing_time: showingTime,
         assigned_by: user?.email ?? "The lead agent",
+        agent_url: `${APP_URL}/agent/${agent.agent_token}`,
       },
     });
   }

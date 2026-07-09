@@ -208,3 +208,70 @@ export function outcomeNudgeDue(input: OutcomeNudgeDueInput): boolean {
 }
 
 export const OUTCOME_NUDGE_SENT_COLUMN = "outcome_nudge_sent_at";
+
+// ---------------------------------------------------------------------------
+// Pre-showing UNCONFIRMED nudge (S440, showing routing Slice 3).
+//
+// The mirror image of the outcome nudge: that one fires AFTER a viewing when no
+// outcome is recorded; this one fires BEFORE a viewing when an assigned viewing
+// hasn't been confirmed with the renter yet, reminding the covering agent to
+// confirm it (one tap on their /agent/[token] calendar). Closes the "did anyone
+// actually confirm this?" gap the "Howard" episode exposed, without the lead
+// agent having to chase.
+//
+// Timing: a viewing is "due" for a confirmation nudge when it is still in the
+// future but within LEAD_MS of its start (default 24h) — close enough that an
+// unconfirmed viewing is a real risk, not so early that confirming is premature.
+// Once the start time passes, this stops firing (a past unconfirmed viewing is
+// the outcome nudge's job, not this one). One nudge per showing: the cron stamps
+// confirmation_nudge_sent_at after send so a re-run never double-sends.
+// ---------------------------------------------------------------------------
+
+// Nudge inside the 24h before a viewing's start.
+export const CONFIRMATION_NUDGE_LEAD_MS = 24 * HOUR_MS;
+
+export type ConfirmationNudgeDueInput = {
+  scheduledAtMs: number;
+  nowMs: number;
+  assigned: boolean; // a showing_agent is assigned
+  confirmed: boolean; // confirmed_at is set
+  outcome: string | null; // open == null or "scheduled"
+  alreadySent: boolean; // confirmation_nudge_sent_at is set
+  leadMs?: number;
+};
+
+/**
+ * Should this showing get its (single) pre-showing unconfirmed nudge right now?
+ *
+ *   - alreadySent                         → false (one nudge per showing)
+ *   - not assigned                        → false (nothing to confirm)
+ *   - already confirmed                   → false
+ *   - a real outcome recorded             → false (cancelled/attended/no_show)
+ *   - start already passed                → false (outcome-nudge territory)
+ *   - start more than LEAD_MS away        → false (too early to chase)
+ *   - otherwise                           → true
+ *
+ * remaining = scheduled_at - now. Boundaries inclusive: due exactly at LEAD_MS
+ * out, and still due right up to the start (remaining == 0).
+ */
+export function confirmationNudgeDue(input: ConfirmationNudgeDueInput): boolean {
+  const {
+    scheduledAtMs,
+    nowMs,
+    assigned,
+    confirmed,
+    outcome,
+    alreadySent,
+    leadMs = CONFIRMATION_NUDGE_LEAD_MS,
+  } = input;
+  if (alreadySent) return false;
+  if (!assigned) return false;
+  if (confirmed) return false;
+  if (outcome !== null && outcome !== "scheduled") return false; // closed
+  const remaining = scheduledAtMs - nowMs;
+  if (remaining < 0) return false; // already started/past
+  if (remaining > leadMs) return false; // too early
+  return true;
+}
+
+export const CONFIRMATION_NUDGE_SENT_COLUMN = "confirmation_nudge_sent_at";

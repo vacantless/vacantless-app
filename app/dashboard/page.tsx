@@ -65,6 +65,7 @@ export default async function OverviewPage() {
     { data: availablePropertyRows },
     { data: workOrderRows },
     { count: pendingMessageCount },
+    { count: awaitingConfirmationCount },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -122,6 +123,19 @@ export default async function OverviewPage() {
       .from("pending_tenant_messages")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
+    // Upcoming viewings that are assigned to a showing agent but not yet confirmed
+    // with the renter (the awaiting_confirmation coordination state, S440 Slice 3).
+    // Drives a conditional Overview tile so the lead agent sees at a glance how
+    // many routed viewings still need a confirmation — the "did anyone confirm
+    // this?" oversight the Howard episode exposed. Renders only when > 0
+    // (conditional-visibility rule).
+    supabase
+      .from("showings")
+      .select("id", { count: "exact", head: true })
+      .not("assigned_agent_id", "is", null)
+      .is("confirmed_at", null)
+      .gte("scheduled_at", new Date().toISOString())
+      .or("outcome.is.null,outcome.eq.scheduled"),
   ]);
 
   // Open + urgent work-order counts for the Overview tile.
@@ -299,6 +313,32 @@ export default async function OverviewPage() {
                 </p>
                 <p className="mt-0.5 text-sm text-gray-500">
                   Courtesy notes we&apos;ve drafted for your tenants. Nothing sends until you review and approve it.
+                </p>
+              </div>
+            </div>
+          </Link>
+        </>
+      )}
+
+      {(awaitingConfirmationCount ?? 0) > 0 && (
+        <>
+          <SectionHeading action={{ href: "/dashboard/showings", label: "Open Viewings" }}>
+            Viewing coordination
+          </SectionHeading>
+          <Link href="/dashboard/showings" className="mb-8 block">
+            <div className="flex items-center gap-3.5 rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-sm ring-1 ring-black/5">
+                <Icons.calendar className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900">
+                  {awaitingConfirmationCount} assigned{" "}
+                  {awaitingConfirmationCount === 1 ? "viewing is" : "viewings are"} awaiting
+                  confirmation
+                </p>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  Routed to a showing agent but not yet confirmed with the renter. Open Viewings to
+                  follow up, or the agent can confirm from their own link.
                 </p>
               </div>
             </div>
