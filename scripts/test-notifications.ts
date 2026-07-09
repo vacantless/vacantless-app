@@ -154,6 +154,19 @@ ok(
     resolveNotificationRecipients({ audience: "operator", configured: [], operatorFallback: ["fb@x.com"] }),
   ) === JSON.stringify(["fb@x.com"]),
 );
+// operator event: the natural party (audienceEmail) is ALWAYS included, even when
+// configured CCs are present (S436 Codex P1b - the assigned showing agent must
+// never be dropped when an org adds an oversight CC).
+ok(
+  "resolve: operator always includes audienceEmail + additive cc",
+  JSON.stringify(
+    resolveNotificationRecipients({
+      audience: "operator",
+      configured: ["cc@x.com"],
+      audienceEmail: "Agent@x.com",
+    }),
+  ) === JSON.stringify(["agent@x.com", "cc@x.com"]),
+);
 // trade event: natural party always included + additive cc, de-duped
 ok(
   "resolve: trade includes party + cc",

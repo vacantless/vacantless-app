@@ -5,6 +5,8 @@ import { EmptyState, PageHeader, SectionHeading } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { groupShowingsIntoBlocks } from "@/lib/booking";
 import { agentDisplayLabel, canAssignShowing } from "@/lib/showing-agents";
+import { getCurrentRole } from "@/lib/membership";
+import { roleCan } from "@/lib/roles";
 import { OutcomeSelect } from "./outcome-select";
 import { AssignSelect } from "./assign-select";
 
@@ -68,6 +70,11 @@ export default async function ShowingsPage() {
   const supabase = createClient();
   const org = await getCurrentOrg();
   const timeZone = org?.booking_timezone ?? "America/Toronto";
+  // Role-gate the write affordances so a showing_helper (server-blocked from both
+  // actions) doesn't see forbidden-click controls (Codex P3).
+  const role = await getCurrentRole();
+  const canManageAgents = roleCan(role, "manage_settings");
+  const canAssign = roleCan(role, "manage_leads");
   const { data } = await supabase
     .from("showings")
     .select(
@@ -137,14 +144,16 @@ export default async function ShowingsPage() {
         subtitle="Viewings renters booked online, plus ones you scheduled. Mark the outcome after each one to keep your renter list accurate."
       />
 
-      <div className="mb-6 -mt-2">
-        <Link
-          href="/dashboard/showing-agents"
-          className="text-sm font-medium text-brand hover:underline"
-        >
-          Manage showing agents →
-        </Link>
-      </div>
+      {canManageAgents && (
+        <div className="mb-6 -mt-2">
+          <Link
+            href="/dashboard/showing-agents"
+            className="text-sm font-medium text-brand hover:underline"
+          >
+            Manage showing agents →
+          </Link>
+        </div>
+      )}
 
       {blocks.length > 0 && (
         <div className="mb-8">
@@ -186,6 +195,7 @@ export default async function ShowingsPage() {
         agentOptions={activeAgentOptions}
         agentLabelById={agentLabelById}
         agentContactById={agentContactById}
+        canAssign={canAssign}
       />
       <Section
         title="Past & closed"
@@ -201,6 +211,7 @@ export default async function ShowingsPage() {
         agentOptions={activeAgentOptions}
         agentLabelById={agentLabelById}
         agentContactById={agentContactById}
+        canAssign={canAssign}
       />
       {cancelled.length > 0 && (
         <Section
@@ -210,6 +221,7 @@ export default async function ShowingsPage() {
           agentOptions={activeAgentOptions}
           agentLabelById={agentLabelById}
           agentContactById={agentContactById}
+          canAssign={canAssign}
         />
       )}
     </div>
@@ -224,6 +236,7 @@ function Section({
   agentOptions,
   agentLabelById,
   agentContactById,
+  canAssign,
 }: {
   title: string;
   rows: ShowingRow[];
@@ -232,6 +245,7 @@ function Section({
   agentOptions: AgentOption[];
   agentLabelById: Map<string, string>;
   agentContactById: Map<string, { name: string; phone: string | null }>;
+  canAssign: boolean;
 }) {
   return (
     <div className="mb-8">
@@ -300,12 +314,17 @@ function Section({
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    {canAssignShowing(s.outcome) && (
+                    {canAssignShowing(s.outcome) && canAssign && (
                       <AssignSelect
                         showingId={s.id}
                         assignedAgentId={s.assigned_agent_id}
                         agents={rowAgentOptions}
                       />
+                    )}
+                    {canAssignShowing(s.outcome) && !canAssign && assignedLabel && (
+                      <span className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-600">
+                        {assignedLabel}
+                      </span>
                     )}
                     <OutcomeSelect showingId={s.id} outcome={s.outcome} />
                   </div>

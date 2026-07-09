@@ -1001,6 +1001,12 @@ export function resolveNotificationRecipients(args: {
   };
 
   if (args.audience === "operator") {
+    // The natural operator party for this send (e.g. the showing agent a viewing
+    // was routed to) is ALWAYS included, so configuring extra CC recipients can
+    // never silently drop them (Codex P1b). Existing operator events pass no
+    // audienceEmail, so this is a no-op for them. Configured recipients are the
+    // additive CC list; operatorFallback covers the "nobody configured" case.
+    push(args.audienceEmail);
     const list = args.configured.length > 0 ? args.configured : args.operatorFallback ?? [];
     list.forEach(push);
   } else {

@@ -75,13 +75,16 @@ export async function assignShowing(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) return;
 
-  // Read the current showing (RLS-scoped) to validate state + build the note.
+  // Read the current showing to validate state + build the note. Explicit org
+  // filter (defense in depth on top of RLS): a multi-org member must never assign
+  // a showing that isn't in the org they're acting as.
   const { data: showingRow } = await supabase
     .from("showings")
     .select(
       "id, outcome, scheduled_at, assigned_agent_id, lead:leads(id, name, email), property:properties(id, address)",
     )
     .eq("id", id)
+    .eq("organization_id", org.id)
     .maybeSingle();
   if (!showingRow) return;
   const showing = showingRow as unknown as {
@@ -94,13 +97,15 @@ export async function assignShowing(formData: FormData) {
   if (!canAssignShowing(showing.outcome)) return;
 
   // If assigning, the target agent must be a live (non-archived) agent in THIS
-  // org. RLS already scopes the read to the org; we additionally reject archived.
+  // org - explicit org filter so an agent from another org can never be attached
+  // (the DB trigger enforces this too, migration 0114).
   let agent: { id: string; name: string; email: string | null } | null = null;
   if (agentId) {
     const { data: agentRow } = await supabase
       .from("showing_agents")
       .select("id, name, email, archived")
       .eq("id", agentId)
+      .eq("organization_id", org.id)
       .maybeSingle();
     if (!agentRow) return;
     const a = agentRow as { id: string; name: string; email: string | null; archived: boolean };
@@ -108,6 +113,9 @@ export async function assignShowing(formData: FormData) {
     agent = { id: a.id, name: a.name, email: a.email };
   }
 
+  // Guard the UPDATE itself, not just the pre-read: org scope + reject a viewing
+  // that was cancelled concurrently between the read and here. If the guarded
+  // update matches no row, we stop before logging or notifying.
   const { data: updated } = await supabase
     .from("showings")
     .update({
@@ -115,6 +123,8 @@ export async function assignShowing(formData: FormData) {
       assigned_at: agentId ? new Date().toISOString() : null,
     })
     .eq("id", id)
+    .eq("organization_id", org.id)
+    .neq("outcome", "cancelled")
     .select("id, organization_id, lead_id")
     .maybeSingle();
   if (!updated) return;
@@ -161,7 +171,11 @@ export async function assignShowing(formData: FormData) {
         reply_to_email: org.reply_to_email,
       },
       eventKey: "leasing.showing_assigned",
-      operatorFallback: agent.email ? [agent.email] : [],
+      // The assigned agent is the NATURAL party for this event and must ALWAYS be
+      // notified, even when the org configures extra CC recipients (Codex P1b) -
+      // so pass the agent as audienceEmail (always included) rather than as
+      // operatorFallback (which configured recipients would override).
+      audienceEmail: agent.email,
       vars: {
         org_name: org.name ?? "Your property manager",
         property_address: showing.property?.address ?? "the property",

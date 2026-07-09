@@ -64,6 +64,27 @@ to whoever is covering. `contactDigits` strips the free-text phone to `[\d+]` fo
 the href; the block only renders when the showing is assigned AND the agent has a
 phone. QA-verified pattern; extend the Codex range to `13da51d..<HEAD>` to cover it.
 
+## Codex fold (S436c) — all 4 findings addressed
+- **P1a cross-org assignment.** `assignShowing` now filters the showing read, the
+  target-agent read, AND the update by `organization_id = org.id`. DB invariant
+  added: migration `0114_showing_agent_same_org` — a BEFORE trigger
+  (`enforce_showing_agent_same_org`, SECURITY DEFINER) raises `check_violation` if
+  `assigned_agent_id`'s org != the showing's org. (A composite FK with ON DELETE
+  SET NULL was rejected: it would null the NOT NULL `organization_id`.) **Proven
+  live on prod** — a temp agent from org A could not be assigned to a showing in
+  org B (self-cleaning transaction).
+- **P1b dropped agent when CC configured.** `resolveNotificationRecipients` now
+  ALWAYS includes `audienceEmail` for the operator audience (additive with
+  configured CCs); `assignShowing` passes the agent as `audienceEmail` (not
+  `operatorFallback`). Existing operator events pass no `audienceEmail` = no-op.
+  New test in `test-notifications.ts`.
+- **P2 pre-read-only cancel guard.** The UPDATE itself now carries
+  `.eq(organization_id).neq(outcome,'cancelled')`; a 0-row result stops before
+  logging/notifying, closing the read-then-write race.
+- **P3 forbidden-click UX.** `showings/page.tsx` role-gates the "Manage showing
+  agents" link (`manage_settings`) and the assign picker (`manage_leads`); a
+  `showing_helper` sees a read-only assigned label instead of the picker.
+
 ## Not in this slice (backlog)
 Slice 2 routing suggestion (suggestOperator scorer over tier/geo/product/capacity);
 Slice 3 tokenized agent view + shared calendar; Slice 4 lead-agent oversight view +
