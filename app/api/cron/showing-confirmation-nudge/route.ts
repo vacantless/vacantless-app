@@ -94,7 +94,12 @@ type ShowingRow = {
   assigned_agent_id: string | null;
   lead: { name: string | null } | null;
   property: { address: string | null } | null;
-  assigned_agent: { name: string | null; email: string | null; agent_token: string | null } | null;
+  assigned_agent: {
+    name: string | null;
+    email: string | null;
+    agent_token: string | null;
+    archived: boolean | null;
+  } | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -169,7 +174,7 @@ export async function GET(req: NextRequest) {
         .select(
           "id, scheduled_at, outcome, confirmed_at, assigned_agent_id, " +
             "lead:leads(name), property:properties(address), " +
-            "assigned_agent:showing_agents(name, email, agent_token)",
+            "assigned_agent:showing_agents(name, email, agent_token, archived)",
         )
         .eq("organization_id", org.id)
         .not("assigned_agent_id", "is", null)
@@ -224,9 +229,21 @@ export async function GET(req: NextRequest) {
 
           const lead = one<{ name: string | null }>(row.lead);
           const prop = one<{ address: string | null }>(row.property);
-          const agent = one<{ name: string | null; email: string | null; agent_token: string | null }>(
-            row.assigned_agent,
-          );
+          const agent = one<{
+            name: string | null;
+            email: string | null;
+            agent_token: string | null;
+            archived: boolean | null;
+          }>(row.assigned_agent);
+          // An ARCHIVED agent's link is revoked (the /agent/[token] page 404s for
+          // it), so never send them the nudge or consume the one allowed send:
+          // skip WITHOUT stamping, so if the agent is un-archived (or the viewing
+          // reassigned) a later sweep still nudges. The lead agent already sees the
+          // viewing on the Overview awaiting-confirmation count. (Codex S440 P2.)
+          if (agent?.archived) {
+            summary.skipped++;
+            continue;
+          }
           // Without a token there is no /agent link to send — skip (defensive; the
           // 0117 backfill gives every agent a token).
           if (!agent?.agent_token) {

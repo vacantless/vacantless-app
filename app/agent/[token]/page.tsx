@@ -26,7 +26,7 @@ type Row = {
   outcome: string | null;
   confirmed_at: string | null;
   assigned_agent_id: string | null;
-  lead: { name: string | null; email: string | null; phone: string | null } | null;
+  lead: { name: string | null; phone: string | null } | null;
   property: {
     address: string | null;
     beds: number | null;
@@ -120,7 +120,9 @@ export default async function AgentCalendarPage({
     .from("showings")
     .select(
       "id, scheduled_at, outcome, confirmed_at, assigned_agent_id, " +
-        "lead:leads(name, email, phone), " +
+        // email intentionally NOT selected: this is an unauthenticated magic-link
+        // page, renter PII scope = name + phone (call/text) only.
+        "lead:leads(name, phone), " +
         "property:properties(address, beds, baths, rent_cents, parking, showing_instructions)",
     )
     .eq("assigned_agent_id", agent.id)
@@ -195,7 +197,6 @@ export default async function AgentCalendarPage({
                 const listing = listingLine(s.property);
                 const instructions = s.property?.showing_instructions?.trim();
                 const phone = s.lead?.phone?.trim();
-                const email = s.lead?.email?.trim();
 
                 return (
                   <div
@@ -226,32 +227,20 @@ export default async function AgentCalendarPage({
                         Renter
                       </p>
                       <p className="mt-1 text-sm font-medium text-gray-900">{renter}</p>
-                      {(phone || email) && (
+                      {phone && (
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {phone && (
-                            <>
-                              <a
-                                href={tel(phone)}
-                                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                              >
-                                Call {phone}
-                              </a>
-                              <a
-                                href={sms(phone)}
-                                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                              >
-                                Text
-                              </a>
-                            </>
-                          )}
-                          {email && (
-                            <a
-                              href={`mailto:${email}`}
-                              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                            >
-                              Email
-                            </a>
-                          )}
+                          <a
+                            href={tel(phone)}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            Call {phone}
+                          </a>
+                          <a
+                            href={sms(phone)}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            Text
+                          </a>
                         </div>
                       )}
                     </div>
