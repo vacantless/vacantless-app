@@ -246,7 +246,11 @@ export async function setShowingConfirmed(formData: FormData) {
       .eq("organization_id", org.id)
       .not("assigned_agent_id", "is", null)
       .is("confirmed_at", null)
-      .neq("outcome", "cancelled")
+      // Mirror the pure awaiting_confirmation OPEN state, not just "not cancelled"
+      // (Codex S436-Slice2 P2): .neq("outcome","cancelled") misses SQL NULL rows
+      // (which deriveCoordinationStatus treats as awaiting) AND would let a
+      // concurrent attended/no_show slip through. Match only the open outcomes.
+      .or("outcome.is.null,outcome.eq.scheduled")
       .select("id")
       .maybeSingle();
     if (!updated) return;

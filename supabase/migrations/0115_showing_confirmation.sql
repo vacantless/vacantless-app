@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0114_showing_confirmation — showing coordination trail, Slice 2 (S436).
+-- 0115_showing_confirmation — showing coordination trail, Slice 2 (S436).
 --
 -- WHY (dogfood, the "Howard" episode 2026-07-08): a booked viewing had no visible
 -- state between "assigned" and "outcome", so the lead agent could not tell whether

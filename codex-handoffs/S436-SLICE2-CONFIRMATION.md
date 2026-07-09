@@ -44,6 +44,14 @@ agent had actually confirmed the appointment with the renter. This adds that sta
 4. confirm-control render matrix (awaiting -> button, confirmed -> badge+undo,
    else nothing) and the manage_leads gate on the page.
 
+## Codex fold (Slice 2 review, no P1)
+- **P2** `setShowingConfirmed` confirm predicate now mirrors the pure awaiting
+  state: `.or("outcome.is.null,outcome.eq.scheduled")` replaces
+  `.neq("outcome","cancelled")` (the old form missed SQL NULL rows and let a
+  concurrent attended/no_show slip through). Org + assigned-agent + confirmed_at-
+  null guards unchanged.
+- **P3** fixed the `0115_showing_confirmation.sql` header comment (said 0114).
+
 ## Backlog (Slice 3+)
 Tokenized /agent/[token] view where the account-less agent self-confirms
 (confirmed_by='agent') + a shared calendar; a pre-showing "still unconfirmed"
