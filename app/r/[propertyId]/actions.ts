@@ -256,10 +256,13 @@ export async function submitLead(formData: FormData) {
   );
   const occupants = parseCount(String(formData.get("screen_occupants") ?? ""));
   const petsDetail = String(formData.get("screen_pets_detail") ?? "").trim();
-  // The screening fieldset only renders when the org enabled it; detect that
-  // via the always-present income field so non-screening leads keep pets = null
+  // Whether the org has pre-screening on. Detected via an explicit hidden
+  // sentinel (screening_on), NOT the income field: S438 Slice 2 lets the operator
+  // suppress the income question (ask_income=false) while still asking pets, so
+  // keying off screen_income would drop the pets answer and stop it flagging
+  // (Codex P2). Absent sentinel => a non-screening lead keeps pets = null
   // (unknown) rather than a misleading "no".
-  const screeningShown = formData.has("screen_income");
+  const screeningShown = formData.has("screening_on");
   // A pet is indicated by the checkbox OR by typing pet details.
   const hasPets = screeningShown
     ? formData.get("screen_has_pets") != null || petsDetail.length > 0

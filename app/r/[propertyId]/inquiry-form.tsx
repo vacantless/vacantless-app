@@ -225,6 +225,15 @@ export function InquiryForm({
         <input type="hidden" name="screen_occupants" value={occupants} />
         <input type="hidden" name="screen_pets_detail" value={petsDetail} />
         {hasPet && <input type="hidden" name="screen_has_pets" value="1" />}
+        {/* Explicit "screening is on" sentinel (S438 Slice 2 P2 fold). The submit
+            action used to detect screening via the income field, but income can
+            now be suppressed (ask_income=false) while pets is still asked — which
+            wrongly nulled the pets answer and stopped it flagging. This sentinel
+            is present whenever the org has screening on, independent of which
+            built-ins are asked. */}
+        {screeningEnabled && (
+          <input type="hidden" name="screening_on" value="1" />
+        )}
         {/* Fallback so a slot chosen from a now-collapsed day still submits. */}
         {hasSlots && selectedSlot && !selectedSlotVisible && (
           <input type="hidden" name="slot" value={selectedSlot} />
@@ -286,7 +295,7 @@ export function InquiryForm({
               <button
                 type="button"
                 onClick={() => setSkipTime(true)}
-                className="mt-3 text-sm font-medium underline"
+                className="mt-3 block text-sm font-medium underline"
                 style={{ color: brandColor }}
               >
                 Can&apos;t make these times? Send your details instead →
