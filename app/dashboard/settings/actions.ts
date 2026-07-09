@@ -75,25 +75,50 @@ export async function updateBrandIdentity(formData: FormData) {
 
 // Renter pre-screening. Governs the qualifying questions on the public inquiry
 // form + the auto qualify-out flag. Default off. IA Step 3 (S275): the editor
-// moved to its point-of-use — /dashboard/leasing/screening — so the redirects
-// land there, not back on Settings.
-export async function updateScreening(formData: FormData) {
+// lives at its point-of-use — /dashboard/leasing/screening. S438 page-hierarchy
+// split the old single save into two independent saves so the page can put WHICH
+// questions are asked near the top and the auto-flag RULES in their own card
+// lower down: updateScreeningQuestions owns the master switch + per-built-in ask
+// toggles; updateScreeningFlags owns the flag thresholds + reason copy. Each does
+// a PARTIAL update of only its own columns, so saving one never disturbs the other.
+
+// Card 1 (top): the master switch + which built-in questions the renter form asks.
+export async function updateScreeningQuestions(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({
+      screening_enabled: formData.get("screening_enabled") != null,
+      // An unchecked box submits nothing, so absence = false ("don't ask it").
+      screening_ask_income: formData.get("screening_ask_income") != null,
+      screening_ask_movein: formData.get("screening_ask_movein") != null,
+      screening_ask_pets: formData.get("screening_ask_pets") != null,
+      screening_ask_occupants: formData.get("screening_ask_occupants") != null,
+    })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  redirect("/dashboard/leasing/screening?screening=questions_saved");
+}
+
+// Card 2 (lower): the auto-flag thresholds + operator-custom reason copy. Reuses
+// validateScreeningSettings for the numeric validation; enabled/ask are not this
+// action's concern (dummy true), and only the flag + reason columns are written.
+export async function updateScreeningFlags(formData: FormData) {
   const org = await requireSettingsOrg();
 
   const result = validateScreeningSettings({
-    enabled: formData.get("screening_enabled") != null,
+    enabled: true,
     income_multiple: String(formData.get("screening_income_multiple") ?? ""),
     max_movein_days: String(formData.get("screening_max_movein_days") ?? ""),
     flag_pets: formData.get("screening_flag_pets") != null,
     reason_income: String(formData.get("screening_reason_income") ?? ""),
     reason_movein: String(formData.get("screening_reason_movein") ?? ""),
     reason_pets: String(formData.get("screening_reason_pets") ?? ""),
-    // Per-built-in ask toggles (S438 Slice 2). An unchecked box submits nothing,
-    // so absence = false (a deliberate "don't ask this built-in").
-    ask_income: formData.get("screening_ask_income") != null,
-    ask_movein: formData.get("screening_ask_movein") != null,
-    ask_pets: formData.get("screening_ask_pets") != null,
-    ask_occupants: formData.get("screening_ask_occupants") != null,
   });
   if (!result.ok) {
     redirect(`/dashboard/leasing/screening?screening=${result.reason}`);
@@ -102,13 +127,20 @@ export async function updateScreening(formData: FormData) {
   const supabase = createClient();
   const { error } = await supabase
     .from("organizations")
-    .update(result.values)
+    .update({
+      screening_income_multiple: result.values.screening_income_multiple,
+      screening_max_movein_days: result.values.screening_max_movein_days,
+      screening_flag_pets: result.values.screening_flag_pets,
+      screening_reason_income: result.values.screening_reason_income,
+      screening_reason_movein: result.values.screening_reason_movein,
+      screening_reason_pets: result.values.screening_reason_pets,
+    })
     .eq("id", org.id);
   if (error) {
     redirect("/dashboard/leasing/screening?screening=error");
   }
 
-  redirect("/dashboard/leasing/screening?screening=saved");
+  redirect("/dashboard/leasing/screening?screening=flags_saved");
 }
 
 // Custom pre-screening questions (S291). Operator authors arbitrary questions

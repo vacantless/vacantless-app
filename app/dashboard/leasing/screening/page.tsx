@@ -8,13 +8,14 @@ import {
   type ScreeningQuestion,
 } from "@/lib/screening-questions";
 import {
-  updateScreening,
+  updateScreeningQuestions,
+  updateScreeningFlags,
   updateScreeningPreferredAnswer,
   setScreeningQuestionActive,
   deleteScreeningQuestion,
 } from "@/app/dashboard/settings/actions";
 import { AddQuestionForm } from "./add-question-form";
-import { ScreeningBuiltins } from "./screening-builtins";
+import { ScreeningAskToggles } from "./screening-builtins";
 import { BrandBanner, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
@@ -189,37 +190,27 @@ export default async function ScreeningSettingsPage({
           </div>
         </div>
 
-        {/* --- Renter pre-screening (built-ins) -------------------------------- */}
+        {/* --- Card 1: which questions the renter form asks ------------------- */}
         <form
-          action={updateScreening}
+          action={updateScreeningQuestions}
           className="rounded-2xl border border-gray-200 bg-white p-5"
         >
           <div className="flex items-center gap-2.5">
             <IconTile size="sm"><Icons.users className="h-4 w-4" /></IconTile>
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-              Questions &amp; auto-flags
+              Questions renters are asked
             </h3>
           </div>
           <p className="mt-1 text-sm text-gray-500">
-            Ask a few qualifying questions on your inquiry form and, optionally,
-            flag renters whose answers likely don&apos;t fit — so you can focus
-            your time on the ones who do. Flagged inquiries are never hidden,
-            rejected, or messaged; you always decide.
+            Choose which qualifying questions your public inquiry form asks. Turn a
+            question off to drop it from the form. Whether any answer auto-flags a
+            possible mismatch is set separately in &ldquo;Auto-flag rules&rdquo;
+            lower on this page.
           </p>
 
-          {sp === "saved" && (
+          {sp === "questions_saved" && (
             <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-              Pre-screening settings saved.
-            </div>
-          )}
-          {sp === "income_multiple" && (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-              The income multiple must be a positive number (e.g. 3 for 3x rent).
-            </div>
-          )}
-          {sp === "max_movein_days" && (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-              The move-in window must be a whole number of days.
+              Questions saved.
             </div>
           )}
           {sp === "error" && (
@@ -228,82 +219,16 @@ export default async function ScreeningSettingsPage({
             </div>
           )}
 
-          <ScreeningBuiltins
+          <ScreeningAskToggles
             enabled={org.screening_enabled}
             askIncome={org.screening_ask_income}
             askMovein={org.screening_ask_movein}
             askPets={org.screening_ask_pets}
             askOccupants={org.screening_ask_occupants}
-            incomeMultiple={org.screening_income_multiple}
-            maxMoveinDays={org.screening_max_movein_days}
-            flagPets={org.screening_flag_pets}
           />
 
-          <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Screening
-            uses only ability to pay, timing, and pets — never factors like
-            family size, background, or any protected group.
-          </p>
-
-          {/* Operator-tunable reason copy (S257). */}
-          <details className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <summary className="cursor-pointer text-sm font-medium text-gray-700">
-              Customize the wording shown on flagged inquiries
-            </summary>
-            <p className="mt-2 text-xs text-gray-400">
-              When an inquiry is flagged, you see a short reason. Reword it to
-              match your voice, or leave blank to use the default. Only you see
-              these — renters never do.
-            </p>
-            <div className="mt-4 space-y-4">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Income reason
-                </span>
-                <input
-                  name="screening_reason_income"
-                  type="text"
-                  maxLength={120}
-                  defaultValue={org.screening_reason_income ?? ""}
-                  placeholder={SCREENING_REASON.income}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Move-in timing reason
-                </span>
-                <input
-                  name="screening_reason_movein"
-                  type="text"
-                  maxLength={120}
-                  defaultValue={org.screening_reason_movein ?? ""}
-                  placeholder={SCREENING_REASON.moveIn}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Pets reason
-                </span>
-                <input
-                  name="screening_reason_pets"
-                  type="text"
-                  maxLength={120}
-                  defaultValue={org.screening_reason_pets ?? ""}
-                  placeholder={SCREENING_REASON.pets}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
-            <p className="mt-3 text-xs text-gray-400">
-              The wording is saved with each inquiry as it comes in, so editing
-              it later won&apos;t change inquiries you already received.
-            </p>
-          </details>
-
           <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-            Save pre-screening
+            Save questions
           </button>
         </form>
 
@@ -496,6 +421,201 @@ export default async function ScreeningSettingsPage({
             background, family, or where someone is from.
           </p>
         </div>
+
+        {/* --- Card 3: auto-flag rules (S438 page hierarchy — flagging lives
+            below the questions it acts on) ---------------------------------- */}
+        <form
+          action={updateScreeningFlags}
+          className="rounded-2xl border border-gray-200 bg-white p-5"
+        >
+          <div className="flex items-center gap-2.5">
+            <IconTile size="sm"><Icons.users className="h-4 w-4" /></IconTile>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Auto-flag rules
+            </h3>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Optionally raise a &ldquo;possible mismatch&rdquo; heads-up on certain
+            answers, so you can focus on the renters who fit. A rule only fires
+            when its question is turned on above. Flagged inquiries are never
+            hidden, rejected, or messaged; you always decide.
+          </p>
+
+          {sp === "flags_saved" && (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+              Auto-flag rules saved.
+            </div>
+          )}
+          {sp === "income_multiple" && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+              The income multiple must be a positive number (e.g. 3 for 3x rent).
+            </div>
+          )}
+          {sp === "max_movein_days" && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+              The move-in window must be a whole number of days.
+            </div>
+          )}
+          {sp === "error" && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+              Something went wrong saving these settings. Please try again.
+            </div>
+          )}
+
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div
+              className={
+                org.screening_enabled && org.screening_ask_income
+                  ? ""
+                  : "opacity-50"
+              }
+            >
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Flag income below (multiple of rent)
+                {org.screening_enabled && !org.screening_ask_income && (
+                  <span className="ml-2 text-xs font-normal text-amber-700">
+                    income question is off
+                  </span>
+                )}
+              </span>
+              <input
+                name="screening_income_multiple"
+                type="number"
+                min={1}
+                max={20}
+                step={0.5}
+                defaultValue={org.screening_income_multiple ?? ""}
+                placeholder="e.g. 3"
+                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <span className="mt-1 block text-xs text-gray-400">
+                Blank = asked, never flags.
+              </span>
+            </div>
+            <div
+              className={
+                org.screening_enabled && org.screening_ask_movein
+                  ? ""
+                  : "opacity-50"
+              }
+            >
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Flag move-in further out than (days)
+                {org.screening_enabled && !org.screening_ask_movein && (
+                  <span className="ml-2 text-xs font-normal text-amber-700">
+                    move-in question is off
+                  </span>
+                )}
+              </span>
+              <input
+                name="screening_max_movein_days"
+                type="number"
+                min={1}
+                max={3650}
+                step={1}
+                defaultValue={org.screening_max_movein_days ?? ""}
+                placeholder="e.g. 90"
+                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <span className="mt-1 block text-xs text-gray-400">
+                Blank = asked, never flags.
+              </span>
+            </div>
+          </div>
+
+          <label
+            className={`mt-4 flex items-start gap-3 ${
+              org.screening_enabled && org.screening_ask_pets ? "" : "opacity-50"
+            }`}
+          >
+            <input
+              name="screening_flag_pets"
+              type="checkbox"
+              defaultChecked={org.screening_flag_pets}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+            />
+            <span className="text-sm">
+              <span className="block font-medium text-gray-700">
+                Flag renters with pets on rentals that aren&apos;t pet-friendly
+                {org.screening_enabled && !org.screening_ask_pets && (
+                  <span className="ml-2 text-xs font-normal text-amber-700">
+                    pets question is off
+                  </span>
+                )}
+              </span>
+              <span className="block text-xs text-gray-400">
+                Only applies to a rental whose &ldquo;pet-friendly&rdquo; toggle
+                is off.
+              </span>
+            </span>
+          </label>
+
+          <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            Screening uses only ability to pay, timing, and pets — never factors
+            like family size, background, or any protected group.
+          </p>
+
+          {/* Operator-tunable reason copy (S257). */}
+          <details className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <summary className="cursor-pointer text-sm font-medium text-gray-700">
+              Customize the wording shown on flagged inquiries
+            </summary>
+            <p className="mt-2 text-xs text-gray-400">
+              When an inquiry is flagged, you see a short reason. Reword it to
+              match your voice, or leave blank to use the default. Only you see
+              these — renters never do.
+            </p>
+            <div className="mt-4 space-y-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Income reason
+                </span>
+                <input
+                  name="screening_reason_income"
+                  type="text"
+                  maxLength={120}
+                  defaultValue={org.screening_reason_income ?? ""}
+                  placeholder={SCREENING_REASON.income}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Move-in timing reason
+                </span>
+                <input
+                  name="screening_reason_movein"
+                  type="text"
+                  maxLength={120}
+                  defaultValue={org.screening_reason_movein ?? ""}
+                  placeholder={SCREENING_REASON.moveIn}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Pets reason
+                </span>
+                <input
+                  name="screening_reason_pets"
+                  type="text"
+                  maxLength={120}
+                  defaultValue={org.screening_reason_pets ?? ""}
+                  placeholder={SCREENING_REASON.pets}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+            <p className="mt-3 text-xs text-gray-400">
+              The wording is saved with each inquiry as it comes in, so editing
+              it later won&apos;t change inquiries you already received.
+            </p>
+          </details>
+
+          <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+            Save flag rules
+          </button>
+        </form>
       </div>
     </div>
   );

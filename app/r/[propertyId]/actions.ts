@@ -256,15 +256,17 @@ export async function submitLead(formData: FormData) {
   );
   const occupants = parseCount(String(formData.get("screen_occupants") ?? ""));
   const petsDetail = String(formData.get("screen_pets_detail") ?? "").trim();
-  // Whether the org has pre-screening on. Detected via an explicit hidden
-  // sentinel (screening_on), NOT the income field: S438 Slice 2 lets the operator
-  // suppress the income question (ask_income=false) while still asking pets, so
-  // keying off screen_income would drop the pets answer and stop it flagging
-  // (Codex P2). Absent sentinel => a non-screening lead keeps pets = null
-  // (unknown) rather than a misleading "no".
-  const screeningShown = formData.has("screening_on");
+  // Whether the renter was actually asked about pets. Keyed off an explicit
+  // sentinel (screen_pets_asked) rendered only when the pets pills show (screening
+  // on AND ask_pets on) — NOT the income field or a generic screening flag. The
+  // pets hidden fields (screen_pets_detail/screen_has_pets) are always in the DOM,
+  // so absence alone can't tell a SUPPRESSED pets question from an answered "no".
+  // Without the sentinel the answer is null (unknown), so a suppressed question is
+  // never stored/shown as a misleading "No" (Codex P2), and it still flags when
+  // income is suppressed but pets is asked.
+  const petsAsked = formData.has("screen_pets_asked");
   // A pet is indicated by the checkbox OR by typing pet details.
-  const hasPets = screeningShown
+  const hasPets = petsAsked
     ? formData.get("screen_has_pets") != null || petsDetail.length > 0
     : null;
 

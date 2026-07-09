@@ -225,14 +225,16 @@ export function InquiryForm({
         <input type="hidden" name="screen_occupants" value={occupants} />
         <input type="hidden" name="screen_pets_detail" value={petsDetail} />
         {hasPet && <input type="hidden" name="screen_has_pets" value="1" />}
-        {/* Explicit "screening is on" sentinel (S438 Slice 2 P2 fold). The submit
-            action used to detect screening via the income field, but income can
-            now be suppressed (ask_income=false) while pets is still asked — which
-            wrongly nulled the pets answer and stopped it flagging. This sentinel
-            is present whenever the org has screening on, independent of which
-            built-ins are asked. */}
-        {screeningEnabled && (
-          <input type="hidden" name="screening_on" value="1" />
+        {/* "Pets question was asked" sentinel (S438 Slice 2 P2 folds). Present
+            exactly when the pets pills render (screening on AND ask_pets on). The
+            submit action keys the pets answer off this, so: (a) a SUPPRESSED pets
+            question (ask_pets=false) arrives null/unknown instead of a misleading
+            "No" (screen_pets_detail is always in the DOM, so absence alone can't
+            tell suppressed from answered); and (b) pets still flags when income is
+            suppressed but pets is asked. Replaces the earlier screening_on
+            sentinel, which couldn't distinguish suppressed-pets from no-pets. */}
+        {screeningEnabled && askPets && (
+          <input type="hidden" name="screen_pets_asked" value="1" />
         )}
         {/* Fallback so a slot chosen from a now-collapsed day still submits. */}
         {hasSlots && selectedSlot && !selectedSlotVisible && (
