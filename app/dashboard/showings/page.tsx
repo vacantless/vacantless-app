@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { EmptyState, PageHeader, SectionHeading } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { groupShowingsIntoBlocks } from "@/lib/booking";
+import { groupShowingsIntoBlocks, utcToLocalInputValue } from "@/lib/booking";
 import {
   agentDisplayLabel,
   canAssignShowing,
@@ -20,6 +20,7 @@ import { roleCan } from "@/lib/roles";
 import { OutcomeSelect } from "./outcome-select";
 import { AssignSelect } from "./assign-select";
 import { ConfirmControl } from "./confirm-control";
+import { RescheduleControl } from "./reschedule-control";
 
 export const dynamic = "force-dynamic";
 
@@ -170,6 +171,10 @@ export default async function ShowingsPage() {
   // (the scorer treats every agent as a generalist). Wiring is in place for when
   // properties gain a type.
   const suggestion: AgentSuggestion | null = suggestShowingAgent(suggestCandidates);
+  // "Now" as a datetime-local wall value in the org tz — the reschedule picker's
+  // `min`, so an operator can't pick a past time in the UI (the action also
+  // rejects it server-side).
+  const nowLocalValue = utcToLocalInputValue(new Date().toISOString(), timeZone);
   const byRecent = (a: ShowingRow, b: ShowingRow) =>
     new Date(b.scheduled_at ?? 0).getTime() -
     new Date(a.scheduled_at ?? 0).getTime();
@@ -259,6 +264,8 @@ export default async function ShowingsPage() {
         agentContactById={agentContactById}
         canAssign={canAssign}
         suggestion={suggestion}
+        allowReschedule
+        nowLocalValue={nowLocalValue}
         note={
           canAssign && awaitingConfirmation > 0 ? (
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
@@ -310,6 +317,8 @@ function Section({
   agentContactById,
   canAssign,
   suggestion,
+  allowReschedule,
+  nowLocalValue,
   note,
 }: {
   title: string;
@@ -321,6 +330,8 @@ function Section({
   agentContactById: Map<string, { name: string; phone: string | null }>;
   canAssign: boolean;
   suggestion?: AgentSuggestion | null;
+  allowReschedule?: boolean;
+  nowLocalValue?: string;
   note?: React.ReactNode;
 }) {
   return (
@@ -420,6 +431,19 @@ function Section({
                   {canAssign && (
                     <ConfirmControl showingId={s.id} status={coordStatus} />
                   )}
+                  {allowReschedule &&
+                    canAssign &&
+                    canAssignShowing(s.outcome) &&
+                    s.scheduled_at && (
+                      <RescheduleControl
+                        showingId={s.id}
+                        defaultLocalValue={utcToLocalInputValue(
+                          s.scheduled_at,
+                          timeZone,
+                        )}
+                        minLocalValue={nowLocalValue ?? ""}
+                      />
+                    )}
                   {contact && contactDigits !== "" && (
                     <p className="text-xs text-gray-500">
                       {contact.name}:{" "}

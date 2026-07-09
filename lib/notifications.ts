@@ -308,6 +308,38 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\n\nOpen your viewings page for the renter's contact, access instructions, and a one-tap Confirm: {{agent_url}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
     active: true,
   },
+  // Assigned viewing RESCHEDULED (S442, operator reschedule). Audience operator;
+  // fired when the lead agent moves an already-assigned viewing to a new time. The
+  // covering agent is account-less, so this email keeps their hand-off current —
+  // it carries the NEW time and re-arms their coordination (the reschedule resets
+  // the confirmation, so they need to re-confirm the new slot). Defaults to the
+  // assigned agent (always included via audienceEmail, like leasing.showing_assigned);
+  // add recipients to CC the lead agent for oversight. Amber accent: a change that
+  // needs their attention, not a red alarm. Only fires when a viewing that is
+  // CURRENTLY assigned is rescheduled; an unassigned reschedule notifies only the
+  // renter.
+  {
+    key: "leasing.showing_rescheduled",
+    family: "leasing",
+    audience: "operator",
+    label: "Assigned viewing rescheduled",
+    description:
+      "When you move an assigned viewing to a new time, the covering agent gets an email with the new time so their hand-off stays current and they can re-confirm with the renter. Defaults to the assigned agent; add recipients below to CC the lead agent for oversight.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "agent_name",
+      "lead_name",
+      "showing_time",
+      "old_showing_time",
+      "rescheduled_by",
+      "agent_url",
+    ],
+    defaultSubject: "Viewing time changed - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "Hi {{agent_name}}, {{rescheduled_by}} moved a viewing you're covering to a new time.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nNew time: {{showing_time}}\nPrevious time: {{old_showing_time}}\n\nThis viewing now needs to be re-confirmed with the renter. Open your viewings page for the renter's contact and a one-tap Confirm: {{agent_url}}\n\nPlease keep the lead agent CC'd on your correspondence so they stay in the loop.",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Pre-showing UNCONFIRMED nudge (S440, showing routing Slice 3). Audience
   // operator; the mirror of the outcome nudge. When an assigned viewing is coming
   // up (within ~24h) and hasn't been confirmed with the renter yet, the ASSIGNED

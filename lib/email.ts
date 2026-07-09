@@ -238,6 +238,112 @@ export async function sendBookingConfirmation(
 }
 
 // ---------------------------------------------------------------------------
+// Showing RESCHEDULED (S442, operator reschedule). Renter-facing: when the
+// operator moves a booked viewing, the renter gets a branded "your time has
+// changed" notice with the NEW time and the same one-tap cancel link (the
+// cancel_token survives a reschedule). Mirrors sendBookingConfirmation exactly —
+// direct transactional email, best-effort, never throws.
+// ---------------------------------------------------------------------------
+
+export type ReschedulePayload = BookingPayload & {
+  old_when_label: string | null; // previous time, formatted in the org timezone
+};
+
+function rescheduleHtml(p: ReschedulePayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const when = escapeHtml(p.when_label);
+  const old = p.old_when_label ? escapeHtml(p.old_when_label) : "";
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">Your viewing time has changed. Here are the updated details:</p>
+      <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
+        <p style="margin:0 0 6px;color:#3f3f46;"><strong>New time:</strong> ${when}</p>
+        ${old ? `<p style="margin:0 0 6px;color:#a1a1aa;text-decoration:line-through;">Previous time: ${old}</p>` : ""}
+        <p style="margin:0;color:#3f3f46;">This is an in-person viewing (not a phone call). Please come to the address above.</p>
+      </div>
+      ${
+        p.cancel_url
+          ? `<p style="margin:0 0 16px;">Can't make the new time? <a href="${escapeHtml(
+              p.cancel_url
+            )}" style="color:${escapeHtml(
+              brand
+            )};font-weight:600;">Cancel this viewing</a>, or just reply to this email.</p>`
+          : `<p style="margin:0 0 16px;">If the new time doesn't work, just reply to this email and we'll sort it out.</p>`
+      }
+      <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you booked a viewing on our listing page.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded "viewing rescheduled" notice to the renter. Never throws;
+ * returns { sent:false } if BREVO_API_KEY is unset or the renter left no email.
+ */
+export async function sendShowingRescheduled(
+  p: ReschedulePayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `Your viewing at ${p.property_address} has a new time`
+    : "Your viewing has a new time";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: rescheduleHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Showing reminder (M3 follow-on). Sent ~24h and ~2h before a booked showing.
 // ---------------------------------------------------------------------------
 

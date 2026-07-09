@@ -487,3 +487,64 @@ export function previewSlotStarts(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// datetime-local <-> UTC instant, interpreted in the org's booking timezone.
+// Used by the operator RESCHEDULE control (S442): the <input type="datetime-local">
+// yields a bare wall-clock string with NO offset, which the operator means in the
+// org's booking timezone. These two helpers are exact inverses (modulo the DST
+// "spring-forward" gap) and DST-correct because they route through
+// zonedWallTimeToUtc / the same Intl offset math generateSlots uses — so we never
+// hand-roll a timezone offset. Kept PURE + here (not in the action) so they can be
+// unit-tested without a DB.
+// ---------------------------------------------------------------------------
+
+// Parse a datetime-local value ("YYYY-MM-DDTHH:mm", optionally ":ss") as a wall
+// time in `timeZone` and return the exact UTC instant. Returns null on any
+// malformed input so the caller can reject rather than book a garbage time.
+export function parseLocalInputToUtc(
+  value: string,
+  timeZone: string,
+): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(
+    value.trim(),
+  );
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month1 = Number(m[2]); // 1-12
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  if (month1 < 1 || month1 > 12) return null;
+  if (day < 1 || day > 31) return null;
+  if (hour > 23 || minute > 59) return null;
+  const utc = zonedWallTimeToUtc(year, month1, day, hour * 60 + minute, timeZone);
+  // Reject a wall time that the calendar rolled over (e.g. Feb 30 -> Mar 2): the
+  // UTC instant, read back in the zone, must land on the same Y/M/D.
+  const seen = ymdInTz(utc.getTime(), timeZone);
+  if (seen.year !== year || seen.month !== month1 || seen.day !== day) {
+    return null;
+  }
+  return utc;
+}
+
+// Format a UTC instant as the "YYYY-MM-DDTHH:mm" wall-clock string that a
+// datetime-local input expects, in `timeZone`. Used to pre-fill the reschedule
+// input with the viewing's current time.
+export function utcToLocalInputValue(iso: string, timeZone: string): string {
+  const dtf = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(new Date(iso));
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  // en-CA renders "24" for midnight in some engines; normalize to "00".
+  const hour = map.hour === "24" ? "00" : map.hour;
+  return `${map.year}-${map.month}-${map.day}T${hour}:${map.minute}`;
+}

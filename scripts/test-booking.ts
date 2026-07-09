@@ -12,6 +12,8 @@ import {
   isValidSlot,
   groupShowingsIntoBlocks,
   previewSlotStarts,
+  parseLocalInputToUtc,
+  utcToLocalInputValue,
   type Availability,
   type DaySlots,
 } from "../lib/booking";
@@ -222,6 +224,45 @@ ok("isValidSlot rejects a slot on a day off",
   !isValidSlot({ ...baseAv, days_off: ["2026-07-01"] }, "2026-07-01T10:00:00.000Z", now));
 ok("isValidSlot still accepts the same weekday when not blocked",
   isValidSlot({ ...baseAv, days_off: ["2026-07-01"] }, "2026-07-08T10:00:00.000Z", now));
+
+// --- reschedule datetime-local <-> UTC (S442) ------------------------------
+// Toronto is UTC-4 in July (EDT). A 6:00 PM wall time on Jul 15 = 22:00 UTC.
+eq("parseLocalInputToUtc: Toronto July wall time -> correct UTC instant",
+  parseLocalInputToUtc("2026-07-15T18:00", "America/Toronto")?.toISOString(),
+  "2026-07-15T22:00:00.000Z");
+// Toronto is UTC-5 in January (EST). 9:30 AM wall = 14:30 UTC.
+eq("parseLocalInputToUtc: Toronto winter wall time -> correct UTC instant (EST)",
+  parseLocalInputToUtc("2026-01-10T09:30", "America/Toronto")?.toISOString(),
+  "2026-01-10T14:30:00.000Z");
+eq("parseLocalInputToUtc: seconds suffix tolerated",
+  parseLocalInputToUtc("2026-07-15T18:00:00", "America/Toronto")?.toISOString(),
+  "2026-07-15T22:00:00.000Z");
+eq("parseLocalInputToUtc: UTC zone is identity",
+  parseLocalInputToUtc("2026-07-15T18:00", "UTC")?.toISOString(),
+  "2026-07-15T18:00:00.000Z");
+ok("parseLocalInputToUtc: rejects empty",
+  parseLocalInputToUtc("", "America/Toronto") === null);
+ok("parseLocalInputToUtc: rejects garbage",
+  parseLocalInputToUtc("not-a-date", "America/Toronto") === null);
+ok("parseLocalInputToUtc: rejects a date-only value",
+  parseLocalInputToUtc("2026-07-15", "America/Toronto") === null);
+ok("parseLocalInputToUtc: rejects an impossible calendar date (Feb 30)",
+  parseLocalInputToUtc("2026-02-30T10:00", "America/Toronto") === null);
+ok("parseLocalInputToUtc: rejects an out-of-range hour",
+  parseLocalInputToUtc("2026-07-15T25:00", "America/Toronto") === null);
+// Round-trip: an instant formatted for the input then re-parsed is unchanged.
+eq("utcToLocalInputValue: formats a UTC instant into Toronto wall time",
+  utcToLocalInputValue("2026-07-15T22:00:00.000Z", "America/Toronto"),
+  "2026-07-15T18:00");
+eq("reschedule round-trip is stable (Toronto July)",
+  parseLocalInputToUtc(
+    utcToLocalInputValue("2026-07-15T22:00:00.000Z", "America/Toronto"),
+    "America/Toronto",
+  )?.toISOString(),
+  "2026-07-15T22:00:00.000Z");
+eq("utcToLocalInputValue: midnight normalizes to 00 not 24",
+  utcToLocalInputValue("2026-07-15T04:00:00.000Z", "America/Toronto"),
+  "2026-07-15T00:00");
 
 console.log(`\nbooking: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
