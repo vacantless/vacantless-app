@@ -9,6 +9,11 @@ import {
   canAssignShowing,
   deriveCoordinationStatus,
   needsConfirmation,
+  orgWeekWindow,
+  suggestShowingAgent,
+  normalizeProductTypes,
+  type AgentSuggestion,
+  type SuggestCandidate,
 } from "@/lib/showing-agents";
 import { getCurrentRole } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
@@ -29,7 +34,15 @@ type ShowingRow = {
   feedback: { rating: number | null; comments: string | null }[] | null;
 };
 
-type AgentRow = { id: string; name: string; tier: string | null; phone: string | null; archived: boolean };
+type AgentRow = {
+  id: string;
+  name: string;
+  tier: string | null;
+  phone: string | null;
+  archived: boolean;
+  product_types: string[] | null;
+  weekly_capacity: number | null;
+};
 type AgentOption = { id: string; label: string };
 
 function Stars({ rating }: { rating: number }) {
@@ -95,7 +108,7 @@ export default async function ShowingsPage() {
   // the full map labels a row whose assigned agent has since been archived.
   const { data: agentData } = await supabase
     .from("showing_agents")
-    .select("id, name, tier, phone, archived")
+    .select("id, name, tier, phone, archived, product_types, weekly_capacity")
     .order("name", { ascending: true });
   const agents = (agentData ?? []) as AgentRow[];
   const activeAgentOptions: AgentOption[] = agents
@@ -126,6 +139,37 @@ export default async function ShowingsPage() {
       }),
     ),
   ).length;
+
+  // Suggested agent for the next viewing (S441) — a HINT the operator taps to
+  // accept, never an auto-assign. Load-balances over each agent's non-cancelled
+  // viewings scheduled THIS org-local week; capacity (when set) takes priority.
+  const week = orgWeekWindow(now, timeZone);
+  const assignedThisWeek = new Map<string, number>();
+  for (const s of all) {
+    if (!s.assigned_agent_id || s.outcome === "cancelled" || !s.scheduled_at) continue;
+    const t = new Date(s.scheduled_at).getTime();
+    if (t >= week.startMs && t < week.endMs) {
+      assignedThisWeek.set(
+        s.assigned_agent_id,
+        (assignedThisWeek.get(s.assigned_agent_id) ?? 0) + 1,
+      );
+    }
+  }
+  const suggestCandidates: SuggestCandidate[] = agents
+    .filter((a) => !a.archived)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      tier: a.tier,
+      productTypes: normalizeProductTypes(a.product_types),
+      weeklyCapacity: a.weekly_capacity,
+      assignedThisWeek: assignedThisWeek.get(a.id) ?? 0,
+      archived: false,
+    }));
+  // No property product-type column exists yet, so productType is left unset
+  // (the scorer treats every agent as a generalist). Wiring is in place for when
+  // properties gain a type.
+  const suggestion: AgentSuggestion | null = suggestShowingAgent(suggestCandidates);
   const byRecent = (a: ShowingRow, b: ShowingRow) =>
     new Date(b.scheduled_at ?? 0).getTime() -
     new Date(a.scheduled_at ?? 0).getTime();
@@ -214,6 +258,7 @@ export default async function ShowingsPage() {
         agentLabelById={agentLabelById}
         agentContactById={agentContactById}
         canAssign={canAssign}
+        suggestion={suggestion}
         note={
           canAssign && awaitingConfirmation > 0 ? (
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
@@ -264,6 +309,7 @@ function Section({
   agentLabelById,
   agentContactById,
   canAssign,
+  suggestion,
   note,
 }: {
   title: string;
@@ -274,6 +320,7 @@ function Section({
   agentLabelById: Map<string, string>;
   agentContactById: Map<string, { name: string; phone: string | null }>;
   canAssign: boolean;
+  suggestion?: AgentSuggestion | null;
   note?: React.ReactNode;
 }) {
   return (
@@ -354,6 +401,13 @@ function Section({
                         showingId={s.id}
                         assignedAgentId={s.assigned_agent_id}
                         agents={rowAgentOptions}
+                        suggestion={
+                          !s.assigned_agent_id &&
+                          suggestion &&
+                          rowAgentOptions.some((o) => o.id === suggestion.agentId)
+                            ? suggestion
+                            : null
+                        }
                       />
                     )}
                     {canAssignShowing(s.outcome) && !canAssign && assignedLabel && (

@@ -17,6 +17,9 @@ import {
   coordinationStatusLabel,
   canConfirmShowing,
   COORDINATION_STATUSES,
+  orgWeekWindow,
+  suggestShowingAgent,
+  type SuggestCandidate,
 } from "../lib/showing-agents";
 
 let passed = 0;
@@ -168,6 +171,121 @@ ok("coord: needsConfirmation not for confirmed", !needsConfirmation("confirmed")
 ok("coord: needsConfirmation not for unassigned", !needsConfirmation("unassigned"));
 ok("coord: canConfirm only awaiting", canConfirmShowing("awaiting_confirmation") && !canConfirmShowing("confirmed"));
 ok("coord: label", coordinationStatusLabel("awaiting_confirmation") === "Awaiting confirmation");
+
+// --- orgWeekWindow (S441) ----------------------------------------------------
+// Wed 2026-07-08 12:00 EDT === 2026-07-08T16:00:00Z. Sunday-start week is
+// Sun 2026-07-05 00:00 EDT (04:00Z) .. Sun 2026-07-12 00:00 EDT.
+{
+  const now = Date.parse("2026-07-08T16:00:00Z");
+  const w = orgWeekWindow(now, "America/Toronto");
+  ok("orgWeekWindow: start is local Sunday midnight", new Date(w.startMs).toISOString() === "2026-07-05T04:00:00.000Z");
+  ok("orgWeekWindow: 7-day span", w.endMs - w.startMs === 7 * 24 * 3_600_000);
+  ok("orgWeekWindow: now within window", now >= w.startMs && now < w.endMs);
+}
+{
+  // Just after local midnight Sunday should already be in the NEW week.
+  const sundayEarly = Date.parse("2026-07-12T04:30:00Z"); // 00:30 EDT Sunday
+  const w = orgWeekWindow(sundayEarly, "America/Toronto");
+  ok("orgWeekWindow: Sunday 00:30 starts a fresh week", new Date(w.startMs).toISOString() === "2026-07-12T04:00:00.000Z");
+}
+{
+  // Monday-start variant: Wed 2026-07-08 -> week starts Mon 2026-07-06.
+  const now = Date.parse("2026-07-08T16:00:00Z");
+  const w = orgWeekWindow(now, "America/Toronto", 1);
+  ok("orgWeekWindow: Monday-start", new Date(w.startMs).toISOString() === "2026-07-06T04:00:00.000Z");
+}
+{
+  // Bad tz falls back to UTC parts without throwing.
+  const now = Date.parse("2026-07-08T16:00:00Z");
+  const w = orgWeekWindow(now, "Not/AZone");
+  ok("orgWeekWindow: bad tz does not throw + 7-day span", w.endMs - w.startMs === 7 * 24 * 3_600_000);
+}
+
+// --- suggestShowingAgent (S441) ----------------------------------------------
+const mk = (o: Partial<SuggestCandidate> & { id: string; name: string }): SuggestCandidate => ({
+  tier: null,
+  productTypes: [],
+  weeklyCapacity: null,
+  assignedThisWeek: 0,
+  archived: false,
+  ...o,
+});
+
+ok("suggest: empty roster -> null", suggestShowingAgent([]) === null);
+ok("suggest: all archived -> null", suggestShowingAgent([mk({ id: "a", name: "A", archived: true })]) === null);
+
+{
+  // Uncapped agents -> load-balance by fewest viewings this week.
+  const s = suggestShowingAgent([
+    mk({ id: "p", name: "Peter", assignedThisWeek: 3 }),
+    mk({ id: "o", name: "Odette", assignedThisWeek: 1 }),
+  ]);
+  ok("suggest: uncapped picks least-loaded", s?.agentId === "o");
+  ok("suggest: reason names the load", s?.reason.includes("fewest viewings this week") === true);
+  ok("suggest: least-loaded not at capacity", s?.atCapacity === false);
+}
+{
+  // Everyone idle -> deterministic name tie-break.
+  const s = suggestShowingAgent([
+    mk({ id: "z", name: "Zed" }),
+    mk({ id: "a", name: "Amy" }),
+  ]);
+  ok("suggest: idle roster tie-breaks by name", s?.agentId === "a");
+  ok("suggest: idle reason = available", s?.reason === "available");
+}
+{
+  // Capacity beats raw load: agent with more REMAINING capacity wins.
+  const s = suggestShowingAgent([
+    mk({ id: "p", name: "Peter", weeklyCapacity: 10, assignedThisWeek: 2 }), // 8 left
+    mk({ id: "o", name: "Odette", weeklyCapacity: 3, assignedThisWeek: 0 }), // 3 left
+  ]);
+  ok("suggest: most remaining capacity wins", s?.agentId === "p");
+  ok("suggest: capacity reason", s?.reason === "8 of 10 viewings left this week");
+}
+{
+  // Capped-at-full still returns a suggestion but flags atCapacity.
+  const s = suggestShowingAgent([
+    mk({ id: "p", name: "Peter", weeklyCapacity: 2, assignedThisWeek: 2 }),
+  ]);
+  ok("suggest: full agent still suggested", s?.agentId === "p");
+  ok("suggest: flags atCapacity", s?.atCapacity === true);
+  ok("suggest: singular viewing wording", s?.reason === "0 of 2 viewings left this week");
+}
+{
+  // Product-type fit narrows to specialists/generalists when it discriminates.
+  const s = suggestShowingAgent(
+    [
+      mk({ id: "sale", name: "SaleOnly", productTypes: ["sale"], assignedThisWeek: 0 }),
+      mk({ id: "rent", name: "RentPro", productTypes: ["rental"], assignedThisWeek: 5 }),
+      mk({ id: "gen", name: "Generalist", productTypes: [], assignedThisWeek: 4 }),
+    ],
+    { productType: "rental" },
+  );
+  ok("suggest: product fit excludes the non-matching specialist", s?.agentId !== "sale");
+  ok("suggest: among fit, load-balance picks generalist over busy rental pro", s?.agentId === "gen");
+  // The generalist doesn't specifically "cover rental", so its reason is load-based.
+  ok("suggest: generalist reason is load-based", s?.reason.includes("fewest viewings this week") === true);
+}
+{
+  // When the winner IS the matching specialist, the reason names the coverage.
+  const s = suggestShowingAgent(
+    [
+      mk({ id: "rent", name: "RentPro", productTypes: ["rental"], assignedThisWeek: 0 }),
+      mk({ id: "sale", name: "SaleOnly", productTypes: ["sale"], assignedThisWeek: 0 }),
+    ],
+    { productType: "rental" },
+  );
+  ok("suggest: specialist winner", s?.agentId === "rent");
+  ok("suggest: specialist reason names coverage", s?.reason.startsWith("covers rental") === true);
+}
+{
+  // No specialist for the type -> everyone stays eligible (never suggest nobody).
+  const s = suggestShowingAgent(
+    [mk({ id: "a", name: "A", productTypes: ["sale"], assignedThisWeek: 1 })],
+    { productType: "rental" },
+  );
+  ok("suggest: no fit -> still suggests someone", s?.agentId === "a");
+}
 
 // --- summary ----------------------------------------------------------------
 if (failed === 0) console.log(`✓ showing-agents: ${passed} passed`);

@@ -232,3 +232,167 @@ export function coordinationStatusLabel(status: CoordinationStatus): string {
 export function canConfirmShowing(status: CoordinationStatus): boolean {
   return status === "awaiting_confirmation";
 }
+
+// --- Suggested agent (S441 — the assist on the assign picker) ----------------
+// A HINT, never an auto-assign. Given the active roster + how many viewings each
+// agent already has THIS WEEK, pick the agent to route the next viewing to and
+// say WHY, so a lead agent spreading showings across a #2/#3 doesn't have to
+// track everyone's load in their head. The operator still picks anyone from the
+// dropdown; this just pre-computes the sensible default. All pure + tested.
+
+// The org-local week the capacity load is measured over. Sunday-start by
+// default (matches the leasing week most operators think in). Returns the UTC
+// [startMs, endMs) instants that bound the local week containing `nowMs`, so the
+// caller can bucket showings by scheduled_at without a tz library. Self-
+// contained (the pure files don't import each other) — mirrors the Intl wall-
+// component round-trip proven in lib/leasing-snapshot.ts.
+const WEEK_MS = 7 * 24 * 3_600_000;
+
+export function orgWeekWindow(
+  nowMs: number,
+  tz: string,
+  weekStartsOn = 0,
+): { startMs: number; endMs: number } {
+  let y = 1970,
+    mo = 1,
+    d = 1,
+    h = 0,
+    mi = 0,
+    s = 0,
+    wd = new Date(nowMs).getUTCDay();
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      weekday: "short",
+    });
+    const map: Record<string, string> = {};
+    for (const p of fmt.formatToParts(new Date(nowMs))) {
+      if (p.type !== "literal") map[p.type] = p.value;
+    }
+    y = Number(map.year);
+    mo = Number(map.month);
+    d = Number(map.day);
+    h = map.hour === "24" ? 0 : Number(map.hour);
+    mi = Number(map.minute);
+    s = Number(map.second);
+    // Weekday of the LOCAL calendar date (not the UTC instant).
+    wd = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+  } catch {
+    const dt = new Date(nowMs);
+    y = dt.getUTCFullYear();
+    mo = dt.getUTCMonth() + 1;
+    d = dt.getUTCDate();
+    h = dt.getUTCHours();
+    mi = dt.getUTCMinutes();
+    s = dt.getUTCSeconds();
+    wd = dt.getUTCDay();
+  }
+  // Back out the tz offset from the local wall-clock to get local-midnight-today
+  // as a UTC instant (asUTC - now == how far local leads UTC).
+  const asUTC = Date.UTC(y, mo - 1, d, h, mi, s);
+  const offsetMs = asUTC - Math.floor(nowMs / 1000) * 1000;
+  const startTodayMs = Date.UTC(y, mo - 1, d) - offsetMs;
+  const daysIntoWeek = (wd - weekStartsOn + 7) % 7;
+  const startMs = startTodayMs - daysIntoWeek * 24 * 3_600_000;
+  return { startMs, endMs: startMs + WEEK_MS };
+}
+
+export type SuggestCandidate = {
+  id: string;
+  name: string;
+  tier: string | null;
+  productTypes: ProductType[];
+  weeklyCapacity: number | null;
+  // Non-cancelled viewings already assigned to this agent within the current
+  // org-local week (computed by the caller from scheduled_at + orgWeekWindow).
+  assignedThisWeek: number;
+  archived: boolean;
+};
+
+export type AgentSuggestion = {
+  agentId: string;
+  name: string;
+  reason: string;
+  atCapacity: boolean;
+};
+
+// Pick the agent to suggest for the next viewing. Ranking, most-significant
+// first: (1) product-type fit — only when it actually discriminates (some active
+// agent covers the viewing's type); an agent with NO product types set is a
+// generalist and always eligible; (2) most remaining weekly capacity (uncapped
+// counts as unlimited); (3) fewest viewings already this week (load balance);
+// (4) name, for a stable, deterministic tie-break. Returns null when the roster
+// has no active agent to suggest.
+export function suggestShowingAgent(
+  candidates: readonly SuggestCandidate[],
+  opts?: { productType?: ProductType | null },
+): AgentSuggestion | null {
+  const active = candidates.filter((c) => !c.archived);
+  if (active.length === 0) return null;
+
+  // Product-type fit is a soft filter: narrow to agents who either declare the
+  // viewing's product type or declare none at all (generalists), but ONLY if
+  // that leaves someone — never suggest nobody because of a type mismatch.
+  const productType = opts?.productType ?? null;
+  let narrowedByProduct = false;
+  let pool = active;
+  if (productType) {
+    const fit = active.filter(
+      (c) => c.productTypes.length === 0 || c.productTypes.includes(productType),
+    );
+    const specialists = active.filter((c) => c.productTypes.includes(productType));
+    if (specialists.length > 0 && fit.length > 0) {
+      pool = fit;
+      narrowedByProduct = true;
+    }
+  }
+
+  const remaining = (c: SuggestCandidate): number => {
+    const r = remainingCapacity(c.weeklyCapacity, c.assignedThisWeek);
+    return r === null ? Number.POSITIVE_INFINITY : r;
+  };
+
+  const winner = [...pool].sort((a, b) => {
+    // Most remaining capacity first. Two uncapped agents compare equal (Infinity
+    // === Infinity) and fall through to load-balance — subtracting them would be
+    // NaN and corrupt the sort.
+    const ra = remaining(a);
+    const rb = remaining(b);
+    if (ra !== rb) return rb - ra;
+    if (a.assignedThisWeek !== b.assignedThisWeek)
+      return a.assignedThisWeek - b.assignedThisWeek;
+    return a.name.localeCompare(b.name);
+  })[0];
+
+  const atCapacity = isAtCapacity(winner.weeklyCapacity, winner.assignedThisWeek);
+
+  // Build a short, truthful reason from the deciding factors.
+  const parts: string[] = [];
+  if (narrowedByProduct && winner.productTypes.includes(productType!)) {
+    parts.push(`covers ${productType}`);
+  }
+  if (winner.weeklyCapacity != null) {
+    const left = remainingCapacity(winner.weeklyCapacity, winner.assignedThisWeek) ?? 0;
+    parts.push(
+      `${left} of ${winner.weeklyCapacity} ${left === 1 ? "viewing" : "viewings"} left this week`,
+    );
+  } else if (pool.some((c) => c.assignedThisWeek > 0)) {
+    parts.push(
+      winner.assignedThisWeek === 0
+        ? "no viewings yet this week"
+        : `fewest viewings this week (${winner.assignedThisWeek})`,
+    );
+  } else {
+    parts.push("available");
+  }
+  const reason = parts.join(" · ");
+
+  return { agentId: winner.id, name: winner.name, reason, atCapacity };
+}
