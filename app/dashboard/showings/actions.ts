@@ -369,10 +369,19 @@ export async function rescheduleShowing(formData: FormData) {
     .eq("id", id)
     .eq("organization_id", org.id)
     .or("outcome.is.null,outcome.eq.scheduled")
-    .select("id, organization_id, lead_id")
+    // Return the POST-update assignment (Codex S442 P2): the pre-read
+    // assigned_agent_id can be stale if another operator reassigned/unassigned
+    // between the read and here. The guarded UPDATE reads+writes atomically, so
+    // its RETURNING value is the authoritative current agent — notify off THAT,
+    // never the pre-read, or the old agent gets the email and the new one doesn't.
+    .select("id, organization_id, lead_id, assigned_agent_id")
     .maybeSingle();
   if (!updated) return;
-  const u = updated as { organization_id: string; lead_id: string | null };
+  const u = updated as {
+    organization_id: string;
+    lead_id: string | null;
+    assigned_agent_id: string | null;
+  };
 
   const oldLabel = showing.scheduled_at
     ? formatSlotLong(showing.scheduled_at, timeZone)
@@ -414,11 +423,11 @@ export async function rescheduleShowing(formData: FormData) {
   // Re-notify the assigned covering agent (if any) so their hand-off stays
   // current. Fires the leasing.showing_rescheduled event with the agent as the
   // always-included recipient (audienceEmail), mirroring leasing.showing_assigned.
-  if (showing.assigned_agent_id) {
+  if (u.assigned_agent_id) {
     const { data: agentRow } = await supabase
       .from("showing_agents")
       .select("id, name, email, archived, agent_token")
-      .eq("id", showing.assigned_agent_id)
+      .eq("id", u.assigned_agent_id)
       .eq("organization_id", org.id)
       .maybeSingle();
     const agent = agentRow as {

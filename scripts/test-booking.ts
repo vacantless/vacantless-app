@@ -250,6 +250,11 @@ ok("parseLocalInputToUtc: rejects an impossible calendar date (Feb 30)",
   parseLocalInputToUtc("2026-02-30T10:00", "America/Toronto") === null);
 ok("parseLocalInputToUtc: rejects an out-of-range hour",
   parseLocalInputToUtc("2026-07-15T25:00", "America/Toronto") === null);
+ok("parseLocalInputToUtc: rejects out-of-range seconds (Codex P2/P3)",
+  parseLocalInputToUtc("2026-07-15T18:00:99", "America/Toronto") === null);
+eq("parseLocalInputToUtc: valid seconds drop to minute granularity",
+  parseLocalInputToUtc("2026-07-15T18:00:30", "America/Toronto")?.toISOString(),
+  "2026-07-15T22:00:00.000Z");
 // Round-trip: an instant formatted for the input then re-parsed is unchanged.
 eq("utcToLocalInputValue: formats a UTC instant into Toronto wall time",
   utcToLocalInputValue("2026-07-15T22:00:00.000Z", "America/Toronto"),

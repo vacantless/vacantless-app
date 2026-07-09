@@ -515,9 +515,14 @@ export function parseLocalInputToUtc(
   const day = Number(m[3]);
   const hour = Number(m[4]);
   const minute = Number(m[5]);
+  // The optional seconds group is validated even though we schedule at minute
+  // granularity (Codex S442 P3): otherwise a forged value like "...T18:00:99"
+  // slips through the malformed/out-of-range guard. Present-but-out-of-range
+  // seconds are rejected; a valid value is dropped to :00 (slots are minute-aligned).
+  const second = m[6] != null ? Number(m[6]) : 0;
   if (month1 < 1 || month1 > 12) return null;
   if (day < 1 || day > 31) return null;
-  if (hour > 23 || minute > 59) return null;
+  if (hour > 23 || minute > 59 || second > 59) return null;
   const utc = zonedWallTimeToUtc(year, month1, day, hour * 60 + minute, timeZone);
   // Reject a wall time that the calendar rolled over (e.g. Feb 30 -> Mar 2): the
   // UTC instant, read back in the zone, must land on the same Y/M/D.
