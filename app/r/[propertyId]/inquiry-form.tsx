@@ -100,6 +100,14 @@ export function InquiryForm({
   const [petsChoice, setPetsChoice] = useState<string | null>(null);
   const [showNote, setShowNote] = useState(false);
 
+  // Progressive sectional reveal (S438). Name + email are tracked so the optional
+  // "Help us prepare" group and the Confirm button only drop in once the required
+  // contact fields are filled; skipTime lets a renter who can't make the offered
+  // times reveal the details section without picking a slot.
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [skipTime, setSkipTime] = useState(false);
+
   // Pets pill -> the two fields the action already reads. "No pets" must submit
   // an EMPTY pets_detail (a non-empty detail is what the action treats as
   // "has a pet"), and only an actual pet sets screen_has_pets.
@@ -151,6 +159,17 @@ export function InquiryForm({
       ? "Confirm viewing"
       : "Send my details";
 
+  // Which sections are revealed (S438 progressive reveal). "Your details" appears
+  // once a time is chosen, the renter opts to skip picking one, or there are no
+  // times to pick. The optional "Help us prepare" group + Confirm appear once the
+  // required name + email are entered. Sections stay in the DOM and toggle via a
+  // collapse CLASS so the <noscript> override keeps the whole form usable with JS
+  // off (a no-JS renter can still book).
+  const detailsRevealed = !hasSlots || selectedSlot !== "" || skipTime;
+  const prepareRevealed =
+    detailsRevealed && name.trim() !== "" && email.trim() !== "";
+  const stepClass = (revealed: boolean) => (revealed ? "" : "vl-step-collapsed");
+
   const chipStyle = (active: boolean) =>
     active
       ? {
@@ -169,6 +188,14 @@ export function InquiryForm({
 
   return (
     <>
+      {/* Progressive-reveal collapse (S438). A collapsed step is hidden for JS
+          users; the <noscript> override re-shows every step so a no-JS renter
+          sees and can submit the full form. */}
+      <style>{`.vl-step-collapsed{display:none}`}</style>
+      <noscript>
+        <style>{`.vl-step-collapsed{display:revert !important}`}</style>
+      </noscript>
+
       <h2 className="text-lg font-bold text-gray-900">
         {hasSlots ? "Book a viewing" : "Request a viewing"}
       </h2>
@@ -255,15 +282,21 @@ export function InquiryForm({
                 {showAllDays ? "Show fewer times" : "More times"}
               </button>
             )}
-            <p className="mt-3 text-xs text-gray-400">
-              Can&apos;t make these times? Just fill in your details below and
-              we&apos;ll reach out.
-            </p>
+            {!selectedSlot && !skipTime && (
+              <button
+                type="button"
+                onClick={() => setSkipTime(true)}
+                className="mt-3 text-sm font-medium underline"
+                style={{ color: brandColor }}
+              >
+                Can&apos;t make these times? Send your details instead →
+              </button>
+            )}
           </fieldset>
         )}
 
-        {/* STEP 2 — Your details ------------------------------------------- */}
-        <fieldset className="space-y-3">
+        {/* STEP 2 — Your details (revealed once a time is chosen / skipped) -- */}
+        <fieldset className={`space-y-3 ${stepClass(detailsRevealed)}`}>
           <legend className="text-sm font-semibold text-gray-800">
             Your details
           </legend>
@@ -275,6 +308,8 @@ export function InquiryForm({
               id="r_name"
               name="name"
               required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
@@ -288,6 +323,8 @@ export function InquiryForm({
                 name="email"
                 type="email"
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
             </div>
@@ -310,8 +347,10 @@ export function InquiryForm({
           </div>
         </fieldset>
 
-        {/* STEP 3 — Help us prepare (optional) ----------------------------- */}
-        <fieldset className="space-y-4 rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+        {/* STEP 3 — Help us prepare (revealed once name + email are filled) - */}
+        <fieldset
+          className={`space-y-4 rounded-lg border border-gray-200 bg-gray-50/60 p-4 ${stepClass(prepareRevealed)}`}
+        >
           <legend className="px-1 text-sm font-medium text-gray-700">
             Help us prepare for your showing{" "}
             <span className="font-normal text-gray-400">(optional)</span>
@@ -544,27 +583,30 @@ export function InquiryForm({
           )}
         </fieldset>
 
-        {/* STEP 4 — Confirm ------------------------------------------------ */}
-        {selectedSlotLabel && (
-          <p className="text-sm text-gray-600">
-            Selected viewing:{" "}
-            <span className="font-semibold text-gray-900">
-              {selectedSlotLabel}
-            </span>
-          </p>
-        )}
-        <button
-          type="submit"
-          className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
-          style={{ background: brandBg }}
-        >
-          {confirmLabel}
-        </button>
-        {hasSlots && !selectedSlot && (
-          <p className="-mt-2 text-center text-xs text-gray-400">
-            No time selected — we&apos;ll reach out to arrange one.
-          </p>
-        )}
+        {/* STEP 4 — Confirm (revealed with the optional group, once contact is
+            filled) ------------------------------------------------------- */}
+        <div className={`space-y-5 ${stepClass(prepareRevealed)}`}>
+          {selectedSlotLabel && (
+            <p className="text-sm text-gray-600">
+              Selected viewing:{" "}
+              <span className="font-semibold text-gray-900">
+                {selectedSlotLabel}
+              </span>
+            </p>
+          )}
+          <button
+            type="submit"
+            className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
+            style={{ background: brandBg }}
+          >
+            {confirmLabel}
+          </button>
+          {hasSlots && !selectedSlot && (
+            <p className="-mt-2 text-center text-xs text-gray-400">
+              No time selected — we&apos;ll reach out to arrange one.
+            </p>
+          )}
+        </div>
       </form>
     </>
   );
