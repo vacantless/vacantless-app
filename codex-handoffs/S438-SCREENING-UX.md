@@ -59,5 +59,52 @@ Per-built-in "don't ask this one" on/off toggles. That requires new columns +
 `get_public_listing`/`submit_public_lead` recreation + public-form gating (the
 anon path), so it is intentionally out of this view-layer fold.
 
-## Gate
+## Gate (Slice 1)
 tsc clean · eslint clean · `test-screening` 141/0 · `test-screening-questions` 116/0.
+
+---
+
+# S438 Slice 2 — per-built-in "ask this question" toggles
+
+**Second commit range (after Slice 1's `15fc45b`).** This is the deferred item:
+turn each built-in (income / move-in / pets / occupants) on/off for the renter
+form independently of flagging. **Touches the anon path** (`get_public_listing`)
+so it gets its own review pass.
+
+## Changes
+1. **Migration `0116_screening_ask_toggles.sql` (APPLIED to prod via the Supabase
+   connector + read-back verified).** 4 booleans on `organizations`
+   (`screening_ask_income/movein/pets/occupants`), **NOT NULL DEFAULT true** →
+   every existing org keeps asking all built-ins. `get_public_listing` recreated
+   from 0071 with 4 added keys; everything else byte-identical.
+   **`submit_public_lead` deliberately UNCHANGED** — a suppressed question is
+   never submitted, so its answer arrives null and the evaluator already never
+   flags a missing answer (option A: the flag is inert with no logic change).
+2. **`lib/screening.ts`** — `OrgScreeningConfig` gains the 4 flags;
+   `describeScreeningStatus` drops a built-in from `askedLabels` when its ask flag
+   is off AND drops that criterion's flag from `flagLabels` (an unasked question
+   can't fire). `validateScreeningSettings` reads the 4 (default true when
+   omitted). +21 tests (`test-screening` 141→**162/0**).
+3. **`lib/org.ts`** — `Org` type + explicit select list gain the 4 columns.
+4. **Public form** — `r/[propertyId]/page.tsx` passes `askIncome/Movein/Pets/
+   Occupants` (coalesced to true if the RPC key is absent) into `inquiry-form.tsx`,
+   which gates the move-in / occupants / pets pill groups and the income field on
+   them. Custom questions gate on screening-on. The "add a note" affordance always
+   stays, so the "Help us prepare" fieldset is never empty.
+5. **Settings** — new client island `screening-builtins.tsx`: master toggle + a
+   per-built-in "Ask this on the renter form" checkbox, and the flag control greys
+   live (option A) with a "question is off — this flag never fires" note when its
+   question is unchecked. Greyed inputs stay ENABLED so the saved threshold is
+   preserved (never lost on save); the flag is inert purely because the question
+   yields no answer. `updateScreening` reads the 4 checkboxes.
+
+## Review focus
+- **Anon path:** confirm `get_public_listing`'s 4 added keys are the only change
+  vs 0071 and the default-true back-compat holds (old app ignores the keys).
+- **No `submit_public_lead` change** is the deliberate design — a suppressed
+  question can't flag because its answer is absent. Confirm that reasoning.
+- Option A: greyed flag inputs remain enabled (value preserved) — intentional.
+
+## Gate (Slice 2)
+tsc clean · eslint clean · `test-screening` **162/0** · `test-screening-questions` 116/0.
+Migration 0116 applied + read-back verified on prod.

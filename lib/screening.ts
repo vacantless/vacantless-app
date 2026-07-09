@@ -80,6 +80,17 @@ export type OrgScreeningConfig = {
   screening_reason_income: string | null;
   screening_reason_movein: string | null;
   screening_reason_pets: string | null;
+  /**
+   * Per-built-in "ask this question on the renter form" toggles (S438 Slice 2).
+   * Default true (a pre-Slice-2 org asks every built-in). Independent of the
+   * flag thresholds: an unasked question simply yields no answer, so its flag
+   * can never fire (option A) — the evaluator needs no change. Only the public
+   * form render and the status summary read these.
+   */
+  screening_ask_income: boolean;
+  screening_ask_movein: boolean;
+  screening_ask_pets: boolean;
+  screening_ask_occupants: boolean;
 };
 
 // --- the rental's relevant facts -------------------------------------------
@@ -185,6 +196,12 @@ export type ScreeningSettingsInput = {
   reason_income?: string;
   reason_movein?: string;
   reason_pets?: string;
+  // Per-built-in ask toggles (S438 Slice 2). Optional so a caller that omits
+  // them (or an older form) defaults every built-in to asked (true).
+  ask_income?: boolean;
+  ask_movein?: boolean;
+  ask_pets?: boolean;
+  ask_occupants?: boolean;
 };
 
 /**
@@ -242,6 +259,12 @@ export function validateScreeningSettings(
       screening_reason_income: cleanScreeningReason(input.reason_income),
       screening_reason_movein: cleanScreeningReason(input.reason_movein),
       screening_reason_pets: cleanScreeningReason(input.reason_pets),
+      // Ask toggles default to true when the caller omits them (older form /
+      // unchecked-means-false is handled by the caller passing an explicit bool).
+      screening_ask_income: input.ask_income ?? true,
+      screening_ask_movein: input.ask_movein ?? true,
+      screening_ask_pets: input.ask_pets ?? true,
+      screening_ask_occupants: input.ask_occupants ?? true,
     },
   };
 }
@@ -373,16 +396,21 @@ export function describeScreeningStatus(
     return { enabled: false, askedLabels: [], flagLabels: [] };
   }
 
+  // Only list a built-in the operator actually asks (S438 Slice 2). Custom
+  // questions are always appended (they render whenever screening is on).
   const askedLabels = [
-    "income",
-    "move-in date",
-    "pets",
-    "number of occupants",
+    ...(config.screening_ask_income ? ["income"] : []),
+    ...(config.screening_ask_movein ? ["move-in date"] : []),
+    ...(config.screening_ask_pets ? ["pets"] : []),
+    ...(config.screening_ask_occupants ? ["number of occupants"] : []),
     ...activeCustomPrompts.map((p) => p.trim()).filter((p) => p.length > 0),
   ];
 
+  // A flag can only fire on a question that is actually asked, so an auto-flag
+  // whose question is turned off is inert and is NOT listed (option A).
   const flagLabels: string[] = [];
   if (
+    config.screening_ask_income &&
     config.screening_income_multiple != null &&
     config.screening_income_multiple > 0
   ) {
@@ -391,6 +419,7 @@ export function describeScreeningStatus(
     );
   }
   if (
+    config.screening_ask_movein &&
     config.screening_max_movein_days != null &&
     config.screening_max_movein_days > 0
   ) {
@@ -398,7 +427,7 @@ export function describeScreeningStatus(
       `move-in more than ${config.screening_max_movein_days} days away`,
     );
   }
-  if (config.screening_flag_pets) {
+  if (config.screening_ask_pets && config.screening_flag_pets) {
     flagLabels.push("pets on a rental that isn't pet-friendly");
   }
 

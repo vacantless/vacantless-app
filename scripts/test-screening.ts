@@ -44,6 +44,10 @@ const fullConfig: OrgScreeningConfig = {
   screening_reason_income: null,
   screening_reason_movein: null,
   screening_reason_pets: null,
+  screening_ask_income: true,
+  screening_ask_movein: true,
+  screening_ask_pets: true,
+  screening_ask_occupants: true,
 };
 
 // $2,000/mo rental, not pet-friendly.
@@ -601,6 +605,111 @@ const goodAnswers: ScreeningAnswers = {
   );
   ok("formatIncomeMultiple: 3 -> '3'", formatIncomeMultiple(3) === "3");
   ok("formatIncomeMultiple: 2.5 -> '2.5'", formatIncomeMultiple(2.5) === "2.5");
+}
+
+// --- describeScreeningStatus honors ask toggles (S438 Slice 2) --------------
+{
+  // Income asked off: dropped from asked AND its flag becomes inert (not listed).
+  const noIncome = describeScreeningStatus(
+    { ...fullConfig, screening_ask_income: false },
+    [],
+  );
+  ok(
+    "ask: income off -> not asked",
+    !noIncome.askedLabels.includes("income"),
+  );
+  ok(
+    "ask: income off -> income flag inert",
+    !noIncome.flagLabels.some((l) => l.startsWith("income below")),
+  );
+  ok("ask: income off -> still asks move-in", noIncome.askedLabels.includes("move-in date"));
+  ok("ask: income off -> 3 built-ins asked", noIncome.askedLabels.length === 3);
+
+  // Move-in asked off: dropped + its flag inert.
+  const noMovein = describeScreeningStatus(
+    { ...fullConfig, screening_ask_movein: false },
+    [],
+  );
+  ok("ask: move-in off -> not asked", !noMovein.askedLabels.includes("move-in date"));
+  ok(
+    "ask: move-in off -> flag inert",
+    !noMovein.flagLabels.some((l) => l.startsWith("move-in more than")),
+  );
+
+  // Pets asked off: dropped + pet flag inert even though flag_pets is true.
+  const noPets = describeScreeningStatus(
+    { ...fullConfig, screening_ask_pets: false },
+    [],
+  );
+  ok("ask: pets off -> not asked", !noPets.askedLabels.includes("pets"));
+  ok(
+    "ask: pets off -> pet flag inert",
+    !noPets.flagLabels.some((l) => l.startsWith("pets on")),
+  );
+
+  // Occupants asked off: dropped (it never had a flag anyway).
+  const noOcc = describeScreeningStatus(
+    { ...fullConfig, screening_ask_occupants: false },
+    [],
+  );
+  ok("ask: occupants off -> not asked", !noOcc.askedLabels.includes("number of occupants"));
+  ok("ask: occupants off -> 3 flags unchanged", noOcc.flagLabels.length === 3);
+
+  // All built-ins off but a custom question on: only the custom prompt is asked,
+  // and there are zero active flags.
+  const onlyCustom = describeScreeningStatus(
+    {
+      ...fullConfig,
+      screening_ask_income: false,
+      screening_ask_movein: false,
+      screening_ask_pets: false,
+      screening_ask_occupants: false,
+    },
+    ["Where do you work?"],
+  );
+  ok("ask: all built-ins off -> only custom asked", onlyCustom.askedLabels.length === 1);
+  ok(
+    "ask: all built-ins off -> custom present",
+    onlyCustom.askedLabels.includes("Where do you work?"),
+  );
+  ok("ask: all built-ins off -> zero flags", onlyCustom.flagLabels.length === 0);
+}
+
+// --- validateScreeningSettings ask toggles ----------------------------------
+{
+  // Omitted ask flags default to true (older form / back-compat).
+  const dflt = validateScreeningSettings({
+    enabled: true,
+    income_multiple: "3",
+    max_movein_days: "90",
+    flag_pets: true,
+  });
+  ok("ask settings: omitted -> income true", dflt.ok && dflt.values.screening_ask_income === true);
+  ok("ask settings: omitted -> movein true", dflt.ok && dflt.values.screening_ask_movein === true);
+  ok("ask settings: omitted -> pets true", dflt.ok && dflt.values.screening_ask_pets === true);
+  ok(
+    "ask settings: omitted -> occupants true",
+    dflt.ok && dflt.values.screening_ask_occupants === true,
+  );
+
+  // Explicit false is preserved.
+  const someOff = validateScreeningSettings({
+    enabled: true,
+    income_multiple: "3",
+    max_movein_days: "",
+    flag_pets: false,
+    ask_income: false,
+    ask_movein: true,
+    ask_pets: false,
+    ask_occupants: true,
+  });
+  ok("ask settings: income false kept", someOff.ok && someOff.values.screening_ask_income === false);
+  ok("ask settings: movein true kept", someOff.ok && someOff.values.screening_ask_movein === true);
+  ok("ask settings: pets false kept", someOff.ok && someOff.values.screening_ask_pets === false);
+  ok(
+    "ask settings: occupants true kept",
+    someOff.ok && someOff.values.screening_ask_occupants === true,
+  );
 }
 
 console.log(`\nscreening: ${passed} passed, ${failed} failed`);

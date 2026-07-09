@@ -48,6 +48,13 @@ type Listing = {
   brand_color_secondary: string | null;
   logo_url: string | null;
   screening_enabled: boolean;
+  // Per-built-in ask toggles (S438 Slice 2). Default true from get_public_listing,
+  // so an older listing payload without these keys reads as undefined -> the form
+  // coalesces to true (asks the built-in) and behavior is unchanged.
+  screening_ask_income?: boolean;
+  screening_ask_movein?: boolean;
+  screening_ask_pets?: boolean;
+  screening_ask_occupants?: boolean;
   screening_questions: {
     id: string;
     prompt: string;
@@ -415,6 +422,10 @@ export default async function PublicListingPage({
               hasClustered={hasClustered}
               showError={Boolean(searchParams.error)}
               screeningEnabled={l.screening_enabled}
+              askIncome={l.screening_ask_income ?? true}
+              askMovein={l.screening_ask_movein ?? true}
+              askPets={l.screening_ask_pets ?? true}
+              askOccupants={l.screening_ask_occupants ?? true}
               screeningQuestions={l.screening_questions ?? []}
               incomeHintCents={incomeHintCents}
               rentMonthly={rentMonthly}

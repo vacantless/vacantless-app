@@ -14,6 +14,7 @@ import {
   deleteScreeningQuestion,
 } from "@/app/dashboard/settings/actions";
 import { AddQuestionForm } from "./add-question-form";
+import { ScreeningBuiltins } from "./screening-builtins";
 import { BrandBanner, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
@@ -85,6 +86,10 @@ export default async function ScreeningSettingsPage({
       screening_reason_income: org.screening_reason_income,
       screening_reason_movein: org.screening_reason_movein,
       screening_reason_pets: org.screening_reason_pets,
+      screening_ask_income: org.screening_ask_income,
+      screening_ask_movein: org.screening_ask_movein,
+      screening_ask_pets: org.screening_ask_pets,
+      screening_ask_occupants: org.screening_ask_occupants,
     },
     activeQuestions.map((q) => q.prompt),
   );
@@ -223,95 +228,19 @@ export default async function ScreeningSettingsPage({
             </div>
           )}
 
-          <label className="mt-5 flex items-start gap-3">
-            <input
-              name="screening_enabled"
-              type="checkbox"
-              defaultChecked={org.screening_enabled}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300"
-            />
-            <span className="text-sm">
-              <span className="block font-medium text-gray-700">
-                Ask pre-screening questions
-              </span>
-              <span className="block text-xs text-gray-400">
-                While this is on, your public renter form asks income, move-in
-                date, pets, and number of occupants. Off by default.
-              </span>
-            </span>
-          </label>
-
-          <p className="mt-5 text-xs font-medium uppercase tracking-wider text-gray-400">
-            Auto-flag settings
-          </p>
-          <p className="mt-1 text-xs text-gray-400">
-            Asking a question and flagging its answer are separate. Set a value to
-            raise a &ldquo;possible mismatch&rdquo; heads-up; leave one blank and
-            that question is still asked, it just never flags.
-          </p>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">
-                Flag income below (multiple of rent)
-              </span>
-              <input
-                name="screening_income_multiple"
-                type="number"
-                min={1}
-                max={20}
-                step={0.5}
-                defaultValue={org.screening_income_multiple ?? ""}
-                placeholder="e.g. 3"
-                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <span className="mt-1 block text-xs text-gray-400">
-                Flags a renter whose stated monthly income is below this multiple
-                of the rent. Blank = asked, never flags.
-              </span>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">
-                Flag move-in further out than (days)
-              </span>
-              <input
-                name="screening_max_movein_days"
-                type="number"
-                min={1}
-                max={3650}
-                step={1}
-                defaultValue={org.screening_max_movein_days ?? ""}
-                placeholder="e.g. 90"
-                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <span className="mt-1 block text-xs text-gray-400">
-                Flags a renter who wants to move in further out than this. Blank =
-                asked, never flags.
-              </span>
-            </label>
-          </div>
-
-          <label className="mt-4 flex items-start gap-3">
-            <input
-              name="screening_flag_pets"
-              type="checkbox"
-              defaultChecked={org.screening_flag_pets}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300"
-            />
-            <span className="text-sm">
-              <span className="block font-medium text-gray-700">
-                Flag renters with pets on rentals that aren&apos;t pet-friendly
-              </span>
-              <span className="block text-xs text-gray-400">
-                Only applies to a rental whose &ldquo;pet-friendly&rdquo; toggle
-                is off.
-              </span>
-            </span>
-          </label>
+          <ScreeningBuiltins
+            enabled={org.screening_enabled}
+            askIncome={org.screening_ask_income}
+            askMovein={org.screening_ask_movein}
+            askPets={org.screening_ask_pets}
+            askOccupants={org.screening_ask_occupants}
+            incomeMultiple={org.screening_income_multiple}
+            maxMoveinDays={org.screening_max_movein_days}
+            flagPets={org.screening_flag_pets}
+          />
 
           <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Number of occupants is always asked for your context but never
-            auto-flags — occupancy can touch protected family status. Screening
+            Screening
             uses only ability to pay, timing, and pets — never factors like
             family size, background, or any protected group.
           </p>

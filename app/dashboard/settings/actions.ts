@@ -88,6 +88,12 @@ export async function updateScreening(formData: FormData) {
     reason_income: String(formData.get("screening_reason_income") ?? ""),
     reason_movein: String(formData.get("screening_reason_movein") ?? ""),
     reason_pets: String(formData.get("screening_reason_pets") ?? ""),
+    // Per-built-in ask toggles (S438 Slice 2). An unchecked box submits nothing,
+    // so absence = false (a deliberate "don't ask this built-in").
+    ask_income: formData.get("screening_ask_income") != null,
+    ask_movein: formData.get("screening_ask_movein") != null,
+    ask_pets: formData.get("screening_ask_pets") != null,
+    ask_occupants: formData.get("screening_ask_occupants") != null,
   });
   if (!result.ok) {
     redirect(`/dashboard/leasing/screening?screening=${result.reason}`);

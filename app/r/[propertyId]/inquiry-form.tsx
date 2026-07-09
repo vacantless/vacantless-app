@@ -31,6 +31,13 @@ export type InquiryFormProps = {
   hasClustered: boolean;
   showError: boolean;
   screeningEnabled: boolean;
+  // Per-built-in ask toggles (S438 Slice 2). Each gates whether its fieldset
+  // renders on the form; all default true so an org that never touched them
+  // (every existing org) asks every built-in exactly as before.
+  askIncome: boolean;
+  askMovein: boolean;
+  askPets: boolean;
+  askOccupants: boolean;
   screeningQuestions: ScreeningQuestion[];
   incomeHintCents: number | null;
   rentMonthly: number | null;
@@ -60,6 +67,10 @@ export function InquiryForm({
   hasClustered,
   showError,
   screeningEnabled,
+  askIncome,
+  askMovein,
+  askPets,
+  askOccupants,
   screeningQuestions,
   incomeHintCents,
   rentMonthly,
@@ -67,6 +78,13 @@ export function InquiryForm({
   petFriendly,
 }: InquiryFormProps) {
   const hasSlots = days.length > 0;
+
+  // Which optional groups render in "Help us prepare" (S438 Slice 2). The
+  // built-in move-in / occupants / pets pills are gated on their ask toggle;
+  // income needs screening on AND its ask toggle; custom questions need screening
+  // on. The "add a note" affordance always stays, so the fieldset is never empty.
+  const showIncome = screeningEnabled && askIncome;
+  const showCustomQuestions = screeningEnabled && screeningQuestions.length > 0;
 
   const [selectedSlot, setSelectedSlot] = useState("");
   const [showAllDays, setShowAllDays] = useState(false);
@@ -299,6 +317,7 @@ export function InquiryForm({
             <span className="font-normal text-gray-400">(optional)</span>
           </legend>
 
+          {askMovein && (
           <div>
             <p className="mb-1.5 text-sm text-gray-600">Ideal move-in</p>
             <div className="flex flex-wrap gap-2">
@@ -348,7 +367,9 @@ export function InquiryForm({
               />
             )}
           </div>
+          )}
 
+          {askOccupants && (
           <div>
             <p className="mb-1.5 text-sm text-gray-600">How many people?</p>
             <div className="flex flex-wrap gap-2">
@@ -369,7 +390,9 @@ export function InquiryForm({
               })}
             </div>
           </div>
+          )}
 
+          {askPets && (
           <div>
             <p className="mb-1.5 text-sm text-gray-600">
               Pets?{" "}
@@ -397,14 +420,15 @@ export function InquiryForm({
               })}
             </div>
           </div>
+          )}
 
           {/* Affordability + operator custom questions live here as a light,
               clearly-optional group (kept, not dropped, so the qualify-out RPC
-              still gets income + custom answers). Only rendered when the org has
-              screening on — which is exactly what gates screeningShown in the
-              submit action (formData.has("screen_income")). */}
-          {screeningEnabled && (
+              still gets income + custom answers). Income needs screening on AND
+              its ask toggle (S438 Slice 2); custom questions need screening on. */}
+          {(showIncome || showCustomQuestions) && (
             <div className="space-y-3 border-t border-gray-200 pt-4">
+              {showIncome && (
               <div>
                 <label htmlFor="r_income" className="mb-1 block text-sm text-gray-600">
                   Approximate monthly household income{" "}
@@ -432,8 +456,9 @@ export function InquiryForm({
                   </span>
                 )}
               </div>
+              )}
 
-              {screeningQuestions.map((q) => {
+              {showCustomQuestions && screeningQuestions.map((q) => {
                 if (q.qtype === "units" && (q.choices?.length ?? 0) === 0) {
                   return null;
                 }
