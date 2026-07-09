@@ -335,6 +335,76 @@ export function affordabilityHintIncomeCents(
   return Math.round(raw / 10_000) * 10_000;
 }
 
+// --- plain-language status summary (S438) -----------------------------------
+// A first-time operator can't tell, at a glance, WHICH questions a renter will
+// actually see versus WHICH answers auto-flag a "possible mismatch" — the two
+// are independent (a question can be asked without ever flagging, e.g. occupants
+// is captured but never flags; income can be asked with no threshold set). This
+// pure helper turns the org's saved config + its active custom questions into
+// two plain-language lists the page renders as a top-of-page summary, so the
+// asked-vs-flagged distinction is explicit instead of inferred. Rendering only —
+// it reads the same stored config the evaluator does and never changes behavior.
+export type ScreeningStatusSummary = {
+  /** Master switch. When false, nothing is asked and nothing flags. */
+  enabled: boolean;
+  /** Questions a renter is asked on the inquiry form (built-ins + custom). */
+  askedLabels: string[];
+  /** Answers that auto-flag a possible mismatch (built-ins only). */
+  flagLabels: string[];
+};
+
+/** Format an income multiple as e.g. "3" or "3.5" (drops a trailing ".0"). */
+export function formatIncomeMultiple(multiple: number): string {
+  return Number.isInteger(multiple) ? String(multiple) : String(multiple);
+}
+
+/**
+ * Summarize the org's screening config for the operator: what renters are asked
+ * and what auto-flags. Built-in asked questions are income, move-in date, pets,
+ * and number of occupants (the fixed fieldset that renders whenever screening is
+ * on); active custom prompts are appended. Flags are the three built-in criteria
+ * that are actually configured. When screening is off both lists are empty. Pure.
+ */
+export function describeScreeningStatus(
+  config: OrgScreeningConfig,
+  activeCustomPrompts: string[] = [],
+): ScreeningStatusSummary {
+  if (!config.screening_enabled) {
+    return { enabled: false, askedLabels: [], flagLabels: [] };
+  }
+
+  const askedLabels = [
+    "income",
+    "move-in date",
+    "pets",
+    "number of occupants",
+    ...activeCustomPrompts.map((p) => p.trim()).filter((p) => p.length > 0),
+  ];
+
+  const flagLabels: string[] = [];
+  if (
+    config.screening_income_multiple != null &&
+    config.screening_income_multiple > 0
+  ) {
+    flagLabels.push(
+      `income below ${formatIncomeMultiple(config.screening_income_multiple)}× rent`,
+    );
+  }
+  if (
+    config.screening_max_movein_days != null &&
+    config.screening_max_movein_days > 0
+  ) {
+    flagLabels.push(
+      `move-in more than ${config.screening_max_movein_days} days away`,
+    );
+  }
+  if (config.screening_flag_pets) {
+    flagLabels.push("pets on a rental that isn't pet-friendly");
+  }
+
+  return { enabled: true, askedLabels, flagLabels };
+}
+
 // --- operator-facing income magnitude (S258) --------------------------------
 // On the qualify-out flag the operator sees WHY a lead was flagged, but for
 // income not HOW FAR off it is. The magnitude is the difference between a

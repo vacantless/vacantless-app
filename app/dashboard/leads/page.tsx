@@ -151,6 +151,12 @@ export default async function LeadsPage({
             href={leadsHref(filter, "out", propertyId)}
             active={screen === "out"}
           />
+          <Link
+            href="/dashboard/leasing/screening"
+            className="ml-1 text-xs font-medium text-brand hover:underline"
+          >
+            Manage pre-screening →
+          </Link>
         </div>
       )}
 

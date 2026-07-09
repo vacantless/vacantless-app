@@ -10,6 +10,8 @@ import {
   affordabilityHintIncomeCents,
   AFFORDABILITY_INCOME_RATIO,
   incomeRequirementMagnitude,
+  describeScreeningStatus,
+  formatIncomeMultiple,
   SCREENING_REASON,
   resolveScreeningReason,
   cleanScreeningReason,
@@ -516,6 +518,89 @@ const goodAnswers: ScreeningAnswers = {
   ok("mag: $0 income is a result", zeroIncome !== null);
   ok("mag: $0 income -> shortfall = full requirement", zeroIncome?.shortfallCents === 840_000);
   ok("mag: $0 income -> does not meet", zeroIncome?.meetsRequirement === false);
+}
+
+// --- describeScreeningStatus (plain-language summary, S438) ------------------
+{
+  // Disabled -> both lists empty regardless of the thresholds still stored.
+  const offSummary = describeScreeningStatus(
+    { ...fullConfig, screening_enabled: false },
+    ["Where do you work?"],
+  );
+  ok("status: disabled -> not enabled", offSummary.enabled === false);
+  ok("status: disabled -> no asked", offSummary.askedLabels.length === 0);
+  ok("status: disabled -> no flags", offSummary.flagLabels.length === 0);
+
+  // Fully on -> four built-in asked labels + the active custom prompt.
+  const onSummary = describeScreeningStatus(fullConfig, ["Where do you work?"]);
+  ok("status: enabled", onSummary.enabled === true);
+  ok("status: asks income", onSummary.askedLabels.includes("income"));
+  ok("status: asks move-in date", onSummary.askedLabels.includes("move-in date"));
+  ok("status: asks pets", onSummary.askedLabels.includes("pets"));
+  ok(
+    "status: asks occupants",
+    onSummary.askedLabels.includes("number of occupants"),
+  );
+  ok(
+    "status: appends custom prompt",
+    onSummary.askedLabels.includes("Where do you work?"),
+  );
+  ok("status: 5 asked (4 built-in + 1 custom)", onSummary.askedLabels.length === 5);
+
+  // Flags reflect the configured criteria.
+  ok(
+    "status: income flag phrased with multiple",
+    onSummary.flagLabels.includes("income below 3× rent"),
+  );
+  ok(
+    "status: move-in flag phrased with days",
+    onSummary.flagLabels.includes("move-in more than 90 days away"),
+  );
+  ok(
+    "status: pets flag present",
+    onSummary.flagLabels.includes("pets on a rental that isn't pet-friendly"),
+  );
+  ok("status: exactly 3 flags", onSummary.flagLabels.length === 3);
+
+  // Asked-but-not-flagged: income asked, but no threshold -> not in flags.
+  const askNoFlag = describeScreeningStatus(
+    {
+      ...fullConfig,
+      screening_income_multiple: null,
+      screening_max_movein_days: null,
+      screening_flag_pets: false,
+    },
+    [],
+  );
+  ok(
+    "status: still asks income with no threshold",
+    askNoFlag.askedLabels.includes("income"),
+  );
+  ok("status: no thresholds -> zero flags", askNoFlag.flagLabels.length === 0);
+
+  // No custom prompts -> just the four built-ins.
+  const noCustom = describeScreeningStatus(fullConfig);
+  ok("status: no custom -> 4 asked", noCustom.askedLabels.length === 4);
+
+  // Blank/whitespace custom prompts are dropped.
+  const blankCustom = describeScreeningStatus(fullConfig, ["  ", "Real one"]);
+  ok(
+    "status: blank custom dropped",
+    blankCustom.askedLabels.filter((l) => l === "Real one").length === 1 &&
+      blankCustom.askedLabels.length === 5,
+  );
+
+  // A fractional multiple renders without a trailing zero.
+  const fracSummary = describeScreeningStatus(
+    { ...fullConfig, screening_income_multiple: 2.5 },
+    [],
+  );
+  ok(
+    "status: fractional multiple 2.5×",
+    fracSummary.flagLabels.includes("income below 2.5× rent"),
+  );
+  ok("formatIncomeMultiple: 3 -> '3'", formatIncomeMultiple(3) === "3");
+  ok("formatIncomeMultiple: 2.5 -> '2.5'", formatIncomeMultiple(2.5) === "2.5");
 }
 
 console.log(`\nscreening: ${passed} passed, ${failed} failed`);

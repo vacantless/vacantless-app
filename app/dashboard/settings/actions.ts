@@ -154,6 +154,43 @@ export async function addScreeningQuestion(formData: FormData) {
   redirect("/dashboard/leasing/screening?screening=question_added");
 }
 
+// Pause / resume a custom question (S438). Turning it OFF (active=false) stops it
+// rendering on the public inquiry form but keeps the definition so the operator
+// can turn it back ON later without re-authoring it — the "pause without delete"
+// the operator UX asked for. This replaces the old single "Remove" (which was a
+// soft delete = active=false); a true delete is deleteScreeningQuestion below.
+// The desired state rides in a hidden `active` field ("1"/"0"). Existing lead
+// snapshots are self-contained (screen_custom_answers carries its own prompt), so
+// pausing/resuming never rewrites answers already filed.
+export async function setScreeningQuestionActive(formData: FormData) {
+  const org = await requireSettingsOrg();
+  const id = String(formData.get("question_id") ?? "").trim();
+  const active = String(formData.get("active") ?? "") === "1";
+  if (!id) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  const supabase = createClient();
+  // RLS plus the explicit org filter prevent touching another org's question.
+  const { error } = await supabase
+    .from("org_screening_questions")
+    .update({ active })
+    .eq("id", id)
+    .eq("organization_id", org.id);
+  if (error) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  redirect(
+    `/dashboard/leasing/screening?screening=${active ? "question_resumed" : "question_paused"}`,
+  );
+}
+
+// Permanently delete a custom question (S438). Offered only on an already-off
+// (paused) question in the UI, so it is a deliberate two-step action, not a
+// one-click loss. A hard delete is safe: leads.screen_custom_answers is a
+// self-contained snapshot (no FK to this row), so past inquiries keep their
+// answers even after the question row is gone.
 export async function deleteScreeningQuestion(formData: FormData) {
   const org = await requireSettingsOrg();
   const id = String(formData.get("question_id") ?? "").trim();
@@ -162,11 +199,10 @@ export async function deleteScreeningQuestion(formData: FormData) {
   }
 
   const supabase = createClient();
-  // Soft delete (active=false) so existing lead snapshots stay meaningful. RLS
-  // plus the explicit org filter prevent touching another org's question.
+  // RLS plus the explicit org filter prevent touching another org's question.
   const { error } = await supabase
     .from("org_screening_questions")
-    .update({ active: false })
+    .delete()
     .eq("id", id)
     .eq("organization_id", org.id);
   if (error) {
