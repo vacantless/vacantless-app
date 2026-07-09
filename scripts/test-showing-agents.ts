@@ -286,6 +286,20 @@ ok("suggest: all archived -> null", suggestShowingAgent([mk({ id: "a", name: "A"
   );
   ok("suggest: no fit -> still suggests someone", s?.agentId === "a");
 }
+{
+  // Codex S441 P3: a generalist must beat a wrong-type specialist for a rental
+  // even when NO rental specialist exists (drop wrong-type specialists whenever
+  // that leaves someone).
+  const s = suggestShowingAgent(
+    [
+      mk({ id: "gen", name: "Gen", productTypes: [], assignedThisWeek: 3 }),
+      mk({ id: "sale", name: "SaleOnly", productTypes: ["sale"], assignedThisWeek: 0 }),
+    ],
+    { productType: "rental" },
+  );
+  ok("suggest: generalist beats wrong-type specialist (no matching specialist)", s?.agentId === "gen");
+  ok("suggest: generalist winner does not claim coverage", s?.reason.includes("covers") === false);
+}
 
 // --- summary ----------------------------------------------------------------
 if (failed === 0) console.log(`✓ showing-agents: ${passed} passed`);

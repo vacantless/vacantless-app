@@ -296,6 +296,11 @@ export function orgWeekWindow(
   }
   // Back out the tz offset from the local wall-clock to get local-midnight-today
   // as a UTC instant (asUTC - now == how far local leads UTC).
+  // KNOWN EDGE (Codex S441 P3, ACCEPTED): the offset sampled at `now` is applied
+  // to the whole week, so a DST-transition week's Sunday boundary can be off by an
+  // hour — affecting only a viewing scheduled in that single ambiguous hour twice a
+  // year. This mirrors the accepted local-midnight simplification in
+  // lib/leasing-snapshot.ts (KI508); not worth diverging for a capacity HINT.
   const asUTC = Date.UTC(y, mo - 1, d, h, mi, s);
   const offsetMs = asUTC - Math.floor(nowMs / 1000) * 1000;
   const startTodayMs = Date.UTC(y, mo - 1, d) - offsetMs;
@@ -344,11 +349,18 @@ export function suggestShowingAgent(
   let narrowedByProduct = false;
   let pool = active;
   if (productType) {
+    // Drop agents who specialize in OTHER product types — a sale-only agent must
+    // never win a rental suggestion over a generalist, even when NO rental
+    // specialist exists (Codex S441 P3). An agent with no product_types is a
+    // generalist and always stays eligible. Only narrow when it actually leaves
+    // someone; if EVERY active agent is a wrong-type specialist, keep them all
+    // rather than suggest nobody. (`narrowedByProduct` only drives the "covers X"
+    // reason, which is separately gated on the winner truly covering the type, so
+    // a generalist winner never falsely claims coverage.)
     const fit = active.filter(
       (c) => c.productTypes.length === 0 || c.productTypes.includes(productType),
     );
-    const specialists = active.filter((c) => c.productTypes.includes(productType));
-    if (specialists.length > 0 && fit.length > 0) {
+    if (fit.length > 0 && fit.length < active.length) {
       pool = fit;
       narrowedByProduct = true;
     }

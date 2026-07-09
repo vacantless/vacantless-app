@@ -36,11 +36,25 @@ export function AssignSelect({
           <button
             type="submit"
             title={`Suggested: ${suggestion.name} — ${suggestion.reason}`}
-            className="inline-flex items-center gap-1 rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
+            className={
+              // When the best agent is already at their weekly capacity, don't
+              // dress the chip as a clean recommendation — amber + an always-
+              // visible "full" marker so the operator sees they'd be overloading
+              // someone (the "N left" reason is hidden on small screens; Codex
+              // S441 P3). It stays tappable — operator's call.
+              suggestion.atCapacity
+                ? "inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                : "inline-flex items-center gap-1 rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
+            }
           >
             <span aria-hidden>✨</span>
             <span>Assign {suggestion.name}</span>
-            <span className="hidden font-normal text-brand/70 sm:inline">
+            {suggestion.atCapacity && <span className="font-semibold">· full</span>}
+            <span
+              className={`hidden font-normal sm:inline ${
+                suggestion.atCapacity ? "text-amber-700" : "text-brand/70"
+              }`}
+            >
               · {suggestion.reason}
             </span>
           </button>
