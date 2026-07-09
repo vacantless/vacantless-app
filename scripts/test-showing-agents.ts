@@ -19,6 +19,7 @@ import {
   COORDINATION_STATUSES,
   orgWeekWindow,
   suggestShowingAgent,
+  pickAutoAssignAgent,
   type SuggestCandidate,
 } from "../lib/showing-agents";
 
@@ -299,6 +300,49 @@ ok("suggest: all archived -> null", suggestShowingAgent([mk({ id: "a", name: "A"
   );
   ok("suggest: generalist beats wrong-type specialist (no matching specialist)", s?.agentId === "gen");
   ok("suggest: generalist winner does not claim coverage", s?.reason.includes("covers") === false);
+}
+
+// --- pickAutoAssignAgent (S443) ----------------------------------------------
+ok("auto-assign: empty roster -> null", pickAutoAssignAgent([]) === null);
+ok(
+  "auto-assign: all archived -> null",
+  pickAutoAssignAgent([mk({ id: "a", name: "A", archived: true })]) === null,
+);
+{
+  // Uncapped agents are never "at capacity" -> auto-assign picks the load-
+  // balanced winner just like the manual suggestion.
+  const a = pickAutoAssignAgent([
+    mk({ id: "busy", name: "Busy", assignedThisWeek: 3 }),
+    mk({ id: "free", name: "Free", assignedThisWeek: 0 }),
+  ]);
+  ok("auto-assign: picks least-loaded uncapped agent", a?.agentId === "free");
+}
+{
+  // The only candidate is at capacity -> auto-assign declines (leave unassigned
+  // for manual routing) even though the manual suggestion would still surface it.
+  const cands = [mk({ id: "full", name: "Full", weeklyCapacity: 2, assignedThisWeek: 2 })];
+  ok("auto-assign: sole at-capacity agent -> null", pickAutoAssignAgent(cands) === null);
+  ok(
+    "suggest still surfaces the at-capacity agent (manual override)",
+    suggestShowingAgent(cands)?.atCapacity === true,
+  );
+}
+{
+  // Everyone capped, all full -> auto-assign declines.
+  const a = pickAutoAssignAgent([
+    mk({ id: "x", name: "X", weeklyCapacity: 1, assignedThisWeek: 1 }),
+    mk({ id: "y", name: "Y", weeklyCapacity: 3, assignedThisWeek: 5 }),
+  ]);
+  ok("auto-assign: all agents full -> null", a === null);
+}
+{
+  // A capped-but-not-full agent beats a full one and gets auto-assigned.
+  const a = pickAutoAssignAgent([
+    mk({ id: "full", name: "Full", weeklyCapacity: 2, assignedThisWeek: 2 }),
+    mk({ id: "room", name: "Room", weeklyCapacity: 5, assignedThisWeek: 1 }),
+  ]);
+  ok("auto-assign: picks the agent with room over the full one", a?.agentId === "room");
+  ok("auto-assign: winner is not at capacity", a?.atCapacity === false);
 }
 
 // --- summary ----------------------------------------------------------------

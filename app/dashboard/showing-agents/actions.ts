@@ -91,6 +91,28 @@ export async function updateShowingAgent(formData: FormData) {
   redirect(`${BASE}?agent=saved`);
 }
 
+// Toggle the org's auto-assign setting (S443). When on, a viewing a renter
+// self-books online is automatically routed to the load-balanced showing agent
+// (respecting weekly capacity) with the same hand-off email a manual assign
+// sends. manage_settings-gated, same as editing the roster. Ships dark: the
+// column defaults false, so an org is unaffected until an operator flips this.
+export async function setAutoAssign(formData: FormData) {
+  await requireCapability("manage_settings", `${BASE}?agent=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const enabled = s(formData, "auto_assign_agents") === "on";
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org.
+  await supabase
+    .from("organizations")
+    .update({ auto_assign_agents: enabled })
+    .eq("id", org.id);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?agent=${enabled ? "auto_on" : "auto_off"}`);
+}
+
 // Soft-hide an agent so they drop out of the assignment picker without breaking
 // the assignment history of past viewings (assigned_agent_id is on-delete-set-
 // null, and archived agents are excluded from the picker in the UI).

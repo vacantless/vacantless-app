@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import {
   PageHeader,
@@ -13,6 +14,7 @@ import {
   createShowingAgent,
   updateShowingAgent,
   setShowingAgentArchived,
+  setAutoAssign,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,8 @@ const FLASH: Record<string, { tone: "ok" | "err"; text: string }> = {
   saved: { tone: "ok", text: "Showing agent saved." },
   archived: { tone: "ok", text: "Agent archived. They no longer appear in the assignment picker." },
   restored: { tone: "ok", text: "Agent restored." },
+  auto_on: { tone: "ok", text: "Auto-assign is on. New online bookings will be routed to the load-balanced agent automatically." },
+  auto_off: { tone: "ok", text: "Auto-assign is off. Route each viewing yourself from the Viewings page." },
   name_required: { tone: "err", text: "A name is required." },
   name_too_long: { tone: "err", text: "That name is too long." },
   email_invalid: { tone: "err", text: "That email doesn't look right." },
@@ -53,6 +57,7 @@ export default async function ShowingAgentsPage({
 }) {
   await requireCapability("manage_settings", "/dashboard/showings?forbidden=1");
   const supabase = createClient();
+  const org = await getCurrentOrg();
   const { data } = await supabase
     .from("showing_agents")
     .select(
@@ -62,6 +67,7 @@ export default async function ShowingAgentsPage({
   const agents = (data ?? []) as Agent[];
   const active = agents.filter((a) => !a.archived);
   const archived = agents.filter((a) => a.archived);
+  const autoAssign = org?.auto_assign_agents ?? false;
 
   const flash = searchParams.agent ? FLASH[searchParams.agent] : null;
 
@@ -84,6 +90,34 @@ export default async function ShowingAgentsPage({
           {flash.text}
         </div>
       )}
+
+      {/* Auto-assign toggle (S443) — route new online bookings automatically */}
+      <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <SectionHeading>Automatic assignment</SectionHeading>
+        <form action={setAutoAssign} className="mt-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              name="auto_assign_agents"
+              defaultChecked={autoAssign}
+              className="mt-0.5 rounded border-gray-300 text-brand focus:ring-brand"
+            />
+            <span className="text-sm text-gray-700">
+              <span className="font-medium text-gray-900">
+                Automatically assign new viewings to a showing agent
+              </span>
+              <br />
+              When a renter books a viewing online, route it to the agent with the
+              most room this week and email them the renter, property, and time. If
+              every agent is at their weekly capacity (or you have no agents yet), the
+              viewing stays unassigned so you can route it yourself.
+            </span>
+          </label>
+          <button type="submit" className={`${PRIMARY_ACTION_CLASS} mt-4 bg-brand`}>
+            Save
+          </button>
+        </form>
+      </div>
 
       {/* Add an agent */}
       <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

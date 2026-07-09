@@ -408,3 +408,25 @@ export function suggestShowingAgent(
 
   return { agentId: winner.id, name: winner.name, reason, atCapacity };
 }
+
+// --- Auto-assign (S443 — the suggestion, applied automatically at booking) ----
+// Same load-balanced pick as suggestShowingAgent, but for the UNATTENDED path:
+// when an org opts in, a newly self-booked viewing is routed automatically with
+// no operator in the loop. The one difference from the manual assist is that
+// auto-assign REFUSES to route to an agent who is at their weekly capacity.
+// suggestShowingAgent ranks by most-remaining-capacity first, so its winner is
+// only at capacity when EVERY active agent is at/over capacity — in that case
+// auto-assign returns null so the viewing stays unassigned and surfaces for
+// manual routing (the operator can still override a full agent by hand), rather
+// than silently piling onto someone who is already full. An empty/all-archived
+// roster likewise yields null (a no-op booking), so turning the flag on for an
+// org with no agents changes nothing. Pure + tested; the impure booking action
+// re-checks org scope + open outcome before it writes.
+export function pickAutoAssignAgent(
+  candidates: readonly SuggestCandidate[],
+  opts?: { productType?: ProductType | null },
+): AgentSuggestion | null {
+  const suggestion = suggestShowingAgent(candidates, opts);
+  if (!suggestion || suggestion.atCapacity) return null;
+  return suggestion;
+}
