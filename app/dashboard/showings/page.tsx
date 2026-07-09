@@ -4,11 +4,17 @@ import { getCurrentOrg } from "@/lib/org";
 import { EmptyState, PageHeader, SectionHeading } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { groupShowingsIntoBlocks } from "@/lib/booking";
-import { agentDisplayLabel, canAssignShowing } from "@/lib/showing-agents";
+import {
+  agentDisplayLabel,
+  canAssignShowing,
+  deriveCoordinationStatus,
+  needsConfirmation,
+} from "@/lib/showing-agents";
 import { getCurrentRole } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
 import { OutcomeSelect } from "./outcome-select";
 import { AssignSelect } from "./assign-select";
+import { ConfirmControl } from "./confirm-control";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +23,7 @@ type ShowingRow = {
   scheduled_at: string | null;
   outcome: string;
   assigned_agent_id: string | null;
+  confirmed_at: string | null;
   lead: { id: string; name: string | null; email: string | null } | null;
   property: { id: string; address: string } | null;
   feedback: { rating: number | null; comments: string | null }[] | null;
@@ -78,7 +85,7 @@ export default async function ShowingsPage() {
   const { data } = await supabase
     .from("showings")
     .select(
-      "id, scheduled_at, outcome, assigned_agent_id, lead:leads(id, name, email), property:properties(id, address), feedback(rating, comments)",
+      "id, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address), feedback(rating, comments)",
     )
     .order("scheduled_at", { ascending: true });
 
@@ -108,6 +115,17 @@ export default async function ShowingsPage() {
       s.scheduled_at != null &&
       new Date(s.scheduled_at).getTime() >= now,
   );
+  // Oversight (Slice 2): how many UPCOMING viewings are assigned but not yet
+  // confirmed with the renter - the "did the agent follow up?" gap surfaced.
+  const awaitingConfirmation = upcoming.filter((s) =>
+    needsConfirmation(
+      deriveCoordinationStatus({
+        outcome: s.outcome,
+        assignedAgentId: s.assigned_agent_id,
+        confirmedAt: s.confirmed_at,
+      }),
+    ),
+  ).length;
   const byRecent = (a: ShowingRow, b: ShowingRow) =>
     new Date(b.scheduled_at ?? 0).getTime() -
     new Date(a.scheduled_at ?? 0).getTime();
@@ -196,6 +214,15 @@ export default async function ShowingsPage() {
         agentLabelById={agentLabelById}
         agentContactById={agentContactById}
         canAssign={canAssign}
+        note={
+          canAssign && awaitingConfirmation > 0 ? (
+            <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              {awaitingConfirmation} assigned{" "}
+              {awaitingConfirmation === 1 ? "viewing is" : "viewings are"} awaiting
+              confirmation with the renter.
+            </p>
+          ) : undefined
+        }
       />
       <Section
         title="Past & closed"
@@ -237,6 +264,7 @@ function Section({
   agentLabelById,
   agentContactById,
   canAssign,
+  note,
 }: {
   title: string;
   rows: ShowingRow[];
@@ -246,10 +274,12 @@ function Section({
   agentLabelById: Map<string, string>;
   agentContactById: Map<string, { name: string; phone: string | null }>;
   canAssign: boolean;
+  note?: React.ReactNode;
 }) {
   return (
     <div className="mb-8">
       <SectionHeading>{title}</SectionHeading>
+      {note ?? null}
       {rows.length === 0 ? (
         empty ?? null
       ) : (
@@ -281,6 +311,11 @@ function Section({
             const contactDigits = contact?.phone
               ? contact.phone.replace(/[^\d+]/g, "")
               : "";
+            const coordStatus = deriveCoordinationStatus({
+              outcome: s.outcome,
+              assignedAgentId: s.assigned_agent_id,
+              confirmedAt: s.confirmed_at,
+            });
             return (
               <li
                 key={s.id}
@@ -328,6 +363,9 @@ function Section({
                     )}
                     <OutcomeSelect showingId={s.id} outcome={s.outcome} />
                   </div>
+                  {canAssign && (
+                    <ConfirmControl showingId={s.id} status={coordStatus} />
+                  )}
                   {contact && contactDigits !== "" && (
                     <p className="text-xs text-gray-500">
                       {contact.name}:{" "}

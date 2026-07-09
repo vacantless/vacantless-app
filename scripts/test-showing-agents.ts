@@ -12,6 +12,11 @@ import {
   isAtCapacity,
   agentDisplayLabel,
   activeAgents,
+  deriveCoordinationStatus,
+  needsConfirmation,
+  coordinationStatusLabel,
+  canConfirmShowing,
+  COORDINATION_STATUSES,
 } from "../lib/showing-agents";
 
 let passed = 0;
@@ -125,6 +130,44 @@ ok(
   "activeAgents: drops archived, keeps order",
   JSON.stringify(activeAgents(roster).map((a) => a.id)) === JSON.stringify(["1", "3"]),
 );
+
+// --- coordination status (Slice 2) ------------------------------------------
+ok("coord: 5 statuses", COORDINATION_STATUSES.length === 5);
+ok(
+  "coord: cancelled wins",
+  deriveCoordinationStatus({ outcome: "cancelled", assignedAgentId: "a", confirmedAt: "x" }) === "cancelled",
+);
+ok(
+  "coord: attended -> done",
+  deriveCoordinationStatus({ outcome: "attended", assignedAgentId: "a", confirmedAt: null }) === "done",
+);
+ok(
+  "coord: no_show -> done",
+  deriveCoordinationStatus({ outcome: "no_show", assignedAgentId: null, confirmedAt: null }) === "done",
+);
+ok(
+  "coord: scheduled + no agent -> unassigned",
+  deriveCoordinationStatus({ outcome: "scheduled", assignedAgentId: null, confirmedAt: null }) === "unassigned",
+);
+ok(
+  "coord: assigned + not confirmed -> awaiting",
+  deriveCoordinationStatus({ outcome: "scheduled", assignedAgentId: "a", confirmedAt: null }) ===
+    "awaiting_confirmation",
+);
+ok(
+  "coord: assigned + confirmed -> confirmed",
+  deriveCoordinationStatus({ outcome: "scheduled", assignedAgentId: "a", confirmedAt: "2026-07-09T00:00:00Z" }) ===
+    "confirmed",
+);
+ok(
+  "coord: null outcome + agent + no confirm -> awaiting",
+  deriveCoordinationStatus({ outcome: null, assignedAgentId: "a", confirmedAt: null }) === "awaiting_confirmation",
+);
+ok("coord: needsConfirmation only for awaiting", needsConfirmation("awaiting_confirmation"));
+ok("coord: needsConfirmation not for confirmed", !needsConfirmation("confirmed"));
+ok("coord: needsConfirmation not for unassigned", !needsConfirmation("unassigned"));
+ok("coord: canConfirm only awaiting", canConfirmShowing("awaiting_confirmation") && !canConfirmShowing("confirmed"));
+ok("coord: label", coordinationStatusLabel("awaiting_confirmation") === "Awaiting confirmation");
 
 // --- summary ----------------------------------------------------------------
 if (failed === 0) console.log(`✓ showing-agents: ${passed} passed`);

@@ -5,7 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { isShowingOutcome, showingOutcomeLabel } from "@/lib/pipeline";
-import { canAssignShowing } from "@/lib/showing-agents";
+import {
+  canAssignShowing,
+  canConfirmShowing,
+  deriveCoordinationStatus,
+} from "@/lib/showing-agents";
 import { sendOrgNotification } from "@/lib/notifications-server";
 
 // Operator sets the outcome of a showing. RLS scopes everything to the org.
@@ -121,6 +125,11 @@ export async function assignShowing(formData: FormData) {
     .update({
       assigned_agent_id: agentId,
       assigned_at: agentId ? new Date().toISOString() : null,
+      // Any assignment change invalidates a prior confirmation: reassigning to a
+      // new agent, or unassigning, means the old "confirmed with renter" no
+      // longer holds, so reset the coordination state (Slice 2).
+      confirmed_at: null,
+      confirmed_by: null,
     })
     .eq("id", id)
     .eq("organization_id", org.id)
@@ -185,6 +194,87 @@ export async function assignShowing(formData: FormData) {
         assigned_by: user?.email ?? "The lead agent",
       },
     });
+  }
+
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+}
+
+// Mark an assigned viewing as confirmed with the renter, or clear that (Slice 2 —
+// the coordination trail that answers "did the agent actually confirm?"). Gated
+// on manage_leads, same as assignment. Since showing agents are account-less in
+// this slice, the lead agent/operator records the confirmation when the agent
+// reports back; a future tokenized agent view lets the agent self-confirm.
+export async function setShowingConfirmed(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/showings?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const confirmed = String(formData.get("confirmed") ?? "") === "true";
+  if (!id) return;
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  const { data: row } = await supabase
+    .from("showings")
+    .select("id, outcome, assigned_agent_id, confirmed_at, lead_id, organization_id")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!row) return;
+  const s = row as {
+    outcome: string | null;
+    assigned_agent_id: string | null;
+    confirmed_at: string | null;
+    lead_id: string | null;
+    organization_id: string;
+  };
+
+  const status = deriveCoordinationStatus({
+    outcome: s.outcome,
+    assignedAgentId: s.assigned_agent_id,
+    confirmedAt: s.confirmed_at,
+  });
+
+  if (confirmed) {
+    // Can only confirm a viewing that is currently assigned + awaiting confirmation.
+    if (!canConfirmShowing(status)) return;
+    const { data: updated } = await supabase
+      .from("showings")
+      .update({ confirmed_at: new Date().toISOString(), confirmed_by: "lead" })
+      .eq("id", id)
+      .eq("organization_id", org.id)
+      .not("assigned_agent_id", "is", null)
+      .is("confirmed_at", null)
+      .neq("outcome", "cancelled")
+      .select("id")
+      .maybeSingle();
+    if (!updated) return;
+  } else {
+    // Clearing only makes sense on a currently-confirmed viewing.
+    if (status !== "confirmed") return;
+    const { data: updated } = await supabase
+      .from("showings")
+      .update({ confirmed_at: null, confirmed_by: null })
+      .eq("id", id)
+      .eq("organization_id", org.id)
+      .not("confirmed_at", "is", null)
+      .select("id")
+      .maybeSingle();
+    if (!updated) return;
+  }
+
+  if (s.lead_id) {
+    await supabase.from("messages").insert({
+      organization_id: s.organization_id,
+      lead_id: s.lead_id,
+      channel: "note",
+      direction: "outbound",
+      body: confirmed
+        ? "Viewing confirmed with the renter."
+        : "Viewing confirmation cleared.",
+    });
+    revalidatePath(`/dashboard/leads/${s.lead_id}`);
   }
 
   revalidatePath("/dashboard/showings");

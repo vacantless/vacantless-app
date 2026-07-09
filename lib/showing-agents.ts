@@ -177,3 +177,58 @@ export function agentDisplayLabel(agent: {
 export function activeAgents<T extends { archived: boolean }>(agents: readonly T[]): T[] {
   return agents.filter((a) => !a.archived);
 }
+
+// --- Coordination status (Slice 2 — the "Howard" follow-up trail) ------------
+// The lifecycle state of a viewing's coordination, so a lead agent can see at a
+// glance whether an assigned viewing has actually been confirmed with the renter
+// instead of guessing. Derived (never stored) from the three source columns.
+//   cancelled              - outcome cancelled; coordination is moot.
+//   done                   - outcome recorded (attended / no_show); in the past.
+//   unassigned             - upcoming, no agent routed yet.
+//   awaiting_confirmation  - upcoming, assigned, but not confirmed with the renter.
+//   confirmed              - upcoming, assigned, and confirmed with the renter.
+export const COORDINATION_STATUSES = [
+  "cancelled",
+  "done",
+  "unassigned",
+  "awaiting_confirmation",
+  "confirmed",
+] as const;
+export type CoordinationStatus = (typeof COORDINATION_STATUSES)[number];
+
+export function deriveCoordinationStatus(args: {
+  outcome: string | null | undefined;
+  assignedAgentId: string | null | undefined;
+  confirmedAt: string | null | undefined;
+}): CoordinationStatus {
+  const outcome = args.outcome ?? "";
+  if (outcome === "cancelled") return "cancelled";
+  if (outcome === "attended" || outcome === "no_show") return "done";
+  if (!args.assignedAgentId) return "unassigned";
+  if (!args.confirmedAt) return "awaiting_confirmation";
+  return "confirmed";
+}
+
+// A viewing "needs a confirmation nudge" only when it is assigned-but-unconfirmed.
+export function needsConfirmation(status: CoordinationStatus): boolean {
+  return status === "awaiting_confirmation";
+}
+
+const COORDINATION_LABELS: Record<CoordinationStatus, string> = {
+  cancelled: "Cancelled",
+  done: "Done",
+  unassigned: "Unassigned",
+  awaiting_confirmation: "Awaiting confirmation",
+  confirmed: "Confirmed",
+};
+
+export function coordinationStatusLabel(status: CoordinationStatus): string {
+  return COORDINATION_LABELS[status];
+}
+
+// A viewing can be marked confirmed only when it is currently in the
+// awaiting_confirmation state (assigned + upcoming + not yet confirmed). Mirrored
+// in the server action guard.
+export function canConfirmShowing(status: CoordinationStatus): boolean {
+  return status === "awaiting_confirmation";
+}
