@@ -6,6 +6,7 @@ import {
   deriveCoordinationStatus,
   coordinationStatusLabel,
 } from "@/lib/showing-agents";
+import { OUTCOME_NUDGE_MAX_AGE_MS } from "@/lib/reminders";
 import { confirmShowingFromToken, recordOutcomeFromToken } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -113,9 +114,14 @@ export default async function AgentCalendarPage({
   );
   const tz = agent.organization?.booking_timezone || "America/Toronto";
 
-  // Upcoming, still-open viewings routed to this agent. A 2h grace keeps a
-  // just-started viewing visible; cancelled / attended / no_show drop off.
-  const cutoff = new Date(Date.now() - 2 * 3_600_000).toISOString();
+  const nowMs = Date.now();
+  // Open assigned viewings within the outcome window: FUTURE ones to confirm, and
+  // PAST ones (back to the 7d nudge backlog bound) that still NEED AN OUTCOME.
+  // The outcome nudge (S445b) fires at 2h / 20h / 44h after the viewing and links
+  // here, so the page must keep a past-but-open viewing visible for the whole
+  // window — a 2h cutoff would drop it and land the nudge on an empty page (Codex
+  // S445b P2). cancelled / attended / no_show still drop off (closed).
+  const cutoff = new Date(nowMs - OUTCOME_NUDGE_MAX_AGE_MS).toISOString();
   const { data: showingRows } = await admin
     .from("showings")
     .select(
@@ -130,13 +136,148 @@ export default async function AgentCalendarPage({
     .or("outcome.is.null,outcome.eq.scheduled")
     .gte("scheduled_at", cutoff)
     .order("scheduled_at", { ascending: true });
-  const showings = (showingRows ?? []) as unknown as Row[];
+  const rows = (showingRows ?? []) as unknown as Row[];
+  // Future (soonest first) = confirm; past (most recent first) = needs an outcome.
+  const upcoming = rows.filter(
+    (s) => s.scheduled_at != null && new Date(s.scheduled_at).getTime() >= nowMs,
+  );
+  const needsOutcome = rows
+    .filter(
+      (s) => s.scheduled_at != null && new Date(s.scheduled_at).getTime() < nowMs,
+    )
+    .reverse();
 
   const justConfirmed = searchParams.status === "confirmed";
   const recordedAttended = searchParams.status === "recorded_attended";
   const recordedNoShow = searchParams.status === "recorded_no_show";
   const errored = searchParams.status === "error";
-  const nowMs = Date.now();
+
+  // One card renderer shared by both sections. A future viewing shows Confirm; a
+  // past-but-open one shows the one-tap outcome capture.
+  const renderCard = (s: Row) => {
+    const status = deriveCoordinationStatus({
+      outcome: s.outcome,
+      assignedAgentId: s.assigned_agent_id,
+      confirmedAt: s.confirmed_at,
+    });
+    const confirmed = status === "confirmed";
+    const happened =
+      s.scheduled_at != null && new Date(s.scheduled_at).getTime() <= nowMs;
+    const renter = s.lead?.name?.trim() || "A renter";
+    const address = s.property?.address?.trim() || "Property";
+    const listing = listingLine(s.property);
+    const instructions = s.property?.showing_instructions?.trim();
+    const phone = s.lead?.phone?.trim();
+
+    return (
+      <div
+        key={s.id}
+        className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+              {fmtWhen(s.scheduled_at, tz)}
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-gray-900">{address}</h2>
+            {listing && <p className="mt-0.5 text-sm text-gray-600">{listing}</p>}
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+              confirmed
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-amber-100 text-amber-800"
+            }`}
+          >
+            {coordinationStatusLabel(status)}
+          </span>
+        </div>
+
+        <div className="mt-4 rounded-xl bg-gray-50 p-3.5">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            Renter
+          </p>
+          <p className="mt-1 text-sm font-medium text-gray-900">{renter}</p>
+          {phone && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a
+                href={tel(phone)}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Call {phone}
+              </a>
+              <a
+                href={sms(phone)}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Text
+              </a>
+            </div>
+          )}
+        </div>
+
+        {instructions && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+              Showing &amp; access instructions
+            </p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">
+              {instructions}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-4">
+          {happened ? (
+            <>
+              <p className="mb-2 text-sm font-medium text-gray-700">How did it go?</p>
+              <div className="flex gap-2">
+                <form action={recordOutcomeFromToken} className="flex-1">
+                  <input type="hidden" name="token" value={params.token} />
+                  <input type="hidden" name="showing_id" value={s.id} />
+                  <input type="hidden" name="outcome" value="attended" />
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl px-4 py-3 text-center text-base font-semibold text-white shadow-sm hover:opacity-95"
+                    style={{ background: brandBg }}
+                  >
+                    Renter showed
+                  </button>
+                </form>
+                <form action={recordOutcomeFromToken} className="flex-1">
+                  <input type="hidden" name="token" value={params.token} />
+                  <input type="hidden" name="showing_id" value={s.id} />
+                  <input type="hidden" name="outcome" value="no_show" />
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                  >
+                    No-show
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : confirmed ? (
+            <p className="text-sm font-medium text-emerald-700">
+              ✓ Confirmed with the renter
+            </p>
+          ) : (
+            <form action={confirmShowingFromToken}>
+              <input type="hidden" name="token" value={params.token} />
+              <input type="hidden" name="showing_id" value={s.id} />
+              <button
+                type="submit"
+                className="w-full rounded-xl px-4 py-3 text-center text-base font-semibold text-white shadow-sm hover:opacity-95"
+                style={{ background: brandBg }}
+              >
+                Confirm this viewing
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -181,157 +322,41 @@ export default async function AgentCalendarPage({
           </p>
         )}
 
-        {showings.length === 0 ? (
+        {upcoming.length === 0 && needsOutcome.length === 0 ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-            <h1 className="text-lg font-semibold text-gray-900">No upcoming viewings</h1>
+            <h1 className="text-lg font-semibold text-gray-900">No viewings right now</h1>
             <p className="mt-2 text-sm text-gray-600">
-              You have no viewings assigned right now. This page updates automatically as new ones
-              are routed to you — keep the link.
+              You have no viewings to confirm or wrap up. This page updates
+              automatically as new ones are routed to you — keep the link.
             </p>
           </div>
         ) : (
-          <>
-            <h1 className="text-xl font-semibold text-gray-900">
-              {showings.length} upcoming viewing{showings.length === 1 ? "" : "s"}
-            </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Tap Confirm once you&apos;ve reached the renter and the viewing is
-              on. After it happens, mark whether they showed.
-            </p>
-
-            <div className="mt-5 space-y-4">
-              {showings.map((s) => {
-                const status = deriveCoordinationStatus({
-                  outcome: s.outcome,
-                  assignedAgentId: s.assigned_agent_id,
-                  confirmedAt: s.confirmed_at,
-                });
-                const confirmed = status === "confirmed";
-                // Once the viewing time has passed, the ask flips from "confirm
-                // it's on" to "did they show?" — captured by the person on-site.
-                const happened =
-                  s.scheduled_at != null &&
-                  new Date(s.scheduled_at).getTime() <= nowMs;
-                const renter = s.lead?.name?.trim() || "A renter";
-                const address = s.property?.address?.trim() || "Property";
-                const listing = listingLine(s.property);
-                const instructions = s.property?.showing_instructions?.trim();
-                const phone = s.lead?.phone?.trim();
-
-                return (
-                  <div
-                    key={s.id}
-                    className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                          {fmtWhen(s.scheduled_at, tz)}
-                        </p>
-                        <h2 className="mt-1 text-lg font-semibold text-gray-900">{address}</h2>
-                        {listing && <p className="mt-0.5 text-sm text-gray-600">{listing}</p>}
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-                          confirmed
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {coordinationStatusLabel(status)}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 rounded-xl bg-gray-50 p-3.5">
-                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                        Renter
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-gray-900">{renter}</p>
-                      {phone && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <a
-                            href={tel(phone)}
-                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                          >
-                            Call {phone}
-                          </a>
-                          <a
-                            href={sms(phone)}
-                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                          >
-                            Text
-                          </a>
-                        </div>
-                      )}
-                    </div>
-
-                    {instructions && (
-                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-                        <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
-                          Showing &amp; access instructions
-                        </p>
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">
-                          {instructions}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="mt-4">
-                      {happened ? (
-                        // Viewing time has passed: capture the outcome in one tap.
-                        <>
-                          <p className="mb-2 text-sm font-medium text-gray-700">
-                            How did it go?
-                          </p>
-                          <div className="flex gap-2">
-                            <form action={recordOutcomeFromToken} className="flex-1">
-                              <input type="hidden" name="token" value={params.token} />
-                              <input type="hidden" name="showing_id" value={s.id} />
-                              <input type="hidden" name="outcome" value="attended" />
-                              <button
-                                type="submit"
-                                className="w-full rounded-xl px-4 py-3 text-center text-base font-semibold text-white shadow-sm hover:opacity-95"
-                                style={{ background: brandBg }}
-                              >
-                                Renter showed
-                              </button>
-                            </form>
-                            <form action={recordOutcomeFromToken} className="flex-1">
-                              <input type="hidden" name="token" value={params.token} />
-                              <input type="hidden" name="showing_id" value={s.id} />
-                              <input type="hidden" name="outcome" value="no_show" />
-                              <button
-                                type="submit"
-                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-                              >
-                                No-show
-                              </button>
-                            </form>
-                          </div>
-                        </>
-                      ) : confirmed ? (
-                        <p className="text-sm font-medium text-emerald-700">
-                          ✓ Confirmed with the renter
-                        </p>
-                      ) : (
-                        <form action={confirmShowingFromToken}>
-                          <input type="hidden" name="token" value={params.token} />
-                          <input type="hidden" name="showing_id" value={s.id} />
-                          <button
-                            type="submit"
-                            className="w-full rounded-xl px-4 py-3 text-center text-base font-semibold text-white shadow-sm hover:opacity-95"
-                            style={{ background: brandBg }}
-                          >
-                            Confirm this viewing
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+          <div className="space-y-8">
+            {needsOutcome.length > 0 && (
+              <section>
+                <h1 className="text-xl font-semibold text-gray-900">
+                  {needsOutcome.length} viewing{needsOutcome.length === 1 ? "" : "s"} to
+                  wrap up
+                </h1>
+                <p className="mt-1 text-sm text-gray-600">
+                  These already happened — mark whether the renter showed.
+                </p>
+                <div className="mt-5 space-y-4">{needsOutcome.map(renderCard)}</div>
+              </section>
+            )}
+            {upcoming.length > 0 && (
+              <section>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {upcoming.length} upcoming viewing{upcoming.length === 1 ? "" : "s"}
+                </h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Tap Confirm once you&apos;ve reached the renter and the viewing is
+                  on. After it happens, mark whether they showed.
+                </p>
+                <div className="mt-5 space-y-4">{upcoming.map(renderCard)}</div>
+              </section>
+            )}
+          </div>
         )}
 
         <p className="mt-6 text-center text-xs text-gray-400">Powered by Vacantless</p>
