@@ -6,7 +6,7 @@ import {
   deriveCoordinationStatus,
   coordinationStatusLabel,
 } from "@/lib/showing-agents";
-import { confirmShowingFromToken } from "./actions";
+import { confirmShowingFromToken, recordOutcomeFromToken } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +133,10 @@ export default async function AgentCalendarPage({
   const showings = (showingRows ?? []) as unknown as Row[];
 
   const justConfirmed = searchParams.status === "confirmed";
+  const recordedAttended = searchParams.status === "recorded_attended";
+  const recordedNoShow = searchParams.status === "recorded_no_show";
   const errored = searchParams.status === "error";
+  const nowMs = Date.now();
 
   return (
     <div
@@ -161,6 +164,17 @@ export default async function AgentCalendarPage({
             Confirmed. The lead agent can now see this viewing is covered.
           </p>
         )}
+        {recordedAttended && (
+          <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+            Thanks — marked as attended. That updates the renter&apos;s status
+            automatically.
+          </p>
+        )}
+        {recordedNoShow && (
+          <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+            Thanks — marked as a no-show. Noted for the lead agent.
+          </p>
+        )}
         {errored && (
           <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
             Something went wrong. Please try again.
@@ -181,7 +195,8 @@ export default async function AgentCalendarPage({
               {showings.length} upcoming viewing{showings.length === 1 ? "" : "s"}
             </h1>
             <p className="mt-1 text-sm text-gray-600">
-              Tap Confirm once you&apos;ve reached the renter and the viewing is on.
+              Tap Confirm once you&apos;ve reached the renter and the viewing is
+              on. After it happens, mark whether they showed.
             </p>
 
             <div className="mt-5 space-y-4">
@@ -192,6 +207,11 @@ export default async function AgentCalendarPage({
                   confirmedAt: s.confirmed_at,
                 });
                 const confirmed = status === "confirmed";
+                // Once the viewing time has passed, the ask flips from "confirm
+                // it's on" to "did they show?" — captured by the person on-site.
+                const happened =
+                  s.scheduled_at != null &&
+                  new Date(s.scheduled_at).getTime() <= nowMs;
                 const renter = s.lead?.name?.trim() || "A renter";
                 const address = s.property?.address?.trim() || "Property";
                 const listing = listingLine(s.property);
@@ -257,7 +277,39 @@ export default async function AgentCalendarPage({
                     )}
 
                     <div className="mt-4">
-                      {confirmed ? (
+                      {happened ? (
+                        // Viewing time has passed: capture the outcome in one tap.
+                        <>
+                          <p className="mb-2 text-sm font-medium text-gray-700">
+                            How did it go?
+                          </p>
+                          <div className="flex gap-2">
+                            <form action={recordOutcomeFromToken} className="flex-1">
+                              <input type="hidden" name="token" value={params.token} />
+                              <input type="hidden" name="showing_id" value={s.id} />
+                              <input type="hidden" name="outcome" value="attended" />
+                              <button
+                                type="submit"
+                                className="w-full rounded-xl px-4 py-3 text-center text-base font-semibold text-white shadow-sm hover:opacity-95"
+                                style={{ background: brandBg }}
+                              >
+                                Renter showed
+                              </button>
+                            </form>
+                            <form action={recordOutcomeFromToken} className="flex-1">
+                              <input type="hidden" name="token" value={params.token} />
+                              <input type="hidden" name="showing_id" value={s.id} />
+                              <input type="hidden" name="outcome" value="no_show" />
+                              <button
+                                type="submit"
+                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                              >
+                                No-show
+                              </button>
+                            </form>
+                          </div>
+                        </>
+                      ) : confirmed ? (
                         <p className="text-sm font-medium text-emerald-700">
                           ✓ Confirmed with the renter
                         </p>
