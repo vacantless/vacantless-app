@@ -12,6 +12,8 @@ export function OnboardLandlordForm() {
   const [email, setEmail] = useState("");
   const [orgName, setOrgName] = useState("");
   const [landlordName, setLandlordName] = useState("");
+  const [concierge, setConcierge] = useState(true);
+  const [intendedOwnerEmail, setIntendedOwnerEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [outcome, setOutcome] = useState<ProvisionOutcome | null>(null);
   const [copied, setCopied] = useState(false);
@@ -26,12 +28,15 @@ export function OnboardLandlordForm() {
         email,
         orgName,
         landlordName: landlordName || null,
+        concierge,
+        intendedOwnerEmail: concierge ? intendedOwnerEmail : null,
       });
       setOutcome(result);
       if (result.ok) {
         setEmail("");
         setOrgName("");
         setLandlordName("");
+        setIntendedOwnerEmail("");
       }
     } finally {
       setLoading(false);
@@ -62,18 +67,51 @@ export function OnboardLandlordForm() {
             htmlFor="onboard-landlord-email"
             className="mb-1 block text-sm font-medium text-slate-700"
           >
-            Landlord email
+            {concierge ? "Proxy login email" : "Landlord email"}
           </label>
           <input
             id="onboard-landlord-email"
             type="email"
             required
-            placeholder="landlord@example.com"
+            placeholder={concierge ? "landlord+name@example.com" : "landlord@example.com"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={inputClass}
           />
         </div>
+        <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={concierge}
+            onChange={(e) => setConcierge(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+          />
+          <span>
+            Concierge setup
+            <span className="block text-xs text-slate-500">
+              Keep renter-facing contact on the proxy until handoff.
+            </span>
+          </span>
+        </label>
+        {concierge && (
+          <div>
+            <label
+              htmlFor="onboard-intended-owner-email"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
+              Landlord handoff email
+            </label>
+            <input
+              id="onboard-intended-owner-email"
+              type="email"
+              required
+              placeholder="landlord@example.com"
+              value={intendedOwnerEmail}
+              onChange={(e) => setIntendedOwnerEmail(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        )}
         <div>
           <label
             htmlFor="onboard-org-name"
@@ -121,11 +159,17 @@ export function OnboardLandlordForm() {
           <p className="text-sm font-medium text-green-800">
             Provisioned {outcome.orgName} ({outcome.email}).
           </p>
+          {outcome.concierge && outcome.intendedOwnerEmail && (
+            <p className="text-xs text-green-700">
+              Handoff target saved: {outcome.intendedOwnerEmail}.
+            </p>
+          )}
           {outcome.inviteLink ? (
             <div className="space-y-2">
               <p className="text-xs text-green-700">
-                Send this set-password link to the landlord (it logs them into
-                their new account, where they choose a password):
+                {outcome.concierge
+                  ? "Use this set-password link with the proxy inbox so the account can be prepared before handoff:"
+                  : "Send this set-password link to the landlord so they can choose a password:"}
               </p>
               <div className="flex gap-2">
                 <input

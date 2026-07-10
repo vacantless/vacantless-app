@@ -6,9 +6,11 @@ import {
   cleanName,
   slugifyOrg,
   validateProvisionInput,
+  validateHandoffInput,
   parseAdminEmails,
   isAdminEmail,
   failureMessage,
+  handoffFailureMessage,
   inviteStatusLabel,
   inviteSourceLabel,
 } from "../lib/provisioning";
@@ -56,6 +58,8 @@ ok("slugify caps at 40 chars", slugifyOrg("a".repeat(60)).length === 40);
   ok("validate ok trims org name", r.ok === true && r.value.orgName === "Zak Smith");
   ok("validate defaults source to operator", r.ok === true && r.value.source === "operator");
   ok("validate operator clears referral attribution", r.ok === true && r.value.referredByOrgId === null);
+  ok("validate defaults concierge off", r.ok === true && r.value.concierge === false);
+  ok("validate clears intended owner without concierge", r.ok === true && r.value.intendedOwnerEmail === null);
 }
 {
   const r = validateProvisionInput({ email: "bad", orgName: "X" });
@@ -94,6 +98,60 @@ ok("slugify caps at 40 chars", slugifyOrg("a".repeat(60)).length === 40);
   });
   ok("validate operator strips stray attribution", r.ok === true && r.value.referredByOrgId === null);
 }
+{
+  const r = validateProvisionInput({
+    email: " Proxy+Paul@Example.com ",
+    orgName: "Paul Schwartz",
+    concierge: true,
+    intendedOwnerEmail: " PeretzSchwartz@Gmail.com ",
+  });
+  ok("validate concierge keeps proxy login", r.ok === true && r.value.email === "proxy+paul@example.com");
+  ok("validate concierge normalizes intended owner", r.ok === true && r.value.intendedOwnerEmail === "peretzschwartz@gmail.com");
+}
+{
+  const r = validateProvisionInput({
+    email: "proxy@example.com",
+    orgName: "Paul Schwartz",
+    concierge: true,
+  });
+  ok("validate concierge requires intended owner", r.ok === false);
+}
+{
+  const r = validateProvisionInput({
+    email: "proxy@example.com",
+    orgName: "Paul Schwartz",
+    concierge: true,
+    intendedOwnerEmail: "bad",
+  });
+  ok("validate concierge rejects bad intended owner", r.ok === false);
+}
+{
+  const r = validateProvisionInput({
+    email: "paul@example.com",
+    orgName: "Paul Schwartz",
+    concierge: true,
+    intendedOwnerEmail: " Paul@Example.com ",
+  });
+  ok("validate concierge rejects same proxy and owner email", r.ok === false);
+}
+
+// --- validateHandoffInput --------------------------------------------------
+{
+  const r = validateHandoffInput({
+    inviteId: " invite-1 ",
+    confirmEmail: " PeretzSchwartz@Gmail.com ",
+  });
+  ok("handoff validate trims invite id", r.ok === true && r.value.inviteId === "invite-1");
+  ok("handoff validate normalizes confirm email", r.ok === true && r.value.confirmEmail === "peretzschwartz@gmail.com");
+}
+{
+  const r = validateHandoffInput({ inviteId: "", confirmEmail: "paul@example.com" });
+  ok("handoff validate rejects missing row", r.ok === false);
+}
+{
+  const r = validateHandoffInput({ inviteId: "invite-1", confirmEmail: "bad" });
+  ok("handoff validate rejects bad email", r.ok === false);
+}
 
 // --- parseAdminEmails / isAdminEmail ---------------------------------------
 {
@@ -111,10 +169,12 @@ ok("slugify caps at 40 chars", slugifyOrg("a".repeat(60)).length === 40);
 
 // --- labels / messages -----------------------------------------------------
 ok("status label provisioned", inviteStatusLabel("provisioned") === "Provisioned");
+ok("status label handed_off", inviteStatusLabel("handed_off") === "Handed off");
 ok("status label unknown -> dash", inviteStatusLabel("weird") === "—");
 ok("source label referral", inviteSourceLabel("referral") === "Referral");
 ok("source label default operator", inviteSourceLabel(null) === "Operator");
 ok("failureMessage already_has_account", failureMessage("already_has_account").length > 0);
+ok("handoffFailureMessage email_mismatch", handoffFailureMessage("email_mismatch").length > 0);
 
 // --- Report ----------------------------------------------------------------
 console.log(`\nprovisioning: ${passed} passed, ${failed} failed`);

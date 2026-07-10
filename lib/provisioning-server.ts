@@ -22,10 +22,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { seedClauseLibrary, seedTenantMessageTemplates } from "@/lib/org-seeds-server";
 import {
   validateProvisionInput,
+  validateHandoffInput,
   slugifyOrg,
   parseAdminEmails,
   type ProvisionInput,
   type ProvisionOutcome,
+  type HandoffInput,
+  type HandoffOutcome,
 } from "@/lib/provisioning";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
@@ -49,18 +52,26 @@ export async function provisionLandlordOrg(
 ): Promise<ProvisionOutcome> {
   const v = validateProvisionInput(input);
   if (!v.ok) return { ok: false, reason: "invalid_input", detail: v.error };
-  const { email, orgName, landlordName, source, referredByOrgId, referredByUserId } =
-    v.value;
+  const {
+    email,
+    orgName,
+    landlordName,
+    concierge,
+    intendedOwnerEmail,
+    source,
+    referredByOrgId,
+    referredByUserId,
+  } = v.value;
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, reason: "not_configured" };
 
-  // 2. Idempotency: a prior 'provisioned' invite for this email wins.
+  // 2. Idempotency: a prior live concierge invite for this email wins.
   {
     const { data: existing } = await admin
       .from("org_invites")
       .select("id")
-      .eq("status", "provisioned")
+      .in("status", ["provisioned", "handed_off"])
       .ilike("invited_email", email)
       .limit(1);
     if (existing && existing.length > 0) {
@@ -102,7 +113,22 @@ export async function provisionLandlordOrg(
   const orgId = (org as { id: string }).id;
 
   // 5. Default to the free funnel tier + seed starter content (best-effort).
-  await admin.from("organizations").update({ plan: "free" }).eq("id", orgId);
+  // Concierge orgs stay safely pointed at the proxy/operator login until the
+  // explicit owner-handoff action moves the auth email and public contacts.
+  await admin
+    .from("organizations")
+    .update({
+      plan: "free",
+      ...(concierge
+        ? {
+            concierge: true,
+            reply_to_email: email,
+            public_contact_email: email,
+            public_contact_phone: null,
+          }
+        : {}),
+    })
+    .eq("id", orgId);
   await seedClauseLibrary(admin, orgId);
   await seedTenantMessageTemplates(admin, orgId);
 
@@ -128,6 +154,7 @@ export async function provisionLandlordOrg(
   await admin.from("org_invites").insert({
     invited_email: email,
     invited_name: landlordName,
+    intended_owner_email: intendedOwnerEmail,
     status: "provisioned",
     source,
     referred_by_org_id: referredByOrgId,
@@ -138,18 +165,31 @@ export async function provisionLandlordOrg(
     provisioned_at: nowIso,
   });
 
-  return { ok: true, orgId, userId, email, orgName, inviteLink };
+  return {
+    ok: true,
+    orgId,
+    userId,
+    email,
+    orgName,
+    inviteLink,
+    concierge,
+    intendedOwnerEmail,
+  };
 }
 
 /** Recent invites for the operator console (service-role read; newest first). */
 export type InviteRow = {
   id: string;
   created_at: string;
-  invited_email: string;
+  invited_email: string | null;
   invited_name: string | null;
   status: string;
   source: string;
   provisioned_org_id: string | null;
+  provisioned_user_id: string | null;
+  intended_owner_email: string | null;
+  handed_off_at: string | null;
+  handed_off_to_email: string | null;
   referred_by_org_id: string | null;
   provisioned_at: string | null;
 };
@@ -160,9 +200,107 @@ export async function listRecentInvites(limit = 30): Promise<InviteRow[]> {
   const { data } = await admin
     .from("org_invites")
     .select(
-      "id, created_at, invited_email, invited_name, status, source, provisioned_org_id, referred_by_org_id, provisioned_at",
+      "id, created_at, invited_email, invited_name, status, source, provisioned_org_id, provisioned_user_id, intended_owner_email, handed_off_at, handed_off_to_email, referred_by_org_id, provisioned_at",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data as InviteRow[] | null) ?? [];
+}
+
+/**
+ * Move a concierge/proxy provisioned account to the intended landlord email.
+ * This preserves the one-org-per-user model: same auth user, same membership,
+ * same prepared org. The landlord receives a fresh recovery link to set their
+ * own password after the login email is moved.
+ */
+export async function handoffProvisionedOrg(
+  input: HandoffInput,
+): Promise<HandoffOutcome> {
+  const v = validateHandoffInput(input);
+  if (!v.ok) return { ok: false, reason: "invalid_input", detail: v.error };
+  const { inviteId, confirmEmail } = v.value;
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, reason: "not_configured" };
+
+  const { data: invite, error: inviteErr } = await admin
+    .from("org_invites")
+    .select(
+      "id, status, invited_email, intended_owner_email, provisioned_org_id, provisioned_user_id",
+    )
+    .eq("id", inviteId)
+    .maybeSingle();
+  if (inviteErr || !invite) return { ok: false, reason: "not_found" };
+
+  const row = invite as {
+    id: string;
+    status: string;
+    invited_email: string | null;
+    intended_owner_email: string | null;
+    provisioned_org_id: string | null;
+    provisioned_user_id: string | null;
+  };
+  if (row.status === "handed_off") return { ok: false, reason: "already_handed_off" };
+  if (row.status !== "provisioned" || !row.provisioned_org_id || !row.provisioned_user_id) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  const intended = (row.intended_owner_email ?? "").trim().toLowerCase();
+  if (!intended) return { ok: false, reason: "missing_intended_owner" };
+  if (intended !== confirmEmail) return { ok: false, reason: "email_mismatch" };
+
+  const { error: updateErr } = await admin.auth.admin.updateUserById(
+    row.provisioned_user_id,
+    { email: intended, email_confirm: true },
+  );
+  if (updateErr) {
+    const msg = updateErr.message ?? "";
+    if (/already|registered|exists|duplicate/i.test(msg)) {
+      return { ok: false, reason: "already_has_account", detail: msg };
+    }
+    return { ok: false, reason: "update_failed", detail: msg };
+  }
+
+  let inviteLink: string | null = null;
+  try {
+    const { data: link } = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email: intended,
+      options: { redirectTo: `${APP_URL}/auth/callback?next=/reset-password` },
+    });
+    inviteLink =
+      (link as { properties?: { action_link?: string } } | null)?.properties
+        ?.action_link ?? null;
+  } catch {
+    inviteLink = null;
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: orgUpdateErr } = await admin
+    .from("organizations")
+    .update({
+      concierge: false,
+      concierge_contact_confirmed_at: nowIso,
+      reply_to_email: intended,
+      public_contact_email: intended,
+    })
+    .eq("id", row.provisioned_org_id);
+  if (orgUpdateErr) {
+    return { ok: false, reason: "update_failed", detail: orgUpdateErr.message };
+  }
+
+  const { error: inviteUpdateErr } = await admin
+    .from("org_invites")
+    .update({
+      status: "handed_off",
+      handed_off_at: nowIso,
+      handed_off_to_email: intended,
+      accepted_at: nowIso,
+    })
+    .eq("id", row.id);
+  if (inviteUpdateErr) {
+    return { ok: false, reason: "update_failed", detail: inviteUpdateErr.message };
+  }
+
+  return { ok: true, email: intended, inviteLink };
 }

@@ -17,6 +17,7 @@ export type InviteSource = "operator" | "referral";
 export type InviteStatus =
   | "pending"
   | "provisioned"
+  | "handed_off"
   | "accepted"
   | "revoked"
   | "failed";
@@ -25,6 +26,7 @@ export const INVITE_SOURCES: InviteSource[] = ["operator", "referral"];
 export const INVITE_STATUSES: InviteStatus[] = [
   "pending",
   "provisioned",
+  "handed_off",
   "accepted",
   "revoked",
   "failed",
@@ -79,6 +81,8 @@ export type ProvisionInput = {
   email: string;
   orgName: string;
   landlordName?: string | null;
+  concierge?: boolean;
+  intendedOwnerEmail?: string | null;
   source?: InviteSource;
   referredByOrgId?: string | null;
   referredByUserId?: string | null;
@@ -88,6 +92,8 @@ export type CleanProvisionInput = {
   email: string;
   orgName: string;
   landlordName: string | null;
+  concierge: boolean;
+  intendedOwnerEmail: string | null;
   source: InviteSource;
   referredByOrgId: string | null;
   referredByUserId: string | null;
@@ -121,12 +127,31 @@ export function validateProvisionInput(input: ProvisionInput): ValidationResult 
     return { ok: false, error: "A referral must be attributed to an organization." };
   }
 
+  const concierge = input.concierge === true;
+  const intendedOwnerEmail = concierge
+    ? normalizeEmail(input.intendedOwnerEmail)
+    : null;
+  if (concierge && !isValidEmail(intendedOwnerEmail)) {
+    return {
+      ok: false,
+      error: "Concierge setup needs the landlord's real email for handoff.",
+    };
+  }
+  if (concierge && intendedOwnerEmail === email) {
+    return {
+      ok: false,
+      error: "Use a proxy login email that is different from the landlord's real email.",
+    };
+  }
+
   return {
     ok: true,
     value: {
       email,
       orgName,
       landlordName: cleanName(input.landlordName),
+      concierge,
+      intendedOwnerEmail,
       source,
       referredByOrgId: source === "referral" ? input.referredByOrgId ?? null : null,
       referredByUserId: source === "referral" ? input.referredByUserId ?? null : null,
@@ -181,8 +206,53 @@ export type ProvisionOutcome =
       orgName: string;
       /** The set-password link to hand the landlord (may be null if link-gen failed). */
       inviteLink: string | null;
+      concierge: boolean;
+      intendedOwnerEmail: string | null;
     }
   | { ok: false; reason: ProvisionFailureReason; detail?: string };
+
+export type HandoffFailureReason =
+  | "invalid_input"
+  | "not_configured"
+  | "not_found"
+  | "missing_intended_owner"
+  | "email_mismatch"
+  | "already_handed_off"
+  | "already_has_account"
+  | "update_failed"
+  | "unknown";
+
+export type HandoffInput = {
+  inviteId: string;
+  confirmEmail: string;
+};
+
+export type CleanHandoffInput = {
+  inviteId: string;
+  confirmEmail: string;
+};
+
+export type HandoffValidationResult =
+  | { ok: true; value: CleanHandoffInput }
+  | { ok: false; error: string };
+
+export function validateHandoffInput(input: HandoffInput): HandoffValidationResult {
+  const inviteId = (input.inviteId ?? "").trim();
+  const confirmEmail = normalizeEmail(input.confirmEmail);
+  if (!inviteId) return { ok: false, error: "Provisioning row is missing." };
+  if (!isValidEmail(confirmEmail)) {
+    return { ok: false, error: "Type the landlord email to confirm handoff." };
+  }
+  return { ok: true, value: { inviteId, confirmEmail } };
+}
+
+export type HandoffOutcome =
+  | {
+      ok: true;
+      email: string;
+      inviteLink: string | null;
+    }
+  | { ok: false; reason: HandoffFailureReason; detail?: string };
 
 /** A friendly one-line explanation of a failure reason for the console. */
 export function failureMessage(reason: ProvisionFailureReason): string {
@@ -204,6 +274,29 @@ export function failureMessage(reason: ProvisionFailureReason): string {
   }
 }
 
+export function handoffFailureMessage(reason: HandoffFailureReason): string {
+  switch (reason) {
+    case "invalid_input":
+      return "Check the handoff email.";
+    case "not_configured":
+      return "Provisioning isn't configured on the server.";
+    case "not_found":
+      return "That provisioned account could not be found.";
+    case "missing_intended_owner":
+      return "This row has no intended landlord email saved.";
+    case "email_mismatch":
+      return "The confirmation email does not match the intended landlord email.";
+    case "already_handed_off":
+      return "This account was already handed off.";
+    case "already_has_account":
+      return "An account with the landlord email already exists.";
+    case "update_failed":
+      return "Couldn't move the login email to the landlord.";
+    default:
+      return "Something went wrong.";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Invite-row view shaping (operator console list)
 // ---------------------------------------------------------------------------
@@ -211,6 +304,7 @@ export function failureMessage(reason: ProvisionFailureReason): string {
 const STATUS_LABELS: Record<InviteStatus, string> = {
   pending: "Pending",
   provisioned: "Provisioned",
+  handed_off: "Handed off",
   accepted: "Accepted",
   revoked: "Revoked",
   failed: "Failed",

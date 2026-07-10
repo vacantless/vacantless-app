@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isAdminEmail, inviteStatusLabel, inviteSourceLabel } from "@/lib/provisioning";
 import { listRecentInvites, adminEmails } from "@/lib/provisioning-server";
 import { OnboardLandlordForm } from "./onboard-form";
+import { HandoffLandlordForm } from "./handoff-form";
 
 export const dynamic = "force-dynamic";
 // Service-role reads of org_invites must always see live rows.
@@ -24,12 +25,13 @@ export default async function AdminConsolePage() {
   const invites = await listRecentInvites(30);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 py-6">
+    <div className="mx-auto max-w-6xl space-y-8 py-6">
       <header className="space-y-1">
         <h1 className="text-xl font-semibold text-slate-900">Onboard a landlord</h1>
         <p className="text-sm text-slate-500">
-          Stand up a new landlord with their own account and organization, then
-          hand them the set-password link. Operator-only.
+          Stand up a proxy-safe landlord account, prepare it, then move the
+          login and renter-facing contact to the real landlord at handoff.
+          Operator-only.
         </p>
       </header>
 
@@ -44,25 +46,52 @@ export default async function AdminConsolePage() {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Email</th>
+                  <th className="px-3 py-2 font-medium">Login</th>
+                  <th className="px-3 py-2 font-medium">Handoff</th>
                   <th className="px-3 py-2 font-medium">Name</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                   <th className="px-3 py-2 font-medium">Source</th>
+                  <th className="px-3 py-2 font-medium">Action</th>
                   <th className="px-3 py-2 font-medium">When</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {invites.map((inv) => (
-                  <tr key={inv.id}>
-                    <td className="px-3 py-2 text-slate-800">{inv.invited_email}</td>
-                    <td className="px-3 py-2 text-slate-600">{inv.invited_name ?? "—"}</td>
-                    <td className="px-3 py-2 text-slate-600">{inviteStatusLabel(inv.status)}</td>
-                    <td className="px-3 py-2 text-slate-600">{inviteSourceLabel(inv.source)}</td>
-                    <td className="px-3 py-2 text-slate-500">
-                      {new Date(inv.created_at).toLocaleDateString("en-CA")}
-                    </td>
-                  </tr>
-                ))}
+                {invites.map((inv) => {
+                  const canHandOff =
+                    inv.status === "provisioned" &&
+                    !!inv.provisioned_org_id &&
+                    !!inv.provisioned_user_id &&
+                    !!inv.intended_owner_email;
+                  return (
+                    <tr key={inv.id} className="align-top">
+                      <td className="px-3 py-2 text-slate-800">{inv.invited_email ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">
+                        {inv.handed_off_to_email ?? inv.intended_owner_email ?? "—"}
+                        {inv.handed_off_at && (
+                          <span className="block text-xs text-green-700">
+                            handed off {new Date(inv.handed_off_at).toLocaleDateString("en-CA")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{inv.invited_name ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{inviteStatusLabel(inv.status)}</td>
+                      <td className="px-3 py-2 text-slate-600">{inviteSourceLabel(inv.source)}</td>
+                      <td className="min-w-48 px-3 py-2 text-slate-600">
+                        <HandoffLandlordForm
+                          inviteId={inv.id}
+                          intendedOwnerEmail={inv.intended_owner_email}
+                          disabled={!canHandOff}
+                        />
+                        {!canHandOff && inv.status === "provisioned" && (
+                          <span className="text-xs text-slate-400">No handoff target</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-slate-500">
+                        {new Date(inv.created_at).toLocaleDateString("en-CA")}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
