@@ -178,33 +178,77 @@ export type OutcomeNudgeDueInput = {
   maxAgeMs?: number;
 };
 
+// Bounded escalation (S445 slice 2). Cumulative offsets from scheduled_at at which
+// the 1st / 2nd / 3rd nudge become due: ~fresh (the GRACE), ~next morning, ~two
+// days later. The Nth nudge (0-indexed by count) is due once elapsed crosses
+// OFFSETS[count]. The cron runs a few-hourly sweep, so successive steps naturally
+// land on separate sweeps (no burst) and each is spaced by the offset gap. All
+// steps sit inside MAX_AGE (7d), so the backlog bound still caps the whole series.
+export const OUTCOME_NUDGE_OFFSETS_MS = [
+  OUTCOME_NUDGE_GRACE_MS, // ~2h — right after it's over
+  20 * HOUR_MS, // ~next morning
+  44 * HOUR_MS, // ~two days later (final)
+];
+// The per-showing count of nudges already sent (drives the step gate).
+export const OUTCOME_NUDGE_COUNT_COLUMN = "outcome_nudge_count";
+
+export type OutcomeNudgeStepInput = {
+  scheduledAtMs: number;
+  nowMs: number;
+  outcome: string | null; // null / "scheduled" means "not recorded"
+  nudgeCount: number; // showings.outcome_nudge_count — how many already sent
+  maxNudges: number; // organizations.outcome_nudge_max — 1 (once) or 3 (follow-up)
+  offsets?: readonly number[];
+  maxAgeMs?: number;
+};
+
 /**
- * Should this showing get its (single) outcome nudge right now?
+ * Should this showing get its NEXT outcome nudge right now? The bounded-escalation
+ * generalization of the old one-shot rule:
  *
- *   - alreadySent                         → false (one nudge per showing)
  *   - a real outcome recorded             → false (attended/no_show/cancelled)
- *   - elapsed < GRACE                     → false (not over yet)
+ *   - nudgeCount >= maxNudges             → false (hit the org's cadence cap)
+ *   - nudgeCount >= offsets.length        → false (no further step defined)
  *   - elapsed > MAX_AGE                    → false (too old; backlog bound)
+ *   - elapsed < offsets[nudgeCount]        → false (the next step's time hasn't come)
  *   - otherwise                           → true
  *
- * elapsed = now - scheduled_at. Boundaries are inclusive: due exactly at GRACE
- * and still due exactly at MAX_AGE.
+ * Recording the outcome (the one-tap answer) makes every future call false, so the
+ * series stops the instant it's answered — the "nudge until filled, then quit".
  */
-export function outcomeNudgeDue(input: OutcomeNudgeDueInput): boolean {
+export function outcomeNudgeStepDue(input: OutcomeNudgeStepInput): boolean {
   const {
     scheduledAtMs,
     nowMs,
     outcome,
-    alreadySent,
-    graceMs = OUTCOME_NUDGE_GRACE_MS,
+    nudgeCount,
+    maxNudges,
+    offsets = OUTCOME_NUDGE_OFFSETS_MS,
     maxAgeMs = OUTCOME_NUDGE_MAX_AGE_MS,
   } = input;
-  if (alreadySent) return false;
-  if (outcome !== null && outcome !== "scheduled") return false; // outcome already recorded
+  if (outcome !== null && outcome !== "scheduled") return false; // already recorded
+  if (nudgeCount >= maxNudges) return false; // hit the cadence cap
+  if (nudgeCount >= offsets.length) return false; // no further step
   const elapsed = nowMs - scheduledAtMs;
-  if (elapsed < graceMs) return false; // not over yet
   if (elapsed > maxAgeMs) return false; // too old
+  if (elapsed < offsets[nudgeCount]) return false; // next step not reached yet
   return true;
+}
+
+/**
+ * Back-compat one-shot form (the pre-escalation contract). Expressed in terms of
+ * the stepped primitive: a single nudge whose only step is the GRACE offset.
+ */
+export function outcomeNudgeDue(input: OutcomeNudgeDueInput): boolean {
+  return outcomeNudgeStepDue({
+    scheduledAtMs: input.scheduledAtMs,
+    nowMs: input.nowMs,
+    outcome: input.outcome,
+    nudgeCount: input.alreadySent ? 1 : 0,
+    maxNudges: 1,
+    offsets: [input.graceMs ?? OUTCOME_NUDGE_GRACE_MS],
+    maxAgeMs: input.maxAgeMs ?? OUTCOME_NUDGE_MAX_AGE_MS,
+  });
 }
 
 export const OUTCOME_NUDGE_SENT_COLUMN = "outcome_nudge_sent_at";

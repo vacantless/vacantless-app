@@ -12,28 +12,36 @@ import {
 import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import {
-  outcomeNudgeDue,
+  outcomeNudgeStepDue,
   OUTCOME_NUDGE_GRACE_MS,
   OUTCOME_NUDGE_MAX_AGE_MS,
   OUTCOME_NUDGE_SENT_COLUMN,
+  OUTCOME_NUDGE_COUNT_COLUMN,
 } from "@/lib/reminders";
 
-// Post-showing outcome-nudge sweep (S392, Slice 3) — the trigger that lights up
-// the one-tap surface built in Slice 2. Once a showing's time passes with no
-// outcome recorded, the OPERATOR gets ONE "how did the viewing go?" email with a
-// /showing/[token] link that records Attended / No-show / Cancelled in a tap.
-// This makes recording an outcome a PUSH (mirroring Aaliyah's tap-a-link habit)
-// instead of a PULL nobody does — the conversion audit found 94 booked showings
-// with 1 recorded outcome.
+// Post-showing outcome-nudge sweep (S392, escalation added S445 slice 2) — the
+// trigger that lights up the one-tap outcome surface. Once a showing's time passes
+// with no outcome recorded, a "how did the viewing go?" email goes out with a
+// one-tap record link. This makes recording an outcome a PUSH (mirroring Aaliyah's
+// tap-a-link habit) instead of a PULL nobody does — the conversion audit found 94
+// booked showings with 1 recorded outcome.
 //
-// EMAIL only, via the notification substrate (operator audience, per-org editable
-// template + branding + recipients). ONE nudge per showing: the per-row decision
-// (outcomeNudgeDue) gates on a 2h grace + a 7d backlog bound + outcome still
-// blank, and outcome_nudge_sent_at is stamped after send so a re-run never
-// double-sends.
+// TARGET: the ASSIGNED AGENT (who was on-site + can one-tap it on their /agent
+// page) when the viewing is assigned and the agent has an email; otherwise the
+// OPERATOR with the /showing/[token] outcome page. EMAIL only, via the notification
+// substrate (per-org editable template + branding + recipients).
+//
+// BOUNDED ESCALATION: not one ignorable email — up to organizations.outcome_nudge_max
+// nudges (1 = "just once", 3 = "follow up until answered"), spaced by
+// OUTCOME_NUDGE_OFFSETS_MS (fresh / next-morning / final) and capped by the 7d
+// backlog bound. The per-row outcomeNudgeStepDue gates the NEXT step on the send
+// count; recording the outcome makes every future call false, so the series STOPS
+// the instant it's answered. outcome_nudge_count is bumped + outcome_nudge_sent_at
+// stamped after each send.
 //
 // SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns the "Post-showing outcome reminder" event on in Settings -> Notifications.
+// turns the "Post-showing outcome reminder" event on in Settings -> Notifications
+// (that toggle is the "off"; the cadence cap is the "once vs follow-up").
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
 //   ?org=<id>   limit the sweep to one org
@@ -91,8 +99,18 @@ type ShowingRow = {
   scheduled_at: string | null;
   outcome: string | null;
   outcome_token: string;
+  outcome_nudge_count: number | null;
+  assigned_agent_id: string | null;
   lead: { name: string | null } | null;
   property: { address: string | null } | null;
+};
+
+type AgentRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  agent_token: string;
+  archived: boolean;
 };
 
 export async function GET(req: NextRequest) {
@@ -123,7 +141,9 @@ export async function GET(req: NextRequest) {
 
   let orgQuery = admin
     .from("organizations")
-    .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone");
+    .select(
+      "id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone, outcome_nudge_max",
+    );
   if (onlyOrg) orgQuery = orgQuery.eq("id", onlyOrg);
   const { data: orgs, error: orgErr } = await orgQuery;
 
@@ -160,20 +180,41 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Showings whose time is in the band, with no real outcome and (unless
-      // forced) no nudge sent yet. The per-row outcomeNudgeDue re-checks precisely.
-      let q = admin
+      const maxNudges: number =
+        typeof org.outcome_nudge_max === "number" ? org.outcome_nudge_max : 3;
+
+      // Showings whose time is in the band with no real outcome yet. The per-row
+      // outcomeNudgeStepDue re-checks precisely against the send count + the org's
+      // cadence cap, so we no longer pre-filter on a single sent stamp (bounded
+      // escalation can send more than once).
+      const { data: showRows } = await admin
         .from("showings")
         .select(
-          "id, scheduled_at, outcome, outcome_token, " +
+          "id, scheduled_at, outcome, outcome_token, outcome_nudge_count, assigned_agent_id, " +
             "lead:leads(name), property:properties(address)",
         )
         .eq("organization_id", org.id)
         .gte("scheduled_at", oldestIso)
         .lte("scheduled_at", newestIso)
         .or("outcome.is.null,outcome.eq.scheduled");
-      if (!force) q = q.is("outcome_nudge_sent_at", null);
-      const { data: showRows } = await q;
+
+      // The org's showing-agent roster (id -> contact), so a nudge for an ASSIGNED
+      // viewing can go to the agent who was on-site (the person who actually knows
+      // the outcome + can one-tap it on their /agent page), falling back to the
+      // operator only when the viewing is unassigned or the agent has no email.
+      // Fetched once per org, lazily.
+      let agentsById: Map<string, AgentRow> | null = null;
+      const ensureAgents = async (): Promise<Map<string, AgentRow>> => {
+        if (agentsById) return agentsById;
+        const { data: agentRows } = await admin
+          .from("showing_agents")
+          .select("id, name, email, agent_token, archived")
+          .eq("organization_id", org.id);
+        agentsById = new Map(
+          ((agentRows ?? []) as AgentRow[]).map((a) => [a.id, a]),
+        );
+        return agentsById;
+      };
 
       // Resolve the operator recipients once per org, only if something is due.
       let operatorFallback: string[] | null = null;
@@ -203,11 +244,15 @@ export async function GET(req: NextRequest) {
             summary.skipped++;
             continue;
           }
-          const due = outcomeNudgeDue({
+          // `force` re-evaluates from zero (test affordance); otherwise the real
+          // per-showing send count is gated against the org's cadence cap.
+          const nudgeCount = force ? 0 : row.outcome_nudge_count ?? 0;
+          const due = outcomeNudgeStepDue({
             scheduledAtMs: new Date(scheduledAt).getTime(),
             nowMs,
             outcome: row.outcome,
-            alreadySent: false, // SQL already excluded sent rows (or force re-sends)
+            nudgeCount,
+            maxNudges,
           });
           if (!due) {
             summary.skipped++;
@@ -218,21 +263,39 @@ export async function GET(req: NextRequest) {
           const prop = one<{ address: string | null }>(row.property);
           const leadName = lead?.name?.trim() || "a renter";
           const address = prop?.address?.trim() || "the property";
+
+          // Route to the ON-SITE agent when the viewing is assigned + the agent has
+          // an email (they know the outcome and can one-tap it on their /agent page);
+          // otherwise fall back to the operator + the /showing outcome page.
+          let audienceEmail: string | null = null;
+          let outcomeUrl = `${APP_URL}/showing/${row.outcome_token}`;
+          if (row.assigned_agent_id) {
+            const agents = await ensureAgents();
+            const agent = agents.get(row.assigned_agent_id);
+            if (agent && !agent.archived && agent.email) {
+              audienceEmail = agent.email;
+              outcomeUrl = `${APP_URL}/agent/${agent.agent_token}`;
+            }
+          }
+          const toAgent = audienceEmail !== null;
+
           const vars: Record<string, string> = {
             org_name: org.name ?? "",
             property_address: address,
             lead_name: leadName,
             showing_time: fmtShowingTime(scheduledAt, tz),
-            outcome_url: `${APP_URL}/showing/${row.outcome_token}`,
+            outcome_url: outcomeUrl,
           };
 
-          const fallback = await ensureFallback();
+          // Operator fallback is only relevant when we're NOT routing to the agent.
+          const fallback = toAgent ? [] : await ensureFallback();
 
           if (dry) {
             const rendered = renderNotification(event, setting, vars);
             const recipients = resolveNotificationRecipients({
               audience: event.audience,
               configured: setting?.recipients ?? [],
+              audienceEmail,
               operatorFallback: fallback,
             });
             summary.sent++; // "would send"
@@ -241,6 +304,8 @@ export async function GET(req: NextRequest) {
               showing: row.id,
               dry: true,
               enabled: isEventEnabled(setting),
+              to: toAgent ? "agent" : "operator",
+              nudge_step: nudgeCount + 1,
               recipients,
               subject: rendered.subject,
               outcome_url: vars.outcome_url,
@@ -258,6 +323,7 @@ export async function GET(req: NextRequest) {
               reply_to_email: org.reply_to_email,
             },
             eventKey: EVENT_KEY,
+            audienceEmail,
             vars,
             operatorFallback: fallback,
             action: { label: "Record the outcome", url: vars.outcome_url },
@@ -282,13 +348,25 @@ export async function GET(req: NextRequest) {
             continue;
           }
 
+          // Bounded escalation: bump the send count (off the REAL prior count, not
+          // the force-zeroed one) and record the last-sent time. The next sweep's
+          // outcomeNudgeStepDue gates the following step on this count + the cap.
           await admin
             .from("showings")
-            .update({ [OUTCOME_NUDGE_SENT_COLUMN]: new Date().toISOString() })
+            .update({
+              [OUTCOME_NUDGE_COUNT_COLUMN]: (row.outcome_nudge_count ?? 0) + 1,
+              [OUTCOME_NUDGE_SENT_COLUMN]: new Date().toISOString(),
+            })
             .eq("id", row.id);
 
           summary.sent++;
-          summary.details.push({ org: org.id, showing: row.id, sent: true });
+          summary.details.push({
+            org: org.id,
+            showing: row.id,
+            sent: true,
+            to: toAgent ? "agent" : "operator",
+            nudge_step: (row.outcome_nudge_count ?? 0) + 1,
+          });
         } catch (e: any) {
           summary.errors++;
           summary.details.push({ org: org.id, showing: row?.id, error: `row_threw:${String(e?.message ?? e)}` });

@@ -356,6 +356,30 @@ export default async function NotificationsSettingsPage({
                           })()}
                       </div>
 
+                      {event.key === "leasing.showing_outcome_nudge" && (
+                        <div>
+                          <label
+                            htmlFor={`${fieldIdPrefix}-cadence`}
+                            className="block text-sm font-medium text-gray-700"
+                          >
+                            How often to remind
+                          </label>
+                          <select
+                            id={`${fieldIdPrefix}-cadence`}
+                            name="outcome_nudge_max"
+                            defaultValue={String(org.outcome_nudge_max ?? 3)}
+                            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:ring-brand"
+                          >
+                            <option value="1">Just once</option>
+                            <option value="3">Follow up until answered</option>
+                          </select>
+                          <p className="mt-1.5 text-xs text-gray-500">
+                            Reminders stop the moment the outcome is recorded. To
+                            turn them off entirely, use the On switch above.
+                          </p>
+                        </div>
+                      )}
+
                       <AccentColorField
                         name="accent_color"
                         saved={row?.accent_color ?? ""}

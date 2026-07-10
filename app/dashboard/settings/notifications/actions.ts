@@ -64,6 +64,23 @@ export async function saveNotificationSetting(formData: FormData) {
 
   if (error) redirect(`${BASE}?error=save&ev=${encodeURIComponent(eventKey)}`);
 
+  // The post-showing outcome nudge carries an extra per-org cadence cap (S445):
+  // 1 = just once, 3 = follow up until answered. Persisted on the organization, not
+  // the per-event row, since the cron reads it there. Guard the value; a bad/absent
+  // input leaves the current setting untouched.
+  if (eventKey === "leasing.showing_outcome_nudge") {
+    const cadence = Number(s(formData, "outcome_nudge_max"));
+    if (cadence === 1 || cadence === 3) {
+      const { error: cadenceErr } = await supabase
+        .from("organizations")
+        .update({ outcome_nudge_max: cadence })
+        .eq("id", org.id);
+      if (cadenceErr) {
+        redirect(`${BASE}?error=save&ev=${encodeURIComponent(eventKey)}`);
+      }
+    }
+  }
+
   revalidatePath(BASE);
   redirect(`${BASE}?saved=${encodeURIComponent(eventKey)}`);
 }
