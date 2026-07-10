@@ -393,7 +393,7 @@ export async function updateProperty(formData: FormData) {
   // scopes this to the caller's org.
   const { data: prior } = await supabase
     .from("properties")
-    .select("rent_cents, price_drop_pending_cents")
+    .select("rent_cents, price_drop_pending_cents, status")
     .eq("id", id)
     .maybeSingle();
   const oldRent = (prior as { rent_cents: number | null } | null)?.rent_cents ?? null;
@@ -401,6 +401,32 @@ export async function updateProperty(formData: FormData) {
     (prior as { price_drop_pending_cents: number | null } | null)
       ?.price_drop_pending_cents ?? null;
   const nextPending = pendingDropFrom(oldRent, newRent, existingPending);
+
+  // Relist guard (S447 Codex P2): the Status dropdown is the power-user escape
+  // hatch, but flipping a LEASED unit back to 'available' while it still has an
+  // active/upcoming tenancy silently puts an occupied unit back on the market.
+  // On a routine edit-form save we DON'T apply that transition (every other
+  // field still saves); the property page surfaces a "Relist anyway" confirm
+  // (relistLeasedProperty). An explicit confirm_relist=1 also passes it through.
+  const priorStatus =
+    (prior as { status: string | null } | null)?.status ?? null;
+  let effectiveStatus = status;
+  let relistBlocked = false;
+  if (
+    priorStatus === "leased" &&
+    status === "available" &&
+    String(formData.get("confirm_relist") ?? "") !== "1"
+  ) {
+    const { count: activeTenancies } = await supabase
+      .from("tenancies")
+      .select("id", { count: "exact", head: true })
+      .eq("property_id", id)
+      .in("status", ["active", "upcoming"]);
+    if ((activeTenancies ?? 0) > 0) {
+      effectiveStatus = "leased";
+      relistBlocked = true;
+    }
+  }
 
   // Structured pet policy (0045), now inheritable (0050): cats/dogs are tri-state
   // (true / false / null = inherit the building/org standard policy). The stored
@@ -443,7 +469,7 @@ export async function updateProperty(formData: FormData) {
       // (/agent/[token], Slice 3). Free-text: lockbox location, buzzer, parking,
       // "text before arriving", etc. Blank clears it.
       showing_instructions: String(formData.get("showing_instructions") ?? "").trim() || null,
-      status,
+      status: effectiveStatus,
       price_drop_pending_cents: nextPending,
       // Unit-level fields
       available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),
@@ -475,7 +501,9 @@ export async function updateProperty(formData: FormData) {
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
   redirect(
-    `/dashboard/properties/${id}?saved=1${tourRejected ? "&tourerr=host" : ""}`,
+    `/dashboard/properties/${id}?${relistBlocked ? "relist=confirm" : "saved=1"}${
+      tourRejected ? "&tourerr=host" : ""
+    }`,
   );
 }
 
@@ -558,6 +586,31 @@ export async function publishProperty(formData: FormData) {
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
   redirect(`/dashboard/properties/${id}?published=1`);
+}
+
+/**
+ * Relist a LEASED unit as Live, with an explicit confirmation (S447 Codex P2).
+ * updateProperty refuses to flip leased -> available on a routine save while an
+ * active/upcoming tenancy exists (that would silently put an occupied unit back
+ * on the market); the property page then shows a "Relist anyway" button that
+ * posts here. Guarded to a currently-leased row so a stale double-click is a
+ * no-op.
+ */
+export async function relistLeasedProperty(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const supabase = createClient();
+  await supabase
+    .from("properties")
+    .update({ status: "available" })
+    .eq("id", id)
+    .eq("status", "leased");
+
+  revalidatePath(`/dashboard/properties/${id}`);
+  revalidatePath("/dashboard/properties");
+  redirect(`/dashboard/properties/${id}?relisted=1`);
 }
 
 /**

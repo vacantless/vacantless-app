@@ -305,7 +305,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     ],
     defaultSubject: "Viewing assigned to you - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\n\nOpen your viewings page for the renter's contact, access instructions, and a one-tap Confirm: {{agent_url}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
+      "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\nLead agent (keep CC'd): {{assigned_by}}\n\nOpen your viewings page for the renter's contact, access instructions, and a one-tap Confirm: {{agent_url}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
     active: true,
   },
   // Assigned viewing RESCHEDULED (S442, operator reschedule). Audience operator;
@@ -336,7 +336,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     ],
     defaultSubject: "Viewing time changed - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "Hi {{agent_name}}, {{rescheduled_by}} moved a viewing you're covering to a new time.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nNew time: {{showing_time}}\nPrevious time: {{old_showing_time}}\n\nThis viewing now needs to be re-confirmed with the renter. Open your viewings page for the renter's contact and a one-tap Confirm: {{agent_url}}\n\nPlease keep the lead agent CC'd on your correspondence so they stay in the loop.",
+      "Hi {{agent_name}}, {{rescheduled_by}} moved a viewing you're covering to a new time.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nNew time: {{showing_time}}\nPrevious time: {{old_showing_time}}\nLead agent (keep CC'd): {{rescheduled_by}}\n\nThis viewing now needs to be re-confirmed with the renter. Open your viewings page for the renter's contact and a one-tap Confirm: {{agent_url}}\n\nPlease keep the lead agent CC'd on your correspondence so they stay in the loop.",
     defaultAccent: "#d97706",
     active: true,
   },

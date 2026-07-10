@@ -105,6 +105,15 @@ export default async function LeadDetailPage({
     .order("scheduled_at", { ascending: false });
   const showings = (showingData ?? []) as Showing[];
 
+  // Cancelled-booking cue (S447 Codex P3): a lead can sit at "Booked" after its
+  // only viewing was cancelled - the cancel path deliberately leaves the stage to
+  // the operator, so surface it clearly rather than let "Booked" read as an active
+  // booking. Active viewing == still 'scheduled' (not cancelled/attended/no_show).
+  const hasScheduledShowing = showings.some((s) => s.outcome === "scheduled");
+  const hasCancelledShowing = showings.some((s) => s.outcome === "cancelled");
+  const bookedWithNoActiveViewing =
+    l.status === "booked" && !hasScheduledShowing && hasCancelledShowing;
+
   // A leased lead can be converted into a tenancy (the property-management
   // record). If one already exists for this lead, link to it instead of
   // offering to create a duplicate.
@@ -194,6 +203,14 @@ export default async function LeadDetailPage({
           </div>
         }
       />
+
+      {bookedWithNoActiveViewing && (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <strong>The booked viewing was cancelled.</strong> This lead is still
+          marked <span className="font-semibold">Booked</span> but has no active
+          viewing - rebook a time or move the stage so the pipeline stays accurate.
+        </p>
+      )}
 
       {/* Quick stage moves — one click to the likely next stages. */}
       {quickStages.length > 0 && (

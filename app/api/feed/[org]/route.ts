@@ -61,9 +61,11 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
-      // Aggregators poll periodically; a short CDN cache absorbs bursts without
-      // making the feed stale for long.
-      "Cache-Control": "public, max-age=300, s-maxage=300",
+      // Aggregators poll periodically; a short CDN cache absorbs bursts. Held to
+      // 60s (was 300, S447 Codex P2) so a delist / re-lease clears from the feed
+      // within ~a minute instead of up to five; stale-while-revalidate lets the
+      // CDN serve the last copy while it refetches so bursts still miss origin.
+      "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=60",
     },
   });
 }

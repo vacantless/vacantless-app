@@ -28,6 +28,7 @@ import { BeforeYouPost } from "@/components/before-you-post";
 import {
   updateProperty,
   publishProperty,
+  relistLeasedProperty,
   duplicateProperty,
   blastPriceDrop,
   uploadPropertyPhotos,
@@ -259,6 +260,9 @@ export default async function PropertyDetailPage({
     duplicated?: string;
     imported?: string;
     tourerr?: string;
+    // Relist-over-active-tenancy confirmation (S447 Codex P2).
+    relist?: string;
+    relisted?: string;
     // Appliance plate/receipt scan (S364): outcome + extracted prefill fields.
     scan?: string;
     sc_type?: string;
@@ -754,21 +758,27 @@ export default async function PropertyDetailPage({
   // Slice A2: the same aggregator-feed status the rentals list shows, surfaced
   // in the kit so the landlord sees this rental is already syndicating (or why
   // not). Reuses feedSignal — one source of truth. Only when entitled.
-  const marketingFeedSignal = marketingEnabled
-    ? feedSignal({
-        status: p.status,
-        rentCents: p.rent_cents,
-        beds: p.beds,
-        baths: typeof p.baths === "number" ? p.baths : null,
-        address: p.address,
-        description: p.description,
-        photoCount: photoRows.length,
-        availabilityWindowCount: 0,
-      })
-    : null;
+  const feedSignalResult = feedSignal({
+    status: p.status,
+    rentCents: p.rent_cents,
+    beds: p.beds,
+    baths: typeof p.baths === "number" ? p.baths : null,
+    address: p.address,
+    description: p.description,
+    photoCount: photoRows.length,
+    availabilityWindowCount: 0,
+  });
+  const marketingFeedSignal = marketingEnabled ? feedSignalResult : null;
   const marketingFeedStatus = marketingFeedSignal
     ? { inFeed: marketingFeedSignal.ok, hint: marketingFeedSignal.hint }
     : null;
+  // Feed status for the Distribute channel cards is shown regardless of the
+  // marketing-kit entitlement, so a free-plan operator still learns WHY a Live
+  // listing is (or isn't) in the aggregator feed (S447 Codex P3).
+  const distributeFeedStatus = {
+    inFeed: feedSignalResult.ok,
+    hint: feedSignalResult.hint,
+  };
 
   // Field-by-field "fill sheet" per portal (S262, syndication step 2). Same
   // listing input as the channel copy (title + body are reused from it), plus
@@ -885,10 +895,9 @@ export default async function PropertyDetailPage({
         channel,
         status,
         copy: copyTab ? { title: copyTab.title, body: copyTab.body } : null,
-        feed:
-          channel.feedEligible && marketingFeedStatus
-            ? { inFeed: marketingFeedStatus.inFeed, hint: marketingFeedStatus.hint }
-            : null,
+        feed: channel.feedEligible
+          ? { inFeed: distributeFeedStatus.inFeed, hint: distributeFeedStatus.hint }
+          : null,
         partner: channel.feedEligible
           ? partnerByChannel.get(channel.key) ?? null
           : null,
@@ -1166,6 +1175,41 @@ export default async function PropertyDetailPage({
             choose Growth
           </Link>{" "}
           for unlimited live listings.
+        </p>
+      )}
+
+      {/* Relist blocked: the unit is still leased with an active tenancy, so a
+          routine edit did NOT put it back on the market. Confirm explicitly. */}
+      {searchParams.relist === "confirm" && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>This unit still has an active tenancy.</strong> It was left as
+          Leased, so it isn&apos;t back on the market. Relisting shows it as
+          available to rent while the current tenancy is still on file - only do
+          this if the unit is genuinely turning over.
+          <div className="mt-2 flex items-center gap-3">
+            <form action={relistLeasedProperty}>
+              <input type="hidden" name="id" value={p.id} />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Relist anyway
+              </button>
+            </form>
+            <Link
+              href={`/dashboard/properties/${p.id}`}
+              className="font-semibold underline"
+            >
+              Keep it leased
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {searchParams.relisted && (
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          <strong>Relisted.</strong> This rental is Live again and open to
+          renters.
         </p>
       )}
 
