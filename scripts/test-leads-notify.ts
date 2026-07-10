@@ -141,5 +141,22 @@ ok(
   }) === "Screening\nOccupants: 2",
 );
 
+// S450 (Codex #1): the caller passes fallbacks operator/login-FIRST so a
+// proxy/concierge onboarding never alerts the real landlord's PUBLIC reply-to /
+// contact address. The resolver must honor that order: with no leasing-role
+// member email, the FIRST usable fallback wins; a leasing member still overrides.
+ok(
+  "fallback order: operator/login preferred over public contact",
+  JSON.stringify(
+    resolveLeadNotifyEmails([helper], ["proxy@login.com", "landlord@public.com"]),
+  ) === JSON.stringify(["proxy@login.com"]),
+);
+ok(
+  "leasing member still overrides fallbacks",
+  JSON.stringify(
+    resolveLeadNotifyEmails([owner], ["proxy@login.com", "landlord@public.com"]),
+  ) === JSON.stringify(["owner@agile.ca"]),
+);
+
 console.log(`\nleads-notify: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

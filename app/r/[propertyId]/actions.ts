@@ -204,18 +204,21 @@ async function notifyOperatorsOfNewLead(
       members.push({ role: m.role, email: u?.user?.email ?? null });
     }
     // B4 (first-pilot friction pass): a captured lead must never notify nobody.
-    // The resolver already routes to leasing-role members (every org's creator is
-    // owner_admin, so the happy path reaches the landlord's own email) and then
-    // to the org reply-to / public contact. As an ABSOLUTE last resort, add any
-    // resolvable member email, so an org that has a member but no leasing-role
-    // member and no contact address still gets alerted rather than silently
-    // dropping the lead. Only consulted when nothing above resolved.
+    // The resolver routes to leasing-role members first (every org's creator is
+    // owner_admin, so the happy path reaches the operator's own login email).
+    // When no leasing-role member email resolves, fall back to a real member/
+    // login BEFORE the org's PUBLIC renter-facing reply-to / contact address:
+    // during concierge/proxy onboarding that public address is often the real
+    // landlord being set up on their behalf (e.g. Paul Schwartz), who must NOT
+    // receive operator lead alerts driven by a proxy login (S450, Codex dogfood
+    // #1). The public contact stays an absolute last resort so a lead is never
+    // silently dropped.
     const anyMemberEmail =
       members.map((m) => m.email).find((e) => e && e.includes("@")) ?? null;
     const operatorFallback = resolveLeadNotifyEmails(members, [
+      anyMemberEmail,
       org.reply_to_email,
       org.public_contact_email,
-      anyMemberEmail,
     ]).slice(0, MAX_LEAD_NOTIFY_RECIPIENTS);
 
     // Pull the lead's screening snapshot (the RPC already wrote the authoritative

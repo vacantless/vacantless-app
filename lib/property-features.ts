@@ -279,7 +279,10 @@ export function buildSpecLine(
     // The field holds a level like "2nd" or "Main" and we render "<level> floor".
     // But operators often type "Main floor"/"2nd floor" already, so don't double
     // the word (the "Main floor floor" bug from the S225 QA audit).
-    out.push(/floor$/i.test(floor) ? floor : `${floor} floor`);
+    // ...or a leading word like a condo "Level 15"/"Penthouse level" (the
+    // "Level 15 floor" bug, S450 QA audit) — append " floor" only when the
+    // value does not already name a floor/level.
+    out.push(/\b(?:floor|level)\b/i.test(floor) ? floor : `${floor} floor`);
   }
   if (f.parking && f.parking.trim()) out.push(`Parking: ${f.parking.trim()}`);
   return out;

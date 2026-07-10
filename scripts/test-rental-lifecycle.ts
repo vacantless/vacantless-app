@@ -543,6 +543,25 @@ const weird = deriveRentalLifecycle(
 );
 ok("unknown lead status tolerated", weird.steps.length === 7);
 
+// S450 (Codex #7): a leased unit with no in-app application must NOT report
+// "1 application" on the Screen step (leased leads are not applications).
+const leasedNoApp = deriveRentalLifecycle(
+  PID,
+  inp({ propertyStatus: "leased", hasRent: true, photoCount: 3, leadStatuses: ["leased"] }),
+);
+ok(
+  "leased unit, no application -> screen detail 'No application on file'",
+  leasedNoApp.steps.find((s) => s.step === "screen")!.detail === "No application on file",
+);
+const oneApp = deriveRentalLifecycle(
+  PID,
+  inp({ propertyStatus: "available", hasRent: true, photoCount: 3, leadStatuses: ["applied", "leased"] }),
+);
+ok(
+  "one applied + one leased -> screen counts 1 application (not 2)",
+  oneApp.steps.find((s) => s.step === "screen")!.detail === "1 application",
+);
+
 console.log(
   `\ntest-rental-lifecycle: ${passed} passed, ${failed} failed (${passed + failed} total)`,
 );

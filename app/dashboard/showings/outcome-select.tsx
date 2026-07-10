@@ -31,6 +31,20 @@ export function OutcomeSelect({
   showingId: string;
   outcome: string;
 }) {
+  // A cancelled viewing is terminal: don't expose Scheduled / Attended / No-show
+  // actions on it — a cancelled row must not invite recording an attendance
+  // outcome on a viewing that never happened (S450, Codex dogfood #2). Show a
+  // static state; re-engaging a renter is a fresh booking, not an outcome flip.
+  if (outcome === "cancelled") {
+    return (
+      <span
+        className="inline-flex items-center rounded-lg border border-gray-300 bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-600"
+        aria-label="Viewing outcome: cancelled"
+      >
+        {showingOutcomeLabel("cancelled")}
+      </span>
+    );
+  }
   return (
     <div
       className="inline-flex flex-wrap gap-1.5"

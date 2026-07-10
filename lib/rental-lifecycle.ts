@@ -171,9 +171,10 @@ export function deriveRentalLifecycle(
   const viewingLeads = input.leadStatuses.filter(
     (s) => (LEAD_RANK[s] ?? 0) >= LEAD_RANK.booked,
   ).length;
-  const appliedLeads = input.leadStatuses.filter(
-    (s) => (LEAD_RANK[s] ?? 0) >= LEAD_RANK.applied,
-  ).length;
+  // Count only leads ACTUALLY at the application stage — not leased ones
+  // (rank > applied). A leased unit with no in-app application must not report
+  // "1 application" on the Screen step (S450 handoff-confidence fix, Codex #7).
+  const appliedLeads = input.leadStatuses.filter((s) => s === "applied").length;
   const leasedLeads = input.leadStatuses.filter((s) => s === "leased").length;
 
   // Raw, per-step satisfaction straight from the inputs (not yet monotone).
@@ -246,9 +247,13 @@ export function deriveRentalLifecycle(
             ? "No viewings booked yet"
             : "Set viewing times to enable booking";
       case "screen":
-        return appliedLeads >= 1
-          ? plural(appliedLeads, "application", "applications")
-          : "No applications yet";
+        if (appliedLeads >= 1)
+          return plural(appliedLeads, "application", "applications");
+        // No application on file. If the unit already progressed past screening
+        // (a lease/tenancy exists), don't imply an application that never came
+        // in — say so plainly instead of a false count (S450, Codex #7).
+        if (isLeased || hasCurrentTenancy) return "No application on file";
+        return "No applications yet";
       case "lease":
         // Only claim a lease when one actually exists (tenancy record or the
         // unit is marked leased). A lead marked "leased" with no tenancy yet is

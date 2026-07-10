@@ -308,5 +308,21 @@ ok(
 );
 
 // ---------------------------------------------------------------------------
+// S450 (Codex #9): a condo level typed as "Level 15" must not render
+// "Level 15 floor" (double word); the value already names a level.
+ok(
+  "spec line: 'Level 15' not doubled with floor",
+  buildSpecLine({ floor: "Level 15" }).includes("Level 15") &&
+    !buildSpecLine({ floor: "Level 15" }).some((x) => /floor/i.test(x)),
+);
+ok(
+  "spec line: bare '2nd' still gets 'floor'",
+  buildSpecLine({ floor: "2nd" }).includes("2nd floor"),
+);
+ok(
+  "spec line: '2nd floor' not doubled",
+  !buildSpecLine({ floor: "2nd floor" }).includes("2nd floor floor"),
+);
+
 console.log(`\nproperty-features: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
