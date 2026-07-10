@@ -21,6 +21,7 @@ import { OutcomeSelect } from "./outcome-select";
 import { AssignSelect } from "./assign-select";
 import { ConfirmControl } from "./confirm-control";
 import { RescheduleControl } from "./reschedule-control";
+import { assignAllUnassigned } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,11 @@ function fmtDayShort(iso: string, timeZone: string): string {
   });
 }
 
-export default async function ShowingsPage() {
+export default async function ShowingsPage({
+  searchParams,
+}: {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}) {
   const supabase = createClient();
   const org = await getCurrentOrg();
   const timeZone = org?.booking_timezone ?? "America/Toronto";
@@ -175,6 +180,23 @@ export default async function ShowingsPage() {
   // `min`, so an operator can't pick a past time in the UI (the action also
   // rejects it server-side).
   const nowLocalValue = utcToLocalInputValue(new Date().toISOString(), timeZone);
+
+  // Bulk "Assign all unassigned" (S444): the one-tap companion to auto-assign.
+  // Show it only when there is something to route AND a roster to route to, and
+  // only to a manage_leads viewer (server-gated too). Read the post-run summary
+  // the action redirects back with (?assigned / ?full) for the result banner.
+  const unassignedUpcomingCount = upcoming.filter((s) => !s.assigned_agent_id).length;
+  const hasActiveAgents = activeAgentOptions.length > 0;
+  const showBulkAssign =
+    canAssign && hasActiveAgents && unassignedUpcomingCount > 0;
+  const assignedParam =
+    typeof searchParams?.assigned === "string" ? Number(searchParams.assigned) : null;
+  const assignedShown =
+    assignedParam != null && Number.isFinite(assignedParam) ? assignedParam : null;
+  const fullShown =
+    typeof searchParams?.full === "string" && Number.isFinite(Number(searchParams.full))
+      ? Number(searchParams.full)
+      : 0;
   const byRecent = (a: ShowingRow, b: ShowingRow) =>
     new Date(b.scheduled_at ?? 0).getTime() -
     new Date(a.scheduled_at ?? 0).getTime();
@@ -220,6 +242,30 @@ export default async function ShowingsPage() {
             Manage showing agents →
           </Link>
         </div>
+      )}
+
+      {assignedShown != null && (
+        <div className="mb-6 -mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {assignedShown === 0
+            ? "No viewings were assigned."
+            : `Assigned ${assignedShown} ${
+                assignedShown === 1 ? "viewing" : "viewings"
+              } to your showing agents.`}
+          {fullShown > 0 &&
+            ` ${fullShown} left unassigned — every agent was at capacity for that week.`}
+        </div>
+      )}
+
+      {showBulkAssign && (
+        <form action={assignAllUnassigned} className="mb-6 -mt-2">
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/10"
+          >
+            Assign {unassignedUpcomingCount} unassigned{" "}
+            {unassignedUpcomingCount === 1 ? "viewing" : "viewings"}
+          </button>
+        </form>
       )}
 
       {blocks.length > 0 && (

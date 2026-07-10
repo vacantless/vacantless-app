@@ -430,3 +430,117 @@ export function pickAutoAssignAgent(
   if (!suggestion || suggestion.atCapacity) return null;
   return suggestion;
 }
+
+// --- Bulk auto-assign (S444 — the operator-initiated "Assign all unassigned") -
+// The batch companion to per-booking auto-assign: route EVERY currently-
+// unassigned upcoming viewing through the same load-balanced, capacity-respecting
+// pick in ONE pass. Kept pure so the batch's load-accounting — the one thing a
+// single per-viewing pick can't get right on its own — is unit-tested
+// deterministically; the impure action just executes the returned plan (a guarded
+// UPDATE per row, idempotent vs a concurrent manual assign, org-scoped in SQL).
+//
+// The subtlety this solves: capacity + load balance are measured PER org-local
+// WEEK (a viewing counts against the week it falls in — the S443 P2-b anchor), and
+// a viewing just assigned earlier in THIS batch must count against the next pick,
+// or the whole batch piles onto whoever started least-loaded. So bucket each
+// agent's existing assignments by week, then walk the unassigned viewings in time
+// order incrementing a running per-(agent, week) tally as we go. A viewing whose
+// week has every active agent at capacity (or an empty roster, or no scheduled
+// time to bucket) is left for manual routing — exactly like pickAutoAssignAgent
+// refusing a full agent.
+
+export type BulkAssignAgent = {
+  id: string;
+  name: string;
+  tier: string | null;
+  productTypes: ProductType[];
+  weeklyCapacity: number | null;
+  archived: boolean;
+};
+
+export type BulkAssignViewing = { id: string; scheduledAtMs: number | null };
+
+// A pre-existing (already-assigned) viewing, used only to seed each agent's
+// current per-week load before the batch runs.
+export type ExistingAssignment = { agentId: string; scheduledAtMs: number | null };
+
+export type BulkAssignPlan = {
+  assignments: { showingId: string; agentId: string; agentName: string }[];
+  // Viewings nobody could take this pass (every active agent at capacity for that
+  // week / empty roster / no scheduled time) — left for manual routing.
+  skipped: string[];
+};
+
+export function planBulkAssignments(args: {
+  unassigned: readonly BulkAssignViewing[];
+  existing: readonly ExistingAssignment[];
+  agents: readonly BulkAssignAgent[];
+  tz: string;
+  weekStartsOn?: number;
+}): BulkAssignPlan {
+  const active = args.agents.filter((a) => !a.archived);
+  const assignments: BulkAssignPlan["assignments"] = [];
+  const skipped: string[] = [];
+  // No roster -> nothing can be routed; every viewing falls to manual.
+  if (active.length === 0) {
+    for (const v of args.unassigned) skipped.push(v.id);
+    return { assignments, skipped };
+  }
+
+  const weekStartsOn = args.weekStartsOn ?? 0;
+  const weekStartOf = (ms: number): number =>
+    orgWeekWindow(ms, args.tz, weekStartsOn).startMs;
+  const loadKey = (agentId: string, weekStartMs: number): string =>
+    `${agentId}|${weekStartMs}`;
+
+  // Seed each agent's current per-(agent, week) load from their existing
+  // assignments. A row with no time can't be placed in a week and carries no load.
+  const load = new Map<string, number>();
+  for (const e of args.existing) {
+    if (e.scheduledAtMs == null) continue;
+    const k = loadKey(e.agentId, weekStartOf(e.scheduledAtMs));
+    load.set(k, (load.get(k) ?? 0) + 1);
+  }
+
+  // Walk the viewings in time order (soonest first; a null time sorts last and is
+  // skipped) so the balancing is deterministic and front-loads the nearest ones.
+  const ordered = [...args.unassigned].sort((a, b) => {
+    const ta = a.scheduledAtMs ?? Number.POSITIVE_INFINITY;
+    const tb = b.scheduledAtMs ?? Number.POSITIVE_INFINITY;
+    if (ta !== tb) return ta - tb;
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const v of ordered) {
+    if (v.scheduledAtMs == null) {
+      // No time -> capacity is weekly, so it can't be placed; leave for manual.
+      skipped.push(v.id);
+      continue;
+    }
+    const weekStartMs = weekStartOf(v.scheduledAtMs);
+    const candidates: SuggestCandidate[] = active.map((a) => ({
+      id: a.id,
+      name: a.name,
+      tier: a.tier,
+      productTypes: a.productTypes,
+      weeklyCapacity: a.weeklyCapacity,
+      // Existing load for this week PLUS anything this batch already gave them.
+      assignedThisWeek: load.get(loadKey(a.id, weekStartMs)) ?? 0,
+      archived: false,
+    }));
+    const pick = pickAutoAssignAgent(candidates);
+    if (!pick) {
+      skipped.push(v.id);
+      continue;
+    }
+    assignments.push({
+      showingId: v.id,
+      agentId: pick.agentId,
+      agentName: pick.name,
+    });
+    const k = loadKey(pick.agentId, weekStartMs);
+    load.set(k, (load.get(k) ?? 0) + 1);
+  }
+
+  return { assignments, skipped };
+}

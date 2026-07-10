@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
@@ -9,6 +10,8 @@ import {
   canAssignShowing,
   canConfirmShowing,
   deriveCoordinationStatus,
+  normalizeProductTypes,
+  planBulkAssignments,
 } from "@/lib/showing-agents";
 import { parseLocalInputToUtc, formatSlotLong } from "@/lib/booking";
 import { sendShowingRescheduled } from "@/lib/email";
@@ -209,6 +212,217 @@ export async function assignShowing(formData: FormData) {
 
   revalidatePath("/dashboard/showings");
   revalidatePath("/dashboard");
+}
+
+// Bulk "Assign all unassigned" (S444): route EVERY still-open upcoming viewing
+// that has no agent yet, in one operator click, through the same load-balanced,
+// capacity-respecting pick as per-booking auto-assign. Gated on manage_leads like
+// the single assign — it's the same lead-agent decision, just batched, and posts
+// to a guarded UPDATE per row so it adds NO new write path or privilege. The batch
+// balancing (each pick counts against the next, per org-local week) lives in the
+// pure planBulkAssignments; here we only load inputs, execute the plan, log, and
+// notify. Redirects back with an ?assigned / ?full summary the page surfaces.
+export async function assignAllUnassigned() {
+  await requireCapability("manage_leads", "/dashboard/showings?forbidden=1");
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return;
+  const timeZone = org.booking_timezone ?? "America/Toronto";
+  const nowIso = new Date().toISOString();
+
+  // Every still-open UPCOMING viewing with no agent (org-scoped, defense in depth
+  // on top of RLS). `.gte("scheduled_at", now)` also drops null-time rows, which
+  // can't be week-bucketed for capacity anyway.
+  const { data: unassignedRows } = await supabase
+    .from("showings")
+    .select(
+      "id, scheduled_at, lead:leads(id, name, email), property:properties(id, address)",
+    )
+    .eq("organization_id", org.id)
+    .is("assigned_agent_id", null)
+    .gte("scheduled_at", nowIso)
+    .or("outcome.is.null,outcome.eq.scheduled")
+    .order("scheduled_at", { ascending: true });
+  const unassigned = (unassignedRows ?? []) as unknown as {
+    id: string;
+    scheduled_at: string | null;
+    lead: { id: string; name: string | null; email: string | null } | null;
+    property: { id: string; address: string } | null;
+  }[];
+  if (unassigned.length === 0) {
+    redirect("/dashboard/showings?assigned=0");
+  }
+
+  // Active roster (non-archived).
+  const { data: agentRows } = await supabase
+    .from("showing_agents")
+    .select(
+      "id, name, tier, email, agent_token, product_types, weekly_capacity, archived",
+    )
+    .eq("organization_id", org.id);
+  const agents = (agentRows ?? []) as {
+    id: string;
+    name: string;
+    tier: string | null;
+    email: string | null;
+    agent_token: string;
+    product_types: string[] | null;
+    weekly_capacity: number | null;
+    archived: boolean;
+  }[];
+
+  // Existing non-cancelled assignments -> the per-(agent, week) load the planner
+  // balances on top of (mirrors the Viewings page + autoAssignBookedShowing).
+  const { data: assignedRows } = await supabase
+    .from("showings")
+    .select("assigned_agent_id, scheduled_at, outcome")
+    .eq("organization_id", org.id)
+    .not("assigned_agent_id", "is", null);
+  const existing = ((assignedRows ?? []) as {
+    assigned_agent_id: string | null;
+    scheduled_at: string | null;
+    outcome: string | null;
+  }[])
+    .filter((s) => s.assigned_agent_id && s.outcome !== "cancelled" && s.scheduled_at)
+    .map((s) => ({
+      agentId: s.assigned_agent_id as string,
+      scheduledAtMs: new Date(s.scheduled_at as string).getTime(),
+    }));
+
+  // No property product-type column yet, so every agent is a generalist (the
+  // planner passes no productType) — wiring lights up when properties gain a type.
+  const plan = planBulkAssignments({
+    unassigned: unassigned.map((s) => ({
+      id: s.id,
+      scheduledAtMs: s.scheduled_at ? new Date(s.scheduled_at).getTime() : null,
+    })),
+    existing,
+    agents: agents.map((a) => ({
+      id: a.id,
+      name: a.name,
+      tier: a.tier,
+      productTypes: normalizeProductTypes(a.product_types),
+      weeklyCapacity: a.weekly_capacity,
+      archived: a.archived,
+    })),
+    tz: timeZone,
+  });
+
+  // Execute the plan. A guarded UPDATE per row assigns ONLY if the viewing is still
+  // unassigned + open + in this org, so a concurrent manual assign between the read
+  // and here wins and we never double-route (idempotent). Collect timeline notes +
+  // email jobs for the rows we actually claimed.
+  const agentById = new Map(agents.map((a) => [a.id, a]));
+  const viewingById = new Map(unassigned.map((s) => [s.id, s]));
+  const noteRows: {
+    organization_id: string;
+    lead_id: string;
+    channel: string;
+    direction: string;
+    body: string;
+  }[] = [];
+  const emailJobs: { agentId: string; showingId: string }[] = [];
+  let assignedCount = 0;
+
+  for (const a of plan.assignments) {
+    const { data: updated } = await supabase
+      .from("showings")
+      .update({
+        assigned_agent_id: a.agentId,
+        assigned_at: new Date().toISOString(),
+        // A fresh assignment is never pre-confirmed (mirrors assignShowing).
+        confirmed_at: null,
+        confirmed_by: null,
+      })
+      .eq("id", a.showingId)
+      .eq("organization_id", org.id)
+      .is("assigned_agent_id", null)
+      .or("outcome.is.null,outcome.eq.scheduled")
+      .select("id, lead_id")
+      .maybeSingle();
+    if (!updated) continue; // a concurrent manual assign won; skip silently.
+    assignedCount++;
+    const u = updated as { lead_id: string | null };
+    if (u.lead_id) {
+      noteRows.push({
+        organization_id: org.id,
+        lead_id: u.lead_id,
+        channel: "note",
+        direction: "outbound",
+        body: `Viewing assigned to ${a.agentName}.`,
+      });
+    }
+    emailJobs.push({ agentId: a.agentId, showingId: a.showingId });
+  }
+
+  // One batched timeline-note insert for the whole run.
+  if (noteRows.length > 0) {
+    await supabase.from("messages").insert(noteRows);
+  }
+
+  // Hand-off emails: the SAME leasing.showing_assigned event the manual/auto path
+  // fires, one per newly-assigned viewing, sent concurrently (best-effort — a mail
+  // hiccup never unwinds an assignment). Net email volume equals assigning each by
+  // hand, just collapsed into one click.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  await Promise.allSettled(
+    emailJobs.map((job) => {
+      const agent = agentById.get(job.agentId);
+      const viewing = viewingById.get(job.showingId);
+      if (!agent) return Promise.resolve();
+      const showingTime = viewing?.scheduled_at
+        ? new Date(viewing.scheduled_at).toLocaleString("en-US", {
+            timeZone,
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZoneName: "short",
+          })
+        : "a time to be confirmed";
+      return sendOrgNotification({
+        client: supabase,
+        org: {
+          id: org.id,
+          name: org.name,
+          brand_color: org.brand_color,
+          logo_url: org.logo_url,
+          reply_to_email: org.reply_to_email,
+        },
+        eventKey: "leasing.showing_assigned",
+        audienceEmail: agent.email,
+        vars: {
+          org_name: org.name ?? "Your property manager",
+          property_address: viewing?.property?.address ?? "the property",
+          agent_name: agent.name,
+          lead_name: viewing?.lead?.name || viewing?.lead?.email || "a renter",
+          showing_time: showingTime,
+          assigned_by: user?.email ?? "The lead agent",
+          agent_url: `${APP_URL}/agent/${agent.agent_token}`,
+        },
+      });
+    }),
+  );
+
+  // Revalidate the surfaces the assignments touched, then land back with a summary:
+  // how many we assigned, and how many were left for manual routing because every
+  // agent was at capacity for that viewing's week (plan.skipped).
+  for (const row of noteRows) {
+    revalidatePath(`/dashboard/leads/${row.lead_id}`);
+  }
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+
+  const capacitySkipped = plan.skipped.length;
+  redirect(
+    `/dashboard/showings?assigned=${assignedCount}${
+      capacitySkipped > 0 ? `&full=${capacitySkipped}` : ""
+    }`,
+  );
 }
 
 // Mark an assigned viewing as confirmed with the renter, or clear that (Slice 2 —

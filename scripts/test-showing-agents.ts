@@ -20,7 +20,9 @@ import {
   orgWeekWindow,
   suggestShowingAgent,
   pickAutoAssignAgent,
+  planBulkAssignments,
   type SuggestCandidate,
+  type BulkAssignAgent,
 } from "../lib/showing-agents";
 
 let passed = 0;
@@ -343,6 +345,163 @@ ok(
   ]);
   ok("auto-assign: picks the agent with room over the full one", a?.agentId === "room");
   ok("auto-assign: winner is not at capacity", a?.atCapacity === false);
+}
+
+// --- planBulkAssignments (S444 — "Assign all unassigned") --------------------
+const mkAgent = (
+  o: Partial<BulkAssignAgent> & { id: string; name: string },
+): BulkAssignAgent => ({
+  tier: null,
+  productTypes: [],
+  weeklyCapacity: null,
+  archived: false,
+  ...o,
+});
+// Two same-week instants (Toronto) used across the batch tests. 2026-07-13 is a
+// Monday; both fall in the Sunday-start week of Jul 12–18.
+const T = "America/Toronto";
+const wk1a = Date.parse("2026-07-13T18:00:00-04:00");
+const wk1b = Date.parse("2026-07-14T18:00:00-04:00");
+const wk1c = Date.parse("2026-07-15T18:00:00-04:00");
+const wk1d = Date.parse("2026-07-16T18:00:00-04:00");
+// A different week (Jul 20 Monday, week of Jul 19–25).
+const wk2a = Date.parse("2026-07-20T18:00:00-04:00");
+
+{
+  // Empty roster -> nothing assignable; every viewing is skipped, none assigned.
+  const p = planBulkAssignments({
+    unassigned: [{ id: "s1", scheduledAtMs: wk1a }],
+    existing: [],
+    agents: [],
+    tz: T,
+  });
+  ok("bulk: empty roster assigns nothing", p.assignments.length === 0);
+  ok("bulk: empty roster skips all", p.skipped.length === 1 && p.skipped[0] === "s1");
+}
+{
+  // No viewings -> empty plan.
+  const p = planBulkAssignments({
+    unassigned: [],
+    existing: [],
+    agents: [mkAgent({ id: "a", name: "Amy" })],
+    tz: T,
+  });
+  ok("bulk: no viewings -> empty plan", p.assignments.length === 0 && p.skipped.length === 0);
+}
+{
+  // Two uncapped agents, four same-week viewings -> balanced 2/2, not 4/0.
+  const p = planBulkAssignments({
+    unassigned: [
+      { id: "s1", scheduledAtMs: wk1a },
+      { id: "s2", scheduledAtMs: wk1b },
+      { id: "s3", scheduledAtMs: wk1c },
+      { id: "s4", scheduledAtMs: wk1d },
+    ],
+    existing: [],
+    agents: [mkAgent({ id: "a", name: "Amy" }), mkAgent({ id: "b", name: "Bob" })],
+    tz: T,
+  });
+  ok("bulk: assigns every viewing when uncapped", p.assignments.length === 4);
+  const counts = new Map<string, number>();
+  for (const x of p.assignments) counts.set(x.agentId, (counts.get(x.agentId) ?? 0) + 1);
+  ok("bulk: balances the batch 2/2 (running load counts)", counts.get("a") === 2 && counts.get("b") === 2);
+}
+{
+  // Existing load tilts the batch: Bob already has 1 this week, so the two new
+  // same-week viewings avoid piling onto him — the batch keeps the WEEK's total
+  // load balanced across agents to within one (never all onto the pre-loaded one).
+  const p = planBulkAssignments({
+    unassigned: [
+      { id: "s1", scheduledAtMs: wk1a },
+      { id: "s2", scheduledAtMs: wk1b },
+    ],
+    existing: [{ agentId: "b", scheduledAtMs: wk1c }],
+    agents: [mkAgent({ id: "a", name: "Amy" }), mkAgent({ id: "b", name: "Bob" })],
+    tz: T,
+  });
+  ok("bulk: first viewing goes to the less-loaded agent", p.assignments[0].agentId === "a");
+  // Total per-agent load = existing + this batch; balanced means max-min <= 1.
+  const total = new Map<string, number>([["b", 1]]);
+  for (const x of p.assignments) total.set(x.agentId, (total.get(x.agentId) ?? 0) + 1);
+  const loads = [total.get("a") ?? 0, total.get("b") ?? 0];
+  ok("bulk: keeps the week's total load balanced (max-min <= 1)", Math.max(...loads) - Math.min(...loads) <= 1);
+  ok("bulk: never dumps the batch onto the already-loaded agent", (total.get("b") ?? 0) <= 2);
+}
+{
+  // Per-agent weekly capacity is a hard gate for the batch: two capacity-1 agents,
+  // three same-week viewings -> each takes exactly ONE, the third has nobody with
+  // room and is left for manual routing (overflow-skip, not an overrun).
+  const p = planBulkAssignments({
+    unassigned: [
+      { id: "s1", scheduledAtMs: wk1a },
+      { id: "s2", scheduledAtMs: wk1b },
+      { id: "s3", scheduledAtMs: wk1c },
+    ],
+    existing: [],
+    agents: [
+      mkAgent({ id: "capA", name: "CapA", weeklyCapacity: 1 }),
+      mkAgent({ id: "capB", name: "CapB", weeklyCapacity: 1 }),
+    ],
+    tz: T,
+  });
+  ok("bulk: fills both capped agents to their cap", p.assignments.length === 2);
+  const a1 = p.assignments.filter((x) => x.agentId === "capA").length;
+  const b1 = p.assignments.filter((x) => x.agentId === "capB").length;
+  ok("bulk: neither capped agent overruns capacity", a1 === 1 && b1 === 1);
+  ok("bulk: the overflow viewing is skipped, not overrun", p.skipped.length === 1 && p.skipped[0] === "s3");
+}
+{
+  // Everyone capped + already full this week -> nothing assignable, all skipped.
+  const p = planBulkAssignments({
+    unassigned: [
+      { id: "s1", scheduledAtMs: wk1a },
+      { id: "s2", scheduledAtMs: wk1b },
+    ],
+    existing: [
+      { agentId: "x", scheduledAtMs: wk1c },
+      { agentId: "y", scheduledAtMs: wk1d },
+    ],
+    agents: [
+      mkAgent({ id: "x", name: "Ex", weeklyCapacity: 1 }),
+      mkAgent({ id: "y", name: "Why", weeklyCapacity: 1 }),
+    ],
+    tz: T,
+  });
+  ok("bulk: all-full week assigns nothing", p.assignments.length === 0);
+  ok("bulk: all-full week skips every viewing", p.skipped.length === 2);
+}
+{
+  // Capacity is PER week: a capacity-1 agent full THIS week is still free NEXT week.
+  const p = planBulkAssignments({
+    unassigned: [
+      { id: "thisWk", scheduledAtMs: wk1a },
+      { id: "nextWk", scheduledAtMs: wk2a },
+    ],
+    existing: [{ agentId: "solo", scheduledAtMs: wk1b }], // fills week 1
+    agents: [mkAgent({ id: "solo", name: "Solo", weeklyCapacity: 1 })],
+    tz: T,
+  });
+  ok("bulk: this-week viewing skipped (agent full this week)", p.skipped.includes("thisWk"));
+  ok("bulk: next-week viewing still assigned (fresh weekly capacity)", p.assignments.some((x) => x.showingId === "nextWk"));
+}
+{
+  // Archived agents are ignored; a null-time viewing can't be week-bucketed so it
+  // is skipped for manual routing.
+  const p = planBulkAssignments({
+    unassigned: [
+      { id: "timed", scheduledAtMs: wk1a },
+      { id: "notime", scheduledAtMs: null },
+    ],
+    existing: [],
+    agents: [
+      mkAgent({ id: "gone", name: "Gone", archived: true }),
+      mkAgent({ id: "here", name: "Here" }),
+    ],
+    tz: T,
+  });
+  ok("bulk: routes to the non-archived agent", p.assignments.some((x) => x.agentId === "here"));
+  ok("bulk: never routes to an archived agent", !p.assignments.some((x) => x.agentId === "gone"));
+  ok("bulk: null-time viewing is skipped", p.skipped.includes("notime"));
 }
 
 // --- summary ----------------------------------------------------------------
