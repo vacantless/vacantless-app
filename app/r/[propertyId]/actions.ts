@@ -316,11 +316,17 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
     }[]).filter((a) => !a.archived);
     if (active.length === 0) return;
 
-    // Per-agent load THIS org-local week (mirror of the Viewings page math): the
-    // org's non-cancelled, agent-assigned showings whose scheduled_at falls in the
-    // current week window.
+    // Per-agent load for the org-local week the NEW viewing falls in — NOT the
+    // current week (Codex S443 P2): a renter can book up to the horizon out
+    // (default 14 days), so a next-week booking must load-balance against each
+    // agent's next-week assignments, or a next-week-full agent still gets routed
+    // to (and a next-week-open agent gets skipped because this week is busy).
+    // Anchor the window on scheduled_at; fall back to now only if it's somehow null.
     const timeZone = org.booking_timezone ?? "America/Toronto";
-    const week = orgWeekWindow(Date.now(), timeZone);
+    const anchorMs = showing.scheduled_at
+      ? new Date(showing.scheduled_at).getTime()
+      : Date.now();
+    const week = orgWeekWindow(anchorMs, timeZone);
     const { data: weekRows } = await admin
       .from("showings")
       .select("assigned_agent_id, scheduled_at, outcome")
@@ -362,6 +368,16 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
     // this org (a concurrent manual assign between the read and here wins; we
     // never double-route). Reset confirmation defensively (a new booking is never
     // pre-confirmed) to mirror assignShowing's invariant.
+    // ACCEPTED LIMITATION (Codex S443 P2-a): weekly_capacity is enforced from an
+    // app-layer count taken just above, so two self-bookings landing in the same
+    // sub-second window could each pick the same near-full agent and overrun the
+    // cap by one. This is deliberately NOT hardened with a lock: capacity is an
+    // advisory hint everywhere else (the manual assignShowing path enforces no cap
+    // at all, and the suggestion chip surfaces at-capacity agents for a human to
+    // override), volume is low, and the overrun is self-correcting on the next
+    // booking. If capacity ever needs to be a HARD guarantee, move the pick+write
+    // into a SECURITY DEFINER RPC that recounts under an advisory lock and apply
+    // it to BOTH the auto and manual paths so they stay consistent.
     const { data: updated } = await admin
       .from("showings")
       .update({
