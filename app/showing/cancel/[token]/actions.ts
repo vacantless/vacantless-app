@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOrgNotification } from "@/lib/notifications-server";
-import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
+import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 
 // Public, UNAUTHENTICATED one-tap viewing CANCELLATION (S418, KI632). The renter
@@ -81,12 +81,9 @@ async function notifyOperatorsOfCancellation(r: CancelResult): Promise<void> {
       const { data: u } = await admin.auth.admin.getUserById(m.user_id);
       members.push({ role: m.role, email: u?.user?.email ?? null });
     }
-    const anyMemberEmail =
-      members.map((m) => m.email).find((e) => e && e.includes("@")) ?? null;
-    const operatorFallback = resolveLeadNotifyEmails(members, [
+    const operatorFallback = resolveLeadNotifyEmailsPreferMemberFallback(members, [
       org.reply_to_email,
       org.public_contact_email,
-      anyMemberEmail,
     ]).slice(0, MAX_NOTIFY_RECIPIENTS);
 
     const dashboardUrl = r.lead_id

@@ -1,6 +1,10 @@
 // Unit tests for the pure leasing.new_lead recipient resolver.
 // Run: npx tsx scripts/test-leads-notify.ts
-import { resolveLeadNotifyEmails, formatLeadScreeningBlock } from "../lib/leads-notify";
+import {
+  resolveLeadNotifyEmails,
+  resolveLeadNotifyEmailsPreferMemberFallback,
+  formatLeadScreeningBlock,
+} from "../lib/leads-notify";
 import type { NotifyMember } from "../lib/incident-reports";
 import type { CustomAnswerSnapshot } from "../lib/screening-questions";
 
@@ -156,6 +160,27 @@ ok(
   JSON.stringify(
     resolveLeadNotifyEmails([owner], ["proxy@login.com", "landlord@public.com"]),
   ) === JSON.stringify(["owner@agile.ca"]),
+);
+ok(
+  "safe fallback: non-leasing member login beats public contact",
+  JSON.stringify(
+    resolveLeadNotifyEmailsPreferMemberFallback([helper], ["landlord@public.com"]),
+  ) === JSON.stringify(["helper@agile.ca"]),
+);
+ok(
+  "safe fallback: public contact is last resort when no member email resolves",
+  JSON.stringify(
+    resolveLeadNotifyEmailsPreferMemberFallback(
+      [{ role: "showing_helper", email: null }],
+      ["landlord@public.com"],
+    ),
+  ) === JSON.stringify(["landlord@public.com"]),
+);
+ok(
+  "safe fallback: leasing member still wins over non-leasing member and public contact",
+  JSON.stringify(
+    resolveLeadNotifyEmailsPreferMemberFallback([helper, operator], ["landlord@public.com"]),
+  ) === JSON.stringify(["op@agile.ca"]),
 );
 
 console.log(`\nleads-notify: ${passed} passed, ${failed} failed`);

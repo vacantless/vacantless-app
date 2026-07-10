@@ -13,7 +13,10 @@ import { sendSms, bookingConfirmationSms } from "@/lib/sms";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
 import { sendOrgNotification } from "@/lib/notifications-server";
-import { resolveLeadNotifyEmails, formatLeadScreeningBlock } from "@/lib/leads-notify";
+import {
+  formatLeadScreeningBlock,
+  resolveLeadNotifyEmailsPreferMemberFallback,
+} from "@/lib/leads-notify";
 import { buildTrackedLink } from "@/lib/listing-distribution";
 import type { NotifyMember } from "@/lib/incident-reports";
 import {
@@ -213,10 +216,7 @@ async function notifyOperatorsOfNewLead(
     // receive operator lead alerts driven by a proxy login (S450, Codex dogfood
     // #1). The public contact stays an absolute last resort so a lead is never
     // silently dropped.
-    const anyMemberEmail =
-      members.map((m) => m.email).find((e) => e && e.includes("@")) ?? null;
-    const operatorFallback = resolveLeadNotifyEmails(members, [
-      anyMemberEmail,
+    const operatorFallback = resolveLeadNotifyEmailsPreferMemberFallback(members, [
       org.reply_to_email,
       org.public_contact_email,
     ]).slice(0, MAX_LEAD_NOTIFY_RECIPIENTS);

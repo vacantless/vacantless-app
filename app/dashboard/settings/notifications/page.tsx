@@ -6,7 +6,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { currentUserCan } from "@/lib/membership";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
+import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import {
   activeNotificationEvents,
   notificationFamilyLabel,
@@ -158,12 +158,9 @@ export default async function NotificationsSettingsPage({
       const { data: u } = await admin.auth.admin.getUserById(m.user_id);
       members.push({ role: m.role, email: u?.user?.email ?? null });
     }
-    const anyMemberEmail =
-      members.map((m) => m.email).find((e) => e && e.includes("@")) ?? null;
-    newLeadDefaultRecipients = resolveLeadNotifyEmails(members, [
+    newLeadDefaultRecipients = resolveLeadNotifyEmailsPreferMemberFallback(members, [
       org.reply_to_email,
       org.public_contact_email,
-      anyMemberEmail,
     ]);
   }
 

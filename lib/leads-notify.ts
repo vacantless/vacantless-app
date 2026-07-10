@@ -51,6 +51,22 @@ export function resolveLeadNotifyEmails(
   return [...out];
 }
 
+/**
+ * Resolve operator-alert recipients with the safe fallback order used by live
+ * renter events: leasing-role members first, then any real member/login email,
+ * then public renter-facing org contacts as the last resort. This keeps
+ * concierge/proxy onboarding from alerting an intended landlord before handoff
+ * when the public contact field is staged with their real email.
+ */
+export function resolveLeadNotifyEmailsPreferMemberFallback(
+  members: NotifyMember[],
+  publicFallbacks: (string | null | undefined)[] = [],
+): string[] {
+  const anyMemberEmail =
+    (members ?? []).map((m) => m.email).find((e) => normalizeNotifyEmail(e)) ?? null;
+  return resolveLeadNotifyEmails(members, [anyMemberEmail, ...publicFallbacks]);
+}
+
 // --- Screening block for the new-lead email ({{screening}} token) -----------
 // The notification-parity payload (S332): turn a lead's screening snapshot into
 // a labeled, multi-line PLAIN-TEXT block so the leasing.new_lead email shows
