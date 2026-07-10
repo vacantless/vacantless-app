@@ -143,7 +143,56 @@ export type BookingPayload = {
   // the operator, instead of relying on a free-text reply that dead-ends at
   // reply_to_email. Optional/back-compat: absent => the reply-only wording.
   cancel_url?: string | null;
+  // Unit access notes (properties.showing_instructions) + the org public phone,
+  // threaded so the confirmation shows how to get in and who to call/text if late
+  // (S448). Both optional; each line renders only when present.
+  showing_instructions?: string | null;
+  leasing_phone?: string | null;
 };
+
+// Shared renter-facing viewing logistics (S448): a tap-to-navigate map link
+// (always, when there's an address), how-to-get-in notes (when the unit carries
+// showing_instructions), a call/text-if-late number (when the org has a public
+// phone), and the photo-ID / duration / "your agent will meet you" line. Each row
+// renders only when its data is present, so it degrades cleanly to just the map.
+function mapsUrl(address: string | null | undefined): string | null {
+  const a = address?.trim();
+  return a
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a)}`
+    : null;
+}
+
+function viewingLogisticsHtml(p: {
+  property_address: string | null;
+  showing_instructions?: string | null;
+  leasing_phone?: string | null;
+  brand: string;
+}): string {
+  const brand = escapeHtml(p.brand);
+  const url = mapsUrl(p.property_address);
+  const instr = p.showing_instructions?.trim();
+  const phone = p.leasing_phone?.trim();
+  const rows: string[] = [];
+  if (instr) {
+    rows.push(
+      `<p style="margin:0 0 12px;"><strong>Getting in:</strong> ${escapeHtml(instr)}</p>`,
+    );
+  }
+  if (url) {
+    rows.push(
+      `<p style="margin:0 0 12px;"><strong>Map + directions:</strong> <a href="${escapeHtml(url)}" style="color:${brand};font-weight:600;">Open in Google Maps</a></p>`,
+    );
+  }
+  if (phone) {
+    rows.push(
+      `<p style="margin:0 0 12px;"><strong>Running late or can't find the entrance?</strong> Call or text <a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}" style="color:${brand};font-weight:600;">${escapeHtml(phone)}</a> and we'll help you get in.</p>`,
+    );
+  }
+  rows.push(
+    `<p style="margin:0 0 16px;color:#52525b;">Please bring a piece of photo ID. The walk-through takes about 10-15 minutes, and your leasing agent will meet you there.</p>`,
+  );
+  return rows.join("\n      ");
+}
 
 function bookingHtml(p: BookingPayload): string {
   const brand = p.brand_color || DEFAULT_BRAND_COLOR;
@@ -168,8 +217,9 @@ function bookingHtml(p: BookingPayload): string {
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
         <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
-        <p style="margin:0;color:#3f3f46;">This is an in-person viewing (not a phone call). Please come to the address above.</p>
+        <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
+      ${viewingLogisticsHtml({ property_address: p.property_address, showing_instructions: p.showing_instructions, leasing_phone: p.leasing_phone, brand })}
       ${
         p.cancel_url
           ? `<p style="margin:0 0 16px;">Need to change your plans? <a href="${escapeHtml(
@@ -274,8 +324,9 @@ function rescheduleHtml(p: ReschedulePayload): string {
         <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
         <p style="margin:0 0 6px;color:#3f3f46;"><strong>New time:</strong> ${when}</p>
         ${old ? `<p style="margin:0 0 6px;color:#a1a1aa;text-decoration:line-through;">Previous time: ${old}</p>` : ""}
-        <p style="margin:0;color:#3f3f46;">This is an in-person viewing (not a phone call). Please come to the address above.</p>
+        <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
+      ${viewingLogisticsHtml({ property_address: p.property_address, showing_instructions: p.showing_instructions, leasing_phone: p.leasing_phone, brand })}
       ${
         p.cancel_url
           ? `<p style="margin:0 0 16px;">Can't make the new time? <a href="${escapeHtml(
@@ -388,8 +439,9 @@ function reminderHtml(p: ReminderPayload): string {
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
         <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
-        <p style="margin:0;color:#3f3f46;">This is an in-person viewing (not a phone call). Please come to the address above.</p>
+        <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
+      ${viewingLogisticsHtml({ property_address: p.property_address, brand })}
       <p style="margin:0 0 16px;">If you can no longer make it or need to reschedule, just reply to this email and we'll sort it out.</p>
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>

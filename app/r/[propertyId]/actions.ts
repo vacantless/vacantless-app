@@ -98,6 +98,24 @@ async function attemptBooking(
           b.scheduled_at,
           b.timezone || "America/Toronto",
         );
+        // Access notes + call/text number for the confirmation (S448).
+        // Best-effort: anon can't read these tables directly, so a small
+        // SECURITY DEFINER RPC returns them (both may be null -> lines skipped).
+        let showingInstructions: string | null = null;
+        let leasingPhone: string | null = null;
+        {
+          const { data: extras } = await supabase.rpc(
+            "get_booking_confirmation_extras",
+            { p_property_id: propertyId },
+          );
+          const e = extras as
+            | { showing_instructions?: string | null; leasing_phone?: string | null }
+            | null;
+          if (e) {
+            showingInstructions = e.showing_instructions ?? null;
+            leasingPhone = e.leasing_phone ?? null;
+          }
+        }
         const result = await sendBookingConfirmation({
           lead_id: leadId,
           renter_name: b.renter_name,
@@ -111,6 +129,8 @@ async function attemptBooking(
           cancel_url: b.cancel_token
             ? `${APP_URL}/showing/cancel/${b.cancel_token}`
             : null,
+          showing_instructions: showingInstructions,
+          leasing_phone: leasingPhone,
         });
         if (result.sent) {
           await supabase.rpc("record_booking_email", {
