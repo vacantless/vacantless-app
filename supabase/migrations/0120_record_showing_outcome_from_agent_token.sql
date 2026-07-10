@@ -24,6 +24,8 @@
 --   - the viewing must still be OPEN (null / 'scheduled')        → already
 --     (a second tap, or a viewing already closed by the operator, is a no-op
 --      success so a double-tap never surprises or flip-flops the record)
+--   - the viewing time must have passed (scheduled_at <= now)    → too_early
+--     (defense in depth; the page hides these buttons until then)
 -- Granted to anon (the page has no session); the token is the credential and a
 -- wrong token records nothing. Mirrors 0118 + 0098 and the 0056/0066 anon
 -- SECURITY DEFINER precedent (feedback_anon_rpc_revalidate_server_side). No RLS
@@ -81,6 +83,14 @@ begin
   -- so a double-tap never overwrites or flip-flops a recorded result.
   if v_showing.outcome is not null and v_showing.outcome <> 'scheduled' then
     return jsonb_build_object('ok', true, 'already', true);
+  end if;
+
+  -- Defense in depth (Codex S445 P2): an outcome can only be recorded once the
+  -- viewing time has passed. The page hides these buttons until scheduled_at <= now,
+  -- but the token RPC is the source of truth, so a hand-posted request for a future
+  -- (or unscheduled) viewing must be rejected here too.
+  if v_showing.scheduled_at is null or v_showing.scheduled_at > now() then
+    return jsonb_build_object('ok', false, 'reason', 'too_early');
   end if;
 
   update public.showings

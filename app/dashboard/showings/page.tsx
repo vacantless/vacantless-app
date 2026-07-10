@@ -185,7 +185,18 @@ export default async function ShowingsPage({
   // Show it only when there is something to route AND a roster to route to, and
   // only to a manage_leads viewer (server-gated too). Read the post-run summary
   // the action redirects back with (?assigned / ?full) for the result banner.
-  const unassignedUpcomingCount = upcoming.filter((s) => !s.assigned_agent_id).length;
+  // Count with the SAME open-upcoming predicate the action uses (unassigned +
+  // future + outcome null OR 'scheduled') — `upcoming` alone is scheduled-only, so
+  // a legacy null-outcome open viewing would be assignable but uncounted (Codex
+  // S444 P2).
+  const isOpenOutcome = (o: string | null | undefined) => o == null || o === "scheduled";
+  const unassignedUpcomingCount = all.filter(
+    (s) =>
+      !s.assigned_agent_id &&
+      s.scheduled_at != null &&
+      new Date(s.scheduled_at).getTime() >= now &&
+      isOpenOutcome(s.outcome),
+  ).length;
   const hasActiveAgents = activeAgentOptions.length > 0;
   const showBulkAssign =
     canAssign && hasActiveAgents && unassignedUpcomingCount > 0;
