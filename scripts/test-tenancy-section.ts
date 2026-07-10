@@ -120,5 +120,18 @@ ok(
   ) === "tenants",
 );
 
+// S450 (Codex #6): an UPLOADED lease PDF is a lease on file, so it must NOT pull
+// focus to the lease-document section (unlike "Not started"/"Draft").
+ok(
+  "lease Uploaded -> does not open lease-document (rent-collection next)",
+  pickDefaultOpenSection(
+    inp({ leaseDocStatus: "Uploaded", rentCollectionStatus: "Not set up" }),
+  ) === "rent-collection",
+);
+ok(
+  "lease Uploaded, all in order -> tenants (not lease-document)",
+  pickDefaultOpenSection(inp({ leaseDocStatus: "Uploaded" })) === "tenants",
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -18,6 +18,7 @@ export type TenancyOpenSectionId =
 /** Lease-document header status (see the page's leaseDocStatus). */
 export type LeaseDocStatusLabel =
   | "Not started"
+  | "Uploaded"
   | "Draft"
   | "Sent for signature"
   | "Signed";

@@ -961,13 +961,20 @@ export default async function TenancyDetailPage({
   const tenantsStatus = `${tenants.length} on lease`;
   const leaseDetailsStatus = `${formatRentCents(t.rent_cents)}${t.rent_cents != null ? "/mo" : ""}`;
   const hasExecutedLease = leaseDocs.some((d) => d.status === "executed");
+  // A signed lease PDF the operator UPLOADED to the vault (doc_type "lease")
+  // instead of generating in-app: there IS a lease on file even with no
+  // lease_documents row, so the card must not read "Not started" (S450, Codex #6
+  // handoff-confidence). Only consulted when there is no in-app lease doc.
+  const hasUploadedLease = allDocList.some((d) => d.doc_type === "lease");
   const leaseDocStatus: LeaseDocStatusLabel = hasExecutedLease
     ? "Signed"
     : leaseDocs.some((d) => d.status === "sent")
       ? "Sent for signature"
       : leaseDocs.some((d) => d.status === "draft")
         ? "Draft"
-        : "Not started";
+        : hasUploadedLease
+          ? "Uploaded"
+          : "Not started";
   const rentAutomatic =
     !!t.rotessa_schedule_id ||
     (!!stripeRentView.subscriptionId &&
@@ -1315,7 +1322,7 @@ export default async function TenancyDetailPage({
         id="lease-document"
         title="Lease document"
         status={leaseDocStatus}
-        done={hasExecutedLease}
+        done={hasExecutedLease || hasUploadedLease}
         defaultOpen={openSection === "lease-document"}
       >
       <TenancyLeaseSection
