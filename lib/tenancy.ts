@@ -35,6 +35,16 @@ export function tenancyTakesUnitOffMarket(status: string): boolean {
   return status === "active" || status === "upcoming";
 }
 
+export type NewTenancyEmptyState = "no_rentals" | "no_eligible_rentals" | null;
+
+export function newTenancyEmptyState(
+  totalRentals: number,
+  eligibleRentals: number,
+): NewTenancyEmptyState {
+  if (eligibleRentals > 0) return null;
+  return totalRentals > 0 ? "no_eligible_rentals" : "no_rentals";
+}
+
 // Co-tenants on a single lease. 1 is the common case; 2-3 covers roommates.
 export const MAX_TENANTS_PER_TENANCY = 3;
 

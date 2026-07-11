@@ -70,6 +70,10 @@ ok("premium carries a price env (config-shape purchasable)", isTierPurchasable(T
 ok("formatPlanPrice growth", formatPlanPrice(9900) === "$99/month");
 ok("formatPlanPrice premium", formatPlanPrice(24900) === "$249/month");
 ok("formatPlanPrice thousands separator", formatPlanPrice(120000) === "$1,200/month");
+const premiumCopy = `${TIERS.premium.blurb} ${TIERS.premium.features.join(" ")}`.toLowerCase();
+ok("premium copy does not promise post-viewing follow-up", !premiumCopy.includes("post-viewing"));
+ok("premium copy does not frame outcome nudges as automatic reminders", !premiumCopy.includes("automatic reminders"));
+ok("premium copy names a concrete Premium-only ops feature", premiumCopy.includes("text-in capture"));
 
 // --- isPaidPlan (narrow: the LIVE purchasable paid plans only) --------------
 ok("growth is paid", isPaidPlan("growth"));

@@ -224,9 +224,8 @@ export function canUseSms(plan: string | null | undefined): boolean {
 
 // Whether this plan may send renter-facing booking/reminder SMS (the public
 // leasing flow). S296 decision: gated to PAID tiers (Growth and up); Free + trial
-// = email only. DEFINED here now; the live wiring (the book_public_showing RPC
-// surfacing org.plan + the reminders cron joining plan) is the next increment —
-// see NEXT-SESSION. Until wired, renter SMS remains ungated at the call sites.
+// = email only. The public booking path, reminder cron, and settings save path
+// all re-check this gate at their send/write sites.
 export function canUseRenterSms(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "renter_sms");
 }
@@ -440,12 +439,13 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceEnv: "STRIPE_PRICE_PREMIUM",
     maxActiveListings: null,
     blurb:
-      "Everything in Growth, plus full books, repairs, and automatic reminders.",
+      "Everything in Growth, plus full books, repair coordination, and higher-capacity operations.",
     features: [
       "Everything in Growth",
       "Full accounting module",
       "Maintenance / repair dispatch",
-      "Automatic post-viewing follow-up",
+      "Text-in capture for maintenance",
+      "Larger photo capacity",
       "Shares new inquiries evenly across your team",
       "Priority support",
     ],

@@ -5,6 +5,7 @@ import {
   tenancyStatusLabel,
   tenancyErrorMessage,
   parseDateOrNull,
+  newTenancyEmptyState,
 } from "@/lib/tenancy";
 import { PageHeader, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -94,6 +95,7 @@ export default async function NewTenancyPage({
   // already has a live tenancy → we filtered it out; tell the operator why.
   const defaultUnitSpokenFor =
     defaultPropertyId !== "" && spokenFor.has(defaultPropertyId);
+  const emptyState = newTenancyEmptyState(allProperties.length, properties.length);
 
   const leadProperty = properties.find((p) => p.id === defaultPropertyId);
   const defaultRent =
@@ -149,12 +151,25 @@ export default async function NewTenancyPage({
         </p>
       )}
 
-      {properties.length === 0 ? (
+      {emptyState ? (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center text-sm text-gray-500">
-          Add a rental first — a tenancy has to attach to a unit.{" "}
-          <Link href="/dashboard/properties" className="font-medium text-brand hover:underline">
-            Go to Rentals
-          </Link>
+          {emptyState === "no_rentals" ? (
+            <>
+              Add a rental first — a tenancy has to attach to a unit.{" "}
+              <Link href="/dashboard/properties" className="font-medium text-brand hover:underline">
+                Go to Rentals
+              </Link>
+            </>
+          ) : (
+            <>
+              No rental is ready for a new tenancy. Every active rental already has
+              an active or upcoming tenancy, or the remaining rentals are not yet
+              public.{" "}
+              <Link href="/dashboard/tenancies" className="font-medium text-brand hover:underline">
+                View tenancies
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <>

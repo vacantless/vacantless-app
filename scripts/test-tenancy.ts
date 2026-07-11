@@ -12,6 +12,7 @@ import {
   validateTenancyInput,
   tenancyErrorMessage,
   formatRentCents,
+  newTenancyEmptyState,
   type TenantInput,
 } from "../lib/tenancy";
 
@@ -42,6 +43,14 @@ ok("active tenancy takes unit off-market", tenancyTakesUnitOffMarket("active") =
 ok("upcoming tenancy takes unit off-market", tenancyTakesUnitOffMarket("upcoming") === true);
 ok("ended tenancy does NOT flip the rental to leased", tenancyTakesUnitOffMarket("ended") === false);
 ok("unknown status does NOT take unit off-market", tenancyTakesUnitOffMarket("evicted") === false);
+
+// --- New-tenancy empty-state split -----------------------------------------
+ok("new tenancy empty: eligible rentals -> none", newTenancyEmptyState(2, 1) === null);
+ok("new tenancy empty: no rentals", newTenancyEmptyState(0, 0) === "no_rentals");
+ok(
+  "new tenancy empty: rentals exist but none eligible",
+  newTenancyEmptyState(2, 0) === "no_eligible_rentals",
+);
 
 // --- parseMoneyToCents ------------------------------------------------------
 ok("money plain", parseMoneyToCents("1250") === 125000);
