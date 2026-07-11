@@ -37,10 +37,24 @@ export default function SignupPage() {
     // Carry any referral token (/signup?ref=...) through to onboarding, where
     // the new org gets attributed to the referrer once it's created. Read it
     // from the URL at submit time (no useSearchParams -> no Suspense boundary).
-    const ref =
+    const search =
       typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("ref")
-        : null;
+        ? new URLSearchParams(window.location.search)
+        : new URLSearchParams();
+    const ref = search.get("ref");
+    // Carry the chosen paid plan (/signup?plan=growth|premium from the pricing
+    // CTAs) through onboarding so paid intent lands on billing instead of
+    // dead-ending on the free plan (Codex P2). Best-effort: only survives the
+    // immediate-session path; the email-confirm path lands on free (upgrade in
+    // billing) as before.
+    const plan = search.get("plan");
+    const onboardingHref = (() => {
+      const qp = new URLSearchParams();
+      if (ref) qp.set("ref", ref);
+      if (plan) qp.set("plan", plan);
+      const qs = qp.toString();
+      return qs ? `/onboarding?${qs}` : "/onboarding";
+    })();
     // If email confirmation is enabled, there is no active session yet — show
     // the confirmation panel instead of dropping the user at a dead end.
     if (!data.session) {
@@ -49,7 +63,7 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
-    router.push(ref ? `/onboarding?ref=${encodeURIComponent(ref)}` : "/onboarding");
+    router.push(onboardingHref);
     router.refresh();
   }
 
@@ -116,7 +130,7 @@ export default function SignupPage() {
 
   return (
     <AuthShell
-      eyebrow="Start a 30-day pilot"
+      eyebrow="Start free"
       title="Create your login"
       subtitle="First, set up your sign-in details. Next you'll name your business. No credit card to start."
       footer={

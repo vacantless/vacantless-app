@@ -35,6 +35,7 @@ import {
   canUseListingMarketing,
   canUseLeaseOcr,
   canUseListingAiImport,
+  canUseRentalApplications,
   leaseOcrMonthlyCap,
   LEASE_OCR_CAP_GROWTH,
   LEASE_OCR_CAP_PREMIUM,
@@ -457,7 +458,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 14 features", PLAN_FEATURES.length === 14);
+ok("PLAN_FEATURES has 15 features", PLAN_FEATURES.length === 15);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -536,6 +537,16 @@ ok("listing_ai_import: core false", canUseListingAiImport("core") === false);
 ok("listing_ai_import: plus false", canUseListingAiImport("plus") === false);
 ok("listing_ai_import: trial false", canUseListingAiImport("trial") === false);
 ok("listing_ai_import: null false", canUseListingAiImport(null) === false);
+// --- applications (Growth & up; S453/S454 rental application + screening) ----
+ok("applications: free false", canUseRentalApplications("free") === false);
+ok("applications: growth true", canUseRentalApplications("growth") === true);
+ok("applications: premium true", canUseRentalApplications("premium") === true);
+ok("applications: pilot true (full access)", canUseRentalApplications("pilot") === true);
+ok("applications: core false", canUseRentalApplications("core") === false);
+ok("applications: plus false", canUseRentalApplications("plus") === false);
+ok("applications: trial false", canUseRentalApplications("trial") === false);
+ok("applications: null false", canUseRentalApplications(null) === false);
+ok("applications mirrors hasEntitlement", canUseRentalApplications("growth") === hasEntitlement("growth", "applications"));
 ok("lease_ocr cap: free 0", leaseOcrMonthlyCap("free") === 0);
 ok("lease_ocr cap: growth = growth cap", leaseOcrMonthlyCap("growth") === LEASE_OCR_CAP_GROWTH);
 ok("lease_ocr cap: premium = premium cap", leaseOcrMonthlyCap("premium") === LEASE_OCR_CAP_PREMIUM);

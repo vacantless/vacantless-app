@@ -21,6 +21,7 @@ import {
   validateBuildingPolicySettings,
 } from "@/lib/policy-profile";
 import { sendTestEmail } from "@/lib/email";
+import { canUseRenterSms } from "@/lib/billing";
 import {
   validateLogoUpload,
   extForLogoType,
@@ -469,10 +470,19 @@ export async function updateRenterMessages(formData: FormData) {
 export async function updateTextMessages(formData: FormData) {
   const org = await requireSettingsOrg();
 
+  // Renter SMS is a Growth+ capability. Block turning it ON on a plan that can't
+  // send renter texts (Codex P2 "Free = no texting"); turning it OFF is always
+  // allowed. This is the primary gate — the booking + reminder send sites also
+  // re-check the plan defensively.
+  const wantsOn = formData.get("sms_enabled") != null;
+  if (wantsOn && !canUseRenterSms(org.plan)) {
+    redirect("/dashboard/settings?tab=comms&sms=upgrade");
+  }
+
   const supabase = createClient();
   const { error } = await supabase
     .from("organizations")
-    .update({ sms_enabled: formData.get("sms_enabled") != null })
+    .update({ sms_enabled: wantsOn })
     .eq("id", org.id);
   if (error) {
     redirect("/dashboard/settings?tab=comms&sms=error");

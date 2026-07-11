@@ -24,10 +24,12 @@ export function OnboardingForm({
   action,
   error,
   referralToken,
+  planIntent,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   error?: string;
   referralToken?: string;
+  planIntent?: string;
 }) {
   const [name, setName] = useState("");
   // A brand-new org starts on the homepage forest-green ombre; the picker
@@ -43,6 +45,8 @@ export function OnboardingForm({
       {/* Referral attribution: carries the ?ref token into createOrganization,
           which flips the referrer's pending invite to accepted (best-effort). */}
       {referralToken && <input type="hidden" name="ref" value={referralToken} />}
+      {/* Paid-plan intent from the pricing CTA -> billing after onboarding. */}
+      {planIntent && <input type="hidden" name="plan" value={planIntent} />}
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
           Business name

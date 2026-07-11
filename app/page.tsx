@@ -1013,7 +1013,7 @@ const PLANS: {
       "Listing distribution and year-end tax export",
     ],
     cta: "Choose Growth",
-    href: "/signup",
+    href: "/signup?plan=growth",
     featured: true,
     ribbon: "Most popular",
   },
@@ -1029,7 +1029,7 @@ const PLANS: {
       "Automatic reminders and priority support",
     ],
     cta: "Choose Premium",
-    href: "/signup",
+    href: "/signup?plan=premium",
   },
 ];
 

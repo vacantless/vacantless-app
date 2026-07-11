@@ -10,6 +10,7 @@ import {
   type AutoReplyPayload,
 } from "@/lib/email";
 import { sendSms, bookingConfirmationSms } from "@/lib/sms";
+import { canUseRenterSms } from "@/lib/billing";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
 import { sendOrgNotification } from "@/lib/notifications-server";
@@ -106,17 +107,26 @@ async function attemptBooking(
         // SECURITY DEFINER RPC returns them (both may be null -> lines skipped).
         let showingInstructions: string | null = null;
         let leasingPhone: string | null = null;
+        // Org plan gates renter SMS below (Codex P2: "Free = no texting" must be
+        // enforced at the send site, not just via the sms_enabled toggle). The
+        // extras RPC (migration 0126) surfaces it alongside the access notes.
+        let orgPlan: string | null = null;
         {
           const { data: extras } = await supabase.rpc(
             "get_booking_confirmation_extras",
             { p_property_id: propertyId },
           );
           const e = extras as
-            | { showing_instructions?: string | null; leasing_phone?: string | null }
+            | {
+                showing_instructions?: string | null;
+                leasing_phone?: string | null;
+                plan?: string | null;
+              }
             | null;
           if (e) {
             showingInstructions = e.showing_instructions ?? null;
             leasingPhone = e.leasing_phone ?? null;
+            orgPlan = e.plan ?? null;
           }
         }
         const result = await sendBookingConfirmation({
@@ -142,7 +152,7 @@ async function attemptBooking(
             p_subject: result.subject ?? null,
           });
         }
-        if (b.sms_enabled && b.renter_phone && !b.sms_opt_out) {
+        if (b.sms_enabled && canUseRenterSms(orgPlan) && b.renter_phone && !b.sms_opt_out) {
           const sms = await sendSms({
             to: b.renter_phone,
             body: bookingConfirmationSms({

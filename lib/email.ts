@@ -288,6 +288,109 @@ export async function sendBookingConfirmation(
 }
 
 // ---------------------------------------------------------------------------
+// Rental application invite (S454, Slice 1). Sent to a lead when the operator
+// requests a rental application: a branded email carrying the tokenized /apply
+// link. Best-effort, never throws — mirrors sendBookingConfirmation (direct
+// transactional Brevo send). The link opens the public Form-410-equivalent
+// capture; no sensitive identifiers are collected here (Model B).
+// ---------------------------------------------------------------------------
+
+export type RentalApplicationInvitePayload = {
+  applicant_name: string | null;
+  applicant_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  apply_url: string; // absolute /apply/<token> link
+};
+
+function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.applicant_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : null;
+  const url = escapeHtml(p.apply_url);
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const propLine = addr
+    ? `<p style="margin:0 0 16px;">To move forward with <strong>${addr}</strong>, please complete your rental application.</p>`
+    : `<p style="margin:0 0 16px;">To move forward, please complete your rental application.</p>`;
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      ${propLine}
+      <p style="margin:0 0 20px;">It only takes a few minutes. You can save time by having your current address, employment, and reference details handy.</p>
+      <p style="margin:0 0 24px;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;">Start your application</a>
+      </p>
+      <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Or paste this link into your browser:</p>
+      <p style="margin:0 0 16px;word-break:break-all;font-size:13px;"><a href="${url}" style="color:${escapeHtml(brand)};">${url}</a></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you inquired about a rental with ${org}. We will never ask for your SIN or banking details by email.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded rental-application invite. Never throws; returns
+ * { sent:false } if BREVO_API_KEY is unset or the applicant left no email.
+ */
+export async function sendRentalApplicationInvite(
+  p: RentalApplicationInvitePayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.applicant_email) return { sent: false, reason: "no_applicant_email" };
+
+  const subject = p.property_address
+    ? `Complete your rental application for ${p.property_address}`
+    : "Complete your rental application";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.applicant_email,
+        ...(p.applicant_name ? { name: p.applicant_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: rentalApplicationInviteHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Showing RESCHEDULED (S442, operator reschedule). Renter-facing: when the
 // operator moves a booked viewing, the renter gets a branded "your time has
 // changed" notice with the NEW time and the same one-tap cancel link (the

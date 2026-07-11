@@ -110,7 +110,14 @@ export type PlanFeature =
   // fields the deterministic MLS parser can't read. Growth+ (a paid time-saver
   // over re-keying, sibling to lease_ocr). Carries a real per-use model/API cost;
   // the import action enforces the entitlement server-side.
-  | "listing_ai_import";
+  | "listing_ai_import"
+  // Rental-application capture + credit screening (S453/S454): request a
+  // Form-410-equivalent application from a lead via a tokenized applicant link,
+  // then (Slice 2) a provider-hosted credit/background report. Growth+ — the
+  // report is applicant-paid (near-zero COGS) and screening completes the
+  // leasing funnel Growth already owns. The requestRentalApplication action +
+  // the lead-detail affordance enforce this server-side.
+  | "applications";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -127,6 +134,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "listing_marketing",
   "lease_ocr",
   "listing_ai_import",
+  "applications",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -148,6 +156,7 @@ function noEntitlements(): PlanEntitlements {
     listing_marketing: false,
     lease_ocr: false,
     listing_ai_import: false,
+    applications: false,
   };
 }
 
@@ -177,13 +186,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // founder pilot = full access
-  core: { sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false },
-  plus: { sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false },
+  pilot: { applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // founder pilot = full access
+  core: { applications: false, sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false },
+  plus: { applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import
-  premium: { sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import
+  growth: { applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import
+  premium: { applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -290,6 +299,15 @@ export function canUseLeaseOcr(plan: string | null | undefined): boolean {
 // parse (no AI backfill), never an error.
 export function canUseListingAiImport(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "listing_ai_import");
+}
+
+// Whether this plan may request rental applications + credit screening (S453/
+// S454). Growth+. The report is applicant-paid (near-zero COGS) and screening is
+// the climax of the leasing funnel Growth already owns. The
+// requestRentalApplication action + the lead-detail "Request application"
+// affordance enforce this server-side; an ungated plan sees the locked upsell.
+export function canUseRentalApplications(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "applications");
 }
 
 // Monthly per-org lease-OCR scan cap (a runaway/abuse backstop, not a meter -

@@ -20,8 +20,18 @@ import {
 import { PageHeader, SectionHeading, EmptyState } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { StatusSelect } from "../status-select";
-import { addNote, setNextAction, clearNextAction, updateLeadStatus } from "../actions";
+import {
+  addNote,
+  setNextAction,
+  clearNextAction,
+  updateLeadStatus,
+  requestRentalApplication,
+} from "../actions";
+import { canUseRentalApplications } from "@/lib/billing";
 import { OutcomeSelect } from "../../showings/outcome-select";
+
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 
 export const dynamic = "force-dynamic";
 
@@ -76,8 +86,10 @@ type Showing = {
 
 export default async function LeadDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { apply?: string };
 }) {
   const supabase = createClient();
   const { data: lead } = await supabase
@@ -105,6 +117,19 @@ export default async function LeadDetailPage({
     .order("scheduled_at", { ascending: false });
   const showings = (showingData ?? []) as Showing[];
 
+  // Rental application on this lead (S454, Slice 1). Latest by request time; there
+  // is at most one OPEN application (requestRentalApplication guards duplicates).
+  const { data: appRow } = await supabase
+    .from("rental_applications")
+    .select(
+      "id, status, public_token, pay_mode, applicant_name, submitted_at, requested_at, form_data",
+    )
+    .eq("lead_id", l.id)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const application = appRow as RentalApp | null;
+
   // Cancelled-booking cue (S447 Codex P3): a lead can sit at "Booked" after its
   // only viewing was cancelled - the cancel path deliberately leaves the stage to
   // the operator, so surface it clearly rather than let "Booked" read as an active
@@ -126,6 +151,8 @@ export default async function LeadDetailPage({
 
   const org = await getCurrentOrg();
   const timeZone = org?.booking_timezone ?? "America/Toronto";
+  const canApplications = canUseRentalApplications(org?.plan);
+  const applyBannerKey = searchParams.apply ?? null;
   // "Today" in the org's timezone as YYYY-MM-DD (en-CA formats that way).
   const today = new Date().toLocaleDateString("en-CA", { timeZone });
 
@@ -373,6 +400,15 @@ export default async function LeadDetailPage({
           </Link>
         </div>
       ) : null}
+
+      <ApplicationCard
+        leadId={l.id}
+        application={application}
+        canApplications={canApplications}
+        applyBaseUrl={APP_URL}
+        timeZone={timeZone}
+        bannerKey={applyBannerKey}
+      />
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
@@ -675,6 +711,217 @@ function Field({
           <span className="text-gray-400">—</span>
         )}
       </div>
+    </div>
+  );
+}
+
+// --- Rental application (S454, Slice 1) ------------------------------------
+
+type RentalApp = {
+  id: string;
+  status: string;
+  public_token: string;
+  pay_mode: string;
+  applicant_name: string | null;
+  submitted_at: string | null;
+  requested_at: string | null;
+  form_data: Record<string, unknown> | null;
+};
+
+// Human labels for the non-sensitive Form-410-equivalent keys (mirror
+// lib/rental-application ALLOWED_FORM_FIELDS). Used to render the submission.
+const FORM_LABELS: Record<string, string> = {
+  current_address: "Current address",
+  current_duration: "Time at current address",
+  current_rent: "Current monthly rent",
+  current_landlord_name: "Current landlord",
+  current_landlord_contact: "Current landlord contact",
+  current_reason_leaving: "Reason for leaving",
+  previous_address: "Previous address",
+  previous_duration: "Time at previous address",
+  previous_landlord_name: "Previous landlord",
+  previous_landlord_contact: "Previous landlord contact",
+  employer: "Employer",
+  position: "Position",
+  employment_length: "Length of employment",
+  supervisor_contact: "Supervisor / HR contact",
+  gross_income: "Gross monthly income",
+  second_employer: "Second employer",
+  second_income: "Second income",
+  other_income: "Other income",
+  bank_reference_institution: "Bank / institution",
+  reference_1_name: "Reference 1",
+  reference_1_contact: "Reference 1 contact",
+  reference_2_name: "Reference 2",
+  reference_2_contact: "Reference 2 contact",
+  vehicles: "Vehicle(s)",
+  occupants: "Other occupants",
+  smoking: "Smoking",
+  pets: "Pets",
+  emergency_contact_name: "Emergency contact",
+  emergency_contact_phone: "Emergency contact phone",
+};
+
+const APPLY_BANNERS: Record<string, { tone: "ok" | "warn" | "err"; text: string }> = {
+  sent: { tone: "ok", text: "Application link sent to the applicant." },
+  exists: { tone: "warn", text: "An application is already open for this lead." },
+  error: { tone: "err", text: "Couldn't create the application. Please try again." },
+  upgrade: { tone: "warn", text: "Rental applications are a Growth feature. Upgrade to request one." },
+};
+
+function ApplicationCard({
+  leadId,
+  application,
+  canApplications,
+  applyBaseUrl,
+  timeZone,
+  bannerKey,
+}: {
+  leadId: string;
+  application: RentalApp | null;
+  canApplications: boolean;
+  applyBaseUrl: string;
+  timeZone: string;
+  bannerKey: string | null;
+}) {
+  const banner = bannerKey ? APPLY_BANNERS[bannerKey] ?? null : null;
+  const bannerClass =
+    banner?.tone === "ok"
+      ? "border-green-200 bg-green-50 text-green-800"
+      : banner?.tone === "err"
+        ? "border-red-200 bg-red-50 text-red-700"
+        : "border-amber-200 bg-amber-50 text-amber-800";
+
+  const submitted = application != null && application.status !== "requested";
+  const entries = submitted
+    ? Object.entries(application?.form_data ?? {}).filter(
+        ([, v]) => v != null && String(v).trim().length > 0,
+      )
+    : [];
+
+  return (
+    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      {banner && (
+        <p className={`mb-3 rounded-lg border px-3 py-2 text-sm ${bannerClass}`}>
+          {banner.text}
+        </p>
+      )}
+
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-gray-500">
+          Rental application
+        </h3>
+        {application && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              submitted ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            {submitted ? "Submitted" : "Awaiting applicant"}
+          </span>
+        )}
+      </div>
+
+      {application ? (
+        submitted ? (
+          <div className="mt-3">
+            <p className="text-sm text-gray-600">
+              Submitted
+              {application.submitted_at
+                ? ` ${new Date(application.submitted_at).toLocaleString("en-US", { timeZone })}`
+                : ""}
+              {" · "}
+              {application.pay_mode === "landlord" ? "landlord-paid" : "applicant-paid"}.
+            </p>
+            <details className="mt-2 text-sm">
+              <summary className="cursor-pointer font-medium text-brand">
+                View submission
+              </summary>
+              {entries.length > 0 ? (
+                <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  {entries.map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-xs font-medium uppercase tracking-wider text-gray-400">
+                        {FORM_LABELS[k] ?? k}
+                      </dt>
+                      <dd className="whitespace-pre-wrap text-sm text-gray-800">{String(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="mt-2 text-sm text-gray-500">
+                  The applicant submitted the consent without filling optional fields.
+                </p>
+              )}
+            </details>
+            <p className="mt-3 text-xs text-gray-400">
+              Credit &amp; background screening runs on the applicant&apos;s secure link (coming next).
+            </p>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm text-gray-600">
+              Requested
+              {application.requested_at
+                ? ` ${new Date(application.requested_at).toLocaleString("en-US", { timeZone })}`
+                : ""}
+              {" · "}
+              {application.pay_mode === "landlord" ? "landlord-paid" : "applicant-paid"}. Waiting for the
+              applicant to complete it.
+            </p>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-400">
+                Applicant link
+              </span>
+              <input
+                type="text"
+                readOnly
+                value={`${applyBaseUrl}/apply/${application.public_token}`}
+                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+              />
+            </label>
+          </div>
+        )
+      ) : canApplications ? (
+        <form action={requestRentalApplication} className="mt-3 space-y-3">
+          <input type="hidden" name="id" value={leadId} />
+          <p className="text-sm text-gray-600">
+            Send this renter a secure link to complete a rental application. No SIN, birthdate, or banking
+            details are collected on this step.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-400">
+                Who pays for screening
+              </span>
+              <select
+                name="pay_mode"
+                defaultValue="applicant"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="applicant">Applicant pays</option>
+                <option value="landlord">I&apos;ll pay</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+            >
+              Request application
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="mt-3 text-sm text-gray-500">
+          Rental applications with built-in credit &amp; background screening are part of{" "}
+          <span className="font-medium text-gray-700">Growth</span>.{" "}
+          <Link href="/dashboard/billing" className="font-medium text-brand hover:underline">
+            Upgrade to request one
+          </Link>
+          .
+        </p>
+      )}
     </div>
   );
 }

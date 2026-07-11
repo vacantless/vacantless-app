@@ -12,6 +12,7 @@ import {
   seedTenantMessageTemplates,
 } from "@/lib/org-seeds-server";
 import { acceptReferral } from "@/lib/referrals-server";
+import { isPaidPlan } from "@/lib/billing";
 
 // Org-seeding helpers (clause library + tenant-message templates) now live in
 // lib/org-seeds-server.ts so the provisioning primitive can reuse them with the
@@ -97,5 +98,10 @@ export async function createOrganization(formData: FormData) {
     }
   }
 
-  redirect("/dashboard");
+  // Paid-plan intent from the pricing CTA (/signup?plan=growth|premium): the new
+  // org is created on 'free'; route the operator to billing to subscribe to the
+  // plan they chose, instead of dead-ending on free (Codex P2). Any other value
+  // (or none) lands on the dashboard as before.
+  const planIntent = String(formData.get("plan") ?? "").trim();
+  redirect(isPaidPlan(planIntent) ? `/dashboard/billing?plan=${planIntent}` : "/dashboard");
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
+import { canUseRenterSms } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import {
@@ -281,6 +282,7 @@ export default async function SettingsPage({
   const senderFlash = searchParams.sender;
   const renterFlash = searchParams.renter;
   const smsFlash = searchParams.sms;
+  const canRenterSms = canUseRenterSms(org.plan);
 
   return (
     <div>
@@ -1107,13 +1109,29 @@ export default async function SettingsPage({
                 Something went wrong saving this setting. Please try again.
               </div>
             )}
+            {smsFlash === "upgrade" && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                Texting renters is a Growth feature.{" "}
+                <Link href="/dashboard/billing" className="font-medium underline">
+                  Upgrade to turn it on
+                </Link>
+                .
+              </div>
+            )}
+            {!canRenterSms && smsFlash !== "upgrade" && (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500">
+                Texting renters is included on Growth and Premium. On your current plan we send
+                confirmations and reminders by email.
+              </div>
+            )}
 
             <label className="mt-4 flex items-start gap-3">
               <input
                 name="sms_enabled"
                 type="checkbox"
                 defaultChecked={org.sms_enabled}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                disabled={!canRenterSms}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 disabled:opacity-50"
               />
               <span className="text-sm">
                 <span className="block font-medium text-gray-700">

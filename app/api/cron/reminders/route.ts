@@ -4,6 +4,7 @@ import { sendShowingReminder } from "@/lib/email";
 import { sendSms, showingReminderSms } from "@/lib/sms";
 import { formatSlotLong } from "@/lib/booking";
 import { reminderDue, REMINDER_SENT_COLUMN, type ReminderKind } from "@/lib/reminders";
+import { canUseRenterSms } from "@/lib/billing";
 
 // Reminder sweep. Finds booked showings that are ~24h or ~2h out and haven't
 // had that reminder sent yet, then sends a branded EMAIL reminder and — when the
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
       "id, scheduled_at, reminder_24h_sent_at, reminder_2h_sent_at, " +
         "reminder_24h_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
         "leads(name, email, phone, sms_opt_out), properties(address), " +
-        "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled)",
+        "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled, plan)",
     )
     .eq("outcome", "scheduled")
     .gt("scheduled_at", now.toISOString())
@@ -175,7 +176,9 @@ export async function GET(req: NextRequest) {
       sent2h: row.reminder_2h_sms_sent_at != null,
     });
     const phone: string | null = lead?.phone ?? null;
-    const smsEnabled: boolean = org?.sms_enabled === true;
+    // Renter SMS is a paid (Growth+) capability: enforce the plan at the send
+    // site, not just the sms_enabled toggle (Codex P2 "Free = no texting").
+    const smsEnabled: boolean = org?.sms_enabled === true && canUseRenterSms(org?.plan);
     const optedOut: boolean = lead?.sms_opt_out === true;
     if (smsKind && smsEnabled && phone && !optedOut) {
       const result = await sendSms({
