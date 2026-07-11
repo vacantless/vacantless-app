@@ -462,7 +462,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 15 features", PLAN_FEATURES.length === 15);
+ok("PLAN_FEATURES has 16 features", PLAN_FEATURES.length === 16);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).

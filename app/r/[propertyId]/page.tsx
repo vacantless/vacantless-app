@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { submitLead, rebookSavedLead } from "./actions";
+import { submitLead, rebookSavedLead, joinWaitlist } from "./actions";
 import { InquiryForm } from "./inquiry-form";
 import { PhotoGallery } from "./photo-gallery";
 import { generateSlots, type Availability } from "@/lib/booking";
@@ -75,7 +75,7 @@ export default async function PublicListingPage({
   searchParams,
 }: {
   params: { propertyId: string };
-  searchParams: { submitted?: string; error?: string; p?: string };
+  searchParams: { submitted?: string; error?: string; p?: string; waitlist?: string };
 }) {
   // Per-post tracking id carried by a tracked inquiry link (/r/<id>?p=<postId>).
   const trackedPostId =
@@ -304,15 +304,96 @@ export default async function PublicListingPage({
           className="mt-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
         >
           {!isAvailable ? (
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-gray-900">
-                This rental is no longer available
-              </h2>
-              <p className="mt-2 text-sm text-gray-600">
-                {l.org_name} isn&apos;t taking inquiries for this listing right
-                now. Please check back, or reach out about their other rentals.
-              </p>
-            </div>
+            searchParams.waitlist === "joined" ? (
+              <div className="text-center">
+                <span
+                  className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-sm"
+                  style={{ background: brandBg }}
+                >
+                  <Icons.check className="h-6 w-6" />
+                </span>
+                <h2 className="text-xl font-bold text-gray-900">
+                  You&apos;re on the waiting list
+                </h2>
+                <p className="mt-2 text-sm text-gray-600">
+                  {l.org_name} will email you as soon as this rental is available
+                  again.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <div className="text-center">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    This rental is no longer available
+                  </h2>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Want it if it opens up again? Join the waiting list and{" "}
+                    {l.org_name} will email you the moment it&apos;s available.
+                  </p>
+                </div>
+                {searchParams.waitlist === "needcontact" ? (
+                  <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-sm text-amber-800">
+                    Please add an email or phone so we can reach you.
+                  </p>
+                ) : null}
+                <form action={joinWaitlist} className="mt-5 space-y-4">
+                  <input type="hidden" name="property_id" value={l.id} />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Name
+                      </label>
+                      <input
+                        name="name"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                        placeholder="Your name"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Email
+                      </label>
+                      <input
+                        name="email"
+                        type="email"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                        placeholder="name@example.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Phone
+                      </label>
+                      <input
+                        name="phone"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                        placeholder="(519) 555-1212"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Ideal move-in (optional)
+                      </label>
+                      <input
+                        name="move_in_by"
+                        type="date"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
+                    style={{ background: brandBg }}
+                  >
+                    Join the waiting list
+                  </button>
+                  <p className="text-center text-xs text-gray-400">
+                    We&apos;ll only use this to tell you when this rental opens up.
+                  </p>
+                </form>
+              </div>
+            )
           ) : slotTaken ? (
             <div>
               <div className="text-center">

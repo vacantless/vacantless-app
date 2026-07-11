@@ -60,7 +60,10 @@ import {
   photoCapForPlan,
   storageUpsellNote,
   canUseListingMarketing,
+  canUseWaitlist,
 } from "@/lib/billing";
+import { WaitlistCard, type WaitlistEntryView } from "./waitlist-card";
+import { matchesVacancy } from "@/lib/waitlist";
 import { CopyLink } from "./copy-link";
 import {
   countEligible,
@@ -255,6 +258,7 @@ export default async function PropertyDetailPage({
     pn?: string; // post-submit nonce that remounts the add-post form (form reset)
     posterr?: string;
     photos?: string;
+    waitlist?: string;
     photoskipped?: string;
     photoerr?: string;
     duplicated?: string;
@@ -740,6 +744,35 @@ export default async function PropertyDetailPage({
   // — the card renders a locked upsell for ungated plans, so we always build the
   // kit (cheap, pure) and let the entitlement decide what the card reveals.
   const marketingEnabled = canUseListingMarketing(org?.plan ?? null);
+
+  // --- Waiting list (S457): this property's + any org-wide entries. RLS scopes
+  // the read to the org; the entitlement gates the operator surface (the public
+  // join still captures for ungated plans). matchingCount powers the notify CTA.
+  const waitlistEnabled = canUseWaitlist(org?.plan ?? null);
+  const { data: waitlistRows } = await supabase
+    .from("waitlist_entries")
+    .select(
+      "id, name, email, phone, beds_min, max_rent_cents, move_in_by, message, notes, source, status, created_at, last_notified_at, property_id, last_notified_property_id",
+    )
+    .or(`property_id.eq.${p.id},property_id.is.null`)
+    .order("created_at", { ascending: true });
+  const waitlistEntries = (waitlistRows ?? []) as (WaitlistEntryView & {
+    property_id: string | null;
+    last_notified_property_id: string | null;
+  })[];
+  const waitlistMatchingCount = waitlistEntries.filter((e) =>
+    matchesVacancy(
+      {
+        status: e.status,
+        property_id: e.property_id,
+        beds_min: e.beds_min,
+        max_rent_cents: e.max_rent_cents,
+        last_notified_property_id: e.last_notified_property_id,
+      },
+      { id: p.id, status: p.status, beds: p.beds, rent_cents: p.rent_cents },
+    ),
+  ).length;
+
   const marketingLandingUrl = linkIsLive ? publicUrl : null;
   const marketingKit = buildMarketingKit({
     businessName: org?.name ?? null,
@@ -1824,6 +1857,18 @@ export default async function PropertyDetailPage({
           </form>
         </div>
       )}
+
+      {/* --- Waiting list (S457) --- */}
+      <div className="mt-6">
+        <WaitlistCard
+          propertyId={p.id}
+          entries={waitlistEntries}
+          locked={!waitlistEnabled}
+          propertyAvailable={p.status === "available"}
+          matchingCount={waitlistMatchingCount}
+          flash={searchParams.waitlist}
+        />
+      </div>
 
       </TabPanel>
 

@@ -11,6 +11,7 @@ import {
 } from "@/lib/email";
 import { sendSms, bookingConfirmationSms } from "@/lib/sms";
 import { canUseRenterSms } from "@/lib/billing";
+import { parseBeds, parseRentToCents, parseDateOrNull } from "@/lib/waitlist";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
 import { sendOrgNotification } from "@/lib/notifications-server";
@@ -649,4 +650,44 @@ export async function rebookSavedLead(formData: FormData) {
   }
   // Still taken (or a race) — keep the cookie so they can try yet another time.
   redirect(withTracking(`/r/${propertyId}?submitted=slottaken`, listingPostId));
+}
+
+// ---------------------------------------------------------------------------
+// Public "Join the waiting list" (S457). Shown on a listing that is no longer
+// available: the renter leaves their contact + optional preferences and we add
+// them via the SECURITY DEFINER join_waitlist RPC (the org is resolved from the
+// property server-side; anon has no direct table grant). Best-effort +
+// redirect-based; a soft failure still returns the renter to the page.
+// ---------------------------------------------------------------------------
+export async function joinWaitlist(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const message = String(formData.get("message") ?? "").trim();
+  const bedsMin = parseBeds(String(formData.get("beds_min") ?? ""));
+  const maxRentCents = parseRentToCents(String(formData.get("max_rent") ?? ""));
+  const moveInBy = parseDateOrNull(String(formData.get("move_in_by") ?? ""));
+
+  // A reachable channel is required; bounce back with a hint flag otherwise.
+  if (!email && !phone) {
+    redirect(`/r/${propertyId}?waitlist=needcontact`);
+  }
+
+  const supabase = createClient();
+  // Soft no-op on any RPC error — never turn a renter's join into an error page.
+  await supabase.rpc("join_waitlist", {
+    p_property_id: propertyId,
+    p_name: name || null,
+    p_email: email || null,
+    p_phone: phone || null,
+    p_beds_min: bedsMin,
+    p_max_rent_cents: maxRentCents,
+    p_move_in_by: moveInBy,
+    p_message: message || null,
+  });
+
+  redirect(`/r/${propertyId}?waitlist=joined`);
 }
