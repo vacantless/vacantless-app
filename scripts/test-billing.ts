@@ -36,6 +36,7 @@ import {
   canUseLeaseOcr,
   canUseListingAiImport,
   canUseRentalApplications,
+  canUseServeNotice,
   leaseOcrMonthlyCap,
   LEASE_OCR_CAP_GROWTH,
   LEASE_OCR_CAP_PREMIUM,
@@ -462,7 +463,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 16 features", PLAN_FEATURES.length === 16);
+ok("PLAN_FEATURES has 17 features", PLAN_FEATURES.length === 17);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -551,6 +552,17 @@ ok("applications: plus false", canUseRentalApplications("plus") === false);
 ok("applications: trial false", canUseRentalApplications("trial") === false);
 ok("applications: null false", canUseRentalApplications(null) === false);
 ok("applications mirrors hasEntitlement", canUseRentalApplications("growth") === hasEntitlement("growth", "applications"));
+
+// --- serve_notice (Growth & up; S460 serve-on-behalf N1 + vault) --------------
+ok("serve_notice: free false", canUseServeNotice("free") === false);
+ok("serve_notice: growth true", canUseServeNotice("growth") === true);
+ok("serve_notice: premium true", canUseServeNotice("premium") === true);
+ok("serve_notice: pilot true (full access)", canUseServeNotice("pilot") === true);
+ok("serve_notice: core false", canUseServeNotice("core") === false);
+ok("serve_notice: plus false", canUseServeNotice("plus") === false);
+ok("serve_notice: trial false", canUseServeNotice("trial") === false);
+ok("serve_notice: null false", canUseServeNotice(null) === false);
+ok("serve_notice mirrors hasEntitlement", canUseServeNotice("growth") === hasEntitlement("growth", "serve_notice"));
 ok("lease_ocr cap: free 0", leaseOcrMonthlyCap("free") === 0);
 ok("lease_ocr cap: growth = growth cap", leaseOcrMonthlyCap("growth") === LEASE_OCR_CAP_GROWTH);
 ok("lease_ocr cap: premium = premium cap", leaseOcrMonthlyCap("premium") === LEASE_OCR_CAP_PREMIUM);

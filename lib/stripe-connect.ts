@@ -651,3 +651,62 @@ export function stripeInvoicesToCsv(rows: StripeInvoiceRow[]): string {
   }
   return lines.join("\r\n");
 }
+
+// ============================================================================
+// Rent-rate-change preconditions (autopilot Slice C, S460 / spec S420). Pure:
+// decides whether a recorded increase may be pushed to the Stripe subscription,
+// and never lets an increase bill EARLY (effective date is the N1-served+90
+// legal floor). The impure orchestration (retrieve sub, create/replace the
+// Subscription Schedule) lives in stripe-rent-actions.ts and is covered by the
+// live sandbox flow. Codes map 1:1 to the ?striperent= page states.
+// ============================================================================
+export type StripeRentUpdateCheck =
+  | { ok: true; newAmountCents: number; effectiveUnix: number }
+  | {
+      ok: false;
+      code: "nosub" | "subinactive" | "noamount" | "noop" | "baddate";
+    };
+
+export function validateStripeRentUpdate(input: {
+  subscriptionId: string | null;
+  subscriptionStatus: string | null;
+  newAmountCents: number | null;
+  /** The amount already pushed to Stripe (tenancies.stripe_rent_amount_synced_cents). */
+  syncedAmountCents: number | null;
+  /** The intended first-bill date of the new rent (the N1 effective date). */
+  effectiveIso: string | null;
+  /** The legal floor: never earlier than the recorded increase effective date. */
+  recordedEffectiveIso: string | null;
+  todayIso: string;
+}): StripeRentUpdateCheck {
+  if (!input.subscriptionId) return { ok: false, code: "nosub" };
+
+  const status = (input.subscriptionStatus ?? "").toLowerCase();
+  if (status !== "active" && status !== "trialing") {
+    return { ok: false, code: "subinactive" };
+  }
+
+  const amt = input.newAmountCents;
+  if (amt == null || !Number.isFinite(amt) || amt <= 0) {
+    return { ok: false, code: "noamount" };
+  }
+  const rounded = Math.round(amt);
+
+  // Re-running with the amount already on Stripe is a no-op, not a change.
+  if (input.syncedAmountCents != null && input.syncedAmountCents === rounded) {
+    return { ok: false, code: "noop" };
+  }
+
+  const effUnix = isoToUnixSeconds(input.effectiveIso);
+  const todayUnix = isoToUnixSeconds(input.todayIso);
+  if (effUnix == null || todayUnix == null) return { ok: false, code: "baddate" };
+  // Never bill the increase early: the effective date can't be in the past...
+  if (effUnix < todayUnix) return { ok: false, code: "baddate" };
+  // ...and can't precede the recorded increase's legal effective date.
+  const floorUnix = isoToUnixSeconds(input.recordedEffectiveIso);
+  if (floorUnix != null && effUnix < floorUnix) {
+    return { ok: false, code: "baddate" };
+  }
+
+  return { ok: true, newAmountCents: rounded, effectiveUnix: effUnix };
+}

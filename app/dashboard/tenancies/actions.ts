@@ -23,9 +23,16 @@ import {
 } from "@/lib/watch-lease";
 import { parseLease, type LeaseImage } from "@/lib/lease-extract-vision";
 import type { LeaseParseResult } from "@/lib/lease-extract";
-import { canUseLeaseOcr, leaseOcrMonthlyCap } from "@/lib/billing";
+import { canUseLeaseOcr, leaseOcrMonthlyCap, canUseServeNotice } from "@/lib/billing";
+import { sendTenantMessageEmail } from "@/lib/email";
+import { createHash } from "crypto";
+import { DOCUMENTS_BUCKET } from "@/lib/documents-server";
+import { documentStoragePath, validateDocumentUpload } from "@/lib/documents";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
+const SERVE_APP_URL = (
+  process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"
+).replace(/\/+$/, "");
 
 // ===========================================================================
 // Lease-OCR prefill (S425) - read an uploaded lease's first pages into a draft
@@ -702,4 +709,247 @@ export async function makePrimaryTenant(formData: FormData) {
 
   revalidatePath(`/dashboard/tenancies/${tenancyId}`);
   redirect(`/dashboard/tenancies/${tenancyId}?tenant=primary`);
+}
+
+// ===========================================================================
+// Renewal & rent-increase autopilot — Slice A (S460).
+//
+// setRenewalAutopilot: the opt-in-once toggle ("Handle my renewal & increase").
+// requestRenewalCheckin: mark that the landlord has asked the tenant to answer
+// the stay/leave check-in — stamps renewal_intent_requested_at so the card can
+// surface the shareable /renewal/[token] link + "asked on <date>". No message
+// is sent here (Slice A is capture-only; the send leg composes with the existing
+// approve-to-send tenant drip in a later slice). No PII crosses this action.
+// ===========================================================================
+export async function setRenewalAutopilot(formData: FormData) {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const id = s(formData, "id");
+  if (!id) redirect("/dashboard/tenancies");
+  const on = s(formData, "on") === "1";
+
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org; a foreign id updates nothing.
+  await supabase
+    .from("tenancies")
+    .update({ renewal_autopilot: on, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/tenancies/${id}`);
+  revalidatePath("/dashboard/tenancies");
+  redirect(`/dashboard/tenancies/${id}?renewal=${on ? "on" : "off"}#renewal`);
+}
+
+export async function requestRenewalCheckin(formData: FormData) {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const id = s(formData, "id");
+  if (!id) redirect("/dashboard/tenancies");
+
+  const supabase = createClient();
+  await supabase
+    .from("tenancies")
+    .update({
+      renewal_intent_requested_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  revalidatePath(`/dashboard/tenancies/${id}`);
+  redirect(`/dashboard/tenancies/${id}?renewal=asked#renewal`);
+}
+
+
+// ===========================================================================
+// Renewal & rent-increase autopilot — Slice B (S460): serve-on-behalf of the N1
+// + vault filing. Design-lock §4 posture: the landlord stays the named server,
+// authorizes each service with an explicit tap, and the email leg refuses to
+// send without the tenant's captured consent to electronic service. Growth+
+// (canUseServeNotice); the free tier still gets the print-yourself N1.
+// ===========================================================================
+
+// serveN1 — record HOW/WHEN the N1 was served and, for method 'email' (with
+// e-consent), deliver the tenant a link to the public view-only N1. Email is
+// stamped served ONLY on a real send (mirrors notifyWaitlist); hand/mail record
+// immediately (the landlord served it themselves).
+export async function serveN1(formData: FormData) {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const id = s(formData, "id");
+  if (!id) redirect("/dashboard/tenancies");
+  // Server-side entitlement gate (never UI-only).
+  if (!canUseServeNotice(org.plan)) redirect(`/dashboard/tenancies/${id}?serve=upgrade#renewal`);
+
+  const method = s(formData, "method");
+  if (method !== "email" && method !== "hand" && method !== "mail") {
+    redirect(`/dashboard/tenancies/${id}?serve=badmethod#renewal`);
+  }
+  const effectiveDate = parseDateOrNull(s(formData, "effective_date"));
+  const consent = s(formData, "consent") === "on";
+
+  const supabase = createClient();
+  const { data: row } = await supabase
+    .from("tenancies")
+    .select(
+      "id, status, n1_service_token, property:properties(address), tenants(name, email, is_primary)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) redirect("/dashboard/tenancies");
+  const t = row as unknown as {
+    id: string;
+    status: string;
+    n1_service_token: string | null;
+    property: { address: string | null } | null;
+    tenants: { name: string | null; email: string | null; is_primary: boolean }[];
+  };
+
+  const primary =
+    (t.tenants ?? []).find((x) => x.is_primary) ?? (t.tenants ?? [])[0] ?? null;
+  const address = t.property?.address?.trim() || "your rental";
+
+  const baseUpdate: Record<string, unknown> = {
+    n1_effective_date: effectiveDate,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (method === "email") {
+    // §4: never email without captured e-consent + a reachable tenant.
+    if (!consent) redirect(`/dashboard/tenancies/${id}?serve=noconsent#renewal`);
+    if (!primary?.email) redirect(`/dashboard/tenancies/${id}?serve=noemail#renewal`);
+    if (!t.n1_service_token) redirect(`/dashboard/tenancies/${id}?serve=notoken#renewal`);
+
+    const link = `${SERVE_APP_URL}/n1/${t.n1_service_token}`;
+    const send = await sendTenantMessageEmail({
+      tenant_email: primary.email,
+      tenant_name: primary.name ?? null,
+      org_name: org.name,
+      brand_color: org.brand_color ?? null,
+      logo_url: org.logo_url ?? null,
+      reply_to_email: org.reply_to_email ?? null,
+      subject: `Notice of rent increase — ${address}`,
+      body:
+        `Your landlord, ${org.name}, has issued a Notice of Rent Increase (Form N1) for ${address}.\n\n` +
+        `You can view and print the notice here:\n${link}\n\n` +
+        `If you have questions, reply to this email.`,
+    });
+    // Stamp served ONLY on a real send — a failed send leaves it unserved.
+    if (!send.sent) {
+      redirect(`/dashboard/tenancies/${id}?serve=sendfail#renewal`);
+    }
+    await supabase
+      .from("tenancies")
+      .update({
+        ...baseUpdate,
+        n1_served_at: new Date().toISOString(),
+        n1_served_method: "email",
+        electronic_service_consent: true,
+        electronic_service_consent_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    revalidatePath(`/dashboard/tenancies/${id}`);
+    redirect(`/dashboard/tenancies/${id}?serve=emailed#renewal`);
+  }
+
+  // hand / mail: the landlord served it themselves; record the method + date.
+  await supabase
+    .from("tenancies")
+    .update({
+      ...baseUpdate,
+      n1_served_at: new Date().toISOString(),
+      n1_served_method: method,
+    })
+    .eq("id", id);
+  revalidatePath(`/dashboard/tenancies/${id}`);
+  redirect(`/dashboard/tenancies/${id}?serve=recorded#renewal`);
+}
+
+// fileN1Pdf — file the printed/served N1 into the document vault as a 'notice'.
+// Mirrors fileApplicationPdf (S456): the operator prints the /n1 view to PDF and
+// uploads it; we store it + stamp n1_filed_document_id (idempotent).
+export async function fileN1Pdf(formData: FormData) {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const id = s(formData, "id");
+  if (!id) redirect("/dashboard/tenancies");
+  const fail = (reason: string): never =>
+    redirect(`/dashboard/tenancies/${id}?serve=${reason}#renewal`);
+  if (!canUseServeNotice(org.plan)) fail("upgrade");
+
+  const supabase = createClient();
+  const { data: row } = await supabase
+    .from("tenancies")
+    .select("id, n1_filed_document_id, property:properties(address), tenants(person_id, is_primary)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) fail("filefail");
+  const t = row as unknown as {
+    id: string;
+    n1_filed_document_id: string | null;
+    property: { address: string | null } | null;
+    tenants: { person_id: string | null; is_primary: boolean }[];
+  };
+  if (t.n1_filed_document_id) redirect(`/dashboard/tenancies/${id}?serve=filed#renewal`);
+
+  const file = formData
+    .getAll("document")
+    .find(
+      (f): f is File =>
+        typeof f === "object" && f !== null && "size" in f && "type" in f && (f as File).size > 0,
+    );
+  if (!file) fail("filenone");
+  const theFile = file as File;
+  if (theFile.type !== "application/pdf") fail("filetype");
+  const v = validateDocumentUpload({ type: theFile.type, size: theFile.size });
+  if (!v.ok) fail("filefail");
+
+  const docId = crypto.randomUUID();
+  const path = documentStoragePath(org.id, docId, "pdf");
+  const { error: upErr } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(path, theFile, { contentType: "application/pdf", upsert: false });
+  if (upErr) fail("filefail");
+
+  let sha256: string | null = null;
+  try {
+    sha256 = createHash("sha256").update(Buffer.from(await theFile.arrayBuffer())).digest("hex");
+  } catch {
+    sha256 = null;
+  }
+
+  const primaryPerson =
+    (t.tenants ?? []).find((x) => x.is_primary)?.person_id ??
+    (t.tenants ?? [])[0]?.person_id ??
+    null;
+  const addr = t.property?.address?.trim();
+
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    organization_id: org.id,
+    person_id: primaryPerson,
+    title: addr ? `Rent increase notice (N1) — ${addr}` : "Rent increase notice (N1)",
+    doc_type: "notice",
+    storage_path: path,
+    mime_type: "application/pdf",
+    size_bytes: theFile.size,
+    sha256,
+    source: "uploaded",
+  });
+  if (insErr) {
+    await supabase.storage.from(DOCUMENTS_BUCKET).remove([path]);
+    fail("filefail");
+  }
+
+  await supabase
+    .from("tenancies")
+    .update({ n1_filed_document_id: docId, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  revalidatePath(`/dashboard/tenancies/${id}`);
+  redirect(`/dashboard/tenancies/${id}?serve=filed#renewal`);
 }

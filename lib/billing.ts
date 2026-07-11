@@ -123,7 +123,11 @@ export type PlanFeature =
   // a leasing-funnel capture that completes the "keep the lead" loop Growth owns.
   // The public join form still captures for ungated plans (an upgrade hook); this
   // entitlement gates only the operator MANAGE + NOTIFY surface.
-  | "waitlist";
+  | "waitlist"
+  // Serve-on-behalf of the N1 (S460): deliver the rent-increase notice to the
+  // tenant + file it to the vault. Growth+ (the "do it for me" premium; the free
+  // tier still gets the print-yourself N1). The serveN1 action enforces this.
+  | "serve_notice";
 
 export const PLAN_FEATURES: PlanFeature[] = [
   "sms",
@@ -142,6 +146,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "listing_ai_import",
   "applications",
   "waitlist",
+  "serve_notice",
 ];
 
 export type PlanEntitlements = Record<PlanFeature, boolean>;
@@ -165,6 +170,7 @@ function noEntitlements(): PlanEntitlements {
     listing_ai_import: false,
     applications: false,
     waitlist: false,
+    serve_notice: false,
   };
 }
 
@@ -194,13 +200,13 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // founder pilot = full access
-  core: { applications: false, sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false },
-  plus: { applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false },
+  pilot: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // founder pilot = full access
+  core: { serve_notice: false, applications: false, sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false },
+  plus: { serve_notice: false, applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import
-  premium: { applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import
+  growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import
+  premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -296,6 +302,12 @@ export function canUseListingMarketing(plan: string | null | undefined): boolean
 // enforced by the waitlist actions and the property-page card.
 export function canUseWaitlist(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "waitlist");
+}
+
+// Serve-on-behalf of the N1 + vault filing (S460). Growth+; the free tier still
+// gets the print-yourself N1 from the rent-increase card (the upgrade hook).
+export function canUseServeNotice(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "serve_notice");
 }
 
 // Whether this plan may use lease-OCR prefill (S425): upload a signed lease and

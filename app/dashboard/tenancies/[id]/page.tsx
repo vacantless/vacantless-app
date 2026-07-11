@@ -24,6 +24,10 @@ import {
   removeTenant,
   makePrimaryTenant,
   recordRentIncrease,
+  setRenewalAutopilot,
+  requestRenewalCheckin,
+  serveN1,
+  fileN1Pdf,
 } from "../actions";
 import { createRotessaCustomer, createRotessaSchedule } from "../rotessa-actions";
 import { defaultFirstProcessDate, minProcessDate, formatProcessDate } from "@/lib/rotessa";
@@ -36,6 +40,7 @@ import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-act
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { tenantReportPath } from "@/lib/incident-reports";
 import { sendTenantMessage } from "../comms-actions";
+import { updateStripeRentAmount } from "../stripe-rent-actions";
 import {
   WORK_ORDER_CATEGORIES,
   WORK_ORDER_PRIORITIES,
@@ -86,6 +91,7 @@ import {
   type RiskLevel,
 } from "@/lib/clauses";
 import { deriveRentIncrease } from "@/lib/rent-increase";
+import { deriveRenewalCheckin } from "@/lib/renewal";
 import { RentIncreaseCard } from "@/components/rent-increase-card";
 import {
   pickDefaultOpenSection,
@@ -156,6 +162,16 @@ type Tenancy = {
   stripe_subscription_id: string | null;
   stripe_subscription_status: string | null;
   report_token: string | null;
+  renewal_autopilot: boolean | null;
+  renewal_intent: string | null;
+  renewal_intent_at: string | null;
+  renewal_intent_requested_at: string | null;
+  renewal_intent_token: string | null;
+  n1_served_at: string | null;
+  n1_served_method: string | null;
+  n1_effective_date: string | null;
+  n1_filed_document_id: string | null;
+  electronic_service_consent: boolean | null;
   property: {
     id: string;
     address: string;
@@ -316,6 +332,8 @@ export default async function TenancyDetailPage({
     err?: string;
     rotessa?: string;
     striperent?: string;
+    serve?: string;
+    renewal?: string;
     reason?: string;
     paid?: string;
     msg?: string;
@@ -338,7 +356,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, report_token, property:properties(id, address, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, report_token, property:properties(id, address, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -514,6 +532,52 @@ export default async function TenancyDetailPage({
           todayOntario,
         )
       : null;
+
+  const renewalCheckin =
+    t.status === "active" && t.start_date
+      ? deriveRenewalCheckin(
+          {
+            startDate: t.start_date,
+            endDate: t.end_date ?? null,
+            intent:
+              (t.renewal_intent as "staying" | "leaving" | "unsure" | null) ??
+              null,
+          },
+          todayOntario,
+        )
+      : null;
+  const renewalLink = t.renewal_intent_token
+    ? `${process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"}/renewal/${t.renewal_intent_token}`
+    : null;
+  const renewalStatusLabel = renewalCheckin
+    ? renewalCheckin.status === "answered"
+      ? renewalCheckin.intent === "leaving"
+        ? "Moving out"
+        : renewalCheckin.intent === "staying"
+          ? "Staying"
+          : "Undecided"
+      : renewalCheckin.status === "due"
+        ? "Ask now"
+        : renewalCheckin.status === "passed"
+          ? "Overdue"
+          : "Scheduled"
+    : undefined;
+
+  const SERVE_FLASH: Record<string, string> = {
+    emailed: "Notice emailed to the tenant and recorded as served.",
+    recorded: "Recorded as served.",
+    filed: "Filed to the document vault.",
+    sendfail: "Could not email the notice — check email is configured. Nothing was recorded as served.",
+    noconsent: "Emailing needs the tenant's consent to electronic service. Tick the consent box, or serve by hand/mail.",
+    noemail: "No tenant email on file — add one, or serve by hand/mail.",
+    upgrade: "Serving the notice for you is a Growth feature.",
+    notoken: "Could not build the tenant link. Try again.",
+    badmethod: "Pick how the notice was served.",
+    filenone: "Attach the printed N1 PDF to file it.",
+    filetype: "The vault accepts a PDF — print the N1 and save it as PDF first.",
+    filefail: "Could not file the notice. Try again.",
+  };
+  const serveFlash = searchParams.serve ? (SERVE_FLASH[searchParams.serve] ?? null) : null;
 
   const { data: messageRows } = await supabase
     .from("tenant_messages")
@@ -1378,6 +1442,101 @@ export default async function TenancyDetailPage({
         <TenancyInspectionSection tenancyId={t.id} inspections={inspectionViews} />
       </CollapsibleSection>
 
+      {/* Renewal check-in (autopilot Slice A, S460) --------------------- */}
+      {renewalCheckin && (
+        <CollapsibleSection
+          id="renewal"
+          title="Renewal"
+          status={renewalStatusLabel}
+          defaultOpen={renewalCheckin.status === "due"}
+        >
+          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-gray-800">
+              Handle my renewal &amp; increase
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Turn this on once and Vacantless runs the yearly cycle for you: it
+              checks in with your tenant about {String.fromCharCode(8220)}staying
+              or leaving{String.fromCharCode(8221)} about 90 days before the lease
+              is up, then walks you through the rent increase. Set it once; it
+              re-arms every year.
+            </p>
+            <form action={setRenewalAutopilot} className="mt-3">
+              <input type="hidden" name="id" value={t.id} />
+              <input type="hidden" name="on" value={t.renewal_autopilot ? "0" : "1"} />
+              <button
+                type="submit"
+                className={
+                  t.renewal_autopilot
+                    ? "rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
+                    : "rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                }
+              >
+                {t.renewal_autopilot
+                  ? "Autopilot is ON — turn off"
+                  : "Turn on renewal autopilot"}
+              </button>
+            </form>
+          </div>
+
+          <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-700">
+              Lease completes{" "}
+              <span className="font-medium">{renewalCheckin.completionDate}</span>.
+              {renewalCheckin.status === "not_ready"
+                ? ` The tenant check-in opens ${renewalCheckin.checkinOpensDate}.`
+                : ""}
+            </p>
+
+            {renewalCheckin.intent ? (
+              <div className="mt-3 rounded-xl bg-gray-50 p-3.5">
+                <p className="text-sm font-medium text-gray-900">
+                  {renewalCheckin.intent === "leaving"
+                    ? "Your tenant is planning to move out."
+                    : renewalCheckin.intent === "staying"
+                      ? "Your tenant is staying."
+                      : "Your tenant is not sure yet."}
+                </p>
+                <p className="mt-1 text-xs text-gray-600">
+                  {renewalCheckin.branch === "handoff_turnover"
+                    ? "Start the turnover — list the unit and line up the next tenant."
+                    : "Next step: serve the rent increase in the section below."}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <form action={requestRenewalCheckin}>
+                  <input type="hidden" name="id" value={t.id} />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    {t.renewal_intent_requested_at
+                      ? "Re-send the tenant check-in"
+                      : "Ask my tenant: staying or leaving?"}
+                  </button>
+                </form>
+                {t.renewal_intent_requested_at ? (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Asked on {t.renewal_intent_requested_at.slice(0, 10)}. Send
+                    your tenant this one-tap link:
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Or send your tenant this one-tap link directly:
+                  </p>
+                )}
+                {renewalLink && (
+                  <code className="mt-1 block break-all rounded-md bg-gray-100 px-2 py-1.5 text-xs text-gray-700">
+                    {renewalLink}
+                  </code>
+                )}
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+      )}
+
       {/* Rent increase (N1 v1) ------------------------------------------- */}
       {rentIncrease && (
         <CollapsibleSection
@@ -1459,6 +1618,108 @@ export default async function TenancyDetailPage({
                 </button>
               </div>
             </form>
+          )}
+
+          {/* Slice C: push the increase to the Stripe rail (date-gated) --- */}
+          {rentIncrease.status !== "exempt" &&
+            t.stripe_subscription_id &&
+            rentIncrease.newRentCents != null && (
+              <form
+                action={updateStripeRentAmount}
+                className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+              >
+                <input type="hidden" name="tenancy_id" value={t.id} />
+                <input
+                  type="hidden"
+                  name="new_rent"
+                  value={(rentIncrease.newRentCents / 100).toFixed(2)}
+                />
+                <input
+                  type="hidden"
+                  name="effective_date"
+                  value={rentIncrease.effectiveDate}
+                />
+                <p className="text-sm font-semibold text-gray-700">
+                  Collect the new rent automatically
+                </p>
+                <p className="mb-3 text-xs text-gray-500">
+                  This tenant pays by Stripe. Once you have served the increase,
+                  update the charge to $
+                  {Math.round(rentIncrease.newRentCents / 100).toLocaleString(
+                    "en-US",
+                  )}
+                  /mo starting {rentIncrease.effectiveDate}. It bills the new
+                  amount on that date and never before.
+                </p>
+                <button type="submit" className={SECONDARY_ACTION_CLASS}>
+                  Update the Stripe rent charge
+                </button>
+              </form>
+            )}
+
+          {/* Slice B: serve the N1 on the landlord's behalf + file to vault -- */}
+          {rentIncrease.status !== "exempt" && (
+            <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              {serveFlash && (
+                <p className="mb-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                  {serveFlash}
+                </p>
+              )}
+              <p className="text-sm font-semibold text-gray-700">Serve the notice</p>
+              {t.n1_served_at ? (
+                <div className="mt-2">
+                  <p className="text-sm text-gray-700">
+                    Served {t.n1_served_at.slice(0, 10)}
+                    {t.n1_served_method ? ` by ${t.n1_served_method}` : ""}.
+                  </p>
+                  {t.n1_filed_document_id ? (
+                    <p className="mt-2 text-xs text-emerald-700">Filed to the document vault.</p>
+                  ) : (
+                    <div className="mt-3">
+                      <p className="mb-1 text-xs text-gray-500">
+                        File the served notice to the vault:{" "}
+                        <Link
+                          href={`/dashboard/tenancies/${t.id}/n1`}
+                          className="font-medium text-brand hover:underline"
+                          target="_blank"
+                        >
+                          open the N1 to print &amp; save as PDF
+                        </Link>
+                        , then upload it.
+                      </p>
+                      <form action={fileN1Pdf} encType="multipart/form-data" className="flex flex-wrap items-center gap-2">
+                        <input type="hidden" name="id" value={t.id} />
+                        <input type="file" name="document" accept="application/pdf" className="text-xs" />
+                        <button type="submit" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                          File to vault
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <form action={serveN1} className="mt-2">
+                  <input type="hidden" name="id" value={t.id} />
+                  <input type="hidden" name="effective_date" value={rentIncrease.effectiveDate} />
+                  <p className="mb-2 text-xs text-gray-500">
+                    You stay the named landlord on the notice — Vacantless only delivers it at your direction.
+                  </p>
+                  <label className="block text-xs font-medium text-gray-600">How are you serving it?</label>
+                  <select name="method" className={inputCls}>
+                    <option value="email">Email the tenant for me</option>
+                    <option value="hand">I served it by hand</option>
+                    <option value="mail">I served it by mail</option>
+                  </select>
+                  <label className="mt-3 flex items-start gap-2 text-xs text-gray-600">
+                    <input type="checkbox" name="consent" className="mt-0.5" />
+                    <span>The tenant has consented to receive notices electronically (required to email).</span>
+                  </label>
+                  <button type="submit" className={`${SECONDARY_ACTION_CLASS} mt-3`}>
+                    Serve the notice
+                  </button>
+                </form>
+              )}
+            </div>
           )}
         </CollapsibleSection>
       )}
