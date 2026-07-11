@@ -160,3 +160,24 @@ function addDaysUTC(ms: number, days: number): number {
 function diffDays(fromMs: number, toMs: number): number {
   return Math.round((toMs - fromMs) / 86_400_000);
 }
+
+// ============================================================================
+// S460d (Codex P2): the N1 serve-state is per-CYCLE, not one-shot. recordRentIncrease
+// rolls the anchor forward but leaves n1_served_at/n1_snapshot in place, so next
+// year the served UI + the Stripe snapshot are STALE (belong to last cycle). A
+// serve counts for the CURRENT cycle only when its frozen snapshot effective date
+// equals the currently-derived effective date; otherwise treat it as unserved so
+// the operator can serve a fresh N1 and the stale Stripe snapshot is ignored.
+// ============================================================================
+export function n1ServedForCurrentCycle(
+  servedAt: string | null | undefined,
+  snapshotEffectiveDate: string | null | undefined,
+  currentEffectiveDate: string | null | undefined,
+): boolean {
+  return (
+    servedAt != null &&
+    snapshotEffectiveDate != null &&
+    currentEffectiveDate != null &&
+    snapshotEffectiveDate === currentEffectiveDate
+  );
+}

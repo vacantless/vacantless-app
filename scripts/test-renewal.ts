@@ -6,6 +6,7 @@ import {
   isRenewalIntent,
   CHECKIN_LEAD_DAYS,
   RENEWAL_INTENTS,
+  n1ServedForCurrentCycle,
   type RenewalCheckinInput,
 } from "../lib/renewal";
 
@@ -110,6 +111,18 @@ ok("bad today -> null", deriveRenewalCheckin(inp(), "not-a-date") === null);
   const r = deriveRenewalCheckin(inp({ endDate: "garbage" }), "2025-06-01")!;
   ok("bad end_date -> anniversary fallback", r.completionDate === "2026-03-01");
 }
+
+// --- S460d: N1 serve-state is per-cycle (Codex P2 - annual re-arm) --------------
+ok("served this cycle when effective dates match",
+   n1ServedForCurrentCycle("2026-12-01T00:00:00Z", "2027-03-01", "2027-03-01") === true);
+ok("NOT served this cycle when snapshot is last cycle's",
+   n1ServedForCurrentCycle("2026-12-01T00:00:00Z", "2027-03-01", "2028-03-01") === false);
+ok("not served when servedAt null",
+   n1ServedForCurrentCycle(null, "2027-03-01", "2027-03-01") === false);
+ok("not served when snapshot date missing",
+   n1ServedForCurrentCycle("2026-12-01T00:00:00Z", null, "2027-03-01") === false);
+ok("not served when current derived date missing",
+   n1ServedForCurrentCycle("2026-12-01T00:00:00Z", "2027-03-01", null) === false);
 
 console.log(`\nrenewal: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

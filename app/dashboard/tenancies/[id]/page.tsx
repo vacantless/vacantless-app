@@ -91,7 +91,7 @@ import {
   type RiskLevel,
 } from "@/lib/clauses";
 import { deriveRentIncrease } from "@/lib/rent-increase";
-import { deriveRenewalCheckin } from "@/lib/renewal";
+import { deriveRenewalCheckin, n1ServedForCurrentCycle } from "@/lib/renewal";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { RentIncreaseCard } from "@/components/rent-increase-card";
 import {
@@ -1627,7 +1627,8 @@ export default async function TenancyDetailPage({
               rolls to next cycle after recordRentIncrease). Shows once served. */}
           {t.stripe_subscription_id &&
             t.n1_snapshot &&
-            t.n1_snapshot.newRentCents != null && (
+            t.n1_snapshot.newRentCents != null &&
+            t.n1_snapshot.effectiveDate === rentIncrease.effectiveDate && (
               <form
                 action={updateStripeRentAmount}
                 className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
@@ -1659,10 +1660,14 @@ export default async function TenancyDetailPage({
                 </p>
               )}
               <p className="text-sm font-semibold text-gray-700">Serve the notice</p>
-              {t.n1_served_at ? (
+              {n1ServedForCurrentCycle(
+                t.n1_served_at,
+                t.n1_snapshot?.effectiveDate,
+                rentIncrease.effectiveDate,
+              ) ? (
                 <div className="mt-2">
                   <p className="text-sm text-gray-700">
-                    Served {t.n1_served_at.slice(0, 10)}
+                    Served {t.n1_served_at?.slice(0, 10)}
                     {t.n1_served_method ? ` by ${t.n1_served_method}` : ""}.
                   </p>
                   {t.n1_filed_document_id ? (
