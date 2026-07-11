@@ -26,8 +26,10 @@ import {
   clearNextAction,
   updateLeadStatus,
   requestRentalApplication,
+  fileApplicationPdf,
 } from "../actions";
 import { canUseRentalApplications } from "@/lib/billing";
+import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
 
 const APP_URL =
@@ -122,13 +124,30 @@ export default async function LeadDetailPage({
   const { data: appRow } = await supabase
     .from("rental_applications")
     .select(
-      "id, status, public_token, pay_mode, applicant_name, submitted_at, requested_at, form_data",
+      "id, status, public_token, pay_mode, applicant_name, submitted_at, requested_at, form_data, filed_to_vault_at, filed_document_id",
     )
     .eq("lead_id", l.id)
     .order("requested_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   const application = appRow as RentalApp | null;
+
+  // Signed download for the filed application-summary PDF (S456, Slice 1b), if
+  // one exists. Minted per page load (short-lived) like the vault list view.
+  let applicationFiledDownloadUrl: string | null = null;
+  if (application?.filed_document_id) {
+    const { data: docRow } = await supabase
+      .from("documents")
+      .select("storage_path")
+      .eq("id", application.filed_document_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    const storagePath = (docRow as { storage_path: string } | null)?.storage_path ?? null;
+    if (storagePath) {
+      const signed = await createDocumentDownloadUrl(supabase, storagePath);
+      if (signed.ok) applicationFiledDownloadUrl = signed.signedUrl;
+    }
+  }
 
   // Cancelled-booking cue (S447 Codex P3): a lead can sit at "Booked" after its
   // only viewing was cancelled - the cancel path deliberately leaves the stage to
@@ -408,6 +427,8 @@ export default async function LeadDetailPage({
         applyBaseUrl={APP_URL}
         timeZone={timeZone}
         bannerKey={applyBannerKey}
+        printUrl={`/dashboard/leads/${l.id}/application/print`}
+        filedDownloadUrl={applicationFiledDownloadUrl}
       />
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -726,6 +747,8 @@ type RentalApp = {
   submitted_at: string | null;
   requested_at: string | null;
   form_data: Record<string, unknown> | null;
+  filed_to_vault_at: string | null;
+  filed_document_id: string | null;
 };
 
 // Human labels for the non-sensitive Form-410-equivalent keys (mirror
@@ -767,6 +790,11 @@ const APPLY_BANNERS: Record<string, { tone: "ok" | "warn" | "err"; text: string 
   exists: { tone: "warn", text: "An application is already open for this lead." },
   error: { tone: "err", text: "Couldn't create the application. Please try again." },
   upgrade: { tone: "warn", text: "Rental applications are a Growth feature. Upgrade to request one." },
+  filed: { tone: "ok", text: "Application summary filed to the document vault." },
+  filenone: { tone: "err", text: "No PDF was selected. Print the summary, save it as a PDF, then choose that file." },
+  filetype: { tone: "err", text: "That file wasn't a PDF. Use Print → Save as PDF, then upload the PDF." },
+  filenotready: { tone: "warn", text: "The applicant hasn't submitted this application yet." },
+  filefail: { tone: "err", text: "Couldn't file the summary. Please try again." },
 };
 
 function ApplicationCard({
@@ -776,6 +804,8 @@ function ApplicationCard({
   applyBaseUrl,
   timeZone,
   bannerKey,
+  printUrl,
+  filedDownloadUrl,
 }: {
   leadId: string;
   application: RentalApp | null;
@@ -783,6 +813,8 @@ function ApplicationCard({
   applyBaseUrl: string;
   timeZone: string;
   bannerKey: string | null;
+  printUrl: string;
+  filedDownloadUrl: string | null;
 }) {
   const banner = bannerKey ? APPLY_BANNERS[bannerKey] ?? null : null;
   const bannerClass =
@@ -854,6 +886,49 @@ function ApplicationCard({
                 </p>
               )}
             </details>
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+              <a
+                href={printUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-brand hover:underline"
+              >
+                Print summary (save as PDF)
+              </a>
+              {filedDownloadUrl ? (
+                <span className="inline-flex items-center gap-2 text-sm text-gray-600">
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                    Filed to vault
+                  </span>
+                  <a
+                    href={filedDownloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-brand hover:underline"
+                  >
+                    Download
+                  </a>
+                </span>
+              ) : (
+                <form action={fileApplicationPdf} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={leadId} />
+                  <input type="hidden" name="application_id" value={application.id} />
+                  <input
+                    type="file"
+                    name="document"
+                    accept="application/pdf"
+                    required
+                    className="text-xs text-gray-600 file:mr-2 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    File to vault
+                  </button>
+                </form>
+              )}
+            </div>
             <p className="mt-3 text-xs text-gray-400">
               Credit &amp; background screening runs on the applicant&apos;s secure link (coming next).
             </p>

@@ -12,6 +12,10 @@ import { normalizePayMode } from "@/lib/rental-application";
 import { normalizeEmail } from "@/lib/persons";
 import { normalizePhoneE164 } from "@/lib/sms";
 import { sendRentalApplicationInvite } from "@/lib/email";
+import { createHash } from "crypto";
+import { DOCUMENTS_BUCKET } from "@/lib/documents-server";
+import { documentStoragePath, validateDocumentUpload } from "@/lib/documents";
+import { applicationSummaryTitle } from "@/lib/rental-application-summary";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -266,4 +270,127 @@ export async function requestRentalApplication(formData: FormData) {
 
   revalidatePath(`/dashboard/leads/${id}`);
   redirect(`/dashboard/leads/${id}?apply=sent`);
+}
+
+// File a SUBMITTED application's NON-SENSITIVE summary PDF into the document
+// vault (S456, Slice 1b). The operator opens the print view
+// (/dashboard/leads/[id]/application/print), reviews it, Prints -> Saves as PDF,
+// and files that PDF here. Stored as a documents(0076) row
+// (doc_type='id_package', source='uploaded') and back-linked via
+// rental_applications.filed_document_id so the card shows a download and
+// re-filing is idempotent. Mirrors fileExecutedLeasePdf's storage + rollback.
+// MODEL B holds — the filed artifact is the non-sensitive summary only; no
+// SIN/DOB/banking ever enters the vault.
+export async function fileApplicationPdf(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
+  const leadId = String(formData.get("id") ?? "");
+  const applicationId = String(formData.get("application_id") ?? "");
+  if (!leadId || !applicationId) return;
+
+  const fail = (reason: string): never =>
+    redirect(`/dashboard/leads/${leadId}?apply=${reason}`);
+
+  const org = await getCurrentOrg();
+  if (!org) return;
+  // Server-side entitlement gate (never UI-only) — mirrors requestRentalApplication.
+  if (!canUseRentalApplications(org.plan)) fail("upgrade");
+
+  const supabase = createClient();
+
+  // The application must exist, belong to THIS lead (and this org via RLS), and be
+  // submitted (or beyond) — a 'requested' application has no summary to file.
+  const { data: appRow } = await supabase
+    .from("rental_applications")
+    .select("id, lead_id, status, applicant_name, filed_document_id")
+    .eq("id", applicationId)
+    .eq("lead_id", leadId)
+    .maybeSingle();
+  if (!appRow) fail("filefail");
+  const app = appRow as {
+    id: string;
+    lead_id: string;
+    status: string;
+    applicant_name: string | null;
+    filed_document_id: string | null;
+  };
+  if (app.status === "requested") fail("filenotready");
+  // Idempotent: already filed -> bounce back with the filed banner (no duplicate).
+  if (app.filed_document_id) redirect(`/dashboard/leads/${leadId}?apply=filed`);
+
+  // Exactly one PDF (the printed summary). Reject images/other in this slot.
+  const file = formData
+    .getAll("document")
+    .find(
+      (f): f is File =>
+        typeof f === "object" &&
+        f !== null &&
+        "size" in f &&
+        "type" in f &&
+        (f as File).size > 0,
+    );
+  if (!file) fail("filenone");
+  const theFile = file as File;
+  if (theFile.type !== "application/pdf") fail("filetype");
+  const v = validateDocumentUpload({ type: theFile.type, size: theFile.size });
+  if (!v.ok) fail("filefail");
+
+  const docId = crypto.randomUUID();
+  const path = documentStoragePath(org.id, docId, "pdf");
+
+  const { error: upErr } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(path, theFile, { contentType: "application/pdf", upsert: false });
+  if (upErr) fail("filefail");
+
+  let sha256: string | null = null;
+  try {
+    sha256 = createHash("sha256")
+      .update(Buffer.from(await theFile.arrayBuffer()))
+      .digest("hex");
+  } catch {
+    sha256 = null;
+  }
+
+  const { error: insErr } = await supabase.from("documents").insert({
+    id: docId,
+    organization_id: org.id,
+    title: applicationSummaryTitle(app.applicant_name),
+    doc_type: "id_package",
+    storage_path: path,
+    mime_type: "application/pdf",
+    size_bytes: theFile.size,
+    sha256,
+    source: "uploaded",
+  });
+  if (insErr) {
+    // Roll back the orphaned object so Storage and the table stay in sync.
+    const { error: rbErr } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .remove([path]);
+    if (rbErr) {
+      console.error("fileApplicationPdf: rollback remove failed", {
+        path,
+        error: rbErr.message,
+      });
+    }
+    fail("filefail");
+  }
+
+  // Back-link the application to the filed doc (idempotency + card download).
+  await supabase
+    .from("rental_applications")
+    .update({ filed_document_id: docId, filed_to_vault_at: new Date().toISOString() })
+    .eq("id", app.id);
+
+  // Timeline note for oversight.
+  await supabase.from("messages").insert({
+    organization_id: org.id,
+    lead_id: leadId,
+    channel: "note",
+    direction: "outbound",
+    body: "Rental application summary filed to the document vault.",
+  });
+
+  revalidatePath(`/dashboard/leads/${leadId}`);
+  redirect(`/dashboard/leads/${leadId}?apply=filed`);
 }
