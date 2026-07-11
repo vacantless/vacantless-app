@@ -798,7 +798,7 @@ export async function serveN1(formData: FormData) {
   const { data: row } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, start_date, n1_service_token, property:properties(address, rent_control_exempt), tenants(name, email, is_primary)",
+      "id, status, rent_cents, start_date, last_rent_increase_date, n1_service_token, property:properties(address, rent_control_exempt), tenants(name, email, is_primary)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -808,6 +808,7 @@ export async function serveN1(formData: FormData) {
     status: string;
     rent_cents: number | null;
     start_date: string | null;
+    last_rent_increase_date: string | null;
     n1_service_token: string | null;
     property: { address: string | null; rent_control_exempt: boolean | null } | null;
     tenants: { name: string | null; email: string | null; is_primary: boolean }[];
@@ -829,6 +830,10 @@ export async function serveN1(formData: FormData) {
     {
       startDate: t.start_date,
       currentRentCents: t.rent_cents,
+      // Codex S460c P1: the 12-month anchor is the LAST increase date (else the
+      // lease start). Omitting it froze a wrong snapshot on later annual cycles
+      // and Stripe billed from it. Matches the dashboard card's derivation.
+      lastIncreaseDate: t.last_rent_increase_date ?? null,
       exempt: t.property?.rent_control_exempt === true,
     },
     todayOntario,

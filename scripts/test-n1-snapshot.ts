@@ -1,6 +1,7 @@
 // Unit tests for n1ModelFromSnapshot (S460b, Codex P1 fold).
 // Run: npx tsx scripts/test-n1-snapshot.ts
 import { n1ModelFromSnapshot, type N1Snapshot } from "../lib/n1-render";
+import { deriveRentIncrease } from "../lib/rent-increase";
 
 let passed = 0, failed = 0;
 function ok(name: string, cond: boolean) {
@@ -51,6 +52,28 @@ ok("exempt: flag true", em.exempt === true);
 // defensive: non-array tenantNames -> []
 const badSnap = { ...snap, tenantNames: undefined as unknown as string[] };
 ok("bad tenantNames -> []", n1ModelFromSnapshot(badSnap).tenantNames.length === 0);
+
+// --- S460c regression: the served snapshot MUST anchor on last_rent_increase_date
+// (not the lease start) on later annual cycles - serveN1 derives the same way the
+// dashboard card does. Omitting lastIncreaseDate froze a wrong effective date/amount
+// that Stripe then billed from. ---------------------------------------------------
+{
+  const start = "2024-03-01";
+  const lastIncrease = "2026-03-01"; // a prior increase two years after move-in
+  const today = "2026-06-01";
+  const withAnchor = deriveRentIncrease(
+    { startDate: start, currentRentCents: 200000, lastIncreaseDate: lastIncrease },
+    today,
+  )!;
+  const withoutAnchor = deriveRentIncrease(
+    { startDate: start, currentRentCents: 200000, lastIncreaseDate: null },
+    today,
+  )!;
+  ok("anchor: eligible = lastIncrease + 12mo", withAnchor.earliestEffectiveDate === "2027-03-01");
+  ok("no-anchor would wrongly use start + 12mo", withoutAnchor.earliestEffectiveDate === "2025-03-01");
+  ok("the two derivations DIFFER (why the snapshot needs lastIncreaseDate)",
+     withAnchor.earliestEffectiveDate !== withoutAnchor.earliestEffectiveDate);
+}
 
 console.log(`\nn1-snapshot: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
