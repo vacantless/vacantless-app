@@ -112,10 +112,24 @@ export async function provisionLandlordOrg(
   }
   const orgId = (org as { id: string }).id;
 
+  // Best-effort compensation: undo the just-created org + user so a failed
+  // CRITICAL write (safe-contact pinning or the invite/audit row) never leaves a
+  // half-provisioned org behind — e.g. a concierge org whose renter-facing
+  // contact never got moved onto the proxy, or a provision with no idempotency/
+  // handoff row. Deletes are best-effort (a leftover is still safer than a
+  // silent partial success).
+  const rollbackProvision = async () => {
+    await admin.from("organizations").delete().eq("id", orgId).then(
+      () => {},
+      () => {},
+    );
+    await admin.auth.admin.deleteUser(userId).catch(() => {});
+  };
+
   // 5. Default to the free funnel tier + seed starter content (best-effort).
   // Concierge orgs stay safely pointed at the proxy/operator login until the
   // explicit owner-handoff action moves the auth email and public contacts.
-  await admin
+  const { error: orgUpdateErr } = await admin
     .from("organizations")
     .update({
       plan: "free",
@@ -129,6 +143,15 @@ export async function provisionLandlordOrg(
         : {}),
     })
     .eq("id", orgId);
+  // For a concierge org this write is CRITICAL: it pins the renter-facing
+  // contact onto the proxy. If it fails we must NOT report success (the org
+  // would keep whatever default contact it was created with, not the proxy) —
+  // compensate and fail. For a non-concierge org this only sets the funnel tier,
+  // so a miss is non-fatal.
+  if (concierge && orgUpdateErr) {
+    await rollbackProvision();
+    return { ok: false, reason: "provision_failed", detail: orgUpdateErr.message };
+  }
   await seedClauseLibrary(admin, orgId);
   await seedTenantMessageTemplates(admin, orgId);
 
@@ -149,9 +172,13 @@ export async function provisionLandlordOrg(
     inviteLink = null;
   }
 
-  // 7. Record the invite (audit + idempotency + referral attribution).
+  // 7. Record the invite (audit + idempotency + referral attribution). This row
+  //    is CRITICAL: it is the idempotency guard (step 2), the audit trail, and —
+  //    for a concierge org — the ONLY place the intended landlord email lives for
+  //    a later handoff. If the insert fails, compensate and fail rather than
+  //    returning a success that can't be re-run or handed off.
   const nowIso = new Date().toISOString();
-  await admin.from("org_invites").insert({
+  const { error: inviteInsertErr } = await admin.from("org_invites").insert({
     invited_email: email,
     invited_name: landlordName,
     intended_owner_email: intendedOwnerEmail,
@@ -164,6 +191,10 @@ export async function provisionLandlordOrg(
     token: newToken(),
     provisioned_at: nowIso,
   });
+  if (inviteInsertErr) {
+    await rollbackProvision();
+    return { ok: false, reason: "provision_failed", detail: inviteInsertErr.message };
+  }
 
   return {
     ok: true,
@@ -244,21 +275,36 @@ export async function handoffProvisionedOrg(
   if (row.status !== "provisioned" || !row.provisioned_org_id || !row.provisioned_user_id) {
     return { ok: false, reason: "not_found" };
   }
+  const provisionedUserId = row.provisioned_user_id;
 
   const intended = (row.intended_owner_email ?? "").trim().toLowerCase();
   if (!intended) return { ok: false, reason: "missing_intended_owner" };
   if (intended !== confirmEmail) return { ok: false, reason: "email_mismatch" };
 
   const { error: updateErr } = await admin.auth.admin.updateUserById(
-    row.provisioned_user_id,
+    provisionedUserId,
     { email: intended, email_confirm: true },
   );
   if (updateErr) {
     const msg = updateErr.message ?? "";
     if (/already|registered|exists|duplicate/i.test(msg)) {
-      return { ok: false, reason: "already_has_account", detail: msg };
+      // A prior handoff attempt may have already moved THIS user's email to
+      // `intended` but failed on a later write (org/invite update). Re-check
+      // before refusing: if the provisioned user already owns `intended`, treat
+      // the auth move as done and fall through to (idempotently) repair the org
+      // + invite rows below. Only a DIFFERENT auth user owning the email is a
+      // genuine already_has_account collision.
+      const { data: existingUser } = await admin.auth.admin.getUserById(
+        provisionedUserId,
+      );
+      const currentEmail = (existingUser?.user?.email ?? "").trim().toLowerCase();
+      if (currentEmail !== intended) {
+        return { ok: false, reason: "already_has_account", detail: msg };
+      }
+      // else: email already on the provisioned user — continue to repair.
+    } else {
+      return { ok: false, reason: "update_failed", detail: msg };
     }
-    return { ok: false, reason: "update_failed", detail: msg };
   }
 
   let inviteLink: string | null = null;
