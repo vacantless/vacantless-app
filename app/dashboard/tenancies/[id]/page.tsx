@@ -92,6 +92,7 @@ import {
 } from "@/lib/clauses";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { deriveRenewalCheckin } from "@/lib/renewal";
+import type { N1Snapshot } from "@/lib/n1-render";
 import { RentIncreaseCard } from "@/components/rent-increase-card";
 import {
   pickDefaultOpenSection,
@@ -172,6 +173,7 @@ type Tenancy = {
   n1_effective_date: string | null;
   n1_filed_document_id: string | null;
   electronic_service_consent: boolean | null;
+  n1_snapshot: N1Snapshot | null;
   property: {
     id: string;
     address: string;
@@ -356,7 +358,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, report_token, property:properties(id, address, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1620,36 +1622,27 @@ export default async function TenancyDetailPage({
             </form>
           )}
 
-          {/* Slice C: push the increase to the Stripe rail (date-gated) --- */}
-          {rentIncrease.status !== "exempt" &&
-            t.stripe_subscription_id &&
-            rentIncrease.newRentCents != null && (
+          {/* Slice C: push the SERVED increase to the Stripe rail, from the
+              frozen n1_snapshot (Codex P1a fix - never the live re-derive, which
+              rolls to next cycle after recordRentIncrease). Shows once served. */}
+          {t.stripe_subscription_id &&
+            t.n1_snapshot &&
+            t.n1_snapshot.newRentCents != null && (
               <form
                 action={updateStripeRentAmount}
                 className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
               >
                 <input type="hidden" name="tenancy_id" value={t.id} />
-                <input
-                  type="hidden"
-                  name="new_rent"
-                  value={(rentIncrease.newRentCents / 100).toFixed(2)}
-                />
-                <input
-                  type="hidden"
-                  name="effective_date"
-                  value={rentIncrease.effectiveDate}
-                />
                 <p className="text-sm font-semibold text-gray-700">
                   Collect the new rent automatically
                 </p>
                 <p className="mb-3 text-xs text-gray-500">
-                  This tenant pays by Stripe. Once you have served the increase,
-                  update the charge to $
-                  {Math.round(rentIncrease.newRentCents / 100).toLocaleString(
-                    "en-US",
-                  )}
-                  /mo starting {rentIncrease.effectiveDate}. It bills the new
-                  amount on that date and never before.
+                  This tenant pays by Stripe. Update the charge to the served
+                  amount{t.n1_snapshot.newRent ? ` (${t.n1_snapshot.newRent}/mo)` : ""}
+                  {t.n1_snapshot.effectiveDate
+                    ? ` starting ${t.n1_snapshot.effectiveDate}`
+                    : ""}
+                  . It bills the new amount on that date and never before.
                 </p>
                 <button type="submit" className={SECONDARY_ACTION_CLASS}>
                   Update the Stripe rent charge

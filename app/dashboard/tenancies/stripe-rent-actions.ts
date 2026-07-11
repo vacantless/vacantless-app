@@ -18,7 +18,7 @@ import {
   isoToUnixSeconds,
   validateStripeRentUpdate,
 } from "@/lib/stripe-connect";
-import { parseMoneyToCents } from "@/lib/tenancy";
+import type { N1Snapshot } from "@/lib/n1-render";
 import { isValidProcessDate } from "@/lib/rotessa";
 
 // Stripe Connect rent mandate actions for a tenancy (platform pivot step 2,
@@ -399,13 +399,12 @@ type RateChangeTenancyRow = {
   stripe_rent_amount_synced_cents: number | null;
   stripe_subscription_schedule_id: string | null;
   last_rent_increase_date: string | null;
+  n1_snapshot: N1Snapshot | null;
 };
 
 export async function updateStripeRentAmount(formData: FormData) {
   const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
   if (!tenancyId) redirect("/dashboard/tenancies");
-  const effectiveIso = String(formData.get("effective_date") ?? "").trim();
-  const newAmountCents = parseMoneyToCents(String(formData.get("new_rent") ?? ""));
 
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
@@ -430,12 +429,24 @@ export async function updateStripeRentAmount(formData: FormData) {
   const { data: tData } = await supabase
     .from("tenancies")
     .select(
-      "id, stripe_subscription_id, stripe_subscription_status, stripe_rent_amount_synced_cents, stripe_subscription_schedule_id, last_rent_increase_date",
+      "id, stripe_subscription_id, stripe_subscription_status, stripe_rent_amount_synced_cents, stripe_subscription_schedule_id, last_rent_increase_date, n1_snapshot",
     )
     .eq("id", tenancyId)
     .maybeSingle();
   const tenancy = tData as RateChangeTenancyRow | null;
   if (!tenancy) redirect("/dashboard/tenancies");
+
+  // Codex P1a fix: the amount + effective date come from the IMMUTABLE served N1
+  // snapshot (frozen at serveN1), NEVER a client hidden field or a live re-derive.
+  // After recordRentIncrease rolls the anchor forward the live derive is next
+  // cycle; the snapshot still holds the served increase, so the rail bills exactly
+  // what was served. Must serve the N1 first (which writes the snapshot).
+  const snap = tenancy.n1_snapshot;
+  if (!snap || snap.newRentCents == null) {
+    redirect(`${tenancyPath(tenancyId)}?striperent=nosnapshot`);
+  }
+  const newAmountCents: number = snap.newRentCents;
+  const effectiveIso = snap.effectiveDate ?? "";
 
   const check = validateStripeRentUpdate({
     subscriptionId: tenancy.stripe_subscription_id,

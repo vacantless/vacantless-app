@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatRentCents } from "@/lib/tenancy";
 import { deriveRentIncrease } from "@/lib/rent-increase";
-import { renderN1Html, type N1RenderModel } from "@/lib/n1-render";
+import {
+  renderN1Html,
+  n1ModelFromSnapshot,
+  type N1RenderModel,
+  type N1Snapshot,
+} from "@/lib/n1-render";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +29,7 @@ export async function GET(
   const { data } = await admin
     .from("tenancies")
     .select(
-      "status, rent_cents, start_date, n1_effective_date, " +
+      "status, rent_cents, start_date, n1_effective_date, n1_snapshot, " +
         "property:properties(address, rent_control_exempt), " +
         "tenants(name, is_primary), " +
         "organization:organizations(name, public_contact_phone, public_contact_email)",
@@ -38,6 +43,7 @@ export async function GET(
     rent_cents: number | null;
     start_date: string | null;
     n1_effective_date: string | null;
+    n1_snapshot: N1Snapshot | null;
     property: { address: string | null; rent_control_exempt: boolean | null } | null;
     tenants: { name: string | null; is_primary: boolean }[];
     organization: {
@@ -46,6 +52,19 @@ export async function GET(
       public_contact_email: string | null;
     } | null;
   };
+
+  // Codex P1b fix: render the IMMUTABLE snapshot frozen at serve time. This is
+  // the notice the tenant was actually served; it must not drift when rent_cents
+  // / start_date / today / the guideline table change afterward.
+  if (t.n1_snapshot) {
+    return new NextResponse(renderN1Html(n1ModelFromSnapshot(t.n1_snapshot)), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
 
   if (t.status !== "active" || t.rent_cents == null || !t.start_date) {
     return new NextResponse("This notice is no longer available.", {

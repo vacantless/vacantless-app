@@ -28,6 +28,9 @@ import { sendTenantMessageEmail } from "@/lib/email";
 import { createHash } from "crypto";
 import { DOCUMENTS_BUCKET } from "@/lib/documents-server";
 import { documentStoragePath, validateDocumentUpload } from "@/lib/documents";
+import { formatRentCents } from "@/lib/tenancy";
+import { deriveRentIncrease } from "@/lib/rent-increase";
+import type { N1Snapshot } from "@/lib/n1-render";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 const SERVE_APP_URL = (
@@ -789,14 +792,13 @@ export async function serveN1(formData: FormData) {
   if (method !== "email" && method !== "hand" && method !== "mail") {
     redirect(`/dashboard/tenancies/${id}?serve=badmethod#renewal`);
   }
-  const effectiveDate = parseDateOrNull(s(formData, "effective_date"));
   const consent = s(formData, "consent") === "on";
 
   const supabase = createClient();
   const { data: row } = await supabase
     .from("tenancies")
     .select(
-      "id, status, n1_service_token, property:properties(address), tenants(name, email, is_primary)",
+      "id, status, rent_cents, start_date, n1_service_token, property:properties(address, rent_control_exempt), tenants(name, email, is_primary)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -804,9 +806,59 @@ export async function serveN1(formData: FormData) {
   const t = row as unknown as {
     id: string;
     status: string;
+    rent_cents: number | null;
+    start_date: string | null;
     n1_service_token: string | null;
-    property: { address: string | null } | null;
+    property: { address: string | null; rent_control_exempt: boolean | null } | null;
     tenants: { name: string | null; email: string | null; is_primary: boolean }[];
+  };
+
+  // Serve only makes sense for an active tenancy with a rent + start date.
+  if (t.status !== "active" || t.rent_cents == null || !t.start_date) {
+    redirect(`/dashboard/tenancies/${id}?serve=notready#renewal`);
+  }
+
+  // Codex P2 fix: recompute the effective date + amounts SERVER-SIDE (never trust
+  // the client hidden field). Codex P1b fix: freeze them into an immutable snapshot
+  // that /n1/[token] renders and updateStripeRentAmount bills from, so a later
+  // recordRentIncrease re-derive cannot drift the served notice or the rail.
+  const todayOntario = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Toronto",
+  });
+  const derived = deriveRentIncrease(
+    {
+      startDate: t.start_date,
+      currentRentCents: t.rent_cents,
+      exempt: t.property?.rent_control_exempt === true,
+    },
+    todayOntario,
+  );
+  if (!derived) redirect(`/dashboard/tenancies/${id}?serve=notready#renewal`);
+
+  const nowIso = new Date().toISOString();
+  const tenantNames = (t.tenants ?? [])
+    .slice()
+    .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+    .map((x) => (x.name ?? "").trim())
+    .filter((n) => n.length > 0);
+  const snapshot: N1Snapshot = {
+    currentRentCents: derived.currentRentCents,
+    newRentCents: derived.newRentCents,
+    increaseCents: derived.increaseCents,
+    currentRent: formatRentCents(derived.currentRentCents),
+    newRent: derived.newRentCents != null ? formatRentCents(derived.newRentCents) : null,
+    increaseAmount:
+      derived.increaseCents != null ? formatRentCents(derived.increaseCents) : null,
+    guidelinePercent: derived.guidelinePercent,
+    effectiveDate: derived.effectiveDate,
+    serveByDate: derived.serveByDate,
+    exempt: derived.exempt,
+    landlordName: org.name,
+    landlordPhone: org.public_contact_phone ?? null,
+    landlordEmail: org.public_contact_email ?? null,
+    tenantNames,
+    rentalUnitAddress: t.property?.address?.trim() || null,
+    capturedAtIso: nowIso,
   };
 
   const primary =
@@ -814,8 +866,9 @@ export async function serveN1(formData: FormData) {
   const address = t.property?.address?.trim() || "your rental";
 
   const baseUpdate: Record<string, unknown> = {
-    n1_effective_date: effectiveDate,
-    updated_at: new Date().toISOString(),
+    n1_effective_date: derived.effectiveDate,
+    n1_snapshot: snapshot,
+    updated_at: nowIso,
   };
 
   if (method === "email") {
@@ -832,7 +885,7 @@ export async function serveN1(formData: FormData) {
       brand_color: org.brand_color ?? null,
       logo_url: org.logo_url ?? null,
       reply_to_email: org.reply_to_email ?? null,
-      subject: `Notice of rent increase — ${address}`,
+      subject: `Notice of rent increase - ${address}`,
       body:
         `Your landlord, ${org.name}, has issued a Notice of Rent Increase (Form N1) for ${address}.\n\n` +
         `You can view and print the notice here:\n${link}\n\n` +

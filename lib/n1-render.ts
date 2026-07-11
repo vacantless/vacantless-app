@@ -264,3 +264,52 @@ export function renderN1Html(model: N1RenderModel): string {
 </body>
 </html>`;
 }
+
+// ============================================================================
+// N1 snapshot (S460b, Codex P1 fold). The IMMUTABLE served notice: frozen at
+// serve time so /n1/[token] and the Stripe rate sync never re-derive from
+// mutable tenancy fields (which drift to the next cycle after recordRentIncrease).
+// Stored as tenancies.n1_snapshot (jsonb, migration 0134). Carries both raw cents
+// (for Stripe) and the formatted strings (for the N1 render), so n1ModelFromSnapshot
+// is pure with no formatting dependency.
+// ============================================================================
+export type N1Snapshot = {
+  // Raw cents — the authoritative amount the Stripe rail bills.
+  currentRentCents: number;
+  newRentCents: number | null;
+  increaseCents: number | null;
+  // Formatted for the rendered N1 (frozen at serve time).
+  currentRent: string | null;
+  newRent: string | null;
+  increaseAmount: string | null;
+  guidelinePercent: number | null;
+  // Server-computed at serve time (never the client hidden field).
+  effectiveDate: string | null;
+  serveByDate: string | null;
+  exempt: boolean;
+  landlordName: string;
+  landlordPhone: string | null;
+  landlordEmail: string | null;
+  tenantNames: string[];
+  rentalUnitAddress: string | null;
+  capturedAtIso: string;
+};
+
+/** Rebuild the N1 render model from a frozen snapshot. Pure. */
+export function n1ModelFromSnapshot(s: N1Snapshot): N1RenderModel {
+  return {
+    landlordName: s.landlordName,
+    landlordPhone: s.landlordPhone,
+    landlordEmail: s.landlordEmail,
+    tenantNames: Array.isArray(s.tenantNames) ? s.tenantNames : [],
+    rentalUnitAddress: s.rentalUnitAddress,
+    currentRent: s.currentRent,
+    newRent: s.newRent,
+    increaseAmount: s.increaseAmount,
+    guidelinePercent: s.guidelinePercent,
+    effectiveDate: s.effectiveDate,
+    serveByDate: s.serveByDate,
+    exempt: s.exempt,
+    generatedAtIso: s.capturedAtIso,
+  };
+}
