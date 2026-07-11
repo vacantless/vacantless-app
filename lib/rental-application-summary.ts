@@ -15,9 +15,9 @@
 // (scripts/test-rental-application-summary.ts) and safe to render server-side.
 
 import { escapeHtml } from "./n1-render";
-import { SENSITIVE_BLOCKED_FIELDS } from "./rental-application";
+import { ALLOWED_FORM_FIELDS } from "./rental-application";
 
-const BLOCKED = new Set<string>(SENSITIVE_BLOCKED_FIELDS as readonly string[]);
+const ALLOWED = new Set<string>(ALLOWED_FORM_FIELDS as readonly string[]);
 
 // Human labels for the non-sensitive keys (mirror lib/rental-application
 // ALLOWED_FORM_FIELDS + the lead-detail FORM_LABELS map).
@@ -141,8 +141,9 @@ export function fieldLabel(key: string): string {
 }
 
 /** Build the grouped, non-sensitive summary sections from a form_data object.
- * Blocked keys are dropped defensively; empty values and empty sections are
- * omitted. Case-insensitive on key names (mirrors sanitizeFormData). */
+ * Allowlist-only (Model B): only ALLOWED_FORM_FIELDS keys render; unknown,
+ * case-variant, and nested (object/array) values are dropped. Empty values and
+ * empty sections are omitted. Case-insensitive on key names. */
 export function buildSummarySections(
   formData: Record<string, unknown> | null | undefined,
 ): ApplicationSummarySection[] {
@@ -150,7 +151,13 @@ export function buildSummarySections(
   if (formData && typeof formData === "object" && !Array.isArray(formData)) {
     for (const [rawKey, rawVal] of Object.entries(formData)) {
       const k = rawKey.trim().toLowerCase();
-      if (BLOCKED.has(k)) continue;
+      // Allowlist-only (Model B): render ONLY the known non-sensitive keys, so a
+      // case-variant / unknown / nested sensitive key that ever reached storage
+      // can never surface here. Nested objects/arrays are dropped defensively —
+      // the SQL boundary (0129) keeps scalars only, so a legacy row's nested
+      // value stays out of the summary too.
+      if (!ALLOWED.has(k)) continue;
+      if (rawVal !== null && typeof rawVal === "object") continue;
       const val = stringifyFormValue(rawVal);
       if (val.length > 0) norm.set(k, val);
     }

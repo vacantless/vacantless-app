@@ -29,6 +29,7 @@ import {
   fileApplicationPdf,
 } from "../actions";
 import { canUseRentalApplications } from "@/lib/billing";
+import { ALLOWED_FORM_FIELDS } from "@/lib/rental-application";
 import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
 
@@ -785,6 +786,8 @@ const FORM_LABELS: Record<string, string> = {
   emergency_contact_phone: "Emergency contact phone",
 };
 
+const APPLICATION_ALLOWED = new Set<string>(ALLOWED_FORM_FIELDS as readonly string[]);
+
 const APPLY_BANNERS: Record<string, { tone: "ok" | "warn" | "err"; text: string }> = {
   sent: { tone: "ok", text: "Application link sent to the applicant." },
   exists: { tone: "warn", text: "An application is already open for this lead." },
@@ -827,7 +830,10 @@ function ApplicationCard({
   const submitted = application != null && application.status !== "requested";
   const entries = submitted
     ? Object.entries(application?.form_data ?? {}).filter(
-        ([, v]) => v != null && String(v).trim().length > 0,
+        ([k, v]) =>
+          APPLICATION_ALLOWED.has(k.trim().toLowerCase()) &&
+          (typeof v === "string" || typeof v === "number" || typeof v === "boolean") &&
+          String(v).trim().length > 0,
       )
     : [];
 
@@ -874,7 +880,7 @@ function ApplicationCard({
                   {entries.map(([k, v]) => (
                     <div key={k}>
                       <dt className="text-xs font-medium uppercase tracking-wider text-gray-400">
-                        {FORM_LABELS[k] ?? k}
+                        {FORM_LABELS[k.toLowerCase()] ?? k}
                       </dt>
                       <dd className="whitespace-pre-wrap text-sm text-gray-800">{String(v)}</dd>
                     </div>

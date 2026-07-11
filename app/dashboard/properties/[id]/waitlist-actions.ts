@@ -200,8 +200,11 @@ export async function notifyWaitlist(formData: FormData) {
       : null;
 
   let notified = 0;
+  let skipped = 0;
   for (const entry of candidates) {
     if (!matchesVacancy(entry, vacancy)) continue;
+
+    let delivered = false;
     if (entry.email) {
       await sendWaitlistVacancyAlert({
         entry_id: entry.id,
@@ -215,6 +218,7 @@ export async function notifyWaitlist(formData: FormData) {
         property_address: (prop.address as string | null) ?? null,
         rent_cents: vacancy.rent_cents,
       });
+      delivered = true;
     }
     if (smsOn && entry.phone_e164) {
       await sendSms({
@@ -225,9 +229,19 @@ export async function notifyWaitlist(formData: FormData) {
           rent_label: rentLabel,
         }),
       });
+      delivered = true;
     }
-    // Stamp regardless of email success so a re-run doesn't re-attempt the same
-    // vacancy; the operator can still reach a phone-only entry manually.
+
+    // Only stamp + count once a channel actually fired. A phone-only entry on an
+    // org with SMS off (or an ungated plan) has NO reachable channel here — leave
+    // it PENDING (unstamped) so a later notify, after SMS is enabled, still
+    // reaches them, and surface it as skipped rather than silently counting it
+    // as notified.
+    if (!delivered) {
+      skipped += 1;
+      continue;
+    }
+
     await supabase
       .from("waitlist_entries")
       .update({
@@ -241,5 +255,13 @@ export async function notifyWaitlist(formData: FormData) {
   }
 
   revalidatePath(propPath(propertyId));
-  redirect(wlAnchor(propertyId, notified > 0 ? `notified-${notified}` : "nomatch"));
+  const flash =
+    notified > 0
+      ? skipped > 0
+        ? `notified-${notified}-skip-${skipped}`
+        : `notified-${notified}`
+      : skipped > 0
+        ? `noreach-${skipped}`
+        : "nomatch";
+  redirect(wlAnchor(propertyId, flash));
 }

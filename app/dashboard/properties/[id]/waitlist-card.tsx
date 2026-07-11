@@ -41,8 +41,25 @@ const STATUS_META: Record<string, { cls: string }> = {
 function flashMessage(flash: string | undefined): { text: string; ok: boolean } | null {
   if (!flash) return null;
   if (flash.startsWith("notified-")) {
-    const n = Number.parseInt(flash.slice("notified-".length), 10);
-    return { text: `Notified ${n} ${n === 1 ? "person" : "people"} on the waiting list.`, ok: true };
+    const rest = flash.slice("notified-".length);
+    const n = Number.parseInt(rest, 10);
+    const skipM = rest.match(/skip-(\d+)/);
+    const skipped = skipM ? Number.parseInt(skipM[1], 10) : 0;
+    const base = `Notified ${n} ${n === 1 ? "person" : "people"} on the waiting list.`;
+    return {
+      text:
+        skipped > 0
+          ? `${base} ${skipped} phone-only ${skipped === 1 ? "waiter" : "waiters"} couldn't be reached (SMS is off) and stay pending.`
+          : base,
+      ok: true,
+    };
+  }
+  if (flash.startsWith("noreach-")) {
+    const m = Number.parseInt(flash.slice("noreach-".length), 10) || 0;
+    return {
+      text: `${m} matching ${m === 1 ? "waiter is" : "waiters are"} phone-only and couldn't be reached — turn on SMS to notify them. They stay pending.`,
+      ok: false,
+    };
   }
   switch (flash) {
     case "added":

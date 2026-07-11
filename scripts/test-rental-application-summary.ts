@@ -43,7 +43,7 @@ const sections = buildSummarySections({
   smoking: "No",
   // empty values are skipped
   employer: "  ",
-  // unknown-but-non-sensitive key still surfaces under Other details
+  // unknown (non-allowlisted) key is DROPPED (allowlist-only, Model B)
   favourite_colour: "blue",
 });
 const secTitles = sections.map((s) => s.title);
@@ -52,7 +52,20 @@ ok("employment section present (gross_income)", secTitles.includes("Employment &
 ok("empty employer dropped", !JSON.stringify(sections).includes("Employer"));
 ok("references section present", secTitles.includes("References"));
 ok("household section present", secTitles.includes("Household"));
-ok("unknown key surfaces under Other details", secTitles.includes("Other details"));
+ok(
+  "unknown key dropped (allowlist-only, no Other details)",
+  !secTitles.includes("Other details") && !JSON.stringify(sections).includes("blue"),
+);
+
+// nested object/array under an allowed key is dropped whole (no nested PII leak)
+const nested = buildSummarySections({
+  current_address: "5 Elm",
+  occupants: [{ sin: "111-222-333" }],
+});
+ok(
+  "nested object under allowed key dropped (no nested PII)",
+  !JSON.stringify(nested).includes("111-222-333"),
+);
 
 // --- Model B: sensitive keys never survive ----------------------------------
 const withPii = buildSummarySections({
