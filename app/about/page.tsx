@@ -38,11 +38,11 @@ function SiteHeader() {
           className="hidden items-center gap-[18px] text-[0.91rem] font-semibold text-[#59655f] md:flex"
           aria-label="Marketing sections"
         >
-          <Link href="/#workflow" className="hover:text-[#15211d]">
-            Workflow
+          <Link href="/#product" className="hover:text-[#15211d]">
+            What you get
           </Link>
-          <Link href="/#why" className="hover:text-[#15211d]">
-            Why Vacantless
+          <Link href="/#rent" className="hover:text-[#15211d]">
+            Rent collection
           </Link>
           <Link href="/#pricing" className="hover:text-[#15211d]">
             Pricing
