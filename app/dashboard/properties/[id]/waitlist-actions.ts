@@ -206,7 +206,7 @@ export async function notifyWaitlist(formData: FormData) {
 
     let delivered = false;
     if (entry.email) {
-      await sendWaitlistVacancyAlert({
+      const emailRes = await sendWaitlistVacancyAlert({
         entry_id: entry.id,
         property_id: propertyId,
         renter_name: entry.name,
@@ -218,10 +218,10 @@ export async function notifyWaitlist(formData: FormData) {
         property_address: (prop.address as string | null) ?? null,
         rent_cents: vacancy.rent_cents,
       });
-      delivered = true;
+      if (emailRes.sent) delivered = true;
     }
     if (smsOn && entry.phone_e164) {
-      await sendSms({
+      const smsRes = await sendSms({
         to: entry.phone_e164,
         body: waitlistVacancySms({
           org_name: orgRow?.name ?? null,
@@ -229,14 +229,15 @@ export async function notifyWaitlist(formData: FormData) {
           rent_label: rentLabel,
         }),
       });
-      delivered = true;
+      if (smsRes.sent) delivered = true;
     }
 
-    // Only stamp + count once a channel actually fired. A phone-only entry on an
-    // org with SMS off (or an ungated plan) has NO reachable channel here — leave
-    // it PENDING (unstamped) so a later notify, after SMS is enabled, still
-    // reaches them, and surface it as skipped rather than silently counting it
-    // as notified.
+    // Only stamp + count once a channel actually SENT/queued (the helper's .sent
+    // flag), not merely when we attempted it. An entry with no reachable channel
+    // (phone-only on an SMS-off/ungated org) OR a failed send (no creds, provider
+    // reject, fetch error -> {sent:false}) has delivered=false: leave it PENDING
+    // (unstamped) so a later notify still reaches them, and surface it as skipped
+    // rather than silently counting it as notified.
     if (!delivered) {
       skipped += 1;
       continue;

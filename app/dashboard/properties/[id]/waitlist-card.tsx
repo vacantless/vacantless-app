@@ -49,7 +49,7 @@ function flashMessage(flash: string | undefined): { text: string; ok: boolean } 
     return {
       text:
         skipped > 0
-          ? `${base} ${skipped} phone-only ${skipped === 1 ? "waiter" : "waiters"} couldn't be reached (SMS is off) and stay pending.`
+          ? `${base} ${skipped} ${skipped === 1 ? "waiter" : "waiters"} couldn't be reached and stay pending (turn on SMS or check email settings, then notify again).`
           : base,
       ok: true,
     };
@@ -57,7 +57,7 @@ function flashMessage(flash: string | undefined): { text: string; ok: boolean } 
   if (flash.startsWith("noreach-")) {
     const m = Number.parseInt(flash.slice("noreach-".length), 10) || 0;
     return {
-      text: `${m} matching ${m === 1 ? "waiter is" : "waiters are"} phone-only and couldn't be reached — turn on SMS to notify them. They stay pending.`,
+      text: `${m} matching ${m === 1 ? "waiter" : "waiters"} couldn't be reached and stay pending. Turn on SMS or check email settings, then notify again.`,
       ok: false,
     };
   }
