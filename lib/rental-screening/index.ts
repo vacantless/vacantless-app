@@ -122,8 +122,9 @@ export type BuildInviteResult =
 
 /**
  * Assemble + validate the normalized invite request from a submitted
- * rental_applications row. A person must already be resolved (submit does this
- * via lib/persons); a name and at least one contact channel are required so the
+ * rental_applications row. A person is resolved when the application is
+ * requested (requestRentalApplication -> resolvePersonId), so person_id is set
+ * before screening; a name and at least one contact channel are required so the
  * provider can reach the applicant. Pure — no I/O, no PII.
  */
 export function buildInviteRequest(input: {

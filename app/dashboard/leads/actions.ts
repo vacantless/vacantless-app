@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { canUseRentalApplications } from "@/lib/billing";
 import { normalizePayMode } from "@/lib/rental-application";
 import { normalizeEmail } from "@/lib/persons";
+import { resolvePersonId } from "@/lib/persons-server";
 import { normalizePhoneE164 } from "@/lib/sms";
 import { sendRentalApplicationInvite } from "@/lib/email";
 import { createHash } from "crypto";
@@ -218,17 +219,32 @@ export async function requestRentalApplication(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Resolve (or create) the durable per-org person for this applicant NOW, from
+  // the lead identity, so the whole application lifecycle shares one identity:
+  // Slice 2 screening (buildInviteRequest needs a personId), file-to-vault (the
+  // filed summary lands on the person's vault page), and the eventual tenancy
+  // (createTenancy resolves the same contact key -> the SAME person). A missing
+  // contact key just yields a fresh person; a null result is harmless.
+  const applicantPhoneE164 = normalizePhoneE164(lead.phone);
+  const personId = await resolvePersonId(supabase, org.id, {
+    name: lead.name,
+    email: lead.email,
+    phone: lead.phone,
+    phone_e164: applicantPhoneE164,
+  });
+
   const { data: inserted, error } = await supabase
     .from("rental_applications")
     .insert({
       organization_id: org.id,
       lead_id: id,
       property_id: lead.property_id,
+      person_id: personId,
       applicant_name: lead.name,
       applicant_email: lead.email,
       applicant_phone: lead.phone,
       applicant_email_norm: normalizeEmail(lead.email),
-      applicant_phone_e164: normalizePhoneE164(lead.phone),
+      applicant_phone_e164: applicantPhoneE164,
       pay_mode: payMode,
       requested_by: user?.id ?? null,
     })
@@ -301,7 +317,7 @@ export async function fileApplicationPdf(formData: FormData) {
   // submitted (or beyond) — a 'requested' application has no summary to file.
   const { data: appRow } = await supabase
     .from("rental_applications")
-    .select("id, lead_id, status, applicant_name, filed_document_id")
+    .select("id, lead_id, status, applicant_name, filed_document_id, person_id")
     .eq("id", applicationId)
     .eq("lead_id", leadId)
     .maybeSingle();
@@ -312,6 +328,7 @@ export async function fileApplicationPdf(formData: FormData) {
     status: string;
     applicant_name: string | null;
     filed_document_id: string | null;
+    person_id: string | null;
   };
   if (app.status === "requested") fail("filenotready");
   // Idempotent: already filed -> bounce back with the filed banner (no duplicate).
@@ -354,6 +371,7 @@ export async function fileApplicationPdf(formData: FormData) {
   const { error: insErr } = await supabase.from("documents").insert({
     id: docId,
     organization_id: org.id,
+    person_id: app.person_id,
     title: applicationSummaryTitle(app.applicant_name),
     doc_type: "id_package",
     storage_path: path,
