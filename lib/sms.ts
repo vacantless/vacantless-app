@@ -186,6 +186,23 @@ export function repairReminderSms(p: SmsCopyInput, kind: "1d" | "sameday"): stri
   );
 }
 
+/** Waiting-list vacancy alert - a unit the renter asked about is available. */
+export function waitlistVacancySms(p: {
+  org_name: string | null;
+  property_address: string | null;
+  rent_label: string | null;
+}): string {
+  const org = (p.org_name || "Our leasing team").trim();
+  const rent = p.rent_label ? ` (${p.rent_label.trim()})` : "";
+  const what = p.property_address
+    ? `${p.property_address.trim()}${rent}`
+    : "a rental you asked about";
+  return noEmDash(
+    `${org}: ${what} is available again - you asked to be notified. ` +
+      `Reply here to book a viewing. ${OPT_OUT_LINE}`,
+  );
+}
+
 /**
  * Rough SMS segment count. GSM-7 packs 160 chars (153 per part when concatenated);
  * any non-GSM char forces UCS-2 at 70 (67 per part). Used in tests to keep our

@@ -6,6 +6,7 @@ import {
   isWithinQuietHours,
   bookingConfirmationSms,
   showingReminderSms,
+  waitlistVacancySms,
   smsSegments,
   computeTwilioSignature,
   verifyTwilioSignature,
@@ -134,6 +135,20 @@ ok("verify rejects empty signature", !verifyTwilioSignature("12345", docUrl, doc
 // round-trip with a fresh token
 const sig = computeTwilioSignature("sk_test_token", "https://x.io/sms", { From: "+15195551234", Body: "STOP" });
 ok("round-trip verify", verifyTwilioSignature("sk_test_token", "https://x.io/sms", { From: "+15195551234", Body: "STOP" }, sig));
+
+// waiting-list vacancy alert (S458)
+const wl = waitlistVacancySms({
+  org_name: "Agile",
+  property_address: "123 King St W",
+  rent_label: "$1,850/month",
+});
+ok("waitlist alert includes opt-out line", wl.includes("Reply STOP to opt out."));
+ok("waitlist alert names the address", wl.includes("123 King St W"));
+ok("waitlist alert includes the rent label", wl.includes("$1,850/month"));
+ok("waitlist alert <= 2 segments", smsSegments(wl) <= 2);
+const wlBare = waitlistVacancySms({ org_name: null, property_address: null, rent_label: null });
+ok("bare waitlist alert still has opt-out", wlBare.includes("Reply STOP to opt out."));
+ok("bare waitlist alert has fallback phrasing", wlBare.includes("a rental you asked about"));
 
 console.log(`\nsms: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

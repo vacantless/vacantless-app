@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { canUseWaitlist } from "@/lib/billing";
+import { canUseWaitlist, canUseRenterSms } from "@/lib/billing";
 import { sendWaitlistVacancyAlert } from "@/lib/email";
+import { sendSms, waitlistVacancySms } from "@/lib/sms";
 import {
   parseBeds,
   parseRentToCents,
@@ -19,8 +20,8 @@ import {
 } from "@/lib/waitlist";
 
 // Waiting-list operator server actions (S457). Add / remove / convert an entry
-// on a property, and the one-tap "Notify waitlist" that emails everyone matching
-// a now-available unit. All gated on manage_leads (a waitlist entry is renter
+// on a property, and the one-tap "Notify waitlist" that emails (and texts, on a
+// renter-SMS plan) everyone matching a now-available unit. All gated on manage_leads (a waitlist entry is renter
 // capture) AND the `waitlist` entitlement (Growth+); redirect-based, surfacing
 // the outcome via ?waitlist=… on the property page (#waitlist anchor). The
 // waitlist_entries table (0128) is org-scoped by RLS; we additionally confirm
@@ -140,7 +141,8 @@ export async function convertWaitlistEntry(formData: FormData) {
 // ---------------------------------------------------------------------------
 // Notify the waiting list that this unit is now available. Matches active
 // entries (this property or org-wide) not already notified about it, emails each
-// (best-effort), and stamps last_notified_* so re-running never double-sends.
+// (best-effort) + texts phone entries on a renter-SMS plan, and stamps
+// last_notified_* so re-running never double-sends.
 // The property must be 'available'.
 // ---------------------------------------------------------------------------
 export async function notifyWaitlist(formData: FormData) {
@@ -159,7 +161,7 @@ export async function notifyWaitlist(formData: FormData) {
 
   const { data: orgRow } = await supabase
     .from("organizations")
-    .select("name, brand_color, logo_url, reply_to_email")
+    .select("name, brand_color, logo_url, reply_to_email, sms_enabled")
     .eq("id", org.id)
     .maybeSingle();
 
@@ -168,7 +170,7 @@ export async function notifyWaitlist(formData: FormData) {
   const { data: rows } = await supabase
     .from("waitlist_entries")
     .select(
-      "id, property_id, status, beds_min, max_rent_cents, last_notified_property_id, name, email",
+      "id, property_id, status, beds_min, max_rent_cents, last_notified_property_id, name, email, phone_e164",
     )
     .eq("organization_id", org.id)
     .eq("status", "active")
@@ -178,6 +180,7 @@ export async function notifyWaitlist(formData: FormData) {
     id: string;
     name: string | null;
     email: string | null;
+    phone_e164: string | null;
   })[];
 
   const vacancy = {
@@ -186,6 +189,15 @@ export async function notifyWaitlist(formData: FormData) {
     beds: (prop.beds as number | null) ?? null,
     rent_cents: (prop.rent_cents as number | null) ?? null,
   };
+
+  // Text renters too when the org has SMS on AND the plan carries the renter-SMS
+  // entitlement (mirrors the booking-confirmation gate). Email stays the
+  // baseline; SMS is the paid reach that finally lands phone-only waiters.
+  const smsOn = !!orgRow?.sms_enabled && canUseRenterSms(org.plan);
+  const rentLabel =
+    vacancy.rent_cents != null
+      ? "$" + Math.round(vacancy.rent_cents / 100).toLocaleString("en-CA") + "/month"
+      : null;
 
   let notified = 0;
   for (const entry of candidates) {
@@ -202,6 +214,16 @@ export async function notifyWaitlist(formData: FormData) {
         reply_to_email: orgRow?.reply_to_email ?? null,
         property_address: (prop.address as string | null) ?? null,
         rent_cents: vacancy.rent_cents,
+      });
+    }
+    if (smsOn && entry.phone_e164) {
+      await sendSms({
+        to: entry.phone_e164,
+        body: waitlistVacancySms({
+          org_name: orgRow?.name ?? null,
+          property_address: (prop.address as string | null) ?? null,
+          rent_label: rentLabel,
+        }),
       });
     }
     // Stamp regardless of email success so a re-run doesn't re-attempt the same
