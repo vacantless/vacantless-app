@@ -36,6 +36,7 @@ export const ONTARIO_GUIDELINE: Record<number, number> = {
   2024: 2.5,
   2025: 2.5,
   2026: 2.1,
+  2027: 1.9,
 };
 
 export function guidelineForYear(year: number): number | null {

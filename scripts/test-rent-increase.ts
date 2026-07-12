@@ -29,6 +29,7 @@ function inp(over: Partial<RentIncreaseInput> = {}): RentIncreaseInput {
 
 // --- guideline table --------------------------------------------------------
 ok("2026 guideline is 2.1%", guidelineForYear(2026) === 2.1);
+ok("2027 guideline is 1.9%", guidelineForYear(2027) === 1.9);
 ok("2025 guideline is 2.5%", guidelineForYear(2025) === 2.5);
 ok("unknown year -> null", guidelineForYear(2099) === null);
 
@@ -105,15 +106,17 @@ ok("unknown year -> null", guidelineForYear(2099) === null);
 
 // --- guideline not yet published for the effective year ----------------------
 {
-  // effective 2027 (no entry) -> guideline null but dates still computed
+  // effective 2029 (no entry yet) -> guideline null but dates still computed.
+  // Keep this year AHEAD of the newest ONTARIO_GUIDELINE entry; bump it when the
+  // table gains that year (S463 added 2027: 1.9).
   const r = deriveRentIncrease(
-    inp({ startDate: "2026-06-01", lastIncreaseDate: null }),
-    "2026-06-15",
+    inp({ startDate: "2028-06-01", lastIncreaseDate: null }),
+    "2028-06-15",
   )!;
   ok("future year -> null guideline", r.guidelinePercent === null);
   ok("future year -> null new rent", r.newRentCents === null);
   ok("future year note says not yet published", r.note.includes("not yet published"));
-  ok("dates still derived", r.earliestEffectiveDate === "2027-06-01");
+  ok("dates still derived", r.earliestEffectiveDate === "2029-06-01");
 }
 
 // --- boundary: exactly REMINDER_LEAD_DAYS and exactly NOTICE_DAYS -----------
