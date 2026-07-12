@@ -839,6 +839,12 @@ export async function serveN1(formData: FormData) {
     todayOntario,
   );
   if (!derived) redirect(`/dashboard/tenancies/${id}?serve=notready#renewal`);
+  // S464: never serve an N1 with no new-rent amount. If the guideline for the
+  // effective year isn't loaded yet (or the unit is exempt so there is no guideline
+  // amount), the N1 would carry a blank "new rent" - block the serve.
+  if (derived.newRentCents == null) {
+    redirect(`/dashboard/tenancies/${id}?serve=noamount#renewal`);
+  }
 
   const nowIso = new Date().toISOString();
   const tenantNames = (t.tenants ?? [])

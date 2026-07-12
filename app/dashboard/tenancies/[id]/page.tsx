@@ -589,6 +589,8 @@ export default async function TenancyDetailPage({
     upgrade: "Serving the notice for you is a Growth feature.",
     notoken: "Could not build the tenant link. Try again.",
     badmethod: "Pick how the notice was served.",
+    noamount:
+      "No new-rent amount yet — the rent-increase guideline for this notice's effective year isn't in the system (or the unit is exempt). It can't be served until an amount is available.",
     filenone: "Attach the printed N1 PDF to file it.",
     filetype: "The vault accepts a PDF — print the N1 and save it as PDF first.",
     filefail: "Could not file the notice. Try again.",
@@ -1704,6 +1706,12 @@ export default async function TenancyDetailPage({
                       </form>
                     </div>
                   )}
+                </div>
+              ) : rentIncrease.newRentCents == null ? (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {rentIncrease.exempt
+                    ? "This unit is exempt from the guideline cap, so there is no guideline N1 amount to serve. Set the increase directly with the tenant."
+                    : `The rent-increase guideline for ${rentIncrease.effectiveDate?.slice(0, 4) ?? "this year"} is not in the system yet, so this N1 has no new-rent amount to serve. Once the guideline is added it becomes servable.`}
                 </div>
               ) : (
                 <form action={serveN1} className="mt-2">
