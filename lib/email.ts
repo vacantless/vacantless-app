@@ -511,6 +511,11 @@ export type ReminderPayload = {
   logo_url: string | null;
   reply_to_email: string | null;
   property_address: string | null;
+  // S471: arrival logistics threaded into the reminder (previously confirmation-
+  // only). showing_instructions = access notes; leasing_phone = resolved arrival
+  // phone (property override -> org default -> public contact).
+  showing_instructions?: string | null;
+  leasing_phone?: string | null;
   when_label: string; // already formatted in the org timezone
 };
 
@@ -544,7 +549,7 @@ function reminderHtml(p: ReminderPayload): string {
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
-      ${viewingLogisticsHtml({ property_address: p.property_address, brand })}
+      ${viewingLogisticsHtml({ property_address: p.property_address, showing_instructions: p.showing_instructions, leasing_phone: p.leasing_phone, brand })}
       <p style="margin:0 0 16px;">If you can no longer make it or need to reschedule, just reply to this email and we'll sort it out.</p>
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>

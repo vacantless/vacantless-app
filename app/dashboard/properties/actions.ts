@@ -469,6 +469,9 @@ export async function updateProperty(formData: FormData) {
       // (/agent/[token], Slice 3). Free-text: lockbox location, buzzer, parking,
       // "text before arriving", etc. Blank clears it.
       showing_instructions: String(formData.get("showing_instructions") ?? "").trim() || null,
+      // S471: per-property override of the org showing arrival phone (the number
+      // renters text/call on arrival). Blank clears -> falls back to the org default.
+      showing_arrival_phone: String(formData.get("showing_arrival_phone") ?? "").trim() || null,
       status: effectiveStatus,
       price_drop_pending_cents: nextPending,
       // Unit-level fields

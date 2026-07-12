@@ -12,6 +12,7 @@ import {
 import {
   updateBrandIdentity,
   updatePublicContact,
+  updateShowingArrivalPhone,
   updateEmailSender,
   updateRenterMessages,
   updateTextMessages,
@@ -603,6 +604,40 @@ export default async function SettingsPage({
               <div className="sm:col-span-2">
                 <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
                   Save contact details
+                </button>
+              </div>
+            </form>
+
+            {/* Showing arrival contact (S471) - the number renters text/call on
+                arrival for a booked viewing. Kept separate from the feed phone
+                above so blanking the feed contact never drops the arrival line;
+                any property can override this default. */}
+            <form
+              action={updateShowingArrivalPhone}
+              className="mt-6 border-t border-gray-100 pt-5"
+            >
+              <label className="block max-w-md">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Showing arrival phone{" "}
+                  <span className="text-gray-400">(default)</span>
+                </span>
+                <input
+                  name="showing_arrival_phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="226-778-0014"
+                  defaultValue={org.showing_arrival_phone ?? ""}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Shown to renters in their booking confirmation and reminders so
+                  they can text or call when they arrive. Any property can override
+                  this. Leave blank to use your contact phone above.
+                </span>
+              </label>
+              <div className="mt-3">
+                <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+                  Save arrival phone
                 </button>
               </div>
             </form>

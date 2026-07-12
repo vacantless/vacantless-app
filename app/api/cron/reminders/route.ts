@@ -41,6 +41,8 @@ type Summary = {
   details: Array<Record<string, unknown>>;
 };
 
+import { resolveArrivalPhone } from "@/lib/showing-contact";
+
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false; // not configured → refuse
@@ -74,8 +76,8 @@ export async function GET(req: NextRequest) {
     .select(
       "id, scheduled_at, reminder_24h_sent_at, reminder_2h_sent_at, " +
         "reminder_24h_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
-        "leads(name, email, phone, sms_opt_out), properties(address), " +
-        "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled, plan)",
+        "leads(name, email, phone, sms_opt_out), properties(address, showing_instructions, showing_arrival_phone), " +
+        "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
     )
     .eq("outcome", "scheduled")
     .gt("scheduled_at", now.toISOString())
@@ -115,6 +117,13 @@ export async function GET(req: NextRequest) {
     const whenLabel = formatSlotLong(scheduledAt, tz);
     const orgName: string | null = org?.name ?? null;
     const addr: string | null = property?.address ?? null;
+    // S471: access notes + resolved arrival phone for the reminder logistics.
+    const showingInstructions: string | null = property?.showing_instructions ?? null;
+    const leasingPhone: string | null = resolveArrivalPhone(
+      property?.showing_arrival_phone,
+      org?.showing_arrival_phone,
+      org?.public_contact_phone,
+    );
 
     let didSomething = false;
 
@@ -137,6 +146,8 @@ export async function GET(req: NextRequest) {
         logo_url: org?.logo_url ?? null,
         reply_to_email: org?.reply_to_email ?? null,
         property_address: addr,
+        showing_instructions: showingInstructions,
+        leasing_phone: leasingPhone,
         when_label: whenLabel,
       });
 

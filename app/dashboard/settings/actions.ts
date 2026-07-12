@@ -15,7 +15,7 @@ import {
   validateNewQuestion,
   normalizePreferredAnswer,
 } from "@/lib/screening-questions";
-import { validatePublicContact } from "@/lib/public-contact";
+import { validatePublicContact, validatePublicContactPhone } from "@/lib/public-contact";
 import {
   validatePolicyProfileSettings,
   validateBuildingPolicySettings,
@@ -318,6 +318,30 @@ export async function updatePublicContact(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=brand&feed=saved");
+}
+
+export async function updateShowingArrivalPhone(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  // Reuse the public-contact phone validator: 7-15 digits, operator formatting
+  // preserved, blank -> null (means "fall back to the contact phone").
+  const res = validatePublicContactPhone(
+    String(formData.get("showing_arrival_phone") ?? ""),
+  );
+  if (!res.ok) {
+    redirect("/dashboard/settings?tab=brand&arrival=invalid");
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ showing_arrival_phone: res.value })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=brand&arrival=error");
+  }
+
+  redirect("/dashboard/settings?tab=brand&arrival=saved");
 }
 
 // Building STANDARD POLICY profile (0048). The org-level defaults (lease term /
