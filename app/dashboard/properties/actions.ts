@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { requireCapability } from "@/lib/membership";
+import { requireCapability, getRoleForOrg } from "@/lib/membership";
+import { roleCan } from "@/lib/roles";
 import { PROPERTY_STATUSES } from "@/lib/pipeline";
 import { pendingDropFrom, leadEligibleForPriceDrop } from "@/lib/price-drop";
 import { sendPriceDropAlert } from "@/lib/email";
@@ -3373,24 +3374,17 @@ export async function logScanExpense(formData: FormData) {
 // distribution feature; the Free funnel tier stays self-serve). Each request is one
 // countable done-for-you unit — the row itself is the billing meter.
 export async function requestConciergePublish(formData: FormData) {
-  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyIdForm = String(formData.get("property_id") ?? "");
   const itemId = String(formData.get("item_id") ?? "");
   if (!propertyIdForm || !itemId) return;
-  const org = await getCurrentOrg();
-  if (!org) redirect("/onboarding");
-  if (!hasEntitlement(org.plan, "listing_marketing")) {
-    redirect(
-      `/dashboard/properties/${propertyIdForm}?run=conciergeupgrade#distribute-header`,
-    );
-  }
 
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/onboarding");
 
-  // RLS scopes this read to the caller's org.
+  // RLS scopes this read to orgs the caller belongs to.
   const { data: item } = await supabase
     .from("distribution_run_items")
     .select("id, run_id, channel, publish_status, mode")
@@ -3401,10 +3395,11 @@ export async function requestConciergePublish(formData: FormData) {
       `/dashboard/properties/${propertyIdForm}?runerr=notfound#distribute-header`,
     );
   }
-  // Authoritative property comes from the run (RLS-scoped), never the form.
+  // Authoritative property + org come from the run (RLS-scoped), never the form,
+  // so a tampered property_id can't cross-authorize against another org.
   const { data: run } = await supabase
     .from("distribution_runs")
-    .select("property_id")
+    .select("property_id, organization_id")
     .eq("id", item.run_id)
     .maybeSingle();
   if (!run) {
@@ -3413,6 +3408,27 @@ export async function requestConciergePublish(formData: FormData) {
     );
   }
   const propertyId = run.property_id as string;
+  const runOrgId = run.organization_id as string;
+
+  // Authorize against the RUN'S org, not getCurrentOrg(). A multi-org user must
+  // not spend one org's role/plan to unlock concierge (a paid, done-for-you
+  // feature) for a different org's run. RLS on the reads above already proves the
+  // caller is a member of the run's org; here we re-check the role + the
+  // listing_marketing entitlement for THAT exact org.
+  const { data: runOrg } = await supabase
+    .from("organizations")
+    .select("plan")
+    .eq("id", runOrgId)
+    .maybeSingle();
+  const role = await getRoleForOrg(runOrgId);
+  if (!runOrg || role == null || !roleCan(role, "manage_properties")) {
+    redirect(`/dashboard/properties/${propertyId}?forbidden=1#distribute-header`);
+  }
+  if (!hasEntitlement((runOrg as { plan: string | null }).plan, "listing_marketing")) {
+    redirect(
+      `/dashboard/properties/${propertyId}?run=conciergeupgrade#distribute-header`,
+    );
+  }
 
   const currentStatus = normalizePublishStatus(item.publish_status);
   const currentMode = normalizePublishMode(item.mode);

@@ -29,6 +29,30 @@ export async function getCurrentRole(): Promise<OrgRole | null> {
   return normalizeRole(raw);
 }
 
+// The caller's role in a SPECIFIC org, scoped by organization_id. Use when the
+// target org is not necessarily the caller's default org — e.g. a multi-org user
+// acting on a run whose organization_id came from the run itself. Returns null if
+// they have no membership in that org (RLS lets a member read only their own
+// membership rows). Prevents one org's role standing in for another's.
+export async function getRoleForOrg(
+  organizationId: string,
+): Promise<OrgRole | null> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("memberships")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("organization_id", organizationId)
+    .limit(1);
+  const raw = data?.[0]?.role as string | undefined;
+  if (raw == null) return null;
+  return normalizeRole(raw);
+}
+
 export async function currentUserCan(capability: Capability): Promise<boolean> {
   const role = await getCurrentRole();
   return role != null && roleCan(role, capability);

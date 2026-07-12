@@ -16,6 +16,7 @@ import {
 import {
   isResolvedPublishStatus,
   normalizePublishStatus,
+  CONCIERGE_OPEN_STATUSES,
   CONCIERGE_CLAIMED_AUDIT,
   CONCIERGE_LIVE_AUDIT,
   CONCIERGE_REJECTED_AUDIT,
@@ -47,7 +48,10 @@ export async function claimConciergeItem(formData: FormData) {
   if (!ctx) redirect("/dashboard");
   if (!itemId) redirect(DESK);
   const now = new Date().toISOString();
-  await ctx.admin
+  // Only an unclaimed, still-open concierge item can be claimed. The predicates
+  // (mode + open status + claimed_by IS NULL) make this atomic: a second staff
+  // click, or a claim on an item already marked live, matches 0 rows -> stale.
+  const { data: claimed } = await ctx.admin
     .from("distribution_run_items")
     .update({
       concierge_claimed_by: ctx.userId,
@@ -58,7 +62,12 @@ export async function claimConciergeItem(formData: FormData) {
       last_attempted_at: now,
       updated_at: now,
     })
-    .eq("id", itemId);
+    .eq("id", itemId)
+    .eq("mode", "concierge")
+    .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
+    .is("concierge_claimed_by", null)
+    .select("id");
+  if (!claimed || claimed.length === 0) redirect(`${DESK}?err=stale`);
   revalidatePath(DESK);
   redirect(`${DESK}?done=claimed`);
 }
@@ -76,10 +85,19 @@ export async function completeConciergeItem(formData: FormData) {
 
   const { data: item } = await admin
     .from("distribution_run_items")
-    .select("id, run_id, channel, listing_post_id")
+    .select("id, run_id, channel, listing_post_id, mode, publish_status")
     .eq("id", itemId)
     .maybeSingle();
   if (!item) redirect(`${DESK}?err=notfound`);
+  // Fast stale-guard: skip all listing_post work if this item was already
+  // completed/rejected or is no longer a concierge item (the final update below
+  // re-checks the same predicates atomically for the concurrent-completion race).
+  if (
+    item.mode !== "concierge" ||
+    !CONCIERGE_OPEN_STATUSES.includes(normalizePublishStatus(item.publish_status))
+  ) {
+    redirect(`${DESK}?err=stale`);
+  }
   const { data: run } = await admin
     .from("distribution_runs")
     .select("property_id, organization_id")
@@ -99,15 +117,34 @@ export async function completeConciergeItem(formData: FormData) {
     redirect(`${DESK}?err=needurl`);
   }
 
-  // Create or refresh the tracked post for this property+channel (reuse the most
-  // recent non-removed row rather than inserting a duplicate).
+  // Create or refresh the tracked post for this property+channel. This runs under
+  // the SERVICE-ROLE client (no RLS), so every listing_posts touch is pinned to
+  // the org+property+portal derived from the RUN — never trusted blindly from the
+  // denormalized listing_post_id (a stale/corrupt FK must not let staff overwrite
+  // another property's post), and every write is error-checked before we mark the
+  // item live.
   let listingPostId = (item.listing_post_id as string | null) ?? null;
   if (url && isPortalKey(channel)) {
     const portal = normalizePortal(channel);
+    // Trust the denormalized FK only if it still points at THIS org+property+
+    // portal and isn't removed; otherwise discard it and re-resolve.
+    if (listingPostId) {
+      const { data: fk } = await admin
+        .from("listing_posts")
+        .select("id")
+        .eq("id", listingPostId)
+        .eq("organization_id", orgId)
+        .eq("property_id", propertyId)
+        .eq("portal", portal)
+        .neq("status", "removed")
+        .maybeSingle();
+      if (!fk?.id) listingPostId = null;
+    }
     if (!listingPostId) {
       const { data: existingPost } = await admin
         .from("listing_posts")
         .select("id")
+        .eq("organization_id", orgId)
         .eq("property_id", propertyId)
         .eq("portal", portal)
         .neq("status", "removed")
@@ -117,12 +154,16 @@ export async function completeConciergeItem(formData: FormData) {
       if (existingPost?.id) listingPostId = existingPost.id as string;
     }
     if (listingPostId) {
-      await admin
+      const { error: upErr } = await admin
         .from("listing_posts")
         .update({ url, status: "live" })
-        .eq("id", listingPostId);
+        .eq("id", listingPostId)
+        .eq("organization_id", orgId)
+        .eq("property_id", propertyId)
+        .eq("portal", portal);
+      if (upErr) redirect(`${DESK}?err=trackfail`);
     } else {
-      const { data: post } = await admin
+      const { data: post, error: insErr } = await admin
         .from("listing_posts")
         .insert({
           organization_id: orgId,
@@ -133,12 +174,19 @@ export async function completeConciergeItem(formData: FormData) {
         })
         .select("id")
         .single();
-      listingPostId = (post?.id as string | undefined) ?? null;
+      if (insErr || !post?.id) redirect(`${DESK}?err=trackfail`);
+      listingPostId = post.id as string;
     }
   }
 
+  // A portal channel must have a live tracker before we can honestly mark it live.
+  if (isPortalKey(channel) && !listingPostId) redirect(`${DESK}?err=trackfail`);
+
   const now = new Date().toISOString();
-  await admin
+  // Atomic completion guard: only flip an item that is still an OPEN concierge
+  // item. If another staff member already completed/rejected it, this matches 0
+  // rows and we stop before double-completing or re-tracking.
+  const { data: completed } = await admin
     .from("distribution_run_items")
     .update({
       publish_status: "live",
@@ -151,7 +199,11 @@ export async function completeConciergeItem(formData: FormData) {
       last_verified_at: now,
       updated_at: now,
     })
-    .eq("id", itemId);
+    .eq("id", itemId)
+    .eq("mode", "concierge")
+    .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
+    .select("id");
+  if (!completed || completed.length === 0) redirect(`${DESK}?err=stale`);
 
   // Complete the run once every item is resolved (live/submitted/skipped).
   const { data: siblings } = await admin
@@ -184,7 +236,9 @@ export async function rejectConciergeItem(formData: FormData) {
   if (!itemId) redirect(DESK);
   const reason = normalizeText(formData.get("reason")) ?? "Could not post to this channel.";
   const now = new Date().toISOString();
-  await ctx.admin
+  // Only an OPEN concierge item can be rejected; a stale form on an already
+  // live/rejected item matches 0 rows -> stale (can't un-live a posted ad).
+  const { data: rejected } = await ctx.admin
     .from("distribution_run_items")
     .update({
       publish_status: "rejected",
@@ -195,7 +249,11 @@ export async function rejectConciergeItem(formData: FormData) {
       last_attempted_at: now,
       updated_at: now,
     })
-    .eq("id", itemId);
+    .eq("id", itemId)
+    .eq("mode", "concierge")
+    .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
+    .select("id");
+  if (!rejected || rejected.length === 0) redirect(`${DESK}?err=stale`);
   revalidatePath(DESK);
   redirect(`${DESK}?done=rejected`);
 }
