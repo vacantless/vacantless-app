@@ -37,6 +37,9 @@ import {
   legacyRunStatusForPublishStatus,
   normalizePublishChannel,
   normalizePublishStatus,
+  normalizePublishMode,
+  canRequestConcierge,
+  CONCIERGE_REQUEST_AUDIT,
   preparePublishChannel,
   type PublishChannelContext,
   type PublishChannelKey,
@@ -76,7 +79,7 @@ import {
   type DropboxEntry,
   type DropboxLeafFolder,
 } from "@/lib/dropbox-import";
-import { photoCapForPlan, listingCapForPlan, canUseListingAiImport } from "@/lib/billing";
+import { photoCapForPlan, listingCapForPlan, canUseListingAiImport, hasEntitlement } from "@/lib/billing";
 import { createHash } from "crypto";
 import {
   validateDocumentUpload,
@@ -3362,4 +3365,88 @@ export async function logScanExpense(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(scanExpAnchor("logged"));
+}
+
+// Operator "Publish for me" (S474b): hand a human-action channel to the Vacantless
+// publishing desk. Flips the run item to concierge mode + queued so a staff member
+// posts it and marks it live. Gated on the listing_marketing entitlement (a paid
+// distribution feature; the Free funnel tier stays self-serve). Each request is one
+// countable done-for-you unit — the row itself is the billing meter.
+export async function requestConciergePublish(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyIdForm = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  if (!propertyIdForm || !itemId) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!hasEntitlement(org.plan, "listing_marketing")) {
+    redirect(
+      `/dashboard/properties/${propertyIdForm}?run=conciergeupgrade#distribute-header`,
+    );
+  }
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // RLS scopes this read to the caller's org.
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("id, run_id, channel, publish_status, mode")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) {
+    redirect(
+      `/dashboard/properties/${propertyIdForm}?runerr=notfound#distribute-header`,
+    );
+  }
+  // Authoritative property comes from the run (RLS-scoped), never the form.
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("property_id")
+    .eq("id", item.run_id)
+    .maybeSingle();
+  if (!run) {
+    redirect(
+      `/dashboard/properties/${propertyIdForm}?runerr=notfound#distribute-header`,
+    );
+  }
+  const propertyId = run.property_id as string;
+
+  const currentStatus = normalizePublishStatus(item.publish_status);
+  const currentMode = normalizePublishMode(item.mode);
+  if (!canRequestConcierge(currentStatus, currentMode)) {
+    redirect(
+      `/dashboard/properties/${propertyId}?run=conciergeineligible#distribute-header`,
+    );
+  }
+
+  const now = new Date().toISOString();
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      mode: "concierge",
+      publish_status: "queued",
+      status: "in_progress",
+      concierge_requested_at: now,
+      concierge_requested_by: user?.id ?? null,
+      concierge_claimed_by: null,
+      concierge_claimed_at: null,
+      audit_message: CONCIERGE_REQUEST_AUDIT,
+      error_code: null,
+      error_message: null,
+      updated_at: now,
+    })
+    .eq("id", itemId);
+
+  // A pending concierge post reopens a completed run.
+  await supabase
+    .from("distribution_runs")
+    .update({ status: "active", completed_at: null })
+    .eq("id", item.run_id)
+    .eq("status", "completed");
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?run=concierge#distribute-header`);
 }

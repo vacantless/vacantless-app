@@ -59,6 +59,7 @@ import { dropboxImportErrorMessage } from "@/lib/dropbox-import";
 import {
   photoCapForPlan,
   listingCapForPlan,
+  hasEntitlement,
   storageUpsellNote,
   canUseListingMarketing,
   canUseWaitlist,
@@ -124,6 +125,7 @@ import {
   publishChannelMeta,
   publishModeLabel,
   publishStatusFromLegacyStatus,
+  canRequestConcierge,
   publishStatusLabel,
   publishStatusTone,
   type PublishChannelContext,
@@ -1096,6 +1098,7 @@ export default async function PropertyDetailPage({
     Array.isArray(value)
       ? value.filter((item): item is string => typeof item === "string")
       : [];
+  const conciergeEnabled = hasEntitlement(org?.plan, "listing_marketing");
   const runItems: RunItemView[] = runItemRows.map((r) => {
     const publishKey = normalizePublishChannel(r.channel);
     const meta = publishKey ? publishChannelMeta(publishKey) : null;
@@ -1126,6 +1129,7 @@ export default async function PropertyDetailPage({
       steps: buildRunSteps(r.channel, {
         guardrailCount: guardrailsForPortal(r.channel).length,
       }),
+      canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
     };
   });
   const alreadyInRun = new Set(runItems.map((i) => i.channel));

@@ -38,6 +38,12 @@ export default async function AdminConsolePage() {
           login and renter-facing contact to the real landlord at handoff.
           Operator-only.
         </p>
+        <a
+          href="/dashboard/admin/concierge"
+          className="inline-block text-sm font-medium text-slate-700 underline hover:text-slate-900"
+        >
+          Publish-for-me desk →
+        </a>
       </header>
 
       <OnboardLandlordForm />

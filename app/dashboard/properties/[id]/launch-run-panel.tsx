@@ -9,6 +9,7 @@ import {
   updateRunItem,
   addRunChannel,
   cancelDistributionRun,
+  requestConciergePublish,
 } from "../actions";
 import {
   type RunItemStatus,
@@ -42,6 +43,9 @@ export type RunItemView = {
   trackedUrl: string | null;
   notes: string | null;
   steps: RunStep[];
+  // S474b: this human-action item can be handed to the Vacantless publishing
+  // desk ("Publish for me"). Computed with the operator's plan entitlement.
+  canConcierge: boolean;
 };
 
 export type PublishChannelChoiceView = {
@@ -237,6 +241,21 @@ export function LaunchRunPanel({
               >
                 Open next action
               </a>
+            )}
+            {item.canConcierge && (
+              <form action={requestConciergePublish} className="mb-3">
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="item_id" value={item.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
+                >
+                  Publish for me
+                </button>
+                <span className="ml-2 text-[11px] text-gray-500">
+                  Vacantless posts this for you and marks it live.
+                </span>
+              </form>
             )}
 
             <form

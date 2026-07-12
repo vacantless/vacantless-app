@@ -187,6 +187,50 @@ export function isResolvedPublishStatus(status: PublishStatus): boolean {
   return status === "live" || status === "submitted" || status === "skipped";
 }
 
+// ----------------------------------------------------------------------------
+// Concierge "Publish for me" (S474b). A channel that still needs a human to post
+// (browser co-pilot / feed-partner / broker / custom sitting in a needs_* state)
+// can be handed to the Vacantless publishing desk: the operator clicks once, the
+// run item flips to concierge mode + queued, and a staff member posts it and
+// marks it live. Only human-action states are eligible — never an automatic
+// channel (the app already does it), an already-concierge item, or a
+// blocked/queued/submitted/live/rejected/skipped one.
+// ----------------------------------------------------------------------------
+
+/** Statuses where a human still has to act, so the desk can take it over. */
+export const CONCIERGE_ELIGIBLE_STATUSES: readonly PublishStatus[] = [
+  "needs_operator",
+  "needs_login",
+  "needs_payment",
+];
+
+/** Open concierge-queue statuses a staff member still has to work. */
+export const CONCIERGE_OPEN_STATUSES: readonly PublishStatus[] = [
+  "queued",
+  "submitting",
+  "needs_operator",
+  "needs_login",
+  "needs_payment",
+];
+
+/** Can this run item be handed to the concierge desk? Pure. */
+export function canRequestConcierge(
+  status: PublishStatus,
+  mode: PublishMode,
+): boolean {
+  if (mode === "automatic" || mode === "concierge") return false;
+  return CONCIERGE_ELIGIBLE_STATUSES.includes(status);
+}
+
+export const CONCIERGE_REQUEST_AUDIT =
+  "Requested Vacantless to post this for you. Our publishing desk will post it and mark it live.";
+export const CONCIERGE_CLAIMED_AUDIT =
+  "Vacantless publishing desk is posting this for you.";
+export const CONCIERGE_LIVE_AUDIT =
+  "Vacantless posted this for you; it is live and the tracked inquiry link is active.";
+export const CONCIERGE_REJECTED_AUDIT =
+  "Vacantless could not post this to this channel. See the reason and try another channel.";
+
 export function legacyRunStatusForPublishStatus(
   status: PublishStatus,
 ): "pending" | "in_progress" | "done" | "skipped" {
