@@ -71,6 +71,18 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok("other ends with paste_url", other[other.length - 1].key === "paste_url");
 }
 {
+  const vacantless = buildRunSteps("vacantless");
+  ok("vacantless has public-page step", vacantless[0].key === "publish_page");
+  ok(
+    "vacantless step does not say portal",
+    !vacantless.some((s) => /portal/i.test(`${s.label} ${s.detail ?? ""}`)),
+  );
+}
+{
+  const orgFeed = buildRunSteps("org_feed");
+  ok("org feed has feed-ready step", orgFeed[0].key === "check_feed_ready");
+}
+{
   const noEmDash = buildRunSteps("kijiji", { guardrailCount: 2 })
     .flatMap((s) => [s.label, s.detail ?? ""])
     .join(" ");
@@ -97,6 +109,16 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   const p = runProgress([{ status: "done" }, { status: "skipped" }]);
   ok("allResolved when every item done/skipped", p.allResolved);
   ok("pct 100", p.pct === 100);
+}
+{
+  const p = runProgress([
+    { status: "pending", publishStatus: "submitted" },
+    { status: "in_progress", publishStatus: "needs_login" },
+    { status: "pending", publishStatus: "skipped" },
+  ]);
+  ok("publish progress counts submitted as done", p.done === 1);
+  ok("publish progress counts skipped", p.skipped === 1);
+  ok("publish progress leaves needs_login open", p.remaining === 1);
 }
 {
   const p = runProgress([]);

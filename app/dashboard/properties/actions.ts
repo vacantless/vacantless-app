@@ -21,6 +21,7 @@ import { parseListing, selectListingImages, type ListingImage } from "@/lib/list
 import type { VisionImageType } from "@/lib/lease-extract-vision";
 import { normalizeVirtualTourUrl } from "@/lib/virtual-tour";
 import {
+  isPortalKey,
   normalizePortal,
   normalizeListingStatus,
   normalizeUrl,
@@ -30,6 +31,23 @@ import {
 } from "@/lib/listing-distribution";
 import { normalizeRunItemStatus } from "@/lib/distribution-run";
 import { normalizePartnerStatus } from "@/lib/distribution-partner";
+import {
+  isPublishStatus,
+  isResolvedPublishStatus,
+  legacyRunStatusForPublishStatus,
+  normalizePublishChannel,
+  normalizePublishStatus,
+  preparePublishChannel,
+  type PublishChannelContext,
+  type PublishChannelKey,
+  type PublishPartnerState,
+} from "@/lib/distribution-publish";
+import { buildShareReadiness, type ShareReadiness } from "@/lib/share-readiness";
+import { feedSignal } from "@/lib/rental-readiness";
+import {
+  isPublicBookable,
+  normalizePropertyStatus,
+} from "@/lib/listing-state";
 import {
   validatePhotoUpload,
   extForType,
@@ -1032,19 +1050,70 @@ export async function removeListingPost(formData: FormData) {
 // live URL produces (or refreshes) that channel's listing_posts row, so a run
 // feeds source attribution + the Distribute cards with no separate write path.
 // ===========================================================================
-const RUN_CHANNEL_KEYS = [
-  "kijiji",
-  "facebook",
-  "rentals_ca",
-  "zumper",
-  "viewit",
-  "realtor_ca",
-  "other",
-] as const;
+type PublishPropertyRow = {
+  id: string;
+  organization_id: string;
+  status: string;
+  address: string | null;
+  rent_cents: number | null;
+  beds: number | null;
+  baths: number | null;
+  description: string | null;
+};
 
-function normalizeRunChannel(raw: unknown): string | null {
-  const v = String(raw ?? "").trim();
-  return (RUN_CHANNEL_KEYS as readonly string[]).includes(v) ? v : null;
+type PublishPostRow = {
+  id: string;
+  portal: string;
+  status: string;
+  url: string | null;
+  posted_on: string | null;
+  created_at?: string | null;
+};
+
+const REQUIRED_SHARE_BLOCKER_LABELS: Record<string, string> = {
+  live: "Publish the Vacantless public page.",
+  address: "Add the rental address.",
+  rent: "Set the monthly rent.",
+  beds_baths: "Add beds and baths.",
+};
+
+function readinessBlockers(
+  readiness: ShareReadiness,
+  opts?: { includeLive?: boolean },
+): string[] {
+  return readiness.checks
+    .filter((check) => check.required && !check.ok)
+    .filter((check) => opts?.includeLive || check.key !== "live")
+    .map((check) => REQUIRED_SHARE_BLOCKER_LABELS[check.key] ?? check.hint);
+}
+
+function canPublishFromStatus(status: string): boolean {
+  return status === "draft" || status === "paused" || status === "off_market";
+}
+
+function livePostForChannel(
+  posts: PublishPostRow[],
+  channel: PublishChannelKey,
+): PublishPostRow | null {
+  if (!isPortalKey(channel)) return null;
+  const live = posts
+    .filter((post) => post.portal === channel && post.status === "live" && post.url)
+    .sort((a, b) => {
+      const ad = a.posted_on ?? a.created_at ?? "";
+      const bd = b.posted_on ?? b.created_at ?? "";
+      return bd.localeCompare(ad);
+    });
+  return live[0] ?? null;
+}
+
+function publishItemResolved(row: {
+  status: string | null;
+  publish_status: string | null;
+}): boolean {
+  if (isPublishStatus(row.publish_status)) {
+    return isResolvedPublishStatus(row.publish_status);
+  }
+  return row.status === "done" || row.status === "skipped";
 }
 
 export async function startDistributionRun(formData: FormData) {
@@ -1057,19 +1126,159 @@ export async function startDistributionRun(formData: FormData) {
   const channels = Array.from(new Set(
     formData
       .getAll("channels")
-      .map(normalizeRunChannel)
-      .filter((c): c is string => c !== null),
+      .map(normalizePublishChannel)
+      .filter((c): c is PublishChannelKey => c !== null),
   ));
   if (channels.length === 0) {
     redirect(`/dashboard/properties/${propertyId}?runerr=nochannels#distribute-header`);
   }
 
   const supabase = createClient();
-  // The property must belong to the caller's org (guards a tampered property_id);
-  // use the property's org as the authoritative organization_id for every insert.
-  const prop = await ownedProperty(supabase, propertyId);
+  const { data: propRow } = await supabase
+    .from("properties")
+    .select("id, organization_id, status, address, rent_cents, beds, baths, description")
+    .eq("id", propertyId)
+    .maybeSingle();
+  const prop = propRow as PublishPropertyRow | null;
   if (!prop) redirect("/dashboard/properties?forbidden=1");
   const orgId = prop.organization_id;
+
+  const [{ count: photoCount }, { count: availabilityCount }, { data: posts }, { data: partners }] =
+    await Promise.all([
+      supabase
+        .from("property_photos")
+        .select("id", { count: "exact", head: true })
+        .eq("property_id", propertyId),
+      supabase
+        .from("availability_rules")
+        .select("id", { count: "exact", head: true }),
+      supabase
+        .from("listing_posts")
+        .select("id, portal, status, url, posted_on, created_at")
+        .eq("property_id", propertyId)
+        .neq("status", "removed"),
+      supabase
+        .from("distribution_partner_accounts")
+        .select("channel, status, feed_url"),
+    ]);
+
+  const postRows = (posts ?? []) as PublishPostRow[];
+  const partnerByChannel = new Map<string, PublishPartnerState>();
+  for (const row of (partners ?? []) as Array<{
+    channel: string;
+    status: string;
+    feed_url: string | null;
+  }>) {
+    partnerByChannel.set(row.channel, {
+      status: normalizePartnerStatus(row.status),
+      feedUrl: row.feed_url,
+    });
+  }
+
+  const normalizedStatus = normalizePropertyStatus(prop.status);
+  let effectiveStatus = normalizedStatus;
+  let linkIsLive = isPublicBookable(effectiveStatus);
+  const initialReadiness = buildShareReadiness({
+    status: effectiveStatus,
+    rentCents: prop.rent_cents,
+    beds: prop.beds,
+    baths: prop.baths,
+    address: prop.address,
+    photoCount: photoCount ?? 0,
+    availabilityWindowCount: availabilityCount ?? 0,
+    replyToEmail: org.reply_to_email,
+  });
+
+  const publicPageBlockers = readinessBlockers(initialReadiness, {
+    includeLive: false,
+  });
+  if (!linkIsLive && !canPublishFromStatus(effectiveStatus)) {
+    publicPageBlockers.unshift(
+      effectiveStatus === "leased"
+        ? "Leased rentals must be explicitly relisted before publishing."
+        : "This rental cannot be published from its current status.",
+    );
+  }
+
+  if (!linkIsLive && channels.includes("vacantless")) {
+    const cap = listingCapForPlan(org.plan);
+    if (cap != null) {
+      const { count: liveCount } = await supabase
+        .from("properties")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "available")
+        .neq("id", propertyId);
+      if ((liveCount ?? 0) >= cap) {
+        publicPageBlockers.push(
+          "Your plan's live-rental limit is full. Pause another rental or upgrade before publishing.",
+        );
+      }
+    }
+  }
+
+  const canPublishPublicPage =
+    !linkIsLive &&
+    canPublishFromStatus(effectiveStatus) &&
+    publicPageBlockers.length === 0;
+
+  if (channels.includes("vacantless") && canPublishPublicPage) {
+    await supabase
+      .from("properties")
+      .update({ status: "available" })
+      .eq("id", propertyId);
+    effectiveStatus = "available";
+    linkIsLive = true;
+  }
+
+  const effectiveReadiness = buildShareReadiness({
+    status: effectiveStatus,
+    rentCents: prop.rent_cents,
+    beds: prop.beds,
+    baths: prop.baths,
+    address: prop.address,
+    photoCount: photoCount ?? 0,
+    availabilityWindowCount: availabilityCount ?? 0,
+    replyToEmail: org.reply_to_email,
+  });
+  const shareBlockers = readinessBlockers(effectiveReadiness, {
+    includeLive: false,
+  });
+  const feed = feedSignal({
+    status: effectiveStatus,
+    rentCents: prop.rent_cents,
+    beds: prop.beds,
+    baths: prop.baths,
+    address: prop.address,
+    description: prop.description,
+    photoCount: photoCount ?? 0,
+    availabilityWindowCount: availabilityCount ?? 0,
+  });
+  const publicUrl = `/r/${propertyId}`;
+  const orgFeedUrl = org.slug ? `/api/feed/${org.slug}` : null;
+  const networkFeedEnabled = Boolean(process.env.NETWORK_FEED_TOKEN?.trim());
+
+  const contextForChannel = (channel: PublishChannelKey): PublishChannelContext => {
+    const livePost = livePostForChannel(postRows, channel);
+    return {
+      linkIsLive,
+      canPublishPublicPage,
+      publicPageBlockers,
+      shareBlockers,
+      feedInFeed: feed.ok,
+      feedHint: feed.hint,
+      publicUrl,
+      orgFeedUrl,
+      networkFeedEnabled,
+      partner: partnerByChannel.get(channel) ?? null,
+      existingLiveUrl: livePost?.url ?? null,
+      existingListingPostId: livePost?.id ?? null,
+    };
+  };
+  const plans = channels.map((channel) =>
+    preparePublishChannel(channel, contextForChannel(channel)),
+  );
+  const now = new Date().toISOString();
+
   // One active run per property: reuse an existing active run, else open one.
   const { data: existing } = await supabase
     .from("distribution_runs")
@@ -1089,17 +1298,36 @@ export async function startDistributionRun(formData: FormData) {
   }
   if (runId) {
     await supabase.from("distribution_run_items").upsert(
-      channels.map((channel) => ({
+      plans.map((plan) => ({
         organization_id: orgId,
         run_id: runId,
-        channel,
-        status: "pending",
+        channel: plan.key,
+        status: legacyRunStatusForPublishStatus(plan.status),
+        publish_status: plan.status,
+        mode: plan.mode,
+        blockers: plan.blockers,
+        external_url: plan.externalUrl,
+        listing_post_id: plan.listingPostId,
+        operator_action_url: plan.operatorActionUrl,
+        audit_message: plan.auditMessage,
+        last_attempted_at: now,
+        last_verified_at: plan.status === "live" ? now : null,
+        error_code:
+          plan.status === "blocked" || plan.status === "rejected"
+            ? plan.status
+            : null,
+        error_message:
+          plan.status === "blocked" || plan.status === "rejected"
+            ? plan.blockers.join(" ")
+            : null,
+        updated_at: now,
       })),
-      { onConflict: "run_id,channel", ignoreDuplicates: true },
+      { onConflict: "run_id,channel" },
     );
   }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
+  revalidatePath("/dashboard/properties");
   redirect(`/dashboard/properties/${propertyId}?run=started#distribute-header`);
 }
 
@@ -1111,7 +1339,13 @@ export async function updateRunItem(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  const status = normalizeRunItemStatus(formData.get("status"));
+  const hasPublishStatus = formData.has("publish_status");
+  const publishStatus = hasPublishStatus
+    ? normalizePublishStatus(formData.get("publish_status"))
+    : null;
+  const status = publishStatus
+    ? legacyRunStatusForPublishStatus(publishStatus)
+    : normalizeRunItemStatus(formData.get("status"));
   const url = normalizeUrl(formData.get("external_url"));
   const notes = normalizeText(formData.get("notes"));
 
@@ -1141,7 +1375,7 @@ export async function updateRunItem(formData: FormData) {
   // Marking a channel done WITH a live URL produces or refreshes its tracked
   // listing_posts row so the run feeds attribution + the Distribute cards.
   let listingPostId = (item.listing_post_id as string | null) ?? null;
-  if (status === "done" && url) {
+  if (status === "done" && url && isPortalKey(item.channel)) {
     const portal = normalizePortal(item.channel);
     const check = validateListingPost({ portal, status: "live", url });
     if (check.ok) {
@@ -1186,9 +1420,19 @@ export async function updateRunItem(formData: FormData) {
     .from("distribution_run_items")
     .update({
       status,
+      publish_status: publishStatus,
       external_url: url,
       notes,
       listing_post_id: listingPostId,
+      last_verified_at: publishStatus === "live" ? new Date().toISOString() : null,
+      error_code:
+        publishStatus === "blocked" || publishStatus === "rejected"
+          ? publishStatus
+          : null,
+      error_message:
+        publishStatus === "blocked" || publishStatus === "rejected"
+          ? notes
+          : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", itemId);
@@ -1196,12 +1440,13 @@ export async function updateRunItem(formData: FormData) {
   // Complete the run once every item is resolved (done/skipped); reopen if not.
   const { data: siblings } = await supabase
     .from("distribution_run_items")
-    .select("status")
+    .select("status, publish_status")
     .eq("run_id", item.run_id);
-  const rows = (siblings ?? []) as { status: string }[];
-  const allResolved =
-    rows.length > 0 &&
-    rows.every((s) => s.status === "done" || s.status === "skipped");
+  const rows = (siblings ?? []) as {
+    status: string | null;
+    publish_status: string | null;
+  }[];
+  const allResolved = rows.length > 0 && rows.every(publishItemResolved);
   await supabase
     .from("distribution_runs")
     .update({
@@ -1220,7 +1465,7 @@ export async function addRunChannel(formData: FormData) {
   if (!runId) return;
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  const channel = normalizeRunChannel(formData.get("channel"));
+  const channel = normalizePublishChannel(formData.get("channel"));
 
   const supabase = createClient();
   // The run must belong to the caller's org (RLS-scoped); derive its property +
@@ -1240,6 +1485,7 @@ export async function addRunChannel(formData: FormData) {
         run_id: runId,
         channel,
         status: "pending",
+        publish_status: "queued",
       },
       { onConflict: "run_id,channel", ignoreDuplicates: true },
     );

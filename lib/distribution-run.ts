@@ -14,6 +14,11 @@ import {
   channelByKey,
   type DistributionChannel,
 } from "./distribution-channels";
+import {
+  isPublishStatus,
+  isResolvedPublishStatus,
+  type PublishStatus,
+} from "./distribution-publish";
 
 // --- run-item status -------------------------------------------------------
 export const RUN_ITEM_STATUSES = [
@@ -71,6 +76,56 @@ export function buildRunSteps(
 ): RunStep[] {
   const channel = channelByKey(channelKey);
   const guardrailCount = opts?.guardrailCount ?? 0;
+
+  if (channelKey === "vacantless") {
+    return [
+      {
+        key: "publish_page",
+        label: "Publish the Vacantless public page",
+        detail:
+          "This is the first link every tracked external channel points renters back to.",
+      },
+      {
+        key: "verify_page",
+        label: "Verify the public page accepts inquiries",
+        detail: "Only mark this Live when the renter page is actually open.",
+      },
+    ];
+  }
+
+  if (channelKey === "org_feed") {
+    return [
+      {
+        key: "check_feed_ready",
+        label: "Confirm the listing is eligible for the org feed",
+        detail:
+          "The feed needs a live listing, rent, address, description, and photos.",
+      },
+      {
+        key: "verify_feed",
+        label: "Verify the rental appears in the XML feed",
+        detail:
+          "This means submitted to the feed, not accepted or live on a partner site.",
+      },
+    ];
+  }
+
+  if (channelKey === "network_feed") {
+    return [
+      {
+        key: "confirm_partner_token",
+        label: "Confirm a network-feed partner token exists",
+        detail:
+          "The private network feed stays dark until a partner token is configured.",
+      },
+      {
+        key: "verify_network_feed",
+        label: "Verify network-feed eligibility",
+        detail:
+          "Do not expose the tokenized URL in the operator run item.",
+      },
+    ];
+  }
 
   // Realtor.ca / broker route: no self-serve copy — hand the field sheet off.
   if (channel && channel.mode === "broker") {
@@ -140,12 +195,26 @@ export type RunProgress = {
   allResolved: boolean;
 };
 
-export function runProgress(
-  items: ReadonlyArray<{ status: RunItemStatus }>,
-): RunProgress {
+type ProgressItem = {
+  status: RunItemStatus;
+  publishStatus?: PublishStatus | null;
+};
+
+function progressOutcome(item: ProgressItem): "done" | "skipped" | "open" {
+  if (isPublishStatus(item.publishStatus)) {
+    if (item.publishStatus === "skipped") return "skipped";
+    return isResolvedPublishStatus(item.publishStatus) ? "done" : "open";
+  }
+  if (item.status === "skipped") return "skipped";
+  if (item.status === "done") return "done";
+  return "open";
+}
+
+export function runProgress(items: ReadonlyArray<ProgressItem>): RunProgress {
   const total = items.length;
-  const done = items.filter((i) => i.status === "done").length;
-  const skipped = items.filter((i) => i.status === "skipped").length;
+  const outcomes = items.map(progressOutcome);
+  const done = outcomes.filter((s) => s === "done").length;
+  const skipped = outcomes.filter((s) => s === "skipped").length;
   const resolved = done + skipped;
   const remaining = total - resolved;
   const pct = total === 0 ? 0 : Math.round((resolved / total) * 100);

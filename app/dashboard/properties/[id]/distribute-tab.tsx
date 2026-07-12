@@ -42,7 +42,11 @@ import {
   listingPostStatusLabel,
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
-import { LaunchRunPanel, type RunItemView } from "./launch-run-panel";
+import {
+  LaunchRunPanel,
+  type PublishChannelChoiceView,
+  type RunItemView,
+} from "./launch-run-panel";
 import type { RunProgress } from "@/lib/distribution-run";
 import { buildReplySnippets } from "@/lib/reply-snippets";
 import {
@@ -67,8 +71,8 @@ export type LaunchRunData = {
   run: { id: string } | null;
   items: RunItemView[];
   progress: RunProgress;
-  selectable: Array<{ key: string; label: string }>;
-  startChannels: Array<{ key: string; label: string }>;
+  selectable: PublishChannelChoiceView[];
+  startChannels: PublishChannelChoiceView[];
 };
 
 export type ReplyInputs = {
@@ -216,7 +220,6 @@ export function DistributeTab({
       {/* Guided launch run (S412 Slice 2). */}
       <LaunchRunPanel
         propertyId={propertyId}
-        linkIsLive={linkIsLive}
         run={launchRun.run}
         items={launchRun.items}
         progress={launchRun.progress}

@@ -11,38 +11,63 @@ import {
   cancelDistributionRun,
 } from "../actions";
 import {
-  runItemStatusLabel,
-  RUN_ITEM_STATUSES,
   type RunItemStatus,
   type RunStep,
   type RunProgress,
 } from "@/lib/distribution-run";
+import {
+  PUBLISH_STATUSES,
+  publishStatusLabel,
+  publishModeLabel,
+  type PublishMode,
+  type PublishStatus,
+  type PublishTone,
+} from "@/lib/distribution-publish";
 
 export type RunItemView = {
   id: string;
   channel: string;
   channelLabel: string;
   status: RunItemStatus;
+  publishStatus: PublishStatus;
+  statusLabel: string;
+  statusTone: PublishTone;
+  mode: PublishMode;
+  modeLabel: string;
+  blockers: string[];
+  operatorActionUrl: string | null;
+  auditMessage: string | null;
+  errorMessage: string | null;
   externalUrl: string | null;
   trackedUrl: string | null;
   notes: string | null;
   steps: RunStep[];
 };
 
+export type PublishChannelChoiceView = {
+  key: string;
+  label: string;
+  modeLabel: string;
+  statusLabel: string;
+  statusTone: PublishTone;
+  description: string;
+  blockers: string[];
+  defaultSelected: boolean;
+};
+
 const FIELD_CLASS =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm";
 const PRIMARY_BTN = "rounded-lg px-4 py-2 text-sm font-medium text-white";
 
-const STATUS_CHIP: Record<RunItemStatus, string> = {
-  pending: "bg-gray-100 text-gray-600",
-  in_progress: "bg-blue-50 text-blue-700",
-  done: "bg-green-50 text-green-700",
-  skipped: "bg-amber-50 text-amber-700",
+const STATUS_CHIP: Record<PublishTone, string> = {
+  positive: "bg-green-50 text-green-700",
+  warning: "bg-amber-50 text-amber-700",
+  danger: "bg-red-50 text-red-700",
+  neutral: "bg-gray-100 text-gray-600",
 };
 
 export function LaunchRunPanel({
   propertyId,
-  linkIsLive,
   run,
   items,
   progress,
@@ -50,54 +75,75 @@ export function LaunchRunPanel({
   startChannels,
 }: {
   propertyId: string;
-  linkIsLive: boolean;
   run: { id: string } | null;
   items: RunItemView[];
   progress: RunProgress;
   // Channels not yet in the run (for "add another channel").
-  selectable: Array<{ key: string; label: string }>;
-  // All channels offered when STARTING a run (matrix + other).
-  startChannels: Array<{ key: string; label: string }>;
+  selectable: PublishChannelChoiceView[];
+  // All channels offered when STARTING a run.
+  startChannels: PublishChannelChoiceView[];
 }) {
   // No active run: offer to start one.
   if (!run) {
     return (
       <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
         <h3 className="mb-1 text-sm font-semibold text-gray-900">
-          Run a guided launch
+          Publish
         </h3>
         <p className="mb-3 text-xs text-gray-600">
-          Pick the channels you want to post to and Vacantless walks you through
-          each one as a checklist - copy, fields, gotchas, then paste the live
-          link. Your progress saves so you can stop and resume.
+          Pick the channels, then Vacantless creates one tracked run. Automatic
+          steps happen where the app can really do them; login, payment, broker,
+          and final-review steps stay explicit.
         </p>
-        {linkIsLive ? (
-          <form action={startDistributionRun}>
-            <input type="hidden" name="property_id" value={propertyId} />
-            <div className="mb-3 flex flex-wrap gap-2">
-              {startChannels.map((c) => (
-                <label
-                  key={c.key}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700"
-                >
-                  <input type="checkbox" name="channels" value={c.key} />
-                  {c.label}
-                </label>
-              ))}
-            </div>
-            <button
-              type="submit"
-              className={PRIMARY_BTN}
-              style={{ backgroundColor: "var(--brand-color)" }}
-            >
-              Start launch run
-            </button>
-          </form>
-        ) : (
-          <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
-            Set this rental Live to run a guided launch.
-          </p>
-        )}
+        <form action={startDistributionRun}>
+          <input type="hidden" name="property_id" value={propertyId} />
+          <div className="mb-3 grid gap-2 md:grid-cols-2">
+            {startChannels.map((c) => (
+              <label
+                key={c.key}
+                className="cursor-pointer rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700"
+              >
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    name="channels"
+                    value={c.key}
+                    defaultChecked={c.defaultSelected}
+                    className="mt-1"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium text-gray-900">{c.label}</span>
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                        {c.modeLabel}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[c.statusTone]}`}
+                      >
+                        {c.statusLabel}
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs text-gray-500">
+                      {c.description}
+                    </span>
+                    {c.blockers.length > 0 && (
+                      <span className="mt-2 block rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                        {c.blockers[0]}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </label>
+            ))}
+          </div>
+          <button
+            type="submit"
+            className={PRIMARY_BTN}
+            style={{ backgroundColor: "var(--brand-color)" }}
+          >
+            Publish
+          </button>
+        </form>
       </div>
     );
   }
@@ -106,9 +152,9 @@ export function LaunchRunPanel({
   return (
     <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">Launch run</h3>
+        <h3 className="text-sm font-semibold text-gray-900">Publish run</h3>
         <span className="text-xs font-medium text-gray-600">
-          {progress.resolved} of {progress.total} channels done
+          {progress.resolved} of {progress.total} channels resolved
         </span>
       </div>
       <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
@@ -128,12 +174,37 @@ export function LaunchRunPanel({
               <span className="text-sm font-semibold text-gray-900">
                 {item.channelLabel}
               </span>
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                {publishModeLabel(item.mode)}
+              </span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[item.status]}`}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[item.statusTone]}`}
               >
-                {runItemStatusLabel(item.status)}
+                {item.statusLabel}
               </span>
             </div>
+
+            {(item.auditMessage || item.errorMessage || item.blockers.length > 0) && (
+              <div className="mb-3 space-y-2">
+                {item.auditMessage && (
+                  <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                    {item.auditMessage}
+                  </p>
+                )}
+                {item.errorMessage && (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {item.errorMessage}
+                  </p>
+                )}
+                {item.blockers.length > 0 && (
+                  <ul className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {item.blockers.map((blocker) => (
+                      <li key={blocker}>{blocker}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <ol className="mb-3 space-y-1.5">
               {item.steps.map((s, i) => (
@@ -157,6 +228,16 @@ export function LaunchRunPanel({
                 <CopyLink url={item.trackedUrl} />
               </div>
             )}
+            {item.operatorActionUrl && (
+              <a
+                href={item.operatorActionUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mb-3 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Open next action
+              </a>
+            )}
 
             <form
               action={updateRunItem}
@@ -174,13 +255,13 @@ export function LaunchRunPanel({
                   </label>
                   <select
                     id={`run-${item.id}-status`}
-                    name="status"
-                    defaultValue={item.status}
+                    name="publish_status"
+                    defaultValue={item.publishStatus}
                     className={FIELD_CLASS}
                   >
-                    {RUN_ITEM_STATUSES.map((s) => (
+                    {PUBLISH_STATUSES.map((s) => (
                       <option key={s} value={s}>
-                        {runItemStatusLabel(s)}
+                        {publishStatusLabel(s)}
                       </option>
                     ))}
                   </select>
@@ -190,7 +271,7 @@ export function LaunchRunPanel({
                     htmlFor={`run-${item.id}-url`}
                     className="mb-1 block text-xs font-medium text-gray-600"
                   >
-                    Live ad URL (to finish + track)
+                    Live URL (required before marking an external post Live)
                   </label>
                   <input
                     id={`run-${item.id}-url`}
@@ -247,7 +328,7 @@ export function LaunchRunPanel({
               >
                 {selectable.map((c) => (
                   <option key={c.key} value={c.key}>
-                    {c.label}
+                    {c.label} - {c.modeLabel}
                   </option>
                 ))}
               </select>
