@@ -11,6 +11,7 @@ import {
 } from "@/lib/n1-render";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // Public, view-only Form N1 for the TENANT (renewal autopilot Slice B, S460).
 // The tenant opens this from the served email; they have NO session — the
@@ -30,7 +31,7 @@ export async function GET(
   const { data } = await admin
     .from("tenancies")
     .select(
-      "status, rent_cents, start_date, n1_effective_date, n1_snapshot, " +
+      "status, rent_cents, start_date, n1_effective_date, n1_served_at, n1_snapshot, " +
         "property:properties(address, rent_control_exempt), " +
         "tenants(name, is_primary), " +
         "organization:organizations(name, public_contact_phone, public_contact_email)",
@@ -44,6 +45,7 @@ export async function GET(
     rent_cents: number | null;
     start_date: string | null;
     n1_effective_date: string | null;
+    n1_served_at: string | null;
     n1_snapshot: N1Snapshot | null;
     property: { address: string | null; rent_control_exempt: boolean | null } | null;
     tenants: { name: string | null; is_primary: boolean }[];
@@ -67,6 +69,15 @@ export async function GET(
     });
   }
 
+  // S467 (Codex P1): the immutable snapshot IS the served copy (S460b). Only
+  // fall through to the legacy no-snapshot derive for notices that were ACTUALLY
+  // served before the snapshot feature - every tenancy carries a default
+  // n1_service_token, so an UNSERVED tenancy must never surface a tenant-facing
+  // notice from its default token.
+  if (!t.n1_served_at) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+
   if (t.status !== "active" || t.rent_cents == null || !t.start_date) {
     return new NextResponse("This notice is no longer available.", {
       status: 400,
@@ -87,7 +98,7 @@ export async function GET(
     },
     todayOntario,
   );
-  if (!result) {
+  if (!result || result.newRentCents == null) {
     return new NextResponse("Could not render this notice.", { status: 400 });
   }
 

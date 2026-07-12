@@ -46,6 +46,7 @@ import { tenantNoticeDedupeKey } from "@/lib/tenant-message-approvals";
 // them from anon/user sessions); see lib/supabase/admin.ts.
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const runtime = "nodejs";
 
 const APP_URL =

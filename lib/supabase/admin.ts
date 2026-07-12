@@ -19,5 +19,17 @@ export function createAdminClient(): SupabaseClient | null {
 
   return createSupabaseClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    // S467: opt every service-role read out of Next.js's fetch Data Cache. The
+    // App Router caches cookieless GET fetches (which this service-role client
+    // makes) in the Data Cache, so without this a public route (e.g. /n1/[token])
+    // or a cron sweep can read FROZEN rows / a stale guideline for the life of the
+    // cache - the blank-N1 bug (KI740). User-client reads carry auth cookies and
+    // are never cached, which is why the operator N1 rendered correctly while the
+    // public one was blank. `dynamic="force-dynamic"` did NOT cover these fetches
+    // (Next 14.2), so pin no-store on the client itself.
+    global: {
+      fetch: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+        fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 }
