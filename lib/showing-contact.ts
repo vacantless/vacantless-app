@@ -13,3 +13,18 @@ export function resolveArrivalPhone(
   };
   return pick(propertyPhone) ?? pick(orgDefaultPhone) ?? pick(publicContactPhone);
 }
+
+/**
+ * Build the digit string for a tel: link from an operator-entered phone that may
+ * carry an extension ("226-778-0014 ext 5", "...x5", "...#5"). Strips formatting
+ * to digits/plus and PAUSE-dials any extension (tel:<number>,<ext>) rather than
+ * mashing it onto the number. Returns "" for a null/blank phone.
+ */
+export function telDialString(phone: string | null | undefined): string {
+  const s = (phone ?? "").trim();
+  if (s === "") return "";
+  const m = s.match(/(?:ext\.?|x|#)\s*(\d{1,6})\s*$/i);
+  const ext = m ? m[1] : "";
+  const base = (m ? s.slice(0, m.index) : s).replace(/[^0-9+]/g, "");
+  return ext ? `${base},${ext}` : base;
+}

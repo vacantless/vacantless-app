@@ -13,6 +13,7 @@
 import { nurtureCopy, type NurtureCopy } from "@/lib/nurture";
 import { TEST_SAMPLE, TEST_SUBJECT_PREFIX } from "@/lib/test-email";
 import { DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
+import { telDialString } from "@/lib/showing-contact";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
@@ -185,7 +186,7 @@ function viewingLogisticsHtml(p: {
   }
   if (phone) {
     rows.push(
-      `<p style="margin:0 0 12px;"><strong>Running late or can't find the entrance?</strong> Call or text <a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}" style="color:${brand};font-weight:600;">${escapeHtml(phone)}</a> and we'll help you get in.</p>`,
+      `<p style="margin:0 0 12px;"><strong>Running late or can't find the entrance?</strong> Call or text <a href="tel:${escapeHtml(telDialString(phone))}" style="color:${brand};font-weight:600;">${escapeHtml(phone)}</a> and we'll help you get in.</p>`,
     );
   }
   rows.push(

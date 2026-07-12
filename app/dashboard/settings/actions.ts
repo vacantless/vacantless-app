@@ -15,7 +15,7 @@ import {
   validateNewQuestion,
   normalizePreferredAnswer,
 } from "@/lib/screening-questions";
-import { validatePublicContact, validatePublicContactPhone } from "@/lib/public-contact";
+import { validatePublicContact } from "@/lib/public-contact";
 import {
   validatePolicyProfileSettings,
   validateBuildingPolicySettings,
@@ -320,30 +320,6 @@ export async function updatePublicContact(formData: FormData) {
   redirect("/dashboard/settings?tab=brand&feed=saved");
 }
 
-export async function updateShowingArrivalPhone(formData: FormData) {
-  const org = await requireSettingsOrg();
-
-  // Reuse the public-contact phone validator: 7-15 digits, operator formatting
-  // preserved, blank -> null (means "fall back to the contact phone").
-  const res = validatePublicContactPhone(
-    String(formData.get("showing_arrival_phone") ?? ""),
-  );
-  if (!res.ok) {
-    redirect("/dashboard/settings?tab=brand&arrival=invalid");
-  }
-
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("organizations")
-    .update({ showing_arrival_phone: res.value })
-    .eq("id", org.id);
-  if (error) {
-    redirect("/dashboard/settings?tab=brand&arrival=error");
-  }
-
-  redirect("/dashboard/settings?tab=brand&arrival=saved");
-}
-
 // Building STANDARD POLICY profile (0048). The org-level defaults (lease term /
 // smoking / A/C type / on-site management) every unit inherits unless it
 // overrides them. IA Step 3 (S275): the editor moved to its point-of-use —
@@ -481,6 +457,11 @@ export async function updateRenterMessages(formData: FormData) {
       feedback_enabled: formData.get("feedback_enabled") != null,
       feedback_delay_hours: delay.value,
       nurture_enabled: formData.get("nurture_enabled") != null,
+      // S471b: arrival phone lives with the renter emails it appears in.
+      // Lenient free text (the email tel: link extracts digits + pause-dials
+      // any extension); blank -> null -> falls back to the contact phone.
+      showing_arrival_phone:
+        String(formData.get("showing_arrival_phone") ?? "").trim() || null,
     })
     .eq("id", org.id);
   if (error) {
