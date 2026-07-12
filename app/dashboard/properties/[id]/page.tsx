@@ -58,7 +58,6 @@ import { importUrlErrorMessage } from "@/lib/image-url-import";
 import { dropboxImportErrorMessage } from "@/lib/dropbox-import";
 import {
   photoCapForPlan,
-  listingCapForPlan,
   storageUpsellNote,
   canUseListingMarketing,
   canUseWaitlist,
@@ -89,7 +88,6 @@ import {
   type PolicyProfile,
 } from "@/lib/policy-profile";
 import {
-  isPortalKey,
   listingPostErrorMessage,
   buildTrackedLink,
   countLeadsByPost,
@@ -113,23 +111,9 @@ import {
 import {
   buildRunSteps,
   runProgress,
+  selectableRunChannels,
   type RunItemStatus,
 } from "@/lib/distribution-run";
-import {
-  normalizePublishChannel,
-  normalizePublishMode,
-  normalizePublishStatus,
-  preparePublishChannel,
-  publishChannelChoices,
-  publishChannelMeta,
-  publishModeLabel,
-  publishStatusFromLegacyStatus,
-  publishStatusLabel,
-  publishStatusTone,
-  type PublishChannelContext,
-  type PublishChannelKey,
-  type PublishPartnerState,
-} from "@/lib/distribution-publish";
 import { guardrailsForPortal } from "@/lib/listing-guardrails";
 import { computeChannelAnalytics } from "@/lib/distribution-analytics";
 import {
@@ -443,12 +427,6 @@ export default async function PropertyDetailPage({
   // never embeds a dead or unavailable URL; closed statuses get a safe fallback
   // line that does not invite bookings.
   const org = await getCurrentOrg();
-  const orgFeedUrl =
-    org?.slug && host
-      ? `${proto}://${host}/api/feed/${org.slug}`
-      : org?.slug
-        ? `/api/feed/${org.slug}`
-        : null;
 
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
@@ -871,47 +849,6 @@ export default async function PropertyDetailPage({
     availabilityWindowCount: availabilityCount ?? 0,
     replyToEmail: org?.reply_to_email ?? null,
   });
-  const publishPlanCap = listingCapForPlan(org?.plan);
-  let otherLiveListingCount = 0;
-  if (!linkIsLive && publishPlanCap != null) {
-    const { count } = await supabase
-      .from("properties")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "available")
-      .neq("id", p.id);
-    otherLiveListingCount = count ?? 0;
-  }
-  const readinessBlockerLabels = (opts?: { includeLive?: boolean }) =>
-    readiness.checks
-      .filter((check) => check.required && !check.ok)
-      .filter((check) => opts?.includeLive || check.key !== "live")
-      .map((check) => {
-        if (check.key === "live") return "Publish the Vacantless public page.";
-        if (check.key === "address") return "Add the rental address.";
-        if (check.key === "rent") return "Set the monthly rent.";
-        if (check.key === "beds_baths") return "Add beds and baths.";
-        return check.hint;
-      });
-  const canPublishFromStatus =
-    normalizedStatus === "draft" ||
-    normalizedStatus === "paused" ||
-    normalizedStatus === "off_market";
-  const publicPageBlockers = readinessBlockerLabels({ includeLive: false });
-  if (!linkIsLive && !canPublishFromStatus) {
-    publicPageBlockers.unshift(
-      normalizedStatus === "leased"
-        ? "Leased rentals must be explicitly relisted before publishing."
-        : "This rental cannot be published from its current status.",
-    );
-  }
-  if (!linkIsLive && publishPlanCap != null && otherLiveListingCount >= publishPlanCap) {
-    publicPageBlockers.push(
-      "Your plan's live-rental limit is full. Pause another rental or upgrade before publishing.",
-    );
-  }
-  const canPublishPublicPage =
-    !linkIsLive && canPublishFromStatus && publicPageBlockers.length === 0;
-  const publishShareBlockers = readinessBlockerLabels({ includeLive: false });
 
   // --- Distribute command center (S412, Slice 1) --------------------------
   // Fold the per-channel copy + the where-posted tracker + share-readiness into
@@ -1005,57 +942,7 @@ export default async function PropertyDetailPage({
     toDistributePost,
   );
 
-  // --- One-click publish run (S467, built on S412 run primitives) ----------
-  const networkFeedEnabled = Boolean(process.env.NETWORK_FEED_TOKEN?.trim());
-  const livePostForPublishChannel = (channel: PublishChannelKey) => {
-    if (!isPortalKey(channel)) return null;
-    const live = (postsByPortal.get(channel) ?? [])
-      .filter((post) => post.status === "live" && post.url)
-      .sort((a, b) => (b.posted_on ?? "").localeCompare(a.posted_on ?? ""));
-    return live[0] ?? null;
-  };
-  const publishContextForChannel = (
-    channel: PublishChannelKey,
-  ): PublishChannelContext => {
-    const livePost = livePostForPublishChannel(channel);
-    const partner = partnerByChannel.get(channel);
-    const partnerState: PublishPartnerState | null = partner
-      ? { status: partner.status, feedUrl: partner.feedUrl }
-      : null;
-    return {
-      linkIsLive,
-      canPublishPublicPage,
-      publicPageBlockers,
-      shareBlockers: publishShareBlockers,
-      feedInFeed: distributeFeedStatus.inFeed,
-      feedHint: distributeFeedStatus.hint,
-      publicUrl,
-      orgFeedUrl,
-      networkFeedEnabled,
-      partner: partnerState,
-      existingLiveUrl: livePost?.url ?? null,
-      existingListingPostId: livePost?.id ?? null,
-    };
-  };
-  const publishStartChannels = publishChannelChoices({
-    includeNetworkFeed: networkFeedEnabled,
-  }).map((meta) => {
-    const plan = preparePublishChannel(
-      meta.key,
-      publishContextForChannel(meta.key),
-    );
-    return {
-      key: plan.key,
-      label: plan.label,
-      modeLabel: publishModeLabel(plan.mode),
-      statusLabel: publishStatusLabel(plan.status),
-      statusTone: publishStatusTone(plan.status),
-      description: plan.description,
-      blockers: plan.blockers,
-      defaultSelected: plan.defaultSelected && plan.status !== "blocked",
-    };
-  });
-
+  // --- Guided launch run (S412 Slice 2) -----------------------------------
   const { data: activeRunRow } = await supabase
     .from("distribution_runs")
     .select("id")
@@ -1068,23 +955,15 @@ export default async function PropertyDetailPage({
     id: string;
     channel: string;
     status: RunItemStatus;
-    publish_status: string | null;
-    mode: string | null;
-    blockers: unknown;
     external_url: string | null;
     notes: string | null;
     listing_post_id: string | null;
-    operator_action_url: string | null;
-    error_message: string | null;
-    audit_message: string | null;
   };
   let runItemRows: RunItemRow[] = [];
   if (activeRun) {
     const { data: ri } = await supabase
       .from("distribution_run_items")
-      .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message",
-      )
+      .select("id, channel, status, external_url, notes, listing_post_id")
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
     runItemRows = (ri ?? []) as RunItemRow[];
@@ -1093,49 +972,28 @@ export default async function PropertyDetailPage({
     DISTRIBUTION_CHANNELS.map((c) => [c.key, c.label]),
   );
   channelLabelByKey.set("other", "Other");
-  const blockersFromRow = (value: unknown): string[] =>
-    Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === "string")
-      : [];
-  const runItems: RunItemView[] = runItemRows.map((r) => {
-    const publishKey = normalizePublishChannel(r.channel);
-    const meta = publishKey ? publishChannelMeta(publishKey) : null;
-    const publishStatus = normalizePublishStatus(
-      r.publish_status ?? publishStatusFromLegacyStatus(r.status),
-    );
-    const mode = normalizePublishMode(r.mode ?? meta?.mode);
-    return {
-      id: r.id,
-      channel: r.channel,
-      channelLabel: meta?.label ?? channelLabelByKey.get(r.channel) ?? r.channel,
-      status: r.status,
-      publishStatus,
-      statusLabel: publishStatusLabel(publishStatus),
-      statusTone: publishStatusTone(publishStatus),
-      mode,
-      modeLabel: publishModeLabel(mode),
-      blockers: blockersFromRow(r.blockers),
-      operatorActionUrl: r.operator_action_url,
-      auditMessage: r.audit_message,
-      errorMessage: r.error_message,
-      externalUrl: r.external_url,
-      trackedUrl:
-        linkIsLive && r.listing_post_id
-          ? buildTrackedLink(publicUrl, r.listing_post_id)
-          : null,
-      notes: r.notes,
-      steps: buildRunSteps(r.channel, {
-        guardrailCount: guardrailsForPortal(r.channel).length,
-      }),
-    };
-  });
+  const runItems: RunItemView[] = runItemRows.map((r) => ({
+    id: r.id,
+    channel: r.channel,
+    channelLabel: channelLabelByKey.get(r.channel) ?? r.channel,
+    status: r.status,
+    externalUrl: r.external_url,
+    trackedUrl:
+      linkIsLive && r.listing_post_id
+        ? buildTrackedLink(publicUrl, r.listing_post_id)
+        : null,
+    notes: r.notes,
+    steps: buildRunSteps(r.channel, {
+      guardrailCount: guardrailsForPortal(r.channel).length,
+    }),
+  }));
   const alreadyInRun = new Set(runItems.map((i) => i.channel));
   const launchRun: LaunchRunData = {
     run: activeRun,
     items: runItems,
     progress: runProgress(runItems),
-    selectable: publishStartChannels.filter((c) => !alreadyInRun.has(c.key)),
-    startChannels: publishStartChannels,
+    selectable: selectableRunChannels(DISTRIBUTION_CHANNELS, alreadyInRun),
+    startChannels: selectableRunChannels(DISTRIBUTION_CHANNELS, new Set()),
   };
   const replyInputs: ReplyInputs = {
     address: p.address,
