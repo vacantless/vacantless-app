@@ -4,6 +4,7 @@ import { isAdminEmail, inviteStatusLabel, inviteSourceLabel } from "@/lib/provis
 import { listRecentInvites, adminEmails } from "@/lib/provisioning-server";
 import { OnboardLandlordForm } from "./onboard-form";
 import { HandoffLandlordForm } from "./handoff-form";
+import { GuidelineForm } from "./guideline-form";
 
 export const dynamic = "force-dynamic";
 // Service-role reads of org_invites must always see live rows.
@@ -23,6 +24,10 @@ export default async function AdminConsolePage() {
   if (!isAdminEmail(user?.email, adminEmails())) notFound();
 
   const invites = await listRecentInvites(30);
+  const { data: guidelineRows } = await supabase
+    .from("rent_guidelines")
+    .select("year, percent, source, updated_at")
+    .order("year", { ascending: false });
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 py-6">
@@ -92,6 +97,40 @@ export default async function AdminConsolePage() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Rent-increase guideline (Ontario)</h2>
+        <p className="text-sm text-slate-500">
+          The guideline % by the year an increase takes effect. Add next year&apos;s
+          value when Ontario publishes it (usually late summer) &mdash; no redeploy
+          needed. A year not listed here falls back to the shipped code default.
+        </p>
+        <GuidelineForm />
+        {((guidelineRows ?? []) as Array<{ year: number; percent: number | string; source: string | null; updated_at: string }>).length > 0 && (
+          <div className="overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Year</th>
+                  <th className="px-3 py-2 font-medium">Guideline</th>
+                  <th className="px-3 py-2 font-medium">Source</th>
+                  <th className="px-3 py-2 font-medium">Updated</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {((guidelineRows ?? []) as Array<{ year: number; percent: number | string; source: string | null; updated_at: string }>).map((g) => (
+                  <tr key={g.year}>
+                    <td className="px-3 py-2 text-slate-800">{g.year}</td>
+                    <td className="px-3 py-2 text-slate-600">{g.percent}%</td>
+                    <td className="px-3 py-2 text-slate-500">{g.source ?? "\u2014"}</td>
+                    <td className="px-3 py-2 text-slate-500">{new Date(g.updated_at).toLocaleDateString("en-CA")}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

@@ -30,6 +30,7 @@ import { DOCUMENTS_BUCKET } from "@/lib/documents-server";
 import { documentStoragePath, validateDocumentUpload } from "@/lib/documents";
 import { formatRentCents } from "@/lib/tenancy";
 import { deriveRentIncrease } from "@/lib/rent-increase";
+import { loadGuidelineLookup } from "@/lib/guideline-server";
 import type { N1Snapshot } from "@/lib/n1-render";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
@@ -826,6 +827,9 @@ export async function serveN1(formData: FormData) {
   const todayOntario = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Toronto",
   });
+  // S465: back the guideline with the rent_guidelines table (a superadmin can add
+  // a year with no redeploy); falls back to the code constant per-year.
+  const guideline = await loadGuidelineLookup(supabase);
   const derived = deriveRentIncrease(
     {
       startDate: t.start_date,
@@ -835,6 +839,7 @@ export async function serveN1(formData: FormData) {
       // and Stripe billed from it. Matches the dashboard card's derivation.
       lastIncreaseDate: t.last_rent_increase_date ?? null,
       exempt: t.property?.rent_control_exempt === true,
+      guideline,
     },
     todayOntario,
   );

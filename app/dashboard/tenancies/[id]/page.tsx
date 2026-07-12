@@ -91,6 +91,7 @@ import {
   type RiskLevel,
 } from "@/lib/clauses";
 import { deriveRentIncrease } from "@/lib/rent-increase";
+import { loadGuidelineLookup } from "@/lib/guideline-server";
 import {
   deriveRenewalCheckin,
   n1ServedForCurrentCycle,
@@ -526,6 +527,7 @@ export default async function TenancyDetailPage({
   const todayOntario = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Toronto",
   });
+  const guidelineLookup = await loadGuidelineLookup(supabase);
   const rentIncrease =
     t.status === "active" && t.rent_cents != null && t.start_date
       ? deriveRentIncrease(
@@ -534,6 +536,7 @@ export default async function TenancyDetailPage({
             currentRentCents: t.rent_cents,
             lastIncreaseDate: t.last_rent_increase_date ?? null,
             exempt: t.property?.rent_control_exempt === true,
+            guideline: guidelineLookup,
           },
           todayOntario,
         )
