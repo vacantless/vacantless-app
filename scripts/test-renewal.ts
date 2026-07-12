@@ -7,6 +7,7 @@ import {
   CHECKIN_LEAD_DAYS,
   RENEWAL_INTENTS,
   n1ServedForCurrentCycle,
+  n1FiledForCurrentCycle,
   type RenewalCheckinInput,
 } from "../lib/renewal";
 
@@ -123,6 +124,18 @@ ok("not served when snapshot date missing",
    n1ServedForCurrentCycle("2026-12-01T00:00:00Z", null, "2027-03-01") === false);
 ok("not served when current derived date missing",
    n1ServedForCurrentCycle("2026-12-01T00:00:00Z", "2027-03-01", null) === false);
+
+// --- S460e: N1 FILED-state is per-cycle (Codex P2 - annual re-arm) ---------------
+ok("filed this cycle when served-this-cycle and a doc exists",
+   n1FiledForCurrentCycle(true, "doc-123") === true);
+ok("NOT filed this cycle when the serve is stale (last cycle)",
+   n1FiledForCurrentCycle(false, "doc-123") === false);
+ok("NOT filed when no filed doc",
+   n1FiledForCurrentCycle(true, null) === false);
+ok("NOT filed when serve stale AND no doc",
+   n1FiledForCurrentCycle(false, null) === false);
+ok("undefined filed doc -> not filed",
+   n1FiledForCurrentCycle(true, undefined) === false);
 
 console.log(`\nrenewal: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

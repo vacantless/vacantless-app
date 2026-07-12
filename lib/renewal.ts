@@ -181,3 +181,19 @@ export function n1ServedForCurrentCycle(
     snapshotEffectiveDate === currentEffectiveDate
   );
 }
+
+
+// ============================================================================
+// S460e (Codex P2): the N1 FILED state is per-CYCLE too. n1_filed_document_id was
+// one-shot, so after recordRentIncrease re-arms the annual cycle a fresh N1 could
+// inherit last cycle's "filed" pointer and block filing the new served notice.
+// serveN1 now resets the pointer on every serve, so it only ever names the CURRENT
+// served notice's vault doc; "filed for this cycle" therefore means the serve is
+// for the current cycle AND a filing exists. Mirrors n1ServedForCurrentCycle.
+// ============================================================================
+export function n1FiledForCurrentCycle(
+  servedForCurrentCycle: boolean,
+  filedDocumentId: string | null | undefined,
+): boolean {
+  return servedForCurrentCycle && filedDocumentId != null;
+}

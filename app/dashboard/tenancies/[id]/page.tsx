@@ -91,7 +91,11 @@ import {
   type RiskLevel,
 } from "@/lib/clauses";
 import { deriveRentIncrease } from "@/lib/rent-increase";
-import { deriveRenewalCheckin, n1ServedForCurrentCycle } from "@/lib/renewal";
+import {
+  deriveRenewalCheckin,
+  n1ServedForCurrentCycle,
+  n1FiledForCurrentCycle,
+} from "@/lib/renewal";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { RentIncreaseCard } from "@/components/rent-increase-card";
 import {
@@ -534,6 +538,16 @@ export default async function TenancyDetailPage({
           todayOntario,
         )
       : null;
+
+  // Is the N1 served for the CURRENT annual cycle? (S460d: the frozen snapshot's
+  // effective date must equal the currently-derived one, else the serve is stale.)
+  const n1ServedThisCycle = rentIncrease
+    ? n1ServedForCurrentCycle(
+        t.n1_served_at,
+        t.n1_snapshot?.effectiveDate,
+        rentIncrease.effectiveDate,
+      )
+    : false;
 
   const renewalCheckin =
     t.status === "active" && t.start_date
@@ -1660,17 +1674,13 @@ export default async function TenancyDetailPage({
                 </p>
               )}
               <p className="text-sm font-semibold text-gray-700">Serve the notice</p>
-              {n1ServedForCurrentCycle(
-                t.n1_served_at,
-                t.n1_snapshot?.effectiveDate,
-                rentIncrease.effectiveDate,
-              ) ? (
+              {n1ServedThisCycle ? (
                 <div className="mt-2">
                   <p className="text-sm text-gray-700">
                     Served {t.n1_served_at?.slice(0, 10)}
                     {t.n1_served_method ? ` by ${t.n1_served_method}` : ""}.
                   </p>
-                  {t.n1_filed_document_id ? (
+                  {n1FiledForCurrentCycle(n1ServedThisCycle, t.n1_filed_document_id) ? (
                     <p className="mt-2 text-xs text-emerald-700">Filed to the document vault.</p>
                   ) : (
                     <div className="mt-3">

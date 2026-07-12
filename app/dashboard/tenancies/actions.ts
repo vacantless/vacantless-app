@@ -873,6 +873,10 @@ export async function serveN1(formData: FormData) {
   const baseUpdate: Record<string, unknown> = {
     n1_effective_date: derived.effectiveDate,
     n1_snapshot: snapshot,
+    // S460e (Codex P2): serving a fresh notice supersedes any prior filing, so reset
+    // the filed pointer per serve. A re-armed annual cycle thus starts UNFILED and the
+    // operator can file this cycle's served N1 (n1_filed_document_id used to be one-shot).
+    n1_filed_document_id: null,
     updated_at: nowIso,
   };
 
@@ -953,6 +957,8 @@ export async function fileN1Pdf(formData: FormData) {
     property: { address: string | null } | null;
     tenants: { person_id: string | null; is_primary: boolean }[];
   };
+  // Per-cycle correct: serveN1 resets this pointer on every serve, so a set value
+  // means THIS cycle's notice is already filed (S460e). Idempotent double-file guard.
   if (t.n1_filed_document_id) redirect(`/dashboard/tenancies/${id}?serve=filed#renewal`);
 
   const file = formData
