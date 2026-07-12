@@ -1,7 +1,7 @@
 // Unit tests for validateStripeRentUpdate (autopilot Slice C, S460 / spec S420).
 // The impure Stripe schedule orchestration lives in stripe-rent-actions.ts and
 // is covered by the live sandbox flow. Run: npx tsx scripts/test-stripe-rent-update.ts
-import { validateStripeRentUpdate } from "../lib/stripe-connect";
+import { validateStripeRentUpdate, selectActiveSchedulePhase } from "../lib/stripe-connect";
 
 let passed = 0;
 let failed = 0;
@@ -73,6 +73,46 @@ ok("no sub -> nosub", validateStripeRentUpdate({ ...base, subscriptionId: null }
   ok("unparseable effective -> baddate", !badIso.ok && badIso.code === "baddate");
   const noFloor = validateStripeRentUpdate({ ...base, recordedEffectiveIso: null });
   ok("null floor still ok when >= today", noFloor.ok === true);
+}
+
+// --- same-day effective is allowed (>= today), never counted as early -------
+{
+  const sameDay = validateStripeRentUpdate({ ...base, effectiveIso: base.todayIso, recordedEffectiveIso: base.todayIso });
+  ok("effective == today -> ok (>= today)", sameDay.ok === true);
+}
+
+// --- selectActiveSchedulePhase: never index 0 after an annual transition ----
+{
+  // Cycle 2: phases = [elapsed $2000, active $2100]; current_phase points at P1.
+  const sched = {
+    current_phase: { start_date: 2000 },
+    phases: [
+      { start_date: 1000, items: [{ price: "price_2000" }] },
+      { start_date: 2000, items: [{ price: "price_2100" }] },
+    ],
+  };
+  const sel = selectActiveSchedulePhase(sched);
+  ok("picks active phase, not phases[0]", sel.ok === true && sel.ok && sel.startDate === 2000);
+  ok("picks active phase price", sel.ok === true && sel.ok && sel.priceId === "price_2100");
+}
+{
+  const sched = { current_phase: { start_date: 5000 }, phases: [{ start_date: 5000, items: [{ price: "price_x" }] }] };
+  const sel = selectActiveSchedulePhase(sched);
+  ok("single-phase schedule -> that phase", sel.ok === true && sel.ok && sel.startDate === 5000 && sel.priceId === "price_x");
+}
+{
+  const sched = { phases: [{ start_date: 1000, items: [{ price: "a" }] }, { start_date: 2000, items: [{ price: "b" }] }] };
+  const sel = selectActiveSchedulePhase(sched);
+  ok("no current_phase -> last (open-ended) phase", sel.ok === true && sel.ok && sel.startDate === 2000 && sel.priceId === "b");
+}
+{
+  const sched = { current_phase: { start_date: 1 }, phases: [{ start_date: 1, items: [{ price: { id: "price_obj" } }] }] };
+  const sel = selectActiveSchedulePhase(sched);
+  ok("expanded price object -> id extracted", sel.ok === true && sel.ok && sel.priceId === "price_obj");
+}
+{
+  const sel = selectActiveSchedulePhase({ phases: [] });
+  ok("empty phases -> nophase", sel.ok === false && !sel.ok && sel.code === "nophase");
 }
 
 console.log(`\nstripe-rent-update: ${passed} passed, ${failed} failed`);

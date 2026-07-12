@@ -710,3 +710,35 @@ export function validateStripeRentUpdate(input: {
 
   return { ok: true, newAmountCents: rounded, effectiveUnix: effUnix };
 }
+
+// ============================================================================
+// selectActiveSchedulePhase (autopilot Slice C, S462 / KI733). Pure.
+// Picks the CURRENTLY ACTIVE phase of a Stripe subscription schedule — never
+// phases[0]. schedule.phases retains ELAPSED phases, so after an annual phase
+// transition the first entry is a completed phase. Stripe only lets you update
+// "current and future phases" and requires phases[0] to be the active phase, so
+// reusing index 0 makes the 2nd annual rent-rate change fail. Matches on
+// current_phase.start_date; falls back to the last (open-ended tail) phase.
+// ============================================================================
+export type SchedulePhaseItemLike = { price?: string | { id?: string | null } | null };
+export type SchedulePhaseLike = { start_date: number; items: SchedulePhaseItemLike[] };
+export type ScheduleLike = {
+  current_phase?: { start_date?: number | null } | null;
+  phases?: SchedulePhaseLike[] | null;
+};
+export type ActiveSchedulePhase =
+  | { ok: true; startDate: number; priceId: string | null }
+  | { ok: false; code: "nophase" };
+
+export function selectActiveSchedulePhase(sched: ScheduleLike): ActiveSchedulePhase {
+  const phases = Array.isArray(sched.phases) ? sched.phases : [];
+  if (phases.length === 0) return { ok: false, code: "nophase" };
+  const activeStart = sched.current_phase?.start_date ?? null;
+  const active =
+    (activeStart != null
+      ? phases.find((p) => p.start_date === activeStart)
+      : undefined) ?? phases[phases.length - 1];
+  const price = active.items?.[0]?.price;
+  const priceId = typeof price === "string" ? price : (price?.id ?? null);
+  return { ok: true, startDate: active.start_date, priceId };
+}

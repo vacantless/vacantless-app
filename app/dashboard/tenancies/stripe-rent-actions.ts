@@ -17,6 +17,7 @@ import {
   parseSubscription,
   isoToUnixSeconds,
   validateStripeRentUpdate,
+  selectActiveSchedulePhase,
 } from "@/lib/stripe-connect";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { isValidProcessDate } from "@/lib/rotessa";
@@ -483,20 +484,26 @@ export async function updateStripeRentAmount(formData: FormData) {
     let currentPriceId: string;
     if (scheduleId) {
       const sched = await stripe!.subscriptionSchedules.retrieve(scheduleId, acct);
-      const p0 = sched.phases[0];
-      currentPhaseStart = p0.start_date;
-      const pi = p0.items[0];
-      currentPriceId = typeof pi.price === "string" ? pi.price : (pi.price?.id ?? price.id);
+      // S462 fix (KI733): pick the CURRENTLY ACTIVE phase, never phases[0].
+      // schedule.phases keeps elapsed phases, so after an annual transition the
+      // first entry is a stale completed phase and Stripe rejects it as phases[0]
+      // on update ("can only update current and future phases") -> the 2nd annual
+      // increase would fail. selectActiveSchedulePhase matches current_phase.
+      const sel = selectActiveSchedulePhase(sched);
+      if (!sel.ok) redirect(`${tenancyPath(tenancyId)}?striperent=nosub`);
+      currentPhaseStart = sel.startDate;
+      currentPriceId = sel.priceId ?? price.id;
     } else {
       const sched = await stripe!.subscriptionSchedules.create(
         { from_subscription: tenancy.stripe_subscription_id! },
         acct,
       );
       scheduleId = sched.id;
-      const p0 = sched.phases[0];
-      currentPhaseStart = p0.start_date;
-      const pi = p0.items[0];
-      currentPriceId = typeof pi.price === "string" ? pi.price : (pi.price?.id ?? price.id);
+      // A fresh from_subscription schedule has a single (current) phase; use the
+      // same active-phase selector for consistency.
+      const sel = selectActiveSchedulePhase(sched);
+      currentPhaseStart = sel.ok ? sel.startDate : sched.phases[0].start_date;
+      currentPriceId = (sel.ok ? sel.priceId : null) ?? price.id;
     }
 
     // Phase 1 = current price until the effective date; phase 2 = the new amount,
