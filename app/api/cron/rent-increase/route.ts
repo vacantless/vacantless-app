@@ -14,6 +14,7 @@ import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import { localDateString } from "@/lib/leasing-snapshot";
 import { deriveRentIncrease } from "@/lib/rent-increase";
+import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { formatRentCents } from "@/lib/tenancy";
 import {
   decideRentIncreaseNudge,
@@ -120,6 +121,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // S466: load the DB-backed guideline ONCE (global; matches serveN1/the card).
+  const guideline = await loadGuidelineLookup(admin);
+
   const params = req.nextUrl.searchParams;
   const force = params.get("force") === "1";
   const dry = params.get("dry") === "1";
@@ -186,6 +190,7 @@ export async function GET(req: NextRequest) {
             currentRentCents: t.rent_cents,
             lastIncreaseDate: t.last_rent_increase_date ?? null,
             exempt: prop?.rent_control_exempt === true,
+            guideline,
           },
           today,
         );

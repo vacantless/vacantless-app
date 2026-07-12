@@ -23,6 +23,7 @@ import {
 import { Icons } from "@/components/icons";
 import { LaunchChecklist } from "./launch-checklist";
 import { deriveRentIncrease } from "@/lib/rent-increase";
+import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { RentIncreaseRow } from "@/components/rent-increase-card";
 import { buildTodayLane } from "@/lib/dashboard-today";
 import { TodayLane } from "./today-lane";
@@ -181,11 +182,13 @@ export default async function OverviewPage() {
     serve_late: 1,
     serve_window: 2,
   };
+  // S466: back the guideline with the DB (0135) so the overview matches serveN1/the card.
+  const overviewGuideline = await loadGuidelineLookup(supabase);
   const rentIncreaseAlerts = ((tenancyRows ?? []) as unknown as TenancyRow[])
     .flatMap((t) => {
       if (t.rent_cents == null || !t.start_date) return [];
       const result = deriveRentIncrease(
-        { startDate: t.start_date, currentRentCents: t.rent_cents },
+        { startDate: t.start_date, currentRentCents: t.rent_cents, guideline: overviewGuideline },
         today,
       );
       if (!result || !(result.status in URGENCY)) return [];

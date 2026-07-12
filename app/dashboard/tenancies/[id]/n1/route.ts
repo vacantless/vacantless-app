@@ -4,6 +4,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { currentUserCan } from "@/lib/membership";
 import { formatRentCents } from "@/lib/tenancy";
 import { deriveRentIncrease } from "@/lib/rent-increase";
+import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { renderN1Html, type N1RenderModel } from "@/lib/n1-render";
 
 export const dynamic = "force-dynamic";
@@ -68,8 +69,9 @@ export async function GET(
     timeZone: "America/Toronto",
   });
 
+  const guideline = await loadGuidelineLookup(supabase);
   const result = deriveRentIncrease(
-    { startDate: tenancy.start_date, currentRentCents: tenancy.rent_cents },
+    { startDate: tenancy.start_date, currentRentCents: tenancy.rent_cents, guideline },
     todayOntario,
   );
   if (!result) {

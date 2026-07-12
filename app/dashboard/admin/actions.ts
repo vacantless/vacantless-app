@@ -107,7 +107,7 @@ export async function upsertRentGuidelineAction(input: {
     {
       year,
       percent,
-      source: `admin console: ${user?.email ?? "unknown"}`,
+      source: "admin console",
       updated_at: new Date().toISOString(),
     },
     { onConflict: "year" },

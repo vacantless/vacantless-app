@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatRentCents } from "@/lib/tenancy";
 import { deriveRentIncrease } from "@/lib/rent-increase";
+import { loadGuidelineLookup } from "@/lib/guideline-server";
 import {
   renderN1Html,
   n1ModelFromSnapshot,
@@ -76,11 +77,13 @@ export async function GET(
   const todayOntario = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Toronto",
   });
+  const guideline = await loadGuidelineLookup(admin);
   const result = deriveRentIncrease(
     {
       startDate: t.start_date,
       currentRentCents: t.rent_cents,
       exempt: t.property?.rent_control_exempt === true,
+      guideline,
     },
     todayOntario,
   );
