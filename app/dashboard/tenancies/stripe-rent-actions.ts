@@ -387,11 +387,14 @@ export async function refreshStripeRentSubscription(formData: FormData) {
 // recording the increase — the increase is already saved; this only syncs the
 // rail. manage_rent + the connected account, exactly like the create path.
 //
-// !!! LIVE-UNVERIFIED: the schedule orchestration below is written to the S420
-//     spec + the Stripe SDK types (tsc-clean) but has NOT been exercised against
-//     a live/sandbox Stripe account. Run the connected-account sandbox flow
-//     before shipping. The pure precondition guard (validateStripeRentUpdate) is
-//     unit-tested in scripts/test-stripe-rent-update.ts (17/0).
+// VERIFIED (S467, 2026-07-12): the schedule orchestration below was exercised
+//     end-to-end against Stripe TEST mode via scripts/harness-stripe-slice-c.ts
+//     (13/0) on a Test Clock — schedule create -> selectActiveSchedulePhase ->
+//     two-phase update; phase 2 bills exactly on the effective date (no early
+//     charge), and across a forced annual transition the S462 active-phase fix
+//     succeeds where the old phases[0] approach is rejected by Stripe. The pure
+//     precondition guard (validateStripeRentUpdate) + selectActiveSchedulePhase
+//     are unit-tested in scripts/test-stripe-rent-update.ts (17/0).
 // ===========================================================================
 type RateChangeTenancyRow = {
   id: string;
