@@ -19,7 +19,12 @@ import {
   type PaymentRow,
 } from "./payments";
 
-export type RentPeriodUnit = "daily" | "weekly" | "monthly" | "yearly";
+export type RentPeriodUnit =
+  | "daily"
+  | "weekly"
+  | "bi_weekly"
+  | "monthly"
+  | "yearly";
 
 // --- dates (pure, tz-safe: parse YYYY-MM-DD as a civil date, no local Date) ---
 
@@ -37,10 +42,21 @@ export function addDaysISO(iso: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+/** Last calendar day of the month that `iso` (any YYYY-MM-DD) falls in, as YYYY-MM-DD. */
+export function endOfMonthISO(iso: string): string {
+  const m = /^(\d{4})-(\d{2})/.exec((iso ?? "").trim());
+  if (!m) throw new Error(`n4: invalid month "${iso}"`);
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return `${m[1]}-${m[2]}-${String(lastDay).padStart(2, "0")}`;
+}
+
 /**
  * RTA s.59(1) minimum notice for an N4: 7 days for a daily/weekly tenancy, else
- * 14 days (monthly / yearly / longer). CHECKLIST value — verify against the
- * current statute + form before serve-on-behalf (design section 6).
+ * 14 days (bi-weekly / monthly / yearly / longer — the LTB N4 instructions state
+ * bi-weekly is 14). CHECKLIST value — verify against the current statute + form
+ * before serve-on-behalf (design section 6).
  */
 export function minN4NoticeDays(unit: RentPeriodUnit): 7 | 14 {
   return unit === "daily" || unit === "weekly" ? 7 : 14;
@@ -65,6 +81,8 @@ export function deriveN4TerminationDate(
 export type N4PeriodRow = {
   period: string; // 'YYYY-MM-01'
   label: string; // 'June 2026'
+  fromISO: string; // period first day (YYYY-MM-01)
+  toISO: string; // period last day (YYYY-MM-<end>)
   chargedCents: number;
   paidCents: number;
   owingCents: number; // charged - paid (negative = that period was overpaid)
@@ -150,6 +168,8 @@ export function deriveN4Arrears(input: {
     return {
       period,
       label: formatPeriodMonth(period),
+      fromISO: period,
+      toISO: endOfMonthISO(period),
       chargedCents: rent,
       paidCents: paid,
       owingCents: rent - paid,
@@ -188,4 +208,50 @@ export function resolveN4OwingCents(
     return Math.round(overrideCents);
   }
   return Math.max(0, Math.round(computedOwingCents || 0));
+}
+
+// --- form-row packing (the official N4 table has only THREE rows) ------------
+
+export type N4FormRow = {
+  fromISO: string;
+  toISO: string;
+  chargedCents: number;
+  paidCents: number;
+  owingCents: number;
+};
+
+/**
+ * Pack derived monthly period rows into the <=3 rows the official N4 table holds.
+ * Per the LTB N4 instructions: "if the tenant owes rent for more than three
+ * rental periods, you can combine two or more rental periods in the first or
+ * second row... in the last row you complete, you must show the rent charged,
+ * paid and owing for the LAST rent period." So <=3 periods -> one row each; >3 ->
+ * row 1 = ALL BUT the last period combined (earliest from-date .. second-last
+ * to-date, summed), row 2 = the last period alone. `combined` tells the operator
+ * review that summarization happened. Pure.
+ */
+export function packN4ArrearsRows(rows: N4PeriodRow[]): {
+  formRows: N4FormRow[];
+  combined: boolean;
+} {
+  const toForm = (r: N4PeriodRow): N4FormRow => ({
+    fromISO: r.fromISO,
+    toISO: r.toISO,
+    chargedCents: r.chargedCents,
+    paidCents: r.paidCents,
+    owingCents: r.owingCents,
+  });
+  if (rows.length <= 3) {
+    return { formRows: rows.map(toForm), combined: false };
+  }
+  const last = rows[rows.length - 1];
+  const earlier = rows.slice(0, rows.length - 1);
+  const combinedRow: N4FormRow = {
+    fromISO: earlier[0].fromISO,
+    toISO: earlier[earlier.length - 1].toISO,
+    chargedCents: earlier.reduce((s, r) => s + r.chargedCents, 0),
+    paidCents: earlier.reduce((s, r) => s + r.paidCents, 0),
+    owingCents: earlier.reduce((s, r) => s + r.owingCents, 0),
+  };
+  return { formRows: [combinedRow, toForm(last)], combined: true };
 }
