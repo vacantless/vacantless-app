@@ -144,18 +144,17 @@ export type BookingPayload = {
   // the operator, instead of relying on a free-text reply that dead-ends at
   // reply_to_email. Optional/back-compat: absent => the reply-only wording.
   cancel_url?: string | null;
-  // Unit access notes (properties.showing_instructions) + the org public phone,
-  // threaded so the confirmation shows how to get in and who to call/text if late
-  // (S448). Both optional; each line renders only when present.
-  showing_instructions?: string | null;
+  // The org call/text-on-arrival phone, threaded so the confirmation shows who
+  // to call/text if late (S448). Optional; the line renders only when present.
+  // (showing_instructions dropped S473/S474 — it's an agent-only lockbox note.)
   leasing_phone?: string | null;
 };
 
 // Shared renter-facing viewing logistics (S448): a tap-to-navigate map link
-// (always, when there's an address), how-to-get-in notes (when the unit carries
-// showing_instructions), a call/text-if-late number (when the org has a public
-// phone), and the photo-ID / duration / "your agent will meet you" line. Each row
-// renders only when its data is present, so it degrades cleanly to just the map.
+// (always, when there's an address), a call/text-if-late number (when the org
+// has an arrival phone), and the photo-ID / duration / "your agent will meet you"
+// line. Each row renders only when its data is present, so it degrades cleanly to
+// just the map. (Agent-only showing_instructions are NOT rendered here — S473/S474.)
 function mapsUrl(address: string | null | undefined): string | null {
   const a = address?.trim();
   return a
@@ -506,9 +505,8 @@ export type ReminderPayload = {
   reply_to_email: string | null;
   property_address: string | null;
   // S471: arrival logistics threaded into the reminder (previously confirmation-
-  // only). showing_instructions = access notes; leasing_phone = resolved arrival
-  // phone (property override -> org default -> public contact).
-  showing_instructions?: string | null;
+  // only). leasing_phone = resolved arrival phone (property override -> org
+  // default -> public contact). (showing_instructions dropped S473/S474 = agent-only.)
   leasing_phone?: string | null;
   when_label: string; // already formatted in the org timezone
 };

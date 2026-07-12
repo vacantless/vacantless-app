@@ -103,10 +103,10 @@ async function attemptBooking(
           b.scheduled_at,
           b.timezone || "America/Toronto",
         );
-        // Access notes + call/text number for the confirmation (S448).
-        // Best-effort: anon can't read these tables directly, so a small
-        // SECURITY DEFINER RPC returns them (both may be null -> lines skipped).
-        let showingInstructions: string | null = null;
+        // Call/text-on-arrival number for the confirmation (S448). Best-effort:
+        // anon can't read the org directly, so a small SECURITY DEFINER RPC
+        // returns it (null -> the line is skipped). NOTE: showing_instructions
+        // (agent-only lockbox notes) is deliberately NOT fetched here (S473/S474).
         let leasingPhone: string | null = null;
         // Org plan gates renter SMS below (Codex P2: "Free = no texting" must be
         // enforced at the send site, not just via the sms_enabled toggle). The
@@ -119,13 +119,11 @@ async function attemptBooking(
           );
           const e = extras as
             | {
-                showing_instructions?: string | null;
                 leasing_phone?: string | null;
                 plan?: string | null;
               }
             | null;
           if (e) {
-            showingInstructions = e.showing_instructions ?? null;
             leasingPhone = e.leasing_phone ?? null;
             orgPlan = e.plan ?? null;
           }
@@ -143,7 +141,6 @@ async function attemptBooking(
           cancel_url: b.cancel_token
             ? `${APP_URL}/showing/cancel/${b.cancel_token}`
             : null,
-          showing_instructions: showingInstructions,
           leasing_phone: leasingPhone,
         });
         if (result.sent) {
