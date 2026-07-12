@@ -12,6 +12,7 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "next": "14.2.35",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "4.7.76",
     "plaid": "^42.2.0",
     "qrcode": "^1.5.4",

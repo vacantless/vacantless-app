@@ -48,6 +48,10 @@ export type N1RenderModel = {
   exempt: boolean;
   // When this working copy was generated (ISO); shown in the footer.
   generatedAtIso: string;
+  // Optional link to the filled OFFICIAL LTB Form N1 PDF (S469). When present a
+  // download button is shown (hidden in print). Set only for the served-snapshot
+  // copy, where the official form can be built from the frozen amounts.
+  officialPdfUrl?: string | null;
 };
 
 export function escapeHtml(s: string): string {
@@ -172,6 +176,7 @@ export function renderN1Html(model: N1RenderModel): string {
   .print-btn { position: fixed; top: 14px; right: 14px; font-family: Arial, sans-serif;
     font-size: 13px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px;
     background: #fff; cursor: pointer; }
+  .dl-btn { position: fixed; top: 52px; right: 14px; text-decoration: none; color: var(--ink); }
   @media print {
     body { background: #fff; }
     .sheet { box-shadow: none; margin: 0; max-width: none; padding: 0; }
@@ -183,6 +188,11 @@ export function renderN1Html(model: N1RenderModel): string {
 </head>
 <body>
 <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+${
+    model.officialPdfUrl
+      ? `<a class="print-btn dl-btn" href="${escapeHtml(model.officialPdfUrl)}">Download official LTB Form N1 (PDF)</a>`
+      : ""
+  }
 <div class="sheet">
   <p class="formno">Form N1 &middot; Residential Tenancies Act, 2006</p>
   <h1>Notice of Rent Increase</h1>

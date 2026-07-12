@@ -17,6 +17,11 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "30mb",
     },
+    // Bundle the LTB N1 template into the official-N1 route's serverless function
+    // (fs.readFileSync at runtime needs it traced; else the route 500s in prod).
+    outputFileTracingIncludes: {
+      "/n1/[token]/official": ["./lib/forms/ltb-n1-2022.pdf"],
+    },
   },
   webpack: (config) => {
     // pdf.js (client-side MLS data-sheet import, S292) references the Node-only

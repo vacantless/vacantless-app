@@ -60,7 +60,11 @@ export async function GET(
   // the notice the tenant was actually served; it must not drift when rent_cents
   // / start_date / today / the guideline table change afterward.
   if (t.n1_snapshot) {
-    return new NextResponse(renderN1Html(n1ModelFromSnapshot(t.n1_snapshot)), {
+    const snapModel = {
+      ...n1ModelFromSnapshot(t.n1_snapshot),
+      officialPdfUrl: `/n1/${params.token}/official`,
+    };
+    return new NextResponse(renderN1Html(snapModel), {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
