@@ -1,4 +1,4 @@
-// Official LTB Form N1 (Notice of Rent Increase) PDF fill — S469.
+// Official LTB Form N1 (Notice of Rent Increase) PDF fill — S469 (+S470 folds).
 //
 // The on-screen served notice (lib/n1-render.ts) is a faithful HTML facsimile.
 // This module produces the ACTUAL Board-approved government form (Form N1,
@@ -14,10 +14,17 @@
 // amount fields RentIncAmount1/2 (9 cells, "." pre-printed at cell 7) place each
 // character in its own cell. We feed positional strings with a BLANK where the
 // form pre-prints a separator, so nothing doubles (KI: "cents in twice" bug).
+//
+// S470: (a) the amount comb has only 6 dollar cells — throw rather than silently
+// truncate an amount above $999,999.99 (Codex P2). (b) strip leftover document
+// JavaScript from the served PDF. We deliberately do NOT flatten: pdf-lib's
+// flatten() leaves dangling widget refs (corrupt xref) on this hybrid template.
+// Non-flattened is structurally clean and renders in every real viewer (XFA was
+// stripped offline, so Adobe uses the filled AcroForm layer).
 
 import fs from "node:fs";
 import path from "node:path";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName, PDFDict } from "pdf-lib";
 import type { N1Snapshot } from "@/lib/n1-render";
 
 const TEMPLATE_REL = "lib/forms/ltb-n1-2022.pdf";
@@ -28,7 +35,15 @@ export const N1_TEMPLATE_VERSION = "v.01/04/2022";
 /** 9-cell amount comb: 6 dollar cells (right-aligned) + blank decimal cell + 2 cents. */
 export function combAmountCents(cents: number): string {
   const v = Math.max(0, Math.round(cents));
-  const dollars = String(Math.floor(v / 100)).slice(-6).padStart(6, " ");
+  const dstr = String(Math.floor(v / 100));
+  if (dstr.length > 6) {
+    // Only 6 dollar cells exist. NEVER silently truncate a legal amount
+    // (a $1,234,567.89 rent would otherwise print as $234,567.89).
+    throw new Error(
+      `N1 amount $${dstr} exceeds the form's 6-digit dollar comb (max $999,999.99)`,
+    );
+  }
+  const dollars = dstr.padStart(6, " ");
   const c = String(v % 100).padStart(2, "0");
   return `${dollars} ${c}`; // 6 + 1(blank, pre-printed ".") + 2 = 9
 }
@@ -53,6 +68,15 @@ function loadTemplate(): Uint8Array {
   }
   templateCache = new Uint8Array(fs.readFileSync(p));
   return templateCache;
+}
+
+/** Remove any leftover document-level JavaScript / open-action from the template. */
+function stripDocumentScripts(pdf: PDFDocument): void {
+  const cat = pdf.catalog;
+  cat.delete(PDFName.of("OpenAction"));
+  cat.delete(PDFName.of("AA"));
+  const names = cat.lookupMaybe(PDFName.of("Names"), PDFDict);
+  if (names) names.delete(PDFName.of("JavaScript"));
 }
 
 /**
@@ -101,10 +125,14 @@ export async function fillOfficialN1(snap: N1Snapshot): Promise<Uint8Array> {
       "select" in f &&
       "getOptions" in f
     ) {
-      const opts = (f as unknown as { getOptions: () => string[] }).getOptions();
-      if (opts.length) (f as unknown as { select: (o: string) => void }).select(opts[0]);
+      const optList = (f as unknown as { getOptions: () => string[] }).getOptions();
+      if (optList.length) (f as unknown as { select: (o: string) => void }).select(optList[0]);
     }
   }
 
+  // Remove any leftover document-level JavaScript from the LiveCycle template so
+  // the served PDF carries no scripts. No flatten (see header): non-flattened is
+  // structurally clean and renders in every real viewer.
+  stripDocumentScripts(pdf);
   return pdf.save();
 }

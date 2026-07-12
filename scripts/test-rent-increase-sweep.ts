@@ -126,6 +126,22 @@ ok(
     RENT_INCREASE_URGENCY.serve_late < RENT_INCREASE_URGENCY.serve_window,
 );
 
+// --- guideline_missing: actionable but no computable amount -> skip + no stamp
+// (Codex P2: the cron must not send a placeholder "the new amount" or stamp the
+// cycle, so a later guideline publish still re-nudges it).
+{
+  const missing = deriveRentIncrease(
+    { startDate: "2025-10-20", currentRentCents: 200000, exempt: false, guideline: () => null },
+    "2026-07-12",
+  );
+  ok("guideline_missing: result is actionable (serve_window)", isActionableRentIncrease(missing));
+  ok("guideline_missing: newRentCents is null", missing?.newRentCents == null);
+  const d = decideRentIncreaseNudge({ result: missing, lastNudgedFor: null, force: true });
+  ok("guideline_missing -> no nudge even forced", d.nudge === false);
+  ok("guideline_missing -> reason guideline_missing", d.reason === "guideline_missing");
+  ok("guideline_missing -> nothing stamped", d.stampFor === null);
+}
+
 console.log(
   `\ntest-rent-increase-sweep: ${passed} passed, ${failed} failed (${passed + failed} total)`,
 );

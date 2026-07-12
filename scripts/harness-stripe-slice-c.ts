@@ -1,5 +1,5 @@
 // ===========================================================================
-// Slice C live sandbox harness (S463) — exercises the IMPURE Stripe schedule
+// Slice C live sandbox harness (S467) — exercises the IMPURE Stripe schedule
 // orchestration in updateStripeRentAmount against a REAL Stripe TEST account,
 // which the unit tests (test-stripe-rent-update.ts) cannot cover.
 //

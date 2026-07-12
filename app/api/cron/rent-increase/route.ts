@@ -201,6 +201,16 @@ export async function GET(req: NextRequest) {
           force,
         });
         if (!decision.nudge || !result || decision.stampFor == null) {
+          if (decision.reason === "guideline_missing") {
+            // Observable in the sweep summary: a due tenancy went un-nudged
+            // because the guideline for its effective year isn't published.
+            summary.details.push({
+              org: org.id,
+              tenancy: t.id,
+              skipped: "guideline_missing",
+              effective_date: result?.effectiveDate ?? null,
+            });
+          }
           summary.skipped++;
           continue;
         }

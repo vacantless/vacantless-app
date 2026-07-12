@@ -1,5 +1,6 @@
-// Unit tests for the official LTB N1 fill (S469): pure comb formatters + a real
-// end-to-end fill against the bundled template producing a valid, non-trivial PDF.
+// Unit tests for the official LTB N1 fill (S469 + S470): pure comb formatters,
+// the amount-overflow guard, and a real end-to-end fill against the bundled
+// template — both the field-bearing (flatten:false) and flattened default.
 import assert from "node:assert";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -30,8 +31,13 @@ const t = (name: string, fn: () => void | Promise<void>) =>
     assert.strictEqual(combAmountCents(0), "     0 00");
     assert.strictEqual(combAmountCents(0).length, 9);
   });
-  await t("amount big 123456789c stays 9 wide (dollars truncated to 6 cells)", () => {
-    assert.strictEqual(combAmountCents(123456789).length, 9);
+  await t("amount at the $999,999.99 ceiling is exactly 9 wide", () => {
+    assert.strictEqual(combAmountCents(99999999), "999999 99");
+    assert.strictEqual(combAmountCents(99999999).length, 9);
+  });
+  await t("amount over $999,999.99 THROWS (never silently truncates)", () => {
+    assert.throws(() => combAmountCents(100000000), /exceeds the form's 6-digit/);
+    assert.throws(() => combAmountCents(123456789));
   });
 
   // --- comb date: DD MM YYYY with blanks over pre-printed slashes
@@ -44,7 +50,6 @@ const t = (name: string, fn: () => void | Promise<void>) =>
     assert.strictEqual(combDateISO(""), null);
   });
 
-  // --- end-to-end fill against the bundled template
   const snap: N1Snapshot = {
     currentRentCents: 220000, newRentCents: 224180, increaseCents: 4180,
     currentRent: "$2,200", newRent: "$2,241.80", increaseAmount: "$41.80",
@@ -55,7 +60,9 @@ const t = (name: string, fn: () => void | Promise<void>) =>
     rentalUnitAddress: "18 Shorncliffe Avenue, Toronto, ON",
     capturedAtIso: "2026-07-12T15:00:00.000Z",
   };
-  await t("fillOfficialN1 returns a valid 2-page PDF with the values set", async () => {
+
+  // --- end-to-end fill: assert the comb-formatted field values
+  await t("fillOfficialN1 sets the fields with comb formatting", async () => {
     const bytes = await fillOfficialN1(snap);
     assert.ok(bytes.length > 20000, "pdf too small");
     const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });

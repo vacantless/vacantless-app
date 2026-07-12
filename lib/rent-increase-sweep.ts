@@ -79,6 +79,13 @@ export function decideRentIncreaseNudge(args: {
   if (!(RENT_INCREASE_NUDGE_STATUSES as readonly string[]).includes(r.status)) {
     return { nudge: false, reason: `not_actionable:${r.status}`, stampFor: null };
   }
+  // Actionable but no computable new rent = the guideline for the effective year
+  // isn't published yet (non-exempt; exempt is excluded above). Do NOT send a
+  // placeholder amount and do NOT stamp — leaving the cycle unstamped so that
+  // publishing the guideline later re-nudges it (Codex P2).
+  if (r.newRentCents == null) {
+    return { nudge: false, reason: "guideline_missing", stampFor: null };
+  }
   const stampFor = r.earliestEffectiveDate;
   if (!args.force && args.lastNudgedFor && args.lastNudgedFor === stampFor) {
     return { nudge: false, reason: "already_nudged", stampFor };
