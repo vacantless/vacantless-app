@@ -165,20 +165,13 @@ function mapsUrl(address: string | null | undefined): string | null {
 
 function viewingLogisticsHtml(p: {
   property_address: string | null;
-  showing_instructions?: string | null;
   leasing_phone?: string | null;
   brand: string;
 }): string {
   const brand = escapeHtml(p.brand);
   const url = mapsUrl(p.property_address);
-  const instr = p.showing_instructions?.trim();
   const phone = p.leasing_phone?.trim();
   const rows: string[] = [];
-  if (instr) {
-    rows.push(
-      `<p style="margin:0 0 12px;"><strong>Getting in:</strong> ${escapeHtml(instr)}</p>`,
-    );
-  }
   if (url) {
     rows.push(
       `<p style="margin:0 0 12px;"><strong>Map + directions:</strong> <a href="${escapeHtml(url)}" style="color:${brand};font-weight:600;">Open in Google Maps</a></p>`,
@@ -220,7 +213,7 @@ function bookingHtml(p: BookingPayload): string {
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
-      ${viewingLogisticsHtml({ property_address: p.property_address, showing_instructions: p.showing_instructions, leasing_phone: p.leasing_phone, brand })}
+      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
       ${
         p.cancel_url
           ? `<p style="margin:0 0 16px;">Need to change your plans? <a href="${escapeHtml(
@@ -430,7 +423,7 @@ function rescheduleHtml(p: ReschedulePayload): string {
         ${old ? `<p style="margin:0 0 6px;color:#a1a1aa;text-decoration:line-through;">Previous time: ${old}</p>` : ""}
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
-      ${viewingLogisticsHtml({ property_address: p.property_address, showing_instructions: p.showing_instructions, leasing_phone: p.leasing_phone, brand })}
+      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
       ${
         p.cancel_url
           ? `<p style="margin:0 0 16px;">Can't make the new time? <a href="${escapeHtml(
@@ -550,7 +543,7 @@ function reminderHtml(p: ReminderPayload): string {
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
-      ${viewingLogisticsHtml({ property_address: p.property_address, showing_instructions: p.showing_instructions, leasing_phone: p.leasing_phone, brand })}
+      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
       <p style="margin:0 0 16px;">If you can no longer make it or need to reschedule, just reply to this email and we'll sort it out.</p>
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>
