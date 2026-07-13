@@ -60,3 +60,35 @@ browser_copilot), a tracked `listing_posts` row, the verification chip = Verifie
 live, and the proof link renders. Then confirm marking live with an EMPTY URL is
 refused (no state change). Viewit adds a payment stop-gate; automatic/feed/broker
 channels show NO co-pilot panel.
+
+---
+
+## S482b — fold of the S482 review (1 P1 + 2 P2). Re-review range: 2eabda7..HEAD
+
+**P1 — co-pilot live-without-proof bypass (CLOSED).** The generic `updateRunItem`
+status form was rendered for co-pilot items alongside the co-pilot panel, and
+`updateRunItem` writes `publish_status='live'` even with a blank URL (no proof, no
+tracker). Fix: (a) `launch-run-panel.tsx` hides the generic status form for
+co-pilot items (`{!item.copilotScript && …}`) so only the co-pilot completion
+path is offered; (b) `updateRunItem` (actions.ts) refuses a `live` flip for any
+`isCopilotChannel` channel — they go live ONLY through `completeCopilotPost`
+(redirect `?runerr=copilot_use_panel`). Defense in depth: UI + server.
+
+**P2 — reservation/CAS + stale-run/concierge (CLOSED).** `completeCopilotPost`
+now: rejects a stale form when the run is not `active` (`copilot_run_closed`) or
+the item was handed to concierge (`copilot_concierge`); RESERVES the item via a
+state-conditional CAS (`publish_status -> 'submitting'`, `.neq live .neq
+submitting`) so a concurrent double-submit sees 0 rows and aborts before any side
+effect (no duplicate live `listing_posts`); terminal-flips LAST gated on
+`.eq publish_status 'submitting'`.
+
+**P2 — fail-closed writes (CLOSED).** `recordVerificationAndAttempt` returns
+`null` if the attempt insert OR the run-item update errors (was: only the
+verification insert). `completeCopilotPost` checks the proof result and the
+`listing_posts` update/insert errors; on any failure it calls
+`releaseReservation()` (revert `submitting` -> prior status) and does NOT mark
+live (`copilot_prooffail` / `copilot_trackerfail`).
+
+Gates: tsc clean; next lint clean on the 3 changed files; copilot 57/0, publish
+36/0, run 44/0, accounts 40/0, verification 23/0; `npm run build` runs in the
+deploy script (Mac). No migration.

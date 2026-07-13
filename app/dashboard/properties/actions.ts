@@ -37,6 +37,7 @@ import {
   isResolvedPublishStatus,
   legacyRunStatusForPublishStatus,
   normalizePublishChannel,
+  isPublishChannelKey,
   normalizePublishStatus,
   normalizePublishMode,
   canRequestConcierge,
@@ -46,6 +47,7 @@ import {
   type PublishChannelKey,
   type PublishPartnerState,
 } from "@/lib/distribution-publish";
+import { isCopilotChannel } from "@/lib/distribution-copilot";
 import { buildShareReadiness, type ShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
 import {
@@ -1375,6 +1377,20 @@ export async function updateRunItem(formData: FormData) {
   }
   const propertyId = run.property_id as string;
   const orgId = run.organization_id as string;
+
+  // Co-pilot channels (Facebook/Kijiji/Viewit) go live ONLY through
+  // completeCopilotPost, which records durable proof + a browser_copilot attempt
+  // and the tracked listing_post. Refuse a live flip via the generic form so they
+  // can't be marked live without proof (Codex S482 P1).
+  if (
+    publishStatus === "live" &&
+    isPublishChannelKey(item.channel) &&
+    isCopilotChannel(item.channel)
+  ) {
+    redirect(
+      `/dashboard/properties/${propertyId}?runerr=copilot_use_panel#distribute-header`,
+    );
+  }
 
   // Marking a channel done WITH a live URL produces or refreshes its tracked
   // listing_posts row so the run feeds attribution + the Distribute cards.

@@ -143,7 +143,7 @@ async function recordVerificationAndAttempt(
     });
     let lastAttemptId: string | null = null;
     if (input.runId) {
-      const { data: att } = await supabase
+      const { data: att, error: attErr } = await supabase
         .from("distribution_publish_attempts")
         .insert({
           organization_id: attempt.organization_id,
@@ -163,11 +163,12 @@ async function recordVerificationAndAttempt(
         })
         .select("id")
         .single();
+      if (attErr) return null;
       lastAttemptId = (att?.id as string | undefined) ?? null;
     }
     const isLiveish =
       input.result === "verified_live" || input.result === "verified_submitted";
-    await supabase
+    const { error: updErr } = await supabase
       .from("distribution_run_items")
       .update({
         last_verification_id: verId,
@@ -181,6 +182,7 @@ async function recordVerificationAndAttempt(
         updated_at: input.nowISO,
       })
       .eq("id", input.runItemId);
+    if (updErr) return null;
   }
   return verId;
 }
@@ -542,11 +544,17 @@ export async function upsertChannelAccount(formData: FormData) {
 // ---------------------------------------------------------------------------
 // completeCopilotPost — the honest completion of a browser co-pilot post (S482).
 // The operator posted the ad themselves on Facebook/Kijiji/Viewit and pastes the
-// LIVE ad URL as proof; only then does the channel go live. Records durable proof
-// + an append-only attempt (actor = browser_copilot) FIRST, then flips the run
-// item live and produces/refreshes the tracked listing_posts row (terminal flip
-// last). NEVER marks live without a real URL (canMarkCopilotLive). Org is stamped
-// from the RESOURCE's own org (KI748), never getCurrentOrg / the client.
+// LIVE ad URL as proof; only then does the channel go live.
+//
+// Invariants (S482b, Codex fold): (1) NEVER live without a real URL
+// (canMarkCopilotLive). (2) Reject a stale form on a cancelled/closed run or an
+// item handed to concierge. (3) RESERVE the item with a state-conditional CAS
+// (publish_status -> 'submitting', only from a non-live/non-submitting state) so
+// a concurrent double-submit can't both run the tracker insert (no duplicate
+// live listing_posts). (4) Record durable proof + attempt FIRST; if the proof,
+// attempt, or tracker write fails, RELEASE the reservation and do NOT go live
+// (fail-closed). (5) Terminal flip LAST, gated on still holding the reservation.
+// Org is stamped from the RESOURCE's own org (KI748), never getCurrentOrg/client.
 // ---------------------------------------------------------------------------
 export async function completeCopilotPost(formData: FormData) {
   await requireCapability("manage_properties", FORBIDDEN);
@@ -556,7 +564,9 @@ export async function completeCopilotPost(formData: FormData) {
   const supabase = createClient();
   const { data: item } = await supabase
     .from("distribution_run_items")
-    .select("id, run_id, channel, transport, listing_post_id, organization_id")
+    .select(
+      "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode",
+    )
     .eq("id", itemId)
     .maybeSingle();
   if (!item) redirect("/dashboard/properties");
@@ -567,20 +577,33 @@ export async function completeCopilotPost(formData: FormData) {
     transport: string | null;
     listing_post_id: string | null;
     organization_id: string;
+    publish_status: string | null;
+    mode: string | null;
   };
 
-  // Authoritative property + org come from the RUN (RLS), never the client.
+  // Authoritative property + org + run status come from the RUN (RLS).
   const { data: run } = await supabase
     .from("distribution_runs")
-    .select("property_id, organization_id")
+    .select("property_id, organization_id, status")
     .eq("id", it.run_id)
     .maybeSingle();
   const propertyId = (run?.property_id as string | undefined) ?? null;
   const runOrgId = (run?.organization_id as string | undefined) ?? null;
+  const runStatus = (run?.status as string | undefined) ?? null;
 
   // Only the honest browser co-pilot channels use this completion.
   if (!isPublishChannelKey(it.channel) || !isCopilotChannel(it.channel)) {
     if (propertyId) backTo(propertyId, "copilot_channel");
+    redirect("/dashboard/properties");
+  }
+  // Reject a stale form after the run was cancelled/closed or the item was handed
+  // to the concierge desk.
+  if (runStatus !== "active") {
+    if (propertyId) backTo(propertyId, "copilot_run_closed");
+    redirect("/dashboard/properties");
+  }
+  if (it.mode === "concierge") {
+    if (propertyId) backTo(propertyId, "copilot_concierge");
     redirect("/dashboard/properties");
   }
 
@@ -602,9 +625,40 @@ export async function completeCopilotPost(formData: FormData) {
     redirect("/dashboard/properties");
   }
 
+  // RESERVE (state-conditional CAS): flip to 'submitting' only from a
+  // non-live/non-submitting state. Exactly one concurrent submit wins; the loser
+  // aborts before any side effect, so no duplicate proof/attempt/tracker rows.
+  const priorStatus = it.publish_status ?? "queued";
+  const reserveISO = new Date().toISOString();
+  const { data: reserved } = await supabase
+    .from("distribution_run_items")
+    .update({ publish_status: "submitting", updated_at: reserveISO })
+    .eq("id", it.id)
+    .eq("run_id", it.run_id)
+    .neq("publish_status", "live")
+    .neq("publish_status", "submitting")
+    .select("id, listing_post_id");
+  if (!reserved || reserved.length === 0) {
+    if (propertyId) backTo(propertyId, "copilot_already");
+    redirect("/dashboard/properties");
+  }
+
+  // Hand the reservation back to its prior state (only if we still hold it) so a
+  // failed completion never strands the item in 'submitting'.
+  async function releaseReservation(): Promise<void> {
+    await supabase
+      .from("distribution_run_items")
+      .update({
+        publish_status: priorStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", it.id)
+      .eq("publish_status", "submitting");
+  }
+
   const uid = await userId(supabase);
-  // 1) Record durable proof + attempt FIRST (actor = browser_copilot).
-  await recordVerificationAndAttempt(supabase, {
+  // 1) Record durable proof + attempt FIRST (actor = browser_copilot). Fail-closed.
+  const verId = await recordVerificationAndAttempt(supabase, {
     orgId,
     userId: uid,
     channel: it.channel,
@@ -622,10 +676,17 @@ export async function completeCopilotPost(formData: FormData) {
     actorType: "browser_copilot",
     nowISO: new Date().toISOString(),
   });
+  if (!verId) {
+    await releaseReservation();
+    if (propertyId) backTo(propertyId, "copilot_prooffail");
+    redirect("/dashboard/properties");
+  }
 
   // 2) Produce/refresh the tracked listing_posts row (attribution) for a portal
-  // channel, reusing the existing per-channel tracker (no duplicate rows).
-  let listingPostId = it.listing_post_id;
+  // channel, reusing the existing per-channel tracker (no duplicate rows). The
+  // reservation guarantees a single writer here. Fail-closed on a write error.
+  let listingPostId =
+    (reserved[0]?.listing_post_id as string | null) ?? it.listing_post_id;
   if (propertyId && runOrgId && isPortalKey(it.channel)) {
     const portal = normalizePortal(it.channel);
     const check = validateListingPost({ portal, status: "live", url: liveUrl });
@@ -643,12 +704,17 @@ export async function completeCopilotPost(formData: FormData) {
         if (existingPost?.id) listingPostId = existingPost.id as string;
       }
       if (listingPostId) {
-        await supabase
+        const { error: upErr } = await supabase
           .from("listing_posts")
           .update({ url: liveUrl, status: "live" })
           .eq("id", listingPostId);
+        if (upErr) {
+          await releaseReservation();
+          if (propertyId) backTo(propertyId, "copilot_trackerfail");
+          redirect("/dashboard/properties");
+        }
       } else {
-        const { data: post } = await supabase
+        const { data: post, error: insErr } = await supabase
           .from("listing_posts")
           .insert({
             organization_id: runOrgId,
@@ -659,15 +725,19 @@ export async function completeCopilotPost(formData: FormData) {
           })
           .select("id")
           .single();
-        listingPostId = (post?.id as string | undefined) ?? null;
+        if (insErr || !post?.id) {
+          await releaseReservation();
+          if (propertyId) backTo(propertyId, "copilot_trackerfail");
+          redirect("/dashboard/properties");
+        }
+        listingPostId = post.id as string;
       }
     }
   }
 
-  // 3) Terminal flip LAST: mark the run item live + done, carry the proof URL +
-  // tracked listing_post pointer.
-  const nowISO = new Date().toISOString();
-  await supabase
+  // 3) Terminal flip LAST, gated on still holding the reservation.
+  const flipISO = new Date().toISOString();
+  const { data: flipped } = await supabase
     .from("distribution_run_items")
     .update({
       status: "done",
@@ -675,12 +745,21 @@ export async function completeCopilotPost(formData: FormData) {
       external_url: liveUrl,
       listing_post_id: listingPostId,
       notes: note,
-      last_verified_at: nowISO,
-      updated_at: nowISO,
+      last_verified_at: flipISO,
+      updated_at: flipISO,
     })
-    .eq("id", it.id);
+    .eq("id", it.id)
+    .eq("publish_status", "submitting")
+    .select("id");
+  if (!flipped || flipped.length === 0) {
+    // Lost the reservation between reserve and flip (unexpected). Proof + tracker
+    // are already durable; do not double-write.
+    if (propertyId) backTo(propertyId, "copilot_already");
+    redirect("/dashboard/properties");
+  }
 
-  // Complete the run once every item is resolved (done/skipped).
+  // Complete the run once every item is resolved (done/skipped). Only an active
+  // run is flipped completed.
   const { data: siblings } = await supabase
     .from("distribution_run_items")
     .select("publish_status")
@@ -697,9 +776,10 @@ export async function completeCopilotPost(formData: FormData) {
     .from("distribution_runs")
     .update({
       status: allResolved ? "completed" : "active",
-      completed_at: allResolved ? nowISO : null,
+      completed_at: allResolved ? flipISO : null,
     })
-    .eq("id", it.run_id);
+    .eq("id", it.run_id)
+    .eq("status", "active");
 
   if (propertyId) {
     revalidatePath(`/dashboard/properties/${propertyId}`);

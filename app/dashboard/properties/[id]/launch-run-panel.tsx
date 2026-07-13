@@ -417,10 +417,15 @@ export function LaunchRunPanel({
               </form>
             </details>
 
-            <form
-              action={updateRunItem}
-              className="space-y-3 border-t border-gray-100 pt-3"
-            >
+            {/* Co-pilot channels complete ONLY via the co-pilot panel above,
+                which records proof + a browser_copilot attempt and never marks
+                live without a real URL. Hide the generic status form for them so
+                it can't bypass that path (Codex S482 P1). */}
+            {!item.copilotScript && (
+              <form
+                action={updateRunItem}
+                className="space-y-3 border-t border-gray-100 pt-3"
+              >
               <input type="hidden" name="property_id" value={propertyId} />
               <input type="hidden" name="item_id" value={item.id} />
               <div className="flex flex-wrap items-end gap-3">
@@ -481,7 +486,8 @@ export function LaunchRunPanel({
               >
                 Save
               </button>
-            </form>
+              </form>
+            )}
           </li>
         ))}
       </ul>
