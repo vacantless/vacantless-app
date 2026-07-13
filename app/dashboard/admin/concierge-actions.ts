@@ -25,6 +25,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const DESK = "/dashboard/admin/concierge";
 
+// A concierge claim left untouched past this window is treated as abandoned, so
+// another staff member can take the item over instead of it locking forever.
+const CONCIERGE_CLAIM_TAKEOVER_MS = 15 * 60 * 1000; // 15 minutes
+
 // Gate every concierge-desk mutation on the superadmin allowlist (the page 404s
 // for non-admins; this rechecks server-side before the service-role client, which
 // bypasses RLS to work across orgs) — mirrors the guideline console (S465).
@@ -83,21 +87,38 @@ export async function completeConciergeItem(formData: FormData) {
   const admin = ctx.admin;
   const url = normalizeUrl(formData.get("external_url"));
 
+  // Reserve exclusive ownership of THIS completion attempt BEFORE any external
+  // side effect. This CAS atomically (a) confirms the item is still an OPEN
+  // concierge item and (b) takes/holds the completion lock via
+  // concierge_claimed_by: it claims an unclaimed item, lets the existing claimer
+  // proceed, or takes over a claim left stale (abandoned) past the takeover
+  // window. A concurrent completer by ANOTHER staff loses this CAS and stops at
+  // ?err=stale BEFORE the listing_posts write, so two people can never both
+  // overwrite the tracked post for one item (the old race: side effect ran first,
+  // then the guarded final update rejected the loser AFTER it had written).
+  const reservedAt = new Date().toISOString();
+  const takeoverCutoff = new Date(Date.now() - CONCIERGE_CLAIM_TAKEOVER_MS)
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z");
   const { data: item } = await admin
     .from("distribution_run_items")
-    .select("id, run_id, channel, listing_post_id, mode, publish_status")
+    .update({
+      concierge_claimed_by: ctx.userId,
+      concierge_claimed_at: reservedAt,
+      publish_status: "submitting",
+      status: "in_progress",
+      last_attempted_at: reservedAt,
+      updated_at: reservedAt,
+    })
     .eq("id", itemId)
+    .eq("mode", "concierge")
+    .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
+    .or(
+      `concierge_claimed_by.is.null,concierge_claimed_by.eq.${ctx.userId},concierge_claimed_at.lt.${takeoverCutoff}`,
+    )
+    .select("id, run_id, channel, listing_post_id")
     .maybeSingle();
-  if (!item) redirect(`${DESK}?err=notfound`);
-  // Fast stale-guard: skip all listing_post work if this item was already
-  // completed/rejected or is no longer a concierge item (the final update below
-  // re-checks the same predicates atomically for the concurrent-completion race).
-  if (
-    item.mode !== "concierge" ||
-    !CONCIERGE_OPEN_STATUSES.includes(normalizePublishStatus(item.publish_status))
-  ) {
-    redirect(`${DESK}?err=stale`);
-  }
+  if (!item) redirect(`${DESK}?err=stale`);
   const { data: run } = await admin
     .from("distribution_runs")
     .select("property_id, organization_id")
@@ -184,8 +205,9 @@ export async function completeConciergeItem(formData: FormData) {
 
   const now = new Date().toISOString();
   // Atomic completion guard: only flip an item that is still an OPEN concierge
-  // item. If another staff member already completed/rejected it, this matches 0
-  // rows and we stop before double-completing or re-tracking.
+  // item AND still held by this staffer's reservation lock. If another staff
+  // member completed/rejected it (or took over an abandoned claim), this matches
+  // 0 rows and we stop before double-completing or re-tracking.
   const { data: completed } = await admin
     .from("distribution_run_items")
     .update({
@@ -201,6 +223,7 @@ export async function completeConciergeItem(formData: FormData) {
     })
     .eq("id", itemId)
     .eq("mode", "concierge")
+    .eq("concierge_claimed_by", ctx.userId)
     .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
     .select("id");
   if (!completed || completed.length === 0) redirect(`${DESK}?err=stale`);

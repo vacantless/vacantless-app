@@ -1,7 +1,7 @@
 // Golden readback test for fillOfficialN4 (Slice B). Fills a known snapshot into
 // the real gov template, reloads the bytes, and asserts each mapped field carries
 // the expected comb-formatted value. Also writes a sample PDF when N4_SAMPLE_OUT
-// is set. Run: npx tsx scripts/test-n4-pdf.ts   (needs lib/forms/ltb-n4-2015.pdf)
+// is set. Run: npx tsx scripts/test-n4-pdf.ts   (needs lib/forms/ltb-n4-2022.pdf)
 import fs from "node:fs";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -87,6 +87,74 @@ async function main() {
       ? (sign as unknown as { getSelected: () => string | undefined }).getSelected()
       : undefined;
   eq(selected, "1", "SelectSign = 1 (landlord)");
+
+  // --- fail-closed row contract (S478 P2 folds) -----------------------------
+  async function throwsAsync(fn: () => Promise<unknown>, msg: string) {
+    try {
+      await fn();
+      eq("did-not-throw", "throw", msg);
+    } catch {
+      pass++;
+    }
+  }
+  const withRows = (
+    rows: N4FillSnapshot["arrearsRows"],
+    total: number,
+  ): N4FillSnapshot => ({ ...snap, arrearsRows: rows, totalOwingCents: total });
+
+  // >3 rows must THROW, never silently drop the 4th+ period (old slice(0,3)).
+  const fiveRaw = deriveN4Arrears({
+    rentCents,
+    startDateISO: "2026-03-01",
+    asOfISO: "2026-07-12",
+    payments: [],
+  }).rows.map((r) => ({
+    fromISO: r.fromISO,
+    toISO: r.toISO,
+    chargedCents: r.chargedCents,
+    paidCents: r.paidCents,
+    owingCents: r.owingCents,
+  }));
+  eq(fiveRaw.length > 3, true, "unpacked derive yields >3 rows for the guard");
+  await throwsAsync(
+    () => fillOfficialN4(withRows(fiveRaw, fiveRaw.length * rentCents)),
+    ">3 arrears rows throws (no silent slice)",
+  );
+
+  // A negative (overpaid) row must THROW — the comb would silently render 0 and
+  // break reconciliation with the total.
+  await throwsAsync(
+    () =>
+      fillOfficialN4(
+        withRows(
+          [
+            { fromISO: "2026-05-01", toISO: "2026-05-31", chargedCents: rentCents, paidCents: 0, owingCents: rentCents },
+            { fromISO: "2026-06-01", toISO: "2026-06-30", chargedCents: rentCents, paidCents: rentCents * 2, owingCents: -rentCents },
+          ],
+          0,
+        ),
+      ),
+    "negative (overpaid) row throws",
+  );
+
+  // Rows summing ABOVE Total Rent Owing must THROW — the table would overstate.
+  await throwsAsync(
+    () =>
+      fillOfficialN4(
+        withRows(
+          [
+            { fromISO: "2026-05-01", toISO: "2026-05-31", chargedCents: rentCents, paidCents: 0, owingCents: rentCents },
+            { fromISO: "2026-06-01", toISO: "2026-06-30", chargedCents: rentCents, paidCents: 0, owingCents: rentCents },
+          ],
+          rentCents,
+        ),
+      ),
+    "rows exceeding Total Rent Owing throws",
+  );
+
+  // Exactly 3 rows reconciling to the total must still SUCCEED (no regression).
+  await fillOfficialN4(withRows(packed.formRows, totalOwingCents));
+  pass++;
 
   console.log(`test-n4-pdf: ${pass}/${fail}`);
   if (fail > 0) process.exit(1);

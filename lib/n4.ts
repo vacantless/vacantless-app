@@ -6,9 +6,10 @@
 //
 // LEGAL NOTE: these are the app's COMPUTED SUGGESTIONS for the operator to review,
 // not legal advice. An N4 is VOID if it overstates the arrears or gives too little
-// notice, so the derive is deliberately conservative (it never inflates owing, and
-// surfaces — but does NOT auto-apply — payments it can't confidently attribute),
-// and the operator confirms/overrides every figure before any serve. The exact
+// notice, so the derive surfaces (but does NOT auto-apply) payments it can't
+// confidently attribute and exposes a tenant-protective LOWER bound
+// (conservativeOwingCents) next to the raw computed UPPER bound; the operator
+// confirms/overrides every figure before any serve. The exact
 // minimum-notice + deemed-service rules and the current LTB form revision must
 // pass the legal-verify gate (N-FORM-LIBRARY-DESIGN-2026-07-12.md, section 6)
 // before serve-on-behalf is enabled.
@@ -92,9 +93,11 @@ export type N4Arrears = {
   rows: N4PeriodRow[];
   totalChargedCents: number;
   totalPaidCents: number; // paid tagged to periods IN the window
-  computedOwingCents: number; // max(0, totalCharged - totalPaid)
-  unassignedPaidCents: number; // payments with no period_month — surfaced, NOT applied
-  outOfWindowPaidCents: number; // payments tagged outside the window — surfaced, NOT applied
+  computedOwingCents: number; // max(0, totalCharged - totalPaid) — UPPER bound: credits nothing unattributed
+  unassignedPaidCents: number; // payments with no period_month — surfaced, NOT applied to computedOwingCents
+  outOfWindowPaidCents: number; // payments tagged outside the window — surfaced, NOT applied to computedOwingCents
+  conservativeOwingCents: number; // tenant-protective LOWER bound: computedOwing minus every unattributed credit
+  hasUnresolvedCredits: boolean; // unassigned/out-of-window payments exist -> operator must resolve before a default serve
 };
 
 /**
@@ -129,9 +132,16 @@ export function monthlyPeriodKeys(firstISO: string, lastISO: string): string[] {
  * one row per monthly period from the anchor (firstPeriodISO ?? tenancy start)
  * through the period containing `asOfISO` (the notice date), charging `rentCents`
  * each and crediting payments tagged to that exact period. Payments with no
- * period, or tagged outside the window, are summed separately and NOT applied —
- * they are shown to the operator (who decides via the override) so the derive
- * can never silently overstate arrears (an overstated N4 is void).
+ * period, or tagged outside the window, are summed separately and NOT applied to
+ * `computedOwingCents` — they are surfaced (unassigned/outOfWindow totals + the
+ * `hasUnresolvedCredits` flag) for the operator to resolve via the override.
+ *
+ * IMPORTANT: `computedOwingCents` is the UPPER bound and CAN overstate real
+ * arrears when a genuine payment is unassigned or tagged out of window. Use
+ * `conservativeOwingCents` (the tenant-protective LOWER bound crediting every
+ * unattributed payment) as the safe default, and force the operator to resolve
+ * credits when `hasUnresolvedCredits` is true before generating/serving an N4
+ * (an overstated N4 is void).
  */
 export function deriveN4Arrears(input: {
   rentCents: number;
@@ -179,6 +189,14 @@ export function deriveN4Arrears(input: {
   const totalChargedCents = rows.reduce((s, r) => s + r.chargedCents, 0);
   const totalPaidCents = rows.reduce((s, r) => s + r.paidCents, 0);
   const computedOwingCents = Math.max(0, totalChargedCents - totalPaidCents);
+  // Tenant-protective floor: credit EVERY unattributed payment (unassigned +
+  // out-of-window) against owing. This can only lower the figure, so a default
+  // built from it can never overstate. The operator override still wins.
+  const unresolvedCreditCents = unassignedPaidCents + outOfWindowPaidCents;
+  const conservativeOwingCents = Math.max(
+    0,
+    computedOwingCents - unresolvedCreditCents,
+  );
 
   return {
     rows,
@@ -187,6 +205,8 @@ export function deriveN4Arrears(input: {
     computedOwingCents,
     unassignedPaidCents,
     outOfWindowPaidCents,
+    conservativeOwingCents,
+    hasUnresolvedCredits: unresolvedCreditCents > 0,
   };
 }
 

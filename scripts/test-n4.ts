@@ -158,7 +158,30 @@ const RENT = 220000; // $2,200.00
   eq(a.unassignedPaidCents, 50000, "unassigned surfaced");
   eq(a.outOfWindowPaidCents, 90000, "out-of-window surfaced");
   eq(a.totalPaidCents, 0, "neither applied to the window total");
-  eq(a.computedOwingCents, 2 * RENT, "owing unaffected by unapplied credits");
+  eq(a.computedOwingCents, 2 * RENT, "computed (UPPER bound) unaffected by unapplied credits");
+  eq(a.hasUnresolvedCredits, true, "unresolved credits flagged");
+  eq(
+    a.conservativeOwingCents,
+    Math.max(0, 2 * RENT - 50000 - 90000),
+    "conservative floor credits every unattributed payment (never overstates)",
+  );
+}
+
+// (e2) No unattributed payments => conservative == computed, flag false.
+{
+  const a = deriveN4Arrears({
+    rentCents: RENT,
+    startDateISO: "2026-06-01",
+    asOfISO: "2026-07-12",
+    payments: [{ amount_cents: RENT, period_month: "2026-06-01" }],
+  });
+  eq(a.hasUnresolvedCredits, false, "no unresolved credits => flag false");
+  eq(
+    a.conservativeOwingCents,
+    a.computedOwingCents,
+    "conservative == computed when everything is attributed",
+  );
+  eq(a.conservativeOwingCents, RENT, "one of two months paid => 1-month floor");
 }
 
 // (f) firstPeriodISO caps the lookback.

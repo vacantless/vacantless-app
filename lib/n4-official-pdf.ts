@@ -2,7 +2,7 @@
 // PDF fill — Slice B of the N-form library (N-FORM-LIBRARY-DESIGN-2026-07-12.md).
 //
 // Extends the proven N1 pattern (lib/n1-official-pdf.ts): a PRE-CLEANED gov
-// template at lib/forms/ltb-n4-2015.pdf (the hybrid AcroForm+XFA raw was
+// template at lib/forms/ltb-n4-2022.pdf (the hybrid AcroForm+XFA raw was
 // XFA-stripped + normalized offline via qpdf -> pdf-lib), filled from an immutable
 // snapshot with the shared comb formatters (lib/forms/shared-combs.ts).
 //
@@ -28,8 +28,11 @@ import { PDFDocument, PDFName, PDFDict } from "pdf-lib";
 import { combAmountCents, combDateISO } from "@/lib/forms/shared-combs";
 import type { N4FormRow } from "@/lib/n4";
 
-const TEMPLATE_REL = "lib/forms/ltb-n4-2015.pdf";
-export const N4_TEMPLATE_VERSION = "2015/11/30";
+// The bundled template IS the current Board-approved Form N4, revision
+// v.01/04/2022 (ModDate 2022-05-17; verified against the live Tribunals Ontario
+// N4 PDF). Filename matches the N1 convention (ltb-n1-2022.pdf).
+const TEMPLATE_REL = "lib/forms/ltb-n4-2022.pdf";
+export const N4_TEMPLATE_VERSION = "v.01/04/2022";
 
 export type N4FillSnapshot = {
   tenantNames: string[];
@@ -108,8 +111,35 @@ export async function fillOfficialN4(snap: N4FillSnapshot): Promise<Uint8Array> 
   setText("OweMeAmount", combAmountCents(snap.totalOwingCents, 10));
   setText("PayDate", combDateISO(snap.terminationDateISO) ?? "");
 
-  // Arrears table (subform[4], Row1..3) — snap.arrearsRows is pre-packed to <=3.
-  snap.arrearsRows.slice(0, 3).forEach((row, i) => {
+  // Arrears table (subform[4], Row1..3). FAIL CLOSED on a snapshot the official
+  // 3-row table can't honestly hold — never silently drop a period (P2: the old
+  // slice(0,3)) and never render row cells that don't reconcile to Total Rent
+  // Owing. combAmountCents clamps a negative to 0, so a negative (overpaid) row
+  // would silently show 0 and make the rows sum higher than the total. The caller
+  // (Slice C) must pack (packN4ArrearsRows) and resolve overpayments BEFORE fill.
+  const arrearsRows = snap.arrearsRows ?? [];
+  if (arrearsRows.length > 3) {
+    throw new Error(
+      `fillOfficialN4: ${arrearsRows.length} arrears rows exceed the official N4 3-row table — pack with packN4ArrearsRows first (never truncate a legal notice)`,
+    );
+  }
+  const totalOweCents = Math.max(0, Math.round(snap.totalOwingCents || 0));
+  let rowsOweCents = 0;
+  for (const row of arrearsRows) {
+    const owe = Math.round(row.owingCents || 0);
+    if (owe < 0) {
+      throw new Error(
+        "fillOfficialN4: a period row shows negative (overpaid) owing — resolve/normalize overpayments before fill so each row and the total reconcile",
+      );
+    }
+    rowsOweCents += owe;
+  }
+  if (rowsOweCents > totalOweCents) {
+    throw new Error(
+      `fillOfficialN4: arrears rows owe ${rowsOweCents}c, exceeding Total Rent Owing ${totalOweCents}c — the table would overstate; re-pack the rows to the resolved total before fill`,
+    );
+  }
+  arrearsRows.forEach((row, i) => {
     const n = i + 1;
     setText(`ArrearFrom${n}`, combDateISO(row.fromISO) ?? "");
     setText(`ArrearTo${n}`, combDateISO(row.toISO) ?? "");
