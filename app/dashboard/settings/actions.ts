@@ -27,8 +27,38 @@ import {
   extForLogoType,
   logoStoragePath,
 } from "@/lib/logo";
+import {
+  normalizePublishChannel,
+} from "@/lib/distribution-publish";
+import {
+  channelCapability,
+  isChannelAccountStatus,
+} from "@/lib/distribution-capabilities";
 
 const LOGO_BUCKET = "org-logos";
+
+function optionalText(formData: FormData, key: string, max = 500): string | null {
+  const value = String(formData.get(key) ?? "").trim();
+  if (!value) return null;
+  return value.length > max ? value.slice(0, max) : value;
+}
+
+function optionalHttpUrl(
+  formData: FormData,
+  key: string,
+): { ok: true; value: string | null } | { ok: false } {
+  const value = optionalText(formData, key, 2048);
+  if (!value) return { ok: true, value: null };
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { ok: false };
+    }
+    return { ok: true, value };
+  } catch {
+    return { ok: false };
+  }
+}
 
 // ===========================================================================
 // Per-tab settings saves (S227 Settings restructure). The old single
@@ -318,6 +348,68 @@ export async function updatePublicContact(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=brand&feed=saved");
+}
+
+// Tab — Distribution: org-level channel setup/account state. Transport,
+// capability flags, and posting policy are derived from the static S480 matrix
+// on the server; the form only supplies the channel key and operational fields.
+export async function updateDistributionChannelAccount(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const channel = normalizePublishChannel(formData.get("channel"));
+  if (!channel) {
+    redirect("/dashboard/settings?tab=distribution&distribution=badchannel");
+  }
+  const cap = channelCapability(channel);
+  const rawStatus = String(formData.get("account_status") ?? "").trim();
+  const accountStatus = isChannelAccountStatus(rawStatus)
+    ? rawStatus
+    : "not_started";
+
+  const feedUrl = optionalHttpUrl(formData, "feed_url");
+  const managerUrl = optionalHttpUrl(formData, "manager_url");
+  if (!feedUrl.ok || !managerUrl.ok) {
+    redirect(`/dashboard/settings?tab=distribution&distribution=url#channel-${channel}`);
+  }
+
+  const contactEmail = validateReplyToEmail(
+    String(formData.get("contact_email") ?? ""),
+  );
+  if (!contactEmail.ok) {
+    redirect(`/dashboard/settings?tab=distribution&distribution=contact#channel-${channel}`);
+  }
+
+  const nowISO = new Date().toISOString();
+  const supabase = createClient();
+  const { error } = await supabase.from("distribution_channel_accounts").upsert(
+    {
+      organization_id: org.id,
+      channel,
+      transport: cap.transport,
+      account_status: accountStatus,
+      feed_url: feedUrl.value,
+      manager_url: managerUrl.value,
+      external_account_label: optionalText(formData, "external_account_label", 160),
+      contact_name: optionalText(formData, "contact_name", 160),
+      contact_email: contactEmail.value,
+      requires_login: cap.requiresLogin,
+      requires_payment: cap.requiresPayment,
+      supports_feed: cap.supportsFeed,
+      supports_copilot: cap.supportsCopilot,
+      supports_concierge: cap.supportsConcierge,
+      supports_live_verification: cap.supportsLiveVerification,
+      posting_policy: cap.postingPolicy,
+      notes: optionalText(formData, "notes", 2000),
+      last_setup_checked_at: nowISO,
+      updated_at: nowISO,
+    },
+    { onConflict: "organization_id,channel" },
+  );
+  if (error) {
+    redirect(`/dashboard/settings?tab=distribution&distribution=error#channel-${channel}`);
+  }
+
+  redirect(`/dashboard/settings?tab=distribution&distribution=saved#channel-${channel}`);
 }
 
 // Building STANDARD POLICY profile (0048). The org-level defaults (lease term /

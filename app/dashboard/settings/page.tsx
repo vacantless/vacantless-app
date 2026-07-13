@@ -12,6 +12,7 @@ import {
 import {
   updateBrandIdentity,
   updatePublicContact,
+  updateDistributionChannelAccount,
   updateEmailSender,
   updateRenterMessages,
   updateTextMessages,
@@ -45,6 +46,20 @@ import {
   channelLabel,
   commsErrorMessage,
 } from "@/lib/tenant-comms";
+import {
+  CHANNEL_ACCOUNT_STATUSES,
+  allChannelCapabilities,
+  channelAccountReadiness,
+  channelReadinessLabel,
+  isChannelAccountStatus,
+  transportLabel,
+  type ChannelAccountStatus,
+  type ChannelReadinessValue,
+} from "@/lib/distribution-capabilities";
+import {
+  publishChannelMeta,
+  type PublishTone,
+} from "@/lib/distribution-publish";
 
 export const dynamic = "force-dynamic";
 
@@ -58,9 +73,16 @@ export const dynamic = "force-dynamic";
 // lands back where they were.
 function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   const t = sp.tab;
-  if (t === "brand" || t === "comms" || t === "banking" || t === "account") {
+  if (
+    t === "brand" ||
+    t === "distribution" ||
+    t === "comms" ||
+    t === "banking" ||
+    t === "account"
+  ) {
     return t;
   }
+  if (sp.distribution) return "distribution";
   if (sp.rotessa || sp.stripeconnect) return "banking";
   if (sp.test || sp.tpl || sp.tn || sp.sender || sp.renter || sp.sms) {
     return "comms";
@@ -68,6 +90,35 @@ function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   // saved / error / logo / logoerr all belong to the brand tab.
   return "brand";
 }
+
+const ACCOUNT_STATUS_LABELS: Record<ChannelAccountStatus, string> = {
+  not_started: "Not started",
+  needs_setup: "Needs setup",
+  submitted: "Submitted",
+  accepted: "Accepted",
+  paused: "Paused",
+  rejected: "Rejected",
+  connected: "Connected",
+  needs_login: "Needs login",
+  needs_payment: "Needs payment",
+};
+
+const READINESS_TONE: Record<ChannelReadinessValue, PublishTone> = {
+  ready: "positive",
+  needs_setup: "neutral",
+  submitted: "positive",
+  needs_login: "warning",
+  needs_payment: "warning",
+  rejected: "danger",
+  paused: "neutral",
+};
+
+const STATUS_CHIP: Record<PublishTone, string> = {
+  positive: "bg-green-50 text-green-700",
+  warning: "bg-amber-50 text-amber-700",
+  danger: "bg-red-50 text-red-700",
+  neutral: "bg-gray-100 text-gray-600",
+};
 
 export default async function SettingsPage({
   searchParams,
@@ -89,6 +140,7 @@ export default async function SettingsPage({
     renter?: string; // Communications → Renter messages flash
     sms?: string; // Communications → Text messages flash
     feed?: string; // Public Page & Brand → syndication contact flash
+    distribution?: string; // Distribution → channel account/setup flash
   };
 }) {
   const org = await getCurrentOrg();
@@ -252,6 +304,49 @@ export default async function SettingsPage({
     description_short: "a longer description (50+ characters)",
     address: "the address",
   };
+
+  const { data: distributionAccountRows } = await supabase
+    .from("distribution_channel_accounts")
+    .select(
+      "channel, account_status, feed_url, manager_url, external_account_label, contact_name, contact_email, notes, last_setup_checked_at, last_successful_publish_at, last_verification_at",
+    )
+    .eq("organization_id", org.id)
+    .order("channel", { ascending: true });
+  type DistributionAccountRow = {
+    channel: string;
+    account_status: string;
+    feed_url: string | null;
+    manager_url: string | null;
+    external_account_label: string | null;
+    contact_name: string | null;
+    contact_email: string | null;
+    notes: string | null;
+    last_setup_checked_at: string | null;
+    last_successful_publish_at: string | null;
+    last_verification_at: string | null;
+  };
+  const distributionAccountByChannel = new Map<string, DistributionAccountRow>();
+  for (const row of (distributionAccountRows ?? []) as DistributionAccountRow[]) {
+    distributionAccountByChannel.set(row.channel, row);
+  }
+  const distributionChannels = allChannelCapabilities().map((cap) => {
+    const account = distributionAccountByChannel.get(cap.channel) ?? null;
+    const accountStatus = isChannelAccountStatus(account?.account_status)
+      ? account.account_status
+      : null;
+    const readiness = channelAccountReadiness({
+      capability: cap,
+      accountStatus,
+      hasFeedRoute: Boolean(account?.feed_url),
+    });
+    return {
+      cap,
+      meta: publishChannelMeta(cap.channel),
+      account,
+      accountStatus: accountStatus ?? "not_started",
+      readiness,
+    };
+  });
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
   // The preview mirrors what renters actually see: the dashboard header and
@@ -733,6 +828,294 @@ export default async function SettingsPage({
                 </div>
               </div>
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* ================= Tab — Distribution ================= */}
+      {tab === "distribution" && (
+        <div className="mt-6 space-y-6">
+          {searchParams.distribution === "saved" && (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              Channel setup saved.
+            </div>
+          )}
+          {searchParams.distribution === "badchannel" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              That channel was not recognized.
+            </div>
+          )}
+          {searchParams.distribution === "url" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Feed and portal links must start with http:// or https://.
+            </div>
+          )}
+          {searchParams.distribution === "contact" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Partner contact email must be a single valid email address, or left blank.
+            </div>
+          )}
+          {searchParams.distribution === "error" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Something went wrong saving the channel setup. Please try again.
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <IconTile size="sm"><Icons.link className="h-4 w-4" /></IconTile>
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                    Channel setup
+                  </h3>
+                  <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                    Set each channel&apos;s account state once here. Rental-level
+                    publishing still happens from Distribute, with feed/live proof
+                    tracked on each publish run.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/properties"
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Open rentals
+              </Link>
+            </div>
+            <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Org feed
+                </span>
+                {feedSummary.orgPhoneMissing && (
+                  <Link
+                    href="/dashboard/settings?tab=brand"
+                    className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 underline"
+                  >
+                    Add contact phone
+                  </Link>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <code className="min-w-[16rem] flex-1 overflow-x-auto rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">
+                  {feedUrl}
+                </code>
+                <CopyLinkButton path={`/api/feed/${org.slug}`} label="Copy feed URL" />
+                <a
+                  href={`/api/feed/${org.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Open feed ↗
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness }) => {
+              const statusId = `dist-${cap.channel}-status`;
+              const feedId = `dist-${cap.channel}-feed`;
+              const managerId = `dist-${cap.channel}-manager`;
+              const labelId = `dist-${cap.channel}-label`;
+              const contactNameId = `dist-${cap.channel}-contact-name`;
+              const contactEmailId = `dist-${cap.channel}-contact-email`;
+              const notesId = `dist-${cap.channel}-notes`;
+              const showFeedField = cap.supportsFeed || cap.needsOrgAccount;
+              const showPortalFields = cap.transport !== "automatic";
+              return (
+                <form
+                  id={`channel-${cap.channel}`}
+                  key={cap.channel}
+                  action={updateDistributionChannelAccount}
+                  className="rounded-2xl border border-gray-200 bg-white p-5"
+                >
+                  <input type="hidden" name="channel" value={cap.channel} />
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        {meta.label}
+                      </h3>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {meta.description}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CHIP[READINESS_TONE[readiness.status]]}`}
+                    >
+                      {channelReadinessLabel(readiness.status)}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                      {transportLabel(cap.transport)}
+                    </span>
+                    {cap.supportsFeed && (
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                        Feed
+                      </span>
+                    )}
+                    {cap.supportsCopilot && (
+                      <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">
+                        Co-pilot
+                      </span>
+                    )}
+                    {cap.supportsConcierge && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                        Concierge
+                      </span>
+                    )}
+                    {cap.requiresLogin && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                        Login
+                      </span>
+                    )}
+                    {cap.requiresPayment && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                        Payment
+                      </span>
+                    )}
+                  </div>
+
+                  {readiness.blockers.length > 0 && (
+                    <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      {readiness.blockers[0]}
+                    </p>
+                  )}
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-gray-600">
+                        Account status
+                      </span>
+                      <select
+                        id={statusId}
+                        name="account_status"
+                        defaultValue={accountStatus}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                      >
+                        {CHANNEL_ACCOUNT_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {ACCOUNT_STATUS_LABELS[status]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {showFeedField && (
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-medium text-gray-600">
+                          Feed URL
+                        </span>
+                        <input
+                          id={feedId}
+                          name="feed_url"
+                          type="url"
+                          maxLength={2048}
+                          placeholder={cap.channel === "org_feed" ? feedUrl : "https://..."}
+                          defaultValue={
+                            account?.feed_url ?? (cap.channel === "org_feed" ? feedUrl : "")
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        />
+                      </label>
+                    )}
+
+                    {showPortalFields && (
+                      <>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-medium text-gray-600">
+                            Portal or manager URL
+                          </span>
+                          <input
+                            id={managerId}
+                            name="manager_url"
+                            type="url"
+                            maxLength={2048}
+                            placeholder="https://..."
+                            defaultValue={account?.manager_url ?? ""}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-medium text-gray-600">
+                            Account label
+                          </span>
+                          <input
+                            id={labelId}
+                            name="external_account_label"
+                            maxLength={160}
+                            placeholder="e.g. Main leasing account"
+                            defaultValue={account?.external_account_label ?? ""}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                      </>
+                    )}
+
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-gray-600">
+                        Partner contact
+                      </span>
+                      <input
+                        id={contactNameId}
+                        name="contact_name"
+                        maxLength={160}
+                        placeholder="Name"
+                        defaultValue={account?.contact_name ?? ""}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-gray-600">
+                        Contact email
+                      </span>
+                      <input
+                        id={contactEmailId}
+                        name="contact_email"
+                        type="email"
+                        maxLength={254}
+                        placeholder="partner@example.com"
+                        defaultValue={account?.contact_email ?? ""}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="mt-3 block">
+                    <span className="mb-1 block text-xs font-medium text-gray-600">
+                      Notes
+                    </span>
+                    <textarea
+                      id={notesId}
+                      name="notes"
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Setup notes, rejection reason, renewal terms, or handoff details."
+                      defaultValue={account?.notes ?? ""}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </label>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-gray-400">
+                      {account?.last_setup_checked_at
+                        ? `Last checked ${new Date(account.last_setup_checked_at).toLocaleDateString("en-CA")}`
+                        : "Not checked yet"}
+                    </div>
+                    <button
+                      className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
+                      type="submit"
+                    >
+                      Save setup
+                    </button>
+                  </div>
+                </form>
+              );
+            })}
           </div>
         </div>
       )}

@@ -9,7 +9,13 @@ import { Icons } from "@/components/icons";
 // survives the redirect-based saves each section uses.
 // S275 IA Step 3: "Lease Clauses" moved out to Tenants → Lease clauses (its
 // point-of-use); screening + building policy moved off the brand tab too.
-export type SettingsTab = "brand" | "comms" | "notifications" | "banking" | "account";
+export type SettingsTab =
+  | "brand"
+  | "distribution"
+  | "comms"
+  | "notifications"
+  | "banking"
+  | "account";
 
 // Most tabs are sections of /dashboard/settings driven by ?tab=. "Notifications"
 // is its own route (its editor is large enough to live apart and keeps the main
@@ -21,6 +27,7 @@ const TABS: {
   href?: string;
 }[] = [
   { key: "brand", label: "Public Page & Brand", icon: "page" },
+  { key: "distribution", label: "Distribution", icon: "link" },
   { key: "comms", label: "Communications", icon: "mail" },
   { key: "notifications", label: "Notifications", icon: "chat", href: "/dashboard/settings/notifications" },
   { key: "banking", label: "Banking & Rent", icon: "card" },
