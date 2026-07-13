@@ -275,3 +275,32 @@ export function packN4ArrearsRows(rows: N4PeriodRow[]): {
   };
   return { formRows: [combinedRow, toForm(last)], combined: true };
 }
+
+/**
+ * Reconcile the packed form rows to a LOWER operator total. An override may
+ * only settle arrears DOWN (a disputed period): the reduction (current summed
+ * owing - target) is credited against the most-recent rows first, increasing
+ * paid and decreasing owing (clamped >= 0), so every row keeps charged - paid =
+ * owing and the rows sum EXACTLY to the target. If target >= the current summed
+ * owing the rows are returned UNCHANGED - an override ABOVE the ledger is never
+ * silently padded; n4SnapshotBlocker rejects it as overstated (a void N4). Pure.
+ */
+export function creditN4RowsToTotal(
+  rows: N4FormRow[],
+  targetTotalCents: number,
+): N4FormRow[] {
+  const target = Math.max(0, Math.round(targetTotalCents || 0));
+  const current = rows.reduce((s, r) => s + Math.round(r.owingCents || 0), 0);
+  const out = rows.map((r) => ({ ...r }));
+  if (target >= current) return out;
+  let reduction = current - target;
+  for (let i = out.length - 1; i >= 0 && reduction > 0; i--) {
+    const owe = Math.round(out[i].owingCents || 0);
+    if (owe <= 0) continue;
+    const credit = Math.min(reduction, owe);
+    out[i].paidCents = Math.round(out[i].paidCents || 0) + credit;
+    out[i].owingCents = owe - credit;
+    reduction -= credit;
+  }
+  return out;
+}

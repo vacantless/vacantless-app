@@ -146,7 +146,12 @@ export async function recordN4Service(formData: FormData) {
   const noticeId = s(formData, "notice_id");
   const method = s(formData, "method");
   if (!noticeId) redirect(anchor(tenancyId, "error"));
-  if (method !== "hand" && method !== "mail" && method !== "courier") {
+  // v1 supports IN-PERSON (hand) service only: termination = notice date + the
+  // minimum notice days, no deemed-service add-on. Mail/courier shift the deemed
+  // service date (and thus the termination date) and are deferred to the per-form
+  // legal-verify gate (design section 6) - so we never record a mail/courier N4
+  // whose frozen PDF used hand-service timing.
+  if (method !== "hand") {
     redirect(anchor(tenancyId, "badmethod"));
   }
 
@@ -217,15 +222,50 @@ export async function fileN4ToVault(formData: FormData) {
   }
 
   const snap = safeNotice.snapshot as N4Snapshot;
-  const bytes = await fillOfficialN4(snapshotToN4Fill(snap));
-  const buf = Buffer.from(bytes);
-
   const docId = crypto.randomUUID();
+  const nowReserve = new Date().toISOString();
+
+  // RESERVE the filing slot BEFORE any side effect (S479 reserve-before-side-
+  // effects model): atomically claim filed_document_id iff still null. A
+  // concurrent double-submit loses this CAS (0 rows) and does NO upload/insert,
+  // so exactly one vault document is ever created.
+  const { data: claimed } = await supabase
+    .from("notices")
+    .update({ filed_document_id: docId, updated_at: nowReserve })
+    .eq("id", noticeId)
+    .eq("tenancy_id", tenancyId)
+    .eq("type", "N4")
+    .in("status", ["served", "filed"])
+    .is("filed_document_id", null)
+    .select("id");
+  if (!claimed || claimed.length === 0) redirect(anchor(tenancyId, "filed"));
+
+  // We own the slot. Roll the reservation back if the artifact can't be created.
+  const unreserve = async () => {
+    await supabase
+      .from("notices")
+      .update({ filed_document_id: null })
+      .eq("id", noticeId)
+      .eq("filed_document_id", docId);
+  };
+
+  let buf: Buffer;
+  try {
+    const bytes = await fillOfficialN4(snapshotToN4Fill(snap));
+    buf = Buffer.from(bytes);
+  } catch {
+    await unreserve();
+    redirect(anchor(tenancyId, "failed"));
+  }
+
   const path = documentStoragePath(safeNotice.organization_id, docId, "pdf");
   const { error: upErr } = await supabase.storage
     .from(DOCUMENTS_BUCKET)
     .upload(path, buf, { contentType: "application/pdf", upsert: false });
-  if (upErr) redirect(anchor(tenancyId, "failed"));
+  if (upErr) {
+    await unreserve();
+    redirect(anchor(tenancyId, "failed"));
+  }
 
   let sha256: string | null = null;
   try {
@@ -254,15 +294,18 @@ export async function fileN4ToVault(formData: FormData) {
     if (rbErr) {
       console.error("fileN4ToVault: rollback remove failed", { path, error: rbErr.message });
     }
+    await unreserve();
     redirect(anchor(tenancyId, "failed"));
   }
 
+  // filed_document_id was already claimed in the reservation above; finalize the
+  // status. Scoped to the slot WE own (filed_document_id == our docId).
   const nowIso = new Date().toISOString();
   await supabase
     .from("notices")
-    .update({ filed_document_id: docId, status: "filed", updated_at: nowIso })
+    .update({ status: "filed", updated_at: nowIso })
     .eq("id", noticeId)
-    .is("filed_document_id", null); // idempotent double-file guard
+    .eq("filed_document_id", docId);
 
   revalidatePath(`/dashboard/tenancies/${tenancyId}`);
   redirect(anchor(tenancyId, "filed"));

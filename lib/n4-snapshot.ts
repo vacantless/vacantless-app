@@ -19,6 +19,7 @@ import {
   deriveN4TerminationDate,
   packN4ArrearsRows,
   resolveN4OwingCents,
+  creditN4RowsToTotal,
   type N4FormRow,
   type RentPeriodUnit,
 } from "./n4";
@@ -104,6 +105,11 @@ export function buildN4Snapshot(input: BuildN4Input): N4Snapshot {
     arrears.conservativeOwingCents,
     input.overrideOwingCents,
   );
+  // Reconcile the itemized rows to the operator total. A down-override credits
+  // the reduction against the most-recent rows (charged-paid=owing preserved,
+  // rows sum EXACTLY to the total). An override ABOVE the ledger leaves the rows
+  // unchanged so n4SnapshotBlocker can reject it as overstated (a void N4).
+  const reconciledRows = creditN4RowsToTotal(packed.formRows, totalOwingCents);
   const terminationDateISO = deriveN4TerminationDate(input.noticeDateISO, unit);
 
   return {
@@ -119,7 +125,7 @@ export function buildN4Snapshot(input: BuildN4Input): N4Snapshot {
     },
     rentCents: input.rentCents,
     rentPeriodUnit: unit,
-    arrearsRows: packed.formRows,
+    arrearsRows: reconciledRows,
     computedOwingCents: arrears.computedOwingCents,
     conservativeOwingCents: arrears.conservativeOwingCents,
     overrideOwingCents: input.overrideOwingCents ?? null,
@@ -141,7 +147,7 @@ export function buildN4Snapshot(input: BuildN4Input): N4Snapshot {
  */
 export function n4SnapshotBlocker(
   snap: N4Snapshot,
-): "no_arrears" | "unresolved_credits" | "not_reconciling" | null {
+): "no_arrears" | "unresolved_credits" | "not_reconciling" | "overstated" | null {
   if (snap.totalOwingCents <= 0) return "no_arrears";
   // Unassigned / out-of-window payments mean the ledger isn't reconciled: the
   // itemized rows (computed) and the conservative total disagree, so the table
@@ -154,6 +160,9 @@ export function n4SnapshotBlocker(
     rowsOwe += Math.round(r.owingCents || 0);
   }
   if (rowsOwe > Math.round(snap.totalOwingCents)) return "not_reconciling";
+  // The total must never EXCEED what the itemized rows support (an override
+  // above the ledger, or any total > summed rows) - that overstates and voids.
+  if (Math.round(snap.totalOwingCents) > rowsOwe) return "overstated";
   return null;
 }
 

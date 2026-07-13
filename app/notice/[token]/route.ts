@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { renderN4Html, n4ModelFromSnapshot } from "@/lib/n4-render";
-import type { N4Snapshot } from "@/lib/n4-snapshot";
+import { n4SnapshotReady, type N4Snapshot } from "@/lib/n4-snapshot";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -44,7 +44,8 @@ export async function GET(
     !isServed ||
     !snap ||
     !Array.isArray(snap.arrearsRows) ||
-    !snap.terminationDateISO
+    !snap.terminationDateISO ||
+    !n4SnapshotReady(snap)
   ) {
     return new NextResponse("Not found", { status: 404 });
   }

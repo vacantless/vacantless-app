@@ -102,5 +102,24 @@ const base = {
   eq(fill.signer.firstName, "Noam", "signer first name");
 }
 
+// (g) override DOWN reconciles: rows credited to sum exactly to the override.
+{
+  const snap = buildN4Snapshot({ ...base, noticeDateISO: "2026-07-13", payments: [], overrideOwingCents: 400000 });
+  eq(snap.totalOwingCents, 400000, "down override wins the total");
+  eq(snap.arrearsRows.reduce((s, r) => s + r.owingCents, 0), 400000, "rows credited to reconcile to the override");
+  ok(snap.arrearsRows.every((r) => r.chargedCents - r.paidCents === r.owingCents), "credited rows keep charged-paid=owing");
+  eq(n4SnapshotBlocker(snap), null, "down override reconciles -> no blocker");
+  ok(n4SnapshotReady(snap), "down override is ready to fill");
+}
+
+// (h) override ABOVE the ledger is rejected as overstated (a void N4).
+{
+  const snap = buildN4Snapshot({ ...base, noticeDateISO: "2026-07-13", payments: [], overrideOwingCents: 900000 });
+  eq(snap.totalOwingCents, 900000, "over-override sets the total");
+  ok(snap.arrearsRows.reduce((s, r) => s + r.owingCents, 0) < snap.totalOwingCents, "rows sum stays below an overstated total");
+  eq(n4SnapshotBlocker(snap), "overstated", "override above the ledger is blocked as overstated");
+  ok(!n4SnapshotReady(snap), "overstated snapshot is not ready");
+}
+
 console.log(`test-n4-snapshot: ${pass}/${fail}`);
 if (fail > 0) process.exit(1);

@@ -9,6 +9,8 @@ import {
   monthlyPeriodKeys,
   packN4ArrearsRows,
   resolveN4OwingCents,
+  creditN4RowsToTotal,
+  type N4FormRow,
   type N4PeriodRow,
   type RentPeriodUnit,
 } from "../lib/n4";
@@ -281,6 +283,27 @@ ok(
   })(),
   "over-wide amount throws (no silent truncation)",
 );
+
+// --- creditN4RowsToTotal (down-only override reconciliation) ----------------
+{
+  const rows: N4FormRow[] = [
+    { fromISO: "2026-05-01", toISO: "2026-05-31", chargedCents: 220000, paidCents: 0, owingCents: 220000 },
+    { fromISO: "2026-06-01", toISO: "2026-06-30", chargedCents: 220000, paidCents: 0, owingCents: 220000 },
+    { fromISO: "2026-07-01", toISO: "2026-07-31", chargedCents: 220000, paidCents: 0, owingCents: 220000 },
+  ];
+  const down = creditN4RowsToTotal(rows, 500000); // 660000 -> 500000, credit 160000
+  eq(down.reduce((s, r) => s + r.owingCents, 0), 500000, "credit reconciles rows sum to target");
+  ok(down.every((r) => r.chargedCents - r.paidCents === r.owingCents), "credited rows keep charged-paid=owing");
+  ok(down.every((r) => r.owingCents >= 0), "no negative owing after credit");
+  eq(down[2].owingCents, 60000, "reduction hits the newest row first (220000-160000)");
+  eq(down[0].owingCents, 220000, "oldest row untouched when reduction fits in newest");
+  const at = creditN4RowsToTotal(rows, 660000);
+  eq(at.reduce((s, r) => s + r.owingCents, 0), 660000, "target == sum leaves rows unchanged");
+  const above = creditN4RowsToTotal(rows, 900000);
+  eq(above.reduce((s, r) => s + r.owingCents, 0), 660000, "target above sum leaves rows unchanged (overstate handled by blocker)");
+  const zero = creditN4RowsToTotal(rows, 0);
+  eq(zero.reduce((s, r) => s + r.owingCents, 0), 0, "credit to zero fully clears owing");
+}
 
 console.log(`test-n4: ${pass}/${fail}`);
 if (fail > 0) process.exit(1);
