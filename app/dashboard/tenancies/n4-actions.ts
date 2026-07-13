@@ -223,49 +223,26 @@ export async function fileN4ToVault(formData: FormData) {
 
   const snap = safeNotice.snapshot as N4Snapshot;
   const docId = crypto.randomUUID();
-  const nowReserve = new Date().toISOString();
+  const path = documentStoragePath(safeNotice.organization_id, docId, "pdf");
 
-  // RESERVE the filing slot BEFORE any side effect (S479 reserve-before-side-
-  // effects model): atomically claim filed_document_id iff still null. A
-  // concurrent double-submit loses this CAS (0 rows) and does NO upload/insert,
-  // so exactly one vault document is ever created.
-  const { data: claimed } = await supabase
-    .from("notices")
-    .update({ filed_document_id: docId, updated_at: nowReserve })
-    .eq("id", noticeId)
-    .eq("tenancy_id", tenancyId)
-    .eq("type", "N4")
-    .in("status", ["served", "filed"])
-    .is("filed_document_id", null)
-    .select("id");
-  if (!claimed || claimed.length === 0) redirect(anchor(tenancyId, "filed"));
-
-  // We own the slot. Roll the reservation back if the artifact can't be created.
-  const unreserve = async () => {
-    await supabase
-      .from("notices")
-      .update({ filed_document_id: null })
-      .eq("id", noticeId)
-      .eq("filed_document_id", docId);
-  };
-
+  // Create the artifact FIRST, then claim the slot. notices.filed_document_id is
+  // an IMMEDIATE FK to documents(id) (migration 0140), so the notice can only be
+  // pointed at a document that already exists — reserving with a not-yet-inserted
+  // docId would violate the FK. So: fill -> upload -> insert the documents row,
+  // THEN a state-conditional CAS claims the (still-null) filed_document_id. A
+  // concurrent double-submit that also created a doc LOSES the CAS and rolls its
+  // own orphan back, so exactly one vault document is ever referenced.
   let buf: Buffer;
   try {
-    const bytes = await fillOfficialN4(snapshotToN4Fill(snap));
-    buf = Buffer.from(bytes);
+    buf = Buffer.from(await fillOfficialN4(snapshotToN4Fill(snap)));
   } catch {
-    await unreserve();
     redirect(anchor(tenancyId, "failed"));
   }
 
-  const path = documentStoragePath(safeNotice.organization_id, docId, "pdf");
   const { error: upErr } = await supabase.storage
     .from(DOCUMENTS_BUCKET)
     .upload(path, buf, { contentType: "application/pdf", upsert: false });
-  if (upErr) {
-    await unreserve();
-    redirect(anchor(tenancyId, "failed"));
-  }
+  if (upErr) redirect(anchor(tenancyId, "failed"));
 
   let sha256: string | null = null;
   try {
@@ -288,24 +265,37 @@ export async function fileN4ToVault(formData: FormData) {
     source: "in_app_generated",
   });
   if (insErr) {
-    const { error: rbErr } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .remove([path]);
+    const { error: rbErr } = await supabase.storage.from(DOCUMENTS_BUCKET).remove([path]);
     if (rbErr) {
       console.error("fileN4ToVault: rollback remove failed", { path, error: rbErr.message });
     }
-    await unreserve();
     redirect(anchor(tenancyId, "failed"));
   }
 
-  // filed_document_id was already claimed in the reservation above; finalize the
-  // status. Scoped to the slot WE own (filed_document_id == our docId).
+  // Claim the filing slot now that the document EXISTS (FK satisfied). Exactly one
+  // filing wins: the CAS matches only while filed_document_id IS NULL.
   const nowIso = new Date().toISOString();
-  await supabase
+  const { data: claimed } = await supabase
     .from("notices")
-    .update({ status: "filed", updated_at: nowIso })
+    .update({ filed_document_id: docId, status: "filed", updated_at: nowIso })
     .eq("id", noticeId)
-    .eq("filed_document_id", docId);
+    .eq("tenancy_id", tenancyId)
+    .eq("type", "N4")
+    .in("status", ["served", "filed"])
+    .is("filed_document_id", null)
+    .select("id");
+
+  if (!claimed || claimed.length === 0) {
+    // Lost the race (another submit already filed) OR the notice moved out of a
+    // fileable state. Roll back OUR orphan document + bytes so only the winner's
+    // doc remains; the notice already points at exactly one document.
+    await supabase.from("documents").delete().eq("id", docId);
+    const { error: rbErr } = await supabase.storage.from(DOCUMENTS_BUCKET).remove([path]);
+    if (rbErr) {
+      console.error("fileN4ToVault: race rollback remove failed", { path, error: rbErr.message });
+    }
+    redirect(anchor(tenancyId, "filed"));
+  }
 
   revalidatePath(`/dashboard/tenancies/${tenancyId}`);
   redirect(anchor(tenancyId, "filed"));
