@@ -6,8 +6,14 @@
 // every human gate (login, payment, CAPTCHA, final review). The operator posts,
 // then pastes the live ad URL as proof — completeCopilotPost refuses to mark a
 // channel live without it. The pure script comes from lib/distribution-copilot.
+//
+// S483 (Lane A): an optional Chrome extension can co-locate the copy on the
+// portal's post page and capture the live URL back here. The extension is a pure
+// courier — it only pre-fills the "Live ad URL" field below via postMessage; the
+// operator still reviews and submits, and completeCopilotPost re-validates the
+// URL server-side. No auto-post, no auto-submit, no new server surface.
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { completeCopilotPost } from "../distribution-actions";
 import {
@@ -17,6 +23,10 @@ import {
 
 const FIELD_CLASS =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm";
+
+// Bridge message tags — must match the extension's bridge.js.
+const APP_SRC = "vacantless-copilot"; // page -> extension
+const EXT_SRC = "vacantless-extension"; // extension -> page
 
 function CopyField({
   label,
@@ -81,6 +91,87 @@ export function CopilotPanel({
   itemId: string;
   script: CopilotScript;
 }) {
+  // Controlled so the extension can pre-fill it; still submits to
+  // completeCopilotPost with name="external_url" + required, unchanged.
+  const [externalUrl, setExternalUrl] = useState("");
+  const [captured, setCaptured] = useState(false);
+  const [extReady, setExtReady] = useState(false);
+  // The nonce for the most recent "Send to extension"; a captured URL is only
+  // accepted when it echoes this exact nonce (Codex S483 P2).
+  const nonceRef = useRef<string | null>(null);
+  const urlInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.source !== window) return;
+      if (event.origin !== window.location.origin) return;
+      const d = event.data as
+        | {
+            source?: string;
+            type?: string;
+            itemId?: string;
+            channel?: string;
+            nonce?: string;
+            url?: string;
+          }
+        | null;
+      if (!d || typeof d !== "object" || d.source !== EXT_SRC) return;
+
+      if (d.type === "pong") {
+        setExtReady(true);
+        return;
+      }
+      if (d.type === "captured_url") {
+        // Accept only for THIS item, THIS channel, and the nonce we last minted.
+        if (d.itemId !== itemId || d.channel !== script.channel) return;
+        if (!nonceRef.current || d.nonce !== nonceRef.current) return;
+        if (typeof d.url === "string" && d.url) {
+          setExternalUrl(d.url);
+          setCaptured(true);
+          requestAnimationFrame(() => {
+            urlInputRef.current?.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+            urlInputRef.current?.focus();
+          });
+        }
+      }
+    }
+    window.addEventListener("message", onMessage);
+    // Ask whether the extension is present (bridge.js replies with "pong").
+    window.postMessage({ source: APP_SRC, type: "ping" }, window.location.origin);
+    return () => window.removeEventListener("message", onMessage);
+  }, [itemId, script.channel]);
+
+  const sendToExtension = useCallback(() => {
+    const nonce =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    nonceRef.current = nonce;
+    setCaptured(false);
+    window.postMessage(
+      {
+        source: APP_SRC,
+        type: "copilot_job",
+        itemId,
+        propertyId,
+        channel: script.channel,
+        channelLabel: script.channelLabel,
+        portalUrl: script.portalUrl,
+        nonce,
+        fields: script.fields.map((f) => ({
+          key: f.key,
+          label: f.label,
+          value: f.value,
+          multiline: f.multiline,
+        })),
+      },
+      window.location.origin,
+    );
+  }, [itemId, propertyId, script]);
+
   return (
     <details className="mb-3 rounded-xl border border-brand/30 bg-brand/5 p-3">
       <summary className="cursor-pointer text-xs font-semibold text-brand">
@@ -117,6 +208,27 @@ export function CopilotPanel({
           >
             Open {script.channelLabel} in a new tab
           </a>
+        )}
+
+        {/* S483: optional extension hand-off. Shown only when the Vacantless
+            extension is installed (bridge.js answered our ping). It co-locates
+            the copy on the portal page and captures the live URL back into the
+            field below — the operator still reviews and marks it live. */}
+        {extReady && (
+          <div className="rounded-lg border border-brand/30 bg-white px-3 py-2">
+            <button
+              type="button"
+              onClick={sendToExtension}
+              className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white"
+            >
+              Send copy to the Vacantless extension
+            </button>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Shows this copy on the {script.channelLabel} post page and captures
+              the live ad URL back here. You still post it and mark it live
+              yourself.
+            </p>
+          </div>
         )}
 
         {/* Copyable, channel-fit content. */}
@@ -175,9 +287,19 @@ export function CopilotPanel({
             <input
               name="external_url"
               required
+              ref={urlInputRef}
+              value={externalUrl}
+              onChange={(e) => setExternalUrl(e.target.value)}
               placeholder="https://..."
-              className={FIELD_CLASS}
+              className={`${FIELD_CLASS}${
+                captured ? " ring-2 ring-brand" : ""
+              }`}
             />
+            {captured && (
+              <p className="mt-1 text-[11px] font-medium text-brand">
+                Captured from the extension — review it, then mark it live.
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <div className="min-w-[10rem] flex-1">
