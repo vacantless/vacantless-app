@@ -12,6 +12,15 @@ import {
   requestConciergePublish,
 } from "../actions";
 import {
+  verifyPublicPage,
+  verifyOrgFeedInclusion,
+  recordItemProof,
+} from "../distribution-actions";
+import {
+  verificationResultLabel,
+  verificationResultTone,
+} from "@/lib/distribution-verification";
+import {
   type RunItemStatus,
   type RunStep,
   type RunProgress,
@@ -46,6 +55,10 @@ export type RunItemView = {
   // S474b: this human-action item can be handed to the Vacantless publishing
   // desk ("Publish for me"). Computed with the operator's plan entitlement.
   canConcierge: boolean;
+  // S480: honest transport + durable verification state + latest proof link.
+  transport: string | null;
+  verificationStatus: string | null;
+  proofUrl: string | null;
 };
 
 export type PublishChannelChoiceView = {
@@ -57,6 +70,10 @@ export type PublishChannelChoiceView = {
   description: string;
   blockers: string[];
   defaultSelected: boolean;
+  // S480: pre-Publish channel setup readiness.
+  readinessLabel: string;
+  readinessTone: PublishTone;
+  setupBlockers: string[];
 };
 
 const FIELD_CLASS =
@@ -126,6 +143,12 @@ export function LaunchRunPanel({
                       >
                         {c.statusLabel}
                       </span>
+                      <span
+                        title="Channel setup readiness"
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[c.readinessTone]}`}
+                      >
+                        Setup: {c.readinessLabel}
+                      </span>
                     </span>
                     <span className="mt-1 block text-xs text-gray-500">
                       {c.description}
@@ -186,6 +209,14 @@ export function LaunchRunPanel({
               >
                 {item.statusLabel}
               </span>
+              {item.verificationStatus && (
+                <span
+                  title="Verification"
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[verificationResultTone(item.verificationStatus)]}`}
+                >
+                  {verificationResultLabel(item.verificationStatus)}
+                </span>
+              )}
             </div>
 
             {(item.auditMessage || item.errorMessage || item.blockers.length > 0) && (
@@ -257,6 +288,104 @@ export function LaunchRunPanel({
                 </span>
               </form>
             )}
+
+            {(item.channel === "vacantless" || item.channel === "org_feed") && (
+              <form
+                action={
+                  item.channel === "vacantless"
+                    ? verifyPublicPage
+                    : verifyOrgFeedInclusion
+                }
+                className="mb-3"
+              >
+                <input type="hidden" name="property_id" value={propertyId} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  {item.channel === "vacantless"
+                    ? "Verify public page"
+                    : "Verify feed inclusion"}
+                </button>
+                <span className="ml-2 text-[11px] text-gray-500">
+                  Records durable proof of this channel&apos;s state.
+                </span>
+              </form>
+            )}
+            {item.proofUrl && (
+              <p className="mb-3 truncate text-xs text-gray-500">
+                Proof:{" "}
+                <a
+                  href={item.proofUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand underline"
+                >
+                  {item.proofUrl}
+                </a>
+              </p>
+            )}
+            <details className="mb-3">
+              <summary className="cursor-pointer text-xs font-medium text-gray-600">
+                Record proof / update verification
+              </summary>
+              <form
+                action={recordItemProof}
+                className="mt-2 flex flex-wrap items-end gap-2"
+              >
+                <input type="hidden" name="item_id" value={item.id} />
+                <div className="w-56">
+                  <label className="mb-1 block text-[11px] font-medium text-gray-500">
+                    Live URL (if any)
+                  </label>
+                  <input
+                    name="external_url"
+                    placeholder="https://..."
+                    className={FIELD_CLASS}
+                  />
+                </div>
+                <div className="w-40">
+                  <label className="mb-1 block text-[11px] font-medium text-gray-500">
+                    Result
+                  </label>
+                  <select
+                    name="result"
+                    defaultValue="verified_live"
+                    className={FIELD_CLASS}
+                  >
+                    {(
+                      [
+                        "verified_live",
+                        "needs_login",
+                        "needs_payment",
+                        "proof_unavailable",
+                        "stale",
+                      ] as const
+                    ).map((r) => (
+                      <option key={r} value={r}>
+                        {verificationResultLabel(r)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[10rem] flex-1">
+                  <label className="mb-1 block text-[11px] font-medium text-gray-500">
+                    Note
+                  </label>
+                  <input
+                    name="note"
+                    placeholder="e.g. posted on Kijiji; screenshot on file"
+                    className={FIELD_CLASS}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Save proof
+                </button>
+              </form>
+            </details>
 
             <form
               action={updateRunItem}

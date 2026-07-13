@@ -21,6 +21,8 @@ import {
   CONCIERGE_LIVE_AUDIT,
   CONCIERGE_REJECTED_AUDIT,
 } from "@/lib/distribution-publish";
+import { scheduleNextVerification } from "@/lib/distribution-verification";
+import { buildAttemptRecord } from "@/lib/distribution-attempts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const DESK = "/dashboard/admin/concierge";
@@ -225,8 +227,79 @@ export async function completeConciergeItem(formData: FormData) {
     .eq("mode", "concierge")
     .eq("concierge_claimed_by", ctx.userId)
     .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
-    .select("id");
+    .select("id, attempt_count");
   if (!completed || completed.length === 0) redirect(`${DESK}?err=stale`);
+
+  // S480: durable proof + append-only attempt for this concierge-completed
+  // channel, and point the run item at them. Reached ONLY by the winning
+  // completer (after the S479 atomic flip), so the reservation/ownership
+  // invariant is untouched; purely additive writes.
+  const verifiedAt = new Date().toISOString();
+  const nextCheck = scheduleNextVerification(channel, "verified_live", verifiedAt);
+  const { data: proof } = await admin
+    .from("distribution_verifications")
+    .insert({
+      organization_id: orgId,
+      property_id: propertyId,
+      run_id: item.run_id as string,
+      run_item_id: itemId,
+      listing_post_id: listingPostId,
+      channel,
+      verification_type: "manual_concierge",
+      result: "verified_live",
+      external_url: url,
+      checked_by: ctx.userId,
+      next_check_at: nextCheck,
+      metadata: { source: "concierge_desk" },
+    })
+    .select("id")
+    .single();
+  const proofId = (proof?.id as string | undefined) ?? null;
+  const priorAttempts = (completed[0]?.attempt_count as number | undefined) ?? 0;
+  const attempt = buildAttemptRecord({
+    organizationId: orgId,
+    runId: item.run_id as string,
+    runItemId: itemId,
+    channel,
+    transport: "concierge",
+    currentAttemptCount: priorAttempts,
+    actorType: "concierge",
+    actorUserId: ctx.userId,
+    statusBefore: "submitting",
+    statusAfter: "verified_live",
+    proofId,
+    metadata: { source: "concierge_desk" },
+  });
+  const { data: att } = await admin
+    .from("distribution_publish_attempts")
+    .insert({
+      organization_id: attempt.organization_id,
+      run_id: attempt.run_id,
+      run_item_id: attempt.run_item_id,
+      channel: attempt.channel,
+      transport: attempt.transport,
+      attempt_no: attempt.attempt_no,
+      actor_type: attempt.actor_type,
+      actor_user_id: attempt.actor_user_id,
+      status_before: attempt.status_before,
+      status_after: attempt.status_after,
+      proof_id: attempt.proof_id,
+      metadata: attempt.metadata,
+    })
+    .select("id")
+    .single();
+  await admin
+    .from("distribution_run_items")
+    .update({
+      verification_status: "verified_live",
+      last_verification_id: proofId,
+      last_attempt_id: (att?.id as string | undefined) ?? null,
+      proof_url: url,
+      attempt_count: priorAttempts + 1,
+      stale_after: nextCheck,
+      updated_at: verifiedAt,
+    })
+    .eq("id", itemId);
 
   // Complete the run once every item is resolved (live/submitted/skipped).
   const { data: siblings } = await admin

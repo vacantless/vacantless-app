@@ -151,6 +151,13 @@ import {
 } from "./distribute-tab";
 import { normalizePartnerStatus } from "@/lib/distribution-partner";
 import type { RunItemView } from "./launch-run-panel";
+import {
+  channelCapability,
+  channelAccountReadiness,
+  channelReadinessLabel,
+  type ChannelAccountStatus,
+  type ChannelReadinessValue,
+} from "@/lib/distribution-capabilities";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
 import { EquipmentSection, type EquipmentView } from "./equipment-section";
@@ -974,6 +981,39 @@ export default async function PropertyDetailPage({
       notes: row.notes,
     });
   }
+  // S480: org channel-account setup rows. Readiness hydrates from these first,
+  // then falls back to the existing feed-partner accounts (0106) so a channel is
+  // "ready" if its partner route is already accepted, even before a new channel
+  // account is recorded.
+  const { data: channelAccountRows } = await supabase
+    .from("distribution_channel_accounts")
+    .select("channel, account_status, feed_url");
+  const channelAccountByKey = new Map<string, { status: string; feedUrl: string | null }>();
+  for (const row of (channelAccountRows ?? []) as Array<{
+    channel: string;
+    account_status: string;
+    feed_url: string | null;
+  }>) {
+    channelAccountByKey.set(row.channel, { status: row.account_status, feedUrl: row.feed_url });
+  }
+  const readinessToneFor = (
+    v: ChannelReadinessValue,
+  ): "positive" | "warning" | "danger" | "neutral" =>
+    v === "ready" || v === "submitted"
+      ? "positive"
+      : v === "needs_login" || v === "needs_payment"
+        ? "warning"
+        : v === "rejected"
+          ? "danger"
+          : "neutral";
+  const accountStatusForChannel = (key: string): ChannelAccountStatus | null => {
+    const acct = channelAccountByKey.get(key);
+    if (acct) return acct.status as ChannelAccountStatus;
+    const partner = partnerByChannel.get(key);
+    // partner status values (not_started/submitted/accepted/rejected/paused) are
+    // a subset of the channel-account statuses.
+    return partner ? (partner.status as ChannelAccountStatus) : null;
+  };
   const distributeChannelCards: DistributeChannelCard[] =
     DISTRIBUTION_CHANNELS.map((channel) => {
       const posts = (postsByPortal.get(channel.key) ?? []).map(toDistributePost);
@@ -1045,6 +1085,11 @@ export default async function PropertyDetailPage({
       meta.key,
       publishContextForChannel(meta.key),
     );
+    const readiness = channelAccountReadiness({
+      capability: channelCapability(meta.key),
+      accountStatus: accountStatusForChannel(meta.key),
+      hasFeedRoute: !!channelAccountByKey.get(meta.key)?.feedUrl,
+    });
     return {
       key: plan.key,
       label: plan.label,
@@ -1054,6 +1099,9 @@ export default async function PropertyDetailPage({
       description: plan.description,
       blockers: plan.blockers,
       defaultSelected: plan.defaultSelected && plan.status !== "blocked",
+      readinessLabel: channelReadinessLabel(readiness.status),
+      readinessTone: readinessToneFor(readiness.status),
+      setupBlockers: readiness.blockers,
     };
   });
 
@@ -1078,13 +1126,16 @@ export default async function PropertyDetailPage({
     operator_action_url: string | null;
     error_message: string | null;
     audit_message: string | null;
+    transport: string | null;
+    verification_status: string | null;
+    proof_url: string | null;
   };
   let runItemRows: RunItemRow[] = [];
   if (activeRun) {
     const { data: ri } = await supabase
       .from("distribution_run_items")
       .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message",
+        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url",
       )
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
@@ -1126,6 +1177,9 @@ export default async function PropertyDetailPage({
           ? buildTrackedLink(publicUrl, r.listing_post_id)
           : null,
       notes: r.notes,
+      transport: r.transport,
+      verificationStatus: r.verification_status,
+      proofUrl: r.proof_url,
       steps: buildRunSteps(r.channel, {
         guardrailCount: guardrailsForPortal(r.channel).length,
       }),
