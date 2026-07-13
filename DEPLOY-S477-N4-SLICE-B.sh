@@ -5,7 +5,7 @@
 # operator serve flow behind the legal-verify gate), so no app behaviour changes.
 #
 # Files:
-#   lib/forms/ltb-n4-2015.pdf   - the Board-approved Form N4 (rev 2015-11-30),
+#   lib/forms/ltb-n4-2022.pdf   - the Board-approved Form N4 (v.01/04/2022),
 #       XFA-stripped + normalized offline (qpdf --qdf rebuild -> pdf-lib drops XFA
 #       -> recompressed to 759KB). 43 AcroForm fields, 3 pages.
 #   lib/forms/shared-combs.ts   - generalized comb formatters (date "DD MM YYYY";
@@ -35,7 +35,7 @@ node_modules/.bin/tsx scripts/test-n4-pdf.ts   # expect test-n4-pdf: 17/0
 npm run build                                  # KI741 - gate on the real build
 
 git add \
-  lib/forms/ltb-n4-2015.pdf \
+  lib/forms/ltb-n4-2022.pdf \
   lib/forms/shared-combs.ts \
   lib/n4-official-pdf.ts \
   lib/n4.ts \

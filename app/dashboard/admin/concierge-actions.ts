@@ -259,8 +259,16 @@ export async function rejectConciergeItem(formData: FormData) {
   if (!itemId) redirect(DESK);
   const reason = normalizeText(formData.get("reason")) ?? "Could not post to this channel.";
   const now = new Date().toISOString();
+  const takeoverCutoff = new Date(Date.now() - CONCIERGE_CLAIM_TAKEOVER_MS)
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z");
   // Only an OPEN concierge item can be rejected; a stale form on an already
-  // live/rejected item matches 0 rows -> stale (can't un-live a posted ad).
+  // live/rejected item matches 0 rows -> stale (can't un-live a posted ad). The
+  // ownership predicate (unclaimed / self / abandoned-past-takeover) MIRRORS the
+  // completion reservation so a DIFFERENT staffer cannot reject an item a
+  // completion has just reserved (publish_status='submitting', claimed_by=other)
+  // out from under its in-flight listing_posts write -> no stale tracker side
+  // effect. A concurrent reject by a non-owner matches 0 rows -> ?err=stale.
   const { data: rejected } = await ctx.admin
     .from("distribution_run_items")
     .update({
@@ -275,6 +283,9 @@ export async function rejectConciergeItem(formData: FormData) {
     .eq("id", itemId)
     .eq("mode", "concierge")
     .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
+    .or(
+      `concierge_claimed_by.is.null,concierge_claimed_by.eq.${ctx.userId},concierge_claimed_at.lt.${takeoverCutoff}`,
+    )
     .select("id");
   if (!rejected || rejected.length === 0) redirect(`${DESK}?err=stale`);
   revalidatePath(DESK);
