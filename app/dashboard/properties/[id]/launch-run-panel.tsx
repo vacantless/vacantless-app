@@ -3,7 +3,9 @@
 // paste the live URL (which produces the tracked listing_posts row). Renders at
 // the top of the Distribute tab, above the channel cards.
 
+import Link from "next/link";
 import { CopyLink } from "./copy-link";
+import { CopilotPanel } from "./copilot-panel";
 import {
   startDistributionRun,
   updateRunItem,
@@ -20,6 +22,7 @@ import {
   verificationResultLabel,
   verificationResultTone,
 } from "@/lib/distribution-verification";
+import type { CopilotScript } from "@/lib/distribution-copilot";
 import {
   type RunItemStatus,
   type RunStep,
@@ -59,6 +62,8 @@ export type RunItemView = {
   transport: string | null;
   verificationStatus: string | null;
   proofUrl: string | null;
+  // S482: the honest browser co-pilot guided-posting script (copilot channels).
+  copilotScript: CopilotScript | null;
 };
 
 export type PublishChannelChoiceView = {
@@ -108,9 +113,15 @@ export function LaunchRunPanel({
   if (!run) {
     return (
       <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
-        <h3 className="mb-1 text-sm font-semibold text-gray-900">
-          Publish
-        </h3>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-gray-900">Publish</h3>
+          <Link
+            href="/dashboard/settings?tab=distribution"
+            className="text-xs font-medium text-brand underline"
+          >
+            Channel setup
+          </Link>
+        </div>
         <p className="mb-3 text-xs text-gray-600">
           Pick the channels, then Vacantless creates one tracked run. Automatic
           steps happen where the app can really do them; login, payment, broker,
@@ -180,9 +191,17 @@ export function LaunchRunPanel({
     <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-gray-900">Publish run</h3>
-        <span className="text-xs font-medium text-gray-600">
-          {progress.resolved} of {progress.total} channels resolved
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/dashboard/settings?tab=distribution"
+            className="text-xs font-medium text-brand underline"
+          >
+            Channel setup
+          </Link>
+          <span className="text-xs font-medium text-gray-600">
+            {progress.resolved} of {progress.total} channels resolved
+          </span>
+        </div>
       </div>
       <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
         <div
@@ -241,19 +260,30 @@ export function LaunchRunPanel({
               </div>
             )}
 
-            <ol className="mb-3 space-y-1.5">
-              {item.steps.map((s, i) => (
-                <li key={s.key} className="flex gap-2 text-xs text-gray-600">
-                  <span className="font-semibold text-gray-400">{i + 1}.</span>
-                  <span>
-                    <span className="font-medium text-gray-800">{s.label}</span>
-                    {s.detail && (
-                      <span className="mt-0.5 block text-gray-500">{s.detail}</span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ol>
+            {/* Co-pilot channels get the guided panel instead of the flat
+                step list; everything else keeps the plain checklist. */}
+            {!item.copilotScript && (
+              <ol className="mb-3 space-y-1.5">
+                {item.steps.map((s, i) => (
+                  <li key={s.key} className="flex gap-2 text-xs text-gray-600">
+                    <span className="font-semibold text-gray-400">{i + 1}.</span>
+                    <span>
+                      <span className="font-medium text-gray-800">{s.label}</span>
+                      {s.detail && (
+                        <span className="mt-0.5 block text-gray-500">{s.detail}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {item.copilotScript && (
+              <CopilotPanel
+                propertyId={propertyId}
+                itemId={item.id}
+                script={item.copilotScript}
+              />
+            )}
 
             {item.trackedUrl && (
               <div className="mb-3">

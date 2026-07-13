@@ -24,7 +24,19 @@ import { listingFeedReadiness, type FeedListingInput } from "@/lib/listing-feed"
 import {
   isPublishChannelKey,
   normalizePublishChannel,
+  isPublishStatus,
+  isResolvedPublishStatus,
 } from "@/lib/distribution-publish";
+import {
+  isPortalKey,
+  normalizePortal,
+  normalizeUrl,
+  validateListingPost,
+} from "@/lib/listing-distribution";
+import {
+  isCopilotChannel,
+  canMarkCopilotLive,
+} from "@/lib/distribution-copilot";
 import {
   channelCapability,
   isChannelAccountStatus,
@@ -525,4 +537,173 @@ export async function upsertChannelAccount(formData: FormData) {
     backTo(propertyId, "account_saved");
   }
   redirect("/dashboard/settings");
+}
+
+// ---------------------------------------------------------------------------
+// completeCopilotPost — the honest completion of a browser co-pilot post (S482).
+// The operator posted the ad themselves on Facebook/Kijiji/Viewit and pastes the
+// LIVE ad URL as proof; only then does the channel go live. Records durable proof
+// + an append-only attempt (actor = browser_copilot) FIRST, then flips the run
+// item live and produces/refreshes the tracked listing_posts row (terminal flip
+// last). NEVER marks live without a real URL (canMarkCopilotLive). Org is stamped
+// from the RESOURCE's own org (KI748), never getCurrentOrg / the client.
+// ---------------------------------------------------------------------------
+export async function completeCopilotPost(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const itemId = s(formData, "item_id");
+  if (!itemId) redirect("/dashboard/properties");
+
+  const supabase = createClient();
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("id, run_id, channel, transport, listing_post_id, organization_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) redirect("/dashboard/properties");
+  const it = item as {
+    id: string;
+    run_id: string;
+    channel: string;
+    transport: string | null;
+    listing_post_id: string | null;
+    organization_id: string;
+  };
+
+  // Authoritative property + org come from the RUN (RLS), never the client.
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("property_id, organization_id")
+    .eq("id", it.run_id)
+    .maybeSingle();
+  const propertyId = (run?.property_id as string | undefined) ?? null;
+  const runOrgId = (run?.organization_id as string | undefined) ?? null;
+
+  // Only the honest browser co-pilot channels use this completion.
+  if (!isPublishChannelKey(it.channel) || !isCopilotChannel(it.channel)) {
+    if (propertyId) backTo(propertyId, "copilot_channel");
+    redirect("/dashboard/properties");
+  }
+
+  // NEVER live without proof: require a real web URL for the live ad.
+  const url = normalizeUrl(formData.get("external_url"));
+  if (!canMarkCopilotLive(url)) {
+    if (propertyId) backTo(propertyId, "copilot_needsurl");
+    redirect("/dashboard/properties");
+  }
+  const liveUrl = url as string;
+  const screenshotPath = s(formData, "screenshot_path") || null;
+  const note = s(formData, "note") || null;
+
+  // Stamp proof with the run item's OWN org (resource-derived); fall back to the
+  // run's org for a legacy item without a denormalized org.
+  const orgId = it.organization_id ?? runOrgId;
+  if (!orgId) {
+    if (propertyId) backTo(propertyId, "copilot_channel");
+    redirect("/dashboard/properties");
+  }
+
+  const uid = await userId(supabase);
+  // 1) Record durable proof + attempt FIRST (actor = browser_copilot).
+  await recordVerificationAndAttempt(supabase, {
+    orgId,
+    userId: uid,
+    channel: it.channel,
+    verificationType: "external_url",
+    result: "verified_live",
+    propertyId,
+    runId: it.run_id,
+    runItemId: it.id,
+    listingPostId: it.listing_post_id,
+    transport: it.transport ?? "browser_copilot",
+    externalUrl: liveUrl,
+    screenshotPath,
+    matchedFields: { operatorConfirmed: true },
+    failureReason: note,
+    actorType: "browser_copilot",
+    nowISO: new Date().toISOString(),
+  });
+
+  // 2) Produce/refresh the tracked listing_posts row (attribution) for a portal
+  // channel, reusing the existing per-channel tracker (no duplicate rows).
+  let listingPostId = it.listing_post_id;
+  if (propertyId && runOrgId && isPortalKey(it.channel)) {
+    const portal = normalizePortal(it.channel);
+    const check = validateListingPost({ portal, status: "live", url: liveUrl });
+    if (check.ok) {
+      if (!listingPostId) {
+        const { data: existingPost } = await supabase
+          .from("listing_posts")
+          .select("id")
+          .eq("property_id", propertyId)
+          .eq("portal", portal)
+          .neq("status", "removed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (existingPost?.id) listingPostId = existingPost.id as string;
+      }
+      if (listingPostId) {
+        await supabase
+          .from("listing_posts")
+          .update({ url: liveUrl, status: "live" })
+          .eq("id", listingPostId);
+      } else {
+        const { data: post } = await supabase
+          .from("listing_posts")
+          .insert({
+            organization_id: runOrgId,
+            property_id: propertyId,
+            portal,
+            url: liveUrl,
+            status: "live",
+          })
+          .select("id")
+          .single();
+        listingPostId = (post?.id as string | undefined) ?? null;
+      }
+    }
+  }
+
+  // 3) Terminal flip LAST: mark the run item live + done, carry the proof URL +
+  // tracked listing_post pointer.
+  const nowISO = new Date().toISOString();
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      status: "done",
+      publish_status: "live",
+      external_url: liveUrl,
+      listing_post_id: listingPostId,
+      notes: note,
+      last_verified_at: nowISO,
+      updated_at: nowISO,
+    })
+    .eq("id", it.id);
+
+  // Complete the run once every item is resolved (done/skipped).
+  const { data: siblings } = await supabase
+    .from("distribution_run_items")
+    .select("publish_status")
+    .eq("run_id", it.run_id);
+  const rows = (siblings ?? []) as { publish_status: string | null }[];
+  const allResolved =
+    rows.length > 0 &&
+    rows.every(
+      (r) =>
+        isPublishStatus(r.publish_status) &&
+        isResolvedPublishStatus(r.publish_status),
+    );
+  await supabase
+    .from("distribution_runs")
+    .update({
+      status: allResolved ? "completed" : "active",
+      completed_at: allResolved ? nowISO : null,
+    })
+    .eq("id", it.run_id);
+
+  if (propertyId) {
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    backTo(propertyId, "copilot_live");
+  }
+  redirect("/dashboard/properties");
 }

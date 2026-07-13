@@ -152,6 +152,10 @@ import {
 import { normalizePartnerStatus } from "@/lib/distribution-partner";
 import type { RunItemView } from "./launch-run-panel";
 import {
+  buildCopilotScript,
+  isCopilotChannel,
+} from "@/lib/distribution-copilot";
+import {
   channelCapability,
   channelAccountReadiness,
   channelReadinessLabel,
@@ -1162,6 +1166,28 @@ export default async function PropertyDetailPage({
       r.publish_status ?? publishStatusFromLegacyStatus(r.status),
     );
     const mode = normalizePublishMode(r.mode ?? meta?.mode);
+    const copilotScript =
+      publishKey && isCopilotChannel(publishKey)
+        ? buildCopilotScript({
+            channel: publishKey,
+            copy: {
+              businessName: org?.name ?? null,
+              address: p.address ?? "",
+              rentCents: p.rent_cents,
+              beds: p.beds,
+              baths: p.baths,
+              description: p.description,
+              features: effectiveFeatures,
+            },
+            trackedUrl:
+              linkIsLive && r.listing_post_id
+                ? buildTrackedLink(publicUrl, r.listing_post_id)
+                : linkIsLive
+                  ? publicUrl
+                  : null,
+            publicPageLive: linkIsLive,
+          })
+        : null;
     return {
       id: r.id,
       channel: r.channel,
@@ -1189,6 +1215,7 @@ export default async function PropertyDetailPage({
         guardrailCount: guardrailsForPortal(r.channel).length,
       }),
       canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
+      copilotScript,
     };
   });
   const alreadyInRun = new Set(runItems.map((i) => i.channel));
