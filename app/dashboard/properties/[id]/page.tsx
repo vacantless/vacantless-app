@@ -314,13 +314,16 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, address, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
 
   if (!property) notFound();
   const p = property as Property;
+  // S480: this page is scoped to ONE property = ONE org; every distribution
+  // account/proof read is filtered to THIS property's org (KI744 / Codex fold).
+  const propertyOrgId = (p as unknown as { organization_id: string }).organization_id;
 
   const { data: leads } = await supabase
     .from("leads")
@@ -959,7 +962,8 @@ export default async function PropertyDetailPage({
     .from("distribution_partner_accounts")
     .select(
       "channel, status, feed_url, partner_contact, submitted_on, accepted_on, last_checked_on, notes",
-    );
+    )
+    .eq("organization_id", propertyOrgId);
   const partnerByChannel = new Map<string, PartnerAccountView>();
   for (const row of (partnerRows ?? []) as Array<{
     channel: string;
@@ -987,7 +991,8 @@ export default async function PropertyDetailPage({
   // account is recorded.
   const { data: channelAccountRows } = await supabase
     .from("distribution_channel_accounts")
-    .select("channel, account_status, feed_url");
+    .select("channel, account_status, feed_url")
+    .eq("organization_id", propertyOrgId);
   const channelAccountByKey = new Map<string, { status: string; feedUrl: string | null }>();
   for (const row of (channelAccountRows ?? []) as Array<{
     channel: string;

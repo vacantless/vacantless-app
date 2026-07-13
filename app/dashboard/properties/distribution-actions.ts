@@ -217,26 +217,29 @@ async function userId(supabase: SupabaseClient): Promise<string | null> {
 // ---------------------------------------------------------------------------
 export async function verifyPublicPage(formData: FormData) {
   await requireCapability("manage_properties", FORBIDDEN);
-  const org = (await getCurrentOrg()) as OrgCtx | null;
-  if (!org) redirect("/onboarding");
   const propertyId = s(formData, "property_id");
   if (!propertyId) redirect("/dashboard/properties");
 
   const supabase = createClient();
   const { data: prop } = await supabase
     .from("properties")
-    .select("id, status, rent_cents, beds, baths, address")
+    .select("id, organization_id, status, rent_cents, beds, baths, address")
     .eq("id", propertyId)
     .maybeSingle();
   if (!prop) redirect("/dashboard/properties");
   const p = prop as {
     id: string;
+    organization_id: string;
     status: string;
     rent_cents: number | null;
     beds: number | null;
     baths: number | null;
     address: string | null;
   };
+  // Authorize against the RESOURCE's org (KI744 / Codex S480-slice-2): stamp
+  // proof rows with the PROPERTY's own org, not getCurrentOrg (which could differ
+  // for a future multi-org/staff account while the property is still RLS-visible).
+  const orgId = p.organization_id;
   const { count: photoCount } = await supabase
     .from("property_photos")
     .select("id", { count: "exact", head: true })
@@ -250,7 +253,7 @@ export async function verifyPublicPage(formData: FormData) {
     address: p.address,
     photoCount: photoCount ?? 0,
     availabilityWindowCount: 0,
-    replyToEmail: org.reply_to_email,
+    replyToEmail: null,
   });
   const byKey: Record<string, boolean> = {};
   for (const c of share.checks) byKey[c.key] = c.ok;
@@ -265,7 +268,7 @@ export async function verifyPublicPage(formData: FormData) {
   const uid = await userId(supabase);
   const loc = await activeRunItemFor(supabase, propertyId, "vacantless");
   await recordVerificationAndAttempt(supabase, {
-    orgId: org.id,
+    orgId,
     userId: uid,
     channel: "vacantless",
     verificationType: "public_page",
@@ -293,20 +296,19 @@ export async function verifyPublicPage(formData: FormData) {
 // ---------------------------------------------------------------------------
 export async function verifyOrgFeedInclusion(formData: FormData) {
   await requireCapability("manage_properties", FORBIDDEN);
-  const org = (await getCurrentOrg()) as OrgCtx | null;
-  if (!org) redirect("/onboarding");
   const propertyId = s(formData, "property_id");
   if (!propertyId) redirect("/dashboard/properties");
 
   const supabase = createClient();
   const { data: prop } = await supabase
     .from("properties")
-    .select("id, status, rent_cents, beds, baths, address, description")
+    .select("id, organization_id, status, rent_cents, beds, baths, address, description")
     .eq("id", propertyId)
     .maybeSingle();
   if (!prop) redirect("/dashboard/properties");
   const p = prop as {
     id: string;
+    organization_id: string;
     status: string;
     rent_cents: number | null;
     beds: number | null;
@@ -314,6 +316,7 @@ export async function verifyOrgFeedInclusion(formData: FormData) {
     address: string | null;
     description: string | null;
   };
+  const orgId = p.organization_id;
   const { count: photoCount } = await supabase
     .from("property_photos")
     .select("id", { count: "exact", head: true })
@@ -329,7 +332,14 @@ export async function verifyOrgFeedInclusion(formData: FormData) {
     description: p.description,
     photos: Array((photoCount ?? 0) as number).fill("x"),
   } as unknown as FeedListingInput);
-  const orgHasPhone = !!(org.public_contact_phone && org.public_contact_phone.trim());
+  // Read the RESOURCE org's contact phone (the feed the listing belongs to).
+  const { data: orgRow } = await supabase
+    .from("organizations")
+    .select("public_contact_phone")
+    .eq("id", orgId)
+    .maybeSingle();
+  const orgPhone = (orgRow?.public_contact_phone as string | null) ?? null;
+  const orgHasPhone = !!(orgPhone && orgPhone.trim());
   const outcome = interpretOrgFeedProof({
     feedReachable: true,
     // The feed only carries publicly-bookable listings.
@@ -341,7 +351,7 @@ export async function verifyOrgFeedInclusion(formData: FormData) {
   const uid = await userId(supabase);
   const loc = await activeRunItemFor(supabase, propertyId, "org_feed");
   await recordVerificationAndAttempt(supabase, {
-    orgId: org.id,
+    orgId,
     userId: uid,
     channel: "org_feed",
     verificationType: "feed_render",
@@ -375,15 +385,13 @@ export async function verifyOrgFeedInclusion(formData: FormData) {
 // ---------------------------------------------------------------------------
 export async function recordItemProof(formData: FormData) {
   await requireCapability("manage_properties", FORBIDDEN);
-  const org = (await getCurrentOrg()) as OrgCtx | null;
-  if (!org) redirect("/onboarding");
   const itemId = s(formData, "item_id");
   if (!itemId) redirect("/dashboard/properties");
 
   const supabase = createClient();
   const { data: item } = await supabase
     .from("distribution_run_items")
-    .select("id, run_id, channel, transport, listing_post_id")
+    .select("id, run_id, channel, transport, listing_post_id, organization_id")
     .eq("id", itemId)
     .maybeSingle();
   if (!item) redirect("/dashboard/properties");
@@ -393,7 +401,10 @@ export async function recordItemProof(formData: FormData) {
     channel: string;
     transport: string | null;
     listing_post_id: string | null;
+    organization_id: string;
   };
+  // Stamp proof with the run item's OWN org (resource-derived, not getCurrentOrg).
+  const orgId = it.organization_id;
   // Derive the property from the run under RLS (never trust a client property id).
   const { data: run } = await supabase
     .from("distribution_runs")
@@ -423,7 +434,7 @@ export async function recordItemProof(formData: FormData) {
 
   const uid = await userId(supabase);
   await recordVerificationAndAttempt(supabase, {
-    orgId: org.id,
+    orgId,
     userId: uid,
     channel: it.channel,
     verificationType,
@@ -455,9 +466,7 @@ export async function recordItemProof(formData: FormData) {
 // ---------------------------------------------------------------------------
 export async function upsertChannelAccount(formData: FormData) {
   await requireCapability("manage_properties", FORBIDDEN);
-  const org = (await getCurrentOrg()) as OrgCtx | null;
-  if (!org) redirect("/onboarding");
-  const propertyId = s(formData, "property_id"); // for the redirect only
+  const propertyId = s(formData, "property_id");
 
   const channelRaw = normalizePublishChannel(s(formData, "channel"));
   if (!channelRaw || !isPublishChannelKey(channelRaw)) {
@@ -470,10 +479,26 @@ export async function upsertChannelAccount(formData: FormData) {
   const accountStatus = isChannelAccountStatus(statusRaw) ? statusRaw : "not_started";
 
   const supabase = createClient();
+  // Org = the org that owns the property this setup was launched from (read under
+  // RLS), else the acting org. Never a client-supplied org id.
+  let orgId: string | null = null;
+  if (propertyId) {
+    const { data: prop } = await supabase
+      .from("properties")
+      .select("organization_id")
+      .eq("id", propertyId)
+      .maybeSingle();
+    orgId = (prop?.organization_id as string | undefined) ?? null;
+    if (!orgId) backTo(propertyId, "account_badchannel");
+  } else {
+    const org = (await getCurrentOrg()) as OrgCtx | null;
+    orgId = org?.id ?? null;
+  }
+  if (!orgId) redirect("/dashboard/settings");
   const nowISO = new Date().toISOString();
   await supabase.from("distribution_channel_accounts").upsert(
     {
-      organization_id: org.id,
+      organization_id: orgId,
       channel,
       transport: cap.transport,
       account_status: accountStatus,
