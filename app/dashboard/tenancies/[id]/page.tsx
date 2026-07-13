@@ -110,6 +110,10 @@ import {
   type DocumentTenantOption,
   type InAppLeaseView,
 } from "./documents-section";
+import {
+  TenancyN4Section,
+  type N4NoticeView,
+} from "./n4-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import {
   TenancyInsuranceSection,
@@ -357,6 +361,7 @@ export default async function TenancyDetailPage({
     insurance?: string;
     violation?: string;
     inspection?: string;
+    n4?: string;
   };
 }) {
   const supabase = createClient();
@@ -527,6 +532,38 @@ export default async function TenancyDetailPage({
   const todayOntario = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Toronto",
   });
+
+  // LTB Form N4 (arrears termination) notices for this tenancy (N-form library
+  // Slice C). Prepare-first; the operator serves themselves. Newest first.
+  const { data: n4Rows } = await supabase
+    .from("notices")
+    .select(
+      "id, status, service_token, total_owing_cents, termination_date, created_at, filed_document_id",
+    )
+    .eq("tenancy_id", params.id)
+    .eq("type", "N4")
+    .order("created_at", { ascending: false });
+  const n4Notices: N4NoticeView[] = (n4Rows ?? []).map((r) => {
+    const n = r as N4NoticeView;
+    return {
+      id: n.id,
+      status: n.status,
+      service_token: n.service_token,
+      total_owing_cents: n.total_owing_cents,
+      termination_date: n.termination_date,
+      created_at: n.created_at,
+      filed_document_id: n.filed_document_id,
+    };
+  });
+  const n4TenantNames = tenants
+    .map((x) => (x.name ?? "").trim())
+    .filter((nm) => nm.length > 0);
+  const n4Payments = payments.map((p) => ({
+    amount_cents: p.amount_cents,
+    period_month: p.period_month,
+  }));
+  const n4AppUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
   const guidelineLookup = await loadGuidelineLookup(supabase);
   const rentIncrease =
     t.status === "active" && t.rent_cents != null && t.start_date
@@ -1433,6 +1470,25 @@ export default async function TenancyDetailPage({
           tenants={tenants
             .filter((tn) => (tn.name ?? "").trim().length > 0)
             .map((tn): DocumentTenantOption => ({ id: tn.id, name: tn.name as string }))}
+        />
+      </CollapsibleSection>
+
+      {/* LTB notices — Form N4 (arrears), N-form library Slice C -------- */}
+      <CollapsibleSection id="notices" title="LTB notices">
+        <TenancyN4Section
+          tenancyId={t.id}
+          active={t.status === "active"}
+          rentCents={t.rent_cents}
+          startDate={t.start_date ?? null}
+          address={t.property?.address ?? null}
+          tenantNames={n4TenantNames}
+          landlordName={org?.name ?? ""}
+          landlordPhone={org?.public_contact_phone ?? null}
+          payments={n4Payments}
+          notices={n4Notices}
+          appUrl={n4AppUrl}
+          today={todayOntario}
+          msg={searchParams.n4}
         />
       </CollapsibleSection>
 

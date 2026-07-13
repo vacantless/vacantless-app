@@ -21,6 +21,7 @@ const nextConfig = {
     // (fs.readFileSync at runtime needs it traced; else the route 500s in prod).
     outputFileTracingIncludes: {
       "/n1/[token]/official": ["./lib/forms/ltb-n1-2022.pdf"],
+      "/notice/[token]/official": ["./lib/forms/ltb-n4-2022.pdf"],
     },
   },
   webpack: (config) => {
