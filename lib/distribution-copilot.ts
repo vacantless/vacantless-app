@@ -253,7 +253,7 @@ export function buildCopilotScript(
     key: "paste_url",
     label: "Paste the live ad URL below and mark it live",
     detail:
-      "Records durable proof and turns on the tracked inquiry link. Nothing is marked live without it.",
+      "Saves proof and turns on the tracked inquiry link. Nothing is marked live without it.",
   });
 
   const honesty: string[] = [];

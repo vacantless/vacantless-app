@@ -223,7 +223,7 @@ export function SidecarCopilot({
           I posted it — mark live with this URL
         </button>
         <p className="text-[11px] text-gray-500">
-          Records durable proof + turns on the tracked inquiry link. Vacantless
+          Saves proof and turns on the tracked inquiry link. Vacantless
           never marks a channel live without a real ad URL. You can close this
           window when you are done.
         </p>

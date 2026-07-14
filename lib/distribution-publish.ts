@@ -88,10 +88,10 @@ const PUBLISH_STATUS_TONES: Record<PublishStatus, PublishTone> = {
 
 const PUBLISH_MODE_LABELS: Record<PublishMode, string> = {
   automatic: "Automatic",
-  feed_partner: "Feed / partner",
-  browser_copilot: "Browser co-pilot",
-  concierge: "Concierge task",
-  broker: "Broker / DDF",
+  feed_partner: "Rental-site feed",
+  browser_copilot: "Guided posting",
+  concierge: "Vacantless desk",
+  broker: "Broker / MLS",
   custom: "Custom tracked post",
 };
 
@@ -180,7 +180,7 @@ export function normalizePublishMode(raw: unknown): PublishMode {
 export function publishModeLabel(value: unknown): string {
   return isPublishMode(value)
     ? PUBLISH_MODE_LABELS[value]
-    : "Browser co-pilot";
+    : "Guided posting";
 }
 
 export function isResolvedPublishStatus(status: PublishStatus): boolean {
@@ -264,7 +264,7 @@ export function publishChannelMeta(key: PublishChannelKey): PublishChannelMeta {
       label: "Vacantless public page",
       mode: "automatic",
       description:
-        "Makes the Vacantless renter page live once required listing basics pass.",
+        "Turns on the renter page that every ad can send people back to.",
       actionLabel: "Open public page",
       actionUrl: null,
       defaultSelected: true,
@@ -273,10 +273,10 @@ export function publishChannelMeta(key: PublishChannelKey): PublishChannelMeta {
   if (key === "org_feed") {
     return {
       key,
-      label: "Per-org listing feed",
+      label: "Listing feed for rental sites",
       mode: "automatic",
       description:
-        "Includes this rental in the organization's XML feed when feed readiness passes.",
+        "Adds this rental to your Vacantless feed when the listing is complete.",
       actionLabel: "Open feed",
       actionUrl: null,
       defaultSelected: true,
@@ -285,10 +285,10 @@ export function publishChannelMeta(key: PublishChannelKey): PublishChannelMeta {
   if (key === "network_feed") {
     return {
       key,
-      label: "Vacantless network feed",
+      label: "Private partner feed",
       mode: "feed_partner",
       description:
-        "Private partner feed. Hidden unless the network feed token is configured.",
+        "Private feed for an approved partner. Hidden until that partner route is set up.",
       actionLabel: null,
       actionUrl: null,
       defaultSelected: false,
@@ -300,7 +300,7 @@ export function publishChannelMeta(key: PublishChannelKey): PublishChannelMeta {
       label: "Other tracked post",
       mode: "custom",
       description:
-        "Create a custom tracked channel item for a local board, niche site, or concierge note.",
+        "Track a local board, niche site, community group, or other place you posted.",
       actionLabel: null,
       actionUrl: null,
       defaultSelected: false,
@@ -351,7 +351,7 @@ export function preparePublishChannel(
         status: "live",
         externalUrl: context.publicUrl,
         operatorActionUrl: context.publicUrl,
-        auditMessage: "Vacantless public page is live and accepting inquiries.",
+        auditMessage: "The Vacantless renter page is live and accepting inquiries.",
       });
     }
     if (context.canPublishPublicPage) {
@@ -359,13 +359,13 @@ export function preparePublishChannel(
         status: "queued",
         operatorActionUrl: context.publicUrl,
         auditMessage:
-          "Vacantless can publish the public renter page after confirmation.",
+          "Vacantless can turn on the renter page after you confirm.",
       });
     }
     return plan(meta, {
       status: "blocked",
       blockers: context.publicPageBlockers,
-      auditMessage: "Vacantless public page is blocked by required listing gaps.",
+      auditMessage: "The renter page is waiting on required listing details.",
     });
   }
 
@@ -374,14 +374,14 @@ export function preparePublishChannel(
       return plan(meta, {
         status: "blocked",
         blockers,
-        auditMessage: "The organization feed waits for the public page to work.",
+        auditMessage: "The listing feed waits for the renter page to work.",
       });
     }
     if (!context.feedInFeed) {
       return plan(meta, {
         status: "blocked",
         blockers: [context.feedHint ?? "Finish feed-required listing fields."],
-        auditMessage: "The listing is not eligible for the per-org XML feed yet.",
+        auditMessage: "This rental is not ready for the listing feed yet.",
       });
     }
     return plan(meta, {
@@ -389,7 +389,7 @@ export function preparePublishChannel(
       externalUrl: context.orgFeedUrl,
       operatorActionUrl: context.orgFeedUrl,
       auditMessage:
-        "Listing is included in the per-org XML feed. Partner acceptance is tracked separately.",
+        "This rental is in your listing feed. A partner site still has to accept and show it before it is live there.",
     });
   }
 
@@ -414,7 +414,7 @@ export function preparePublishChannel(
     return plan(meta, {
       status: "submitted",
       auditMessage:
-        "Listing is eligible for the private network feed. The tokenized feed URL is not exposed here.",
+        "This rental is eligible for the private partner feed. The protected feed URL is not shown here.",
     });
   }
 
@@ -446,7 +446,7 @@ export function preparePublishChannel(
       status: "needs_login",
       operatorActionUrl: meta.actionUrl,
       auditMessage:
-        "Browser co-pilot required. Vacantless will not silently post through a login/CAPTCHA gate.",
+        "Guided posting required. Vacantless prepares the ad, but you sign in, review, and post.",
     });
   }
 
@@ -455,7 +455,7 @@ export function preparePublishChannel(
       status: "needs_payment",
       operatorActionUrl: meta.actionUrl,
       auditMessage:
-        "Paid or account-confirmed portal flow. Operator must review payment/login before live posting.",
+        "Guided paid-listing flow. You review any login or payment before posting.",
     });
   }
 
@@ -464,7 +464,7 @@ export function preparePublishChannel(
       status: "needs_operator",
       operatorActionUrl: meta.actionUrl,
       auditMessage:
-        "Broker/DDF route. Send the prepared field sheet to the listing brokerage and confirm the live URL later.",
+        "Broker or MLS route. Send the prepared field sheet to the listing agent and confirm the live URL later.",
     });
   }
 
@@ -472,7 +472,7 @@ export function preparePublishChannel(
     status: "needs_operator",
     operatorActionUrl: meta.actionUrl,
     auditMessage:
-      "Custom tracked channel. Record the human next step or paste the live URL when it exists.",
+      "Custom tracked channel. Record the next step or paste the live URL when it exists.",
   });
 }
 
@@ -514,7 +514,7 @@ function feedPartnerPlan(
       status: "rejected",
       blockers: ["Partner rejected or declined the feed route."],
       auditMessage:
-        "Partner account is rejected. Fix the channel requirement and resubmit.",
+        "The partner route was rejected. Fix the requirement and resubmit.",
     });
   }
   if (
@@ -526,15 +526,15 @@ function feedPartnerPlan(
       externalUrl: partner.feedUrl,
       operatorActionUrl: partner.feedUrl,
       auditMessage: isPartnerActive(partner.status)
-        ? "Partner/feed route is accepted. Listing is submitted through the feed; live external URL still needs verification."
-        : "Partner/feed route is submitted and awaiting acceptance.",
+        ? "The partner route is accepted. The listing is submitted through the feed; the live ad URL still needs checking."
+        : "The partner route is submitted and waiting for acceptance.",
     });
   }
   return plan(meta, {
     status: "needs_operator",
     operatorActionUrl: meta.actionUrl,
     auditMessage:
-      "No accepted feed partner route is recorded. Use guided portal flow or submit the org feed to the partner.",
+      "No accepted partner feed is recorded. Use guided posting or send the feed to the partner.",
   });
 }
 
@@ -550,7 +550,7 @@ function actionLabelForDistributionChannel(
   channel: DistributionChannel,
 ): string | null {
   if (channel.mode === "broker") return "Open Realtor.ca";
-  if (channel.key === "viewit") return "Open paid portal";
+  if (channel.key === "viewit") return "Open Viewit";
   return `Open ${channel.label}`;
 }
 

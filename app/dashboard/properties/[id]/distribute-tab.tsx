@@ -180,11 +180,10 @@ export function DistributeTab({
           </h3>
         </div>
         <p className="mb-3 text-xs text-gray-500">
-          One place to see where this listing is live, what still needs a human
-          step, and which channel is producing renters. Vacantless prepares the
-          copy, field sheet, and gotchas; posting to Facebook, Kijiji, and the
-          other portals stays a guided manual step - it never posts on your
-          behalf.
+          Choose where to publish, follow the steps for each site, and see which
+          channels bring renters back. Vacantless handles what it can, guides you
+          where a site needs login or payment, and saves proof before anything is
+          counted as Live.
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
@@ -254,8 +253,8 @@ export function DistributeTab({
           </h3>
         </div>
         <p className="mb-4 text-xs text-gray-500">
-          Track any other place you posted - a niche board, a community group, a
-          custom site - so its inquiries are attributed too.
+          Track any other place you posted, like a local board, community group,
+          or niche site, so its inquiries are counted too.
         </p>
 
         {otherPosts.length > 0 && (
@@ -308,7 +307,7 @@ function AnalyticsPanel({ rows }: { rows: ChannelAnalyticsRow[] }) {
         </h3>
       </div>
       <p className="mb-4 text-xs text-gray-500">
-        Which channel actually produced renters - {totals.leads}{" "}
+        See which places actually produced renters: {totals.leads}{" "}
         {totals.leads === 1 ? "inquiry" : "inquiries"} across{" "}
         {totals.channelsWithLeads}{" "}
         {totals.channelsWithLeads === 1 ? "channel" : "channels"},{" "}
@@ -467,9 +466,9 @@ function ChannelCard({
       {/* Feed note (feed-eligible channels only). */}
       {feed && (
         <p className="mb-3 text-xs text-gray-500">
-          <span className="font-medium text-gray-700">Feed:</span>{" "}
+          <span className="font-medium text-gray-700">Listing feed:</span>{" "}
           {feed.inFeed
-            ? "This listing is in your Vacantless feed, ready for a partner route once one is set up."
+            ? "This rental is in your Vacantless feed. A partner site still needs to accept and show it before it is live there."
             : feed.hint}
         </p>
       )}
@@ -678,7 +677,7 @@ function AddPostForm({
   return (
     <details>
       <summary className="cursor-pointer text-sm font-medium text-brand">
-        + Track a post / mark as posted
+        + Track a live ad
       </summary>
       <form
         // Remount on a successful add to clear the uncontrolled inputs

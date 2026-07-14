@@ -186,7 +186,7 @@ export function CopilotPanel({
   return (
     <details className="mb-3 rounded-xl border border-brand/30 bg-brand/5 p-3">
       <summary className="cursor-pointer text-xs font-semibold text-brand">
-        Guided posting (co-pilot) — {script.channelLabel}
+        Guided posting - {script.channelLabel}
       </summary>
 
       <div className="mt-3 space-y-3">
@@ -230,12 +230,11 @@ export function CopilotPanel({
             onClick={openSidecar}
             className="rounded-lg border border-brand/40 bg-brand/5 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
           >
-            Open co-pilot window (no install needed)
+            Open helper window (no install needed)
           </button>
           <p className="mt-1 text-[11px] text-gray-500">
-            Pops out this copy + the mark-live form in a companion window you can
-            keep beside the {script.channelLabel} tab. You still post it and mark
-            it live yourself.
+            Opens this copy and the Live URL form in a small window you can keep
+            beside the {script.channelLabel} tab. You still review and post.
           </p>
         </div>
 
@@ -360,7 +359,7 @@ export function CopilotPanel({
             I posted it — mark live with this URL
           </button>
           <p className="text-[11px] text-gray-500">
-            Records durable proof + turns on the tracked inquiry link. Vacantless
+            Saves proof and turns on the tracked inquiry link. Vacantless
             never marks a channel live without a real ad URL.
           </p>
         </form>

@@ -66,8 +66,8 @@ ok(
 );
 
 // --- labels ----------------------------------------------------------------
-ok("modeLabel broker", channelModeLabel("broker") === "Agent / MLS route");
-ok("modeLabel junk -> default", channelModeLabel("???") === "Guided manual post");
+ok("modeLabel broker", channelModeLabel("broker") === "Broker / MLS");
+ok("modeLabel junk -> default", channelModeLabel("???") === "Guided posting");
 ok("statusLabel posted", channelStatusLabel("posted") === "Posted");
 ok("statusLabel needs_refresh", channelStatusLabel("needs_refresh") === "Needs refresh");
 ok("statusLabel junk -> Not started", channelStatusLabel("???") === "Not started");

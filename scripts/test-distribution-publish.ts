@@ -52,7 +52,7 @@ ok(
 ok("10 publish statuses", PUBLISH_STATUSES.length === 10);
 ok("label needs_login", publishStatusLabel("needs_login") === "Needs login");
 ok("bad status label -> Queued", publishStatusLabel("???") === "Queued");
-ok("mode label broker", publishModeLabel("broker") === "Broker / DDF");
+ok("mode label broker", publishModeLabel("broker") === "Broker / MLS");
 
 // --- internal channels -----------------------------------------------------
 {

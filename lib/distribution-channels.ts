@@ -39,15 +39,15 @@ export const CHANNEL_MODES = [
 export type ChannelMode = (typeof CHANNEL_MODES)[number];
 
 const CHANNEL_MODE_LABELS: Record<ChannelMode, string> = {
-  assisted_manual: "Guided manual post",
-  feed_or_assisted: "Feed-ready or guided",
-  broker: "Agent / MLS route",
+  assisted_manual: "Guided posting",
+  feed_or_assisted: "Feed or guided",
+  broker: "Broker / MLS",
 };
 
 export function channelModeLabel(mode: unknown): string {
   return typeof mode === "string" && (CHANNEL_MODES as readonly string[]).includes(mode)
     ? CHANNEL_MODE_LABELS[mode as ChannelMode]
-    : "Guided manual post";
+    : "Guided posting";
 }
 
 // --- the channel matrix ----------------------------------------------------
@@ -81,7 +81,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "Facebook Marketplace",
     mode: "assisted_manual",
     blurb:
-      "Assisted posting only. Vacantless builds Facebook-safe copy, a photo plan, and reply snippets; you post and paste the live link back.",
+      "Vacantless prepares Facebook-safe wording, photo order, and renter replies. You review the Facebook post, then paste the live ad link back here.",
     copyKey: "facebook",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -93,7 +93,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "Kijiji",
     mode: "assisted_manual",
     blurb:
-      "Guided manual post. Vacantless gives you the title, description, field sheet, and the location/plan gotchas; you post and paste the live link.",
+      "Vacantless gives you the title, description, field sheet, and Kijiji reminders. You post on Kijiji, then paste the live ad link back here.",
     copyKey: "kijiji",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -105,7 +105,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "Rentals.ca",
     mode: "feed_or_assisted",
     blurb:
-      "Structured listing channel. Your org feed can carry this listing once a partner route is set up; until then, post it guided with the field sheet.",
+      "If your Rentals.ca feed route is connected, Vacantless can submit the listing. Until then, use the guided copy and field sheet.",
     copyKey: "rentals_ca",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -117,7 +117,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "Zumper",
     mode: "feed_or_assisted",
     blurb:
-      "Structured listing channel with a manager surface. Feed-candidate; post guided with the field sheet until a partner route is confirmed.",
+      "If your Zumper feed route is connected, Vacantless can submit the listing. Until then, use the guided copy and field sheet.",
     copyKey: "zumper",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -129,7 +129,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "Viewit.ca",
     mode: "assisted_manual",
     blurb:
-      "Guided manual post (Viewit is a paid listing surface). Vacantless gives you the copy, field sheet, and geocoding gotchas.",
+      "Viewit is a paid listing site. Vacantless prepares the copy and fields; you review any payment and paste the live ad link back here.",
     copyKey: "viewit",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -141,7 +141,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "Realtor.ca",
     mode: "broker",
     blurb:
-      "Agent / MLS route. Realtor.ca is populated through a brokerage/DDF feed, not a self-serve landlord post. Vacantless prepares the field sheet for your agent.",
+      "Realtor.ca is an agent or MLS route, not a self-serve landlord post. Vacantless prepares the field sheet for your agent.",
     copyKey: null,
     hasFillSheet: true,
     hasGuardrails: true,

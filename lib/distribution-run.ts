@@ -81,14 +81,14 @@ export function buildRunSteps(
     return [
       {
         key: "publish_page",
-        label: "Publish the Vacantless public page",
+        label: "Turn on the Vacantless renter page",
         detail:
-          "This is the first link every tracked external channel points renters back to.",
+          "This is the safe link every outside ad can send renters back to.",
       },
       {
         key: "verify_page",
-        label: "Verify the public page accepts inquiries",
-        detail: "Only mark this Live when the renter page is actually open.",
+        label: "Check that renters can inquire",
+        detail: "Only mark this Live when the renter page is open and working.",
       },
     ];
   }
@@ -97,15 +97,15 @@ export function buildRunSteps(
     return [
       {
         key: "check_feed_ready",
-        label: "Confirm the listing is eligible for the org feed",
+        label: "Confirm this rental is ready for the listing feed",
         detail:
           "The feed needs a live listing, rent, address, description, and photos.",
       },
       {
         key: "verify_feed",
-        label: "Verify the rental appears in the XML feed",
+        label: "Check that the rental appears in the feed",
         detail:
-          "This means submitted to the feed, not accepted or live on a partner site.",
+          "This means submitted to the feed, not accepted or live on a partner site yet.",
       },
     ];
   }
@@ -114,15 +114,15 @@ export function buildRunSteps(
     return [
       {
         key: "confirm_partner_token",
-        label: "Confirm a network-feed partner token exists",
+        label: "Confirm a private partner feed is set up",
         detail:
           "The private network feed stays dark until a partner token is configured.",
       },
       {
         key: "verify_network_feed",
-        label: "Verify network-feed eligibility",
+        label: "Check that this rental is eligible for the private feed",
         detail:
-          "Do not expose the tokenized URL in the operator run item.",
+          "The protected partner feed link is not shown in the operator run item.",
       },
     ];
   }
@@ -134,7 +134,7 @@ export function buildRunSteps(
         key: "brief_agent",
         label: `Send the field sheet to your agent`,
         detail:
-          "Realtor.ca is populated through a brokerage/DDF feed, so your agent lists it. The field sheet in Photos & marketing has everything they need.",
+          "Realtor.ca is populated through the agent or MLS route, so your agent lists it. The field sheet in Photos & marketing has everything they need.",
       },
       {
         key: "confirm_live",

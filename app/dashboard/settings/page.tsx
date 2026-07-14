@@ -960,7 +960,7 @@ export default async function SettingsPage({
                     )}
                     {cap.supportsCopilot && (
                       <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">
-                        Co-pilot
+                        Guided
                       </span>
                     )}
                     {cap.supportsConcierge && (

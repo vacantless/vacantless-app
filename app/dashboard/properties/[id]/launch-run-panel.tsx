@@ -92,6 +92,22 @@ const STATUS_CHIP: Record<PublishTone, string> = {
   neutral: "bg-gray-100 text-gray-600",
 };
 
+function nextActionLabel(item: RunItemView): string {
+  if (item.channel === "vacantless") return "Open renter page";
+  if (item.channel === "org_feed") return "Open listing feed";
+  if (item.mode === "broker") return "Open broker page";
+  if (item.mode === "feed_partner") return "Open feed or partner page";
+  return `Open ${item.channelLabel}`;
+}
+
+function urlFieldLabel(item: RunItemView): string {
+  if (item.channel === "vacantless") return "Renter page URL";
+  if (item.channel === "org_feed") return "Feed URL";
+  if (item.mode === "feed_partner") return "Feed or partner URL";
+  if (item.mode === "broker") return "Broker or MLS URL";
+  return "Live ad URL";
+}
+
 export function LaunchRunPanel({
   propertyId,
   run,
@@ -114,7 +130,9 @@ export function LaunchRunPanel({
     return (
       <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-gray-900">Publish</h3>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Publish to channels
+          </h3>
           <Link
             href="/dashboard/settings?tab=distribution"
             className="text-xs font-medium text-brand underline"
@@ -123,9 +141,9 @@ export function LaunchRunPanel({
           </Link>
         </div>
         <p className="mb-3 text-xs text-gray-600">
-          Pick the channels, then Vacantless creates one tracked run. Automatic
-          steps happen where the app can really do them; login, payment, broker,
-          and final-review steps stay explicit.
+          Choose the places once. Vacantless turns on what it can, guides you
+          where a site needs login or payment, and keeps proof and renter leads
+          in one checklist.
         </p>
         <form action={startDistributionRun}>
           <input type="hidden" name="property_id" value={propertyId} />
@@ -179,7 +197,7 @@ export function LaunchRunPanel({
             className={PRIMARY_BTN}
             style={{ backgroundColor: "var(--brand-color)" }}
           >
-            Publish
+            Start publish checklist
           </button>
         </form>
       </div>
@@ -190,7 +208,9 @@ export function LaunchRunPanel({
   return (
     <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">Publish run</h3>
+        <h3 className="text-sm font-semibold text-gray-900">
+          Publish checklist
+        </h3>
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/dashboard/settings?tab=distribution"
@@ -199,7 +219,7 @@ export function LaunchRunPanel({
             Channel setup
           </Link>
           <span className="text-xs font-medium text-gray-600">
-            {progress.resolved} of {progress.total} channels resolved
+            {progress.resolved} of {progress.total} channels done
           </span>
         </div>
       </div>
@@ -300,7 +320,7 @@ export function LaunchRunPanel({
                 rel="noreferrer"
                 className="mb-3 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
               >
-                Open next action
+                {nextActionLabel(item)}
               </a>
             )}
             {item.canConcierge && (
@@ -311,10 +331,11 @@ export function LaunchRunPanel({
                   type="submit"
                   className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
                 >
-                  Publish for me
+                  Ask Vacantless to post it
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
-                  Vacantless posts this for you and marks it live.
+                  Our publishing desk takes over this channel and still records
+                  real live-ad proof before it is marked Live.
                 </span>
               </form>
             )}
@@ -334,11 +355,11 @@ export function LaunchRunPanel({
                   className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   {item.channel === "vacantless"
-                    ? "Verify public page"
-                    : "Verify feed inclusion"}
+                    ? "Check renter page"
+                    : "Check listing feed"}
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
-                  Records durable proof of this channel&apos;s state.
+                  Saves proof for this channel.
                 </span>
               </form>
             )}
@@ -357,7 +378,7 @@ export function LaunchRunPanel({
             )}
             <details className="mb-3">
               <summary className="cursor-pointer text-xs font-medium text-gray-600">
-                Record proof / update verification
+                Add proof / check again
               </summary>
               <form
                 action={recordItemProof}
@@ -422,71 +443,73 @@ export function LaunchRunPanel({
                 live without a real URL. Hide the generic status form for them so
                 it can't bypass that path (Codex S482 P1). */}
             {!item.copilotScript && (
-              <form
-                action={updateRunItem}
-                className="space-y-3 border-t border-gray-100 pt-3"
-              >
-              <input type="hidden" name="property_id" value={propertyId} />
-              <input type="hidden" name="item_id" value={item.id} />
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="w-40">
-                  <label
-                    htmlFor={`run-${item.id}-status`}
-                    className="mb-1 block text-xs font-medium text-gray-600"
+              <details className="border-t border-gray-100 pt-3">
+                <summary className="cursor-pointer text-xs font-medium text-gray-600">
+                  Advanced status update
+                </summary>
+                <form action={updateRunItem} className="mt-3 space-y-3">
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <input type="hidden" name="item_id" value={item.id} />
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="w-40">
+                      <label
+                        htmlFor={`run-${item.id}-status`}
+                        className="mb-1 block text-xs font-medium text-gray-600"
+                      >
+                        Status
+                      </label>
+                      <select
+                        id={`run-${item.id}-status`}
+                        name="publish_status"
+                        defaultValue={item.publishStatus}
+                        className={FIELD_CLASS}
+                      >
+                        {PUBLISH_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {publishStatusLabel(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="min-w-[14rem] flex-1">
+                      <label
+                        htmlFor={`run-${item.id}-url`}
+                        className="mb-1 block text-xs font-medium text-gray-600"
+                      >
+                        {urlFieldLabel(item)}
+                      </label>
+                      <input
+                        id={`run-${item.id}-url`}
+                        name="external_url"
+                        defaultValue={item.externalUrl ?? ""}
+                        placeholder="https://..."
+                        className={FIELD_CLASS}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor={`run-${item.id}-notes`}
+                      className="mb-1 block text-xs font-medium text-gray-600"
+                    >
+                      Notes
+                    </label>
+                    <input
+                      id={`run-${item.id}-notes`}
+                      name="notes"
+                      defaultValue={item.notes ?? ""}
+                      className={FIELD_CLASS}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className={PRIMARY_BTN}
+                    style={{ backgroundColor: "var(--brand-color)" }}
                   >
-                    Status
-                  </label>
-                  <select
-                    id={`run-${item.id}-status`}
-                    name="publish_status"
-                    defaultValue={item.publishStatus}
-                    className={FIELD_CLASS}
-                  >
-                    {PUBLISH_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {publishStatusLabel(s)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-[14rem] flex-1">
-                  <label
-                    htmlFor={`run-${item.id}-url`}
-                    className="mb-1 block text-xs font-medium text-gray-600"
-                  >
-                    Live URL (required before marking an external post Live)
-                  </label>
-                  <input
-                    id={`run-${item.id}-url`}
-                    name="external_url"
-                    defaultValue={item.externalUrl ?? ""}
-                    placeholder="https://..."
-                    className={FIELD_CLASS}
-                  />
-                </div>
-              </div>
-              <div>
-                <label
-                  htmlFor={`run-${item.id}-notes`}
-                  className="mb-1 block text-xs font-medium text-gray-600"
-                >
-                  Notes
-                </label>
-                <input
-                  id={`run-${item.id}-notes`}
-                  name="notes"
-                  defaultValue={item.notes ?? ""}
-                  className={FIELD_CLASS}
-                />
-              </div>
-              <button
-                type="submit"
-                className={PRIMARY_BTN}
-                style={{ backgroundColor: "var(--brand-color)" }}
-              >
-                Save
-              </button>
-              </form>
+                    Save status
+                  </button>
+                </form>
+              </details>
             )}
           </li>
         ))}
