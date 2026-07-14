@@ -607,9 +607,10 @@ export async function completeCopilotPost(formData: FormData) {
     redirect("/dashboard/properties");
   }
 
-  // NEVER live without proof: require a real web URL for the live ad.
+  // NEVER live without proof: require a real, channel-matching public-listing URL
+  // for the live ad (rejects a browse / login / search / wrong-portal URL).
   const url = normalizeUrl(formData.get("external_url"));
-  if (!canMarkCopilotLive(url)) {
+  if (!canMarkCopilotLive(it.channel, url)) {
     if (propertyId) backTo(propertyId, "copilot_needsurl");
     redirect("/dashboard/properties");
   }

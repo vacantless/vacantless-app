@@ -289,12 +289,63 @@ export function buildCopilotScript(
   };
 }
 
+// Per-channel host allowlist for the browser co-pilot channels. A co-pilot post's
+// live-proof URL must live on the channel the operator actually posted to.
+const COPILOT_CHANNEL_HOSTS: Record<string, string[]> = {
+  kijiji: ["kijiji.ca"],
+  facebook: ["facebook.com"],
+  viewit: ["viewit.ca"],
+};
+
+// Paths that clearly are NOT a public live ad (login/register/create/search + the
+// Kijiji browse prefixes b-/s-). KEEP IN SYNC with the extension's portal.js
+// BAD_PATH (vacantless-extension/portal.js) so the on-page warn and this
+// server-side gate agree. General tokens match at any segment boundary (so
+// Facebook /marketplace/create is rejected); b-/s- are anchored to the FIRST path
+// segment only, so a live Kijiji ad like /v-.../b-bright-basement/<id> never trips it.
+const COPILOT_BAD_PATH =
+  /(?:^|\/)(?:login|signin|sign-in|register|t-login|checkpoint|post-ad|p-post-ad|p-submit-ad|create|new-listing|search)(?:[/.?_-]|$)|^\/(?:b-|s-)/i;
+
+function copilotHostMatches(host: string, base: string): boolean {
+  return host === base || host.endsWith("." + base);
+}
+
+export type CopilotLiveUrlIssue = "ok" | "invalid" | "wrong_channel" | "not_listing";
+
+/**
+ * Classify a co-pilot live-proof URL for a channel. Pure. Returns "ok" ONLY for a
+ * real http(s) URL that is (a) on the channel's own host and (b) not an obvious
+ * non-listing page (login / register / create / search / browse). This is the
+ * server-side hardening that makes "mark live" reject a Kijiji account, browse,
+ * search, or login URL instead of accepting any web URL.
+ */
+export function copilotLiveUrlIssue(
+  channel: string,
+  externalUrl: string | null | undefined,
+): CopilotLiveUrlIssue {
+  if (!isWebUrl(externalUrl)) return "invalid";
+  let u: URL;
+  try {
+    u = new URL(externalUrl as string);
+  } catch {
+    return "invalid";
+  }
+  const hosts = COPILOT_CHANNEL_HOSTS[channel];
+  if (!hosts) return "invalid"; // not a browser co-pilot channel
+  const host = u.hostname.toLowerCase();
+  if (!hosts.some((base) => copilotHostMatches(host, base))) return "wrong_channel";
+  if (COPILOT_BAD_PATH.test(u.pathname)) return "not_listing";
+  return "ok";
+}
+
 /**
  * The pure guard the completion server action reuses: a co-pilot post may be
- * marked live ONLY with a real web URL as proof. Never live without proof.
+ * marked live ONLY with a real, channel-matching public-listing URL as proof.
+ * Never live without proof; never live from a browse / login / search page.
  */
 export function canMarkCopilotLive(
+  channel: string,
   externalUrl: string | null | undefined,
 ): boolean {
-  return isWebUrl(externalUrl);
+  return copilotLiveUrlIssue(channel, externalUrl) === "ok";
 }
