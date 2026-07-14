@@ -64,6 +64,14 @@ export type RunItemView = {
   proofUrl: string | null;
   // S482: the honest browser co-pilot guided-posting script (copilot channels).
   copilotScript: CopilotScript | null;
+  // S488 Slice 1: merged from the retired where-posted grid so the command
+  // center carries one status vocabulary. Both are derived in page.tsx from the
+  // channel's listing_posts (no schema change):
+  //  - staleRefresh: a live ad exists but is stale/expired/removed (needs_refresh).
+  //  - liveWithoutUrl: a row is marked live but has no ad URL (the grid's
+  //    "problem" state). Codex P3: must render red "Needs ad URL", never as Live.
+  staleRefresh?: boolean;
+  liveWithoutUrl?: boolean;
 };
 
 export type PublishChannelChoiceView = {
@@ -91,6 +99,21 @@ const STATUS_CHIP: Record<PublishTone, string> = {
   danger: "bg-red-50 text-red-700",
   neutral: "bg-gray-100 text-gray-600",
 };
+
+// Slice 1: the single derived status chip for a run row. Folds the two former
+// vocabularies (PublishStatus + the grid's ChannelStatusValue) into one, and
+// applies the two Codex P3s:
+//  - liveWithoutUrl (the grid's "problem") -> red "Needs ad URL", never Live.
+//  - submitted must NOT read as Live: its default tone is `positive`, so we
+//    override to warning + "Submitted to feed - not live yet".
+//  - staleRefresh (needs_refresh) -> amber "Needs refresh".
+function displayStatus(item: RunItemView): { label: string; tone: PublishTone } {
+  if (item.liveWithoutUrl) return { label: "Needs ad URL", tone: "danger" };
+  if (item.staleRefresh) return { label: "Needs refresh", tone: "warning" };
+  if (item.publishStatus === "submitted")
+    return { label: "Submitted to feed - not live yet", tone: "warning" };
+  return { label: item.statusLabel, tone: item.statusTone };
+}
 
 function nextActionLabel(item: RunItemView): string {
   if (item.channel === "vacantless") return "Open renter page";
@@ -244,9 +267,9 @@ export function LaunchRunPanel({
                 {publishModeLabel(item.mode)}
               </span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[item.statusTone]}`}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[displayStatus(item).tone]}`}
               >
-                {item.statusLabel}
+                {displayStatus(item).label}
               </span>
               {item.verificationStatus && (
                 <span
@@ -376,141 +399,151 @@ export function LaunchRunPanel({
                 </a>
               </p>
             )}
-            <details className="mb-3">
+            {/* More actions (Slice 1): operator/admin controls folded out of the
+                first read (Codex #5) — proof capture + the generic status editor.
+                The generic status form stays gated on !item.copilotScript so a
+                co-pilot item can only go live via completeCopilotPost with a real
+                URL (S482 P1 guard preserved — structural, not just visually
+                hidden: the form is not rendered at all for co-pilot items). */}
+            <details className="border-t border-gray-100 pt-3">
               <summary className="cursor-pointer text-xs font-medium text-gray-600">
-                Add proof / check again
+                More actions
               </summary>
-              <form
-                action={recordItemProof}
-                className="mt-2 flex flex-wrap items-end gap-2"
-              >
-                <input type="hidden" name="item_id" value={item.id} />
-                <div className="w-56">
-                  <label className="mb-1 block text-[11px] font-medium text-gray-500">
-                    Live URL (if any)
-                  </label>
-                  <input
-                    name="external_url"
-                    placeholder="https://..."
-                    className={FIELD_CLASS}
-                  />
-                </div>
-                <div className="w-40">
-                  <label className="mb-1 block text-[11px] font-medium text-gray-500">
-                    Result
-                  </label>
-                  <select
-                    name="result"
-                    defaultValue="verified_live"
-                    className={FIELD_CLASS}
-                  >
-                    {(
-                      [
-                        "verified_live",
-                        "needs_login",
-                        "needs_payment",
-                        "proof_unavailable",
-                        "stale",
-                      ] as const
-                    ).map((r) => (
-                      <option key={r} value={r}>
-                        {verificationResultLabel(r)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="min-w-[10rem] flex-1">
-                  <label className="mb-1 block text-[11px] font-medium text-gray-500">
-                    Note
-                  </label>
-                  <input
-                    name="note"
-                    placeholder="e.g. posted on Kijiji; screenshot on file"
-                    className={FIELD_CLASS}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              <div className="mt-3 space-y-4">
+                {/* Add proof / check again. */}
+                <form
+                  action={recordItemProof}
+                  className="flex flex-wrap items-end gap-2"
                 >
-                  Save proof
-                </button>
-              </form>
-            </details>
-
-            {/* Co-pilot channels complete ONLY via the co-pilot panel above,
-                which records proof + a browser_copilot attempt and never marks
-                live without a real URL. Hide the generic status form for them so
-                it can't bypass that path (Codex S482 P1). */}
-            {!item.copilotScript && (
-              <details className="border-t border-gray-100 pt-3">
-                <summary className="cursor-pointer text-xs font-medium text-gray-600">
-                  Advanced status update
-                </summary>
-                <form action={updateRunItem} className="mt-3 space-y-3">
-                  <input type="hidden" name="property_id" value={propertyId} />
                   <input type="hidden" name="item_id" value={item.id} />
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="w-40">
-                      <label
-                        htmlFor={`run-${item.id}-status`}
-                        className="mb-1 block text-xs font-medium text-gray-600"
-                      >
-                        Status
-                      </label>
-                      <select
-                        id={`run-${item.id}-status`}
-                        name="publish_status"
-                        defaultValue={item.publishStatus}
-                        className={FIELD_CLASS}
-                      >
-                        {PUBLISH_STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {publishStatusLabel(s)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="min-w-[14rem] flex-1">
-                      <label
-                        htmlFor={`run-${item.id}-url`}
-                        className="mb-1 block text-xs font-medium text-gray-600"
-                      >
-                        {urlFieldLabel(item)}
-                      </label>
-                      <input
-                        id={`run-${item.id}-url`}
-                        name="external_url"
-                        defaultValue={item.externalUrl ?? ""}
-                        placeholder="https://..."
-                        className={FIELD_CLASS}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label
-                      htmlFor={`run-${item.id}-notes`}
-                      className="mb-1 block text-xs font-medium text-gray-600"
-                    >
-                      Notes
+                  <div className="w-56">
+                    <label className="mb-1 block text-[11px] font-medium text-gray-500">
+                      Live URL (if any)
                     </label>
                     <input
-                      id={`run-${item.id}-notes`}
-                      name="notes"
-                      defaultValue={item.notes ?? ""}
+                      name="external_url"
+                      placeholder="https://..."
+                      className={FIELD_CLASS}
+                    />
+                  </div>
+                  <div className="w-40">
+                    <label className="mb-1 block text-[11px] font-medium text-gray-500">
+                      Result
+                    </label>
+                    <select
+                      name="result"
+                      defaultValue="verified_live"
+                      className={FIELD_CLASS}
+                    >
+                      {(
+                        [
+                          "verified_live",
+                          "needs_login",
+                          "needs_payment",
+                          "proof_unavailable",
+                          "stale",
+                        ] as const
+                      ).map((r) => (
+                        <option key={r} value={r}>
+                          {verificationResultLabel(r)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-w-[10rem] flex-1">
+                    <label className="mb-1 block text-[11px] font-medium text-gray-500">
+                      Note
+                    </label>
+                    <input
+                      name="note"
+                      placeholder="e.g. posted on Kijiji; screenshot on file"
                       className={FIELD_CLASS}
                     />
                   </div>
                   <button
                     type="submit"
-                    className={PRIMARY_BTN}
-                    style={{ backgroundColor: "var(--brand-color)" }}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    Save status
+                    Save proof
                   </button>
                 </form>
-              </details>
-            )}
+
+                {/* Co-pilot channels complete ONLY via the co-pilot panel above,
+                    which records proof + a browser_copilot attempt and never
+                    marks live without a real URL. The generic status form is not
+                    rendered for them so it can't bypass that path (Codex S482 P1). */}
+                {!item.copilotScript && (
+                  <form
+                    action={updateRunItem}
+                    className="space-y-3 border-t border-gray-100 pt-4"
+                  >
+                    <p className="text-xs font-medium text-gray-600">
+                      Advanced status update
+                    </p>
+                    <input type="hidden" name="property_id" value={propertyId} />
+                    <input type="hidden" name="item_id" value={item.id} />
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="w-40">
+                        <label
+                          htmlFor={`run-${item.id}-status`}
+                          className="mb-1 block text-xs font-medium text-gray-600"
+                        >
+                          Status
+                        </label>
+                        <select
+                          id={`run-${item.id}-status`}
+                          name="publish_status"
+                          defaultValue={item.publishStatus}
+                          className={FIELD_CLASS}
+                        >
+                          {PUBLISH_STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {publishStatusLabel(s)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="min-w-[14rem] flex-1">
+                        <label
+                          htmlFor={`run-${item.id}-url`}
+                          className="mb-1 block text-xs font-medium text-gray-600"
+                        >
+                          {urlFieldLabel(item)}
+                        </label>
+                        <input
+                          id={`run-${item.id}-url`}
+                          name="external_url"
+                          defaultValue={item.externalUrl ?? ""}
+                          placeholder="https://..."
+                          className={FIELD_CLASS}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`run-${item.id}-notes`}
+                        className="mb-1 block text-xs font-medium text-gray-600"
+                      >
+                        Notes
+                      </label>
+                      <input
+                        id={`run-${item.id}-notes`}
+                        name="notes"
+                        defaultValue={item.notes ?? ""}
+                        className={FIELD_CLASS}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className={PRIMARY_BTN}
+                      style={{ backgroundColor: "var(--brand-color)" }}
+                    >
+                      Save status
+                    </button>
+                  </form>
+                )}
+              </div>
+            </details>
           </li>
         ))}
       </ul>

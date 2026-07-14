@@ -131,6 +131,44 @@ const PRIMARY_BTN =
 const SECONDARY_BTN =
   "inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50";
 
+// --- next-action banner (Slice 1) ------------------------------------------
+// One prioritized "do this next" line across all run channels, so the command
+// center leads with a single obvious step (Codex #1/#4). Pure — derived only
+// from the run items' publish status. Resolved states (live / submitted /
+// skipped) and attention states handled inside the row (blocked / rejected)
+// don't drive the banner; it points at the next thing to DO.
+const NEXT_ACTION_WEIGHT: Record<string, number> = {
+  needs_login: 1,
+  needs_payment: 1,
+  needs_operator: 2,
+  queued: 3,
+};
+function nextRunAction(items: RunItemView[]): { label: string } | null {
+  let best: { weight: number; item: RunItemView } | null = null;
+  for (const item of items) {
+    const weight = NEXT_ACTION_WEIGHT[item.publishStatus];
+    if (weight == null) continue;
+    if (!best || weight < best.weight) best = { weight, item };
+  }
+  if (!best) return null;
+  const it = best.item;
+  const label =
+    it.publishStatus === "needs_login" || it.publishStatus === "needs_payment"
+      ? `Sign in on ${it.channelLabel} to post it`
+      : it.publishStatus === "queued"
+        ? `Start ${it.channelLabel}`
+        : it.channel === "vacantless"
+          ? "Confirm your renter page"
+          : it.channel === "org_feed"
+            ? "Confirm your listing feed"
+            : it.mode === "broker"
+              ? `Send ${it.channelLabel} to your agent`
+              : it.mode === "feed_partner"
+                ? `Publish ${it.channelLabel} via your feed`
+                : `Post on ${it.channelLabel} next`;
+  return { label };
+}
+
 export function DistributeTab({
   propertyId,
   linkIsLive,
@@ -165,6 +203,7 @@ export function DistributeTab({
   const liveChannels = channelCards.filter(
     (c) => c.status.value === "posted" || c.status.value === "needs_refresh",
   ).length;
+  const nextAction = launchRun.run ? nextRunAction(launchRun.items) : null;
 
   return (
     <div>
@@ -213,10 +252,22 @@ export function DistributeTab({
         )}
       </div>
 
-      {/* Listing quality (Slice 5). */}
-      <ListingQualityPanel quality={quality} />
+      {/* Next-action banner (Slice 1): one prioritized step across all channels,
+          so the command center leads with a single obvious action (Codex #1/#4). */}
+      {nextAction && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-brand/30 bg-brand/5 px-5 py-3">
+          <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+            Next
+          </span>
+          <span className="text-sm font-semibold text-gray-900">
+            {nextAction.label}
+          </span>
+        </div>
+      )}
 
-      {/* Guided launch run (S412 Slice 2). */}
+      {/* THE command center — one guided surface: pick channels, follow one next
+          action per channel, paste the live URL. After the Slice 1 merge this is
+          the single action surface (Codex #2). */}
       <LaunchRunPanel
         propertyId={propertyId}
         run={launchRun.run}
@@ -226,69 +277,97 @@ export function DistributeTab({
         startChannels={launchRun.startChannels}
       />
 
-      {/* Channel cards. */}
-      <div className="space-y-4">
-        {channelCards.map((card) => (
-          <ChannelCard
-            key={card.channel.key}
-            card={card}
-            propertyId={propertyId}
-            linkIsLive={linkIsLive}
-            addFormKey={addFormKey}
-            today={today}
-            replyInputs={replyInputs}
-            qaExpected={qaExpected}
-          />
-        ))}
-      </div>
-
-      {/* Other / manual channels — anything not in the matrix (PadMapper, a
-          local board, a custom post). Keeps the durable "this ad exists here"
-          record for attribution. */}
-      <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="mb-2 flex items-center gap-2.5">
-          <IconTile><Icons.list className="h-4 w-4" /></IconTile>
-          <h3 className="text-sm font-semibold text-gray-900">
-            Other channels
-          </h3>
-        </div>
-        <p className="mb-4 text-xs text-gray-500">
-          Track any other place you posted, like a local board, community group,
-          or niche site, so its inquiries are counted too.
-        </p>
-
-        {otherPosts.length > 0 && (
-          <ul className="mb-4 space-y-3">
-            {otherPosts.map((post) => (
-              <PostRow
-                key={post.id}
-                post={post}
+      {/* Posted links & tools (Slice 1): the old per-channel grid + the "other
+          channels" tracker, demoted to a collapsed drawer. These are tools
+          (tracked links, reply snippets, add-a-tracked-post), not a second action
+          surface — one command center, one place per channel (Codex #2). Feed
+          partner setup stays inside its channel card here. */}
+      <details className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-gray-900">
+          Posted links &amp; tools
+          <span className="ml-2 text-xs font-normal text-gray-500">
+            Tracked links, reply snippets, and manually-tracked posts
+          </span>
+        </summary>
+        <div className="border-t border-gray-100 px-5 py-4">
+          {/* Per-channel cards (tracked posts, copy, reply snippets, partner). */}
+          <div className="space-y-4">
+            {channelCards.map((card) => (
+              <ChannelCard
+                key={card.channel.key}
+                card={card}
                 propertyId={propertyId}
                 linkIsLive={linkIsLive}
-                fixedPortal="other"
-                showLabel
+                addFormKey={addFormKey}
+                today={today}
+                replyInputs={replyInputs}
+                qaExpected={qaExpected}
               />
             ))}
-          </ul>
-        )}
+          </div>
 
-        {linkIsLive ? (
-          <AddPostForm
-            propertyId={propertyId}
-            portal="other"
-            addFormKey={addFormKey}
-            showLabel
-          />
-        ) : (
-          <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Tracking a post turns on when this rental is Live and accepting
-            inquiries.
-          </p>
-        )}
-      </div>
+          {/* Other / manual channels — anything not in the matrix (PadMapper, a
+              local board, a custom post). Keeps the durable "this ad exists here"
+              record for attribution. */}
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="mb-2 flex items-center gap-2.5">
+              <IconTile><Icons.list className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold text-gray-900">
+                Other channels
+              </h3>
+            </div>
+            <p className="mb-4 text-xs text-gray-500">
+              Track any other place you posted, like a local board, community
+              group, or niche site, so its inquiries are counted too.
+            </p>
 
-      {/* What's working — per-channel analytics (Slice 4). */}
-      <AnalyticsPanel rows={analytics} />
+            {otherPosts.length > 0 && (
+              <ul className="mb-4 space-y-3">
+                {otherPosts.map((post) => (
+                  <PostRow
+                    key={post.id}
+                    post={post}
+                    propertyId={propertyId}
+                    linkIsLive={linkIsLive}
+                    fixedPortal="other"
+                    showLabel
+                  />
+                ))}
+              </ul>
+            )}
+
+            {linkIsLive ? (
+              <AddPostForm
+                propertyId={propertyId}
+                portal="other"
+                addFormKey={addFormKey}
+                showLabel
+              />
+            ) : (
+              <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                Tracking a post turns on when this rental is Live and accepting
+                inquiries.
+              </p>
+            )}
+          </div>
+        </div>
+      </details>
+
+      {/* Performance & setup (Slice 1): listing quality + what's-working
+          analytics, collapsed. Present for power users, out of the first read
+          (Codex #5). */}
+      <details className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-gray-900">
+          Performance &amp; setup
+          <span className="ml-2 text-xs font-normal text-gray-500">
+            Listing quality and what&apos;s bringing renters back
+          </span>
+        </summary>
+        <div className="border-t border-gray-100 px-5 py-4">
+          <ListingQualityPanel quality={quality} />
+          <AnalyticsPanel rows={analytics} />
+        </div>
+      </details>
     </div>
   );
 }

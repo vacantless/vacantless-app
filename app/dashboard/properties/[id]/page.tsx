@@ -1075,6 +1075,16 @@ export default async function PropertyDetailPage({
   const distributeOtherPosts = (postsByPortal.get("other") ?? []).map(
     toDistributePost,
   );
+  // Slice 1 (S488): fold the where-posted grid's per-channel status into the
+  // command center so a run row shows ONE merged status. computeChannelStatus
+  // already derives needs_refresh (a live ad gone stale/expired) and problem (a
+  // row marked live with no ad URL) from listing_posts; expose them by channel
+  // key for the run items below. Pure data-shaping — no schema change.
+  const channelStatusValueByKey = new Map(
+    distributeChannelCards.map(
+      (c) => [c.channel.key as string, c.status.value] as const,
+    ),
+  );
 
   // --- One-click publish run (S467, built on S412 run primitives) ----------
   const networkFeedEnabled = Boolean(process.env.NETWORK_FEED_TOKEN?.trim());
@@ -1237,6 +1247,9 @@ export default async function PropertyDetailPage({
       }),
       canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
       copilotScript,
+      // S488 Slice 1: merged where-posted staleness/problem for this channel.
+      staleRefresh: channelStatusValueByKey.get(r.channel) === "needs_refresh",
+      liveWithoutUrl: channelStatusValueByKey.get(r.channel) === "problem",
     };
   });
   const alreadyInRun = new Set(runItems.map((i) => i.channel));

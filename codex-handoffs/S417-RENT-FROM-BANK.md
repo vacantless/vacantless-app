@@ -1,5 +1,7 @@
 # Codex handoff — S417 rent-from-bank (money-in lane)
 
+> ✅ CODEX-ACCEPTED 2026-07-05 (commit `0fd9b37`): no P1/P2. Traced every money-surface invariant (dark/entitlement gating, manage_tenancies, credit+pending guard, RLS-scoped active-tenancy allocations, claim-before-insert + rollback, correct rent_payments shape, no expense_id path); `git diff --check` passed. Only snag = a LOCAL esbuild platform mismatch running the test script (`@esbuild/aix-ppc64` vs needed `darwin-arm64`) - environment not code; sandbox run was 22/0. Loop CLOSED, no code-review queue.
+
 **Review target:** the S417 commit (rent-from-bank). Range = the single commit pushed by `DEPLOY-S417-RENT-FROM-BANK.sh`.
 
 ## What & why
@@ -45,6 +47,14 @@ rows the owner statement already sums. We never move money — this only records
 
 ## Verify done
 tsc clean; eslint clean on the 4 changed files; rent-from-bank 22/0; payments 47/0; bank-import 68/0.
-Live smoke DEFERRED until `RENT_FROM_BANK=1` is set (dark). Smoke plan: on 506 Manning, tag the
-$7,396 Rotessa credit, split $2,620/$3,352/$1,424 across the three units, confirm three rent_payments
-+ owner statement "Rent collected" = $7,396 for June, then (optional) teardown.
+LIVE-SMOKED on the Manning Ave Rentals org (Premium) with `RENT_FROM_BANK=1` set in prod + redeployed:
+the $7,396 Rotessa credit prefilled 2620/3352/1424, "Record as rent" wrote three `rent_payments`
+(source='bank', linked to the credit) and flipped the credit to triage_status='assigned'; the owner
+statement then read Rent collected $7,396.00 (3 payments) / Expenses $6,109.79 / NET +$1,286.21 for
+2026 [verified via execute_sql + the live statement page]. Idempotency/rollback paths not force-tested
+live (unit-covered).
+
+Follow-up (NOT part of this change): the By-building statement table lists each unit twice (a
+building-key row + a unit row for the same rent) because the 506 Manning triplex is modeled as three
+separate unit-properties each with its own building_key; totals are correct. Cleanest fix = model the
+triplex as one building with three units (also moves the Not-unit-specific costs off "Unassigned").

@@ -43,3 +43,11 @@ credit rent?" lane and the expense-triage lane guesswork.
 ## Gates (verified in sandbox via `node -r sucrase/register` + `npx tsc`)
 - tsc --noEmit clean; eslint clean on the 2 changed source files.
 - `test-bank-feed` 25→**34/0**; `test-bank-import` 68/0 (no regression).
+
+## Codex review — ACCEPTED (2026-07-07, range `b70c3de..539280e`)
+No P1/P2. Confirmed safely additive: `txnDetailLine` is pure and only surfaces
+`description` as useful secondary context; primary labels in both lanes unchanged;
+both queries already selected `merchant` + `description`; no mutation/money-path
+code changed. Codex re-ran: `git diff --check`, tsc clean, lint clean,
+test-bank-feed 34/0, test-bank-import 68/0, test-rent-from-bank 22/0,
+test-categorization-rules 47/0. Loop CLOSED.

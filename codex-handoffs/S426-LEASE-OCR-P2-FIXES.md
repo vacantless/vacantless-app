@@ -1,5 +1,8 @@
 # Codex handoff - S426 Lease-OCR P2 fixes + live QA
 
+> ✅ ACCEPTED by Codex 2026-07-06: no P1/P2 on S426 or S426b; verified test-lease-extract 89/0, test-lease-locator 25/0, test-billing 246/0, tsc clean. Lease-OCR P2 lane CLOSED. (Homepage commit d152adb was not in scope for this review.)
+
+
 Range: `08acb6c..3d48a73` (1 commit). No migration.
 Status: SHIPPED DARK (env `LEASE_OCR_ENABLED` removed from prod again after QA; model call still needs `ANTHROPIC_API_KEY`).
 Context: you reviewed the original lease-OCR (`14c997a..08acb6c`) and flagged 2 P2s, no P1s. This commit folds BOTH. This note asks you to review the FIX.

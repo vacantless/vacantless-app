@@ -90,7 +90,18 @@ claims automated posting.
 - `scripts/test-distribution-channels.ts` - 79/0.
 - Regressions: `test-listing-distribution` 66/0, `test-listing-marketing` 26/0,
   `test-booking` 40/0.
-- Live smoke on North Star QA: PENDING (fill in after deploy).
+- **Live-smoked on North Star QA (prod `ed1cd0c`, 833 Pillette, Live + in-feed)**:
+  the Distribute tab renders with all 6 channel cards + Other; modes correct
+  (Facebook/Kijiji/Viewit = Guided manual post, Rentals.ca/Zumper = Feed-ready or
+  guided, Realtor.ca = Agent / MLS route); the feed note appears ONLY on the two
+  feed-eligible cards ("This listing is in your Vacantless feed..."); Realtor.ca
+  (broker) shows NO "Copy wording" button. Added a Kijiji post (Live, ad URL,
+  posted 2026-06-15): the header flipped to "1 channel posted", the Kijiji card
+  recomputed to **Needs refresh** with "up about 19 days" (daysBetween correct)
+  + the tracked `?p=` inquiry link + inquiry count; the edit form pre-filled the
+  saved values; **Remove** returned the card to Ready to post and the header to
+  "0 channels posted". The "Ready to publish? -> Distribute" bridge on Photos &
+  marketing switches tabs via `#distribute-header`. QA left clean (0 posts).
 
 ## Not in this slice (sequenced later, per the plan)
 

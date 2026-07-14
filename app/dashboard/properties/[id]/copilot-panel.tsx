@@ -210,96 +210,108 @@ export function CopilotPanel({
           </ul>
         )}
 
-        {script.portalUrl && (
-          <a
-            href={script.portalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Open {script.channelLabel} in a new tab
-          </a>
-        )}
-
-        {/* S484 (Lane C): no-install pop-out sidecar. Always available (no
-            extension, every browser). Opens a same-origin companion window with
-            this same copy + the mark-live form. */}
-        <div className="rounded-lg border border-brand/30 bg-white px-3 py-2">
+        {/* PRIMARY PATH (Slice 1): the no-install helper window. Same-origin
+            pop-out (S484) that shows this same copy + the mark-live form beside
+            the portal tab. Made the ONE obvious primary CTA for a first-time
+            landlord; opening the portal is a secondary link, and the copy +
+            steps below are collapsed because the helper window carries them. */}
+        <div className="rounded-lg border-2 border-brand/40 bg-brand/5 px-3 py-3">
           <button
             type="button"
             onClick={openSidecar}
-            className="rounded-lg border border-brand/40 bg-brand/5 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
+            className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white"
           >
-            Open helper window (no install needed)
+            Open helper window
           </button>
-          <p className="mt-1 text-[11px] text-gray-500">
-            Opens this copy and the Live URL form in a small window you can keep
-            beside the {script.channelLabel} tab. You still review and post.
+          <p className="mt-1.5 text-[11px] text-gray-600">
+            Works now — no install. Keep this window beside the{" "}
+            {script.channelLabel} tab; it shows the copy and the Live URL form.
+            You still review and post.
           </p>
+          {script.portalUrl && (
+            <a
+              href={script.portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex text-[11px] font-medium text-brand underline"
+            >
+              Or open {script.channelLabel} in a new tab
+            </a>
+          )}
         </div>
 
-        {/* S483: optional extension hand-off. Shown only when the Vacantless
-            extension is installed (bridge.js answered our ping). It co-locates
-            the copy on the portal page and captures the live URL back into the
-            field below — the operator still reviews and marks it live. */}
+        {/* S483 extension: OPTIONAL beta courier, shown ONLY when the extension
+            is already installed (bridge.js answered our ping — extReady). No
+            install CTA in Slice 1 (the extension is unpacked-only); the helper
+            window above is the no-install path everyone gets. */}
         {extReady && (
           <div className="rounded-lg border border-brand/30 bg-white px-3 py-2">
             <button
               type="button"
               onClick={sendToExtension}
-              className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white"
+              className="rounded-lg border border-brand/40 bg-brand/5 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
             >
-              Send copy to the Vacantless extension
+              Send to Chrome extension (beta)
             </button>
             <p className="mt-1 text-[11px] text-gray-500">
-              Shows this copy on the {script.channelLabel} post page and captures
-              the live ad URL back here. You still post it and mark it live
-              yourself.
+              You have the Vacantless extension installed — this shows the copy
+              on the {script.channelLabel} post page and brings the live ad URL
+              back here. You still post it and mark it live yourself.
             </p>
           </div>
         )}
 
-        {/* Copyable, channel-fit content. */}
-        {script.fields.length > 0 && (
-          <div className="grid gap-2">
-            {script.fields.map((f) => (
-              <CopyField
-                key={f.key}
-                label={f.label}
-                value={f.value}
-                multiline={f.multiline}
-                hint={f.hint}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Ordered steps; stop-gate steps are called out as "you do this". */}
-        <ol className="space-y-1.5">
-          {script.steps.map((step, i) => (
-            <li
-              key={step.key}
-              className={`rounded-lg px-3 py-2 text-xs ${
-                step.stopGate
-                  ? "border border-amber-200 bg-amber-50 text-amber-900"
-                  : "text-gray-600"
-              }`}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-gray-400">{i + 1}.</span>
-                <span className="font-medium text-gray-800">{step.label}</span>
-                {step.stopGate && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                    {stopGateLabel(step.stopGate)} — Vacantless stops here
-                  </span>
-                )}
+        {/* Copy + steps, collapsed by default. The helper window shows the same
+            content; folding it here is what keeps the inline card calm
+            (Codex #3). */}
+        <details className="rounded-lg border border-gray-200 bg-white">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-gray-600">
+            Show the copy and steps here
+          </summary>
+          <div className="space-y-3 px-3 pb-3">
+            {/* Copyable, channel-fit content. */}
+            {script.fields.length > 0 && (
+              <div className="grid gap-2">
+                {script.fields.map((f) => (
+                  <CopyField
+                    key={f.key}
+                    label={f.label}
+                    value={f.value}
+                    multiline={f.multiline}
+                    hint={f.hint}
+                  />
+                ))}
               </div>
-              {step.detail && (
-                <p className="mt-0.5 pl-5 text-gray-500">{step.detail}</p>
-              )}
-            </li>
-          ))}
-        </ol>
+            )}
+
+            {/* Ordered steps; stop-gate steps are called out as "you do this". */}
+            <ol className="space-y-1.5">
+              {script.steps.map((step, i) => (
+                <li
+                  key={step.key}
+                  className={`rounded-lg px-3 py-2 text-xs ${
+                    step.stopGate
+                      ? "border border-amber-200 bg-amber-50 text-amber-900"
+                      : "text-gray-600"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-gray-400">{i + 1}.</span>
+                    <span className="font-medium text-gray-800">{step.label}</span>
+                    {step.stopGate && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                        {stopGateLabel(step.stopGate)} — Vacantless stops here
+                      </span>
+                    )}
+                  </div>
+                  {step.detail && (
+                    <p className="mt-0.5 pl-5 text-gray-500">{step.detail}</p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </details>
 
         {/* Completion: paste the live URL as proof. Never live without it. */}
         <form
