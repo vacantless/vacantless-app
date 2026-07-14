@@ -153,9 +153,11 @@ function nextRunAction(items: RunItemView[]): { label: string } | null {
   if (!best) return null;
   const it = best.item;
   const label =
-    it.publishStatus === "needs_login" || it.publishStatus === "needs_payment"
-      ? `Sign in on ${it.channelLabel} to post it`
-      : it.publishStatus === "queued"
+    it.publishStatus === "needs_payment"
+      ? `Sign in or pay on ${it.channelLabel} to post it`
+      : it.publishStatus === "needs_login"
+        ? `Sign in on ${it.channelLabel} to post it`
+        : it.publishStatus === "queued"
         ? `Start ${it.channelLabel}`
         : it.channel === "vacantless"
           ? "Confirm your renter page"
