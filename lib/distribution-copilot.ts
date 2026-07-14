@@ -308,11 +308,13 @@ const COPILOT_CHANNEL_HOSTS: Record<string, string[]> = {
 //            trailing id, so a /b- or /s- browse page or a title slug that merely
 //            starts with b-/s- in a later segment is not confused for a listing)
 //   facebook /marketplace/item/<numeric item id>
-//   viewit   /.../<numeric listing id>
+//   viewit   a numeric listing id — either its own path segment (/26049) OR the
+//            slug form ending VIT=<id> / VIT%3D<id> (pathname keeps %3D encoded),
+//            e.g. /3015SandwichSt-Windsor-1bdrm-VIT=22134 (Codex S485b re-review).
 const COPILOT_LISTING_PATH: Record<string, RegExp> = {
   kijiji: /^\/v-.+\/\d{6,}\/?$/i,
   facebook: /\/marketplace\/item\/\d{6,}(?:\/|$)/i,
-  viewit: /\/\d{5,}(?:\/|$)/,
+  viewit: /\/\d{5,}(?:\/|$)|VIT(?:=|%3D)\d{5,}/i,
 };
 
 function copilotHostMatches(host: string, base: string): boolean {

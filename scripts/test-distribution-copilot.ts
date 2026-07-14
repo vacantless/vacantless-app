@@ -104,7 +104,12 @@ ok(!kjDark.fields.some((f) => f.key === "tracked_link"), "no tracked_link field 
 // Accept a genuine public listing (numeric id) on the channel's own host.
 ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/1740248220"), "kijiji live /v- ad can mark live");
 ok(canMarkCopilotLive("facebook", "https://www.facebook.com/marketplace/item/1234567890123"), "facebook marketplace item can mark live");
-ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/rental/12345"), "viewit listing can mark live");
+ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/rental/12345"), "viewit numeric-segment listing can mark live");
+// S485c: viewit slug listings end in VIT=<id> / VIT%3D<id> (Codex S485b re-review).
+ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/3015SandwichSt-Windsor-1bdrm-VIT=22134"), "viewit VIT= slug listing can mark live");
+ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/3015SandwichSt-Windsor-1bdrm-VIT%3D22134"), "viewit VIT%3D slug listing can mark live");
+ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/AvenueStClair-Toronto-2bdrm-VIT%3D244963"), "viewit VIT%3D slug listing (2) can mark live");
+ok(!canMarkCopilotLive("viewit", "https://www.viewit.ca/browse-toronto-apartments"), "viewit browse page (no id) rejected");
 // A live /v- ad whose TITLE slug starts with b- must NOT be rejected (the /v- + trailing id still matches).
 ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/b-bright-basement/1740248220"), "live /v- ad with b- title slug still ok");
 // A trailing query does not break the match (pathname is used).
