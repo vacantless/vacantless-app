@@ -144,6 +144,17 @@ export function CopilotPanel({
     return () => window.removeEventListener("message", onMessage);
   }, [itemId, script.channel]);
 
+  // No-install path (S484): open the same-origin co-pilot sidecar window. Needs
+  // no extension — it shows this same copy + the mark-live form on a Vacantless
+  // surface. Sized for a companion window beside the portal tab.
+  const openSidecar = useCallback(() => {
+    window.open(
+      `/dashboard/properties/${propertyId}/copilot/${itemId}`,
+      `vacantless-copilot-${itemId}`,
+      "width=520,height=760,menubar=no,toolbar=no,location=no,status=no",
+    );
+  }, [propertyId, itemId]);
+
   const sendToExtension = useCallback(() => {
     const nonce =
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -209,6 +220,24 @@ export function CopilotPanel({
             Open {script.channelLabel} in a new tab
           </a>
         )}
+
+        {/* S484 (Lane C): no-install pop-out sidecar. Always available (no
+            extension, every browser). Opens a same-origin companion window with
+            this same copy + the mark-live form. */}
+        <div className="rounded-lg border border-brand/30 bg-white px-3 py-2">
+          <button
+            type="button"
+            onClick={openSidecar}
+            className="rounded-lg border border-brand/40 bg-brand/5 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
+          >
+            Open co-pilot window (no install needed)
+          </button>
+          <p className="mt-1 text-[11px] text-gray-500">
+            Pops out this copy + the mark-live form in a companion window you can
+            keep beside the {script.channelLabel} tab. You still post it and mark
+            it live yourself.
+          </p>
+        </div>
 
         {/* S483: optional extension hand-off. Shown only when the Vacantless
             extension is installed (bridge.js answered our ping). It co-locates
