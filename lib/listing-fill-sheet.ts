@@ -136,6 +136,7 @@ export const FILL_SHEET_PORTALS: readonly PortalKey[] = [
   "kijiji",
   "facebook",
   "rentals_ca",
+  "rentfaster",
   "zumper",
   "viewit",
   "realtor_ca",
@@ -687,6 +688,187 @@ function rentalsCaFields(input: FillSheetInput, _title: string, body: string): F
   ];
 }
 
+const RENTFASTER_STEP = {
+  address: "Step 1 · Listing type & address",
+  details: "Step 2 · Details, rent & terms",
+  media: "Step 3 · Description, photos & contact",
+  payment: "Step 4 · Review & payment",
+} as const;
+
+function rentFasterFields(input: FillSheetInput, title: string, body: string): FillField[] {
+  const { street, unit } = splitAddressUnit(input.address);
+  const lease = leaseTermField(input);
+  const utilities = utilitiesField(input);
+  const petPolicy = petPolicyLabel(input.features ?? {});
+  return [
+    {
+      id: "rentfaster-listing-type",
+      label: "Listing type",
+      value: "Single Unit Listing",
+      source: "preset",
+      step: RENTFASTER_STEP.address,
+      hint: "Use this for one suite at one address. Use Multi-Unit Listing only when one address has several unit types.",
+      guardrailId: "rentfaster-single-address",
+    },
+    {
+      id: "rentfaster-address",
+      label: "Address",
+      value: street,
+      source: "listing",
+      step: RENTFASTER_STEP.address,
+      hint: "Pick the address/geocode result and confirm the listing lands in the correct city search.",
+      guardrailId: "rentfaster-location-market",
+    },
+    {
+      id: "rentfaster-unit",
+      label: "Unit / suite",
+      value: unit,
+      source: unit ? "listing" : "manual",
+      step: RENTFASTER_STEP.address,
+      hint: "Enter the suite/unit only when the rental has one.",
+    },
+    {
+      id: "rentfaster-property-type",
+      label: "Property type",
+      value: "Apartment",
+      source: "preset",
+      step: RENTFASTER_STEP.details,
+      hint: "Change this to match the unit if it is a condo, house, townhouse, basement, room, or another type.",
+    },
+    {
+      id: "rentfaster-title",
+      label: "Ad title",
+      value: title,
+      source: "listing",
+      step: RENTFASTER_STEP.details,
+    },
+    {
+      id: "rentfaster-price",
+      label: "Rent (monthly)",
+      value: formatPriceField(input.rentCents),
+      source: "listing",
+      step: RENTFASTER_STEP.details,
+    },
+    {
+      id: "rentfaster-bedrooms",
+      label: "Bedrooms",
+      value: bedroomsField(input.beds),
+      source: "listing",
+      step: RENTFASTER_STEP.details,
+    },
+    {
+      id: "rentfaster-bathrooms",
+      label: "Bathrooms",
+      value: bathroomsField(input.baths),
+      source: "listing",
+      step: RENTFASTER_STEP.details,
+    },
+    {
+      id: "rentfaster-size",
+      label: "Size (sq ft)",
+      value: sqftField(input.features?.sqft),
+      source: "listing",
+      step: RENTFASTER_STEP.details,
+      hint: "Use the real size when known; leave for manual review rather than overstating it.",
+    },
+    {
+      id: "rentfaster-available-date",
+      label: "Available date",
+      value: availabilityField(input.features?.available_date, input.now),
+      source: "listing",
+      step: RENTFASTER_STEP.details,
+    },
+    {
+      id: "rentfaster-lease-term",
+      label: "Lease term",
+      value: lease.value,
+      source: lease.source,
+      step: RENTFASTER_STEP.details,
+      hint: "Set the actual lease term." + lease.note,
+    },
+    {
+      id: "rentfaster-utilities",
+      label: "Utilities included",
+      value: utilities,
+      source: utilities ? "listing" : "manual",
+      step: RENTFASTER_STEP.details,
+      hint: "Tick only utilities included in rent. Hydro must stay disclosed when it is not included.",
+    },
+    {
+      id: "rentfaster-pets",
+      label: "Pet policy",
+      value: petPolicy,
+      source: petPolicy ? "listing" : "manual",
+      step: RENTFASTER_STEP.details,
+      hint: "Match the actual policy and avoid advertising a hard no-pets clause in Ontario.",
+    },
+    {
+      id: "rentfaster-parking",
+      label: "Parking",
+      value: textOrNull(input.features?.parking),
+      source: textOrNull(input.features?.parking) ? "listing" : "manual",
+      step: RENTFASTER_STEP.details,
+      hint: "State whether parking is included, extra, or unavailable.",
+    },
+    {
+      id: "rentfaster-furnished",
+      label: "Furnished",
+      value: yesNoField(input.features?.furnished),
+      source: "listing",
+      step: RENTFASTER_STEP.details,
+    },
+    {
+      id: "rentfaster-description",
+      label: "Description",
+      value: body,
+      source: "listing",
+      step: RENTFASTER_STEP.media,
+      hint: "The ad includes unlimited description, so keep the useful details in.",
+      guardrailId: "rentfaster-photo-depth",
+    },
+    {
+      id: "rentfaster-photos",
+      label: "Photos",
+      value: null,
+      source: "manual",
+      step: RENTFASTER_STEP.media,
+      hint: "Upload the full unit-specific photo set.",
+      guardrailId: "rentfaster-photo-depth",
+    },
+    {
+      id: "rentfaster-contact-email",
+      label: "Contact email",
+      value: textOrNull(input.leadContactEmail),
+      source: "listing",
+      step: RENTFASTER_STEP.media,
+    },
+    {
+      id: "rentfaster-contact-phone",
+      label: "Contact phone",
+      value: textOrNull(input.leadContactPhone),
+      source: "listing",
+      step: RENTFASTER_STEP.media,
+    },
+    {
+      id: "rentfaster-payment",
+      label: "Plan / payment",
+      value: "New Rental Ad - $54.50 + tax",
+      source: "preset",
+      step: RENTFASTER_STEP.payment,
+      hint: "Confirm the checkout total and the 60-day posting window before paying.",
+      guardrailId: "rentfaster-paid-sixty-day",
+    },
+    {
+      id: "rentfaster-live-url",
+      label: "After posting: live ad URL",
+      value: null,
+      source: "manual",
+      step: RENTFASTER_STEP.payment,
+      hint: "Open the public RentFaster ad and paste that live listing URL back into Vacantless. Do not use the dashboard or pricing page.",
+    },
+  ];
+}
+
 // Zumper posting is a 5-step wizard (S269 live walk): Address / Listing (itself
 // 5 sub-steps) / Pricing / Media / Review. Its form order is NOT our flat field
 // order, so — exactly like Rentals.ca — each field carries the step it lives on
@@ -978,6 +1160,7 @@ const FIELD_BUILDERS: Record<
   kijiji: kijijiFields,
   facebook: facebookFields,
   rentals_ca: rentalsCaFields,
+  rentfaster: rentFasterFields,
   zumper: zumperFields,
   viewit: viewitFields,
   realtor_ca: () => realtorCaFields(),

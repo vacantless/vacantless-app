@@ -22,6 +22,7 @@ export const COPY_PORTAL_KEYS = [
   "kijiji",
   "facebook",
   "rentals_ca",
+  "rentfaster",
   "zumper",
   "viewit",
 ] as const;
@@ -71,7 +72,8 @@ const PORTAL_PROFILES: Record<CopyPortalKey, PortalProfile> = {
     classified: true,
   },
   rentals_ca: { label: "Rentals.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
-  zumper: { label: "Zumper", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
+  rentfaster: { label: "RentFaster.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
+  zumper: { label: "Zumper + PadMapper", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
   viewit: { label: "Viewit.ca", maxTitle: 90, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
 };
 

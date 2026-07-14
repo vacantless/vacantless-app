@@ -91,7 +91,7 @@ const FULL: FillSheetInput = {
 };
 
 // --- every postable portal yields a usable sheet ---------------------------
-ok("6 postable portals", FILL_SHEET_PORTALS.length === 6);
+ok("7 postable portals", FILL_SHEET_PORTALS.length === 7);
 ok("3 field sources", FILL_FIELD_SOURCES.length === 3);
 
 for (const portal of FILL_SHEET_PORTALS) {
@@ -193,6 +193,41 @@ ok(
   })(),
 );
 
+// --- RentFaster fill sheet -------------------------------------------------
+const rentfaster = buildFillSheet(FULL, "rentfaster");
+ok(
+  "rentfaster: listing type is single-unit preset",
+  rentfaster.fields.find((f) => f.id === "rentfaster-listing-type")?.value ===
+    "Single Unit Listing",
+);
+ok(
+  "rentfaster: payment field carries paid plan guardrail",
+  (() => {
+    const f = rentfaster.fields.find((x) => x.id === "rentfaster-payment");
+    return (
+      f?.value === "New Rental Ad - $54.50 + tax" &&
+      f?.source === "preset" &&
+      f?.guardrailId === "rentfaster-paid-sixty-day"
+    );
+  })(),
+);
+ok(
+  "rentfaster: live URL proof reminder is manual",
+  (() => {
+    const f = rentfaster.fields.find((x) => x.id === "rentfaster-live-url");
+    return f?.source === "manual" && f?.value === null;
+  })(),
+);
+ok(
+  "rentfaster: contact email from input",
+  rentfaster.fields.find((f) => f.id === "rentfaster-contact-email")?.value ===
+    "rentals@agileonline.ca",
+);
+ok(
+  "rentfaster: every field is step-tagged",
+  rentfaster.fields.every((f) => !!f.step),
+);
+
 // --- a SPARSE unit leaves listing fields null, presets still present -------
 const SPARSE: FillSheetInput = {
   address: "12 Test St",
@@ -288,7 +323,7 @@ for (const portal of ["kijiji", "rentals_ca", "zumper", "viewit"] as const) {
   ok(`${portal}: tour follows description`, di >= 0 && ids[di + 1].endsWith("-virtual-tour"));
 }
 // Excluded portals never grow a tour field.
-for (const portal of ["facebook", "realtor_ca"] as const) {
+for (const portal of ["facebook", "rentfaster", "realtor_ca"] as const) {
   const sheet = buildFillSheet(WITH_TOUR, portal);
   ok(`${portal}: no tour field`, !sheet.fields.some((f) => f.id.endsWith("-virtual-tour")));
 }

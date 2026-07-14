@@ -129,7 +129,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 // --- selectable channels ---------------------------------------------------
 {
   const sel = selectableRunChannels(DISTRIBUTION_CHANNELS, new Set());
-  ok("selectable includes all 6 matrix + other = 7", sel.length === 7);
+  ok("selectable includes all 7 matrix + other = 8", sel.length === 8);
   ok("selectable includes other", sel.some((c) => c.key === "other"));
 }
 {
@@ -139,7 +139,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok("excludes already-in-run facebook", !sel.some((c) => c.key === "facebook"));
   ok("excludes already-in-run other", !sel.some((c) => c.key === "other"));
-  ok("selectable now 5", sel.length === 5);
+  ok("selectable now 6", sel.length === 6);
 }
 
 console.log(`\ndistribution-run: ${passed} passed, ${failed} failed`);

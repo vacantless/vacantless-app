@@ -26,7 +26,7 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- matrix ----------------------------------------------------------------
-ok("6 channels in the matrix", DISTRIBUTION_CHANNELS.length === 6);
+ok("7 channels in the matrix", DISTRIBUTION_CHANNELS.length === 7);
 ok(
   "matrix excludes 'other'",
   !DISTRIBUTION_CHANNELS.some((c) => (c.key as string) === "other"),
@@ -53,7 +53,11 @@ ok("realtor_ca has NO self-serve copy", channelByKey("realtor_ca")?.copyKey === 
 ok("facebook copyKey = facebook", channelByKey("facebook")?.copyKey === "facebook");
 ok("facebook is assisted_manual", channelByKey("facebook")?.mode === "assisted_manual");
 ok("rentals_ca is feed-eligible", channelByKey("rentals_ca")?.feedEligible === true);
+ok("rentfaster is feed-eligible", channelByKey("rentfaster")?.feedEligible === true);
+ok("rentfaster has copy", channelByKey("rentfaster")?.copyKey === "rentfaster");
+ok("rentfaster has guardrails", channelByKey("rentfaster")?.hasGuardrails === true);
 ok("zumper is feed-eligible", channelByKey("zumper")?.feedEligible === true);
+ok("zumper label carries PadMapper", channelByKey("zumper")?.label === "Zumper + PadMapper");
 ok("facebook is NOT feed-eligible", channelByKey("facebook")?.feedEligible === false);
 ok("kijiji is NOT feed-eligible", channelByKey("kijiji")?.feedEligible === false);
 ok(

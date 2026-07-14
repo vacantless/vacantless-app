@@ -138,6 +138,44 @@ const RENTALS_CA: Guardrail[] = [
   },
 ];
 
+const RENTFASTER: Guardrail[] = [
+  {
+    id: "rentfaster-paid-sixty-day",
+    severity: "critical",
+    title: "Confirm the paid 60-day ad cost before you submit.",
+    detail:
+      "RentFaster prices a single-unit new rental ad at $54.50 plus tax and says it posts for 60 days. Confirm the checkout total and that this channel is worth the spend before paying.",
+  },
+  {
+    id: "rentfaster-single-address",
+    severity: "warning",
+    title: "Use one single-unit ad per address unless this is a true multi-unit listing.",
+    detail:
+      "The single-unit ad is valid for one address. RentFaster's multi-unit option is for one address with up to 7 unit types, usually an apartment block. Do not bundle unrelated addresses into one ad.",
+  },
+  {
+    id: "rentfaster-location-market",
+    severity: "warning",
+    title: "Check the city and map market before paying.",
+    detail:
+      "RentFaster search is city and map driven. Confirm the address geocodes to the right city or nearby market before you pay, especially for Ontario listings outside its western-Canada core.",
+  },
+  {
+    id: "rentfaster-reactivate",
+    severity: "tip",
+    title: "Reactivate an old matching ad instead of creating a fresh one when possible.",
+    detail:
+      "RentFaster stores deactivated ads and lists a lower reactivation price than a new rental ad. If this exact address was listed before, check My Listings first.",
+  },
+  {
+    id: "rentfaster-photo-depth",
+    severity: "tip",
+    title: "Use the full photo set and a complete description.",
+    detail:
+      "RentFaster's single-unit ad includes unlimited photos and description, so do not hold back the unit-specific photos that help renters decide quickly.",
+  },
+];
+
 const ZUMPER: Guardrail[] = [
   {
     id: "zumper-url-strip",
@@ -281,6 +319,7 @@ const PORTAL_GUARDRAILS: Record<PortalKey, Guardrail[]> = {
   kijiji: KIJIJI,
   facebook: FACEBOOK,
   rentals_ca: RENTALS_CA,
+  rentfaster: RENTFASTER,
   zumper: ZUMPER,
   viewit: VIEWIT,
   realtor_ca: REALTOR_CA,

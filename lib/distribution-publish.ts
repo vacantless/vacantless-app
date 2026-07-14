@@ -27,6 +27,7 @@ export const PUBLISH_CHANNEL_KEYS = [
   "facebook",
   "kijiji",
   "rentals_ca",
+  "rentfaster",
   "zumper",
   "viewit",
   "realtor_ca",
@@ -88,7 +89,7 @@ const PUBLISH_STATUS_TONES: Record<PublishStatus, PublishTone> = {
 
 const PUBLISH_MODE_LABELS: Record<PublishMode, string> = {
   automatic: "Automatic",
-  feed_partner: "Rental-site feed",
+  feed_partner: "Feed candidate",
   browser_copilot: "Guided posting",
   concierge: "Vacantless desk",
   broker: "Broker / MLS",
@@ -437,7 +438,7 @@ export function preparePublishChannel(
     });
   }
 
-  if (key === "rentals_ca" || key === "zumper") {
+  if (key === "rentals_ca" || key === "rentfaster" || key === "zumper") {
     return feedPartnerPlan(meta, context);
   }
 
@@ -528,6 +529,14 @@ function feedPartnerPlan(
       auditMessage: isPartnerActive(partner.status)
         ? "The partner route is accepted. The listing is submitted through the feed; the live ad URL still needs checking."
         : "The partner route is submitted and waiting for acceptance.",
+    });
+  }
+  if (meta.key === "rentfaster") {
+    return plan(meta, {
+      status: "needs_payment",
+      operatorActionUrl: meta.actionUrl,
+      auditMessage:
+        "No accepted RentFaster feed route is recorded. Use the guided paid-listing flow; you review and pay before posting.",
     });
   }
   return plan(meta, {

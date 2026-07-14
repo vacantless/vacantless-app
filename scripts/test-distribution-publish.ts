@@ -40,6 +40,7 @@ const base: PublishChannelContext = {
 // --- channel keys + choices ------------------------------------------------
 ok("publish keys include internal public page", PUBLISH_CHANNEL_KEYS.includes("vacantless"));
 ok("publish keys include per-org feed", PUBLISH_CHANNEL_KEYS.includes("org_feed"));
+ok("publish keys include rentfaster", PUBLISH_CHANNEL_KEYS.includes("rentfaster"));
 ok("normalize accepts facebook", normalizePublishChannel(" facebook ") === "facebook");
 ok("normalize rejects junk", normalizePublishChannel("craigslist") === null);
 ok("network feed hidden by default", !publishChannelChoices().some((c) => c.key === "network_feed"));
@@ -53,6 +54,7 @@ ok("10 publish statuses", PUBLISH_STATUSES.length === 10);
 ok("label needs_login", publishStatusLabel("needs_login") === "Needs login");
 ok("bad status label -> Queued", publishStatusLabel("???") === "Queued");
 ok("mode label broker", publishModeLabel("broker") === "Broker / MLS");
+ok("mode label feed partner is candidate", publishModeLabel("feed_partner") === "Feed candidate");
 
 // --- internal channels -----------------------------------------------------
 {
@@ -125,6 +127,18 @@ ok("mode label broker", publishModeLabel("broker") === "Broker / MLS");
   });
   ok("accepted Rentals.ca partner submits but does not claim live", plan.status === "submitted");
   ok("accepted Rentals.ca keeps feed/partner mode", plan.mode === "feed_partner");
+}
+{
+  const plan = preparePublishChannel("rentfaster", base);
+  ok("RentFaster without partner is guided paid flow", plan.status === "needs_payment");
+  ok("RentFaster without partner does not claim feed submission", plan.auditMessage.includes("No accepted RentFaster feed route"));
+}
+{
+  const plan = preparePublishChannel("rentfaster", {
+    ...base,
+    partner: { status: "accepted", feedUrl: "https://feed.test/rentfaster.xml" },
+  });
+  ok("accepted RentFaster partner submits but does not claim live", plan.status === "submitted");
 }
 {
   const plan = preparePublishChannel("zumper", base);

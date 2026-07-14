@@ -40,7 +40,7 @@ export type ChannelMode = (typeof CHANNEL_MODES)[number];
 
 const CHANNEL_MODE_LABELS: Record<ChannelMode, string> = {
   assisted_manual: "Guided posting",
-  feed_or_assisted: "Feed or guided",
+  feed_or_assisted: "Feed candidate / guided",
   broker: "Broker / MLS",
 };
 
@@ -105,7 +105,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "Rentals.ca",
     mode: "feed_or_assisted",
     blurb:
-      "If your Rentals.ca feed route is connected, Vacantless can submit the listing. Until then, use the guided copy and field sheet.",
+      "Rentals.ca is a feed candidate, not a live Vacantless integration. Until a partner route is accepted, use the guided copy, field sheet, and proof tracking.",
     copyKey: "rentals_ca",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -113,11 +113,23 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     portalUrl: "https://rentals.ca/",
   },
   {
-    key: "zumper",
-    label: "Zumper",
+    key: "rentfaster",
+    label: "RentFaster.ca",
     mode: "feed_or_assisted",
     blurb:
-      "If your Zumper feed route is connected, Vacantless can submit the listing. Until then, use the guided copy and field sheet.",
+      "RentFaster is a feed candidate and paid self-serve listing lane. Vacantless prepares the fields and tracking; you review, pay if needed, and paste the live ad link.",
+    copyKey: "rentfaster",
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: true,
+    portalUrl: "https://www.rentfaster.ca/list-property/",
+  },
+  {
+    key: "zumper",
+    label: "Zumper + PadMapper",
+    mode: "feed_or_assisted",
+    blurb:
+      "Zumper is the managed posting path and can also reach PadMapper. Use guided posting until a partner route is accepted; submitted is not counted as live until proof comes back.",
     copyKey: "zumper",
     hasFillSheet: true,
     hasGuardrails: true,

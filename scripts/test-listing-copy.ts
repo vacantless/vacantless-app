@@ -33,7 +33,7 @@ function ok(name: string, cond: boolean) {
 const NOW = new Date("2026-06-15T12:00:00Z");
 
 // --- portal keys -----------------------------------------------------------
-ok("COPY_PORTAL_KEYS has 6", COPY_PORTAL_KEYS.length === 6);
+ok("COPY_PORTAL_KEYS has 7", COPY_PORTAL_KEYS.length === 7);
 ok("COPY_PORTALS mirrors keys", COPY_PORTALS.length === COPY_PORTAL_KEYS.length);
 ok("isCopyPortalKey: kijiji", isCopyPortalKey("kijiji"));
 ok("isCopyPortalKey: rejects junk", !isCopyPortalKey("craigslist"));
@@ -42,6 +42,8 @@ ok("normalizeCopyPortal: trims + accepts", normalizeCopyPortal(" facebook ") ===
 ok("normalizeCopyPortal: blank -> generic", normalizeCopyPortal("") === "generic");
 ok("normalizeCopyPortal: junk -> generic", normalizeCopyPortal("nope") === "generic");
 ok("copyPortalLabel: kijiji", copyPortalLabel("kijiji") === "Kijiji");
+ok("copyPortalLabel: rentfaster", copyPortalLabel("rentfaster") === "RentFaster.ca");
+ok("copyPortalLabel: zumper names PadMapper", copyPortalLabel("zumper") === "Zumper + PadMapper");
 ok("copyPortalLabel: junk -> Master copy", copyPortalLabel("x") === "Master copy");
 
 // --- formatRent ------------------------------------------------------------
@@ -280,8 +282,9 @@ ok(
   rentalsCa.body.includes("Book a viewing or ask us a question:"),
 );
 ok(
-  "copy: zumper + viewit also drop the spec line",
-  !buildListingCopy(fullInput, "zumper").body.includes("850 sq ft") &&
+  "copy: rentfaster + zumper + viewit also drop the spec line",
+  !buildListingCopy(fullInput, "rentfaster").body.includes("850 sq ft") &&
+    !buildListingCopy(fullInput, "zumper").body.includes("850 sq ft") &&
     !buildListingCopy(fullInput, "viewit").body.includes("850 sq ft"),
 );
 // Classifieds keep the full self-contained dump (regression guard).

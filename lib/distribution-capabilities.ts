@@ -10,8 +10,8 @@
 //
 // Honesty rules (brief): automatic only where real (Vacantless page + org feed);
 // Facebook/Kijiji/Viewit are browser co-pilot or concierge (never silent posting);
-// Rentals.ca/Zumper are feed-partner when accepted, else guided; Realtor.ca is a
-// broker/DDF route. "submitted"/feed-ready is never "live".
+// Rentals.ca/RentFaster/Zumper are feed-candidates when accepted, else guided;
+// Realtor.ca is a broker/DDF route. "submitted"/feed-ready is never "live".
 // ============================================================================
 
 import {
@@ -97,8 +97,15 @@ const CHANNEL_CAPABILITIES: Record<PublishChannelKey, ChannelCapability> = {
     supportsFeed: true,
     supportsCopilot: true,
     supportsConcierge: true,
-    postingPolicy: "feed_only",
-    needsOrgAccount: true,
+    postingPolicy: "human_confirmed",
+  }),
+  rentfaster: CAP("rentfaster", "feed_partner", {
+    supportsFeed: true,
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    requiresPayment: true,
+    postingPolicy: "human_confirmed",
   }),
   zumper: CAP("zumper", "feed_partner", {
     supportsFeed: true,
@@ -264,6 +271,9 @@ export function channelAccountReadiness(
   }
   if (cap.transport === "custom") {
     return { ...base, status: "ready", nextActionLabel: "Record a tracked post", nextActionKind: "manual_custom" };
+  }
+  if (cap.transport === "feed_partner") {
+    return { ...base, status: "ready", nextActionLabel: "Use guided posting", nextActionKind: "feed_setup" };
   }
   return { ...base, status: "ready", nextActionLabel: "Open co-pilot", nextActionKind: "open_copilot" };
 }

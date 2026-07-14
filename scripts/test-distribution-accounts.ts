@@ -39,11 +39,14 @@ eq(channelCapability("facebook").postingPolicy, "human_confirmed", "facebook hum
 eq(channelCapability("kijiji").transport, "browser_copilot", "kijiji is co-pilot");
 eq(channelCapability("viewit").requiresPayment, true, "viewit needs payment");
 eq(channelCapability("rentals_ca").transport, "feed_partner", "rentals_ca feed_partner");
-eq(channelCapability("rentals_ca").needsOrgAccount, true, "rentals_ca needs an org account");
+eq(channelCapability("rentals_ca").needsOrgAccount, false, "rentals_ca is guided unless partner acceptance exists");
+eq(channelCapability("rentfaster").transport, "feed_partner", "rentfaster feed candidate");
+eq(channelCapability("rentfaster").requiresPayment, true, "rentfaster needs payment");
+eq(channelCapability("rentfaster").postingPolicy, "human_confirmed", "rentfaster human confirmed");
 eq(channelCapability("realtor_ca").transport, "broker", "realtor_ca broker");
 eq(channelCapability("realtor_ca").postingPolicy, "broker_only", "realtor_ca broker_only");
 eq(channelCapability("other").transport, "custom", "other custom");
-eq(allChannelCapabilities().length, 10, "10 channel capabilities");
+eq(allChannelCapabilities().length, 11, "11 channel capabilities");
 
 // --- account readiness ------------------------------------------------------
 {
@@ -53,18 +56,23 @@ eq(allChannelCapabilities().length, 10, "10 channel capabilities");
   eq(r.nextActionKind, "publish_now", "vacantless publish_now");
 }
 {
-  // Feed partner with no account -> needs_setup.
+  // Rentals.ca is a feed-candidate, but the default operator lane is guided.
   const r = channelAccountReadiness({ capability: channelCapability("rentals_ca"), accountStatus: null });
-  eq(r.status, "needs_setup", "rentals_ca no account => needs_setup");
-  ok(r.blockers.length > 0, "needs_setup carries a blocker");
+  eq(r.status, "ready", "rentals_ca no account => guided ready");
+  eq(r.nextActionLabel, "Use guided posting", "rentals_ca guided next step");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("rentals_ca"), accountStatus: "submitted" });
-  eq(r.status, "submitted", "rentals_ca submitted => submitted");
+  eq(r.status, "ready", "rentals_ca submitted account does not imply connected feed");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("rentals_ca"), accountStatus: "accepted" });
   eq(r.status, "ready", "rentals_ca accepted => ready");
+}
+{
+  const r = channelAccountReadiness({ capability: channelCapability("rentfaster") });
+  eq(r.status, "ready", "rentfaster ready to guide");
+  eq(r.nextActionLabel, "Use guided posting", "rentfaster guided next step");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("zumper"), hasFeedRoute: true });

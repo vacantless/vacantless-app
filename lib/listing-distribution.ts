@@ -10,6 +10,7 @@ export const PORTAL_KEYS = [
   "kijiji",
   "facebook",
   "rentals_ca",
+  "rentfaster",
   "zumper",
   "viewit",
   "realtor_ca",
@@ -22,7 +23,8 @@ const PORTAL_LABELS: Record<PortalKey, string> = {
   kijiji: "Kijiji",
   facebook: "Facebook Marketplace",
   rentals_ca: "Rentals.ca",
-  zumper: "Zumper",
+  rentfaster: "RentFaster.ca",
+  zumper: "Zumper + PadMapper",
   viewit: "Viewit.ca",
   realtor_ca: "Realtor.ca",
   other: "Other",
@@ -204,6 +206,7 @@ export type ListingPostValidation =
 export type ListingPostError =
   | "live_needs_url"
   | "url_not_web"
+  | "rentfaster_url_required"
   | "realtor_url_required";
 
 /** True when a string is a plausible absolute http(s) URL. */
@@ -233,6 +236,29 @@ export function isRealtorCaListingUrl(value: string | null | undefined): boolean
   }
 }
 
+/** True for a public RentFaster listing URL, not a search/manage/pricing page. */
+export function isRentFasterListingUrl(value: string | null | undefined): boolean {
+  if (!isWebUrl(value)) return false;
+  try {
+    const u = new URL(String(value).trim());
+    const host = u.hostname.toLowerCase();
+    if (host !== "rentfaster.ca" && host !== "www.rentfaster.ca") return false;
+    const path = u.pathname.toLowerCase().replace(/\/+$/, "");
+    if (!path || path === "/" || path === "/prices" || path === "/list-property") {
+      return false;
+    }
+    if (/\/(?:dashboard|login|register|my-listings)(?:\/|$)/.test(path)) {
+      return false;
+    }
+    // Search pages end at /rentals; listing detail pages continue past it and
+    // include an id/address segment. This is deliberately shape-based, not
+    // network verification.
+    return /\/rentals\/.+\d/.test(path);
+  } catch {
+    return false;
+  }
+}
+
 export function validateListingPost(
   input: ListingPostInput,
 ): ListingPostValidation {
@@ -244,6 +270,13 @@ export function validateListingPost(
   // Any URL that IS provided must look like a real web address.
   if (url && !isWebUrl(url)) {
     return { ok: false, field: "url", code: "url_not_web" };
+  }
+  if (
+    input.status === "live" &&
+    input.portal === "rentfaster" &&
+    !isRentFasterListingUrl(url)
+  ) {
+    return { ok: false, field: "url", code: "rentfaster_url_required" };
   }
   if (
     input.status === "live" &&
@@ -262,6 +295,8 @@ export function listingPostErrorMessage(code: unknown): string {
       return "Add the ad's web link before marking this post Live, or set it to Draft for now.";
     case "url_not_web":
       return "That doesn't look like a web link. Use the full address, like https://www.kijiji.ca/...";
+    case "rentfaster_url_required":
+      return "Use the live RentFaster.ca listing link, not the search, pricing, or dashboard page, before marking RentFaster Live.";
     case "realtor_url_required":
       return "Use the live Realtor.ca listing link, like https://www.realtor.ca/real-estate/123456/..., before marking Realtor.ca Live.";
     default:

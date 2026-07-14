@@ -94,6 +94,7 @@ ok(!canMarkLive("needs_login"), "needs_login is not live");
 {
   const now = "2026-07-13T00:00:00.000Z";
   eq(scheduleNextVerification("facebook", "verified_live", now), "2026-07-27T00:00:00.000Z", "facebook live +14d");
+  eq(scheduleNextVerification("rentfaster", "verified_live", now), "2026-07-27T00:00:00.000Z", "rentfaster live +14d");
   eq(scheduleNextVerification("org_feed", "verified_submitted", now), "2026-07-20T00:00:00.000Z", "org_feed submitted +7d");
   eq(scheduleNextVerification("kijiji", "needs_login", now), "2026-07-14T00:00:00.000Z", "needs_login +1d");
   eq(scheduleNextVerification("facebook", "not_found", now), null, "not_found => no auto recheck");

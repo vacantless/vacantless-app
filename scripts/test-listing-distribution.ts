@@ -18,6 +18,7 @@ import {
   countLeadsByPost,
   isWebUrl,
   isRealtorCaListingUrl,
+  isRentFasterListingUrl,
   validateListingPost,
   listingPostErrorMessage,
   reservableTrackerId,
@@ -36,7 +37,7 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- portals ---------------------------------------------------------------
-ok("PORTAL_KEYS has 7", PORTAL_KEYS.length === 7);
+ok("PORTAL_KEYS has 8", PORTAL_KEYS.length === 8);
 ok("PORTALS mirrors keys", PORTALS.length === PORTAL_KEYS.length);
 ok("PORTALS carries labels", PORTALS[0].label === "Kijiji");
 ok("isPortalKey: kijiji", isPortalKey("kijiji"));
@@ -47,6 +48,8 @@ ok("normalizePortal: junk -> other", normalizePortal("nope") === "other");
 ok("normalizePortal: blank -> other", normalizePortal("") === "other");
 ok("normalizePortal: non-string -> other", normalizePortal(null) === "other");
 ok("portalLabel: rentals_ca", portalLabel("rentals_ca") === "Rentals.ca");
+ok("portalLabel: rentfaster", portalLabel("rentfaster") === "RentFaster.ca");
+ok("portalLabel: zumper names PadMapper reach", portalLabel("zumper") === "Zumper + PadMapper");
 ok("portalLabel: facebook", portalLabel("facebook") === "Facebook Marketplace");
 ok("portalLabel: junk -> Other", portalLabel("xyz") === "Other");
 
@@ -105,6 +108,10 @@ ok(
   sourceLabelForPost({ portal: "facebook" }) === "Facebook Marketplace",
 );
 ok(
+  "sourceLabelForPost: rentfaster",
+  sourceLabelForPost({ portal: "rentfaster" }) === "RentFaster.ca",
+);
+ok(
   "sourceLabelForPost: other uses label",
   sourceLabelForPost({ portal: "other", label: "PadMapper" }) === "PadMapper",
 );
@@ -150,6 +157,24 @@ ok(
 ok(
   "isRealtorCaListingUrl: non-realtor host rejected",
   !isRealtorCaListingUrl("https://example.com/real-estate/28573147"),
+);
+ok(
+  "isRentFasterListingUrl: detail listing accepted",
+  isRentFasterListingUrl(
+    "https://www.rentfaster.ca/on/toronto/rentals/apartment/1-bedroom/123-main-street/567890",
+  ),
+);
+ok(
+  "isRentFasterListingUrl: city search rejected",
+  !isRentFasterListingUrl("https://www.rentfaster.ca/on/toronto/rentals/"),
+);
+ok(
+  "isRentFasterListingUrl: prices page rejected",
+  !isRentFasterListingUrl("https://www.rentfaster.ca/prices/"),
+);
+ok(
+  "isRentFasterListingUrl: wrong host rejected",
+  !isRentFasterListingUrl("https://example.com/on/toronto/rentals/apartment/1"),
 );
 
 ok(
@@ -197,6 +222,24 @@ ok(
     url: "https://www.realtor.ca/",
   }).ok === false,
 );
+const rentFasterSearchPage = validateListingPost({
+  portal: "rentfaster",
+  status: "live",
+  url: "https://www.rentfaster.ca/on/toronto/rentals/",
+});
+ok(
+  "validate: rentfaster live requires detail listing URL",
+  rentFasterSearchPage.ok === false &&
+    rentFasterSearchPage.code === "rentfaster_url_required",
+);
+ok(
+  "validate: rentfaster detail listing URL ok",
+  validateListingPost({
+    portal: "rentfaster",
+    status: "live",
+    url: "https://www.rentfaster.ca/on/toronto/rentals/apartment/1-bedroom/123-main-street/567890",
+  }).ok === true,
+);
 const realtorWrongHost = validateListingPost({
   portal: "realtor_ca",
   status: "live",
@@ -233,6 +276,10 @@ ok(
 ok(
   "errorMessage: realtor_url_required mentions Realtor.ca",
   listingPostErrorMessage("realtor_url_required").includes("Realtor.ca"),
+);
+ok(
+  "errorMessage: rentfaster_url_required mentions RentFaster",
+  listingPostErrorMessage("rentfaster_url_required").includes("RentFaster"),
 );
 ok(
   "errorMessage: unknown -> generic",
@@ -302,8 +349,9 @@ ok(
 ok(
   "errorMessage: no em dashes",
   !/[—–]/.test(
-    listingPostErrorMessage("live_needs_url") +
+      listingPostErrorMessage("live_needs_url") +
       listingPostErrorMessage("url_not_web") +
+      listingPostErrorMessage("rentfaster_url_required") +
       listingPostErrorMessage("realtor_url_required"),
   ),
 );

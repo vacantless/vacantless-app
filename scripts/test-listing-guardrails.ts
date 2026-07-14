@@ -79,6 +79,16 @@ ok(
   rentals.some((g) => g.id === "rentalsca-lead-contact-revert"),
 );
 
+const rentfaster = guardrailsForPortal("rentfaster");
+ok(
+  "rentfaster: paid 60-day guardrail present + critical",
+  rentfaster.some((g) => g.id === "rentfaster-paid-sixty-day" && g.severity === "critical"),
+);
+ok(
+  "rentfaster: single-address guardrail present",
+  rentfaster.some((g) => g.id === "rentfaster-single-address"),
+);
+
 const fb = guardrailsForPortal("facebook");
 ok(
   "facebook: manual-only present + critical",

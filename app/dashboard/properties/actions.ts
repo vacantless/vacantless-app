@@ -1666,6 +1666,7 @@ export async function cancelDistributionRun(formData: FormData) {
 // ===========================================================================
 const PARTNER_CHANNEL_KEYS = [
   "rentals_ca",
+  "rentfaster",
   "zumper",
   "viewit",
   "realtor_ca",

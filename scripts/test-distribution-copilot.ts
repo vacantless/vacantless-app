@@ -45,12 +45,13 @@ ok(isCopilotChannel("viewit"), "viewit is a co-pilot channel");
 ok(!isCopilotChannel("vacantless"), "vacantless is NOT co-pilot (automatic)");
 ok(!isCopilotChannel("org_feed"), "org_feed is NOT co-pilot (automatic)");
 ok(!isCopilotChannel("rentals_ca"), "rentals_ca is NOT co-pilot (feed partner)");
+ok(!isCopilotChannel("rentfaster"), "rentfaster is NOT co-pilot (feed candidate)");
 ok(!isCopilotChannel("zumper"), "zumper is NOT co-pilot (feed partner)");
 ok(!isCopilotChannel("realtor_ca"), "realtor_ca is NOT co-pilot (broker)");
 ok(!isCopilotChannel("other"), "other is NOT co-pilot (custom)");
 
 // --- non-copilot channels return null --------------------------------------
-for (const c of ["vacantless", "org_feed", "network_feed", "rentals_ca", "zumper", "realtor_ca", "other"] as const) {
+for (const c of ["vacantless", "org_feed", "network_feed", "rentals_ca", "rentfaster", "zumper", "realtor_ca", "other"] as const) {
   eq(
     buildCopilotScript({ channel: c, copy: BASE, trackedUrl: TRACKED, publicPageLive: true }),
     null,

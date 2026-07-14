@@ -43,6 +43,14 @@ ok(
   })?.label === "Facebook Marketplace",
 );
 ok(
+  "source: post rentfaster label",
+  resolveLeadSource({
+    source: null,
+    source_detail: null,
+    post: { portal: "rentfaster", label: null, url: null },
+  })?.label === "RentFaster.ca",
+);
+ok(
   "source: post other -> free-text label",
   resolveLeadSource({
     source: null,

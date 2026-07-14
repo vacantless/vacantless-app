@@ -197,6 +197,7 @@ export const STALE_DAYS: Partial<Record<string, number>> = {
   kijiji: 14,
   viewit: 30, // paid placement — longer term
   rentals_ca: 7,
+  rentfaster: 14,
   zumper: 7,
   org_feed: 7,
   network_feed: 7,
