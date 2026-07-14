@@ -256,6 +256,38 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
   }
 }
 
+// --- leasing.viewing_booked event (S490) -----------------------------------
+{
+  const ev = getNotificationEvent("leasing.viewing_booked");
+  ok("viewing_booked: registered", ev !== null);
+  ok("viewing_booked: leasing family", ev?.family === "leasing");
+  ok("viewing_booked: operator audience", ev?.audience === "operator");
+  ok("viewing_booked: active", ev?.active === true);
+  ok("viewing_booked: in active set", activeNotificationEvents().some((e) => e.key === "leasing.viewing_booked"));
+  ok("viewing_booked: informational accent", ev?.defaultAccent === undefined);
+  if (ev) {
+    const declared = new Set(ev.tokens);
+    const used = [...(ev.defaultSubject + " " + ev.defaultBody).matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)].map(
+      (m) => m[1].toLowerCase(),
+    );
+    ok("viewing_booked: all template tokens declared", used.every((t) => declared.has(t)));
+    ok("viewing_booked: declares phone", declared.has("lead_phone"));
+    ok("viewing_booked: declares showing time", declared.has("showing_time"));
+    const rendered = renderNotification(ev, null, {
+      org_name: "Agile",
+      property_address: "833 Pillette Rd - Unit 20",
+      lead_name: "Gurpreet Singh",
+      lead_phone: "519-555-0100",
+      showing_time: "Tue, Jul 14, 5:30 PM EDT",
+      dashboard_url: "https://x/dashboard/leads/abc",
+    });
+    ok("viewing_booked: renders lead name", rendered.subject.includes("Gurpreet Singh"));
+    ok("viewing_booked: renders showing time", rendered.subject.includes("5:30 PM"));
+    ok("viewing_booked: renders phone", rendered.body.includes("519-555-0100"));
+    ok("viewing_booked: no leftover tokens", !/\{\{/.test(rendered.subject + rendered.body));
+  }
+}
+
 // --- leasing.daily_snapshot event (digest — S333) --------------------------
 {
   const ev = getNotificationEvent("leasing.daily_snapshot");

@@ -232,6 +232,23 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "New inquiry from {{lead_name}} for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply when you can and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
   },
+  // Real-time viewing-booked alert (S490). Audience operator; complements
+  // leasing.new_lead with the missing booked-time signal when a renter self-books
+  // from /r. Defaults to the same manage-leads member fallback, so the covering
+  // leasing inbox gets the time immediately even when auto-assign is off.
+  {
+    key: "leasing.viewing_booked",
+    family: "leasing",
+    audience: "operator",
+    label: "Viewing booked",
+    description:
+      "When a renter books a viewing from your public listing, your leasing team is notified in real time with the time and contact so whoever's covering can plan. Defaults to members who manage inquiries; edit the recipients below.",
+    tokens: [...COMMON_TOKENS, "lead_name", "lead_phone", "showing_time", "dashboard_url"],
+    defaultSubject: "Viewing booked: {{lead_name}} — {{showing_time}}",
+    defaultBody:
+      "{{lead_name}} booked a viewing at {{property_address}}.\n\nWhen: {{showing_time}}\nPhone: {{lead_phone}}\n\nOpen the inquiry: {{dashboard_url}}",
+    active: true,
+  },
   // Post-showing outcome nudge (S391). Audience operator; the push half of the
   // showing funnel — once a showing's time has passed with no outcome recorded,
   // the operator gets ONE "how did the viewing go?" email with a one-tap

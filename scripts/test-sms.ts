@@ -78,8 +78,23 @@ ok("booking includes org", booking.includes("Agile Rentals"));
 ok("booking includes address", booking.includes("833 Pillette Rd, Unit 6"));
 ok("booking includes when", booking.includes("Wed, Jun 17 at 2:00 PM"));
 ok("booking includes opt-out line", booking.includes("Reply STOP to opt out."));
+eq(
+  "booking default copy unchanged",
+  booking,
+  "Agile Rentals: your viewing at 833 Pillette Rd, Unit 6 is confirmed for Wed, Jun 17 at 2:00 PM. Reply here if you need to reschedule. Reply STOP to opt out.",
+);
 ok("booking has no em dash", !/[‒–—―]/.test(booking));
 ok("booking <= 2 segments", smsSegments(booking) <= 2);
+const bookingConfirmFirst = bookingConfirmationSms({
+  ...copy,
+  booking_requires_confirmation: true,
+});
+ok("booking confirm-first says request is in", bookingConfirmFirst.includes("your viewing request"));
+ok("booking confirm-first says agent confirms", bookingConfirmFirst.includes("will reach out to confirm before your viewing"));
+ok("booking confirm-first avoids confirmed phrasing", !bookingConfirmFirst.includes("is confirmed for"));
+ok("booking confirm-first has opt-out", bookingConfirmFirst.includes("Reply STOP to opt out."));
+ok("booking confirm-first has no em dash", !/[‒–—―]/.test(bookingConfirmFirst));
+ok("booking confirm-first <= 2 segments", smsSegments(bookingConfirmFirst) <= 2);
 
 const r24 = showingReminderSms(copy, "24h");
 const r2 = showingReminderSms(copy, "2h");

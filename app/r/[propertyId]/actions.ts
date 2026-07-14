@@ -112,6 +112,7 @@ async function attemptBooking(
         // enforced at the send site, not just via the sms_enabled toggle). The
         // extras RPC (migration 0126) surfaces it alongside the access notes.
         let orgPlan: string | null = null;
+        let bookingRequiresConfirmation = false;
         {
           const { data: extras } = await supabase.rpc(
             "get_booking_confirmation_extras",
@@ -121,11 +122,13 @@ async function attemptBooking(
             | {
                 leasing_phone?: string | null;
                 plan?: string | null;
+                booking_requires_confirmation?: boolean | null;
               }
             | null;
           if (e) {
             leasingPhone = e.leasing_phone ?? null;
             orgPlan = e.plan ?? null;
+            bookingRequiresConfirmation = e.booking_requires_confirmation === true;
           }
         }
         const result = await sendBookingConfirmation({
@@ -142,6 +145,7 @@ async function attemptBooking(
             ? `${APP_URL}/showing/cancel/${b.cancel_token}`
             : null,
           leasing_phone: leasingPhone,
+          booking_requires_confirmation: bookingRequiresConfirmation,
         });
         if (result.sent) {
           await supabase.rpc("record_booking_email", {
@@ -157,6 +161,7 @@ async function attemptBooking(
               org_name: b.org_name,
               property_address: b.property_address,
               when_label: whenLabel,
+              booking_requires_confirmation: bookingRequiresConfirmation,
             }),
           });
           if (sms.sent) {
@@ -172,6 +177,7 @@ async function attemptBooking(
         // that hasn't turned it on. Runs after the renter's confirmation is sent.
         if (b.showing_id) {
           await autoAssignBookedShowing(b.showing_id);
+          await notifyOperatorsOfViewingBooked(b.showing_id);
         }
       }
     }
@@ -269,6 +275,104 @@ async function notifyOperatorsOfNewLead(
     });
   } catch {
     // Swallow — the lead is saved; the operator alert is best-effort.
+  }
+}
+
+// Real-time operator alert when a renter self-books a viewing (S490). This runs
+// in the same success branch as autoAssignBookedShowing, but it is independent of
+// auto-assign's org opt-in: every successful booking should produce one
+// lead-manager alert with the booked time. Best-effort and never throws.
+async function notifyOperatorsOfViewingBooked(showingId: string): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    if (!admin) return;
+
+    const { data: showingRow } = await admin
+      .from("showings")
+      .select(
+        "id, organization_id, scheduled_at, lead:leads(id, name, phone), property:properties(id, address)",
+      )
+      .eq("id", showingId)
+      .maybeSingle();
+    if (!showingRow) return;
+    const showing = showingRow as unknown as {
+      organization_id: string;
+      scheduled_at: string | null;
+      lead: { id: string; name: string | null; phone: string | null } | null;
+      property: { id: string; address: string | null } | null;
+    };
+
+    const { data: orgRow } = await admin
+      .from("organizations")
+      .select(
+        "id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone",
+      )
+      .eq("id", showing.organization_id)
+      .maybeSingle();
+    if (!orgRow) return;
+    const org = orgRow as {
+      id: string;
+      name: string | null;
+      brand_color: string | null;
+      logo_url: string | null;
+      reply_to_email: string | null;
+      public_contact_email: string | null;
+      booking_timezone: string | null;
+    };
+
+    const { data: memberRows } = await admin
+      .from("memberships")
+      .select("user_id, role")
+      .eq("organization_id", org.id);
+    const members: NotifyMember[] = [];
+    for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
+      const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+      members.push({ role: m.role, email: u?.user?.email ?? null });
+    }
+    const operatorFallback = resolveLeadNotifyEmailsPreferMemberFallback(members, [
+      org.reply_to_email,
+      org.public_contact_email,
+    ]).slice(0, MAX_LEAD_NOTIFY_RECIPIENTS);
+
+    const timeZone = org.booking_timezone || "America/Toronto";
+    const showingTime = showing.scheduled_at
+      ? new Date(showing.scheduled_at).toLocaleString("en-US", {
+          timeZone,
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        })
+      : "(time not set)";
+    const dashboardUrl = showing.lead?.id
+      ? `${APP_URL}/dashboard/leads/${showing.lead.id}`
+      : `${APP_URL}/dashboard/showings`;
+
+    await sendOrgNotification({
+      client: admin,
+      org: {
+        id: org.id,
+        name: org.name,
+        brand_color: org.brand_color,
+        logo_url: org.logo_url,
+        reply_to_email: org.reply_to_email,
+      },
+      eventKey: "leasing.viewing_booked",
+      vars: {
+        org_name: org.name ?? "",
+        property_address: showing.property?.address ?? "(unspecified property)",
+        lead_name: showing.lead?.name?.trim() || "(no name given)",
+        lead_phone: showing.lead?.phone?.trim() || "(no phone)",
+        showing_time: showingTime,
+        dashboard_url: dashboardUrl,
+      },
+      operatorFallback,
+      action: { label: "Open the inquiry", url: dashboardUrl },
+    });
+  } catch {
+    // Swallow — the booking is saved; the alert is best-effort.
   }
 }
 

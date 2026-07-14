@@ -26,6 +26,7 @@ type OrgBooking = {
   booking_slot_minutes: number;
   booking_lead_hours: number;
   booking_horizon_days: number;
+  booking_requires_confirmation: boolean;
   clustering_enabled: boolean;
   clustering_buffer_minutes: number;
   showing_block_capacity: number;
@@ -76,7 +77,7 @@ export default async function AvailabilityPage({
       supabase
         .from("organizations")
         .select(
-          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
+          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
         )
         .eq("id", org?.id ?? "")
         .maybeSingle(),
@@ -96,6 +97,7 @@ export default async function AvailabilityPage({
     booking_slot_minutes: 30,
     booking_lead_hours: 12,
     booking_horizon_days: 14,
+    booking_requires_confirmation: false,
     clustering_enabled: false,
     clustering_buffer_minutes: 60,
     showing_block_capacity: 6,
@@ -247,6 +249,23 @@ export default async function AvailabilityPage({
             />
           </label>
         </div>
+        <label className="mt-4 flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+          <input
+            type="checkbox"
+            name="booking_requires_confirmation"
+            defaultChecked={cfg.booking_requires_confirmation}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300"
+          />
+          <span>
+            <span className="block text-sm font-medium text-gray-700">
+              Agent confirms viewings before they happen
+            </span>
+            <span className="mt-1 block text-sm text-gray-500">
+              Renters are told someone will reach out to confirm before the
+              viewing.
+            </span>
+          </span>
+        </label>
         <div className="mt-4 text-right">
           <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
             Save settings

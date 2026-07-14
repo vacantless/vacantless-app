@@ -146,12 +146,20 @@ export type SmsCopyInput = {
   org_name: string | null;
   property_address: string | null;
   when_label: string; // already formatted in the org timezone
+  booking_requires_confirmation?: boolean | null;
 };
 
 /** Booking-confirmation text. The renter just self-booked; first SMS touch. */
 export function bookingConfirmationSms(p: SmsCopyInput): string {
   const org = (p.org_name || "Our leasing team").trim();
   const addr = p.property_address ? p.property_address.trim() : "the property";
+  if (p.booking_requires_confirmation === true) {
+    return noEmDash(
+      `${org}: your viewing request at ${addr} for ${p.when_label} is in. ` +
+        `Someone from our team will reach out to confirm before your viewing. ` +
+        `Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
+    );
+  }
   return noEmDash(
     `${org}: your viewing at ${addr} is confirmed for ${p.when_label}. ` +
       `Reply here if you need to reschedule. ${OPT_OUT_LINE}`,

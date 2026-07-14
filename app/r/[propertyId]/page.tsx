@@ -48,6 +48,9 @@ type Listing = {
   brand_color_secondary: string | null;
   logo_url: string | null;
   screening_enabled: boolean;
+  // S490: when true, booked-copy tells renters an agent will confirm first.
+  // Older RPC payloads omit it -> default false below, preserving current copy.
+  booking_requires_confirmation?: boolean;
   // Per-built-in ask toggles (S438 Slice 2). Default true from get_public_listing,
   // so an older listing payload without these keys reads as undefined -> the form
   // coalesces to true (asks the built-in) and behavior is unchanged.
@@ -160,6 +163,8 @@ export default async function PublicListingPage({
   ];
 
   const booked = searchParams.submitted === "booked";
+  const bookingRequiresConfirmation =
+    l.booking_requires_confirmation === true;
   // The renter's chosen time was taken before we could book it (audit B1). Their
   // inquiry is still saved; we tell them clearly and let them pick another time.
   const slotTaken = searchParams.submitted === "slottaken";
@@ -482,11 +487,17 @@ export default async function PublicListingPage({
                 <Icons.check className="h-6 w-6" />
               </span>
               <h2 className="text-xl font-bold text-gray-900">
-                {booked ? "Your viewing is booked!" : "Thanks, we got your inquiry!"}
+                {booked
+                  ? bookingRequiresConfirmation
+                    ? "Your viewing request is in!"
+                    : "Your viewing is booked!"
+                  : "Thanks, we got your inquiry!"}
               </h2>
               <p className="mt-2 text-sm text-gray-600">
                 {booked
-                  ? `We've emailed you the details. ${l.org_name} will see you then.`
+                  ? bookingRequiresConfirmation
+                    ? `We've emailed you the details. Someone from ${l.org_name} will reach out to confirm before your viewing.`
+                    : `We've emailed you the details. ${l.org_name} will see you then.`
                   : `The team at ${l.org_name} will be in touch shortly to set up a viewing.`}
               </p>
             </div>

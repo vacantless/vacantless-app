@@ -148,6 +148,9 @@ export type BookingPayload = {
   // to call/text if late (S448). Optional; the line renders only when present.
   // (showing_instructions dropped S473/S474 — it's an agent-only lockbox note.)
   leasing_phone?: string | null;
+  // S490: copy-only gate. The slot is still reserved, but the renter is told an
+  // agent will confirm before the viewing. Default false preserves old copy.
+  booking_requires_confirmation?: boolean | null;
 };
 
 // Shared renter-facing viewing logistics (S448): a tap-to-navigate map link
@@ -193,6 +196,14 @@ function bookingHtml(p: BookingPayload): string {
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
   const when = escapeHtml(p.when_label);
+  const requiresConfirmation = p.booking_requires_confirmation === true;
+  const intro = requiresConfirmation
+    ? "Your viewing request is in. We'll confirm your viewing before it happens. Here are the details:"
+    : "Your viewing is confirmed. Here are the details:";
+  const visitNote = requiresConfirmation
+    ? `This is an in-person walk-through at the property. Someone from ${org} will reach out to confirm before your viewing.`
+    : "This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.";
+  const signoff = requiresConfirmation ? "Thank you" : "See you then";
 
   const logo = p.logo_url
     ? `<img src="${escapeHtml(
@@ -206,11 +217,11 @@ function bookingHtml(p: BookingPayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
-      <p style="margin:0 0 16px;">Your viewing is confirmed. Here are the details:</p>
+      <p style="margin:0 0 16px;">${intro}</p>
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
         <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
-        <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
+        <p style="margin:0;color:#3f3f46;">${visitNote}</p>
       </div>
       ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
       ${
@@ -222,7 +233,7 @@ function bookingHtml(p: BookingPayload): string {
             )};font-weight:600;">Cancel this viewing</a>. To reschedule, cancel and pick a new time, or just reply to this email.</p>`
           : `<p style="margin:0 0 16px;">If you need to change or cancel, just reply to this email and we'll sort it out.</p>`
       }
-      <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
+      <p style="margin:24px 0 0;color:#52525b;">${signoff},<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
       You are receiving this because you booked a viewing on our listing page.
@@ -242,9 +253,14 @@ export async function sendBookingConfirmation(
   if (!apiKey) return { sent: false, reason: "no_api_key" };
   if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
 
-  const subject = p.property_address
-    ? `Your viewing at ${p.property_address} is confirmed`
-    : "Your viewing is confirmed";
+  const subject =
+    p.booking_requires_confirmation === true
+      ? p.property_address
+        ? `Your viewing request at ${p.property_address} is in`
+        : "Your viewing request is in"
+      : p.property_address
+        ? `Your viewing at ${p.property_address} is confirmed`
+        : "Your viewing is confirmed";
 
   const body = {
     sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },

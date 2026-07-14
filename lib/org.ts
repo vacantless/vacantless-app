@@ -19,6 +19,7 @@ export type Org = {
   pilot_deposit_amount_cents: number | null;
   pilot_deposit_paid_at: string | null;
   booking_timezone: string;
+  booking_requires_confirmation: boolean;
   feedback_enabled: boolean;
   feedback_delay_hours: number;
   nurture_enabled: boolean;
@@ -70,7 +71,7 @@ export async function getCurrentOrg(): Promise<Org | null> {
   const { data } = await supabase
     .from("organizations")
     .select(
-      "id, name, slug, brand_color, brand_color_secondary, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, public_contact_phone, public_contact_email, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, dispatch_terms_accepted_at",
+      "id, name, slug, brand_color, brand_color_secondary, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, booking_requires_confirmation, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, public_contact_phone, public_contact_email, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, dispatch_terms_accepted_at",
     )
     .limit(1);
   return (data?.[0] as Org) ?? null;

@@ -30,8 +30,11 @@ export async function updateBookingSettings(formData: FormData) {
   const slot = Number(formData.get("slot_minutes"));
   const lead = Number(formData.get("lead_hours"));
   const horizon = Number(formData.get("horizon_days"));
+  const requiresConfirmation = formData.get("booking_requires_confirmation") === "on";
 
-  const update: Record<string, string | number> = {};
+  const update: Record<string, string | number | boolean> = {
+    booking_requires_confirmation: requiresConfirmation,
+  };
   if (COMMON_TZ.has(tz)) update.booking_timezone = tz;
   if ([15, 20, 30, 45, 60].includes(slot)) update.booking_slot_minutes = slot;
   if (Number.isFinite(lead) && lead >= 0 && lead <= 168)
@@ -39,10 +42,8 @@ export async function updateBookingSettings(formData: FormData) {
   if (Number.isFinite(horizon) && horizon >= 1 && horizon <= 60)
     update.booking_horizon_days = Math.round(horizon);
 
-  if (Object.keys(update).length > 0) {
-    const supabase = createClient();
-    await supabase.from("organizations").update(update).eq("id", org.id);
-  }
+  const supabase = createClient();
+  await supabase.from("organizations").update(update).eq("id", org.id);
 
   revalidatePath("/dashboard/availability");
   redirect("/dashboard/availability?saved=settings");
