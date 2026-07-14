@@ -29,6 +29,7 @@ import {
   normalizeText,
   normalizeDate,
   validateListingPost,
+  reservableTrackerId,
 } from "@/lib/listing-distribution";
 import { normalizeRunItemStatus } from "@/lib/distribution-run";
 import { normalizePartnerStatus } from "@/lib/distribution-partner";
@@ -1285,6 +1286,59 @@ export async function startDistributionRun(formData: FormData) {
   );
   const now = new Date().toISOString();
 
+  // Distribution hardening #2: reserve a per-channel tracked ?p= link BEFORE the
+  // operator posts. For each browser co-pilot portal channel (facebook/kijiji/
+  // viewit) with no tracker yet, reuse the property's existing tracker for that
+  // portal or create a draft listing_posts row (a non-live row may carry a null
+  // url per migration 0122). completeCopilotPost later promotes the SAME row to
+  // live in place. Org = the property's own org (KI748). A reserved draft carries
+  // no live claim; the where-posted tracker hides reserved-but-unposted rows.
+  const reservedByChannel = new Map<string, string>();
+  for (const plan of plans) {
+    if (plan.listingPostId) continue;
+    if (!isCopilotChannel(plan.key) || !isPortalKey(plan.key)) continue;
+    const reuseId = reservableTrackerId(
+      postRows.map((r) => ({
+        id: r.id,
+        portal: r.portal,
+        status: r.status,
+        created_at: r.created_at ?? "",
+      })),
+      plan.key,
+    );
+    if (reuseId) {
+      reservedByChannel.set(plan.key, reuseId);
+      continue;
+    }
+    const { data: draft, error: draftErr } = await supabase
+      .from("listing_posts")
+      .insert({
+        organization_id: orgId,
+        property_id: propertyId,
+        portal: plan.key,
+        status: "draft",
+        url: null,
+      })
+      .select("id")
+      .single();
+    if (draft?.id) {
+      reservedByChannel.set(plan.key, draft.id as string);
+    } else if (draftErr) {
+      // Lost a concurrent reservation race (the 0144 partial unique index rejects
+      // a duplicate blank draft). Reuse the row the winner created.
+      const { data: raced } = await supabase
+        .from("listing_posts")
+        .select("id")
+        .eq("property_id", propertyId)
+        .eq("portal", plan.key)
+        .eq("status", "draft")
+        .is("url", null)
+        .limit(1)
+        .maybeSingle();
+      if (raced?.id) reservedByChannel.set(plan.key, raced.id as string);
+    }
+  }
+
   // One active run per property: reuse an existing active run, else open one.
   const { data: existing } = await supabase
     .from("distribution_runs")
@@ -1313,7 +1367,7 @@ export async function startDistributionRun(formData: FormData) {
         mode: plan.mode,
         blockers: plan.blockers,
         external_url: plan.externalUrl,
-        listing_post_id: plan.listingPostId,
+        listing_post_id: plan.listingPostId ?? reservedByChannel.get(plan.key) ?? null,
         operator_action_url: plan.operatorActionUrl,
         audit_message: plan.auditMessage,
         last_attempted_at: now,
@@ -1499,6 +1553,69 @@ export async function addRunChannel(formData: FormData) {
   const propertyId = run.property_id as string;
 
   if (channel) {
+    // Distribution hardening #2: when a co-pilot portal channel is ADDED to a run,
+    // reserve its per-channel tracked link too (mirrors startDistributionRun).
+    // Only for a brand-new run item (an existing item keeps its own tracker; the
+    // ignoreDuplicates upsert below leaves it untouched), so no draft is orphaned.
+    let reservedPostId: string | null = null;
+    if (isCopilotChannel(channel) && isPortalKey(channel)) {
+      const { data: existingItem } = await supabase
+        .from("distribution_run_items")
+        .select("id")
+        .eq("run_id", runId)
+        .eq("channel", channel)
+        .maybeSingle();
+      if (!existingItem) {
+        const { data: existingPosts } = await supabase
+          .from("listing_posts")
+          .select("id, portal, status, created_at")
+          .eq("property_id", propertyId)
+          .eq("portal", channel)
+          .neq("status", "removed");
+        reservedPostId = reservableTrackerId(
+          ((existingPosts ?? []) as Array<{
+            id: string;
+            portal: string;
+            status: string;
+            created_at: string | null;
+          }>).map((r) => ({
+            id: r.id,
+            portal: r.portal,
+            status: r.status,
+            created_at: r.created_at ?? "",
+          })),
+          channel,
+        );
+        if (!reservedPostId) {
+          const { data: draft, error: draftErr } = await supabase
+            .from("listing_posts")
+            .insert({
+              organization_id: run.organization_id as string,
+              property_id: propertyId,
+              portal: channel,
+              status: "draft",
+              url: null,
+            })
+            .select("id")
+            .single();
+          if (draft?.id) {
+            reservedPostId = draft.id as string;
+          } else if (draftErr) {
+            // Lost a concurrent reservation race (0144 partial unique index).
+            const { data: raced } = await supabase
+              .from("listing_posts")
+              .select("id")
+              .eq("property_id", propertyId)
+              .eq("portal", channel)
+              .eq("status", "draft")
+              .is("url", null)
+              .limit(1)
+              .maybeSingle();
+            reservedPostId = (raced?.id as string | undefined) ?? null;
+          }
+        }
+      }
+    }
     await supabase.from("distribution_run_items").upsert(
       {
         organization_id: run.organization_id as string,
@@ -1506,6 +1623,7 @@ export async function addRunChannel(formData: FormData) {
         channel,
         status: "pending",
         publish_status: "queued",
+        listing_post_id: reservedPostId,
       },
       { onConflict: "run_id,channel", ignoreDuplicates: true },
     );

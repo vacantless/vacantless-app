@@ -131,6 +131,36 @@ export function buildTrackedLink(publicUrl: string, postId: string): string {
 }
 
 /**
+ * Pick the per-(property, portal) tracker row to RESERVE for a browser co-pilot
+ * channel, so the tracked `?p=` inquiry link is FINAL before the operator posts
+ * (distribution hardening #2). Prefers an existing `live` tracker (its link is
+ * already circulating), else the newest non-`removed` row, else null = the caller
+ * should create a fresh draft. Pure; `removed` rows are ignored. "Newest" = max
+ * created_at (ISO timestamps compare lexically).
+ */
+export function reservableTrackerId(
+  posts: ReadonlyArray<{
+    id: string;
+    portal: string;
+    status: string;
+    created_at: string;
+  }>,
+  portal: PortalKey,
+): string | null {
+  const candidates = posts.filter(
+    (p) => p.portal === portal && p.status !== "removed",
+  );
+  if (candidates.length === 0) return null;
+  const live = candidates.find((p) => p.status === "live");
+  if (live) return live.id;
+  let newest = candidates[0];
+  for (const p of candidates) {
+    if (p.created_at > newest.created_at) newest = p;
+  }
+  return newest.id;
+}
+
+/**
  * The human source label a lead gets when it arrives through this post — must
  * match the CASE in submit_public_lead. Used for previews + keeping the two
  * layers honest in tests.

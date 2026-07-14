@@ -944,8 +944,29 @@ export default async function PropertyDetailPage({
     else if (c.key === "beds_baths") channelBlockers.push("Add beds and baths");
     else if (c.key === "address") channelBlockers.push("Add the address");
   }
+  // Reserved-but-unposted trackers (distribution hardening #2): a co-pilot
+  // reservation is a draft listing_posts row with no url, referenced by a run
+  // item. Hide those from the where-posted tracker (the ready ?p= link shows in
+  // the co-pilot panel instead); a manually-created url-less draft that no run
+  // item references still shows.
+  const reservedPlumbingPostIds = new Set<string>();
+  {
+    const draftIds = postRows
+      .filter((post) => post.status === "draft" && !(post.url && post.url.trim()))
+      .map((post) => post.id);
+    if (draftIds.length > 0) {
+      const { data: refRows } = await supabase
+        .from("distribution_run_items")
+        .select("listing_post_id")
+        .in("listing_post_id", draftIds);
+      for (const ref of (refRows ?? []) as { listing_post_id: string | null }[]) {
+        if (ref.listing_post_id) reservedPlumbingPostIds.add(ref.listing_post_id);
+      }
+    }
+  }
   const postsByPortal = new Map<PortalKey, ListingPostRow[]>();
   for (const post of postRows) {
+    if (reservedPlumbingPostIds.has(post.id)) continue;
     const arr = postsByPortal.get(post.portal) ?? [];
     arr.push(post);
     postsByPortal.set(post.portal, arr);

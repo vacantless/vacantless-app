@@ -19,6 +19,7 @@ import {
   isWebUrl,
   validateListingPost,
   listingPostErrorMessage,
+  reservableTrackerId,
 } from "../lib/listing-distribution";
 
 let passed = 0;
@@ -191,6 +192,67 @@ ok(
 ok(
   "errorMessage: unknown -> generic",
   listingPostErrorMessage("???").length > 0,
+);
+
+// --- reservableTrackerId (distribution hardening #2) ------------------------
+ok(
+  "reserve: no posts -> null (create)",
+  reservableTrackerId([], "facebook") === null,
+);
+ok(
+  "reserve: only removed -> null (create)",
+  reservableTrackerId(
+    [{ id: "r1", portal: "facebook", status: "removed", created_at: "2026-01-01" }],
+    "facebook",
+  ) === null,
+);
+ok(
+  "reserve: single live -> reuse it",
+  reservableTrackerId(
+    [{ id: "L1", portal: "facebook", status: "live", created_at: "2026-01-01" }],
+    "facebook",
+  ) === "L1",
+);
+ok(
+  "reserve: prefers live over a newer draft",
+  reservableTrackerId(
+    [
+      { id: "L1", portal: "facebook", status: "live", created_at: "2026-01-01" },
+      { id: "D2", portal: "facebook", status: "draft", created_at: "2026-06-01" },
+    ],
+    "facebook",
+  ) === "L1",
+);
+ok(
+  "reserve: no live -> newest non-removed row wins",
+  reservableTrackerId(
+    [
+      { id: "D1", portal: "kijiji", status: "draft", created_at: "2026-01-01" },
+      { id: "D3", portal: "kijiji", status: "draft", created_at: "2026-06-01" },
+      { id: "D2", portal: "kijiji", status: "expired", created_at: "2026-03-01" },
+    ],
+    "kijiji",
+  ) === "D3",
+);
+ok(
+  "reserve: filters by portal",
+  reservableTrackerId(
+    [
+      { id: "F1", portal: "facebook", status: "live", created_at: "2026-01-01" },
+      { id: "V1", portal: "viewit", status: "draft", created_at: "2026-02-01" },
+    ],
+    "viewit",
+  ) === "V1",
+);
+ok(
+  "reserve: ignores a newer removed row",
+  reservableTrackerId(
+    [
+      { id: "D1", portal: "viewit", status: "draft", created_at: "2026-01-01" },
+      { id: "X2", portal: "viewit", status: "removed", created_at: "2026-09-01" },
+    ],
+    "viewit",
+  ) === "D1",
 );
 ok(
   "errorMessage: no em dashes",
