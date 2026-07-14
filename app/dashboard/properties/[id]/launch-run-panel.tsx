@@ -210,6 +210,11 @@ export function LaunchRunPanel({
                         {c.blockers[0]}
                       </span>
                     )}
+                    {c.setupBlockers.length > 0 && (
+                      <span className="mt-2 block rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600">
+                        Setup: {c.setupBlockers[0]}
+                      </span>
+                    )}
                   </span>
                 </div>
               </label>

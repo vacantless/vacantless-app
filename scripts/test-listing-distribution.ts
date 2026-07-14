@@ -17,6 +17,7 @@ import {
   sourceLabelForPost,
   countLeadsByPost,
   isWebUrl,
+  isRealtorCaListingUrl,
   validateListingPost,
   listingPostErrorMessage,
   reservableTrackerId,
@@ -136,6 +137,20 @@ ok("isWebUrl: no dot in host rejected", !isWebUrl("https://localhost"));
 ok("isWebUrl: spaces rejected", !isWebUrl("https://a b.com"));
 ok("isWebUrl: junk rejected", !isWebUrl("not a url"));
 ok("isWebUrl: null rejected", !isWebUrl(null));
+ok(
+  "isRealtorCaListingUrl: real listing accepted",
+  isRealtorCaListingUrl(
+    "https://www.realtor.ca/real-estate/28573147/123-main-street-toronto",
+  ),
+);
+ok(
+  "isRealtorCaListingUrl: bare homepage rejected",
+  !isRealtorCaListingUrl("https://www.realtor.ca/"),
+);
+ok(
+  "isRealtorCaListingUrl: non-realtor host rejected",
+  !isRealtorCaListingUrl("https://example.com/real-estate/28573147"),
+);
 
 ok(
   "validate: live + url ok",
@@ -175,6 +190,32 @@ ok(
   badUrl.ok === false && badUrl.code === "url_not_web",
 );
 ok(
+  "validate: realtor_ca live requires realtor listing URL",
+  validateListingPost({
+    portal: "realtor_ca",
+    status: "live",
+    url: "https://www.realtor.ca/",
+  }).ok === false,
+);
+const realtorWrongHost = validateListingPost({
+  portal: "realtor_ca",
+  status: "live",
+  url: "https://example.com/real-estate/28573147/123-main-street",
+});
+ok(
+  "validate: realtor_ca wrong host -> realtor_url_required",
+  realtorWrongHost.ok === false &&
+    realtorWrongHost.code === "realtor_url_required",
+);
+ok(
+  "validate: realtor_ca listing URL ok",
+  validateListingPost({
+    portal: "realtor_ca",
+    status: "live",
+    url: "https://www.realtor.ca/real-estate/28573147/123-main-street-toronto",
+  }).ok === true,
+);
+ok(
   "validate: live whitespace-only url already normalized to null -> live_needs_url",
   // normalizeUrl turns "   " into null; mirror that the action passes null here.
   validateListingPost({ portal: "kijiji", status: "live", url: normalizeUrl("   ") })
@@ -188,6 +229,10 @@ ok(
 ok(
   "errorMessage: url_not_web mentions web link",
   listingPostErrorMessage("url_not_web").includes("web link"),
+);
+ok(
+  "errorMessage: realtor_url_required mentions Realtor.ca",
+  listingPostErrorMessage("realtor_url_required").includes("Realtor.ca"),
 );
 ok(
   "errorMessage: unknown -> generic",
@@ -258,7 +303,8 @@ ok(
   "errorMessage: no em dashes",
   !/[—–]/.test(
     listingPostErrorMessage("live_needs_url") +
-      listingPostErrorMessage("url_not_web"),
+      listingPostErrorMessage("url_not_web") +
+      listingPostErrorMessage("realtor_url_required"),
   ),
 );
 

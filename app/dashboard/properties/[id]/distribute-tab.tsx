@@ -131,6 +131,19 @@ const PRIMARY_BTN =
 const SECONDARY_BTN =
   "inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50";
 
+type DistributionHealth = {
+  totalChannels: number;
+  activeChannels: number;
+  liveChannels: number;
+  submittedChannels: number;
+  attentionChannels: number;
+  staleChannels: number;
+  proofIssueChannels: number;
+  trackedPosts: number;
+  attributedLeads: number;
+  advancedLeads: number;
+};
+
 // --- next-action banner (Slice 1) ------------------------------------------
 // One prioritized "do this next" line across all run channels, so the command
 // center leads with a single obvious step (Codex #1/#4). Pure — derived only
@@ -171,6 +184,64 @@ function nextRunAction(items: RunItemView[]): { label: string } | null {
   return { label };
 }
 
+function distributionHealth({
+  channelCards,
+  otherPosts,
+  launchRun,
+  analytics,
+}: {
+  channelCards: DistributeChannelCard[];
+  otherPosts: DistributePostRow[];
+  launchRun: LaunchRunData;
+  analytics: ChannelAnalyticsRow[];
+}): DistributionHealth {
+  const runItems = launchRun.items;
+  const activeChannels = launchRun.run
+    ? runItems.length
+    : launchRun.startChannels.filter((c) => c.defaultSelected).length;
+  const submittedChannels = runItems.filter(
+    (item) => item.publishStatus === "submitted",
+  ).length;
+  const attentionChannels = runItems.filter(
+    (item) =>
+      item.publishStatus === "blocked" ||
+      item.publishStatus === "rejected" ||
+      item.publishStatus === "needs_login" ||
+      item.publishStatus === "needs_payment" ||
+      item.publishStatus === "needs_operator" ||
+      item.liveWithoutUrl ||
+      item.staleRefresh,
+  ).length;
+  const staleChannels = channelCards.filter(
+    (card) => card.status.value === "needs_refresh",
+  ).length;
+  const proofIssueChannels = channelCards.filter(
+    (card) => card.status.value === "problem",
+  ).length;
+  const allPosts = [
+    ...channelCards.flatMap((card) => card.posts),
+    ...otherPosts,
+  ];
+  const totals = analyticsTotals(analytics);
+
+  return {
+    totalChannels: channelCards.length,
+    activeChannels,
+    liveChannels: channelCards.filter(
+      (card) =>
+        card.status.value === "posted" ||
+        card.status.value === "needs_refresh",
+    ).length,
+    submittedChannels,
+    attentionChannels,
+    staleChannels,
+    proofIssueChannels,
+    trackedPosts: allPosts.length,
+    attributedLeads: totals.leads,
+    advancedLeads: totals.advanced,
+  };
+}
+
 export function DistributeTab({
   propertyId,
   linkIsLive,
@@ -206,6 +277,12 @@ export function DistributeTab({
     (c) => c.status.value === "posted" || c.status.value === "needs_refresh",
   ).length;
   const nextAction = launchRun.run ? nextRunAction(launchRun.items) : null;
+  const health = distributionHealth({
+    channelCards,
+    otherPosts,
+    launchRun,
+    analytics,
+  });
 
   return (
     <div>
@@ -266,6 +343,8 @@ export function DistributeTab({
           </span>
         </div>
       )}
+
+      <DistributionHealthPanel health={health} />
 
       {/* THE command center — one guided surface: pick channels, follow one next
           action per channel, paste the live URL. After the Slice 1 merge this is
@@ -370,6 +449,95 @@ export function DistributeTab({
           <AnalyticsPanel rows={analytics} />
         </div>
       </details>
+    </div>
+  );
+}
+
+function DistributionHealthPanel({ health }: { health: DistributionHealth }) {
+  const coverageLabel =
+    health.totalChannels > 0
+      ? `${health.liveChannels}/${health.totalChannels}`
+      : "0/0";
+  const attentionTone =
+    health.proofIssueChannels > 0
+      ? "danger"
+      : health.attentionChannels > 0 || health.staleChannels > 0
+        ? "warning"
+        : "positive";
+  const attentionLabel =
+    health.proofIssueChannels > 0
+      ? `${health.proofIssueChannels} proof gap${
+          health.proofIssueChannels === 1 ? "" : "s"
+        }`
+      : health.attentionChannels > 0
+        ? `${health.attentionChannels} action${
+            health.attentionChannels === 1 ? "" : "s"
+          } needed`
+        : health.staleChannels > 0
+          ? `${health.staleChannels} refresh${
+              health.staleChannels === 1 ? "" : "es"
+            } due`
+          : "Clean";
+
+  return (
+    <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <IconTile>
+            <Icons.list className="h-4 w-4" />
+          </IconTile>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Distribution health
+          </h3>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONE_CHIP[attentionTone]}`}
+        >
+          {attentionLabel}
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <HealthMetric label="Live coverage" value={coverageLabel} />
+        <HealthMetric
+          label="In active run"
+          value={String(health.activeChannels)}
+        />
+        <HealthMetric
+          label="Submitted, not live"
+          value={String(health.submittedChannels)}
+        />
+        <HealthMetric
+          label="Tracked posts"
+          value={String(health.trackedPosts)}
+        />
+        <HealthMetric
+          label="Attributed leads"
+          value={String(health.attributedLeads)}
+        />
+        <HealthMetric
+          label="Booked or advanced"
+          value={String(health.advancedLeads)}
+        />
+        <HealthMetric
+          label="Refresh due"
+          value={String(health.staleChannels)}
+        />
+        <HealthMetric
+          label="Proof gaps"
+          value={String(health.proofIssueChannels)}
+        />
+      </div>
+    </section>
+  );
+}
+
+function HealthMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+      <p className="text-[11px] font-medium uppercase text-gray-500">
+        {label}
+      </p>
+      <p className="mt-1 text-base font-semibold text-gray-900">{value}</p>
     </div>
   );
 }

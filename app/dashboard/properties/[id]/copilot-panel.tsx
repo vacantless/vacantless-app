@@ -184,12 +184,24 @@ export function CopilotPanel({
   }, [itemId, propertyId, script]);
 
   return (
-    <details className="mb-3 rounded-xl border border-brand/30 bg-brand/5 p-3">
-      <summary className="cursor-pointer text-xs font-semibold text-brand">
-        Guided posting - {script.channelLabel}
-      </summary>
+    <div className="mb-3 rounded-xl border border-brand/30 bg-brand/5 p-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-brand">
+          Guided posting - {script.channelLabel}
+        </p>
+        {script.portalUrl && (
+          <a
+            href={script.portalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-medium text-brand underline"
+          >
+            Open {script.channelLabel}
+          </a>
+        )}
+      </div>
 
-      <div className="mt-3 space-y-3">
+      <div className="space-y-3">
         {/* Honesty: what Vacantless does and does not do. */}
         <ul className="space-y-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
           {script.honesty.map((h) => (
@@ -228,16 +240,6 @@ export function CopilotPanel({
             {script.channelLabel} tab; it shows the copy and the Live URL form.
             You still review and post.
           </p>
-          {script.portalUrl && (
-            <a
-              href={script.portalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex text-[11px] font-medium text-brand underline"
-            >
-              Or open {script.channelLabel} in a new tab
-            </a>
-          )}
         </div>
 
         {/* S483 extension: OPTIONAL beta courier, shown ONLY when the extension
@@ -376,6 +378,6 @@ export function CopilotPanel({
           </p>
         </form>
       </div>
-    </details>
+    </div>
   );
 }

@@ -201,7 +201,10 @@ export type ListingPostValidation =
   | { ok: true }
   | { ok: false; field: "url"; code: ListingPostError };
 
-export type ListingPostError = "live_needs_url" | "url_not_web";
+export type ListingPostError =
+  | "live_needs_url"
+  | "url_not_web"
+  | "realtor_url_required";
 
 /** True when a string is a plausible absolute http(s) URL. */
 export function isWebUrl(value: string | null | undefined): boolean {
@@ -212,6 +215,19 @@ export function isWebUrl(value: string | null | undefined): boolean {
     const u = new URL(v);
     // Need a host with a dot (rules out "https://localhost" typos) and no spaces.
     return u.hostname.includes(".") && !/\s/.test(v);
+  } catch {
+    return false;
+  }
+}
+
+/** True for a public Realtor.ca listing URL, not the homepage or another site. */
+export function isRealtorCaListingUrl(value: string | null | undefined): boolean {
+  if (!isWebUrl(value)) return false;
+  try {
+    const u = new URL(String(value).trim());
+    const host = u.hostname.toLowerCase();
+    const isRealtorHost = host === "realtor.ca" || host === "www.realtor.ca";
+    return isRealtorHost && /^\/real-estate\/\d+/i.test(u.pathname);
   } catch {
     return false;
   }
@@ -229,6 +245,13 @@ export function validateListingPost(
   if (url && !isWebUrl(url)) {
     return { ok: false, field: "url", code: "url_not_web" };
   }
+  if (
+    input.status === "live" &&
+    input.portal === "realtor_ca" &&
+    !isRealtorCaListingUrl(url)
+  ) {
+    return { ok: false, field: "url", code: "realtor_url_required" };
+  }
   return { ok: true };
 }
 
@@ -239,6 +262,8 @@ export function listingPostErrorMessage(code: unknown): string {
       return "Add the ad's web link before marking this post Live, or set it to Draft for now.";
     case "url_not_web":
       return "That doesn't look like a web link. Use the full address, like https://www.kijiji.ca/...";
+    case "realtor_url_required":
+      return "Use the live Realtor.ca listing link, like https://www.realtor.ca/real-estate/123456/..., before marking Realtor.ca Live.";
     default:
       return "Please check the post details and try again.";
   }
