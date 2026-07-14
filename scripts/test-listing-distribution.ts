@@ -169,6 +169,12 @@ ok(
   !isRentFasterListingUrl("https://www.rentfaster.ca/on/toronto/rentals/"),
 );
 ok(
+  "isRentFasterListingUrl: category filter page rejected (digit in slug is not an id)",
+  !isRentFasterListingUrl(
+    "https://www.rentfaster.ca/ab/calgary/rentals/apartment/1-bedroom/",
+  ),
+);
+ok(
   "isRentFasterListingUrl: prices page rejected",
   !isRentFasterListingUrl("https://www.rentfaster.ca/prices/"),
 );

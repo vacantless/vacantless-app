@@ -250,10 +250,12 @@ export function isRentFasterListingUrl(value: string | null | undefined): boolea
     if (/\/(?:dashboard|login|register|my-listings)(?:\/|$)/.test(path)) {
       return false;
     }
-    // Search pages end at /rentals; listing detail pages continue past it and
-    // include an id/address segment. This is deliberately shape-based, not
-    // network verification.
-    return /\/rentals\/.+\d/.test(path);
+    // A listing DETAIL page ends in a numeric listing id under /rentals/ (or
+    // /listings/). Search/filter pages end in a category slug like
+    // /apartment/1-bedroom (the digit is inside the slug, not a trailing id), so
+    // require BOTH a /rentals|listings/ ancestor AND a final all-digit id segment.
+    // Fail-closed + shape-based, not network verification (Codex S489 P2).
+    return /\/(?:rentals|listings)\//.test(path) && /\/\d{4,}$/.test(path);
   } catch {
     return false;
   }

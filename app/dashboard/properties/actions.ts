@@ -1446,6 +1446,26 @@ export async function updateRunItem(formData: FormData) {
     );
   }
 
+  // Non-co-pilot portal channels (RentFaster / Realtor.ca / Rentals.ca / Zumper /
+  // Viewit) marked live via the generic status form must carry a VALID listing URL
+  // for that portal. validateListingPost enforces the per-portal proof shape (the
+  // S489 realtor_ca + rentfaster gates, plus the baseline "live needs a real web
+  // URL"). Refuse the live flip when it fails, so the item's own publish_status
+  // can't bypass a proof gate that only guarded the listing_posts write (Codex
+  // S489 P1).
+  if (publishStatus === "live" && isPortalKey(item.channel)) {
+    const proof = validateListingPost({
+      portal: normalizePortal(item.channel),
+      status: "live",
+      url,
+    });
+    if (!proof.ok) {
+      redirect(
+        `/dashboard/properties/${propertyId}?runerr=needs_valid_url#distribute-header`,
+      );
+    }
+  }
+
   // Marking a channel done WITH a live URL produces or refreshes its tracked
   // listing_posts row so the run feeds attribution + the Distribute cards.
   let listingPostId = (item.listing_post_id as string | null) ?? null;
