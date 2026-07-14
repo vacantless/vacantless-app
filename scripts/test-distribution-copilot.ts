@@ -100,13 +100,15 @@ ok(kjDark.blockers.length === 1, "kijiji surfaces a blocker when page not live /
 ok(kjDark.blockers[0].includes("public page first"), "blocker names the public page prerequisite");
 ok(!kjDark.fields.some((f) => f.key === "tracked_link"), "no tracked_link field when there is no tracked url");
 
-// --- canMarkCopilotLive: never live without a real, channel-matching listing URL ---
-// Accept a genuine public listing on the channel's own host.
-ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/123"), "kijiji live /v- ad can mark live");
-ok(canMarkCopilotLive("facebook", "https://www.facebook.com/marketplace/item/123"), "facebook marketplace item can mark live");
+// --- canMarkCopilotLive: never live without a real, channel-matching PUBLIC LISTING URL ---
+// Accept a genuine public listing (numeric id) on the channel's own host.
+ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/1740248220"), "kijiji live /v- ad can mark live");
+ok(canMarkCopilotLive("facebook", "https://www.facebook.com/marketplace/item/1234567890123"), "facebook marketplace item can mark live");
 ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/rental/12345"), "viewit listing can mark live");
-// A live /v- ad whose TITLE slug starts with b- must NOT be rejected (b-/s- is anchored to segment 1).
-ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/b-bright-basement/123"), "live /v- ad with b- title slug still ok");
+// A live /v- ad whose TITLE slug starts with b- must NOT be rejected (the /v- + trailing id still matches).
+ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/b-bright-basement/1740248220"), "live /v- ad with b- title slug still ok");
+// A trailing query does not break the match (pathname is used).
+ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/1740248220?utm=x"), "live ad with query still ok");
 // Missing / malformed proof.
 ok(!canMarkCopilotLive("kijiji", null), "null cannot mark live");
 ok(!canMarkCopilotLive("kijiji", ""), "empty cannot mark live");
@@ -114,10 +116,16 @@ ok(!canMarkCopilotLive("kijiji", "   "), "whitespace cannot mark live");
 ok(!canMarkCopilotLive("kijiji", "kijiji.ca/v/123"), "scheme-less url cannot mark live");
 ok(!canMarkCopilotLive("kijiji", "ftp://kijiji.ca/x"), "ftp url cannot mark live");
 // Channel-aware host: a URL on the wrong portal is rejected.
-ok(!canMarkCopilotLive("kijiji", "https://www.facebook.com/marketplace/item/1"), "facebook url rejected for kijiji");
-ok(!canMarkCopilotLive("facebook", "https://www.kijiji.ca/v-apartments-condos/123"), "kijiji url rejected for facebook");
-ok(!canMarkCopilotLive("kijiji", "https://evil-kijiji.ca/v-x/1"), "look-alike host rejected");
-// Non-listing shapes on the right host are rejected.
+ok(!canMarkCopilotLive("kijiji", "https://www.facebook.com/marketplace/item/1234567890123"), "facebook url rejected for kijiji");
+ok(!canMarkCopilotLive("facebook", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/1740248220"), "kijiji url rejected for facebook");
+ok(!canMarkCopilotLive("kijiji", "https://evil-kijiji.ca/v-x/1740248220"), "look-alike host rejected");
+// S485b: same-host NON-LISTING pages (root / browse / marketplace root) are rejected.
+ok(!canMarkCopilotLive("kijiji", "https://www.kijiji.ca/"), "kijiji root rejected");
+ok(!canMarkCopilotLive("facebook", "https://www.facebook.com/marketplace/"), "facebook marketplace root rejected");
+ok(!canMarkCopilotLive("facebook", "https://www.facebook.com/"), "facebook root rejected");
+ok(!canMarkCopilotLive("viewit", "https://www.viewit.ca/"), "viewit root rejected");
+ok(!canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/"), "kijiji /v- category page (no id) rejected");
+// Other non-listing shapes on the right host are rejected.
 ok(!canMarkCopilotLive("kijiji", "https://www.kijiji.ca/t-login.html"), "kijiji login page rejected");
 ok(!canMarkCopilotLive("kijiji", "https://www.kijiji.ca/register"), "kijiji register page rejected");
 ok(!canMarkCopilotLive("kijiji", "https://www.kijiji.ca/b-apartments-condos/windsor/c37l1700212"), "kijiji browse page rejected");
@@ -125,11 +133,12 @@ ok(!canMarkCopilotLive("kijiji", "https://www.kijiji.ca/p-post-ad.html"), "kijij
 ok(!canMarkCopilotLive("kijiji", "https://www.kijiji.ca/anything/search?q=x"), "kijiji search page rejected");
 ok(!canMarkCopilotLive("facebook", "https://www.facebook.com/marketplace/create/item"), "facebook create page rejected");
 // Unknown / non-co-pilot channel is always invalid.
-ok(!canMarkCopilotLive("vacantless", "https://www.kijiji.ca/v-apartments-condos/123"), "non-copilot channel cannot mark live");
+ok(!canMarkCopilotLive("vacantless", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/1740248220"), "non-copilot channel cannot mark live");
 // copilotLiveUrlIssue reasons.
-eq(copilotLiveUrlIssue("kijiji", "https://www.kijiji.ca/v-apartments-condos/123"), "ok", "issue ok for a live kijiji ad");
+eq(copilotLiveUrlIssue("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/1740248220"), "ok", "issue ok for a live kijiji ad");
 eq(copilotLiveUrlIssue("kijiji", "ftp://kijiji.ca/x"), "invalid", "issue invalid for non-web url");
-eq(copilotLiveUrlIssue("kijiji", "https://www.facebook.com/marketplace/item/1"), "wrong_channel", "issue wrong_channel for cross-portal url");
+eq(copilotLiveUrlIssue("kijiji", "https://www.facebook.com/marketplace/item/1234567890123"), "wrong_channel", "issue wrong_channel for cross-portal url");
+eq(copilotLiveUrlIssue("kijiji", "https://www.kijiji.ca/"), "not_listing", "issue not_listing for the channel root");
 eq(copilotLiveUrlIssue("kijiji", "https://www.kijiji.ca/t-login.html"), "not_listing", "issue not_listing for a login page");
 
 // --- label/note helpers -----------------------------------------------------

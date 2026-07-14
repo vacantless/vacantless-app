@@ -297,14 +297,23 @@ const COPILOT_CHANNEL_HOSTS: Record<string, string[]> = {
   viewit: ["viewit.ca"],
 };
 
-// Paths that clearly are NOT a public live ad (login/register/create/search + the
-// Kijiji browse prefixes b-/s-). KEEP IN SYNC with the extension's portal.js
-// BAD_PATH (vacantless-extension/portal.js) so the on-page warn and this
-// server-side gate agree. General tokens match at any segment boundary (so
-// Facebook /marketplace/create is rejected); b-/s- are anchored to the FIRST path
-// segment only, so a live Kijiji ad like /v-.../b-bright-basement/<id> never trips it.
-const COPILOT_BAD_PATH =
-  /(?:^|\/)(?:login|signin|sign-in|register|t-login|checkpoint|post-ad|p-post-ad|p-submit-ad|create|new-listing|search)(?:[/.?_-]|$)|^\/(?:b-|s-)/i;
+// POSITIVE per-channel "this is a public listing" path shapes. The server gate is
+// an ALLOWLIST (accept only a real listing URL), NOT a denylist — a denylist lets a
+// bare root / browse page (kijiji.ca/, facebook.com/marketplace/, viewit.ca/) slip
+// through as "ok" and mark live without proof (Codex S485 P2). The extension's
+// portal.js keeps a soft BAD_PATH warn to hint the operator; THIS is the
+// authoritative hard gate and is intentionally stricter. A public listing on each
+// portal carries a numeric listing id:
+//   kijiji   /v-<category>/<...>/<numeric ad id>   (VIP ad page; the /v- prefix +
+//            trailing id, so a /b- or /s- browse page or a title slug that merely
+//            starts with b-/s- in a later segment is not confused for a listing)
+//   facebook /marketplace/item/<numeric item id>
+//   viewit   /.../<numeric listing id>
+const COPILOT_LISTING_PATH: Record<string, RegExp> = {
+  kijiji: /^\/v-.+\/\d{6,}\/?$/i,
+  facebook: /\/marketplace\/item\/\d{6,}(?:\/|$)/i,
+  viewit: /\/\d{5,}(?:\/|$)/,
+};
 
 function copilotHostMatches(host: string, base: string): boolean {
   return host === base || host.endsWith("." + base);
@@ -314,10 +323,11 @@ export type CopilotLiveUrlIssue = "ok" | "invalid" | "wrong_channel" | "not_list
 
 /**
  * Classify a co-pilot live-proof URL for a channel. Pure. Returns "ok" ONLY for a
- * real http(s) URL that is (a) on the channel's own host and (b) not an obvious
- * non-listing page (login / register / create / search / browse). This is the
- * server-side hardening that makes "mark live" reject a Kijiji account, browse,
- * search, or login URL instead of accepting any web URL.
+ * real http(s) URL that is (a) on the channel's own host and (b) shaped like that
+ * channel's PUBLIC LISTING (a positive allowlist — a root / browse / login /
+ * search page has no listing id and is rejected as "not_listing"). This is the
+ * server-side hardening that makes "mark live" require an actual public listing
+ * URL as proof, not just any web URL on the right domain.
  */
 export function copilotLiveUrlIssue(
   channel: string,
@@ -331,10 +341,11 @@ export function copilotLiveUrlIssue(
     return "invalid";
   }
   const hosts = COPILOT_CHANNEL_HOSTS[channel];
-  if (!hosts) return "invalid"; // not a browser co-pilot channel
+  const listing = COPILOT_LISTING_PATH[channel];
+  if (!hosts || !listing) return "invalid"; // not a browser co-pilot channel
   const host = u.hostname.toLowerCase();
   if (!hosts.some((base) => copilotHostMatches(host, base))) return "wrong_channel";
-  if (COPILOT_BAD_PATH.test(u.pathname)) return "not_listing";
+  if (!listing.test(u.pathname)) return "not_listing";
   return "ok";
 }
 
