@@ -27,6 +27,7 @@ import {
   normalizeProductTypes,
   type SuggestCandidate,
 } from "@/lib/showing-agents";
+import { publicLeadSubmitEffects } from "@/lib/public-lead-dedup";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -673,11 +674,24 @@ export async function submitLead(formData: FormData) {
     maxAge: SAVED_LEAD_COOKIE_TTL_S,
   });
 
-  // Tell the leasing team a new lead landed (best-effort; never blocks the
-  // renter). Fires regardless of whether they also booked a showing below.
-  await notifyOperatorsOfNewLead(payload, { phone, moveIn: moveInRaw });
+  const leadReused = payload.lead_reused === true;
+  const leadHasShowing = payload.lead_has_showing === true;
+  let outcome: "submitted" | "booked" | "booking_failed" =
+    leadReused && leadHasShowing ? "booked" : "submitted";
+  const initialEffects = publicLeadSubmitEffects({
+    leadReused,
+    leadHasShowing,
+    hasSlot: slot.length > 0,
+    outcome,
+  });
 
-  let outcome: "submitted" | "booked" | "booking_failed" = "submitted";
+  // Tell the leasing team a new lead landed (best-effort; never blocks the
+  // renter). Suppress this on RPC-reused leads so server-side dedup also dedups
+  // the "new inquiry" operator email, not only the row insert.
+  if (initialEffects.notifyNewLead) {
+    await notifyOperatorsOfNewLead(payload, { phone, moveIn: moveInRaw });
+  }
+
   // The renter picked a time but it was no longer bookable (already taken
   // between page load and submit, or won a same-instant race). Drives a distinct
   // "that time was just taken" state on the page instead of the generic
@@ -685,14 +699,21 @@ export async function submitLead(formData: FormData) {
   let slotTaken = false;
 
   // --- Booking path -------------------------------------------------------
-  if (slot) {
+  if (initialEffects.attemptBooking) {
     const r = await attemptBooking(supabase, payload.lead_id, propertyId, slot);
     slotTaken = r.slotTaken;
     outcome = r.booked ? "booked" : "booking_failed";
   }
 
+  const effects = publicLeadSubmitEffects({
+    leadReused,
+    leadHasShowing,
+    hasSlot: slot.length > 0,
+    outcome,
+  });
+
   // --- Auto-reply path (no slot, or booking failed) -----------------------
-  if (outcome !== "booked") {
+  if (effects.sendAutoReply) {
     try {
       const result = await sendAutoReply(payload);
       if (result.sent) {

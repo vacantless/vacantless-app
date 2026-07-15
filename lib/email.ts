@@ -40,6 +40,8 @@ function replyToOf(replyToEmail: string | null | undefined, orgName: string | nu
 
 export type AutoReplyPayload = {
   lead_id: string;
+  lead_reused?: boolean | null;
+  lead_has_showing?: boolean | null;
   org_id: string;
   renter_name: string | null;
   renter_email: string | null;

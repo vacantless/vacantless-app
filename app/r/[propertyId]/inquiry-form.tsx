@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 import {
   type DaySlots,
   selectedSlotIsRendered,
@@ -16,6 +17,34 @@ type ScreeningQuestion = {
 };
 
 type MoveInPill = { label: string; value: string };
+
+function InquirySubmitButton({
+  children,
+  pendingLabel,
+  className,
+  style,
+  submitting,
+}: {
+  children: ReactNode;
+  pendingLabel: string;
+  className: string;
+  style: CSSProperties;
+  submitting: boolean;
+}) {
+  const { pending } = useFormStatus();
+  const busy = pending || submitting;
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      aria-busy={busy}
+      className={className}
+      style={style}
+    >
+      {busy ? pendingLabel : children}
+    </button>
+  );
+}
 
 export type InquiryFormProps = {
   // The submitLead server action, passed down so this client component can post
@@ -107,6 +136,7 @@ export function InquiryForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [skipTime, setSkipTime] = useState(false);
+  const [submitStarted, setSubmitStarted] = useState(false);
 
   // Pets pill -> the two fields the action already reads. "No pets" must submit
   // an EMPTY pets_detail (a non-empty detail is what the action treats as
@@ -214,7 +244,11 @@ export function InquiryForm({
         </p>
       )}
 
-      <form action={action} className="space-y-5">
+      <form
+        action={action}
+        className="space-y-5"
+        onSubmit={() => setSubmitStarted(true)}
+      >
         <input type="hidden" name="property_id" value={propertyId} />
         {trackedPostId && (
           <input type="hidden" name="listing_post_id" value={trackedPostId} />
@@ -605,13 +639,14 @@ export function InquiryForm({
               </span>
             </p>
           )}
-          <button
-            type="submit"
+          <InquirySubmitButton
             className="w-full rounded-lg px-4 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
             style={{ background: brandBg }}
+            pendingLabel={selectedSlot ? "Confirming..." : "Sending..."}
+            submitting={submitStarted}
           >
             {confirmLabel}
-          </button>
+          </InquirySubmitButton>
           {hasSlots && !selectedSlot && (
             <p className="-mt-2 text-center text-xs text-gray-400">
               No time selected — we&apos;ll reach out to arrange one.
