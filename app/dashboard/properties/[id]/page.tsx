@@ -1044,6 +1044,7 @@ export default async function PropertyDetailPage({
     // a subset of the channel-account statuses.
     return partner ? (partner.status as ChannelAccountStatus) : null;
   };
+  const fillSheetByPortal = new Map(fillSheets.map((sheet) => [sheet.portal, sheet]));
   const distributeChannelCards: DistributeChannelCard[] =
     DISTRIBUTION_CHANNELS.map((channel) => {
       const posts = (postsByPortal.get(channel.key) ?? []).map(toDistributePost);
@@ -1063,6 +1064,7 @@ export default async function PropertyDetailPage({
         channel,
         status,
         copy: copyTab ? { title: copyTab.title, body: copyTab.body } : null,
+        fillSheet: fillSheetByPortal.get(channel.key) ?? null,
         feed: channel.feedEligible
           ? { inFeed: distributeFeedStatus.inFeed, hint: distributeFeedStatus.hint }
           : null,
@@ -1252,6 +1254,11 @@ export default async function PropertyDetailPage({
       liveWithoutUrl: channelStatusValueByKey.get(r.channel) === "problem",
     };
   });
+  const reservedTrackedLinksByChannel: Record<string, string> = {};
+  for (const item of runItems) {
+    if (!item.trackedUrl || item.publishStatus === "live") continue;
+    reservedTrackedLinksByChannel[item.channel] ??= item.trackedUrl;
+  }
   const alreadyInRun = new Set(runItems.map((i) => i.channel));
   const launchRun: LaunchRunData = {
     run: activeRun,
@@ -1439,7 +1446,7 @@ export default async function PropertyDetailPage({
         href="/dashboard/properties"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
       >
-        ← Rentals
+        ← Properties
       </Link>
 
       {searchParams.saved && (
@@ -1635,7 +1642,7 @@ export default async function PropertyDetailPage({
 
       <PageHeader
         icon={<Icons.building />}
-        eyebrow="Rental"
+        eyebrow="Property"
         title={p.address}
         action={
           <div className="flex flex-wrap items-center gap-2">
@@ -1662,14 +1669,14 @@ export default async function PropertyDetailPage({
                 >
                   {normalizedStatus === "paused"
                     ? "Set Live again"
-                    : "Publish rental"}
+                    : "Publish property"}
                 </button>
               </form>
             )}
             <form action={duplicateProperty}>
               <input type="hidden" name="id" value={p.id} />
               <button type="submit" className={SECONDARY_ACTION_CLASS}>
-                Duplicate this rental
+                Duplicate this property
               </button>
             </form>
           </div>
@@ -1684,7 +1691,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="market"
-        label="Photos & marketing"
+        label="Photos & listing copy"
         done={marketStep?.state === "done"}
       >
 
@@ -2055,8 +2062,8 @@ export default async function PropertyDetailPage({
         </div>
         <p className="mb-4 text-xs text-gray-500">
           {linkIsLive
-            ? "The field-by-field values and the per-portal gotchas to have open while you post. When you're ready to actually distribute this rental and track where it's live, head to the Distribute tab."
-            : "Prepare your posting reference here. Posting and tracking turn on in the Distribute tab once this rental is Live and accepting inquiries."}
+            ? "The field-by-field values and the per-portal gotchas to have open while you post. When you're ready to market this property and track where it's live, head to the Distribute tab."
+            : "Prepare your posting reference here. Posting and tracking turn on in the Distribute tab once this property is Live and accepting inquiries."}
         </p>
 
         {!linkIsLive && promotionGuard && (
@@ -2079,11 +2086,11 @@ export default async function PropertyDetailPage({
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-gray-900">
-              Ready to publish?
+              Market this property
             </p>
             <p className="text-xs text-gray-600">
-              Your copy, photos, and field sheet are here. The Distribute tab is
-              where you post to each channel and track what&apos;s live.
+              Your copy, photos, and field sheet are ready. Open Distribute to
+              post to each channel, save proof, and track what is actually live.
             </p>
           </div>
           <a
@@ -2091,7 +2098,7 @@ export default async function PropertyDetailPage({
             className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-white"
             style={{ backgroundColor: "var(--brand-color)" }}
           >
-            Go to Distribute →
+            Publish / Market →
           </a>
         </div>
       </div>
@@ -2162,6 +2169,7 @@ export default async function PropertyDetailPage({
           analytics={distributionAnalytics}
           quality={listingQuality}
           qaExpected={qaExpected}
+          reservedTrackedLinksByChannel={reservedTrackedLinksByChannel}
         />
       </TabPanel>
 

@@ -225,13 +225,13 @@ export function MarketingKitCard({
                 />
                 <span className="text-xs font-medium text-gray-700">
                   {feedStatus.inFeed
-                    ? "Syndicating to rental aggregators"
-                    : "Not in the aggregator feed yet"}
+                    ? "In Vacantless listing feed"
+                    : "Not in the listing feed yet"}
                 </span>
               </div>
               <p className="mt-1 pl-4 text-[11px] text-gray-500">
                 {feedStatus.inFeed
-                  ? "This rental is included in your listing feed for Rentals.ca, Zumper, and partner sites - no posting needed."
+                  ? "This property is in your Vacantless feed. A partner site still needs to accept and show it before it is live there."
                   : feedStatus.hint}
               </p>
             </div>

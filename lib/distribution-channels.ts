@@ -117,12 +117,12 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     label: "RentFaster.ca",
     mode: "feed_or_assisted",
     blurb:
-      "RentFaster is a feed candidate and paid self-serve listing lane. Vacantless prepares the fields and tracking; you review, pay if needed, and paste the live ad link.",
+      "RentFaster is a feed candidate and paid self-serve listing lane. Start logged in, choose Single Unit, review package/add-ons, then paste the live ad link.",
     copyKey: "rentfaster",
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: true,
-    portalUrl: "https://www.rentfaster.ca/list-property/",
+    portalUrl: "https://www.rentfaster.ca/admin/add-listing/",
   },
   {
     key: "zumper",

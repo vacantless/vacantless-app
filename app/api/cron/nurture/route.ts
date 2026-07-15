@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, created_at, organization_id, property_id, name, email, status, " +
         "nurture_step_sent, nurture_last_sent_at, " +
-        "properties(address, rent_cents), " +
+        "properties(address, rent_cents, status), " +
         "organizations(name, brand_color, logo_url, reply_to_email, nurture_enabled)",
     )
     .in("status", NURTURABLE_STATUSES as unknown as string[])
@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
       status: row.status ?? "",
       stepsSent: row.nurture_step_sent ?? 0,
       lastSentAtMs: row.nurture_last_sent_at ? new Date(row.nurture_last_sent_at).getTime() : null,
+      propertyStatus: property?.status ?? null,
       enabled: org?.nurture_enabled ?? true,
     });
 

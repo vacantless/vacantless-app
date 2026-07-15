@@ -142,9 +142,23 @@ const RENTFASTER: Guardrail[] = [
   {
     id: "rentfaster-paid-sixty-day",
     severity: "critical",
-    title: "Confirm the paid 60-day ad cost before you submit.",
+    title: "Confirm the current Single Unit package price before you submit.",
     detail:
-      "RentFaster prices a single-unit new rental ad at $54.50 plus tax and says it posts for 60 days. Confirm the checkout total and that this channel is worth the spend before paying.",
+      "RentFaster's paid Single Unit package and term can change. Use the checkout total on screen as the source of truth, confirm the owner approved the spend, and keep the receipt with the posting proof.",
+  },
+  {
+    id: "rentfaster-package-addons",
+    severity: "critical",
+    title: "Remove Credit Report and Zumper add-ons unless you deliberately want them.",
+    detail:
+      "The cart can include optional Credit Report and Zumper/PadMapper-style add-ons. Uncheck anything the owner did not approve before payment; optional syndication is not the same as Vacantless proving a channel is live.",
+  },
+  {
+    id: "rentfaster-proof-capture",
+    severity: "critical",
+    title: "Paste the public RentFaster ad URL before marking the channel Live.",
+    detail:
+      "Do not use the RentFaster homepage, pricing page, dashboard, checkout, or manage-listing URL as proof. Open the public ad and paste a real /rentals/... listing URL so Vacantless can attribute renter inquiries.",
   },
   {
     id: "rentfaster-single-address",
@@ -154,6 +168,20 @@ const RENTFASTER: Guardrail[] = [
       "The single-unit ad is valid for one address. RentFaster's multi-unit option is for one address with up to 7 unit types, usually an apartment block. Do not bundle unrelated addresses into one ad.",
   },
   {
+    id: "rentfaster-province-default",
+    severity: "warning",
+    title: "Set Province to Ontario before selecting the address.",
+    detail:
+      "RentFaster can default to a western province. Set Ontario first, then use the address autocomplete so the city/search market and map land correctly.",
+  },
+  {
+    id: "rentfaster-address-autocomplete",
+    severity: "warning",
+    title: "Pick the Google address suggestion and confirm the community.",
+    detail:
+      "Typing a bare address is not enough. Select the dropdown suggestion, then review the community/city and map pin before you pay.",
+  },
+  {
     id: "rentfaster-location-market",
     severity: "warning",
     title: "Check the city and map market before paying.",
@@ -161,11 +189,53 @@ const RENTFASTER: Guardrail[] = [
       "RentFaster search is city and map driven. Confirm the address geocodes to the right city or nearby market before you pay, especially for Ontario listings outside its western-Canada core.",
   },
   {
+    id: "rentfaster-property-type-review",
+    severity: "warning",
+    title: "Review the property type instead of accepting a generic apartment guess.",
+    detail:
+      "RentFaster's Single Unit form does not always offer a generic Apartment option. For a suite in a fourplex, choose Fourplex; otherwise choose the closest true property type.",
+  },
+  {
+    id: "rentfaster-promotion-not-auto",
+    severity: "warning",
+    title: "Paid promotion is optional and must be approved.",
+    detail:
+      "Do not treat RentFaster promotion as automatic distribution. Leave paid promotion off unless the landlord approved the extra spend.",
+  },
+  {
+    id: "rentfaster-photos-after-payment",
+    severity: "warning",
+    title: "Upload photos after payment, then re-open the public ad.",
+    detail:
+      "RentFaster's photo upload is post-payment in this flow. After checkout, upload the full set, open the public listing, and confirm the photos display before saving proof in Vacantless.",
+  },
+  {
     id: "rentfaster-reactivate",
     severity: "tip",
     title: "Reactivate an old matching ad instead of creating a fresh one when possible.",
     detail:
       "RentFaster stores deactivated ads and lists a lower reactivation price than a new rental ad. If this exact address was listed before, check My Listings first.",
+  },
+  {
+    id: "rentfaster-home-features-picker",
+    severity: "tip",
+    title: "Use the inline Add Feature picker for real amenities.",
+    detail:
+      "Add only features that are true for this unit: laundry, A/C, parking, utilities, outdoor space, appliances, and similar renter filters.",
+  },
+  {
+    id: "rentfaster-contact-methods",
+    severity: "tip",
+    title: "Confirm email and phone before checkout.",
+    detail:
+      "RentFaster inquiries route through the contact methods on the listing. Confirm the owner/client-facing inbox and phone before paying.",
+  },
+  {
+    id: "rentfaster-downstream-syndication",
+    severity: "tip",
+    title: "Treat downstream syndication as unproven until proof exists.",
+    detail:
+      "RentFaster may mention downstream exposure such as Rentals.ca, RentBoard, RentCanada, or a Zumper/PadMapper add-on. Vacantless should still track each channel honestly and only mark Live when a real public URL exists.",
   },
   {
     id: "rentfaster-photo-depth",

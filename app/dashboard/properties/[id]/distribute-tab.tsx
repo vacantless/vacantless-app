@@ -4,7 +4,7 @@
 // tracked posts + the add/edit/remove forms, reusing the SAME server actions
 // (addListingPost / updateListingPost / removeListingPost) and listing_posts
 // rows — no data-model change. Asset prep (Marketing Kit, Listing Copy, Fill
-// Sheet, Photos) stays on the Photos & marketing tab; this tab is about WHERE
+// Sheet, Photos) stays on the Photos & listing copy tab; this tab is about WHERE
 // the listing goes and WHAT still needs a human step.
 //
 // Server component: it renders <form action={serverAction}> directly and leans
@@ -47,7 +47,7 @@ import {
   type PublishChannelChoiceView,
   type RunItemView,
 } from "./launch-run-panel";
-import type { RunProgress } from "@/lib/distribution-run";
+import { activeRunChannelCount, type RunProgress } from "@/lib/distribution-run";
 import { buildReplySnippets } from "@/lib/reply-snippets";
 import {
   analyticsTotals,
@@ -60,6 +60,7 @@ import {
   type ListingQuality,
   type FairHousingFlag,
 } from "@/lib/listing-quality";
+import type { FillSheet } from "@/lib/listing-fill-sheet";
 
 export type QualityView = {
   listing: ListingQuality;
@@ -112,6 +113,7 @@ export type DistributeChannelCard = {
   channel: DistributionChannel;
   status: ChannelStatus;
   copy: { title: string; body: string } | null;
+  fillSheet: FillSheet | null;
   feed: { inFeed: boolean; hint: string } | null;
   partner: PartnerAccountView | null;
   posts: DistributePostRow[];
@@ -196,9 +198,10 @@ function distributionHealth({
   analytics: ChannelAnalyticsRow[];
 }): DistributionHealth {
   const runItems = launchRun.items;
-  const activeChannels = launchRun.run
-    ? runItems.length
-    : launchRun.startChannels.filter((c) => c.defaultSelected).length;
+  const activeChannels = activeRunChannelCount({
+    hasRun: Boolean(launchRun.run),
+    runItemCount: runItems.length,
+  });
   const submittedChannels = runItems.filter(
     (item) => item.publishStatus === "submitted",
   ).length;
@@ -257,6 +260,7 @@ export function DistributeTab({
   analytics,
   quality,
   qaExpected,
+  reservedTrackedLinksByChannel,
 }: {
   propertyId: string;
   linkIsLive: boolean;
@@ -272,6 +276,7 @@ export function DistributeTab({
   analytics: ChannelAnalyticsRow[];
   quality: QualityView;
   qaExpected: QaExpected;
+  reservedTrackedLinksByChannel: Record<string, string>;
 }) {
   const liveChannels = channelCards.filter(
     (c) => c.status.value === "posted" || c.status.value === "needs_refresh",
@@ -294,7 +299,7 @@ export function DistributeTab({
         <div className="mb-2 flex items-center gap-2.5">
           <IconTile><Icons.link className="h-4 w-4" /></IconTile>
           <h3 className="text-sm font-semibold text-gray-900">
-            Distribute this rental
+            Market this property
           </h3>
         </div>
         <p className="mb-3 text-xs text-gray-500">
@@ -320,7 +325,7 @@ export function DistributeTab({
           </span>
           {!readyToShare && (
             <a href="#share" className="font-medium text-brand underline">
-              Finish setup in Photos &amp; marketing →
+              Finish setup in Photos &amp; listing copy →
             </a>
           )}
         </div>
@@ -383,6 +388,9 @@ export function DistributeTab({
                 today={today}
                 replyInputs={replyInputs}
                 qaExpected={qaExpected}
+                reservedTrackedUrl={
+                  reservedTrackedLinksByChannel[card.channel.key] ?? null
+                }
               />
             ))}
           </div>
@@ -594,6 +602,135 @@ function AnalyticsPanel({ rows }: { rows: ChannelAnalyticsRow[] }) {
 
 // --- one channel card ------------------------------------------------------
 
+function groupedFillSheetFields(sheet: FillSheet): Array<{
+  step: string;
+  fields: FillSheet["fields"];
+}> {
+  const groups: Array<{ step: string; fields: FillSheet["fields"] }> = [];
+  const byStep = new Map<string, FillSheet["fields"]>();
+  for (const field of sheet.fields) {
+    const step = field.step ?? "Fields";
+    const fields = byStep.get(step) ?? [];
+    fields.push(field);
+    byStep.set(step, fields);
+  }
+  for (const [step, fields] of byStep) groups.push({ step, fields });
+  return groups;
+}
+
+function RentFasterPostingKit({
+  copy,
+  fillSheet,
+  reservedTrackedUrl,
+}: {
+  copy: { title: string; body: string } | null;
+  fillSheet: FillSheet | null;
+  reservedTrackedUrl: string | null;
+}) {
+  const groups = fillSheet ? groupedFillSheetFields(fillSheet) : [];
+  const gotchas = [
+    "Set Province to Ontario before choosing the address.",
+    "Pick the Google address suggestion and confirm the community/map.",
+    "Review property type; use Fourplex for a unit in a fourplex.",
+    "Remove Credit Report and Zumper/PadMapper add-ons unless approved.",
+    "Paid promotion is optional and owner-approved, not automatic.",
+    "Upload photos after payment, then paste the public RentFaster ad URL.",
+  ];
+
+  return (
+    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold text-amber-950">
+            RentFaster posting kit
+          </p>
+          <p className="text-[11px] text-amber-800">
+            Use this while logged in on the RentFaster add-listing page.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {copy && (
+            <>
+              <CopyTextButton value={copy.title} label="Copy title" />
+              <CopyTextButton value={copy.body} label="Copy description" />
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-3 rounded-lg border border-amber-200 bg-white p-2.5">
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+          Tracked inquiry link
+        </p>
+        {reservedTrackedUrl ? (
+          <CopyLink url={reservedTrackedUrl} />
+        ) : (
+          <p className="text-xs text-amber-800">
+            Add RentFaster to a publish run to reserve the tracked link before
+            you post.
+          </p>
+        )}
+      </div>
+
+      {fillSheet && (
+        <details className="mb-3 rounded-lg border border-amber-200 bg-white p-2.5">
+          <summary className="cursor-pointer text-xs font-semibold text-amber-950">
+            RentFaster field sheet
+          </summary>
+          <div className="mt-2 space-y-3">
+            {groups.map((group) => (
+              <div key={group.step}>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  {group.step}
+                </p>
+                <dl className="space-y-1">
+                  {group.fields.map((field) => (
+                    <div
+                      key={field.id}
+                      className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2"
+                    >
+                      <dt className="text-[11px] font-semibold text-gray-700">
+                        {field.label}
+                      </dt>
+                      <dd className="mt-0.5 text-xs text-gray-900">
+                        {field.value ?? "Manual / review"}
+                      </dd>
+                      {field.hint && (
+                        <dd className="mt-1 text-[11px] text-gray-500">
+                          {field.hint}
+                        </dd>
+                      )}
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      <div>
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+          RentFaster gotchas
+        </p>
+        <ul className="space-y-1">
+          {gotchas.map((gotcha) => (
+            <li
+              key={gotcha}
+              className="flex items-start gap-1.5 text-xs text-amber-900"
+            >
+              <span aria-hidden className="mt-px">
+                ○
+              </span>
+              <span>{gotcha}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function ChannelCard({
   card,
   propertyId,
@@ -602,6 +739,7 @@ function ChannelCard({
   today,
   replyInputs,
   qaExpected,
+  reservedTrackedUrl,
 }: {
   card: DistributeChannelCard;
   propertyId: string;
@@ -610,8 +748,9 @@ function ChannelCard({
   today: string;
   replyInputs: ReplyInputs;
   qaExpected: QaExpected;
+  reservedTrackedUrl: string | null;
 }) {
-  const { channel, status, copy, feed, partner } = card;
+  const { channel, status, copy, fillSheet, feed, partner } = card;
   const tone = channelStatusTone(status.value);
   const combinedCopy = copy ? `${copy.title}\n\n${copy.body}` : null;
   // Reply snippets for the assisted-manual + feed channels (a renter messages
@@ -746,9 +885,17 @@ function ChannelCard({
           <CopyTextButton value={combinedCopy} label="Copy this channel's wording" />
         )}
         <a href="#listing-copy-title" className="text-xs font-medium text-brand underline">
-          Full copy &amp; field sheet in Photos &amp; marketing →
+          Full copy &amp; field sheet in Photos &amp; listing copy →
         </a>
       </div>
+
+      {channel.key === "rentfaster" && (
+        <RentFasterPostingKit
+          copy={copy}
+          fillSheet={fillSheet}
+          reservedTrackedUrl={reservedTrackedUrl}
+        />
+      )}
 
       {/* Reply snippets — ready-to-paste replies to a renter's message. */}
       {replySnippets.length > 0 && (

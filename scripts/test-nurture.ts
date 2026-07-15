@@ -3,6 +3,7 @@ import {
   nurtureStepDue,
   nurtureCopy,
   isNurturableStatus,
+  isNurturablePropertyStatus,
   STEP_THRESHOLD_HOURS,
   NURTURE_STEPS,
   MIN_GAP_HOURS,
@@ -32,6 +33,7 @@ function base(overrides: Partial<Parameters<typeof nurtureStepDue>[0]> = {}) {
     createdAtMs: hoursAgo(STEP_THRESHOLD_HOURS[0] + 1), // just past step-1 threshold
     nowMs: NOW,
     status: "new",
+    propertyStatus: "available",
     stepsSent: 0,
     lastSentAtMs: null,
     enabled: true,
@@ -49,6 +51,20 @@ eq("status applied NOT nurturable", isNurturableStatus("applied"), false);
 eq("status leased NOT nurturable", isNurturableStatus("leased"), false);
 eq("status lost NOT nurturable", isNurturableStatus("lost"), false);
 eq("status null NOT nurturable", isNurturableStatus(null), false);
+
+// --- isNurturablePropertyStatus ---
+eq("property available nurturable", isNurturablePropertyStatus("available"), true);
+eq("property leased NOT nurturable", isNurturablePropertyStatus("leased"), false);
+eq("property draft NOT nurturable", isNurturablePropertyStatus("draft"), false);
+eq("property off_market NOT nurturable", isNurturablePropertyStatus("off_market"), false);
+eq("property null NOT nurturable", isNurturablePropertyStatus(null), false);
+
+// --- property-status gate ---
+eq("available property preserves due step", base({ propertyStatus: "available" }), 1);
+eq("leased property stops drip", base({ propertyStatus: "leased" }), 0);
+eq("draft property stops drip", base({ propertyStatus: "draft" }), 0);
+eq("off_market property stops drip", base({ propertyStatus: "off_market" }), 0);
+eq("null property status preserves current behavior", base({ propertyStatus: null }), 1);
 
 // --- gating: enabled / status / completion ---
 eq("disabled org → 0", base({ enabled: false }), 0);

@@ -8,7 +8,7 @@ import {
   severityLabel,
   type Guardrail,
 } from "../lib/listing-guardrails";
-import { PORTAL_KEYS } from "../lib/listing-distribution";
+import { PORTAL_KEYS, isRentFasterListingUrl } from "../lib/listing-distribution";
 
 let passed = 0;
 let failed = 0;
@@ -81,12 +81,55 @@ ok(
 
 const rentfaster = guardrailsForPortal("rentfaster");
 ok(
-  "rentfaster: paid 60-day guardrail present + critical",
+  "rentfaster: paid package guardrail present + critical",
   rentfaster.some((g) => g.id === "rentfaster-paid-sixty-day" && g.severity === "critical"),
+);
+ok(
+  "rentfaster: price copy is not hard-coded to the old $54.50 claim",
+  !rentfaster.find((g) => g.id === "rentfaster-paid-sixty-day")?.detail.includes("$54.50"),
+);
+ok(
+  "rentfaster: add-on removal guardrail present + critical",
+  rentfaster.some((g) => g.id === "rentfaster-package-addons" && g.severity === "critical"),
+);
+ok(
+  "rentfaster: proof-capture guardrail present + critical",
+  rentfaster.some((g) => g.id === "rentfaster-proof-capture" && g.severity === "critical"),
+);
+ok(
+  "rentfaster: province default guardrail present",
+  rentfaster.some((g) => g.id === "rentfaster-province-default"),
+);
+ok(
+  "rentfaster: paid promotion guardrail present",
+  rentfaster.some((g) => g.id === "rentfaster-promotion-not-auto"),
+);
+ok(
+  "rentfaster: photos-after-payment guardrail present",
+  rentfaster.some((g) => g.id === "rentfaster-photos-after-payment"),
 );
 ok(
   "rentfaster: single-address guardrail present",
   rentfaster.some((g) => g.id === "rentfaster-single-address"),
+);
+
+ok(
+  "rentfaster URL guard accepts public listing detail",
+  isRentFasterListingUrl(
+    "https://www.rentfaster.ca/on/windsor/rentals/fourplex/2-bedrooms/50-glenrose-avenue/123456",
+  ),
+);
+ok(
+  "rentfaster URL guard rejects logged-in add-listing route",
+  !isRentFasterListingUrl("https://www.rentfaster.ca/admin/add-listing/"),
+);
+ok(
+  "rentfaster URL guard rejects dashboard route",
+  !isRentFasterListingUrl("https://www.rentfaster.ca/admin/listings/"),
+);
+ok(
+  "rentfaster URL guard rejects pricing route",
+  !isRentFasterListingUrl("https://www.rentfaster.ca/prices/"),
 );
 
 const fb = guardrailsForPortal("facebook");

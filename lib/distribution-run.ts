@@ -59,6 +59,13 @@ export function isResolvedRunStatus(s: RunItemStatus): boolean {
   return s === "done" || s === "skipped";
 }
 
+export function activeRunChannelCount(input: {
+  hasRun: boolean;
+  runItemCount: number;
+}): number {
+  return input.hasRun ? Math.max(0, input.runItemCount) : 0;
+}
+
 // --- steps -----------------------------------------------------------------
 // One checklist step. `detail` is optional guidance shown under the label.
 export type RunStep = {
@@ -134,7 +141,7 @@ export function buildRunSteps(
         key: "brief_agent",
         label: `Send the field sheet to your agent`,
         detail:
-          "Realtor.ca is populated through the agent or MLS route, so your agent lists it. The field sheet in Photos & marketing has everything they need.",
+          "Realtor.ca is populated through the agent or MLS route, so your agent lists it. The field sheet in Photos & listing copy has everything they need.",
       },
       {
         key: "confirm_live",
@@ -156,7 +163,7 @@ export function buildRunSteps(
     {
       key: "fields",
       label: "Fill the listing fields",
-      detail: "The field sheet in Photos & marketing lists each field in order.",
+      detail: "The field sheet in Photos & listing copy lists each field in order.",
     },
     {
       key: "photos",

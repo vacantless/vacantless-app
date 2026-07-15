@@ -78,7 +78,7 @@ const PUBLISH_STATUS_TONES: Record<PublishStatus, PublishTone> = {
   blocked: "danger",
   queued: "neutral",
   submitting: "warning",
-  submitted: "positive",
+  submitted: "warning",
   needs_operator: "warning",
   needs_login: "warning",
   needs_payment: "warning",
@@ -185,7 +185,7 @@ export function publishModeLabel(value: unknown): string {
 }
 
 export function isResolvedPublishStatus(status: PublishStatus): boolean {
-  return status === "live" || status === "submitted" || status === "skipped";
+  return status === "live" || status === "skipped";
 }
 
 // ----------------------------------------------------------------------------
@@ -236,8 +236,9 @@ export function legacyRunStatusForPublishStatus(
   status: PublishStatus,
 ): "pending" | "in_progress" | "done" | "skipped" {
   if (status === "skipped") return "skipped";
-  if (status === "live" || status === "submitted") return "done";
+  if (status === "live") return "done";
   if (
+    status === "submitted" ||
     status === "needs_operator" ||
     status === "needs_login" ||
     status === "needs_payment" ||

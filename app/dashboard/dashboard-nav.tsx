@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 // items moved out of the old "More ▾" dropdown (which mixed core work beside
 // account settings) into a right-side ORG MENU keyed to the org name.
 //
-//   PRIMARY:  Overview · Rentals · Leasing · Tenants · Money · Maintenance
+//   PRIMARY:  Overview · Properties · Leasing · Tenants · Money · Maintenance
 //   ORG ▾  :  Settings · Your plan · [Refer] · [Captures] · Sign out
 //
 // Leasing, Tenants and Money are hub landings that tab across existing routes
@@ -35,7 +35,7 @@ type NavItem = {
 
 const PRIMARY: NavItem[] = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/properties", label: "Rentals" },
+  { href: "/dashboard/properties", label: "Properties" },
   {
     href: "/dashboard/leasing",
     label: "Leasing",

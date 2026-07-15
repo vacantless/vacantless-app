@@ -233,7 +233,7 @@ export function buildCopilotScript(
     detail:
       channel === "facebook"
         ? "Facebook flags duplicate photos across posts — use this listing's own set, cover photo first."
-        : "Use the field sheet in Photos & marketing; cover photo first.",
+        : "Use the field sheet in Photos & listing copy; cover photo first.",
   });
   if (cap.requiresPayment) {
     steps.push({

@@ -41,10 +41,18 @@ export function isNurturableStatus(status: string | null | undefined): boolean {
   return (NURTURABLE_STATUSES as readonly string[]).includes(status ?? "");
 }
 
+// A drip only makes sense while the unit is actually takeable.
+export const NURTURABLE_PROPERTY_STATUSES = ["available"] as const;
+
+export function isNurturablePropertyStatus(status: string | null | undefined): boolean {
+  return (NURTURABLE_PROPERTY_STATUSES as readonly string[]).includes(status ?? "");
+}
+
 export type NurtureDueInput = {
   createdAtMs: number | null;
   nowMs: number;
   status: string;
+  propertyStatus: string | null;
   stepsSent: number;
   lastSentAtMs: number | null;
   enabled: boolean;
@@ -57,6 +65,7 @@ export type NurtureDueInput = {
  * Returns a positive step only when ALL hold:
  *   - the org has nurture enabled
  *   - the lead is still in a nurturable stage (inquired, not yet booked/lost)
+ *   - the property is still available, when the lead is tied to a property
  *   - it hasn't already received every step
  *   - the lead has an inquiry time, and that inquiry isn't older than the
  *     freshness cap (don't drip cold/imported leads)
@@ -71,6 +80,7 @@ export function nurtureStepDue(input: NurtureDueInput): number {
 
   if (!enabled) return 0;
   if (!isNurturableStatus(status)) return 0;
+  if (input.propertyStatus != null && !isNurturablePropertyStatus(input.propertyStatus)) return 0;
 
   // Clamp a malformed count into range; never below 0.
   const sent = Number.isInteger(stepsSent) && stepsSent > 0 ? stepsSent : 0;

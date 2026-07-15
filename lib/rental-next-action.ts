@@ -184,14 +184,14 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
               "detail is",
               "details are",
             )} already filled from your building defaults. Confirm them and add the few things below.`
-          : "Add the rental's core details below. Set your building defaults once and future units inherit them automatically.";
+          : "Add the property's rental details below. Set your building defaults once and future units inherit them automatically.";
       return {
         step,
-        title: "Finish setting up this rental",
+        title: "Finish setting up this property",
         blurb,
         derived: facts,
         gaps,
-        cta: { label: "Add rental details", href: `${self}#rental-details` },
+        cta: { label: "Add property details", href: `${self}#rental-details` },
       };
     }
 
@@ -222,7 +222,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         });
       return {
         step,
-        title: "Publish this rental",
+        title: "Publish this property",
         blurb:
           "Your listing is written from these details and your building defaults. Finish the steps below to take it live.",
         derived,
@@ -252,15 +252,17 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         });
       return {
         step,
-        title: "Bring in inquiries",
+        title: "Market this property",
         blurb:
-          "Your rental is live. Share it where renters look — your listing copy and per-portal fill sheets are ready to paste.",
+          "Your property is live. Use the distribution checklist to post where renters look and track which channels bring leads back.",
         derived,
         gaps:
           input.listingPostCount === 0
-            ? [{ key: "share", label: "Share the link / post to a channel" }]
-            : [{ key: "share", label: "Share the link with more renters" }],
-        cta: { label: "Copy & share the listing", href: `${self}#share` },
+            ? [{ key: "market", label: "Post to your first channel" }]
+            : input.openInquiryCount === 0
+              ? [{ key: "market", label: "Refresh or add a renter channel" }]
+              : [{ key: "share", label: "Share the link with more renters" }],
+        cta: { label: "Publish / Market", href: `${self}#distribute-header` },
       };
     }
 

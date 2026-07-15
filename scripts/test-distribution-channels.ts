@@ -1,5 +1,6 @@
 // Unit tests for the pure distribution-channels matrix + status reducer.
 // Run: npx tsx scripts/test-distribution-channels.ts
+import { readFileSync } from "node:fs";
 import {
   CHANNEL_MODES,
   DISTRIBUTION_CHANNELS,
@@ -56,6 +57,10 @@ ok("rentals_ca is feed-eligible", channelByKey("rentals_ca")?.feedEligible === t
 ok("rentfaster is feed-eligible", channelByKey("rentfaster")?.feedEligible === true);
 ok("rentfaster has copy", channelByKey("rentfaster")?.copyKey === "rentfaster");
 ok("rentfaster has guardrails", channelByKey("rentfaster")?.hasGuardrails === true);
+ok(
+  "rentfaster portal URL opens logged-in add-listing route",
+  channelByKey("rentfaster")?.portalUrl === "https://www.rentfaster.ca/admin/add-listing/",
+);
 ok("zumper is feed-eligible", channelByKey("zumper")?.feedEligible === true);
 ok("zumper label carries PadMapper", channelByKey("zumper")?.label === "Zumper + PadMapper");
 ok("facebook is NOT feed-eligible", channelByKey("facebook")?.feedEligible === false);
@@ -67,6 +72,42 @@ ok(
 ok(
   "all matrix channels have guardrails",
   DISTRIBUTION_CHANNELS.every((c) => c.hasGuardrails),
+);
+
+const marketingKitSource = readFileSync(
+  "app/dashboard/properties/[id]/marketing-kit-card.tsx",
+  "utf8",
+);
+ok(
+  "feed copy does not claim no posting needed",
+  !marketingKitSource.includes("no posting needed"),
+);
+ok(
+  "feed copy says partner acceptance is still needed",
+  marketingKitSource.includes("A partner site still needs to accept and show it"),
+);
+
+const distributeTabSource = readFileSync(
+  "app/dashboard/properties/[id]/distribute-tab.tsx",
+  "utf8",
+);
+ok(
+  "RentFaster card exposes its posting kit",
+  distributeTabSource.includes("RentFaster posting kit"),
+);
+ok(
+  "RentFaster card can copy a reserved tracked link",
+  distributeTabSource.includes("Tracked inquiry link") &&
+    distributeTabSource.includes("reservedTrackedUrl"),
+);
+
+const launchRunPanelSource = readFileSync(
+  "app/dashboard/properties/[id]/launch-run-panel.tsx",
+  "utf8",
+);
+ok(
+  "first-run CTA says add selected channels",
+  launchRunPanelSource.includes("Add selected channels to publish checklist"),
 );
 
 // --- labels ----------------------------------------------------------------

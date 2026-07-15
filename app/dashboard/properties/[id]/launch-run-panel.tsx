@@ -225,7 +225,7 @@ export function LaunchRunPanel({
             className={PRIMARY_BTN}
             style={{ backgroundColor: "var(--brand-color)" }}
           >
-            Start publish checklist
+            Add selected channels to publish checklist
           </button>
         </form>
       </div>

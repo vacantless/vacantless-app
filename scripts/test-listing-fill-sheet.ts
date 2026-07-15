@@ -201,13 +201,52 @@ ok(
     "Single Unit Listing",
 );
 ok(
-  "rentfaster: payment field carries paid plan guardrail",
+  "rentfaster: province preset is Ontario",
+  rentfaster.fields.find((f) => f.id === "rentfaster-province")?.value === "Ontario",
+);
+ok(
+  "rentfaster: property type is a reviewable Fourplex default, not Apartment",
+  (() => {
+    const f = rentfaster.fields.find((x) => x.id === "rentfaster-property-type");
+    return (
+      f?.label === "Review property type" &&
+      f?.value === "Fourplex (review)"
+    );
+  })(),
+);
+ok(
+  "rentfaster: property type does not use generic Apartment",
+  rentfaster.fields.find((f) => f.id === "rentfaster-property-type")?.value !==
+    "Apartment",
+);
+ok(
+  "rentfaster: payment field carries add-on guardrail",
   (() => {
     const f = rentfaster.fields.find((x) => x.id === "rentfaster-payment");
-    return (
-      f?.value === "New Rental Ad - $54.50 + tax" &&
+    return Boolean(
+      f?.value?.includes("Single Unit Listing package") &&
       f?.source === "preset" &&
-      f?.guardrailId === "rentfaster-paid-sixty-day"
+      f?.guardrailId === "rentfaster-package-addons",
+    );
+  })(),
+);
+ok(
+  "rentfaster: photos happen after package/payment",
+  (() => {
+    const ids = rentfaster.fields.map((f) => f.id);
+    return ids.indexOf("rentfaster-payment") < ids.indexOf("rentfaster-photos");
+  })(),
+);
+ok(
+  "rentfaster: downstream syndication is explicit and not proof",
+  (() => {
+    const f = rentfaster.fields.find((x) => x.id === "rentfaster-downstream-syndication");
+    return Boolean(
+      f?.value?.includes("Rentals.ca") &&
+      f?.value?.includes("RentBoard") &&
+      f?.value?.includes("RentCanada") &&
+      f?.value?.includes("Zumper/PadMapper") &&
+      f?.guardrailId === "rentfaster-downstream-syndication",
     );
   })(),
 );
@@ -215,7 +254,11 @@ ok(
   "rentfaster: live URL proof reminder is manual",
   (() => {
     const f = rentfaster.fields.find((x) => x.id === "rentfaster-live-url");
-    return f?.source === "manual" && f?.value === null;
+    return (
+      f?.source === "manual" &&
+      f?.value === null &&
+      f?.guardrailId === "rentfaster-proof-capture"
+    );
   })(),
 );
 ok(
@@ -226,6 +269,11 @@ ok(
 ok(
   "rentfaster: every field is step-tagged",
   rentfaster.fields.every((f) => !!f.step),
+);
+ok(
+  "rentfaster: home features picker reminder is present",
+  rentfaster.fields.find((f) => f.id === "rentfaster-home-features")?.guardrailId ===
+    "rentfaster-home-features-picker",
 );
 
 // --- a SPARSE unit leaves listing fields null, presets still present -------

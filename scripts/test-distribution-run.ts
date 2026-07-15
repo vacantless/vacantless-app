@@ -2,6 +2,7 @@
 // Run: npx tsx scripts/test-distribution-run.ts
 import {
   RUN_ITEM_STATUSES,
+  activeRunChannelCount,
   runItemStatusLabel,
   isRunItemStatus,
   normalizeRunItemStatus,
@@ -116,14 +117,19 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     { status: "in_progress", publishStatus: "needs_login" },
     { status: "pending", publishStatus: "skipped" },
   ]);
-  ok("publish progress counts submitted as done", p.done === 1);
+  ok("publish progress leaves submitted open", p.done === 0);
   ok("publish progress counts skipped", p.skipped === 1);
-  ok("publish progress leaves needs_login open", p.remaining === 1);
+  ok("publish progress leaves submitted and needs_login open", p.remaining === 2);
+  ok("publish progress only resolves skipped/live channels", p.pct === 33);
 }
 {
   const p = runProgress([]);
   ok("empty run pct 0", p.pct === 0);
   ok("empty run not allResolved", !p.allResolved);
+}
+{
+  ok("active channel count is zero before a run starts", activeRunChannelCount({ hasRun: false, runItemCount: 6 }) === 0);
+  ok("active channel count uses actual run items after start", activeRunChannelCount({ hasRun: true, runItemCount: 4 }) === 4);
 }
 
 // --- selectable channels ---------------------------------------------------

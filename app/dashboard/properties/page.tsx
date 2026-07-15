@@ -99,14 +99,14 @@ export default async function PropertiesPage({
       <BrandBanner
         icon={<Icons.building />}
         eyebrow="Portfolio"
-        title="Rentals"
-        subtitle="Your rental portfolio. Each rental has its own public inquiry page and renter inquiry tracking."
+        title="Properties"
+        subtitle="Your landlord clients' properties and their marketing status."
       />
 
       {searchParams.added && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          Rental added as a draft. Open it to add photos and details, then set it
-          Live to share its public inquiry page.
+          Property added as a draft. Open it to add photos and details, then set
+          it Live to share its public inquiry page.
         </p>
       )}
 
@@ -119,7 +119,7 @@ export default async function PropertiesPage({
       )}
       {searchParams.import === "failed" && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-          Something went wrong creating the rental. Please try again.
+          Something went wrong creating the property. Please try again.
         </p>
       )}
       {searchParams.import === "badimage" && (
@@ -222,7 +222,15 @@ export default async function PropertiesPage({
                   // The photo-poor warning that used to sit here is now carried
                   // by the Photos chip in the readiness strip below (Codex design
                   // audit #5), so this stays a clean Copy action.
-                  <CopyIntakeButton url={intakeUrl(p.id)} />
+                  <>
+                    <CopyIntakeButton url={intakeUrl(p.id)} />
+                    <Link
+                      href={`/dashboard/properties/${p.id}#distribute-header`}
+                      className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
+                    >
+                      Publish / Market →
+                    </Link>
+                  </>
                 ) : isPubliclyVisible(p.status) ? (
                   // Leased / Paused: the public /r page LOADS but tells renters
                   // the unit is no longer available, so a bare "Copy inquiry
@@ -261,17 +269,17 @@ export default async function PropertiesPage({
         <div className="mb-8">
           <EmptyState
             icon={<Icons.building />}
-            title="No rentals yet"
-            description="Add your first rental to create its public inquiry page and start collecting inquiries — it takes a couple of minutes."
-            cta={{ href: "#add-rental", label: "Add your first rental" }}
+            title="No properties yet"
+            description="Add your first property to create its public inquiry page and start collecting inquiries - it takes a couple of minutes."
+            cta={{ href: "#add-rental", label: "Add your first property" }}
           />
         </div>
       )}
 
-      {/* Scroll target for the empty-state "Add your first rental" CTA so a
-          brand-new org jumps straight to the add-a-rental section. */}
+      {/* Scroll target for the empty-state CTA. Keep the id stable for existing
+          links while the product language says property. */}
       <div id="add-rental" className="scroll-mt-4" />
-      <SectionHeading>Add a rental</SectionHeading>
+      <SectionHeading>Add a property</SectionHeading>
 
       {/* Realtor onboarding wedge (item M): paste an existing MLS / realtor.ca
           listing to prefill a draft, so a realtor who already has the unit on
@@ -412,7 +420,7 @@ export default async function PropertiesPage({
           className={PRIMARY_ACTION_CLASS}
           style={{ background: "var(--brand-gradient, var(--brand-color))" }}
         >
-          Add rental
+          Add property
         </button>
       </form>
     </div>

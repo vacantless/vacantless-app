@@ -146,12 +146,18 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
 {
   const a = deriveNextAction(inp({ currentStep: "inquiries", hasRent: true, isLive: true, linkIsLive: true, photoCount: 2, listingPostCount: 0 }));
   ok("inquiries: link fact present when live", !!findFact(a, "link"));
-  ok("inquiries: share gap present", findGap(a, "share"));
-  ok("inquiries: cta -> #share", a?.cta.href === `/dashboard/properties/${PID}#share`);
+  ok("inquiries: market gap present", findGap(a, "market"));
+  ok("inquiries: cta -> distribute", a?.cta.href === `/dashboard/properties/${PID}#distribute-header`);
+  ok("inquiries: cta says Publish / Market", a?.cta.label === "Publish / Market");
 }
 {
   const a = deriveNextAction(inp({ currentStep: "inquiries", linkIsLive: true, listingPostCount: 3 }));
   ok("inquiries: posts fact reflects count", findFact(a, "posts")?.value === "3 channels");
+  ok("inquiries: no-inquiry property still routes to distribution", findGap(a, "market"));
+}
+{
+  const a = deriveNextAction(inp({ currentStep: "inquiries", linkIsLive: true, listingPostCount: 3, openInquiryCount: 2 }));
+  ok("inquiries: with open inquiries, share-more gap remains", findGap(a, "share"));
 }
 
 // --- viewings ---------------------------------------------------------------

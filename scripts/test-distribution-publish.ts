@@ -7,7 +7,9 @@ import {
   preparePublishChannel,
   normalizePublishChannel,
   publishStatusLabel,
+  publishStatusTone,
   publishModeLabel,
+  isResolvedPublishStatus,
   legacyRunStatusForPublishStatus,
   type PublishChannelContext,
 } from "../lib/distribution-publish";
@@ -156,10 +158,12 @@ ok("mode label feed partner is candidate", publishModeLabel("feed_partner") === 
 
 // --- legacy status bridge --------------------------------------------------
 ok("live maps to legacy done", legacyRunStatusForPublishStatus("live") === "done");
-ok("submitted maps to legacy done", legacyRunStatusForPublishStatus("submitted") === "done");
+ok("submitted stays non-terminal in legacy run status", legacyRunStatusForPublishStatus("submitted") === "in_progress");
 ok("needs_login maps to in_progress", legacyRunStatusForPublishStatus("needs_login") === "in_progress");
 ok("blocked maps to pending", legacyRunStatusForPublishStatus("blocked") === "pending");
 ok("skipped maps to skipped", legacyRunStatusForPublishStatus("skipped") === "skipped");
+ok("submitted is an attention state, not positive", publishStatusTone("submitted") === "warning");
+ok("submitted is not resolved until proof goes live", !isResolvedPublishStatus("submitted"));
 
 const copy = [
   ...publishChannelChoices({ includeNetworkFeed: true }).flatMap((c) => [
