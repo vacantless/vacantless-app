@@ -1010,6 +1010,7 @@ const PLANS: {
       "Automatic rent collection (Stripe / Rotessa)",
       "Tenant records and payment ledger",
       "Renter screening, plus email and text",
+      "Automated lead nurture and post-viewing follow-up",
       "Listing distribution and year-end tax export",
     ],
     cta: "Choose Growth",

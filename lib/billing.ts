@@ -457,6 +457,8 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Online rent collection (Stripe / Rotessa)",
       "Renter pre-screening questions",
       "Tenant + renter messaging by email and text",
+      "Automated lead nurture and post-viewing follow-up",
+      "Grouped viewing scheduling (back-to-back showings)",
       "Tenancy records and payment ledger",
       "Year-end tax / rent export",
     ],
