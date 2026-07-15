@@ -212,8 +212,9 @@ export default async function ConciergeDeskPage() {
                 {item.channel === "realtor_ca" && (
                   <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
                     Realtor referral: match a licensed network agent. The agent
-                    lists this rental on Realtor.ca through their own brokerage;
-                    the desk only confirms the live realtor.ca link.
+                    is the principal and lists through their own brokerage;
+                    Vacantless collects no referral fee and only marks Live with
+                    the real Realtor.ca link.
                   </p>
                 )}
 

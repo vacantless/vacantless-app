@@ -377,9 +377,10 @@ export function LaunchRunPanel({
                     Dispatch a network agent
                   </button>
                   <span className="ml-2 text-[11px] text-gray-500">
-                    A licensed real-estate agent from our network lists your
-                    rental on Realtor.ca through their brokerage. You confirm the
-                    live listing link; Vacantless tracks it.
+                    A licensed real-estate agent is the principal and lists your
+                    rental through their own brokerage. Vacantless collects no
+                    referral fee and only marks it live with the real Realtor.ca
+                    link.
                   </span>
                 </form>
               )}

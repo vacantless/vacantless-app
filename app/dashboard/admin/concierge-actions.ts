@@ -17,9 +17,9 @@ import {
   isResolvedPublishStatus,
   normalizePublishStatus,
   CONCIERGE_OPEN_STATUSES,
-  CONCIERGE_CLAIMED_AUDIT,
-  CONCIERGE_LIVE_AUDIT,
-  CONCIERGE_REJECTED_AUDIT,
+  conciergeClaimedAuditForChannel,
+  conciergeLiveAuditForChannel,
+  conciergeRejectedAuditForChannel,
 } from "@/lib/distribution-publish";
 import { scheduleNextVerification } from "@/lib/distribution-verification";
 import { buildAttemptRecord } from "@/lib/distribution-attempts";
@@ -54,6 +54,14 @@ export async function claimConciergeItem(formData: FormData) {
   if (!ctx) redirect("/dashboard");
   if (!itemId) redirect(DESK);
   const now = new Date().toISOString();
+  const { data: itemForAudit } = await ctx.admin
+    .from("distribution_run_items")
+    .select("channel")
+    .eq("id", itemId)
+    .maybeSingle();
+  const auditMessage = conciergeClaimedAuditForChannel(
+    (itemForAudit?.channel as string | null) ?? "",
+  );
   // Only an unclaimed, still-open concierge item can be claimed. The predicates
   // (mode + open status + claimed_by IS NULL) make this atomic: a second staff
   // click, or a claim on an item already marked live, matches 0 rows -> stale.
@@ -64,7 +72,7 @@ export async function claimConciergeItem(formData: FormData) {
       concierge_claimed_at: now,
       publish_status: "submitting",
       status: "in_progress",
-      audit_message: CONCIERGE_CLAIMED_AUDIT,
+      audit_message: auditMessage,
       last_attempted_at: now,
       updated_at: now,
     })
@@ -217,7 +225,7 @@ export async function completeConciergeItem(formData: FormData) {
       status: "done",
       external_url: url,
       listing_post_id: listingPostId,
-      audit_message: CONCIERGE_LIVE_AUDIT,
+      audit_message: conciergeLiveAuditForChannel(channel),
       error_code: null,
       error_message: null,
       last_verified_at: now,
@@ -332,6 +340,14 @@ export async function rejectConciergeItem(formData: FormData) {
   if (!itemId) redirect(DESK);
   const reason = normalizeText(formData.get("reason")) ?? "Could not post to this channel.";
   const now = new Date().toISOString();
+  const { data: itemForAudit } = await ctx.admin
+    .from("distribution_run_items")
+    .select("channel")
+    .eq("id", itemId)
+    .maybeSingle();
+  const auditMessage = conciergeRejectedAuditForChannel(
+    (itemForAudit?.channel as string | null) ?? "",
+  );
   const takeoverCutoff = new Date(Date.now() - CONCIERGE_CLAIM_TAKEOVER_MS)
     .toISOString()
     .replace(/\.\d{3}Z$/, "Z");
@@ -349,7 +365,7 @@ export async function rejectConciergeItem(formData: FormData) {
       status: "in_progress",
       error_code: "rejected",
       error_message: reason,
-      audit_message: CONCIERGE_REJECTED_AUDIT,
+      audit_message: auditMessage,
       last_attempted_at: now,
       updated_at: now,
     })

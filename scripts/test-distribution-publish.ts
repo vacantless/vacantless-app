@@ -12,8 +12,17 @@ import {
   isResolvedPublishStatus,
   legacyRunStatusForPublishStatus,
   conciergeRequestAuditForChannel,
+  conciergeClaimedAuditForChannel,
+  conciergeLiveAuditForChannel,
+  conciergeRejectedAuditForChannel,
   CONCIERGE_REQUEST_AUDIT,
+  CONCIERGE_CLAIMED_AUDIT,
+  CONCIERGE_LIVE_AUDIT,
+  CONCIERGE_REJECTED_AUDIT,
   REALTOR_REFERRAL_REQUEST_AUDIT,
+  REALTOR_REFERRAL_CLAIMED_AUDIT,
+  REALTOR_REFERRAL_LIVE_AUDIT,
+  REALTOR_REFERRAL_REJECTED_AUDIT,
   type PublishChannelContext,
 } from "../lib/distribution-publish";
 
@@ -169,28 +178,57 @@ ok("submitted is an attention state, not positive", publishStatusTone("submitted
 ok("submitted is not resolved until proof goes live", !isResolvedPublishStatus("submitted"));
 
 // --- Lane B: realtor referral audit copy -----------------------------------
+const realtorAudits = [
+  REALTOR_REFERRAL_REQUEST_AUDIT,
+  REALTOR_REFERRAL_CLAIMED_AUDIT,
+  REALTOR_REFERRAL_LIVE_AUDIT,
+  REALTOR_REFERRAL_REJECTED_AUDIT,
+];
+
 ok(
   "realtor_ca concierge request uses the RECO referral audit",
   conciergeRequestAuditForChannel("realtor_ca") === REALTOR_REFERRAL_REQUEST_AUDIT,
 );
 ok(
+  "realtor_ca concierge lifecycle uses RECO referral audits",
+  conciergeClaimedAuditForChannel("realtor_ca") === REALTOR_REFERRAL_CLAIMED_AUDIT &&
+    conciergeLiveAuditForChannel("realtor_ca") === REALTOR_REFERRAL_LIVE_AUDIT &&
+    conciergeRejectedAuditForChannel("realtor_ca") === REALTOR_REFERRAL_REJECTED_AUDIT,
+);
+ok(
   "non-realtor channels keep the generic concierge audit",
-  conciergeRequestAuditForChannel("facebook") === CONCIERGE_REQUEST_AUDIT &&
-    conciergeRequestAuditForChannel("kijiji") === CONCIERGE_REQUEST_AUDIT &&
-    conciergeRequestAuditForChannel("other") === CONCIERGE_REQUEST_AUDIT,
-);
-ok(
-  "realtor referral audit is RECO-honest: agent is principal, no fee, real URL",
-  /licensed/i.test(REALTOR_REFERRAL_REQUEST_AUDIT) &&
-    /their own brokerage/i.test(REALTOR_REFERRAL_REQUEST_AUDIT) &&
-    /not a party to any referral fee/i.test(REALTOR_REFERRAL_REQUEST_AUDIT) &&
-    /realtor\.ca/i.test(REALTOR_REFERRAL_REQUEST_AUDIT),
-);
-ok(
-  "realtor referral audit never claims Vacantless posts to Realtor.ca",
-  !/Vacantless (posts|posted|will post) (it |this )?(on|to) realtor/i.test(
-    REALTOR_REFERRAL_REQUEST_AUDIT,
+  ["facebook", "kijiji", "other"].every(
+    (channel) =>
+      conciergeRequestAuditForChannel(channel) === CONCIERGE_REQUEST_AUDIT &&
+      conciergeClaimedAuditForChannel(channel) === CONCIERGE_CLAIMED_AUDIT &&
+      conciergeLiveAuditForChannel(channel) === CONCIERGE_LIVE_AUDIT &&
+      conciergeRejectedAuditForChannel(channel) === CONCIERGE_REJECTED_AUDIT,
   ),
+);
+ok(
+  "realtor referral audits are RECO-honest: agent is principal, no fee, real URL",
+  realtorAudits.every((audit) => /licensed/i.test(audit)) &&
+    realtorAudits.every((audit) => /(principal|would be the principal)/i.test(audit)) &&
+    realtorAudits.every((audit) =>
+      /(not a party to any referral fee|collect a referral fee)/i.test(audit),
+    ) &&
+    realtorAudits.every((audit) => /realtor\.ca/i.test(audit)),
+);
+ok(
+  "realtor referral audits never claim Vacantless posts to Realtor.ca",
+  realtorAudits.every(
+    (audit) =>
+      !/Vacantless (posts|posted|will post) (it |this )?(on|to) realtor/i.test(audit),
+  ),
+);
+ok(
+  "realtor live and rejected audits mention no fee and the Realtor.ca URL",
+  /licensed/i.test(REALTOR_REFERRAL_LIVE_AUDIT) &&
+    /(not a party to any referral fee|collect a referral fee)/i.test(REALTOR_REFERRAL_LIVE_AUDIT) &&
+    /realtor\.ca listing URL/i.test(REALTOR_REFERRAL_LIVE_AUDIT) &&
+    /licensed/i.test(REALTOR_REFERRAL_REJECTED_AUDIT) &&
+    /(not a party to any referral fee|collect a referral fee)/i.test(REALTOR_REFERRAL_REJECTED_AUDIT) &&
+    /realtor\.ca listing URL/i.test(REALTOR_REFERRAL_REJECTED_AUDIT),
 );
 
 const copy = [
@@ -199,8 +237,11 @@ const copy = [
     c.description,
   ]),
   ...PUBLISH_STATUSES.map(publishStatusLabel),
-  REALTOR_REFERRAL_REQUEST_AUDIT,
+  ...realtorAudits,
   CONCIERGE_REQUEST_AUDIT,
+  CONCIERGE_CLAIMED_AUDIT,
+  CONCIERGE_LIVE_AUDIT,
+  CONCIERGE_REJECTED_AUDIT,
 ].join(" ");
 ok("publish copy has no em dashes", !/[—–]/.test(copy));
 
