@@ -357,6 +357,24 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // Renter accepted a suggested reschedule time (S497). Audience operator; fired
+  // after the renter uses the POST-only magic link to move the showing to one of
+  // the proposed open slots. Defaults to members who manage inquiries so the
+  // lead agent sees the new time immediately.
+  {
+    key: "leasing.reschedule_accepted",
+    family: "leasing",
+    audience: "operator",
+    label: "Renter accepted a new viewing time",
+    description:
+      "When a renter accepts one of your suggested viewing times, your leasing team is notified with the updated time. Defaults to members who manage inquiries; edit the recipients below.",
+    tokens: [...COMMON_TOKENS, "lead_name", "showing_time", "dashboard_url"],
+    defaultSubject: "New viewing time accepted - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "{{lead_name}} accepted a new viewing time at {{property_address}}.\n\nNew time: {{showing_time}}\n\nOpen the inquiry: {{dashboard_url}}",
+    defaultAccent: "#059669",
+    active: true,
+  },
   // Pre-showing UNCONFIRMED nudge (S440, showing routing Slice 3). Audience
   // operator; the mirror of the outcome nudge. When an assigned viewing is coming
   // up (within ~24h) and hasn't been confirmed with the renter yet, the ASSIGNED

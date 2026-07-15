@@ -3,7 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { EmptyState, PageHeader, SectionHeading } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { groupShowingsIntoBlocks, utcToLocalInputValue } from "@/lib/booking";
+import {
+  generateSlots,
+  groupShowingsIntoBlocks,
+  utcToLocalInputValue,
+  type Availability,
+} from "@/lib/booking";
 import {
   agentDisplayLabel,
   canAssignShowing,
@@ -21,6 +26,10 @@ import { OutcomeSelect } from "./outcome-select";
 import { AssignSelect } from "./assign-select";
 import { ConfirmControl } from "./confirm-control";
 import { RescheduleControl } from "./reschedule-control";
+import {
+  SuggestTimeControl,
+  type SuggestTimeSlotOption,
+} from "./suggest-time-control";
 import { assignAllUnassigned } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +110,7 @@ export default async function ShowingsPage({
   const role = await getCurrentRole();
   const canManageAgents = roleCan(role, "manage_settings");
   const canAssign = roleCan(role, "manage_leads");
+  const canSuggestTimes = role != null && roleCan(role, "manage_showings");
   const { data } = await supabase
     .from("showings")
     .select(
@@ -134,6 +144,30 @@ export default async function ShowingsPage({
       s.scheduled_at != null &&
       new Date(s.scheduled_at).getTime() >= now,
   );
+  const slotOptionsByPropertyId = new Map<string, SuggestTimeSlotOption[]>();
+  for (const propertyId of Array.from(
+    new Set(
+      upcoming
+        .map((s) => s.property?.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  )) {
+    const { data: avData } = await supabase.rpc("get_public_availability", {
+      p_property_id: propertyId,
+    });
+    const av = avData as Availability | null;
+    const options = av
+      ? generateSlots(av)
+          .flatMap((day) =>
+            day.slots.map((slot) => ({
+              iso: slot.iso,
+              label: `${day.dayLabel} · ${slot.label}`,
+            })),
+          )
+          .slice(0, 18)
+      : [];
+    slotOptionsByPropertyId.set(propertyId, options);
+  }
   // Oversight (Slice 2): how many UPCOMING viewings are assigned but not yet
   // confirmed with the renter - the "did the agent follow up?" gap surfaced.
   const awaitingConfirmation = upcoming.filter((s) =>
@@ -200,6 +234,8 @@ export default async function ShowingsPage({
   const hasActiveAgents = activeAgentOptions.length > 0;
   const showBulkAssign =
     canAssign && hasActiveAgents && unassignedUpcomingCount > 0;
+  const proposalParam =
+    typeof searchParams?.proposal === "string" ? searchParams.proposal : null;
   const assignedParam =
     typeof searchParams?.assigned === "string" ? Number(searchParams.assigned) : null;
   const assignedShown =
@@ -252,6 +288,20 @@ export default async function ShowingsPage({
           >
             Manage showing agents →
           </Link>
+        </div>
+      )}
+
+      {proposalParam && (
+        <div className="mb-6 -mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          {proposalParam === "sent"
+            ? "Suggested times sent to the renter."
+            : proposalParam === "taken"
+              ? "One of those times is no longer available. Pick from the current open slots."
+              : proposalParam === "closed"
+                ? "That viewing is already closed, so it cannot be rescheduled."
+                : proposalParam === "invalid"
+                  ? "Pick 1-3 open times before sending a suggestion."
+                  : "We could not send those suggested times. Please try again."}
         </div>
       )}
 
@@ -320,9 +370,11 @@ export default async function ShowingsPage({
         agentLabelById={agentLabelById}
         agentContactById={agentContactById}
         canAssign={canAssign}
+        canSuggestTimes={canSuggestTimes}
         suggestion={suggestion}
         allowReschedule
         nowLocalValue={nowLocalValue}
+        slotOptionsByPropertyId={slotOptionsByPropertyId}
         note={
           canAssign && awaitingConfirmation > 0 ? (
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
@@ -373,9 +425,11 @@ function Section({
   agentLabelById,
   agentContactById,
   canAssign,
+  canSuggestTimes,
   suggestion,
   allowReschedule,
   nowLocalValue,
+  slotOptionsByPropertyId,
   note,
 }: {
   title: string;
@@ -386,9 +440,11 @@ function Section({
   agentLabelById: Map<string, string>;
   agentContactById: Map<string, { name: string; phone: string | null }>;
   canAssign: boolean;
+  canSuggestTimes?: boolean;
   suggestion?: AgentSuggestion | null;
   allowReschedule?: boolean;
   nowLocalValue?: string;
+  slotOptionsByPropertyId?: Map<string, SuggestTimeSlotOption[]>;
   note?: React.ReactNode;
 }) {
   return (
@@ -499,6 +555,16 @@ function Section({
                           timeZone,
                         )}
                         minLocalValue={nowLocalValue ?? ""}
+                      />
+                    )}
+                  {allowReschedule &&
+                    canSuggestTimes &&
+                    canAssignShowing(s.outcome) &&
+                    s.scheduled_at &&
+                    s.property?.id && (
+                      <SuggestTimeControl
+                        showingId={s.id}
+                        slots={slotOptionsByPropertyId?.get(s.property.id) ?? []}
                       />
                     )}
                   {contact && contactDigits !== "" && (

@@ -13,8 +13,14 @@ import {
   normalizeProductTypes,
   planBulkAssignments,
 } from "@/lib/showing-agents";
-import { parseLocalInputToUtc, formatSlotLong } from "@/lib/booking";
-import { sendShowingRescheduled } from "@/lib/email";
+import {
+  parseLocalInputToUtc,
+  formatSlotLong,
+  isValidSlot,
+  type Availability,
+} from "@/lib/booking";
+import { sendShowingRescheduled, sendRescheduleProposal } from "@/lib/email";
+import { normalizeProposedSlots } from "@/lib/reschedule-proposals";
 import { sendOrgNotification } from "@/lib/notifications-server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -66,6 +72,105 @@ export async function updateShowingOutcome(formData: FormData) {
 
   revalidatePath("/dashboard/showings");
   revalidatePath("/dashboard");
+}
+
+// Operator-proposed reschedule (S497): unlike the unilateral reschedule above,
+// this leaves the showing at its current time and emails the renter a tokenized
+// pick-one link. The renter write is POST-only through accept_reschedule_proposal.
+export async function proposeShowingTimes(formData: FormData) {
+  await requireCapability("manage_showings", "/dashboard/showings?forbidden=1");
+  const id = String(formData.get("showing_id") ?? "").trim();
+  const slots = normalizeProposedSlots(formData.getAll("slot"));
+  if (!id || slots.length === 0) redirect("/dashboard/showings?proposal=invalid");
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return;
+  const timeZone = org.booking_timezone ?? "America/Toronto";
+
+  const { data: showingRow } = await supabase
+    .from("showings")
+    .select(
+      "id, outcome, scheduled_at, organization_id, lead:leads(id, name, email), property:properties(id, address)",
+    )
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!showingRow) redirect("/dashboard/showings?proposal=invalid");
+  const showing = showingRow as unknown as {
+    id: string;
+    outcome: string | null;
+    scheduled_at: string | null;
+    organization_id: string;
+    lead: { id: string; name: string | null; email: string | null } | null;
+    property: { id: string; address: string | null } | null;
+  };
+  if (showing.outcome != null && showing.outcome !== "scheduled") {
+    redirect("/dashboard/showings?proposal=closed");
+  }
+  if (!showing.property?.id) redirect("/dashboard/showings?proposal=invalid");
+
+  const { data: avData } = await supabase.rpc("get_public_availability", {
+    p_property_id: showing.property.id,
+  });
+  const av = avData as Availability | null;
+  if (!av || slots.some((slot) => !isValidSlot(av, slot))) {
+    redirect("/dashboard/showings?proposal=taken");
+  }
+
+  const now = new Date().toISOString();
+  await supabase
+    .from("showing_reschedule_proposals")
+    .update({ status: "expired", responded_at: now })
+    .eq("showing_id", showing.id)
+    .eq("organization_id", org.id)
+    .eq("status", "pending");
+
+  const { data: proposal, error: proposalErr } = await supabase
+    .from("showing_reschedule_proposals")
+    .insert({
+      showing_id: showing.id,
+      organization_id: org.id,
+      proposed_slots: slots,
+    })
+    .select("id, token")
+    .single();
+  if (proposalErr || !proposal?.token) {
+    redirect("/dashboard/showings?proposal=error");
+  }
+
+  const labels = slots.map((slot) => formatSlotLong(slot, timeZone));
+  if (showing.lead?.id) {
+    await supabase.from("messages").insert({
+      organization_id: org.id,
+      lead_id: showing.lead.id,
+      channel: "note",
+      direction: "outbound",
+      body: `Suggested new viewing times: ${labels.join("; ")}.`,
+    });
+    revalidatePath(`/dashboard/leads/${showing.lead.id}`);
+  }
+
+  await sendRescheduleProposal({
+    lead_id: showing.lead?.id ?? "",
+    renter_name: showing.lead?.name ?? null,
+    renter_email: showing.lead?.email ?? null,
+    org_name: org.name,
+    brand_color: org.brand_color,
+    logo_url: org.logo_url,
+    reply_to_email: org.reply_to_email,
+    property_address: showing.property.address ?? null,
+    current_when_label: showing.scheduled_at
+      ? formatSlotLong(showing.scheduled_at, timeZone)
+      : null,
+    proposed_when_labels: labels,
+    proposal_url: `${APP_URL}/showing/reschedule/${proposal.token}`,
+    renter_url: `${APP_URL}/r/${showing.property.id}`,
+  });
+
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+  redirect("/dashboard/showings?proposal=sent");
 }
 
 // Route a viewing to one of the org's showing agents (S436, multi-operator

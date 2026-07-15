@@ -402,6 +402,215 @@ export async function sendRentalApplicationInvite(
 }
 
 // ---------------------------------------------------------------------------
+// Showing reschedule proposal (S497). Renter-facing: operator suggests 1-3
+// currently open slots, but the viewing is not moved until the renter accepts
+// through the POST-only magic link.
+// ---------------------------------------------------------------------------
+
+export type RescheduleProposalPayload = {
+  lead_id: string;
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  current_when_label: string | null;
+  proposed_when_labels: string[];
+  proposal_url: string;
+  renter_url: string;
+};
+
+function timeChangeBlock(
+  label: string,
+  value: string,
+  tone: "original" | "suggested",
+  href?: string,
+): string {
+  const isSuggested = tone === "suggested";
+  const border = isSuggested ? "#bbf7d0" : "#e4e4e7";
+  const bg = isSuggested ? "#f0fdf4" : "#f4f4f5";
+  const labelColor = isSuggested ? "#047857" : "#52525b";
+  const valueColor = isSuggested ? "#064e3b" : "#18181b";
+  const content = `<div style="padding:14px 16px;border-radius:10px;border:1px solid ${border};background:${bg};">
+    <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:${labelColor};">${label}</p>
+    <p style="margin:0;font-size:16px;font-weight:700;color:${valueColor};">${value}</p>
+  </div>`;
+  if (!href) return content;
+  return `<a href="${href}" style="display:block;margin:0 0 10px;text-decoration:none;">${content}</a>`;
+}
+
+function rescheduleProposalHtml(p: RescheduleProposalPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const current = p.current_when_label
+    ? escapeHtml(p.current_when_label)
+    : "Your current viewing time";
+  const proposalUrl = escapeHtml(p.proposal_url);
+  const renterUrl = escapeHtml(p.renter_url);
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const proposed = p.proposed_when_labels
+    .map((label) => timeChangeBlock("New Suggested Time", escapeHtml(label), "suggested", proposalUrl))
+    .join("");
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 8px;">Would it be possible to adjust your viewing on this property to the following?</p>
+      <p style="margin:0 0 18px;color:#52525b;"><strong>${addr}</strong></p>
+      <div style="margin:0 0 12px;">${timeChangeBlock("Original Showing", current, "original")}</div>
+      <div style="margin:0 0 18px;">${proposed}</div>
+      <p style="margin:0 0 12px;color:#52525b;font-size:13px;">Tap a green suggested time to review and accept it. Your original viewing stays booked unless you accept a new time or rebook.</p>
+      <p style="margin:0 0 16px;"><a href="${renterUrl}" style="color:${escapeHtml(brand)};font-weight:600;text-decoration:none;">None of these work — see all available times</a></p>
+      <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Magic link:</p>
+      <p style="margin:0 0 16px;word-break:break-all;font-size:13px;"><a href="${proposalUrl}" style="color:${escapeHtml(brand)};">${proposalUrl}</a></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you booked a viewing on our listing page.
+    </div>
+  </div>
+</body></html>`;
+}
+
+export async function sendRescheduleProposal(
+  p: RescheduleProposalPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `Time change suggestion — ${p.property_address}`
+    : "Time change suggestion";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: rescheduleProposalHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+export type RescheduleAcceptedConfirmationPayload = BookingPayload & {
+  old_when_label?: string | null;
+};
+
+function rescheduleAcceptedConfirmationHtml(
+  p: RescheduleAcceptedConfirmationPayload,
+): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Your leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const address = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const oldTime = p.old_when_label ? escapeHtml(p.old_when_label) : null;
+  const newTime = escapeHtml(p.when_label || "the selected time");
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const logistics = viewingLogisticsHtml({
+    property_address: p.property_address,
+    leasing_phone: p.leasing_phone,
+    brand,
+  });
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 18px;">The following viewing has been successfully modified and is now confirmed.</p>
+      <p style="margin:0 0 18px;color:#52525b;"><strong>${address}</strong></p>
+      ${oldTime ? `<div style="margin:0 0 12px;">${timeChangeBlock("Original Showing", oldTime, "original")}</div>` : ""}
+      <div style="margin:0 0 18px;">${timeChangeBlock("New Suggested Time", newTime, "suggested")}</div>
+      ${logistics}
+      ${p.cancel_url ? `<p style="margin:18px 0 0;font-size:13px;color:#52525b;">Need to cancel instead? <a href="${escapeHtml(p.cancel_url)}" style="color:${escapeHtml(brand)};">Use your cancellation link</a>.</p>` : ""}
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+  </div>
+</body></html>`;
+}
+
+export async function sendRescheduleAcceptedConfirmation(
+  p: RescheduleAcceptedConfirmationPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `Showing confirmed - ${p.property_address}`
+    : "Showing confirmed";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: rescheduleAcceptedConfirmationHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Showing RESCHEDULED (S442, operator reschedule). Renter-facing: when the
 // operator moves a booked viewing, the renter gets a branded "your time has
 // changed" notice with the NEW time and the same one-tap cancel link (the
