@@ -22,8 +22,8 @@
 // re-opens the fair-housing question (e.g. a preferred answer on a "how many
 // occupants?" pick-list), so it is deliberately out of scope here.
 //
-// 'units' = single-select "other units of interest" whose options are NOT stored
-// on the question — they are computed at form-render time from the org's OTHER
+// 'units' = "other units of interest" whose options are NOT stored on the
+// question — they are computed at form-render time from the org's OTHER
 // AVAILABLE rentals (get_public_listing). Available-only + dynamic by
 // construction, so a leased unit never appears and the operator never maintains
 // a list. INFORMATIONAL ONLY (stored + shown like 'text', never auto-flags). The

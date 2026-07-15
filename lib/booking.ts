@@ -10,6 +10,12 @@ export type AvailabilityRule = {
   end_minute: number;
 };
 
+export type AvailabilityOverride = {
+  day: string; // YYYY-MM-DD in the org timezone
+  start_minute: number;
+  end_minute: number;
+};
+
 // A future scheduled showing somewhere in the org, used to derive a building's
 // implicit anchor window (the "Hero block"). Only currently-listed properties
 // are surfaced by the RPC.
@@ -30,6 +36,10 @@ export type Availability = {
   // weekly rules still stand, this just subtracts specific dates (e.g. a
   // rotating day off). Absent/empty = no dates blocked.
   days_off?: string[];
+  // Date-specific custom windows, YYYY-MM-DD in the org tz. When a day has one
+  // or more overrides, those windows replace the weekly rule for that date.
+  // Precedence: days_off > overrides > weekly rules.
+  overrides?: AvailabilityOverride[];
   // --- Showing clustering ("Hero blocks"), all optional / opt-in ---
   clustering_enabled?: boolean;
   clustering_buffer_minutes?: number; // how far adjacent slots may extend an anchor
@@ -194,7 +204,14 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
     list.push(r);
     byWeekday.set(r.weekday, list);
   }
-  if (byWeekday.size === 0) return [];
+  const byDate = new Map<string, AvailabilityOverride[]>();
+  for (const o of av.overrides || []) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(o.day)) continue;
+    const list = byDate.get(o.day) ?? [];
+    list.push(o);
+    byDate.set(o.day, list);
+  }
+  if (byWeekday.size === 0 && byDate.size === 0) return [];
 
   const days: DaySlots[] = [];
 
@@ -205,7 +222,11 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
     const { year, month, day, weekday } = ymdInTz(anchorMs, tz);
     const dayKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     if (daysOff.has(dayKey)) continue; // operator blocked this specific date
-    const rules = byWeekday.get(weekday);
+    const overrideRules = byDate.get(dayKey);
+    const rules =
+      overrideRules && overrideRules.length > 0
+        ? overrideRules
+        : byWeekday.get(weekday);
     if (!rules || rules.length === 0) continue;
 
     const slots: Slot[] = [];

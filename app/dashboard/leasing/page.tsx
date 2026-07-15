@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
   },
   {
     href: "/dashboard/availability",
-    title: "Availability",
+    title: "Viewing Times",
     desc: "Set the viewing times renters can book — this is the setup behind Viewings.",
     icon: "clock",
   },

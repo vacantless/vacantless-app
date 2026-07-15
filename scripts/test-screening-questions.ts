@@ -328,6 +328,7 @@ ok("answer choice: case-sensitive (does not match)", parseCustomAnswer("choice",
 
 // --- parseCustomAnswer (units) ---------------------------------------------
 ok("answer units: trims like text", parseCustomAnswer("units", "  833 Pillette Rd, Unit 20  ") === "833 Pillette Rd, Unit 20");
+ok("answer units: keeps comma-joined selections as text", parseCustomAnswer("units", "2419 Mercer Street, 833 Pillette Rd") === "2419 Mercer Street, 833 Pillette Rd");
 ok("answer units: blank -> null", parseCustomAnswer("units", "   ") === null);
 ok("answer units: null -> null", parseCustomAnswer("units", null) === null);
 {

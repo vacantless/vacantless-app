@@ -8,6 +8,8 @@ import {
   deleteAvailabilityWindow,
   addDayOff,
   removeDayOff,
+  addAvailabilityOverride,
+  removeAvailabilityOverride,
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -17,6 +19,13 @@ export const dynamic = "force-dynamic";
 type Rule = {
   id: string;
   weekday: number;
+  start_minute: number;
+  end_minute: number;
+};
+
+type Override = {
+  id: string;
+  day: string;
   start_minute: number;
   end_minute: number;
 };
@@ -50,11 +59,13 @@ const SAVED_MESSAGES: Record<string, string> = {
   cluster: "Grouping settings saved.",
   window: "Viewing window added.",
   dayoff: "Day off added.",
+  override: "Specific-date hours added.",
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
   window_invalid: "The end time has to be after the start time.",
   dayoff_invalid: "Pick a valid date, today or later.",
+  override_invalid: "Pick a valid date and custom hours where the end is after the start.",
 };
 
 export default async function AvailabilityPage({
@@ -72,7 +83,12 @@ export default async function AvailabilityPage({
     ? ERROR_MESSAGES[searchParams.error]
     : null;
 
-  const [{ data: orgRow }, { data: rulesData }, { data: daysOffData }] =
+  const [
+    { data: orgRow },
+    { data: rulesData },
+    { data: daysOffData },
+    { data: overridesData },
+  ] =
     await Promise.all([
       supabase
         .from("organizations")
@@ -90,6 +106,11 @@ export default async function AvailabilityPage({
         .from("availability_days_off")
         .select("id, day")
         .order("day"),
+      supabase
+        .from("availability_overrides")
+        .select("id, day, start_minute, end_minute")
+        .order("day")
+        .order("start_minute"),
     ]);
 
   const cfg = (orgRow as OrgBooking) ?? {
@@ -115,7 +136,10 @@ export default async function AvailabilityPage({
   const daysOff = ((daysOffData ?? []) as { id: string; day: string }[]).filter(
     (d) => d.day >= todayKey,
   );
-  const fmtDayOff = (day: string) =>
+  const overrides = ((overridesData ?? []) as Override[]).filter(
+    (d) => d.day >= todayKey,
+  );
+  const fmtSpecificDate = (day: string) =>
     new Intl.DateTimeFormat("en-US", {
       timeZone: "UTC",
       weekday: "short",
@@ -123,6 +147,19 @@ export default async function AvailabilityPage({
       day: "numeric",
       year: "numeric",
     }).format(new Date(`${day}T00:00:00Z`));
+  const specificDates = [
+    ...daysOff.map((d) => ({
+      id: d.id,
+      day: d.day,
+      kind: "day_off" as const,
+      sort: `${d.day}|0|${d.id}`,
+    })),
+    ...overrides.map((o) => ({
+      ...o,
+      kind: "override" as const,
+      sort: `${o.day}|1|${String(o.start_minute).padStart(4, "0")}|${o.id}`,
+    })),
+  ].sort((a, b) => a.sort.localeCompare(b.sort));
 
   const byDay = new Map<number, Rule[]>();
   for (const r of rules) {
@@ -542,37 +579,57 @@ export default async function AvailabilityPage({
         </form>
       </div>
 
-      {/* Days off (date-specific blackouts) */}
+      {/* Specific dates: day-off blackouts + custom hours */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Days off
+          Specific dates
         </h3>
         <p className="mb-4 mt-1 text-sm text-gray-500">
-          Block a specific date on top of your weekly schedule, for a day you
-          can&rsquo;t do viewings. Your weekly windows stay as they are; only the
-          dates you add here are closed. Use this for a day off that changes week
-          to week instead of removing a whole weekday.
+          Close one date entirely or set custom hours for a date that should be
+          different from the weekly schedule. A day off wins over custom hours.
         </p>
 
-        {daysOff.length === 0 ? (
+        {specificDates.length === 0 ? (
           <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            No days off scheduled. Add one below to close that date for viewings.
+            No specific dates scheduled. Add one below when a day needs custom
+            viewing hours or should be closed.
           </div>
         ) : (
-          <div className="mb-4 flex flex-wrap gap-2">
-            {daysOff.map((d) => (
-              <form key={d.id} action={removeDayOff} className="inline-flex">
-                <input type="hidden" name="id" value={d.id} />
-                <button
-                  title="Remove this day off"
-                  className="group inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-sm text-gray-700 hover:border-red-300 hover:bg-red-50"
+          <div className="mb-4 divide-y divide-gray-100 rounded-lg border border-gray-200">
+            {specificDates.map((d) => (
+              <div
+                key={`${d.kind}-${d.id}`}
+                className="flex flex-wrap items-center justify-between gap-3 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800">
+                    {fmtSpecificDate(d.day)}
+                  </p>
+                  {d.kind === "day_off" ? (
+                    <p className="text-xs text-gray-500">Day off</p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Custom hours: {minutesToLabel(d.start_minute)} –{" "}
+                      {minutesToLabel(d.end_minute)}
+                    </p>
+                  )}
+                </div>
+                <form
+                  action={
+                    d.kind === "day_off"
+                      ? removeDayOff
+                      : removeAvailabilityOverride
+                  }
                 >
-                  {fmtDayOff(d.day)}
-                  <span className="text-gray-400 group-hover:text-red-500">
-                    ✕
-                  </span>
-                </button>
-              </form>
+                  <input type="hidden" name="id" value={d.id} />
+                  <button
+                    title="Remove this specific date"
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-sm text-gray-700 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </div>
             ))}
           </div>
         )}
@@ -595,6 +652,50 @@ export default async function AvailabilityPage({
           </label>
           <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
             Add day off
+          </button>
+        </form>
+        <form
+          action={addAvailabilityOverride}
+          className="mt-3 flex flex-wrap items-end gap-3"
+        >
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-gray-500">
+              Custom date
+            </span>
+            <input
+              name="day"
+              type="date"
+              required
+              min={todayKey}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-gray-500">
+              From
+            </span>
+            <input
+              name="start"
+              type="time"
+              required
+              defaultValue="10:00"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-gray-500">
+              To
+            </span>
+            <input
+              name="end"
+              type="time"
+              required
+              defaultValue="17:00"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
+            Add custom hours
           </button>
         </form>
       </div>

@@ -128,6 +128,7 @@ export function InquiryForm({
   const [occupants, setOccupants] = useState("");
   const [petsChoice, setPetsChoice] = useState<string | null>(null);
   const [showNote, setShowNote] = useState(false);
+  const [unitAnswers, setUnitAnswers] = useState<Record<string, string[]>>({});
 
   // Progressive sectional reveal (S438). Name + email are tracked so the optional
   // "Help us prepare" group and the Confirm button only drop in once the required
@@ -215,6 +216,22 @@ export function InquiryForm({
         ? "font-medium shadow-sm"
         : "border-gray-300 text-gray-700 hover:border-gray-400"
     }`;
+
+  const toggleUnitAnswer = (
+    questionId: string,
+    value: string,
+    checked: boolean,
+  ) => {
+    setUnitAnswers((current) => {
+      const existing = current[questionId] ?? [];
+      const next = checked
+        ? existing.includes(value)
+          ? existing
+          : [...existing, value]
+        : existing.filter((item) => item !== value);
+      return { ...current, [questionId]: next };
+    });
+  };
 
   return (
     <>
@@ -546,6 +563,7 @@ export function InquiryForm({
                 if (q.qtype === "units" && (q.choices?.length ?? 0) === 0) {
                   return null;
                 }
+                const selectedUnits = unitAnswers[q.id] ?? [];
                 return (
                   <div key={q.id}>
                     <label htmlFor={`cq_${q.id}`} className="mb-1 block text-sm text-gray-600">
@@ -568,7 +586,44 @@ export function InquiryForm({
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                       </select>
-                    ) : q.qtype === "choice" || q.qtype === "units" ? (
+                    ) : q.qtype === "units" ? (
+                      <div className="space-y-2">
+                        <input
+                          id={`cq_${q.id}`}
+                          name={`cq_${q.id}`}
+                          value={selectedUnits.join(", ")}
+                          readOnly
+                          required={q.required}
+                          tabIndex={-1}
+                          className="sr-only"
+                        />
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {(q.choices ?? []).map((opt) => {
+                            const checked = selectedUnits.includes(opt);
+                            return (
+                              <label
+                                key={opt}
+                                className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                                  checked
+                                    ? "border-brand bg-brand/5 text-gray-900"
+                                    : "border-gray-200 text-gray-700"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) =>
+                                    toggleUnitAnswer(q.id, opt, e.target.checked)
+                                  }
+                                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                                />
+                                <span>{opt}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : q.qtype === "choice" ? (
                       <select
                         id={`cq_${q.id}`}
                         name={`cq_${q.id}`}
@@ -576,9 +631,7 @@ export function InquiryForm({
                         defaultValue=""
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                       >
-                        <option value="">
-                          {q.qtype === "units" ? "Select a unit…" : "Select…"}
-                        </option>
+                        <option value="">Select…</option>
                         {(q.choices ?? []).map((opt) => (
                           <option key={opt} value={opt}>
                             {opt}

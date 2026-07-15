@@ -182,3 +182,71 @@ export async function removeDayOff(formData: FormData) {
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
 }
+
+// Date-specific custom hours. On a date with one or more overrides, those
+// windows replace the recurring weekday windows; an availability_days_off row
+// for the same date still wins and closes the day entirely.
+export async function addAvailabilityOverride(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+
+  const day = String(formData.get("day") ?? "").trim();
+  const start = timeStrToMinutes(String(formData.get("start") ?? ""));
+  const end = timeStrToMinutes(String(formData.get("end") ?? ""));
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day))
+    redirect("/dashboard/availability?error=override_invalid");
+  const parsed = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()))
+    redirect("/dashboard/availability?error=override_invalid");
+  if (parsed.toISOString().slice(0, 10) !== day)
+    redirect("/dashboard/availability?error=override_invalid");
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: org.booking_timezone || "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  if (
+    day < todayKey ||
+    start == null ||
+    end == null ||
+    start < 0 ||
+    end > 1440 ||
+    end <= start
+  ) {
+    redirect("/dashboard/availability?error=override_invalid");
+  }
+
+  const supabase = createClient();
+  await supabase
+    .from("availability_overrides")
+    .upsert(
+      {
+        organization_id: org.id,
+        day,
+        start_minute: start,
+        end_minute: end,
+      },
+      {
+        onConflict: "organization_id,day,start_minute,end_minute",
+        ignoreDuplicates: true,
+      },
+    );
+
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard");
+  redirect("/dashboard/availability?saved=override");
+}
+
+export async function removeAvailabilityOverride(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+  const supabase = createClient();
+  // RLS scopes the delete to the caller's org.
+  await supabase.from("availability_overrides").delete().eq("id", id);
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard");
+}

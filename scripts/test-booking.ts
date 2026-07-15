@@ -225,6 +225,41 @@ ok("isValidSlot rejects a slot on a day off",
 ok("isValidSlot still accepts the same weekday when not blocked",
   isValidSlot({ ...baseAv, days_off: ["2026-07-01"] }, "2026-07-08T10:00:00.000Z", now));
 
+// --- availability overrides (date-specific custom hours, S496) ------------
+const overrideJul1 = {
+  day: "2026-07-01",
+  start_minute: 780,
+  end_minute: 840,
+}; // Wed 13:00-14:00 replaces the normal Wed 10:00-12:00
+const withOverride = generateSlots({ ...baseAv, overrides: [overrideJul1] }, now);
+const overrideDay = withOverride.find((d) => d.dayKey === "2026-07-01")!;
+eq("override replaces the weekly rule on that date",
+  overrideDay.slots.map((s) => s.iso),
+  ["2026-07-01T13:00:00.000Z", "2026-07-01T13:30:00.000Z"]);
+ok("override removes the weekly slot on that date",
+  !overrideDay.slots.some((s) => s.iso === "2026-07-01T10:00:00.000Z"));
+ok("day off beats override",
+  !generateSlots(
+    { ...baseAv, days_off: ["2026-07-01"], overrides: [overrideJul1] },
+    now,
+  ).some((d) => d.dayKey === "2026-07-01"));
+const pureOverrideAv: Availability = {
+  timezone: "UTC",
+  slot_minutes: 30,
+  lead_hours: 0,
+  horizon_days: 9,
+  rules: [],
+  booked: [],
+  overrides: [{ day: "2026-07-03", start_minute: 600, end_minute: 660 }],
+};
+eq("pure-override org still generates that date",
+  generateSlots(pureOverrideAv, now).map((d) => d.slots.map((s) => s.iso)),
+  [["2026-07-03T10:00:00.000Z", "2026-07-03T10:30:00.000Z"]]);
+ok("isValidSlot honors an override slot",
+  isValidSlot({ ...baseAv, overrides: [overrideJul1] }, "2026-07-01T13:30:00.000Z", now));
+ok("isValidSlot rejects the replaced weekly slot on an override date",
+  !isValidSlot({ ...baseAv, overrides: [overrideJul1] }, "2026-07-01T10:00:00.000Z", now));
+
 // --- reschedule datetime-local <-> UTC (S442) ------------------------------
 // Toronto is UTC-4 in July (EDT). A 6:00 PM wall time on Jul 15 = 22:00 UTC.
 eq("parseLocalInputToUtc: Toronto July wall time -> correct UTC instant",
