@@ -42,7 +42,7 @@ import {
   normalizePublishStatus,
   normalizePublishMode,
   canRequestConcierge,
-  CONCIERGE_REQUEST_AUDIT,
+  conciergeRequestAuditForChannel,
   preparePublishChannel,
   type PublishChannelContext,
   type PublishChannelKey,
@@ -3593,6 +3593,19 @@ export async function requestConciergePublish(formData: FormData) {
     );
   }
 
+  // Realtor.ca is a licensed-agent referral (Distribution Lane B), not a
+  // post-it-ourselves channel: it may only reach the desk when the RECO referral
+  // firewall is on. Re-check the flag SERVER-side (never trust the client), so a
+  // realtor_ca item can never be handed off while the referral is dark.
+  if (
+    item.channel === "realtor_ca" &&
+    process.env.REALTOR_REFERRAL_ENABLED !== "1"
+  ) {
+    redirect(
+      `/dashboard/properties/${propertyId}?run=conciergeineligible#distribute-header`,
+    );
+  }
+
   const now = new Date().toISOString();
   await supabase
     .from("distribution_run_items")
@@ -3604,7 +3617,7 @@ export async function requestConciergePublish(formData: FormData) {
       concierge_requested_by: user?.id ?? null,
       concierge_claimed_by: null,
       concierge_claimed_at: null,
-      audit_message: CONCIERGE_REQUEST_AUDIT,
+      audit_message: conciergeRequestAuditForChannel(item.channel),
       error_code: null,
       error_message: null,
       updated_at: now,

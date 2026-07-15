@@ -11,6 +11,9 @@ import {
   publishModeLabel,
   isResolvedPublishStatus,
   legacyRunStatusForPublishStatus,
+  conciergeRequestAuditForChannel,
+  CONCIERGE_REQUEST_AUDIT,
+  REALTOR_REFERRAL_REQUEST_AUDIT,
   type PublishChannelContext,
 } from "../lib/distribution-publish";
 
@@ -165,12 +168,39 @@ ok("skipped maps to skipped", legacyRunStatusForPublishStatus("skipped") === "sk
 ok("submitted is an attention state, not positive", publishStatusTone("submitted") === "warning");
 ok("submitted is not resolved until proof goes live", !isResolvedPublishStatus("submitted"));
 
+// --- Lane B: realtor referral audit copy -----------------------------------
+ok(
+  "realtor_ca concierge request uses the RECO referral audit",
+  conciergeRequestAuditForChannel("realtor_ca") === REALTOR_REFERRAL_REQUEST_AUDIT,
+);
+ok(
+  "non-realtor channels keep the generic concierge audit",
+  conciergeRequestAuditForChannel("facebook") === CONCIERGE_REQUEST_AUDIT &&
+    conciergeRequestAuditForChannel("kijiji") === CONCIERGE_REQUEST_AUDIT &&
+    conciergeRequestAuditForChannel("other") === CONCIERGE_REQUEST_AUDIT,
+);
+ok(
+  "realtor referral audit is RECO-honest: agent is principal, no fee, real URL",
+  /licensed/i.test(REALTOR_REFERRAL_REQUEST_AUDIT) &&
+    /their own brokerage/i.test(REALTOR_REFERRAL_REQUEST_AUDIT) &&
+    /not a party to any referral fee/i.test(REALTOR_REFERRAL_REQUEST_AUDIT) &&
+    /realtor\.ca/i.test(REALTOR_REFERRAL_REQUEST_AUDIT),
+);
+ok(
+  "realtor referral audit never claims Vacantless posts to Realtor.ca",
+  !/Vacantless (posts|posted|will post) (it |this )?(on|to) realtor/i.test(
+    REALTOR_REFERRAL_REQUEST_AUDIT,
+  ),
+);
+
 const copy = [
   ...publishChannelChoices({ includeNetworkFeed: true }).flatMap((c) => [
     c.label,
     c.description,
   ]),
   ...PUBLISH_STATUSES.map(publishStatusLabel),
+  REALTOR_REFERRAL_REQUEST_AUDIT,
+  CONCIERGE_REQUEST_AUDIT,
 ].join(" ");
 ok("publish copy has no em dashes", !/[—–]/.test(copy));
 

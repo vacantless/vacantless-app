@@ -232,6 +232,26 @@ export const CONCIERGE_LIVE_AUDIT =
 export const CONCIERGE_REJECTED_AUDIT =
   "Vacantless could not post this to this channel. See the reason and try another channel.";
 
+// Realtor.ca is NOT a post-it-ourselves channel (Distribution Lane B). A rental
+// reaches Realtor.ca only through a RECO-licensed agent's brokerage, so a
+// "dispatch a network agent" request is a referral to a licensed agent (the
+// agent is the principal; Vacantless posts nothing and is not a party to any
+// referral fee). It carries RECO-honest wording distinct from the generic
+// "our desk posts it" concierge copy.
+export const REALTOR_REFERRAL_REQUEST_AUDIT =
+  "Realtor.ca referral: match a licensed network agent. The agent lists this rental on Realtor.ca through their own brokerage; Vacantless tracks the live link and is not a party to any referral fee. Never mark live without the real realtor.ca listing URL.";
+
+/**
+ * The concierge-request audit line for a channel. Realtor.ca carries the
+ * RECO-honest network-agent referral wording; every other channel keeps the
+ * generic "publishing desk posts it" copy. Pure.
+ */
+export function conciergeRequestAuditForChannel(channel: string): string {
+  return channel === "realtor_ca"
+    ? REALTOR_REFERRAL_REQUEST_AUDIT
+    : CONCIERGE_REQUEST_AUDIT;
+}
+
 export function legacyRunStatusForPublishStatus(
   status: PublishStatus,
 ): "pending" | "in_progress" | "done" | "skipped" {

@@ -1260,12 +1260,17 @@ export default async function PropertyDetailPage({
     reservedTrackedLinksByChannel[item.channel] ??= item.trackedUrl;
   }
   const alreadyInRun = new Set(runItems.map((i) => i.channel));
+  // Distribution Lane B: the RECO referral firewall. Realtor.ca's "dispatch a
+  // network agent" option stays dark until a RECO referral agreement + partner
+  // brokerage are in place. Mirrors the REFERRALS_ENABLED "1" idiom.
+  const realtorReferralEnabled = process.env.REALTOR_REFERRAL_ENABLED === "1";
   const launchRun: LaunchRunData = {
     run: activeRun,
     items: runItems,
     progress: runProgress(runItems),
     selectable: publishStartChannels.filter((c) => !alreadyInRun.has(c.key)),
     startChannels: publishStartChannels,
+    realtorReferralEnabled,
   };
   const replyInputs: ReplyInputs = {
     address: p.address,

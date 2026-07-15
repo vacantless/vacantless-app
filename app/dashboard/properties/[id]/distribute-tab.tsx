@@ -74,6 +74,9 @@ export type LaunchRunData = {
   progress: RunProgress;
   selectable: PublishChannelChoiceView[];
   startChannels: PublishChannelChoiceView[];
+  // Distribution Lane B: REALTOR_REFERRAL_ENABLED firewall, threaded to the
+  // Realtor.ca "dispatch a network agent" referral option in the run panel.
+  realtorReferralEnabled: boolean;
 };
 
 export type ReplyInputs = {
@@ -361,6 +364,7 @@ export function DistributeTab({
         progress={launchRun.progress}
         selectable={launchRun.selectable}
         startChannels={launchRun.startChannels}
+        realtorReferralEnabled={launchRun.realtorReferralEnabled}
       />
 
       {/* Posted links & tools (Slice 1): the old per-channel grid + the "other

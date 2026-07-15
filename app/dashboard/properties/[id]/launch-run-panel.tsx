@@ -138,6 +138,7 @@ export function LaunchRunPanel({
   progress,
   selectable,
   startChannels,
+  realtorReferralEnabled,
 }: {
   propertyId: string;
   run: { id: string } | null;
@@ -147,6 +148,10 @@ export function LaunchRunPanel({
   selectable: PublishChannelChoiceView[];
   // All channels offered when STARTING a run.
   startChannels: PublishChannelChoiceView[];
+  // Distribution Lane B: the RECO referral firewall (REALTOR_REFERRAL_ENABLED).
+  // When off, Realtor.ca shows only the "your own agent" broker handoff — never
+  // the "dispatch a network agent" referral.
+  realtorReferralEnabled: boolean;
 }) {
   // No active run: offer to start one.
   if (!run) {
@@ -351,7 +356,34 @@ export function LaunchRunPanel({
                 {nextActionLabel(item)}
               </a>
             )}
-            {item.canConcierge && (
+            {/* Concierge / referral handoff. Realtor.ca is a special case
+                (Distribution Lane B): a rental can only reach Realtor.ca through
+                a RECO-licensed agent, so its handoff is a "dispatch a network
+                agent" referral (the licensed agent is the principal; Vacantless
+                posts nothing and earns no fee), gated behind the
+                REALTOR_REFERRAL_ENABLED firewall. Every other channel keeps the
+                generic "Ask Vacantless to post it" publishing-desk handoff. */}
+            {item.canConcierge &&
+              item.channel === "realtor_ca" &&
+              realtorReferralEnabled && (
+                <form action={requestConciergePublish} className="mb-3">
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <input type="hidden" name="item_id" value={item.id} />
+                  <input type="hidden" name="referral" value="realtor_network_agent" />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
+                  >
+                    Dispatch a network agent
+                  </button>
+                  <span className="ml-2 text-[11px] text-gray-500">
+                    A licensed real-estate agent from our network lists your
+                    rental on Realtor.ca through their brokerage. You confirm the
+                    live listing link; Vacantless tracks it.
+                  </span>
+                </form>
+              )}
+            {item.canConcierge && item.channel !== "realtor_ca" && (
               <form action={requestConciergePublish} className="mb-3">
                 <input type="hidden" name="property_id" value={propertyId} />
                 <input type="hidden" name="item_id" value={item.id} />

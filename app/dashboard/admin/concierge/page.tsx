@@ -205,6 +205,18 @@ export default async function ConciergeDeskPage() {
                   )}
                 </div>
 
+                {/* Distribution Lane B: a realtor_ca concierge item is a
+                    referral to match a LICENSED agent, not a post-it-ourselves
+                    job. Flag it so the desk brokers a licensed agent instead of
+                    trying to self-post to Realtor.ca. */}
+                {item.channel === "realtor_ca" && (
+                  <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                    Realtor referral: match a licensed network agent. The agent
+                    lists this rental on Realtor.ca through their own brokerage;
+                    the desk only confirms the live realtor.ca link.
+                  </p>
+                )}
+
                 {prop?.description && (
                   <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600 line-clamp-3">
                     {prop.description}
