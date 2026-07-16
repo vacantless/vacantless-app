@@ -187,9 +187,9 @@ ok("move picker excludes the moving showing from capacity anchors",
     { excludeShowingId: "moving" },
   ));
 
-// --- S503: anchored closed days synthesize a clustered grid ---------------
-const s503Now = new Date("2026-07-01T05:30:00.000Z");
-const synthClosedAv: Availability = {
+// --- S506: clustering narrows only inside opened windows ------------------
+const s506Now = new Date("2026-07-01T05:30:00.000Z");
+const closedAnchoredAv: Availability = {
   timezone: "UTC",
   slot_minutes: 30,
   lead_hours: 12,
@@ -208,38 +208,24 @@ const synthClosedAv: Availability = {
     },
   ],
 };
-const synthOperator = generateSlots(synthClosedAv, s503Now, {
-  relaxLeadForAnchoredDays: true,
-});
-eq("S503 synth closed day offers operator grid from anchor-buffer to anchor+buffer",
-  synthOperator.flatMap((d) => d.slots.map((s) => s.iso)),
-  [
-    "2026-07-01T17:00:00.000Z",
-    "2026-07-01T17:30:00.000Z",
-    "2026-07-01T18:30:00.000Z",
-    "2026-07-01T19:00:00.000Z",
-  ]);
-ok("S503 synthesized operator slots are clustered",
-  synthOperator.every((d) => d.slots.every((s) => s.clustered === true)));
-
-const synthRenter = generateSlots(synthClosedAv, s503Now);
-eq("S503 renter synth grid keeps normal lead floor",
-  synthRenter.flatMap((d) => d.slots.map((s) => s.iso)),
-  [
-    "2026-07-01T17:30:00.000Z",
-    "2026-07-01T18:30:00.000Z",
-    "2026-07-01T19:00:00.000Z",
-  ]);
-ok("S503 day off beats an anchored synthesized day",
+eq("S506 closed anchored day stays closed for operator picker",
+  generateSlots(closedAnchoredAv, s506Now, {
+    relaxLeadForAnchoredDays: true,
+  }).flatMap((d) => d.slots.map((s) => s.iso)),
+  []);
+eq("S506 closed anchored day stays closed for renter booking",
+  generateSlots(closedAnchoredAv, s506Now).flatMap((d) => d.slots.map((s) => s.iso)),
+  []);
+ok("S506 day off still beats an anchored closed day",
   generateSlots(
-    { ...synthClosedAv, days_off: ["2026-07-01"] },
-    s503Now,
+    { ...closedAnchoredAv, days_off: ["2026-07-01"] },
+    s506Now,
     { relaxLeadForAnchoredDays: true },
   ).length === 0);
-ok("S503 anchored day at capacity has zero slots",
+ok("S506 anchored closed day at capacity has zero slots",
   generateSlots(
     {
-      ...synthClosedAv,
+      ...closedAnchoredAv,
       booked: [],
       showing_block_capacity: 2,
       cluster_candidates: [
@@ -255,16 +241,44 @@ ok("S503 anchored day at capacity has zero slots",
         },
       ],
     },
-    s503Now,
+    s506Now,
     { relaxLeadForAnchoredDays: true },
   ).length === 0);
 
+const eveningWindowAnchoredAv: Availability = {
+  ...closedAnchoredAv,
+  rules: [{ weekday: 3, start_minute: 1080, end_minute: 1260 }], // Wed 18:00-21:00
+  booked: ["2026-07-01T19:30:00.000Z"],
+  clustering_buffer_minutes: 120,
+  cluster_candidates: [
+    {
+      id: "anchor",
+      address: "833 Pillette Rd Unit 22",
+      scheduled_at: "2026-07-01T19:30:00.000Z",
+    },
+  ],
+};
+const eveningWindowSlots = generateSlots(eveningWindowAnchoredAv, s506Now, {
+  relaxLeadForAnchoredDays: true,
+}).find((d) => d.dayKey === "2026-07-01")?.slots ?? [];
+eq("S506 windowed anchor never opens slots before the 18:00 operator window",
+  eveningWindowSlots.map((s) => s.iso),
+  [
+    "2026-07-01T18:00:00.000Z",
+    "2026-07-01T18:30:00.000Z",
+    "2026-07-01T19:00:00.000Z",
+    "2026-07-01T20:00:00.000Z",
+    "2026-07-01T20:30:00.000Z",
+  ]);
+ok("S506 windowed anchored slots are still tagged clustered",
+  eveningWindowSlots.every((s) => s.clustered === true));
+
 const coveredAnchoredAv: Availability = {
-  ...synthClosedAv,
+  ...closedAnchoredAv,
   rules: [{ weekday: 3, start_minute: 960, end_minute: 1200 }], // Wed 16:00-20:00
 };
-eq("S503 covered anchored day keeps rule grid with renter lead floor",
-  generateSlots(coveredAnchoredAv, s503Now)
+eq("S506 covered anchored day keeps rule grid with renter lead floor",
+  generateSlots(coveredAnchoredAv, s506Now)
     .find((d) => d.dayKey === "2026-07-01")
     ?.slots.map((s) => s.iso),
   [
@@ -272,8 +286,8 @@ eq("S503 covered anchored day keeps rule grid with renter lead floor",
     "2026-07-01T18:30:00.000Z",
     "2026-07-01T19:00:00.000Z",
   ]);
-eq("S503 covered anchored operator relaxes lead but still uses rule grid",
-  generateSlots(coveredAnchoredAv, s503Now, {
+eq("S506 covered anchored operator relaxes lead but still uses rule grid",
+  generateSlots(coveredAnchoredAv, s506Now, {
     relaxLeadForAnchoredDays: true,
   })
     .find((d) => d.dayKey === "2026-07-01")
@@ -284,7 +298,7 @@ eq("S503 covered anchored operator relaxes lead but still uses rule grid",
     "2026-07-01T18:30:00.000Z",
     "2026-07-01T19:00:00.000Z",
   ]);
-eq("S503 clustering disabled is identical to pre-cluster generation",
+eq("S506 clustering disabled is identical to pre-cluster generation",
   generateSlots({
     ...baseAv,
     clustering_enabled: false,

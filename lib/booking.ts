@@ -274,15 +274,7 @@ export function generateSlots(
 
     const slots: Slot[] = [];
     if (!rules || rules.length === 0) {
-      if (!isAnchored || !anchors) continue;
-      const lo = Math.min(...anchors) - bufferMs;
-      const hi = Math.max(...anchors) + bufferMs;
-      for (let t = lo; t <= hi; t += slotMin * 60_000) {
-        if (relaxLead ? t <= now.getTime() : t < earliest) continue;
-        if (booked.has(t)) continue;
-        const iso = new Date(t).toISOString();
-        slots.push({ iso, label: fmtTime(iso, tz), clustered: true });
-      }
+      continue;
     } else {
       for (const rule of rules) {
         for (let m = rule.start_minute; m + slotMin <= rule.end_minute; m += slotMin) {

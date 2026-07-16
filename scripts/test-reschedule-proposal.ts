@@ -221,9 +221,6 @@ function sqlContractAcceptsSlot(
 
   const overrides = (av.overrides ?? []).filter((o) => o.day === dayKey);
   const weeklyRules = (av.rules ?? []).filter((r) => r.weekday === dow);
-  const isSynth =
-    isAnchored && overrides.length === 0 && weeklyRules.length === 0;
-
   if (overrides.length > 0) {
     const inOverride = overrides.some(
       (o) =>
@@ -232,7 +229,7 @@ function sqlContractAcceptsSlot(
         (minOfDay - o.start_minute) % slotMin === 0,
     );
     if (!inOverride) return false;
-  } else if (!isSynth) {
+  } else {
     const inRule = weeklyRules.some(
       (r) =>
         minOfDay >= r.start_minute &&
@@ -248,7 +245,6 @@ function sqlContractAcceptsSlot(
     const lo = Math.min(...anchors) - bufferMs;
     const hi = Math.max(...anchors) + bufferMs;
     if (t < lo || t > hi) return false;
-    if (isSynth && (t - lo) % (slotMin * 60_000) !== 0) return false;
   }
 
   return true;
@@ -278,30 +274,28 @@ const parityCandidates = slotRange(
   "2026-07-01T16:30:00.000Z",
   "2026-07-01T19:30:00.000Z",
 );
-const jsOperatorGrid = generateSlots(paritySynthAv, parityNow, {
+const jsClosedOperatorGrid = generateSlots(paritySynthAv, parityNow, {
   relaxLeadForAnchoredDays: true,
 }).flatMap((d) => d.slots.map((s) => s.iso));
-const sqlAcceptGrid = parityCandidates.filter((slot) =>
+const sqlClosedAcceptGrid = parityCandidates.filter((slot) =>
   sqlContractAcceptsSlot(paritySynthAv, slot, parityNow, { flow: "accept" }),
 );
-ok("S503 SQL contract: accept RPC accepts every operator-grid synth slot",
-  jsOperatorGrid.every((slot) => sqlAcceptGrid.includes(slot)));
-ok("S503 SQL contract: accept RPC rejects off-grid synth slot",
-  !sqlContractAcceptsSlot(paritySynthAv, "2026-07-01T17:15:00.000Z", parityNow, {
+ok("S506 JS: operator picker does not synthesize a windowless anchored day",
+  jsClosedOperatorGrid.length === 0);
+ok("S506 SQL contract: accept RPC rejects a would-be synth slot",
+  !sqlContractAcceptsSlot(paritySynthAv, "2026-07-01T17:30:00.000Z", parityNow, {
     flow: "accept",
   }));
-ok("S503 SQL contract: accept RPC rejects out-of-window synth slot",
-  !sqlContractAcceptsSlot(paritySynthAv, "2026-07-01T16:30:00.000Z", parityNow, {
-    flow: "accept",
-  }));
-ok("S503 SQL contract: accept RPC rejects day-off synth slot",
+ok("S506 SQL contract: accept RPC rejects every closed-day candidate",
+  sqlClosedAcceptGrid.length === 0);
+ok("S506 SQL contract: accept RPC still rejects day-off anchored slot",
   !sqlContractAcceptsSlot(
     { ...paritySynthAv, days_off: ["2026-07-01"] },
     "2026-07-01T17:30:00.000Z",
     parityNow,
     { flow: "accept" },
   ));
-ok("S503 SQL contract: accept RPC rejects over-cap synth day",
+ok("S506 SQL contract: accept RPC still rejects over-cap anchored day",
   !sqlContractAcceptsSlot(
     {
       ...paritySynthAv,
@@ -324,22 +318,58 @@ ok("S503 SQL contract: accept RPC rejects over-cap synth day",
     parityNow,
     { flow: "accept" },
   ));
-const jsRenterGrid = generateSlots(paritySynthAv, parityNow)
+const jsClosedRenterGrid = generateSlots(paritySynthAv, parityNow)
   .flatMap((d) => d.slots.map((s) => s.iso));
-const sqlBookGrid = parityCandidates.filter((slot) =>
+const sqlClosedBookGrid = parityCandidates.filter((slot) =>
   sqlContractAcceptsSlot(paritySynthAv, slot, parityNow, { flow: "book" }),
 );
-ok("S503 SQL contract: book RPC accepts every renter-grid synth slot",
-  jsRenterGrid.every((slot) => sqlBookGrid.includes(slot)));
-ok("S503 SQL contract: book RPC rejects inside lead window",
-  !sqlContractAcceptsSlot(paritySynthAv, "2026-07-01T17:00:00.000Z", parityNow, {
+ok("S506 JS: renter booking does not synthesize a windowless anchored day",
+  jsClosedRenterGrid.length === 0);
+ok("S506 SQL contract: book RPC rejects a would-be synth slot",
+  !sqlContractAcceptsSlot(paritySynthAv, "2026-07-01T18:30:00.000Z", parityNow, {
     flow: "book",
   }));
-ok("S503 SQL contract: JS synth operator grid equals accept RPC accepted set",
-  JSON.stringify(jsOperatorGrid) === JSON.stringify(sqlAcceptGrid));
-ok("S503 SQL contract: JS synth renter grid equals book RPC accepted set",
-  JSON.stringify(jsRenterGrid) === JSON.stringify(sqlBookGrid));
-ok("S503 SQL contract: normal non-synth accept still works",
+ok("S506 SQL contract: book RPC rejects every closed-day candidate",
+  sqlClosedBookGrid.length === 0);
+
+const parityWindowAv: Availability = {
+  ...paritySynthAv,
+  horizon_days: 1,
+  rules: [{ weekday: 3, start_minute: 960, end_minute: 1200 }], // Wed 16:00-20:00
+};
+const parityWindowCandidates = slotRange(
+  "2026-07-01T16:00:00.000Z",
+  "2026-07-01T20:00:00.000Z",
+);
+const expectedWindowOperatorGrid = [
+  "2026-07-01T17:00:00.000Z",
+  "2026-07-01T17:30:00.000Z",
+  "2026-07-01T18:30:00.000Z",
+  "2026-07-01T19:00:00.000Z",
+];
+const expectedWindowRenterGrid = [
+  "2026-07-01T17:30:00.000Z",
+  "2026-07-01T18:30:00.000Z",
+  "2026-07-01T19:00:00.000Z",
+];
+const jsWindowOperatorGrid = generateSlots(parityWindowAv, parityNow, {
+  relaxLeadForAnchoredDays: true,
+}).flatMap((d) => d.slots.map((s) => s.iso));
+const sqlWindowAcceptGrid = parityWindowCandidates.filter((slot) =>
+  sqlContractAcceptsSlot(parityWindowAv, slot, parityNow, { flow: "accept" }),
+);
+ok("S506 SQL contract: windowed accept grid matches JS operator grid",
+  JSON.stringify(jsWindowOperatorGrid) === JSON.stringify(expectedWindowOperatorGrid) &&
+    JSON.stringify(sqlWindowAcceptGrid) === JSON.stringify(expectedWindowOperatorGrid));
+const jsWindowRenterGrid = generateSlots(parityWindowAv, parityNow)
+  .flatMap((d) => d.slots.map((s) => s.iso));
+const sqlWindowBookGrid = parityWindowCandidates.filter((slot) =>
+  sqlContractAcceptsSlot(parityWindowAv, slot, parityNow, { flow: "book" }),
+);
+ok("S506 SQL contract: windowed book grid matches JS renter grid",
+  JSON.stringify(jsWindowRenterGrid) === JSON.stringify(expectedWindowRenterGrid) &&
+    JSON.stringify(sqlWindowBookGrid) === JSON.stringify(expectedWindowRenterGrid));
+ok("S506 SQL contract: normal non-synth accept still works",
   sqlContractAcceptsSlot(
     {
       timezone: "UTC",
@@ -368,6 +398,10 @@ const migration0150 = readFileSync(
 );
 const migration0152 = readFileSync(
   "supabase/migrations/0152_clustering_open_covered_day.sql",
+  "utf8",
+);
+const migration0154 = readFileSync(
+  "supabase/migrations/0154_clustering_respect_windows.sql",
   "utf8",
 );
 ok("migration creates the proposal RPCs",
@@ -413,6 +447,26 @@ ok("0152 enforces synth-only step alignment in both RPCs",
 ok("0152 preserves anon/authenticated grants for both RPCs",
   /grant execute on function public\.accept_reschedule_proposal\(uuid, timestamptz\)\s+to anon, authenticated/i.test(migration0152) &&
     /grant execute on function public\.book_public_showing\(uuid, uuid, timestamptz\)\s+to anon, authenticated/i.test(migration0152));
+ok("0154 recreates exactly the two write RPCs",
+  migration0154.includes("create or replace function public.accept_reschedule_proposal") &&
+    migration0154.includes("create or replace function public.book_public_showing") &&
+    !migration0154.includes("create or replace function public.get_reschedule_proposal"));
+ok("0154 removes synthesized-day bypass and dead stepping",
+  !migration0154.includes("v_is_synth_day") &&
+    !migration0154.includes("v_synth_lo") &&
+    !/elsif not v_is_synth_day and not exists/i.test(migration0154) &&
+    !/p_slot - v_synth_lo/i.test(migration0154));
+ok("0154 requires a real weekly rule when no override exists in both RPCs",
+  (migration0154.match(/elsif not exists \(\s*select 1\s*from public\.availability_rules/g) ?? []).length === 2);
+ok("0154 preserves accept lead relaxation for anchored windowed days only",
+  /create or replace function public\.accept_reschedule_proposal[\s\S]*if p_slot < now\(\) \+ make_interval\(hours => coalesce\(v_lead_hours, 0\)\)\s+and not v_is_anchored_day/i.test(migration0154) &&
+    /create or replace function public\.book_public_showing[\s\S]*if p_slot < now\(\) \+ make_interval\(hours => coalesce\(v_lead_hours, 0\)\) then\s+raise exception 'Slot is no longer available'/i.test(migration0154));
+ok("0154 preserves clustered window band guard in both RPCs",
+  (migration0154.match(/p_slot < v_anchor_min - make_interval\(mins => greatest\(0, coalesce\(v_cluster_buffer, 60\)\)\)/g) ?? []).length === 2 &&
+    (migration0154.match(/p_slot > v_anchor_max \+ make_interval\(mins => greatest\(0, coalesce\(v_cluster_buffer, 60\)\)\)/g) ?? []).length === 2);
+ok("0154 preserves anon/authenticated grants for both RPCs",
+  /grant execute on function public\.accept_reschedule_proposal\(uuid, timestamptz\)\s+to anon, authenticated/i.test(migration0154) &&
+    /grant execute on function public\.book_public_showing\(uuid, uuid, timestamptz\)\s+to anon, authenticated/i.test(migration0154));
 
 const emailSource = readFileSync("lib/email.ts", "utf8");
 const pageSource = readFileSync("app/showing/reschedule/[token]/page.tsx", "utf8");
