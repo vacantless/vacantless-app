@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin
     .from("showings")
     .select(
-      "id, scheduled_at, reminder_24h_sent_at, reminder_2h_sent_at, " +
+      "id, cancel_token, scheduled_at, reminder_24h_sent_at, reminder_2h_sent_at, " +
         "reminder_24h_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
         "leads(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone), " +
         "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
@@ -146,6 +146,7 @@ export async function GET(req: NextRequest) {
         reply_to_email: org?.reply_to_email ?? null,
         property_address: addr,
         leasing_phone: leasingPhone,
+        cancel_token: row.cancel_token ?? null,
         when_label: whenLabel,
       });
 

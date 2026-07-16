@@ -735,6 +735,9 @@ export type ReminderPayload = {
   // only). leasing_phone = resolved arrival phone (property override -> org
   // default -> public contact). (showing_instructions dropped S473/S474 = agent-only.)
   leasing_phone?: string | null;
+  // Public per-showing token. When present, reminder email renders scanner-safe
+  // action links: GET opens the confirm/reschedule pages; only POST confirms.
+  cancel_token?: string | null;
   when_label: string; // already formatted in the org timezone
 };
 
@@ -744,6 +747,13 @@ function reminderHtml(p: ReminderPayload): string {
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
   const when = escapeHtml(p.when_label);
+  const cancelToken = p.cancel_token?.trim();
+  const confirmUrl = cancelToken
+    ? `${APP_BASE_URL}/showing/confirm/${encodeURIComponent(cancelToken)}`
+    : null;
+  const rescheduleUrl = cancelToken
+    ? `${APP_BASE_URL}/showing/reschedule/${encodeURIComponent(cancelToken)}`
+    : null;
 
   const lead =
     p.kind === "2h"
@@ -769,6 +779,16 @@ function reminderHtml(p: ReminderPayload): string {
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
       ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
+      ${
+        confirmUrl && rescheduleUrl
+          ? `<p style="margin:0 0 14px;text-align:center;">
+        <a href="${escapeHtml(confirmUrl)}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:9px;font-weight:700;">✓ Confirm you're coming</a>
+      </p>
+      <p style="margin:0 0 16px;text-align:center;font-size:13px;">
+        <a href="${escapeHtml(rescheduleUrl)}" style="color:${escapeHtml(brand)};font-weight:600;text-decoration:none;">Can't make it? Reschedule</a>
+      </p>`
+          : ""
+      }
       <p style="margin:0 0 16px;">If you can no longer make it or need to reschedule, just reply to this email and we'll sort it out.</p>
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>
