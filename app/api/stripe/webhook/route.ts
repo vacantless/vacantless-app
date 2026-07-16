@@ -7,6 +7,7 @@ import {
   isRentReconcileEvent,
   rentStatusFromEvent,
   shouldApplyRentStatus,
+  type RawStripeInvoice,
   subscriptionIdOfInvoice,
 } from "@/lib/stripe-connect";
 
@@ -362,6 +363,16 @@ export async function POST(req: NextRequest) {
       }
       case "customer.subscription.deleted": {
         await applySubscription(admin, event.data.object as Stripe.Subscription, true);
+        break;
+      }
+      case "invoice.paid":
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const subId = subscriptionIdOfInvoice(invoice as unknown as RawStripeInvoice);
+        if (subId) {
+          const sub = await stripe.subscriptions.retrieve(subId);
+          await applySubscription(admin, sub, false);
+        }
         break;
       }
       case "charge.refunded": {
