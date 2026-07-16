@@ -50,7 +50,7 @@ import { decideApplianceNudge } from "@/lib/appliance-care-sweep";
 //
 // SHIP DARK: opt-in per org AND per kind (each event has its own
 // isDripEnqueueEnabled) — nothing fires until the org turns the relevant event on
-// in Settings -> Notifications, and nothing exists to fire until a landlord logs
+// in Automations & Templates, and nothing exists to fire until a landlord logs
 // an appliance with a warranty / a consumable.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):

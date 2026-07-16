@@ -13,13 +13,11 @@ export type SettingsTab =
   | "brand"
   | "distribution"
   | "comms"
-  | "notifications"
   | "banking"
   | "account";
 
-// Most tabs are sections of /dashboard/settings driven by ?tab=. "Notifications"
-// is its own route (its editor is large enough to live apart and keeps the main
-// settings page from growing further); `href` overrides the default ?tab= link.
+// Settings sections are driven by ?tab= so redirect-based saves keep operators
+// on the same setup surface.
 const TABS: {
   key: SettingsTab;
   label: string;
@@ -29,7 +27,6 @@ const TABS: {
   { key: "brand", label: "Public Page & Brand", icon: "page" },
   { key: "distribution", label: "Distribution", icon: "link" },
   { key: "comms", label: "Communications", icon: "mail" },
-  { key: "notifications", label: "Notifications", icon: "chat", href: "/dashboard/settings/notifications" },
   { key: "banking", label: "Banking & Rent", icon: "card" },
   { key: "account", label: "Account & Plan", icon: "key" },
 ];

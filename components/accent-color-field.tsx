@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-// The per-event email accent-color control for Settings → Notifications (S332).
+// The per-event email accent-color control for Automations & Templates (S332).
 // Mirrors the form's "blank = use the default" convention (like the subject /
 // message fields): when "Use the default" is checked, the hidden input submits
 // "" and the server stores NULL, so the email follows the event default (e.g.

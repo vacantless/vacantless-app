@@ -688,7 +688,7 @@ export function AppliancesSection({
         two optional reminders per appliance: a <strong>warranty</strong> nudge before the
         manufacturer coverage lapses, and a <strong>recurring</strong> nudge for consumables like a
         fridge water filter. Enable them under the &ldquo;Appliance warranty&rdquo; and
-        &ldquo;Appliance consumable&rdquo; reminders in Settings &rarr; Notifications.
+        &ldquo;Appliance consumable&rdquo; reminders in Automations &amp; Templates.
       </p>
 
       {appliances.length === 0 ? (

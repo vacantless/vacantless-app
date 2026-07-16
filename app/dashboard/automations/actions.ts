@@ -11,7 +11,7 @@ import {
   validateRecipientsInput,
 } from "@/lib/notifications";
 
-const BASE = "/dashboard/settings/notifications";
+const BASE = "/dashboard/automations";
 
 function s(fd: FormData, k: string): string {
   const v = fd.get(k);

@@ -33,7 +33,7 @@ import {
 // future start within 24h, and confirmation_nudge_sent_at is stamped after send.
 //
 // SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns "Unconfirmed viewing reminder" on in Settings -> Notifications.
+// turns "Unconfirmed viewing reminder" on in Automations & Templates.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
 //   ?org=<id>   limit the sweep to one org

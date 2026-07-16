@@ -36,7 +36,7 @@ import { decideDetectorNudge } from "@/lib/detector-eol-sweep";
 // logging a replacement rolls the EOL forward and re-arms the next cycle.
 //
 // SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns the "Detectors reaching end of life" event on in Settings -> Notifications.
+// turns the "Detectors reaching end of life" event on in Automations & Templates.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
 //   ?org=<id>   limit the sweep to one org

@@ -167,7 +167,7 @@ export function TenancyViolationSection({
       <p className="text-sm text-gray-600">
         Keep a record of lease breaches and the notices you serve &mdash; the history an
         LTB application later depends on. Set a &ldquo;remedy due by&rdquo; date and turn on the
-        &ldquo;Lease violation follow-up due&rdquo; reminder in Settings &rarr; Notifications, and
+        &ldquo;Lease violation follow-up due&rdquo; reminder in Automations &amp; Templates, and
         we email you as that deadline nears (and again if it passes) so you can check whether
         it was fixed and then close it or escalate. The reminder goes to your team, never the
         tenant. This logs what happened; it does not file LTB forms for you.

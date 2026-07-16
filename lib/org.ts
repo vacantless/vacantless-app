@@ -30,7 +30,7 @@ export type Org = {
   // S443: opt-in auto-assign of self-booked viewings to a showing agent.
   auto_assign_agents: boolean;
   // S445: post-showing outcome-nudge cadence cap. 1 = just once, 3 = follow up
-  // until answered. "Off" is the event toggle in Settings -> Notifications.
+  // until answered. "Off" is the event toggle in Automations & Templates.
   outcome_nudge_max: number;
   screening_enabled: boolean;
   screening_income_multiple: number | null;

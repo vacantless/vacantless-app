@@ -1353,6 +1353,21 @@ export default async function SettingsPage({
             </p>
           </div>
 
+          {/* S501: notification automations/templates moved to their own
+              operator surface; org-level communications defaults stay here. */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <p className="text-sm text-gray-600">
+              Notification automations and templates now live in{" "}
+              <Link
+                href="/dashboard/automations"
+                className="font-medium text-brand underline"
+              >
+                Automations &amp; Templates
+              </Link>
+              .
+            </p>
+          </div>
+
           {/* --- Text messages --- */}
           <form
             action={updateTextMessages}

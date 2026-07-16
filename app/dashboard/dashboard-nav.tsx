@@ -68,6 +68,7 @@ const PRIMARY: NavItem[] = [
 // are NOT daily work - they configure or step outside the operating surface.
 const ACCOUNT: NavItem[] = [
   { href: "/dashboard/settings", label: "Settings" },
+  { href: "/dashboard/automations", label: "Automations & templates" },
   { href: "/dashboard/billing", label: "Your plan" },
 ];
 

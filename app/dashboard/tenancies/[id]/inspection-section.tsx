@@ -136,7 +136,7 @@ export function TenancyInspectionSection({
         Schedule and keep a record of your move-in, move-out, and periodic inspections &mdash;
         the condition history that protects you in a deposit or damage dispute. Set a
         &ldquo;planned date&rdquo; and turn on the &ldquo;Property inspection due&rdquo; reminder in
-        Settings &rarr; Notifications, and we email you about a week before so you can give the
+        Automations &amp; Templates, and we email you about a week before so you can give the
         tenant the required written notice and book a time. The reminder goes to your team, never
         the tenant. This logs the inspection; it does not file a condition-report form for you.
       </p>

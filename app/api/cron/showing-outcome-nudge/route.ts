@@ -40,7 +40,7 @@ import {
 // stamped after each send.
 //
 // SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns the "Post-showing outcome reminder" event on in Settings -> Notifications
+// turns the "Post-showing outcome reminder" event on in Automations & Templates
 // (that toggle is the "off"; the cadence cap is the "once vs follow-up").
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):

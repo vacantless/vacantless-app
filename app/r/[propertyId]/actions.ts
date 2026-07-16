@@ -194,7 +194,7 @@ async function attemptBooking(
 // via the service-role admin client, exactly like notifyOperatorsOfNewReport
 // (Slice 4). Best-effort: it NEVER throws, so a mail failure can't turn a
 // captured lead into an error for the renter. The customizable substrate
-// (Settings → Notifications) overrides copy/recipients/on-off per org; this only
+// (Automations & Templates) overrides copy/recipients/on-off per org; this only
 // supplies the default audience + the {{token}} values.
 async function notifyOperatorsOfNewLead(
   payload: AutoReplyPayload,

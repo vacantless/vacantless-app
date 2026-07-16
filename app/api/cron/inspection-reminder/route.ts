@@ -37,7 +37,7 @@ import { decideInspectionNudge } from "@/lib/property-inspections-sweep";
 // property-inspections-sweep.ts); editing the date (or rescheduling) re-arms it.
 //
 // SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns the "Property inspection due" event on in Settings -> Notifications.
+// turns the "Property inspection due" event on in Automations & Templates.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
 //   ?org=<id>   limit the sweep to one org

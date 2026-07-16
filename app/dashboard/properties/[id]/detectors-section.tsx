@@ -141,7 +141,7 @@ export function DetectorsSection({
         Log this unit&apos;s smoke and carbon-monoxide detectors. We compute each one&apos;s
         manufacturer end-of-life from its install date (~10 years for smoke and combo,
         ~7 for CO-only) and, when you turn on the &ldquo;Detectors reaching end of life&rdquo;
-        reminder in Settings &rarr; Notifications, email you once per unit before they expire
+        reminder in Automations &amp; Templates, email you once per unit before they expire
         &mdash; so you order the right type and replace the set in one trip. Always confirm
         each detector&apos;s manufacturer date and your local fire code.
       </p>

@@ -38,7 +38,7 @@ import { canUseRepairSms } from "@/lib/billing";
 // exactly one reminder, same-day taking priority over the day-before.
 //
 // SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns the "Repair visit reminder" event on in Settings -> Notifications. Inert
+// turns the "Repair visit reminder" event on in Automations & Templates. Inert
 // regardless until an operator confirms an appointment.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):

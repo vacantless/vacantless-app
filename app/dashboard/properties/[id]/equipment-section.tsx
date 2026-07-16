@@ -140,7 +140,7 @@ export function EquipmentSection({
         Log this unit&apos;s major equipment &mdash; water heaters and furnaces. We compute
         each one&apos;s manufacturer end-of-life from its install date (~10 years for a tank
         water heater, ~15 for a furnace) and, when you turn on the &ldquo;Major equipment
-        reaching end of life&rdquo; reminder in Settings &rarr; Notifications, email you ahead
+        reaching end of life&rdquo; reminder in Automations &amp; Templates, email you ahead
         of time &mdash; with enough lead to plan a replacement on your schedule (before a water
         heater leaks, or a furnace dies mid-winter) instead of paying emergency rates. Always
         confirm each item&apos;s manufacturer date.

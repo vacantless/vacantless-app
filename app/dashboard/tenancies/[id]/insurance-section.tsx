@@ -126,7 +126,7 @@ export function TenancyInsuranceSection({
       <p className="text-sm text-gray-600">
         If your lease requires the tenant to carry renter&apos;s (contents + liability)
         insurance, log their policy here. When you turn on the &ldquo;Renter&apos;s insurance
-        expiring or lapsed&rdquo; reminder in Settings &rarr; Notifications, we email you about a
+        expiring or lapsed&rdquo; reminder in Automations &amp; Templates, we email you about a
         month before it expires &mdash; and again if it lapses &mdash; so you can ask for renewed
         proof before any coverage gap. The reminder goes to your team, never the tenant.
       </p>
