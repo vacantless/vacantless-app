@@ -18,6 +18,7 @@ import {
   formatSlotLong,
   isValidSlot,
   type Availability,
+  type ClusterCandidate,
 } from "@/lib/booking";
 import { sendShowingRescheduled, sendRescheduleProposal } from "@/lib/email";
 import { normalizeProposedSlots } from "@/lib/reschedule-proposals";
@@ -114,7 +115,39 @@ export async function proposeShowingTimes(formData: FormData) {
     p_property_id: showing.property.id,
   });
   const av = avData as Availability | null;
-  if (!av || slots.some((slot) => !isValidSlot(av, slot))) {
+  if (!av) redirect("/dashboard/showings?proposal=taken");
+
+  const validationNow = new Date();
+  const { data: clusterRows, error: clusterErr } = await supabase
+    .from("showings")
+    .select("id, scheduled_at, property:properties(address, status)")
+    .eq("organization_id", org.id)
+    .eq("outcome", "scheduled")
+    .gte("scheduled_at", validationNow.toISOString());
+  if (clusterErr) redirect("/dashboard/showings?proposal=error");
+  const clusterCandidates = ((clusterRows ?? []) as unknown as Array<{
+    id: string;
+    scheduled_at: string | null;
+    property: { address: string | null; status: string | null } | null;
+  }>).flatMap((row): ClusterCandidate[] => {
+    if (!row.scheduled_at || row.property?.status === "off_market") return [];
+    return [{
+      id: row.id,
+      address: row.property?.address ?? null,
+      scheduled_at: row.scheduled_at,
+    }];
+  });
+  const moveAvailability: Availability = {
+    ...av,
+    cluster_candidates: clusterCandidates,
+  };
+  if (
+    slots.some((slot) =>
+      !isValidSlot(moveAvailability, slot, validationNow, {
+        excludeShowingId: showing.id,
+      }),
+    )
+  ) {
     redirect("/dashboard/showings?proposal=taken");
   }
 

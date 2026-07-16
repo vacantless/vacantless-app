@@ -20,6 +20,7 @@ export type AvailabilityOverride = {
 // implicit anchor window (the "Hero block"). Only currently-listed properties
 // are surfaced by the RPC.
 export type ClusterCandidate = {
+  id?: string | null;
   address: string | null;
   scheduled_at: string; // ISO instant
 };
@@ -58,6 +59,10 @@ export type DaySlots = {
   dayKey: string; // YYYY-MM-DD in the org timezone
   dayLabel: string; // e.g. "Tue, Jul 1"
   slots: Slot[];
+};
+
+export type SlotGenerationOptions = {
+  excludeShowingId?: string | null;
 };
 
 // How many days the renter booking form shows before "More times" is expanded.
@@ -185,7 +190,11 @@ function fmtDay(dayAnchorUtcMs: number, timeZone: string): string {
  * Generate open slots grouped by day, in the org's timezone, from `now`.
  * Excludes slots earlier than now + lead_hours and any already-booked instant.
  */
-export function generateSlots(av: Availability, now: Date = new Date()): DaySlots[] {
+export function generateSlots(
+  av: Availability,
+  now: Date = new Date(),
+  options: SlotGenerationOptions = {},
+): DaySlots[] {
   const tz = av.timezone || "America/Toronto";
   const slotMin = av.slot_minutes > 0 ? av.slot_minutes : 30;
   const horizon = av.horizon_days > 0 ? av.horizon_days : 14;
@@ -263,6 +272,7 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
     const targetKey = buildingKey(av.target_address);
     if (targetKey) {
       const anchors = (av.cluster_candidates || [])
+        .filter((c) => !options.excludeShowingId || c.id !== options.excludeShowingId)
         .filter((c) => buildingKey(c.address) === targetKey)
         .map((c) => new Date(c.scheduled_at).getTime())
         .filter((t) => !Number.isNaN(t));
@@ -284,6 +294,7 @@ export function generateSlots(av: Availability, now: Date = new Date()): DaySlot
 // pre-comma street portion, drops unit/apt/suite/# designators, and folds a
 // few common street-type abbreviations so "Rd" and "Road" match.
 // ---------------------------------------------------------------------------
+// Known drift: SQL public.building_key in 0049 does not fold street-type abbreviations until the deferred recompute migration ships.
 const STREET_ABBR: Record<string, string> = {
   road: "rd",
   street: "st",
@@ -426,10 +437,15 @@ export function groupShowingsIntoBlocks(
 }
 
 /** True if `iso` is one of the currently-bookable slots. Server-side guard. */
-export function isValidSlot(av: Availability, iso: string, now: Date = new Date()): boolean {
+export function isValidSlot(
+  av: Availability,
+  iso: string,
+  now: Date = new Date(),
+  options: SlotGenerationOptions = {},
+): boolean {
   const target = new Date(iso).getTime();
   if (Number.isNaN(target)) return false;
-  for (const day of generateSlots(av, now)) {
+  for (const day of generateSlots(av, now, options)) {
     for (const s of day.slots) {
       if (new Date(s.iso).getTime() === target) return true;
     }

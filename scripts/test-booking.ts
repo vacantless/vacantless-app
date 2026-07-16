@@ -164,6 +164,29 @@ ok("isValidSlot rejects an out-of-window slot when clustering is on",
       cluster_candidates: [{ address: "833 Pillette Rd Unit 22", scheduled_at: "2026-07-01T10:30:00.000Z" }] },
     "2026-07-01T11:30:00.000Z", now)); // same (anchored) day, but outside the 10:00-11:00 window
 
+const atCapMoveAv: Availability = {
+  ...baseAv,
+  rules: [{ weekday: 3, start_minute: 600, end_minute: 720 }],
+  clustering_enabled: true,
+  clustering_buffer_minutes: 60,
+  showing_block_capacity: 3,
+  target_address: "833 Pillette Rd Unit 27",
+  cluster_candidates: [
+    { id: "moving", address: "833 Pillette Rd Unit 22", scheduled_at: "2026-07-01T10:00:00.000Z" },
+    { id: "anchor-a", address: "833 Pillette Rd Unit 24", scheduled_at: "2026-07-01T10:30:00.000Z" },
+    { id: "anchor-b", address: "833 Pillette Rd Unit 26", scheduled_at: "2026-07-01T11:00:00.000Z" },
+  ],
+};
+ok("new booking into a full building/day block hides that capped day",
+  !generateSlots(atCapMoveAv, now).some((d) => d.dayKey === "2026-07-01"));
+ok("move picker excludes the moving showing from capacity anchors",
+  isValidSlot(
+    atCapMoveAv,
+    "2026-07-01T11:30:00.000Z",
+    now,
+    { excludeShowingId: "moving" },
+  ));
+
 // --- groupShowingsIntoBlocks ----------------------------------------------
 const blocks = groupShowingsIntoBlocks(
   [

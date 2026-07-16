@@ -99,8 +99,47 @@ ok("day off beats an otherwise valid proposed override",
     now,
   })) === "slot_not_available");
 
+const moveAtCapAv: Availability = {
+  ...baseAv,
+  rules: [{ weekday: 3, start_minute: 600, end_minute: 720 }],
+  clustering_enabled: true,
+  clustering_buffer_minutes: 60,
+  showing_block_capacity: 3,
+  target_address: "833 Pillette Rd Unit 27",
+  cluster_candidates: [
+    { id: "moving", address: "833 Pillette Rd Unit 22", scheduled_at: "2026-07-01T10:00:00.000Z" },
+    { id: "anchor-a", address: "833 Pillette Rd Unit 24", scheduled_at: "2026-07-01T10:30:00.000Z" },
+    { id: "anchor-b", address: "833 Pillette Rd Unit 26", scheduled_at: "2026-07-01T11:00:00.000Z" },
+  ],
+};
+ok("new booking into a full building/day block is still rejected",
+  reasonOf(canAcceptRescheduleProposal({
+    status: "pending",
+    proposedSlots: ["2026-07-01T11:30:00.000Z"],
+    slot: "2026-07-01T11:30:00.000Z",
+    availability: moveAtCapAv,
+    now,
+  })) === "slot_not_available");
+ok("move at capacity accepts an in-block slot after excluding the moving showing",
+  canAcceptRescheduleProposal({
+    status: "pending",
+    proposedSlots: ["2026-07-01T11:30:00.000Z"],
+    slot: "2026-07-01T11:30:00.000Z",
+    availability: moveAtCapAv,
+    excludeShowingId: "moving",
+    now,
+  }).ok);
+
 const migration = readFileSync(
   "supabase/migrations/0149_showing_reschedule_proposals.sql",
+  "utf8",
+);
+const migration0148 = readFileSync(
+  "supabase/migrations/0148_availability_overrides.sql",
+  "utf8",
+);
+const migration0150 = readFileSync(
+  "supabase/migrations/0150_reschedule_move_capacity_self_exclude.sql",
   "utf8",
 );
 ok("migration creates the proposal RPCs",
@@ -116,6 +155,13 @@ ok("accept SQL preserves day-off before override before weekly precedence", (() 
 })());
 ok("proposal get RPC only exposes pending tokens",
   migration.includes("if v_status <> 'pending' then"));
+ok("0150 recreates only the accept RPC",
+  migration0150.includes("create or replace function public.accept_reschedule_proposal") &&
+    !migration0150.includes("create or replace function public.get_reschedule_proposal"));
+ok("0150 self-excludes the moving showing in the clustering anchor select",
+  /select count\(\*\), min\(s\.scheduled_at\), max\(s\.scheduled_at\)[\s\S]*and s\.id <> v_showing_id[\s\S]*cp\.building_key = v_building/i.test(migration0150));
+ok("0148 insert guard remains untouched by the move-only self-exclusion",
+  !migration0148.includes("v_showing_id"));
 
 const emailSource = readFileSync("lib/email.ts", "utf8");
 const pageSource = readFileSync("app/showing/reschedule/[token]/page.tsx", "utf8");

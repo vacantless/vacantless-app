@@ -8,6 +8,7 @@ import {
   groupShowingsIntoBlocks,
   utcToLocalInputValue,
   type Availability,
+  type ClusterCandidate,
 } from "@/lib/booking";
 import {
   agentDisplayLabel,
@@ -41,7 +42,7 @@ type ShowingRow = {
   assigned_agent_id: string | null;
   confirmed_at: string | null;
   lead: { id: string; name: string | null; email: string | null } | null;
-  property: { id: string; address: string } | null;
+  property: { id: string; address: string; status: string | null } | null;
   feedback: { rating: number | null; comments: string | null }[] | null;
 };
 
@@ -114,7 +115,7 @@ export default async function ShowingsPage({
   const { data } = await supabase
     .from("showings")
     .select(
-      "id, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address), feedback(rating, comments)",
+      "id, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address, status), feedback(rating, comments)",
     )
     .order("scheduled_at", { ascending: true });
 
@@ -138,13 +139,22 @@ export default async function ShowingsPage({
     agents.map((a) => [a.id, { name: a.name, phone: a.phone }]),
   );
   const now = Date.now();
+  const nowDate = new Date(now);
   const upcoming = all.filter(
     (s) =>
       s.outcome === "scheduled" &&
       s.scheduled_at != null &&
       new Date(s.scheduled_at).getTime() >= now,
   );
-  const slotOptionsByPropertyId = new Map<string, SuggestTimeSlotOption[]>();
+  const clusterCandidates: ClusterCandidate[] = upcoming.flatMap((s) => {
+    if (!s.scheduled_at || s.property?.status === "off_market") return [];
+    return [{
+      id: s.id,
+      address: s.property?.address ?? null,
+      scheduled_at: s.scheduled_at,
+    }];
+  });
+  const availabilityByPropertyId = new Map<string, Availability | null>();
   for (const propertyId of Array.from(
     new Set(
       upcoming
@@ -155,9 +165,18 @@ export default async function ShowingsPage({
     const { data: avData } = await supabase.rpc("get_public_availability", {
       p_property_id: propertyId,
     });
-    const av = avData as Availability | null;
+    availabilityByPropertyId.set(propertyId, avData as Availability | null);
+  }
+  const slotOptionsByShowingId = new Map<string, SuggestTimeSlotOption[]>();
+  for (const showing of upcoming) {
+    const propertyId = showing.property?.id;
+    const av = propertyId ? availabilityByPropertyId.get(propertyId) : null;
     const options = av
-      ? generateSlots(av)
+      ? generateSlots(
+          { ...av, cluster_candidates: clusterCandidates },
+          nowDate,
+          { excludeShowingId: showing.id },
+        )
           .flatMap((day) =>
             day.slots.map((slot) => ({
               iso: slot.iso,
@@ -166,7 +185,7 @@ export default async function ShowingsPage({
           )
           .slice(0, 18)
       : [];
-    slotOptionsByPropertyId.set(propertyId, options);
+    slotOptionsByShowingId.set(showing.id, options);
   }
   // Oversight (Slice 2): how many UPCOMING viewings are assigned but not yet
   // confirmed with the renter - the "did the agent follow up?" gap surfaced.
@@ -374,7 +393,7 @@ export default async function ShowingsPage({
         suggestion={suggestion}
         allowReschedule
         nowLocalValue={nowLocalValue}
-        slotOptionsByPropertyId={slotOptionsByPropertyId}
+        slotOptionsByShowingId={slotOptionsByShowingId}
         note={
           canAssign && awaitingConfirmation > 0 ? (
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
@@ -429,7 +448,7 @@ function Section({
   suggestion,
   allowReschedule,
   nowLocalValue,
-  slotOptionsByPropertyId,
+  slotOptionsByShowingId,
   note,
 }: {
   title: string;
@@ -444,7 +463,7 @@ function Section({
   suggestion?: AgentSuggestion | null;
   allowReschedule?: boolean;
   nowLocalValue?: string;
-  slotOptionsByPropertyId?: Map<string, SuggestTimeSlotOption[]>;
+  slotOptionsByShowingId?: Map<string, SuggestTimeSlotOption[]>;
   note?: React.ReactNode;
 }) {
   return (
@@ -564,7 +583,7 @@ function Section({
                     s.property?.id && (
                       <SuggestTimeControl
                         showingId={s.id}
-                        slots={slotOptionsByPropertyId?.get(s.property.id) ?? []}
+                        slots={slotOptionsByShowingId?.get(s.id) ?? []}
                       />
                     )}
                   {contact && contactDigits !== "" && (

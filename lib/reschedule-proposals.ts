@@ -62,12 +62,17 @@ export function canAcceptRescheduleProposal(input: {
   slot: string;
   availability: Availability;
   now?: Date;
+  excludeShowingId?: string | null;
 }): RescheduleAcceptCheck {
   if (input.status !== "pending") return { ok: false, reason: "not_pending" };
   if (!proposedSlotMatches(input.proposedSlots, input.slot)) {
     return { ok: false, reason: "slot_not_proposed" };
   }
-  if (!isValidSlot(input.availability, input.slot, input.now ?? new Date())) {
+  if (
+    !isValidSlot(input.availability, input.slot, input.now ?? new Date(), {
+      excludeShowingId: input.excludeShowingId,
+    })
+  ) {
     return { ok: false, reason: "slot_not_available" };
   }
   return { ok: true, slot: new Date(input.slot).toISOString() };
