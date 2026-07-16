@@ -2350,7 +2350,7 @@ export default async function TenancyDetailPage({
           Message the tenants on this tenancy by email and/or text — rent
           reminders, maintenance notices, or general updates. Messages send under
           your brand; replies come back to your reply-to address.{" "}
-          <Link href="/dashboard/settings#templates" className="font-medium text-brand hover:underline">
+          <Link href="/dashboard/tenancies/message-templates" className="font-medium text-brand hover:underline">
             Manage saved templates
           </Link>
           .

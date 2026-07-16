@@ -74,6 +74,12 @@ export default async function TenanciesPage({
         subtitle="Your active leases. Each tenancy links a tenant to a unit with the signed rent and lease dates — the record rent collection and tenant messaging build on."
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/tenancies/message-templates"
+              className={SECONDARY_ACTION_CLASS}
+            >
+              Message templates
+            </Link>
             <Link href="/dashboard/tenancies/watch" className={SECONDARY_ACTION_CLASS}>
               Watch a lease
             </Link>

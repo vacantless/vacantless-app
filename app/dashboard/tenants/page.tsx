@@ -116,9 +116,8 @@ export default function TenantsHubPage() {
         </div>
       </Card>
 
-      {/* Message templates bridge (S275 IA Step 3, G7): tenant message templates
-          are set in Settings but used here when you message tenants. Point to
-          where they're edited rather than leaving the link buried. */}
+      {/* Message templates bridge (S499b): tenant message templates now live at
+          their point-of-use under Tenancies, where tenant messages are composed. */}
       <Card className="mt-4 bg-gray-50">
         <div className="flex items-start gap-3.5">
           <IconTile>
@@ -128,12 +127,12 @@ export default function TenantsHubPage() {
             <h2 className="font-semibold text-gray-900">Message templates</h2>
             <p className="mt-1 text-sm leading-relaxed text-gray-600">
               Save reusable email and text templates for tenant messages. Manage
-              them in{" "}
+              them with{" "}
               <Link
-                href="/dashboard/settings?tab=comms"
+                href="/dashboard/tenancies/message-templates"
                 className="font-medium text-brand underline"
               >
-                Settings → Communications
+                Tenancies → Message templates
               </Link>
               .
             </p>

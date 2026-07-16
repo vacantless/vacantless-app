@@ -13,14 +13,14 @@ import { validateTemplateInput } from "@/lib/tenant-comms";
 // that owns branding, reply-to, and feature toggles. The send action itself is
 // guarded on manage_tenancies (it acts on a specific tenancy). REDIRECT-based.
 
-const SETTINGS = "/dashboard/settings";
+const TEMPLATE_PAGE = "/dashboard/tenancies/message-templates";
 
 function s(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
 
 export async function saveMessageTemplate(formData: FormData) {
-  await requireCapability("manage_settings", `${SETTINGS}?tpl=forbidden`);
+  await requireCapability("manage_settings", `${TEMPLATE_PAGE}?tpl=forbidden`);
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
@@ -32,7 +32,7 @@ export async function saveMessageTemplate(formData: FormData) {
     subject: s(formData, "subject") || null,
     body: s(formData, "body"),
   });
-  if (!check.ok) redirect(`${SETTINGS}?tpl=${check.code}#templates`);
+  if (!check.ok) redirect(`${TEMPLATE_PAGE}?tpl=${check.code}`);
 
   const supabase = createClient();
   const fields = {
@@ -57,26 +57,26 @@ export async function saveMessageTemplate(formData: FormData) {
         .from("tenant_message_templates")
         .insert({ organization_id: org.id, ...fields });
 
-  if (error) redirect(`${SETTINGS}?tpl=savefailed#templates`);
+  if (error) redirect(`${TEMPLATE_PAGE}?tpl=savefailed`);
 
-  revalidatePath(SETTINGS);
+  revalidatePath(TEMPLATE_PAGE);
   // `tn` is a fresh nonce so the create-template form REMOUNTS and its
   // uncontrolled inputs clear on a soft-nav redirect — otherwise a just-created
   // template's values linger and invite a duplicate (S226 QA-audit form-reset).
   redirect(
-    `${SETTINGS}?tpl=${id ? "updated" : "created"}&tn=${Date.now().toString(36)}#templates`,
+    `${TEMPLATE_PAGE}?tpl=${id ? "updated" : "created"}&tn=${Date.now().toString(36)}`,
   );
 }
 
 export async function deleteMessageTemplate(formData: FormData) {
-  await requireCapability("manage_settings", `${SETTINGS}?tpl=forbidden`);
+  await requireCapability("manage_settings", `${TEMPLATE_PAGE}?tpl=forbidden`);
 
   const id = s(formData, "id");
-  if (!id) redirect(`${SETTINGS}#templates`);
+  if (!id) redirect(TEMPLATE_PAGE);
 
   const supabase = createClient();
   await supabase.from("tenant_message_templates").delete().eq("id", id);
 
-  revalidatePath(SETTINGS);
-  redirect(`${SETTINGS}?tpl=deleted#templates`);
+  revalidatePath(TEMPLATE_PAGE);
+  redirect(`${TEMPLATE_PAGE}?tpl=deleted`);
 }
