@@ -187,6 +187,116 @@ ok("move picker excludes the moving showing from capacity anchors",
     { excludeShowingId: "moving" },
   ));
 
+// --- S503: anchored closed days synthesize a clustered grid ---------------
+const s503Now = new Date("2026-07-01T05:30:00.000Z");
+const synthClosedAv: Availability = {
+  timezone: "UTC",
+  slot_minutes: 30,
+  lead_hours: 12,
+  horizon_days: 0,
+  rules: [],
+  booked: ["2026-07-01T18:00:00.000Z"],
+  clustering_enabled: true,
+  clustering_buffer_minutes: 60,
+  showing_block_capacity: 6,
+  target_address: "833 Pillette Rd Unit 27",
+  cluster_candidates: [
+    {
+      id: "anchor",
+      address: "833 Pillette Rd Unit 22",
+      scheduled_at: "2026-07-01T18:00:00.000Z",
+    },
+  ],
+};
+const synthOperator = generateSlots(synthClosedAv, s503Now, {
+  relaxLeadForAnchoredDays: true,
+});
+eq("S503 synth closed day offers operator grid from anchor-buffer to anchor+buffer",
+  synthOperator.flatMap((d) => d.slots.map((s) => s.iso)),
+  [
+    "2026-07-01T17:00:00.000Z",
+    "2026-07-01T17:30:00.000Z",
+    "2026-07-01T18:30:00.000Z",
+    "2026-07-01T19:00:00.000Z",
+  ]);
+ok("S503 synthesized operator slots are clustered",
+  synthOperator.every((d) => d.slots.every((s) => s.clustered === true)));
+
+const synthRenter = generateSlots(synthClosedAv, s503Now);
+eq("S503 renter synth grid keeps normal lead floor",
+  synthRenter.flatMap((d) => d.slots.map((s) => s.iso)),
+  [
+    "2026-07-01T17:30:00.000Z",
+    "2026-07-01T18:30:00.000Z",
+    "2026-07-01T19:00:00.000Z",
+  ]);
+ok("S503 day off beats an anchored synthesized day",
+  generateSlots(
+    { ...synthClosedAv, days_off: ["2026-07-01"] },
+    s503Now,
+    { relaxLeadForAnchoredDays: true },
+  ).length === 0);
+ok("S503 anchored day at capacity has zero slots",
+  generateSlots(
+    {
+      ...synthClosedAv,
+      booked: [],
+      showing_block_capacity: 2,
+      cluster_candidates: [
+        {
+          id: "anchor-a",
+          address: "833 Pillette Rd Unit 22",
+          scheduled_at: "2026-07-01T17:30:00.000Z",
+        },
+        {
+          id: "anchor-b",
+          address: "833 Pillette Rd Unit 24",
+          scheduled_at: "2026-07-01T18:00:00.000Z",
+        },
+      ],
+    },
+    s503Now,
+    { relaxLeadForAnchoredDays: true },
+  ).length === 0);
+
+const coveredAnchoredAv: Availability = {
+  ...synthClosedAv,
+  rules: [{ weekday: 3, start_minute: 960, end_minute: 1200 }], // Wed 16:00-20:00
+};
+eq("S503 covered anchored day keeps rule grid with renter lead floor",
+  generateSlots(coveredAnchoredAv, s503Now)
+    .find((d) => d.dayKey === "2026-07-01")
+    ?.slots.map((s) => s.iso),
+  [
+    "2026-07-01T17:30:00.000Z",
+    "2026-07-01T18:30:00.000Z",
+    "2026-07-01T19:00:00.000Z",
+  ]);
+eq("S503 covered anchored operator relaxes lead but still uses rule grid",
+  generateSlots(coveredAnchoredAv, s503Now, {
+    relaxLeadForAnchoredDays: true,
+  })
+    .find((d) => d.dayKey === "2026-07-01")
+    ?.slots.map((s) => s.iso),
+  [
+    "2026-07-01T17:00:00.000Z",
+    "2026-07-01T17:30:00.000Z",
+    "2026-07-01T18:30:00.000Z",
+    "2026-07-01T19:00:00.000Z",
+  ]);
+eq("S503 clustering disabled is identical to pre-cluster generation",
+  generateSlots({
+    ...baseAv,
+    clustering_enabled: false,
+    clustering_buffer_minutes: 30,
+    showing_block_capacity: 6,
+    target_address: "833 Pillette Rd Unit 27",
+    cluster_candidates: [
+      { address: "833 Pillette Rd Unit 22", scheduled_at: "2026-07-01T10:30:00.000Z" },
+    ],
+  }, now).map((d) => d.slots.map((s) => s.iso)),
+  generateSlots(baseAv, now).map((d) => d.slots.map((s) => s.iso)));
+
 // --- groupShowingsIntoBlocks ----------------------------------------------
 const blocks = groupShowingsIntoBlocks(
   [

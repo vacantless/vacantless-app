@@ -63,6 +63,7 @@ export type DaySlots = {
 
 export type SlotGenerationOptions = {
   excludeShowingId?: string | null;
+  relaxLeadForAnchoredDays?: boolean;
 };
 
 // How many days the renter booking form shows before "More times" is expanded.
@@ -220,9 +221,38 @@ export function generateSlots(
     list.push(o);
     byDate.set(o.day, list);
   }
-  if (byWeekday.size === 0 && byDate.size === 0) return [];
+
+  const targetKey =
+    av.clustering_enabled ? buildingKey(av.target_address) : "";
+  const anchorInstantsMs: number[] = [];
+  const anchorsByDay = new Map<string, number[]>();
+  if (targetKey) {
+    for (const c of av.cluster_candidates || []) {
+      if (options.excludeShowingId && c.id === options.excludeShowingId) {
+        continue;
+      }
+      if (buildingKey(c.address) !== targetKey) continue;
+      const t = new Date(c.scheduled_at).getTime();
+      if (Number.isNaN(t) || t < now.getTime()) continue;
+      anchorInstantsMs.push(t);
+      const { year, month, day } = ymdInTz(t, tz);
+      const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const list = anchorsByDay.get(key) ?? [];
+      list.push(t);
+      anchorsByDay.set(key, list);
+    }
+  }
+
+  if (byWeekday.size === 0 && byDate.size === 0 && anchorsByDay.size === 0) {
+    return [];
+  }
 
   const days: DaySlots[] = [];
+  const bufferMs = Math.max(0, av.clustering_buffer_minutes ?? 60) * 60_000;
+  const cap =
+    av.showing_block_capacity != null && av.showing_block_capacity > 0
+      ? av.showing_block_capacity
+      : 6;
 
   // Walk calendar days 0..horizon as seen in the org timezone. Anchor each day
   // at local noon to read its Y/M/D/weekday safely (avoids DST midnight edges).
@@ -236,17 +266,33 @@ export function generateSlots(
       overrideRules && overrideRules.length > 0
         ? overrideRules
         : byWeekday.get(weekday);
-    if (!rules || rules.length === 0) continue;
+    const anchors = anchorsByDay.get(dayKey);
+    const isAnchored =
+      anchors != null && anchors.length >= 1 && anchors.length < cap;
+    const relaxLead =
+      options.relaxLeadForAnchoredDays === true && isAnchored;
 
     const slots: Slot[] = [];
-    for (const rule of rules) {
-      for (let m = rule.start_minute; m + slotMin <= rule.end_minute; m += slotMin) {
-        const instant = zonedWallTimeToUtc(year, month, day, m, tz);
-        const t = instant.getTime();
-        if (t < earliest) continue;
+    if (!rules || rules.length === 0) {
+      if (!isAnchored || !anchors) continue;
+      const lo = Math.min(...anchors) - bufferMs;
+      const hi = Math.max(...anchors) + bufferMs;
+      for (let t = lo; t <= hi; t += slotMin * 60_000) {
+        if (relaxLead ? t <= now.getTime() : t < earliest) continue;
         if (booked.has(t)) continue;
-        const iso = instant.toISOString();
-        slots.push({ iso, label: fmtTime(iso, tz) });
+        const iso = new Date(t).toISOString();
+        slots.push({ iso, label: fmtTime(iso, tz), clustered: true });
+      }
+    } else {
+      for (const rule of rules) {
+        for (let m = rule.start_minute; m + slotMin <= rule.end_minute; m += slotMin) {
+          const instant = zonedWallTimeToUtc(year, month, day, m, tz);
+          const t = instant.getTime();
+          if (relaxLead ? t <= now.getTime() : t < earliest) continue;
+          if (booked.has(t)) continue;
+          const iso = instant.toISOString();
+          slots.push({ iso, label: fmtTime(iso, tz) });
+        }
       }
     }
     if (slots.length === 0) continue;
@@ -269,14 +315,8 @@ export function generateSlots(
   // building's anchor window; days with no anchor keep full availability (they
   // can start a new anchor). Disabled (the default) = identical to before.
   if (av.clustering_enabled) {
-    const targetKey = buildingKey(av.target_address);
     if (targetKey) {
-      const anchors = (av.cluster_candidates || [])
-        .filter((c) => !options.excludeShowingId || c.id !== options.excludeShowingId)
-        .filter((c) => buildingKey(c.address) === targetKey)
-        .map((c) => new Date(c.scheduled_at).getTime())
-        .filter((t) => !Number.isNaN(t));
-      return clusterDays(days, anchors, {
+      return clusterDays(days, anchorInstantsMs, {
         timeZone: tz,
         bufferMinutes: av.clustering_buffer_minutes ?? 60,
         capacity: av.showing_block_capacity ?? 6,

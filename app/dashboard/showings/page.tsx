@@ -175,7 +175,10 @@ export default async function ShowingsPage({
       ? generateSlots(
           { ...av, cluster_candidates: clusterCandidates },
           nowDate,
-          { excludeShowingId: showing.id },
+          {
+            excludeShowingId: showing.id,
+            relaxLeadForAnchoredDays: true,
+          },
         )
           .flatMap((day) =>
             day.slots.map((slot) => ({

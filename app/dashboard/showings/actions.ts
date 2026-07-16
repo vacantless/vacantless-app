@@ -145,6 +145,7 @@ export async function proposeShowingTimes(formData: FormData) {
     slots.some((slot) =>
       !isValidSlot(moveAvailability, slot, validationNow, {
         excludeShowingId: showing.id,
+        relaxLeadForAnchoredDays: true,
       }),
     )
   ) {
