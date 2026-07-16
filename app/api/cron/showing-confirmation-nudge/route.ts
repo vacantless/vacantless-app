@@ -15,6 +15,8 @@ import {
   confirmationNudgeDue,
   CONFIRMATION_NUDGE_LEAD_MS,
   CONFIRMATION_NUDGE_SENT_COLUMN,
+  pendingRescheduleShowingIds,
+  type PendingRescheduleProposalRow,
 } from "@/lib/reminders";
 
 // Pre-showing UNCONFIRMED-nudge sweep (S440, showing routing Slice 3) — the
@@ -184,6 +186,30 @@ export async function GET(req: NextRequest) {
         .or("outcome.is.null,outcome.eq.scheduled");
       if (!force) q = q.is("confirmation_nudge_sent_at", null);
       const { data: showRows } = await q;
+      const candidateRows = showRows ?? [];
+      const candidateIds = (candidateRows as any[])
+        .map((row) => row.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+      let eligibleRows = candidateRows;
+      if (candidateIds.length > 0) {
+        const { data: proposalRows, error: proposalErr } = await admin
+          .from("showing_reschedule_proposals")
+          .select("showing_id, status, responded_at")
+          .in("showing_id", candidateIds)
+          .eq("status", "pending")
+          .is("responded_at", null);
+        if (proposalErr) {
+          summary.errors++;
+          summary.details.push({ org: org.id, error: `reschedule_query_error:${proposalErr.message}` });
+          continue;
+        }
+        const pendingRescheduleIds = pendingRescheduleShowingIds(
+          (proposalRows ?? []) as PendingRescheduleProposalRow[],
+        );
+        eligibleRows = (candidateRows as any[]).filter(
+          (row) => !pendingRescheduleIds.has(row.id),
+        );
+      }
 
       // Operator members, resolved once per org and only if needed (the fallback
       // for an assigned agent with no email on file).
@@ -206,7 +232,7 @@ export async function GET(req: NextRequest) {
         return operatorMembers;
       };
 
-      for (const raw of (showRows ?? []) as any[]) {
+      for (const raw of eligibleRows as any[]) {
         const row = raw as ShowingRow;
         try {
           const scheduledAt = row.scheduled_at;

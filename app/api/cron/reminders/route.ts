@@ -3,7 +3,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendShowingReminder } from "@/lib/email";
 import { sendSms, showingReminderSms } from "@/lib/sms";
 import { formatSlotLong } from "@/lib/booking";
-import { reminderDue, REMINDER_SENT_COLUMN, type ReminderKind } from "@/lib/reminders";
+import {
+  pendingRescheduleShowingIds,
+  reminderDue,
+  REMINDER_SENT_COLUMN,
+  type ReminderKind,
+  type PendingRescheduleProposalRow,
+} from "@/lib/reminders";
 import { canUseRenterSms } from "@/lib/billing";
 
 // Reminder sweep. Finds booked showings that are ~24h or ~2h out and haven't
@@ -94,7 +100,31 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const rows = data ?? [];
+  const candidateRows = data ?? [];
+  const candidateIds = (candidateRows as any[])
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  let rows = candidateRows;
+  if (candidateIds.length > 0) {
+    const { data: proposalRows, error: proposalErr } = await admin
+      .from("showing_reschedule_proposals")
+      .select("showing_id, status, responded_at")
+      .in("showing_id", candidateIds)
+      .eq("status", "pending")
+      .is("responded_at", null);
+    if (proposalErr) {
+      return NextResponse.json(
+        { ok: false, reason: `query_error:${proposalErr.message}`, scanned: 0, sent: 0, smsSent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+        { status: 200 },
+      );
+    }
+    const pendingRescheduleIds = pendingRescheduleShowingIds(
+      (proposalRows ?? []) as PendingRescheduleProposalRow[],
+    );
+    rows = (candidateRows as any[]).filter(
+      (row) => !pendingRescheduleIds.has(row.id),
+    );
+  }
   const summary: Summary = { ok: true, scanned: rows.length, sent: 0, smsSent: 0, skipped: 0, errors: 0, details: [] };
 
   for (const row of rows as any[]) {

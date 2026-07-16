@@ -54,6 +54,28 @@ export const REMINDER_SENT_COLUMN: Record<ReminderKind, string> = {
   "2h": "reminder_2h_sent_at",
 };
 
+export type PendingRescheduleProposalRow = {
+  showing_id: string | null;
+  status?: string | null;
+  responded_at?: string | null;
+};
+
+export function pendingRescheduleShowingIds(
+  rows: PendingRescheduleProposalRow[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (
+      row.showing_id &&
+      row.status === "pending" &&
+      row.responded_at == null
+    ) {
+      ids.add(row.showing_id);
+    }
+  }
+  return ids;
+}
+
 // ---------------------------------------------------------------------------
 // Repair-appointment reminders (S387, Slice 4)
 //
