@@ -31,9 +31,28 @@ export async function updateBookingSettings(formData: FormData) {
   const lead = Number(formData.get("lead_hours"));
   const horizon = Number(formData.get("horizon_days"));
   const requiresConfirmation = formData.get("booking_requires_confirmation") === "on";
+  const viewingReminderEnabled =
+    formData.get("viewing_reminder_enabled") === "on";
+  const viewingReminderWeekday = Number(
+    formData.get("viewing_reminder_weekday"),
+  );
+  const viewingReminderHour = Number(formData.get("viewing_reminder_hour"));
 
   const update: Record<string, string | number | boolean> = {
     booking_requires_confirmation: requiresConfirmation,
+    viewing_reminder_enabled: viewingReminderEnabled,
+    viewing_reminder_weekday:
+      Number.isInteger(viewingReminderWeekday) &&
+      viewingReminderWeekday >= 0 &&
+      viewingReminderWeekday <= 6
+        ? viewingReminderWeekday
+        : 0,
+    viewing_reminder_hour:
+      Number.isInteger(viewingReminderHour) &&
+      viewingReminderHour >= 0 &&
+      viewingReminderHour <= 23
+        ? viewingReminderHour
+        : 17,
   };
   if (COMMON_TZ.has(tz)) update.booking_timezone = tz;
   if ([15, 20, 30, 45, 60].includes(slot)) update.booking_slot_minutes = slot;

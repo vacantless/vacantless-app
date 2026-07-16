@@ -39,6 +39,9 @@ type OrgBooking = {
   clustering_enabled: boolean;
   clustering_buffer_minutes: number;
   showing_block_capacity: number;
+  viewing_reminder_enabled: boolean;
+  viewing_reminder_weekday: number;
+  viewing_reminder_hour: number;
 };
 
 const TIMEZONES = [
@@ -93,7 +96,7 @@ export default async function AvailabilityPage({
       supabase
         .from("organizations")
         .select(
-          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity",
+          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, viewing_reminder_enabled, viewing_reminder_weekday, viewing_reminder_hour",
         )
         .eq("id", org?.id ?? "")
         .maybeSingle(),
@@ -122,6 +125,9 @@ export default async function AvailabilityPage({
     clustering_enabled: false,
     clustering_buffer_minutes: 60,
     showing_block_capacity: 6,
+    viewing_reminder_enabled: false,
+    viewing_reminder_weekday: 0,
+    viewing_reminder_hour: 17,
   };
   const rules = (rulesData ?? []) as Rule[];
 
@@ -303,6 +309,49 @@ export default async function AvailabilityPage({
             </span>
           </span>
         </label>
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              name="viewing_reminder_enabled"
+              defaultChecked={cfg.viewing_reminder_enabled}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-700">
+                Email me a weekly reminder to set my viewing times
+              </span>
+              <span className="mt-1 block text-sm text-gray-500">
+                If your calendar has no open viewing times for the coming week,
+                we&rsquo;ll email you on this day so renters never hit an empty
+                calendar. Turn it off any time.
+              </span>
+            </span>
+          </label>
+          <div className="mt-3 max-w-xs">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Reminder day
+              </span>
+              <select
+                name="viewing_reminder_weekday"
+                defaultValue={String(cfg.viewing_reminder_weekday ?? 0)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                {WEEKDAY_LABELS.map((label, wd) => (
+                  <option key={wd} value={wd}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <input
+              type="hidden"
+              name="viewing_reminder_hour"
+              value={cfg.viewing_reminder_hour ?? 17}
+            />
+          </div>
+        </div>
         <div className="mt-4 text-right">
           <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
             Save settings

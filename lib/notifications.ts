@@ -427,6 +427,23 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "Here is today's leasing snapshot for {{snapshot_date}}.\n\n{{snapshot}}\n\nThis is a daily status view, not a to-do backlog — nothing here is overdue. One email per weekday at the start of your shift.\n\nOpen your inquiries: {{dashboard_url}}",
     active: true,
   },
+  // Weekly viewing-times reminder (S500). Audience operator; one email on the
+  // org's chosen weekday/hour only when the next seven days have ZERO bookable
+  // viewing slots. The route stamps quiet covered weeks too, so a covered
+  // calendar stays silent.
+  {
+    key: "leasing.viewing_availability_reminder",
+    family: "leasing",
+    audience: "operator",
+    label: "Set your viewing times",
+    description:
+      "Once a week, if the coming week has no open viewing times, your team gets a reminder to add availability. Quiet when the calendar is covered. Defaults to members who manage inquiries; edit the recipients below.",
+    tokens: ["org_name", "open_days_next_7", "viewing_times_url"],
+    defaultSubject: "Your viewing calendar is empty for next week",
+    defaultBody:
+      "{{org_name}} has {{open_days_next_7}} open viewing day(s) in the next 7 days, so renters cannot book a viewing right now.\n\nSet your viewing times: {{viewing_times_url}}\n\nOnce you add a weekly window or a specific date, this reminder will stay quiet when the coming week is covered.",
+    active: true,
+  },
   // Rent-increase autopilot (the FREE compliance wedge — S339). The proactive
   // half of the already-shipped engine (lib/rent-increase.ts + lib/n1-render.ts):
   // a per-tenancy reminder fired by app/api/cron/rent-increase when a unit enters

@@ -11,6 +11,8 @@ name: Vacantless background sweeps
 #   * /api/cron/nurture   — lead nurture drip to un-booked inquiries (M5)
 #   * /api/cron/leasing-snapshot — daily weekday leasing digest (self-gates to
 #     once/day at the org's start-of-shift hour via leasing_snapshot_last_sent_on)
+#   * /api/cron/viewing-reminder — weekly viewing-times reminder (self-gates to
+#     the org's chosen weekday/hour and stays quiet when the next week is covered)
 #   * /api/cron/rent-increase — per-tenancy N1 reminder (self-gates to once per
 #     increase cycle via tenancies.rent_increase_nudged_for)
 #   * /api/cron/compliance-calendar — seasonal soft tenant courtesy notes (drafts
@@ -70,6 +72,12 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/leasing-snapshot" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger viewing-reminder sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/viewing-reminder" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger rent-increase sweep
         run: |
