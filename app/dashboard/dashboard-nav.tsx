@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from "react";
 // account settings) into a right-side ORG MENU keyed to the org name.
 //
 //   PRIMARY:  Overview · Properties · Leasing · Tenants · Money · Maintenance
-//   ORG ▾  :  Settings · Your plan · [Refer] · [Captures] · Sign out
+//   ORG ▾  :  My settings · Settings · Your plan · [Refer] · [Captures] · Sign out
 //
 // Leasing, Tenants and Money are hub landings that tab across existing routes
 // (via `match` prefixes, so a hub item stays lit while you're on a child route).
@@ -67,6 +67,7 @@ const PRIMARY: NavItem[] = [
 // Org / account menu (behind the org pill on desktop; inline on mobile). These
 // are NOT daily work - they configure or step outside the operating surface.
 const ACCOUNT: NavItem[] = [
+  { href: "/dashboard/me", label: "My settings" },
   { href: "/dashboard/settings", label: "Settings" },
   { href: "/dashboard/automations", label: "Automations & templates" },
   { href: "/dashboard/billing", label: "Your plan" },

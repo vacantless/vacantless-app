@@ -5,8 +5,10 @@ import {
   PRODUCT_TYPES,
   isProductType,
   normalizeProductTypes,
+  validateCoverage,
   validateShowingAgent,
   MAX_AGENT_NAME_LEN,
+  MAX_AGENT_FIELD_LEN,
   canAssignShowing,
   remainingCapacity,
   isAtCapacity,
@@ -104,6 +106,52 @@ if (vEmptyOptionals.ok) {
 
 const vZeroCap = validateShowingAgent({ name: "Zero", weekly_capacity: 0 });
 ok("validate: zero capacity allowed", vZeroCap.ok && vZeroCap.value.weekly_capacity === 0);
+
+// --- coverage validation (S509) ---------------------------------------------
+const cBlank = validateCoverage({
+  service_area: "   ",
+  product_types: null,
+  weekly_capacity: "",
+});
+ok("coverage: blank input ok", cBlank.ok);
+if (cBlank.ok) {
+  ok("coverage: blank service_area -> null", cBlank.value.service_area === null);
+  ok("coverage: blank product_types -> []", cBlank.value.product_types.length === 0);
+  ok("coverage: blank capacity -> null", cBlank.value.weekly_capacity === null);
+}
+
+const cThree = validateCoverage({ weekly_capacity: "3" });
+ok("coverage: string capacity 3", cThree.ok && cThree.value.weekly_capacity === 3);
+
+const cZero = validateCoverage({ weekly_capacity: "0" });
+ok("coverage: string capacity 0", cZero.ok && cZero.value.weekly_capacity === 0);
+
+const cNegative = validateCoverage({ weekly_capacity: "-1" });
+ok("coverage: negative capacity rejected", !cNegative.ok && cNegative.code === "capacity_invalid");
+
+const cFraction = validateCoverage({ weekly_capacity: "2.5" });
+ok("coverage: fractional capacity rejected", !cFraction.ok && cFraction.code === "capacity_invalid");
+
+const cText = validateCoverage({ weekly_capacity: "x" });
+ok("coverage: text capacity rejected", !cText.ok && cText.code === "capacity_invalid");
+
+const cTypes = validateCoverage({
+  product_types: ["rental", "house", "junk", "rental"],
+});
+ok(
+  "coverage: product types normalized",
+  cTypes.ok &&
+    JSON.stringify(cTypes.value.product_types) === JSON.stringify(["rental", "house"]),
+);
+
+const cArea = validateCoverage({ service_area: "  York Mills  " });
+ok("coverage: service_area trimmed", cArea.ok && cArea.value.service_area === "York Mills");
+
+const cLongArea = validateCoverage({ service_area: "x".repeat(MAX_AGENT_FIELD_LEN + 5) });
+ok(
+  "coverage: service_area truncated",
+  cLongArea.ok && cLongArea.value.service_area === "x".repeat(MAX_AGENT_FIELD_LEN),
+);
 
 // --- assignment state -------------------------------------------------------
 ok("canAssign: scheduled", canAssignShowing("scheduled"));

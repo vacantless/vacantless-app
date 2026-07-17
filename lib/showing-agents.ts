@@ -71,6 +71,46 @@ export type ShowingAgentValidation =
   | { ok: true; value: ShowingAgentInput }
   | { ok: false; code: string };
 
+export type CoverageInput = {
+  service_area: string | null;
+  product_types: ProductType[];
+  weekly_capacity: number | null;
+};
+
+export type CoverageValidation =
+  | { ok: true; value: CoverageInput }
+  | { ok: false; code: string };
+
+/** Validate the self-serve "my coverage" subset. Identity and routing fields
+ * stay admin-managed on the org roster. */
+export function validateCoverage(raw: {
+  service_area?: string | null;
+  product_types?: readonly (string | null | undefined)[] | null;
+  weekly_capacity?: string | number | null;
+}): CoverageValidation {
+  const trimOrNull = (v: string | null | undefined): string | null => {
+    const t = (v ?? "").trim();
+    if (t === "") return null;
+    return t.length > MAX_AGENT_FIELD_LEN ? t.slice(0, MAX_AGENT_FIELD_LEN) : t;
+  };
+
+  let weekly_capacity: number | null = null;
+  if (raw.weekly_capacity !== null && raw.weekly_capacity !== undefined && `${raw.weekly_capacity}`.trim() !== "") {
+    const n = typeof raw.weekly_capacity === "number" ? raw.weekly_capacity : Number(raw.weekly_capacity);
+    if (!Number.isInteger(n) || n < 0) return { ok: false, code: "capacity_invalid" };
+    weekly_capacity = n;
+  }
+
+  return {
+    ok: true,
+    value: {
+      service_area: trimOrNull(raw.service_area),
+      product_types: normalizeProductTypes(raw.product_types),
+      weekly_capacity,
+    },
+  };
+}
+
 // Coerce + validate a roster form. Name is the only hard requirement; email, if
 // given, must look like an email; weekly_capacity, if given, must be a
 // non-negative integer (mirrors the CHECK in 0113). Everything else is trimmed
