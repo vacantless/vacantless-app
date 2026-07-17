@@ -92,25 +92,48 @@ export default function MoneyHubPage() {
             <p className="mt-1 text-sm leading-relaxed text-gray-600">
               Download a CSV of rent activity for your records or year-end taxes.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <p className="mt-2 text-xs text-gray-500">
+              Leave dates blank for everything.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
               <a
                 href="/dashboard/rent/statement/export"
                 className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
               >
                 Owner statement CSV
               </a>
-              <a
-                href="/dashboard/rent/export"
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-              >
-                Rotessa rent CSV
-              </a>
-              <a
-                href="/dashboard/rent/stripe-export"
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-              >
-                Stripe payouts CSV
-              </a>
+              <form action="/dashboard/rent/export" method="get" className="flex flex-wrap items-end gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">From</span>
+                  <input type="date" name="from" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">To</span>
+                  <input type="date" name="to" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
+                </label>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                >
+                  Rotessa rent CSV
+                </button>
+              </form>
+              <form action="/dashboard/rent/stripe-export" method="get" className="flex flex-wrap items-end gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">From</span>
+                  <input type="date" name="from" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">To</span>
+                  <input type="date" name="to" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
+                </label>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                >
+                  Stripe payouts CSV
+                </button>
+              </form>
             </div>
           </div>
         </div>

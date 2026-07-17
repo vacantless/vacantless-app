@@ -173,31 +173,6 @@ export default function StripeConnectSettingsCard({
             </form>
           </div>
 
-          {/* Export rent invoices (Stripe-generated -> CSV). Sibling of the
-              Rotessa transaction-report export. */}
-          {state === "ready" && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <h4 className="text-sm font-semibold text-gray-700">Export rent invoices</h4>
-              <p className="mt-1 text-xs text-gray-500">
-                Download your Stripe rent invoices (amounts, dates, and status)
-                as a CSV for bookkeeping or taxes. Leave the dates blank for
-                everything.
-              </p>
-              <form action="/dashboard/rent/stripe-export" method="get" className="mt-3 flex flex-wrap items-end gap-3">
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-gray-600">From</span>
-                  <input type="date" name="from" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-gray-600">To</span>
-                  <input type="date" name="to" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                </label>
-                <button type="submit" className={SECONDARY_ACTION_CLASS}>
-                  Download CSV
-                </button>
-              </form>
-            </div>
-          )}
         </div>
       ) : (
         <form action={startStripeConnect} className="mt-4 space-y-4">
