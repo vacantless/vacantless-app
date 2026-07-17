@@ -27,6 +27,10 @@ import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { RentIncreaseRow } from "@/components/rent-increase-card";
 import { buildTodayLane } from "@/lib/dashboard-today";
 import { TodayLane } from "./today-lane";
+import {
+  resolveAssignedView,
+  type AssignedView,
+} from "@/lib/dashboard-assigned";
 
 export const dynamic = "force-dynamic";
 
@@ -51,10 +55,72 @@ const OPEN_STATUSES: LeadStatus[] = [
   "applied",
 ];
 
-export default async function OverviewPage() {
+type OverviewPageProps = {
+  searchParams?: { assigned?: string | string[] };
+};
+
+function assignedToggleClass(view: AssignedView, target: AssignedView) {
+  const active = view === target;
+  return `inline-flex min-w-[6.5rem] items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition ${
+    active
+      ? "bg-gray-900 text-white shadow-sm"
+      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+  }`;
+}
+
+export default async function OverviewPage({ searchParams }: OverviewPageProps) {
   const supabase = createClient();
   const org = await getCurrentOrg();
   const timeZone = org?.booking_timezone ?? "America/Toronto";
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: myAgentRows } = org
+    ? await supabase
+        .from("showing_agents")
+        .select("id")
+        .eq("user_id", user?.id ?? "00000000-0000-0000-0000-000000000000")
+        .eq("organization_id", org.id)
+        .eq("archived", false)
+        .limit(1)
+    : { data: null };
+  const myAgentId: string | null =
+    (myAgentRows as { id: string }[] | null)?.[0]?.id ?? null;
+  const hasLinkedAgent = myAgentId != null;
+  const assignedView = resolveAssignedView({
+    hasLinkedAgent,
+    param: searchParams?.assigned,
+  });
+
+  let upcomingShowingsQuery = supabase
+    .from("showings")
+    .select(
+      "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(address)",
+    )
+    .eq("outcome", "scheduled")
+    .gte("scheduled_at", new Date().toISOString())
+    .order("scheduled_at", { ascending: true })
+    .limit(5);
+  if (assignedView === "mine" && myAgentId) {
+    upcomingShowingsQuery = upcomingShowingsQuery.eq(
+      "assigned_agent_id",
+      myAgentId,
+    );
+  }
+
+  let awaitingConfirmationQuery = supabase
+    .from("showings")
+    .select("id", { count: "exact", head: true })
+    .not("assigned_agent_id", "is", null)
+    .is("confirmed_at", null)
+    .gte("scheduled_at", new Date().toISOString())
+    .or("outcome.is.null,outcome.eq.scheduled");
+  if (assignedView === "mine" && myAgentId) {
+    awaitingConfirmationQuery = awaitingConfirmationQuery.eq(
+      "assigned_agent_id",
+      myAgentId,
+    );
+  }
 
   // RLS scopes all of these to the caller's org automatically.
   const [
@@ -81,15 +147,7 @@ export default async function OverviewPage() {
     supabase
       .from("availability_rules")
       .select("id", { count: "exact", head: true }),
-    supabase
-      .from("showings")
-      .select(
-        "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(address)",
-      )
-      .eq("outcome", "scheduled")
-      .gte("scheduled_at", new Date().toISOString())
-      .order("scheduled_at", { ascending: true })
-      .limit(5),
+    upcomingShowingsQuery,
     // Active tenancies — feed the rent-increase rollup (N1 v1, S282). Renders
     // only when something is actionable, so a pure-leasing org never sees it
     // (conditional-visibility rule, like the Money nav).
@@ -130,13 +188,7 @@ export default async function OverviewPage() {
     // many routed viewings still need a confirmation — the "did anyone confirm
     // this?" oversight the Howard episode exposed. Renders only when > 0
     // (conditional-visibility rule).
-    supabase
-      .from("showings")
-      .select("id", { count: "exact", head: true })
-      .not("assigned_agent_id", "is", null)
-      .is("confirmed_at", null)
-      .gte("scheduled_at", new Date().toISOString())
-      .or("outcome.is.null,outcome.eq.scheduled"),
+    awaitingConfirmationQuery,
   ]);
 
   // Open + urgent work-order counts for the Overview tile.
@@ -404,13 +456,43 @@ export default async function OverviewPage() {
       <SectionHeading action={{ href: "/dashboard/showings", label: "View all" }}>
         Upcoming viewings
       </SectionHeading>
+      {hasLinkedAgent && (
+        <div className="mb-3 inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+          <Link
+            href="/dashboard?assigned=mine"
+            aria-current={assignedView === "mine" ? "page" : undefined}
+            className={assignedToggleClass(assignedView, "mine")}
+          >
+            My viewings
+          </Link>
+          <Link
+            href="/dashboard?assigned=team"
+            aria-current={assignedView === "team" ? "page" : undefined}
+            className={assignedToggleClass(assignedView, "team")}
+          >
+            Team
+          </Link>
+        </div>
+      )}
       {upcomingShowings.length === 0 ? (
         <div className="mb-8">
           <EmptyState
             icon={<Icons.calendar />}
-            title="No upcoming viewings"
-            description="Set your weekly availability so renters can book their own viewings online."
-            cta={{ href: "/dashboard/availability", label: "Set availability" }}
+            title={
+              assignedView === "mine"
+                ? "No viewings assigned to you"
+                : "No upcoming viewings"
+            }
+            description={
+              assignedView === "mine"
+                ? "No viewings are assigned to you right now."
+                : "Set your weekly availability so renters can book their own viewings online."
+            }
+            cta={
+              assignedView === "mine"
+                ? undefined
+                : { href: "/dashboard/availability", label: "Set availability" }
+            }
           />
         </div>
       ) : (
