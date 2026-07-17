@@ -9,7 +9,8 @@ import {
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { PRODUCT_TYPES } from "@/lib/showing-agents";
-import { updateMyCoverage } from "./actions";
+import type { AssignedView } from "@/lib/dashboard-assigned";
+import { updateMyCoverage, updateMyDashboardDefaults } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ type MyAgent = {
 
 const FLASH: Record<string, { tone: "ok" | "err"; text: string }> = {
   saved: { tone: "ok", text: "Coverage saved." },
+  defaults_saved: { tone: "ok", text: "Dashboard defaults saved." },
   capacity_invalid: { tone: "err", text: "Weekly capacity must be a whole number, 0 or more." },
   not_linked: { tone: "err", text: "You're not on the showing roster, so there's no coverage to save." },
 };
@@ -55,6 +57,19 @@ export default async function MySettingsPage({
     .limit(1);
   const me: MyAgent | null = (rows as MyAgent[] | null)?.[0] ?? null;
   const hasLinkedAgent = me != null;
+  let defaultView: AssignedView = "mine";
+  if (hasLinkedAgent) {
+    const { data: prefRows } = await supabase
+      .from("user_preferences")
+      .select("default_assigned_view")
+      .eq("user_id", user.id)
+      .eq("organization_id", org.id)
+      .limit(1);
+    const v = (
+      prefRows as { default_assigned_view: string | null }[] | null
+    )?.[0]?.default_assigned_view;
+    defaultView = v === "team" ? "team" : "mine";
+  }
   const flash = searchParams.me ? FLASH[searchParams.me] : null;
 
   return (
@@ -78,7 +93,10 @@ export default async function MySettingsPage({
       )}
 
       {hasLinkedAgent ? (
-        <MyCoverageCard me={me} />
+        <div className="space-y-6">
+          <MyCoverageCard me={me} />
+          <DashboardDefaultsCard defaultView={defaultView} />
+        </div>
       ) : (
         <EmptyState
           icon={<Icons.users className="h-5 w-5" />}
@@ -86,6 +104,49 @@ export default async function MySettingsPage({
           description="Ask an admin to add you so you can set your coverage."
         />
       )}
+    </div>
+  );
+}
+
+function DashboardDefaultsCard({ defaultView }: { defaultView: AssignedView }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <SectionHeading>Dashboard defaults</SectionHeading>
+      <form action={updateMyDashboardDefaults} className="space-y-4">
+        <div>
+          <label className={LABEL}>Default viewings view</label>
+          <div className="flex flex-wrap gap-3">
+            <label className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+              <input
+                type="radio"
+                name="default_assigned_view"
+                value="mine"
+                defaultChecked={defaultView === "mine"}
+                className="border-gray-300 text-brand focus:ring-brand"
+              />
+              My viewings
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+              <input
+                type="radio"
+                name="default_assigned_view"
+                value="team"
+                defaultChecked={defaultView === "team"}
+                className="border-gray-300 text-brand focus:ring-brand"
+              />
+              Team
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Which viewings the dashboard shows first when you open it. You can
+            still switch anytime.
+          </p>
+        </div>
+
+        <button type="submit" className={`${PRIMARY_ACTION_CLASS} bg-brand`}>
+          Save defaults
+        </button>
+      </form>
     </div>
   );
 }

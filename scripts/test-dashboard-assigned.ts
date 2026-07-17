@@ -47,6 +47,66 @@ ok(
   resolveAssignedView({ hasLinkedAgent: true, param: ["team", "mine"] }) ===
     "team",
 );
+ok(
+  "unlinked ignores preferred mine",
+  resolveAssignedView({
+    hasLinkedAgent: false,
+    param: undefined,
+    preferred: "mine",
+  }) === "team",
+);
+ok(
+  "unlinked ignores preferred team",
+  resolveAssignedView({
+    hasLinkedAgent: false,
+    param: "mine",
+    preferred: "team",
+  }) === "team",
+);
+ok(
+  "linked uses preferred team when no param",
+  resolveAssignedView({
+    hasLinkedAgent: true,
+    param: undefined,
+    preferred: "team",
+  }) === "team",
+);
+ok(
+  "linked uses preferred mine when no param",
+  resolveAssignedView({
+    hasLinkedAgent: true,
+    param: undefined,
+    preferred: "mine",
+  }) === "mine",
+);
+ok(
+  "linked preferred null falls back to mine",
+  resolveAssignedView({
+    hasLinkedAgent: true,
+    param: undefined,
+    preferred: null,
+  }) === "mine",
+);
+ok(
+  "linked preferred omitted falls back to mine",
+  resolveAssignedView({ hasLinkedAgent: true, param: undefined }) === "mine",
+);
+ok(
+  "linked explicit mine wins over preferred team",
+  resolveAssignedView({
+    hasLinkedAgent: true,
+    param: "mine",
+    preferred: "team",
+  }) === "mine",
+);
+ok(
+  "linked explicit team wins over preferred mine",
+  resolveAssignedView({
+    hasLinkedAgent: true,
+    param: "team",
+    preferred: "mine",
+  }) === "team",
+);
 
 console.log(`\ndashboard-assigned: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

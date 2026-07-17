@@ -87,9 +87,23 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const myAgentId: string | null =
     (myAgentRows as { id: string }[] | null)?.[0]?.id ?? null;
   const hasLinkedAgent = myAgentId != null;
+  let preferred: AssignedView | null = null;
+  if (hasLinkedAgent && org && user) {
+    const { data: prefRows } = await supabase
+      .from("user_preferences")
+      .select("default_assigned_view")
+      .eq("user_id", user.id)
+      .eq("organization_id", org.id)
+      .limit(1);
+    const v = (
+      prefRows as { default_assigned_view: string | null }[] | null
+    )?.[0]?.default_assigned_view;
+    preferred = v === "team" || v === "mine" ? v : null;
+  }
   const assignedView = resolveAssignedView({
     hasLinkedAgent,
     param: searchParams?.assigned,
+    preferred,
   });
 
   let upcomingShowingsQuery = supabase
