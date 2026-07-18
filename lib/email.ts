@@ -2073,19 +2073,13 @@ export function notificationHtml(p: NotificationEmailPayload): string {
         return `<a href="${url}" style="${style}">${label}</a>`;
       })
       .join("");
-    const fallback = p.actions
-      .map((a) => {
-        const url = escapeHtml(a.url);
-        const label = escapeHtml(a.label);
-        return `<p style="margin:0 0 8px;padding:12px;background:#f4f4f5;border-radius:8px;font-size:14px;color:#3f3f46;word-break:break-all;"><strong>${label}</strong> &rarr; ${url}</p>`;
-      })
-      .join("");
+    // Buttons only: no raw-URL fallback list. The message body carries a single
+    // plain link ({{outcome_url}}) for button-stripping clients, so the branded
+    // outcome buttons stay clean instead of trailing 2–3 long tokenized URLs.
     action = `
       <p style="margin:0 0 16px;text-align:center;">
         ${buttons}
-      </p>
-      <p style="margin:0 0 8px;font-size:14px;color:#3f3f46;">If a button does not open, copy and paste one of these links into your browser:</p>
-      ${fallback}`;
+      </p>`;
   } else if (p.action_url) {
     const url = escapeHtml(p.action_url);
     const label = escapeHtml(p.action_label || "Open in dashboard");

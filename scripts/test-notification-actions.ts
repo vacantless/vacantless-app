@@ -64,16 +64,14 @@ ok(
   ),
 );
 ok(
-  "actions renders plain-text fallback labels and urls",
-  actionRowHtml.includes(
-    "<strong>Renter showed</strong> &rarr; https://app.example/agent/agent-token/record?showing=showing-1&amp;o=attended",
-  ) &&
-    actionRowHtml.includes(
-      "<strong>No-show</strong> &rarr; https://app.example/agent/agent-token/record?showing=showing-1&amp;o=no_show",
-    ),
+  "actions render buttons only — no raw-URL fallback list (S511b)",
+  !actionRowHtml.includes("&rarr;") && !actionRowHtml.includes("word-break:break-all"),
 );
 ok("actions suppresses legacy single action url", !actionRowHtml.includes("https://app.example/showing/legacy"));
-ok("actions uses multi-button fallback copy", actionRowHtml.includes("If a button does not open"));
+ok(
+  "actions drop the multi-button fallback copy (S511b)",
+  !actionRowHtml.includes("If a button does not open"),
+);
 
 const singleHtml = notificationHtml({
   ...base,

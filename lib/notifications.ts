@@ -268,7 +268,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     tokens: [...COMMON_TOKENS, "lead_name", "showing_time", "outcome_url"],
     defaultSubject: "How did the viewing go? - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nTap to record it - Attended, No-show, or Cancelled: {{outcome_url}}\n\nMarking it Attended moves this renter forward automatically and keeps your renter list accurate.",
+      "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nUse the buttons below to record how it went — or open {{outcome_url}}.\n\nMarking it Attended moves this renter forward automatically and keeps your renter list accurate.",
     active: true,
   },
   // Renter-initiated cancellation (S418, KI632). Audience operator; the missing
