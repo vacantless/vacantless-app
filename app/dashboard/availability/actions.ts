@@ -20,6 +20,29 @@ const COMMON_TZ = new Set([
   "America/Los_Angeles",
 ]);
 
+async function stampAvailabilityReopened(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+) {
+  try {
+    const { error } = await supabase
+      .from("organizations")
+      .update({ availability_reopened_at: new Date().toISOString() })
+      .eq("id", orgId);
+    if (error) {
+      console.error(
+        `[availability-reopen] org=${orgId} stamp_failed=${error.message}`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[availability-reopen] org=${orgId} stamp_threw=${
+        err instanceof Error ? err.message : "unknown"
+      }`,
+    );
+  }
+}
+
 export async function updateBookingSettings(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) return;
@@ -137,12 +160,19 @@ export async function addAvailabilityWindow(formData: FormData) {
   }
 
   const supabase = createClient();
-  await supabase.from("availability_rules").insert({
+  const { error: insertErr } = await supabase.from("availability_rules").insert({
     organization_id: org.id,
     weekday,
     start_minute: start,
     end_minute: end,
   });
+  if (insertErr) {
+    console.error(
+      `[availability-reopen] org=${org.id} window_insert_failed=${insertErr.message}`,
+    );
+  } else {
+    await stampAvailabilityReopened(supabase, org.id);
+  }
 
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
@@ -210,10 +240,22 @@ export async function addDayOff(formData: FormData) {
 export async function removeDayOff(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
   await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
   const supabase = createClient();
   // RLS scopes the delete to the caller's org.
-  await supabase.from("availability_days_off").delete().eq("id", id);
+  const { error: deleteErr } = await supabase
+    .from("availability_days_off")
+    .delete()
+    .eq("id", id);
+  if (deleteErr) {
+    console.error(
+      `[availability-reopen] org=${org.id} dayoff_delete_failed=${deleteErr.message}`,
+    );
+  } else {
+    await stampAvailabilityReopened(supabase, org.id);
+  }
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
 }
@@ -255,7 +297,7 @@ export async function addAvailabilityOverride(formData: FormData) {
   }
 
   const supabase = createClient();
-  await supabase
+  const { error: upsertErr } = await supabase
     .from("availability_overrides")
     .upsert(
       {
@@ -269,6 +311,13 @@ export async function addAvailabilityOverride(formData: FormData) {
         ignoreDuplicates: true,
       },
     );
+  if (upsertErr) {
+    console.error(
+      `[availability-reopen] org=${org.id} override_upsert_failed=${upsertErr.message}`,
+    );
+  } else {
+    await stampAvailabilityReopened(supabase, org.id);
+  }
 
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");

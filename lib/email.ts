@@ -1204,6 +1204,127 @@ export async function sendWaitlistVacancyAlert(
 }
 
 // ---------------------------------------------------------------------------
+// Viewing-times reopened email (S513c). Sent to renters who already told us
+// they wanted to book but could not find a workable viewing time.
+// ---------------------------------------------------------------------------
+
+export type ViewingTimesOpenedPayload = {
+  lead_id: string;
+  property_id: string;
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  rent_cents: number | null;
+};
+
+function viewingTimesOpenedHtml(p: ViewingTimesOpenedPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : null;
+  const rent = formatRent(p.rent_cents);
+  const url = escapeHtml(listingUrl(p.property_id));
+
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  const propBlock = addr
+    ? `<div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;text-align:center;">
+        <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
+        ${
+          rent
+            ? `<p style="margin:0;font-size:16px;color:${escapeHtml(
+                brand,
+              )};"><strong>${escapeHtml(rent)}</strong></p>`
+            : ""
+        }
+      </div>`
+    : "";
+
+  const addressLine = addr
+    ? ` for <strong>${addr}</strong>`
+    : " for the rental you asked about";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">Good news — new viewing times just opened${addressLine}. Grab one that works for you:</p>
+      ${propBlock}
+      <p style="margin:0 0 24px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Book a viewing</a>
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or paste this link into your browser:<br/><span style="color:#52525b;">${url}</span></p>
+      <p style="margin:24px 0 0;color:#52525b;">Talk soon,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you asked us to keep you posted when new viewing times opened.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Best-effort branded viewing-times-opened email. Never throws; returns
+ * { sent:false } if BREVO_API_KEY is unset or the lead left no email.
+ */
+export async function sendViewingTimesOpenedEmail(
+  p: ViewingTimesOpenedPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `New viewing times just opened — ${p.property_address}`
+    : "New viewing times just opened";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: viewingTimesOpenedHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Nurture drip (M5). A short, paced sequence of branded follow-ups to a renter
 // who inquired but hasn't booked a showing yet. The per-step copy lives in
 // lib/nurture (pure + tested); this composer wraps it in the branded card and
