@@ -2011,12 +2011,19 @@ export async function sendTradeDispatchInvite(
 // into a tracking redirect that some corporate inboxes block, so the bare URL
 // must survive unwrapped). Best-effort + degrades like the rest.
 // ---------------------------------------------------------------------------
+export type NotificationEmailAction = {
+  label: string;
+  url: string;
+  variant?: "primary" | "secondary";
+};
+
 export type NotificationEmailPayload = {
   to_email: string;
   subject: string; // already rendered + token-substituted
   body: string; // already rendered plain text (may contain newlines)
   action_label?: string | null;
   action_url?: string | null;
+  actions?: NotificationEmailAction[] | null;
   org_name: string | null;
   brand_color: string | null;
   // Per-event top-stripe accent (hex #RRGGBB). When set it overrides brand_color
@@ -2038,7 +2045,7 @@ function bodyToParagraphs(body: string): string {
     .join("");
 }
 
-function notificationHtml(p: NotificationEmailPayload): string {
+export function notificationHtml(p: NotificationEmailPayload): string {
   const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   // The accent bar uses the per-event accent when set, else the org brand. The
   // CTA button below always uses `brand` so the action stays on-brand.
@@ -2051,7 +2058,35 @@ function notificationHtml(p: NotificationEmailPayload): string {
     : "";
 
   let action = "";
-  if (p.action_url) {
+  if (p.actions?.length) {
+    const buttons = p.actions
+      .map((a) => {
+        const url = escapeHtml(a.url);
+        const label = escapeHtml(a.label);
+        const variant = a.variant ?? "primary";
+        const style =
+          variant === "secondary"
+            ? "display:inline-block;background:#ffffff;color:#3f3f46;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;border:1px solid #d4d4d8;margin:0 4px 8px;"
+            : `display:inline-block;background:${escapeHtml(
+                brand,
+              )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin:0 4px 8px;`;
+        return `<a href="${url}" style="${style}">${label}</a>`;
+      })
+      .join("");
+    const fallback = p.actions
+      .map((a) => {
+        const url = escapeHtml(a.url);
+        const label = escapeHtml(a.label);
+        return `<p style="margin:0 0 8px;padding:12px;background:#f4f4f5;border-radius:8px;font-size:14px;color:#3f3f46;word-break:break-all;"><strong>${label}</strong> &rarr; ${url}</p>`;
+      })
+      .join("");
+    action = `
+      <p style="margin:0 0 16px;text-align:center;">
+        ${buttons}
+      </p>
+      <p style="margin:0 0 8px;font-size:14px;color:#3f3f46;">If a button does not open, copy and paste one of these links into your browser:</p>
+      ${fallback}`;
+  } else if (p.action_url) {
     const url = escapeHtml(p.action_url);
     const label = escapeHtml(p.action_label || "Open in dashboard");
     action = `

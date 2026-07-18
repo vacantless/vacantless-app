@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOrgNotification } from "@/lib/notifications-server";
+import type { NotificationEmailAction } from "@/lib/email";
 import {
   getNotificationEvent,
   isDripEnqueueEnabled,
@@ -268,13 +269,43 @@ export async function GET(req: NextRequest) {
           // an email (they know the outcome and can one-tap it on their /agent page);
           // otherwise fall back to the operator + the /showing outcome page.
           let audienceEmail: string | null = null;
-          let outcomeUrl = `${APP_URL}/showing/${row.outcome_token}`;
+          let outcomeUrl = `${APP_URL}/showing/${encodeURIComponent(row.outcome_token)}`;
+          let actions: NotificationEmailAction[] = [
+            {
+              label: "Attended",
+              url: `${outcomeUrl}/record?o=attended`,
+              variant: "primary",
+            },
+            {
+              label: "No-show",
+              url: `${outcomeUrl}/record?o=no_show`,
+              variant: "secondary",
+            },
+            {
+              label: "Cancelled",
+              url: `${outcomeUrl}/record?o=cancelled`,
+              variant: "secondary",
+            },
+          ];
           if (row.assigned_agent_id) {
             const agents = await ensureAgents();
             const agent = agents.get(row.assigned_agent_id);
             if (agent && !agent.archived && agent.email) {
               audienceEmail = agent.email;
-              outcomeUrl = `${APP_URL}/agent/${agent.agent_token}`;
+              outcomeUrl = `${APP_URL}/agent/${encodeURIComponent(agent.agent_token)}`;
+              const showing = encodeURIComponent(row.id);
+              actions = [
+                {
+                  label: "Renter showed",
+                  url: `${outcomeUrl}/record?showing=${showing}&o=attended`,
+                  variant: "primary",
+                },
+                {
+                  label: "No-show",
+                  url: `${outcomeUrl}/record?showing=${showing}&o=no_show`,
+                  variant: "secondary",
+                },
+              ];
             }
           }
           const toAgent = audienceEmail !== null;
@@ -309,6 +340,7 @@ export async function GET(req: NextRequest) {
               recipients,
               subject: rendered.subject,
               outcome_url: vars.outcome_url,
+              actions,
             });
             continue;
           }
@@ -326,7 +358,7 @@ export async function GET(req: NextRequest) {
             audienceEmail,
             vars,
             operatorFallback: fallback,
-            action: { label: "Record the outcome", url: vars.outcome_url },
+            actions,
           });
 
           // For THIS cron the email IS the product action, so only stamp

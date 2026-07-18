@@ -37,7 +37,7 @@ import {
   type NotificationSettingRow,
   type NotificationTokenVars,
 } from "./notifications";
-import { sendNotificationEmail } from "./email";
+import { sendNotificationEmail, type NotificationEmailAction } from "./email";
 
 // The org branding the branded shell needs. Callers already hold these (the
 // operator action from getCurrentOrg; the trade action from its admin org read),
@@ -63,6 +63,9 @@ export type SendOrgNotificationArgs = {
   // Optional CTA rendered as button + plain-text fallback (the "work from your
   // inbox" affordance for email-first operators like Aaliyah).
   action?: { label: string; url: string } | null;
+  // Optional CTA row for events with several scoped actions, such as the
+  // post-showing outcome nudge.
+  actions?: NotificationEmailAction[] | null;
 };
 
 // Best-effort delivery report. `delivered` is the signal a caller acts on when
@@ -119,6 +122,7 @@ export async function sendOrgNotification(
           body: rendered.body,
           action_label: args.action?.label ?? null,
           action_url: args.action?.url ?? null,
+          actions: args.actions ?? null,
           org_name: args.org.name,
           brand_color: args.org.brand_color,
           accent_color: accent,
