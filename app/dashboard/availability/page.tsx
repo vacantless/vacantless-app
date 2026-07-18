@@ -4,6 +4,7 @@ import { WEEKDAY_LABELS, minutesToLabel, previewSlotStarts } from "@/lib/booking
 import {
   updateBookingSettings,
   updateClusteringSettings,
+  setAllowDoubleBooking,
   addAvailabilityWindow,
   deleteAvailabilityWindow,
   addDayOff,
@@ -39,6 +40,7 @@ type OrgBooking = {
   clustering_enabled: boolean;
   clustering_buffer_minutes: number;
   showing_block_capacity: number;
+  allow_double_booking: boolean;
   viewing_reminder_enabled: boolean;
   viewing_reminder_weekday: number;
   viewing_reminder_hour: number;
@@ -60,6 +62,7 @@ const TIMEZONES = [
 const SAVED_MESSAGES: Record<string, string> = {
   settings: "Booking settings saved.",
   cluster: "Grouping settings saved.",
+  double_booking: "Open-house booking setting saved.",
   window: "Viewing window added.",
   dayoff: "Day off added.",
   override: "Specific-date hours added.",
@@ -96,7 +99,7 @@ export default async function AvailabilityPage({
       supabase
         .from("organizations")
         .select(
-          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, viewing_reminder_enabled, viewing_reminder_weekday, viewing_reminder_hour",
+          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, allow_double_booking, viewing_reminder_enabled, viewing_reminder_weekday, viewing_reminder_hour",
         )
         .eq("id", org?.id ?? "")
         .maybeSingle(),
@@ -125,6 +128,7 @@ export default async function AvailabilityPage({
     clustering_enabled: false,
     clustering_buffer_minutes: 60,
     showing_block_capacity: 6,
+    allow_double_booking: false,
     viewing_reminder_enabled: false,
     viewing_reminder_weekday: 0,
     viewing_reminder_hour: 17,
@@ -190,6 +194,11 @@ export default async function AvailabilityPage({
 
   // Short labels for the at-a-glance grid headers (Sun..Sat).
   const shortDays = WEEKDAY_LABELS.map((l) => l.slice(0, 3));
+
+  async function saveAllowDoubleBooking(formData: FormData) {
+    "use server";
+    await setAllowDoubleBooking(formData.get("allow_double_booking") === "on");
+  }
 
   return (
     <div>
@@ -359,66 +368,98 @@ export default async function AvailabilityPage({
         </div>
       </form>
 
-      {/* Group showings by building (Hero blocks) */}
-      <form
-        action={updateClusteringSettings}
-        className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-      >
-        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Group viewings by building
-        </h3>
-        <p className="mb-4 text-sm text-gray-500">
-          When on, the booking page steers new renters toward times near the
-          viewings already booked at the same building, so visits stay grouped
-          per building per day and you spend less time travelling between them.
-          Buildings are matched by street address. Days with no viewing yet stay
-          fully open.
-        </p>
-        <label className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            name="clustering_enabled"
-            defaultChecked={cfg.clustering_enabled}
-            className="mt-0.5 h-4 w-4 rounded border-gray-300"
-          />
-          <span className="text-sm font-medium text-gray-700">
-            Group new viewings around existing ones at the same building
-          </span>
-        </label>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">
-              How far around a booked viewing to offer times (minutes)
-            </span>
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Group showings by building (Hero blocks) */}
+        <form
+          action={updateClusteringSettings}
+          className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        >
+          <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Group viewings by building
+          </h3>
+          <p className="mb-4 text-sm text-gray-500">
+            When on, the booking page steers new renters toward times near the
+            viewings already booked at the same building, so visits stay grouped
+            per building per day and you spend less time travelling between them.
+            Buildings are matched by street address. Days with no viewing yet stay
+            fully open.
+          </p>
+          <label className="flex items-start gap-3">
             <input
-              name="clustering_buffer_minutes"
-              type="number"
-              min={0}
-              max={480}
-              defaultValue={cfg.clustering_buffer_minutes}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              type="checkbox"
+              name="clustering_enabled"
+              defaultChecked={cfg.clustering_enabled}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
             />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">
-              Max viewings per building per day
+            <span className="text-sm font-medium text-gray-700">
+              Group new viewings around existing ones at the same building
             </span>
-            <input
-              name="showing_block_capacity"
-              type="number"
-              min={1}
-              max={50}
-              defaultValue={cfg.showing_block_capacity}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
           </label>
-        </div>
-        <div className="mt-4 text-right">
-          <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
-            Save
-          </button>
-        </div>
-      </form>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                How far around a booked viewing to offer times (minutes)
+              </span>
+              <input
+                name="clustering_buffer_minutes"
+                type="number"
+                min={0}
+                max={480}
+                defaultValue={cfg.clustering_buffer_minutes}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                Max viewings per building per day
+              </span>
+              <input
+                name="showing_block_capacity"
+                type="number"
+                min={1}
+                max={50}
+                defaultValue={cfg.showing_block_capacity}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+          <div className="mt-4 text-right">
+            <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
+              Save
+            </button>
+          </div>
+        </form>
+
+        <form
+          action={saveAllowDoubleBooking}
+          className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        >
+          <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Open-house booking
+          </h3>
+          <p className="mb-4 text-sm text-gray-500">
+            When on, a viewing time stays bookable even after someone books it,
+            so several renters can book the same slot. When off (default), each
+            time can be booked once.
+          </p>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              name="allow_double_booking"
+              defaultChecked={cfg.allow_double_booking}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              Open-house booking — allow multiple bookings per time
+            </span>
+          </label>
+          <div className="mt-4 text-right">
+            <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
 
       {/* Week at a glance + renter preview */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

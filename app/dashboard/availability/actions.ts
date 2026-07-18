@@ -97,6 +97,22 @@ export async function updateClusteringSettings(formData: FormData) {
   redirect("/dashboard/availability?saved=cluster");
 }
 
+export async function setAllowDoubleBooking(enabled: boolean) {
+  const org = await getCurrentOrg();
+  if (!org) return;
+  // Viewing settings are admin/operator only (locked seat model).
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+
+  const supabase = createClient();
+  await supabase
+    .from("organizations")
+    .update({ allow_double_booking: enabled })
+    .eq("id", org.id);
+
+  revalidatePath("/dashboard/availability");
+  redirect("/dashboard/availability?saved=double_booking");
+}
+
 export async function addAvailabilityWindow(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) return;
