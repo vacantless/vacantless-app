@@ -13,6 +13,8 @@ name: Vacantless background sweeps
 #     once/day at the org's start-of-shift hour via leasing_snapshot_last_sent_on)
 #   * /api/cron/viewing-reminder — weekly viewing-times reminder (self-gates to
 #     the org's chosen weekday/hour and stays quiet when the next week is covered)
+#   * /api/cron/availability-tripwire — same-day zero/thin viewing availability
+#     alert (edge-triggered per org, opt-in, owner_admin always copied)
 #   * /api/cron/reschedule-nudge — one re-send of an unresponded pending
 #     reschedule proposal 24h after creation; opt-in per org and capped per row
 #   * /api/cron/rent-increase — per-tenancy N1 reminder (self-gates to once per
@@ -80,6 +82,12 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/viewing-reminder" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger availability-tripwire sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/availability-tripwire" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger reschedule-nudge sweep
         run: |

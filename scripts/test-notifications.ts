@@ -167,6 +167,24 @@ ok(
     }),
   ) === JSON.stringify(["agent@x.com", "cc@x.com"]),
 );
+{
+  const recipients = resolveNotificationRecipients({
+    audience: "operator",
+    configured: [
+      "admin@x.com",
+      ...Array.from({ length: MAX_NOTIFICATION_RECIPIENTS + 2 }, (_, i) => `u${i}@x.com`),
+    ],
+    alwaysInclude: ["Admin@x.com"],
+  });
+  ok(
+    "resolve: operator alwaysInclude survives configured list + cap",
+    recipients[0] === "admin@x.com" &&
+      recipients.filter((e) => e === "admin@x.com").length === 1 &&
+      recipients[1] === "u0@x.com" &&
+      recipients.length === MAX_NOTIFICATION_RECIPIENTS &&
+      !recipients.includes(`u${MAX_NOTIFICATION_RECIPIENTS - 1}@x.com`),
+  );
+}
 // trade event: natural party always included + additive cc, de-duped
 ok(
   "resolve: trade includes party + cc",

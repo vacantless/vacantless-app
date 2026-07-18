@@ -60,6 +60,9 @@ export type SendOrgNotificationArgs = {
   // For an operator event with no configured recipients: where it falls back so
   // the alert never silently goes nowhere (e.g. org members with the cap).
   operatorFallback?: string[];
+  // Unconditional safety CCs, such as owner_admin recipients for availability
+  // tripwires. Threaded through the same validation/dedupe/cap as all recipients.
+  alwaysInclude?: string[];
   // Optional CTA rendered as button + plain-text fallback (the "work from your
   // inbox" affordance for email-first operators like Aaliyah).
   action?: { label: string; url: string } | null;
@@ -107,6 +110,7 @@ export async function sendOrgNotification(
       configured: setting?.recipients ?? [],
       audienceEmail: args.audienceEmail,
       operatorFallback: args.operatorFallback,
+      alwaysInclude: args.alwaysInclude,
     });
     if (recipients.length === 0)
       return { delivered: false, sentCount: 0, attempted: 0, skipped: "no_recipients" };

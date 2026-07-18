@@ -444,6 +444,26 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "{{org_name}} has {{open_days_next_7}} open viewing day(s) in the next 7 days, so renters cannot book a viewing right now.\n\nSet your viewing times: {{viewing_times_url}}\n\nOnce you add a weekly window or a specific date, this reminder will stay quiet when the coming week is covered.",
     active: true,
   },
+  // Same-day viewing availability tripwire (S513a). Audience operator; unlike
+  // the weekly viewing-times reminder, this is an urgent mid-week alert when
+  // actually-bookable capacity drops to zero/thin after subtracting booked
+  // showings and lead time. The route force-includes owner_admin emails via
+  // resolveNotificationRecipients(alwaysInclude), even when recipients are
+  // customized.
+  {
+    key: "leasing.viewing_availability_dropped",
+    family: "leasing",
+    audience: "operator",
+    label: "Viewing availability dropped",
+    description:
+      "Same-day alert when your next few days of bookable viewing times drop to zero or thin. Owner admins are always copied so a staffing gap cannot be hidden by custom recipients.",
+    tokens: ["org_name", "open_slots", "open_days", "window_days", "viewing_times_url"],
+    defaultSubject:
+      "Heads up — {{org_name}} has almost no bookable viewing times",
+    defaultBody:
+      "{{org_name}} currently has {{open_slots}} bookable viewing slot(s) across {{open_days}} day(s) in the next {{window_days}} days. Renters may be hitting the booking page and finding nothing that works. Open more times so viewings keep flowing.",
+    active: true,
+  },
   // Rent-increase autopilot (the FREE compliance wedge — S339). The proactive
   // half of the already-shipped engine (lib/rent-increase.ts + lib/n1-render.ts):
   // a per-tenancy reminder fired by app/api/cron/rent-increase when a unit enters
@@ -1097,6 +1117,8 @@ export function validateRecipientsInput(raw: string | null | undefined): Recipie
  *     (so the alert never silently goes nowhere).
  *   - trade / tenant events: the natural party (`audienceEmail`) is ALWAYS
  *     included; the editable list is additive cc.
+ *   - alwaysInclude is an unconditional safety CC channel used by operator
+ *     safety events where a role/address must survive custom recipients.
  * Always de-duped, lower-cased, valid-only, and capped.
  */
 export function resolveNotificationRecipients(args: {
@@ -1104,6 +1126,7 @@ export function resolveNotificationRecipients(args: {
   configured: string[]; // already-parsed editable list (parseRecipientList)
   audienceEmail?: string | null; // the trade / tenant address for this send
   operatorFallback?: string[]; // member/contact emails for operator events
+  alwaysInclude?: string[]; // unconditional CCs, before configured/fallback
 }): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -1122,10 +1145,12 @@ export function resolveNotificationRecipients(args: {
     // audienceEmail, so this is a no-op for them. Configured recipients are the
     // additive CC list; operatorFallback covers the "nobody configured" case.
     push(args.audienceEmail);
+    args.alwaysInclude?.forEach(push);
     const list = args.configured.length > 0 ? args.configured : args.operatorFallback ?? [];
     list.forEach(push);
   } else {
     push(args.audienceEmail);
+    args.alwaysInclude?.forEach(push);
     args.configured.forEach(push);
   }
   return out.slice(0, MAX_NOTIFICATION_RECIPIENTS);
