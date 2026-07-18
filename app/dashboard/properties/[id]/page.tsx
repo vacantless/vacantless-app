@@ -279,6 +279,7 @@ export default async function PropertyDetailPage({
   params: { id: string };
   searchParams: {
     saved?: string;
+    created?: string;
     // One-click Publish (B1): published=1 confirms the rental went Live;
     // publish=needs means the basics required to share aren't set yet.
     published?: string;
@@ -1460,6 +1461,12 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {searchParams.created && (
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Rental created. Finish the unit details below, then publish.
+        </p>
+      )}
+
       {/* One-click Publish (B1): confirm the rental is now Live and point the
           operator straight at the link to share. */}
       {searchParams.published && (
@@ -1473,7 +1480,7 @@ export default async function PropertyDetailPage({
       {searchParams.publish === "needs" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <strong>Almost there.</strong> Add the rent and the bed and bath count
-          on the Set up tab, then use Publish again to make this rental Live.
+          on the Unit details tab, then use Publish again to make this rental Live.
         </p>
       )}
 
@@ -1693,6 +1700,635 @@ export default async function PropertyDetailPage({
       {nextAction && <NextActionCard action={nextAction} />}
 
       <TabbedSections initialTab={defaultTab}>
+
+      <TabPanel
+        tabId="setup"
+        label="Unit details"
+        anchorId="rental-details"
+        done={setUpStep?.state === "done"}
+      >
+
+      <form
+        action={updateProperty}
+        className="mb-8 space-y-5"
+      >
+        <input type="hidden" name="id" value={p.id} />
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-semibold text-gray-900">
+            The unit
+          </h3>
+        <div>
+          <label
+            htmlFor="property-address"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
+            Address
+          </label>
+          <input
+            id="property-address"
+            name="address"
+            required
+            defaultValue={p.address}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <div className="w-32">
+            <label
+              htmlFor="property-rent"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
+              Rent ($/mo)
+            </label>
+            <input
+              id="property-rent"
+              name="rent"
+              type="number"
+              step="0.01"
+              defaultValue={p.rent_cents != null ? p.rent_cents / 100 : ""}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="w-20">
+            <label
+              htmlFor="property-beds"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
+              Beds
+            </label>
+            <input
+              id="property-beds"
+              name="beds"
+              type="number"
+              step="1"
+              defaultValue={p.beds ?? ""}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="w-20">
+            <label
+              htmlFor="property-baths"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
+              Baths
+            </label>
+            <input
+              id="property-baths"
+              name="baths"
+              type="number"
+              step="0.5"
+              defaultValue={p.baths ?? ""}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="w-40">
+            <label
+              htmlFor="property-parking"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
+              Parking
+            </label>
+            <input
+              id="property-parking"
+              name="parking"
+              defaultValue={p.parking ?? ""}
+              placeholder="1 spot"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="w-40">
+            <label
+              htmlFor="property-status"
+              className="mb-1 block text-xs font-medium text-gray-600"
+            >
+              Status
+            </label>
+            <select
+              id="property-status"
+              name="status"
+              defaultValue={p.status}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+            >
+              {PROPERTY_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {propertyStatusLabel(s)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <details className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          <summary className="cursor-pointer font-medium text-gray-600">
+            What each status means
+          </summary>
+          <ul className="mt-2 space-y-1.5">
+            {PROPERTY_STATUSES.map((s) => (
+              <li key={s} className="flex items-start gap-2">
+                <span
+                  className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-medium ${propertyStatusBadge(s).className}`}
+                >
+                  {propertyStatusLabel(s)}
+                </span>
+                <span>{propertyStatusHelp(s)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-semibold text-gray-900">
+            Showings
+          </h3>
+        <div>
+          <label
+            htmlFor="property-showing-instructions"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
+            Showing &amp; access instructions{" "}
+            <span className="font-normal text-gray-400">(shared with the assigned agent)</span>
+          </label>
+          <textarea
+            id="property-showing-instructions"
+            name="showing_instructions"
+            defaultValue={p.showing_instructions ?? ""}
+            rows={3}
+            placeholder="e.g. Lockbox on the gas meter, code 4821. Buzz unit 20 to be let in. Park in visitor spots out front."
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Only shown to a showing agent you assign a viewing to, on their private link. Not shown
+            to renters.
+          </p>
+          <label
+            htmlFor="property-showing-arrival-phone"
+            className="mb-1 mt-4 block text-xs font-medium text-gray-600"
+          >
+            Arrival contact phone{" "}
+            <span className="font-normal text-gray-400">
+              (overrides your default arrival phone for this building)
+            </span>
+          </label>
+          <input
+            id="property-showing-arrival-phone"
+            name="showing_arrival_phone"
+            type="tel"
+            inputMode="tel"
+            defaultValue={p.showing_arrival_phone ?? ""}
+            placeholder="e.g. 226-778-0014"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            The number renters text or call when they arrive for a viewing at this building. You
+            can add an extension (for example 226-778-0014 ext 5). Leave blank to use your default
+            arrival phone from Settings.
+          </p>
+        </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-semibold text-gray-900">
+            Listing description
+          </h3>
+        <div id="listing-description" className="scroll-mt-6">
+        <DescriptionGuide
+          defaultValue={p.description ?? ""}
+          facts={{
+            beds: p.beds,
+            baths: p.baths,
+            sqft: p.sqft,
+            floor: p.floor,
+            parking: p.parking,
+            laundry: p.laundry,
+            air_conditioning: p.air_conditioning,
+            balcony: p.balcony,
+            furnished: p.furnished,
+            // Effective (inherited) utilities/pets so the description helper
+            // reflects the unit's resolved policy, not a bare unset.
+            pet_friendly: effectiveFeatures.pet_friendly,
+            pets_cats: effectiveFeatures.pets_cats,
+            pets_dogs: effectiveFeatures.pets_dogs,
+            pets_dog_size: effectiveFeatures.pets_dog_size,
+            pets_notes: p.pets_notes,
+            heat_included: effectiveFeatures.heat_included,
+            hydro_included: effectiveFeatures.hydro_included,
+            water_included: effectiveFeatures.water_included,
+            available_date: p.available_date,
+            rent_cents: p.rent_cents,
+          }}
+        />
+        </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-sm font-semibold text-gray-900">
+            More details
+          </h3>
+
+        {/* --- Virtual tour / video link (item S) --- */}
+        <div className="border-t border-gray-100 pt-4">
+          <label
+            htmlFor="virtual_tour_url"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500"
+          >
+            Virtual tour / video URL{" "}
+            <span className="font-normal normal-case tracking-normal text-gray-400">
+              (optional)
+            </span>
+          </label>
+          <input
+            id="virtual_tour_url"
+            name="virtual_tour_url"
+            type="url"
+            inputMode="url"
+            defaultValue={p.virtual_tour_url ?? ""}
+            placeholder="https://youriguide.com/… · YouTube · Vimeo · Matterport"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          {searchParams.tourerr === "host" ? (
+            <p className="mt-1 text-xs text-amber-700">
+              That link isn&apos;t from a supported tour host, so it wasn&apos;t
+              saved. Use an iGUIDE, Matterport, YouTube, or Vimeo link.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-gray-400">
+              Paste an iGUIDE, Matterport, YouTube, or Vimeo link. It embeds on
+              your listing page and rides along to the portals.
+            </p>
+          )}
+        </div>
+
+        {/* --- Unit details --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Unit details
+          </legend>
+          <div className="flex flex-wrap gap-4">
+            <div className="w-40">
+              <label
+                htmlFor="property-available-date"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Available date
+              </label>
+              <input
+                id="property-available-date"
+                name="available_date"
+                type="date"
+                defaultValue={p.available_date ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-gray-400">Blank = available now</p>
+            </div>
+            <div className="w-28">
+              <label
+                htmlFor="property-sqft"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Size (sq ft)
+              </label>
+              <input
+                id="property-sqft"
+                name="sqft"
+                type="number"
+                step="1"
+                min="0"
+                defaultValue={p.sqft ?? ""}
+                placeholder="850"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-32">
+              <label
+                htmlFor="property-floor"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Floor
+              </label>
+              <input
+                id="property-floor"
+                name="floor"
+                defaultValue={p.floor ?? ""}
+                placeholder="2nd"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-44">
+              <label
+                htmlFor="property-laundry"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Laundry
+              </label>
+              <select
+                id="property-laundry"
+                name="laundry"
+                defaultValue={p.laundry ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Not specified</option>
+                {LAUNDRY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {laundryLabel(opt)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        {/* --- Amenities --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Amenities
+          </legend>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {(
+              [
+                ["air_conditioning", "Air conditioning", p.air_conditioning],
+                ["balcony", "Balcony", p.balcony],
+                ["furnished", "Furnished", p.furnished],
+              ] as const
+            ).map(([name, label, checked]) => (
+              <label
+                key={name}
+                className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"
+              >
+                <input
+                  type="checkbox"
+                  name={name}
+                  defaultChecked={checked}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+
+          {/* --- Pets (structured policy 0045; inheritable 0050) --- */}
+          <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+            <p className="mb-2 text-xs font-medium text-gray-600">Pets welcome</p>
+            <p className="mb-3 text-xs text-gray-400">
+              Leave a field on &ldquo;Inherit&rdquo; to use your{" "}
+              <Link
+                href="/dashboard/properties/standard-policy"
+                className="underline hover:text-gray-600"
+              >
+                standard pet policy
+              </Link>
+              ; set one here only if this unit differs.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-1 block text-sm text-gray-600">Cats</span>
+                <select
+                  name="pets_cats"
+                  defaultValue={boolToSelect(p.pets_cats)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">
+                    Inherit ({petInheritWord(policyProfile?.pets_cats)})
+                  </option>
+                  <option value="true">Welcome</option>
+                  <option value="false">Not welcome</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-gray-600">Dogs</span>
+                <select
+                  name="pets_dogs"
+                  defaultValue={boolToSelect(p.pets_dogs)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">
+                    Inherit ({petInheritWord(policyProfile?.pets_dogs)})
+                  </option>
+                  <option value="true">Welcome</option>
+                  <option value="false">Not welcome</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-gray-600">
+                  Dog size limit
+                </span>
+                <select
+                  name="pets_dog_size"
+                  defaultValue={p.pets_dog_size ?? ""}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">
+                    Inherit ({dogSizeLabel(policyProfile?.pets_dog_size) ?? "no limit"})
+                  </option>
+                  {DOG_SIZE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {dogSizeLabel(opt)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label htmlFor="property-pets-notes" className="sr-only">
+              Pet notes
+            </label>
+            <input
+              id="property-pets-notes"
+              name="pets_notes"
+              defaultValue={p.pets_notes ?? ""}
+              placeholder="Pet notes (optional), e.g. 1 pet max, no aggressive breeds"
+              className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Advertised pet preference for the listing and feed. In Ontario a
+              &ldquo;no pets&rdquo; lease clause is void (RTA s.14) — this is a
+              listing/screening field, not an enforceable rule.
+            </p>
+          </div>
+        </fieldset>
+
+        {/* --- Utilities included in rent (inheritable 0050) --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Utilities included in rent
+          </legend>
+          <p className="mb-3 text-xs text-gray-400">
+            Leave a utility on &ldquo;Inherit&rdquo; to use your{" "}
+            <Link
+              href="/dashboard/properties/standard-policy"
+              className="underline hover:text-gray-600"
+            >
+              standard policy
+            </Link>
+            ; pick &ldquo;Tenant pays&rdquo; only where this unit differs.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {(
+              [
+                ["heat_included", "Heat", p.heat_included, policyProfile?.heat_included],
+                ["hydro_included", "Hydro", p.hydro_included, policyProfile?.hydro_included],
+                ["water_included", "Water", p.water_included, policyProfile?.water_included],
+              ] as const
+            ).map(([name, label, value, inherited]) => (
+              <label key={name} className="block">
+                <span className="mb-1 block text-sm text-gray-600">{label}</span>
+                <select
+                  name={name}
+                  defaultValue={boolToSelect(value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">
+                    Inherit ({utilInheritWord(inherited)})
+                  </option>
+                  <option value="true">Included</option>
+                  <option value="false">Tenant pays</option>
+                </select>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {/* --- Standard policy (0048) — inherited from the building profile --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Standard policy
+          </legend>
+          <p className="mb-3 text-xs text-gray-400">
+            These show the value this unit inherits from your{" "}
+            <Link
+              href="/dashboard/properties/standard-policy"
+              className="underline hover:text-gray-600"
+            >
+              standard policy
+            </Link>{" "}
+            (building override, falling back to the organization default). Only
+            change one here if THIS unit differs.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                Lease term
+              </span>
+              <select
+                name="lease_term"
+                defaultValue={p.lease_term ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit ({leaseTermLabel(policyProfile?.lease_term) ?? "1-year lease"})
+                </option>
+                {LEASE_TERM_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {leaseTermLabel(opt)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                Air conditioning
+              </span>
+              <select
+                name="ac_type"
+                defaultValue={p.ac_type ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit (
+                  {acTypeLabel(policyProfile?.ac_type)
+                    ? acTypeLabel(policyProfile?.ac_type)
+                    : policyProfile?.ac_type === "none"
+                      ? "no A/C"
+                      : "not set"}
+                  )
+                </option>
+                {AC_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt === "none" ? "No air conditioning" : `A/C: ${acTypeLabel(opt)}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                Smoking
+              </span>
+              <select
+                name="smoking"
+                defaultValue={p.smoking ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit ({smokingLabel(policyProfile?.smoking) ?? "not set"})
+                </option>
+                {SMOKING_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {smokingLabel(opt)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                On-site management
+              </span>
+              <select
+                name="on_site_management"
+                defaultValue={
+                  p.on_site_management == null
+                    ? ""
+                    : p.on_site_management
+                      ? "true"
+                      : "false"
+                }
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">
+                  Inherit (
+                  {policyProfile?.on_site_management == null
+                    ? "not set"
+                    : policyProfile.on_site_management
+                      ? "Yes"
+                      : "No"}
+                  )
+                </option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        {/* --- Internal (operator-only) --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Internal
+          </legend>
+          <p className="mb-3 text-xs text-gray-400">
+            Not shown to renters.
+          </p>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="photos_ready"
+              defaultChecked={p.photos_ready}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            Listing photos ready
+          </label>
+        </fieldset>
+
+        </section>
+
+        <button
+          type="submit"
+          className={PRIMARY_ACTION_CLASS}
+          style={{ backgroundColor: "var(--brand-color)" }}
+        >
+          Save changes
+        </button>
+      </form>
+
+      </TabPanel>
 
       <TabPanel
         tabId="market"
@@ -2176,610 +2812,6 @@ export default async function PropertyDetailPage({
           qaExpected={qaExpected}
           reservedTrackedLinksByChannel={reservedTrackedLinksByChannel}
         />
-      </TabPanel>
-
-      <TabPanel
-        tabId="setup"
-        label="Set up"
-        anchorId="rental-details"
-        done={setUpStep?.state === "done"}
-      >
-
-      <form
-        action={updateProperty}
-        className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-      >
-        <input type="hidden" name="id" value={p.id} />
-        <div>
-          <label
-            htmlFor="property-address"
-            className="mb-1 block text-xs font-medium text-gray-600"
-          >
-            Address
-          </label>
-          <input
-            id="property-address"
-            name="address"
-            required
-            defaultValue={p.address}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div className="flex flex-wrap gap-4">
-          <div className="w-32">
-            <label
-              htmlFor="property-rent"
-              className="mb-1 block text-xs font-medium text-gray-600"
-            >
-              Rent ($/mo)
-            </label>
-            <input
-              id="property-rent"
-              name="rent"
-              type="number"
-              step="0.01"
-              defaultValue={p.rent_cents != null ? p.rent_cents / 100 : ""}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="w-20">
-            <label
-              htmlFor="property-beds"
-              className="mb-1 block text-xs font-medium text-gray-600"
-            >
-              Beds
-            </label>
-            <input
-              id="property-beds"
-              name="beds"
-              type="number"
-              step="1"
-              defaultValue={p.beds ?? ""}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="w-20">
-            <label
-              htmlFor="property-baths"
-              className="mb-1 block text-xs font-medium text-gray-600"
-            >
-              Baths
-            </label>
-            <input
-              id="property-baths"
-              name="baths"
-              type="number"
-              step="0.5"
-              defaultValue={p.baths ?? ""}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="w-40">
-            <label
-              htmlFor="property-parking"
-              className="mb-1 block text-xs font-medium text-gray-600"
-            >
-              Parking
-            </label>
-            <input
-              id="property-parking"
-              name="parking"
-              defaultValue={p.parking ?? ""}
-              placeholder="1 spot"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="w-40">
-            <label
-              htmlFor="property-status"
-              className="mb-1 block text-xs font-medium text-gray-600"
-            >
-              Status
-            </label>
-            <select
-              id="property-status"
-              name="status"
-              defaultValue={p.status}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-            >
-              {PROPERTY_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {propertyStatusLabel(s)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <details className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-          <summary className="cursor-pointer font-medium text-gray-600">
-            What each status means
-          </summary>
-          <ul className="mt-2 space-y-1.5">
-            {PROPERTY_STATUSES.map((s) => (
-              <li key={s} className="flex items-start gap-2">
-                <span
-                  className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-medium ${propertyStatusBadge(s).className}`}
-                >
-                  {propertyStatusLabel(s)}
-                </span>
-                <span>{propertyStatusHelp(s)}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-        <div>
-          <label
-            htmlFor="property-showing-instructions"
-            className="mb-1 block text-xs font-medium text-gray-600"
-          >
-            Showing &amp; access instructions{" "}
-            <span className="font-normal text-gray-400">(shared with the assigned agent)</span>
-          </label>
-          <textarea
-            id="property-showing-instructions"
-            name="showing_instructions"
-            defaultValue={p.showing_instructions ?? ""}
-            rows={3}
-            placeholder="e.g. Lockbox on the gas meter, code 4821. Buzz unit 20 to be let in. Park in visitor spots out front."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Only shown to a showing agent you assign a viewing to, on their private link. Not shown
-            to renters.
-          </p>
-          <label
-            htmlFor="property-showing-arrival-phone"
-            className="mb-1 mt-4 block text-xs font-medium text-gray-600"
-          >
-            Arrival contact phone{" "}
-            <span className="font-normal text-gray-400">
-              (overrides your default arrival phone for this building)
-            </span>
-          </label>
-          <input
-            id="property-showing-arrival-phone"
-            name="showing_arrival_phone"
-            type="tel"
-            inputMode="tel"
-            defaultValue={p.showing_arrival_phone ?? ""}
-            placeholder="e.g. 226-778-0014"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            The number renters text or call when they arrive for a viewing at this building. You
-            can add an extension (for example 226-778-0014 ext 5). Leave blank to use your default
-            arrival phone from Settings.
-          </p>
-        </div>
-        <div id="listing-description" className="scroll-mt-6">
-        <DescriptionGuide
-          defaultValue={p.description ?? ""}
-          facts={{
-            beds: p.beds,
-            baths: p.baths,
-            sqft: p.sqft,
-            floor: p.floor,
-            parking: p.parking,
-            laundry: p.laundry,
-            air_conditioning: p.air_conditioning,
-            balcony: p.balcony,
-            furnished: p.furnished,
-            // Effective (inherited) utilities/pets so the description helper
-            // reflects the unit's resolved policy, not a bare unset.
-            pet_friendly: effectiveFeatures.pet_friendly,
-            pets_cats: effectiveFeatures.pets_cats,
-            pets_dogs: effectiveFeatures.pets_dogs,
-            pets_dog_size: effectiveFeatures.pets_dog_size,
-            pets_notes: p.pets_notes,
-            heat_included: effectiveFeatures.heat_included,
-            hydro_included: effectiveFeatures.hydro_included,
-            water_included: effectiveFeatures.water_included,
-            available_date: p.available_date,
-            rent_cents: p.rent_cents,
-          }}
-        />
-        </div>
-
-        {/* --- Virtual tour / video link (item S) --- */}
-        <div className="border-t border-gray-100 pt-4">
-          <label
-            htmlFor="virtual_tour_url"
-            className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500"
-          >
-            Virtual tour / video URL{" "}
-            <span className="font-normal normal-case tracking-normal text-gray-400">
-              (optional)
-            </span>
-          </label>
-          <input
-            id="virtual_tour_url"
-            name="virtual_tour_url"
-            type="url"
-            inputMode="url"
-            defaultValue={p.virtual_tour_url ?? ""}
-            placeholder="https://youriguide.com/… · YouTube · Vimeo · Matterport"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          {searchParams.tourerr === "host" ? (
-            <p className="mt-1 text-xs text-amber-700">
-              That link isn&apos;t from a supported tour host, so it wasn&apos;t
-              saved. Use an iGUIDE, Matterport, YouTube, or Vimeo link.
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-gray-400">
-              Paste an iGUIDE, Matterport, YouTube, or Vimeo link. It embeds on
-              your listing page and rides along to the portals.
-            </p>
-          )}
-        </div>
-
-        {/* --- Unit details --- */}
-        <fieldset className="border-t border-gray-100 pt-4">
-          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Unit details
-          </legend>
-          <div className="flex flex-wrap gap-4">
-            <div className="w-40">
-              <label
-                htmlFor="property-available-date"
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Available date
-              </label>
-              <input
-                id="property-available-date"
-                name="available_date"
-                type="date"
-                defaultValue={p.available_date ?? ""}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <p className="mt-1 text-xs text-gray-400">Blank = available now</p>
-            </div>
-            <div className="w-28">
-              <label
-                htmlFor="property-sqft"
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Size (sq ft)
-              </label>
-              <input
-                id="property-sqft"
-                name="sqft"
-                type="number"
-                step="1"
-                min="0"
-                defaultValue={p.sqft ?? ""}
-                placeholder="850"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="w-32">
-              <label
-                htmlFor="property-floor"
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Floor
-              </label>
-              <input
-                id="property-floor"
-                name="floor"
-                defaultValue={p.floor ?? ""}
-                placeholder="2nd"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="w-44">
-              <label
-                htmlFor="property-laundry"
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Laundry
-              </label>
-              <select
-                id="property-laundry"
-                name="laundry"
-                defaultValue={p.laundry ?? ""}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">Not specified</option>
-                {LAUNDRY_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {laundryLabel(opt)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </fieldset>
-
-        {/* --- Amenities --- */}
-        <fieldset className="border-t border-gray-100 pt-4">
-          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Amenities
-          </legend>
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {(
-              [
-                ["air_conditioning", "Air conditioning", p.air_conditioning],
-                ["balcony", "Balcony", p.balcony],
-                ["furnished", "Furnished", p.furnished],
-              ] as const
-            ).map(([name, label, checked]) => (
-              <label
-                key={name}
-                className="flex cursor-pointer items-center gap-2 text-sm text-gray-700"
-              >
-                <input
-                  type="checkbox"
-                  name={name}
-                  defaultChecked={checked}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-
-          {/* --- Pets (structured policy 0045; inheritable 0050) --- */}
-          <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-            <p className="mb-2 text-xs font-medium text-gray-600">Pets welcome</p>
-            <p className="mb-3 text-xs text-gray-400">
-              Leave a field on &ldquo;Inherit&rdquo; to use your{" "}
-              <Link
-                href="/dashboard/properties/standard-policy"
-                className="underline hover:text-gray-600"
-              >
-                standard pet policy
-              </Link>
-              ; set one here only if this unit differs.
-            </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <label className="block">
-                <span className="mb-1 block text-sm text-gray-600">Cats</span>
-                <select
-                  name="pets_cats"
-                  defaultValue={boolToSelect(p.pets_cats)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
-                >
-                  <option value="">
-                    Inherit ({petInheritWord(policyProfile?.pets_cats)})
-                  </option>
-                  <option value="true">Welcome</option>
-                  <option value="false">Not welcome</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-gray-600">Dogs</span>
-                <select
-                  name="pets_dogs"
-                  defaultValue={boolToSelect(p.pets_dogs)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
-                >
-                  <option value="">
-                    Inherit ({petInheritWord(policyProfile?.pets_dogs)})
-                  </option>
-                  <option value="true">Welcome</option>
-                  <option value="false">Not welcome</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm text-gray-600">
-                  Dog size limit
-                </span>
-                <select
-                  name="pets_dog_size"
-                  defaultValue={p.pets_dog_size ?? ""}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
-                >
-                  <option value="">
-                    Inherit ({dogSizeLabel(policyProfile?.pets_dog_size) ?? "no limit"})
-                  </option>
-                  {DOG_SIZE_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {dogSizeLabel(opt)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <label htmlFor="property-pets-notes" className="sr-only">
-              Pet notes
-            </label>
-            <input
-              id="property-pets-notes"
-              name="pets_notes"
-              defaultValue={p.pets_notes ?? ""}
-              placeholder="Pet notes (optional), e.g. 1 pet max, no aggressive breeds"
-              className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Advertised pet preference for the listing and feed. In Ontario a
-              &ldquo;no pets&rdquo; lease clause is void (RTA s.14) — this is a
-              listing/screening field, not an enforceable rule.
-            </p>
-          </div>
-        </fieldset>
-
-        {/* --- Utilities included in rent (inheritable 0050) --- */}
-        <fieldset className="border-t border-gray-100 pt-4">
-          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Utilities included in rent
-          </legend>
-          <p className="mb-3 text-xs text-gray-400">
-            Leave a utility on &ldquo;Inherit&rdquo; to use your{" "}
-            <Link
-              href="/dashboard/properties/standard-policy"
-              className="underline hover:text-gray-600"
-            >
-              standard policy
-            </Link>
-            ; pick &ldquo;Tenant pays&rdquo; only where this unit differs.
-          </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {(
-              [
-                ["heat_included", "Heat", p.heat_included, policyProfile?.heat_included],
-                ["hydro_included", "Hydro", p.hydro_included, policyProfile?.hydro_included],
-                ["water_included", "Water", p.water_included, policyProfile?.water_included],
-              ] as const
-            ).map(([name, label, value, inherited]) => (
-              <label key={name} className="block">
-                <span className="mb-1 block text-sm text-gray-600">{label}</span>
-                <select
-                  name={name}
-                  defaultValue={boolToSelect(value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
-                >
-                  <option value="">
-                    Inherit ({utilInheritWord(inherited)})
-                  </option>
-                  <option value="true">Included</option>
-                  <option value="false">Tenant pays</option>
-                </select>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        {/* --- Standard policy (0048) — inherited from the building profile --- */}
-        <fieldset className="border-t border-gray-100 pt-4">
-          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Standard policy
-          </legend>
-          <p className="mb-3 text-xs text-gray-400">
-            These show the value this unit inherits from your{" "}
-            <Link
-              href="/dashboard/properties/standard-policy"
-              className="underline hover:text-gray-600"
-            >
-              standard policy
-            </Link>{" "}
-            (building override, falling back to the organization default). Only
-            change one here if THIS unit differs.
-          </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-600">
-                Lease term
-              </span>
-              <select
-                name="lease_term"
-                defaultValue={p.lease_term ?? ""}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">
-                  Inherit ({leaseTermLabel(policyProfile?.lease_term) ?? "1-year lease"})
-                </option>
-                {LEASE_TERM_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {leaseTermLabel(opt)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-600">
-                Air conditioning
-              </span>
-              <select
-                name="ac_type"
-                defaultValue={p.ac_type ?? ""}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">
-                  Inherit (
-                  {acTypeLabel(policyProfile?.ac_type)
-                    ? acTypeLabel(policyProfile?.ac_type)
-                    : policyProfile?.ac_type === "none"
-                      ? "no A/C"
-                      : "not set"}
-                  )
-                </option>
-                {AC_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt === "none" ? "No air conditioning" : `A/C: ${acTypeLabel(opt)}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-600">
-                Smoking
-              </span>
-              <select
-                name="smoking"
-                defaultValue={p.smoking ?? ""}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">
-                  Inherit ({smokingLabel(policyProfile?.smoking) ?? "not set"})
-                </option>
-                {SMOKING_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {smokingLabel(opt)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-gray-600">
-                On-site management
-              </span>
-              <select
-                name="on_site_management"
-                defaultValue={
-                  p.on_site_management == null
-                    ? ""
-                    : p.on_site_management
-                      ? "true"
-                      : "false"
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">
-                  Inherit (
-                  {policyProfile?.on_site_management == null
-                    ? "not set"
-                    : policyProfile.on_site_management
-                      ? "Yes"
-                      : "No"}
-                  )
-                </option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </label>
-          </div>
-        </fieldset>
-
-        {/* --- Internal (operator-only) --- */}
-        <fieldset className="border-t border-gray-100 pt-4">
-          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Internal
-          </legend>
-          <p className="mb-3 text-xs text-gray-400">
-            Not shown to renters.
-          </p>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              name="photos_ready"
-              defaultChecked={p.photos_ready}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            Listing photos ready
-          </label>
-        </fieldset>
-
-        <button
-          type="submit"
-          className={PRIMARY_ACTION_CLASS}
-          style={{ backgroundColor: "var(--brand-color)" }}
-        >
-          Save changes
-        </button>
-      </form>
-
       </TabPanel>
 
       <TabPanel tabId="assets" label="Assets">

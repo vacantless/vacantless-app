@@ -23,7 +23,7 @@ import {
 import { type LeadStatus } from "./pipeline";
 
 // The seven stages of a unit's life, in order. Mirrors the rail in the audit:
-//   [Set up] -> [Market] -> [Inquiries] -> [Viewings] -> [Screen] -> [Lease] -> [Tenanted]
+//   [Unit details] -> [Market] -> [Inquiries] -> [Viewings] -> [Screen] -> [Lease] -> [Tenanted]
 export const LIFECYCLE_STEPS = [
   "set_up",
   "market",
@@ -46,7 +46,7 @@ export type TenancyLifecycleStatus = "upcoming" | "active" | "ended";
 export type LifecycleStepState = "done" | "current" | "todo";
 
 const STEP_LABELS: Record<LifecycleStep, string> = {
-  set_up: "Set up",
+  set_up: "Unit details",
   market: "Market",
   inquiries: "Inquiries",
   viewings: "Viewings",
@@ -271,7 +271,7 @@ export function deriveRentalLifecycle(
   };
 
   // Deep-links into the surface where each step's work actually happens.
-  // Set up / Market / Inquiries live on this same rental page (anchors); the
+  // Unit details / Market / Inquiries live on this same rental page (anchors); the
   // later cross-unit stages route into their hub queues. Screen, once this unit
   // has applications, jumps to the inquiries list filtered to THIS rental's
   // applicants (?property=&status=applied) instead of the generic screening

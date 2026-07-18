@@ -200,13 +200,12 @@ export async function addProperty(formData: FormData) {
     redirect(`/dashboard/properties/${newId}?photoerr=${result.reason}`);
   }
 
-  // Redirect (not just revalidate) so the add form REMOUNTS and its uncontrolled
-  // inputs clear — otherwise the typed values linger and invite a duplicate
-  // unit on the next submit (live QA finding S192). The `added` value is a fresh
-  // NONCE each time: redirecting to the same route is a soft navigation, so React
-  // reuses the form DOM and a CONSTANT flag (?added=1) would NOT reset the
-  // uncontrolled inputs. The page keys the form on this value to force a remount
-  // (S226 QA-audit fix: "Add rental form still retains submitted values").
+  // Without photos, land the operator inside the unit details they just created.
+  // If the insert failed to return an id, keep the list fallback so we never build
+  // a /properties/null URL.
+  if (newId) {
+    redirect(`/dashboard/properties/${newId}?created=1#rental-details`);
+  }
   redirect(`/dashboard/properties?added=${Date.now().toString(36)}`);
 }
 

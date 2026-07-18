@@ -327,8 +327,8 @@ export function DistributeTab({
             {liveChannels} {liveChannels === 1 ? "channel" : "channels"} posted
           </span>
           {!readyToShare && (
-            <a href="#share" className="font-medium text-brand underline">
-              Finish setup in Photos &amp; listing copy →
+            <a href="#rental-details" className="font-medium text-brand underline">
+              Finish setup in Unit details →
             </a>
           )}
         </div>

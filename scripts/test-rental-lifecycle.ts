@@ -54,7 +54,7 @@ ok(
   fresh.steps.every((s, i) => s.step === LIFECYCLE_STEPS[i]),
 );
 ok("totalCount is 7", fresh.totalCount === 7);
-ok("labels resolve", lifecycleStepLabel("set_up") === "Set up");
+ok("labels resolve", lifecycleStepLabel("set_up") === "Unit details");
 
 // --- brand-new draft: nothing done, current = set_up ------------------------
 ok("fresh draft -> currentStep set_up", fresh.currentStep === "set_up");
