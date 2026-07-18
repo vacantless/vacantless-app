@@ -15,6 +15,8 @@
 // All time math is anchored to the ORG's local timezone (booking_timezone), so
 // "today" / "this week" / "start of shift" match the operator's day, not UTC.
 
+import type { LeasingHealth, LeasingHealthStatus } from "./leasing-health";
+
 // --- Row shapes the route passes in (already fetched + flattened) ------------
 export type SnapshotLead = {
   name: string | null;
@@ -200,8 +202,13 @@ export function snapshotCounts(b: SnapshotBuckets): SnapshotCounts {
  * email, so the digest never spams. The route still stamps the day so it
  * doesn't re-check until tomorrow.
  */
-export function snapshotHasContent(b: SnapshotBuckets): boolean {
+export function snapshotHasContent(
+  b: SnapshotBuckets,
+  health?: LeasingHealth | null,
+): boolean {
   return (
+    health?.status === "black" ||
+    health?.status === "red" ||
     b.newLeads.length > 0 ||
     b.showingsToday.length > 0 ||
     b.showingsWeek.length > 0 ||
@@ -289,14 +296,69 @@ function section(title: string, blocks: string[], emptyMsg: string): string {
   return parts.join("\n\n");
 }
 
+const HEALTH_LABELS: Record<LeasingHealthStatus, string> = {
+  green: "🟢 Healthy",
+  yellow: "🟡 Watch",
+  red: "🔴 Action needed",
+  black: "⚫ Offline",
+};
+
+function yesNo(v: boolean): string {
+  return v ? "yes" : "no";
+}
+
+function nextOpenDayLabel(day: string | null): string {
+  return day ?? "none";
+}
+
+export function buildLeasingHealthBlock(
+  health: LeasingHealth,
+  tz: string,
+): string {
+  void tz;
+  const label = HEALTH_LABELS[health.status];
+  if (health.status === "green" && health.alerts.length === 0) {
+    return `${label} — availability for the next ${health.futureOpenDays} days`;
+  }
+
+  const top = health.alerts[0]?.recommendation ?? "Keep the viewing calendar fresh.";
+  const rollup =
+    `Accepting bookings today: ${yesNo(health.hasToday)} · ` +
+    `Openings tomorrow: ${yesNo(health.hasTomorrow)} · ` +
+    `Next opening: ${nextOpenDayLabel(health.nextOpenDay)}`;
+
+  const parts = [
+    `LEASING HEALTH: ${label}`,
+    `Recommendation: ${top}`,
+    rollup,
+  ];
+
+  if (health.alerts.length > 0) {
+    parts.push(
+      [
+        "NEEDS ATTENTION",
+        ...health.alerts.map(
+          (alert) => `• ${alert.message} ${alert.recommendation}`,
+        ),
+      ].join("\n"),
+    );
+  }
+
+  return parts.join("\n");
+}
+
 /**
  * The `{{snapshot}}` token value: the four labeled sections as plain text,
  * ready for the substrate's branded shell. Pure. The route fetches the rows;
  * this lays them out. Always returns all four sections (with counts) so the
  * digest reads as a status view even when a section is empty.
  */
-export function buildSnapshotBlock(b: SnapshotBuckets, tz: string): string {
-  return [
+export function buildSnapshotBlock(
+  b: SnapshotBuckets,
+  tz: string,
+  health?: LeasingHealth | null,
+): string {
+  const sections = [
     section(
       "NEW INQUIRIES — LAST 24 HOURS",
       b.newLeads.map(leadBlock),
@@ -317,7 +379,9 @@ export function buildSnapshotBlock(b: SnapshotBuckets, tz: string): string {
       b.noShowing.map(leadBlock),
       "Every inquiry from this week has a viewing booked. Nice.",
     ),
-  ].join("\n\n");
+  ];
+  if (health) sections.unshift(buildLeasingHealthBlock(health, tz));
+  return sections.join("\n\n");
 }
 
 /** Subject-friendly date, e.g. "Thursday, June 25". */

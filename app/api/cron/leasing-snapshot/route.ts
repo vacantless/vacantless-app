@@ -11,6 +11,15 @@ import {
 import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import {
+  assessLeasingHealth,
+  type LeasingHealth,
+} from "@/lib/leasing-health";
+import type {
+  Availability,
+  AvailabilityOverride,
+  AvailabilityRule,
+} from "@/lib/booking";
+import {
   snapshotWindow,
   shouldSendSnapshot,
   buildSnapshotBlock,
@@ -51,6 +60,8 @@ const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 const MAX_RECIPIENTS = 10;
 const EVENT_KEY = "leasing.daily_snapshot";
+const DAY_MS = 24 * 3_600_000;
+const LEASING_HEALTH_WINDOW_DAYS = 7;
 
 type Summary = {
   ok: boolean;
@@ -73,6 +84,75 @@ function authorized(req: NextRequest): boolean {
 function one<T>(rel: T | T[] | null | undefined): T | null {
   if (Array.isArray(rel)) return rel[0] ?? null;
   return (rel as T) ?? null;
+}
+
+function num(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+type AvailabilityRuleRow = AvailabilityRule & { created_at: string | null };
+type AvailabilityDayOffRow = { day: string; created_at: string | null };
+type AvailabilityOverrideRow = AvailabilityOverride & {
+  created_at: string | null;
+};
+type ListingRow = {
+  id: string;
+  address: string | null;
+  status: string | null;
+  created_at: string | null;
+};
+type FutureShowingRow = {
+  property_id: string | null;
+  scheduled_at: string | null;
+};
+type OpenInquiryRow = { property_id: string | null };
+
+function parseTimeMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function maxCreatedAtMs(
+  ...groups: Array<Array<{ created_at: string | null }>>
+): number | null {
+  let max: number | null = null;
+  for (const group of groups) {
+    for (const row of group) {
+      const ms = parseTimeMs(row.created_at);
+      if (ms == null) continue;
+      if (max == null || ms > max) max = ms;
+    }
+  }
+  return max;
+}
+
+function groupOpenInquiries(rows: OpenInquiryRow[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.property_id) continue;
+    counts.set(row.property_id, (counts.get(row.property_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function groupBookedInstants(rows: FutureShowingRow[]): {
+  byProperty: Map<string, string[]>;
+  all: string[];
+} {
+  const byProperty = new Map<string, string[]>();
+  const all: string[] = [];
+  for (const row of rows) {
+    if (!row.scheduled_at) continue;
+    all.push(row.scheduled_at);
+    if (!row.property_id) continue;
+    const list = byProperty.get(row.property_id) ?? [];
+    list.push(row.scheduled_at);
+    byProperty.set(row.property_id, list);
+  }
+  all.sort();
+  for (const list of byProperty.values()) list.sort();
+  return { byProperty, all };
 }
 
 export async function GET(req: NextRequest) {
@@ -105,7 +185,8 @@ export async function GET(req: NextRequest) {
     .from("organizations")
     .select(
       "id, name, brand_color, logo_url, reply_to_email, public_contact_email, " +
-        "booking_timezone, leasing_snapshot_hour, leasing_snapshot_last_sent_on",
+        "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, " +
+        "leasing_snapshot_hour, leasing_snapshot_last_sent_on",
     );
   if (onlyOrg) orgQuery = orgQuery.eq("id", onlyOrg);
   const { data: orgs, error: orgErr } = await orgQuery;
@@ -118,6 +199,7 @@ export async function GET(req: NextRequest) {
   }
 
   const nowMs = Date.now();
+  const now = new Date(nowMs);
   const summary: Summary = { ok: true, scanned: (orgs ?? []).length, sent: 0, skipped: 0, errors: 0, details: [] };
 
   for (const org of (orgs ?? []) as any[]) {
@@ -210,23 +292,124 @@ export async function GET(req: NextRequest) {
           created_at: r.created_at,
         }));
 
+      // --- Leasing Health: shared calendar + per-listing overlays ----------
+      const healthEndIso = new Date(
+        nowMs + LEASING_HEALTH_WINDOW_DAYS * DAY_MS,
+      ).toISOString();
+      const [
+        { data: ruleRows, error: ruleErr },
+        { data: dayOffRows, error: dayOffErr },
+        { data: overrideRows, error: overrideErr },
+        { data: listingRows, error: listingErr },
+        { data: futureShowingRows, error: futureShowingErr },
+        { data: openInquiryRows, error: openInquiryErr },
+      ] = await Promise.all([
+        admin
+          .from("availability_rules")
+          .select("weekday, start_minute, end_minute, created_at")
+          .eq("organization_id", org.id),
+        admin
+          .from("availability_days_off")
+          .select("day, created_at")
+          .eq("organization_id", org.id),
+        admin
+          .from("availability_overrides")
+          .select("day, start_minute, end_minute, created_at")
+          .eq("organization_id", org.id),
+        admin
+          .from("properties")
+          .select("id, address, status, created_at")
+          .eq("organization_id", org.id)
+          .eq("status", "available"),
+        admin
+          .from("showings")
+          .select("property_id, scheduled_at")
+          .eq("organization_id", org.id)
+          .gte("scheduled_at", now.toISOString())
+          .lt("scheduled_at", healthEndIso)
+          .or("outcome.is.null,outcome.eq.scheduled")
+          .order("scheduled_at", { ascending: true }),
+        admin
+          .from("leads")
+          .select("property_id")
+          .eq("organization_id", org.id)
+          .in("status", SNAPSHOT_NUDGE_STATUSES as unknown as string[]),
+      ]);
+      if (ruleErr) throw new Error(`health_rules:${ruleErr.message}`);
+      if (dayOffErr) throw new Error(`health_days_off:${dayOffErr.message}`);
+      if (overrideErr) throw new Error(`health_overrides:${overrideErr.message}`);
+      if (listingErr) throw new Error(`health_listings:${listingErr.message}`);
+      if (futureShowingErr) {
+        throw new Error(`health_future_showings:${futureShowingErr.message}`);
+      }
+      if (openInquiryErr) {
+        throw new Error(`health_open_inquiries:${openInquiryErr.message}`);
+      }
+
+      const rules = (ruleRows ?? []) as AvailabilityRuleRow[];
+      const daysOff = (dayOffRows ?? []) as AvailabilityDayOffRow[];
+      const overrides = (overrideRows ?? []) as AvailabilityOverrideRow[];
+      const { byProperty: bookedByProperty, all: bookedInstants } =
+        groupBookedInstants((futureShowingRows ?? []) as FutureShowingRow[]);
+      const openInquiriesByProperty = groupOpenInquiries(
+        (openInquiryRows ?? []) as OpenInquiryRow[],
+      );
+      const availability: Availability = {
+        timezone: tz,
+        slot_minutes: num(org.booking_slot_minutes, 30),
+        lead_hours: num(org.booking_lead_hours, 12),
+        horizon_days: num(org.booking_horizon_days, 14),
+        rules: rules.map((r) => ({
+          weekday: r.weekday,
+          start_minute: r.start_minute,
+          end_minute: r.end_minute,
+        })),
+        booked: bookedInstants,
+        days_off: daysOff.map((r) => String(r.day)),
+        overrides: overrides.map((r) => ({
+          day: String(r.day),
+          start_minute: r.start_minute,
+          end_minute: r.end_minute,
+        })),
+      };
+      const health: LeasingHealth = assessLeasingHealth({
+        now,
+        windowDays: LEASING_HEALTH_WINDOW_DAYS,
+        availability,
+        lastWindowChangeMs: maxCreatedAtMs(rules, daysOff, overrides),
+        listings: ((listingRows ?? []) as ListingRow[]).map((p) => ({
+          propertyId: p.id,
+          address: p.address ?? "",
+          status: p.status ?? "",
+          createdAtMs: parseTimeMs(p.created_at),
+          openInquiries: openInquiriesByProperty.get(p.id) ?? 0,
+          bookedInstants: bookedByProperty.get(p.id) ?? [],
+        })),
+      });
+
       const buckets: SnapshotBuckets = { newLeads, showingsToday, showingsWeek, noShowing };
       const counts = snapshotCounts(buckets);
 
       // Fire-on-data: a quiet day sends nothing. In normal mode we still stamp
       // so we don't recompute every 15 min for the rest of the day. force/dry
       // bypass the empty gate so a test can always see the result.
-      if (!snapshotHasContent(buckets) && !force && !dry) {
+      if (!snapshotHasContent(buckets, health) && !force && !dry) {
         await admin
           .from("organizations")
           .update({ leasing_snapshot_last_sent_on: gate.localDate })
           .eq("id", org.id);
         summary.skipped++;
-        summary.details.push({ org: org.id, skipped: "empty", stamped: gate.localDate });
+        summary.details.push({
+          org: org.id,
+          skipped: "empty",
+          stamped: gate.localDate,
+          health_status: health.status,
+          health_open_days: health.openDays,
+        });
         continue;
       }
 
-      const snapshotBlock = buildSnapshotBlock(buckets, tz);
+      const snapshotBlock = buildSnapshotBlock(buckets, tz, health);
       const vars: Record<string, string> = {
         org_name: org.name ?? "",
         property_address: "",
@@ -273,6 +456,9 @@ export async function GET(req: NextRequest) {
           dry: true,
           enabled: isEventEnabled(setting),
           counts,
+          health_status: health.status,
+          health_open_days: health.openDays,
+          health_alerts: health.alerts.map((a) => a.code),
           recipients,
           subject: rendered.subject,
           body: rendered.body,
@@ -306,7 +492,15 @@ export async function GET(req: NextRequest) {
         .eq("id", org.id);
 
       summary.sent++;
-      summary.details.push({ org: org.id, sent: true, counts, stamped: gate.localDate });
+      summary.details.push({
+        org: org.id,
+        sent: true,
+        counts,
+        health_status: health.status,
+        health_open_days: health.openDays,
+        health_alerts: health.alerts.map((a) => a.code),
+        stamped: gate.localDate,
+      });
     } catch (err) {
       summary.errors++;
       summary.details.push({
