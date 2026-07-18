@@ -64,6 +64,46 @@ function positiveInt(value: unknown, fallback: number): number {
   return Math.floor(value);
 }
 
+function safeErrorMessage(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === "object" && err !== null && "message" in err
+        ? (err as { message?: unknown }).message
+        : typeof err === "string"
+          ? err
+          : null;
+  if (typeof raw !== "string" || raw.trim() === "") return "unknown";
+  return raw
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]");
+}
+
+function flag(value: boolean): "1" | "0" {
+  return value ? "1" : "0";
+}
+
+function logOrgTripwireResult(input: {
+  orgId: string;
+  outcome: string;
+  severity: string;
+  open: number;
+  openDays: number;
+  nextLastState: string | null;
+  alert: boolean;
+  force: boolean;
+  dry: boolean;
+  updateRan: boolean;
+  updateErr?: string | null;
+  delivered?: boolean | null;
+  sendErr?: string | null;
+}) {
+  console.log(
+    `[availability-tripwire] org=${input.orgId} outcome=${input.outcome} severity=${input.severity} open=${input.open} openDays=${input.openDays} nextLastState=${input.nextLastState ?? "null"} alert=${flag(input.alert)} force=${flag(input.force)} dry=${flag(input.dry)} updateRan=${flag(input.updateRan)} updateErr=${input.updateErr ?? "none"} delivered=${input.delivered == null ? "n/a" : flag(input.delivered)} sendErr=${input.sendErr ?? "none"}`,
+  );
+}
+
 type AvailabilityRuleRow = AvailabilityRule & { created_at: string | null };
 type AvailabilityDayOffRow = { day: string; created_at: string | null };
 type AvailabilityOverrideRow = AvailabilityOverride & {
@@ -146,7 +186,9 @@ export async function GET(req: NextRequest) {
   const summary: Summary = { ok: true, scanned: (orgs ?? []).length, sent: 0, skipped: 0, errors: 0, details: [] };
 
   for (const org of (orgs ?? []) as any[]) {
+    let stage = "start";
     try {
+      stage = "enabled_check";
       if (!org.availability_tripwire_enabled) {
         summary.skipped++;
         summary.details.push({ org: org.id, skipped: "disabled" });
@@ -164,6 +206,7 @@ export async function GET(req: NextRequest) {
       );
       const endIso = new Date(nowMs + lookaheadDays * DAY_MS).toISOString();
 
+      stage = "load_availability";
       const [
         { data: ruleRows, error: ruleErr },
         { data: dayOffRows, error: dayOffErr },
@@ -198,6 +241,7 @@ export async function GET(req: NextRequest) {
         throw new Error(`future_showings:${futureShowingErr.message}`);
       }
 
+      stage = "compute";
       const rules = (ruleRows ?? []) as AvailabilityRuleRow[];
       const daysOff = (dayOffRows ?? []) as AvailabilityDayOffRow[];
       const overrides = (overrideRows ?? []) as AvailabilityOverrideRow[];
@@ -252,7 +296,8 @@ export async function GET(req: NextRequest) {
         viewing_times_url: viewingTimesUrl,
       };
 
-      if (dry || alert) {
+      if (dry) {
+        stage = "load_members_dry";
         const members = await loadMembers(admin, org.id);
         const operatorFallback = resolveLeadNotifyEmails(members, [
           org.reply_to_email,
@@ -260,63 +305,95 @@ export async function GET(req: NextRequest) {
         ]).slice(0, MAX_RECIPIENTS);
         const alwaysInclude = ownerAdminEmails(members);
 
-        if (dry) {
-          const { data: settingRow } = await admin
-            .from("notification_settings")
-            .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
-            .eq("organization_id", org.id)
-            .eq("event_key", EVENT_KEY)
-            .maybeSingle();
-          const setting = (settingRow as NotificationSettingRow | null) ?? null;
-          const rendered = renderNotification(event, setting, vars);
-          const recipients = resolveNotificationRecipients({
-            audience: event.audience,
-            configured: setting?.recipients ?? [],
-            operatorFallback,
-            alwaysInclude,
-          });
-          const wouldSend = alert && isEventEnabled(setting) && recipients.length > 0;
-          if (wouldSend) summary.sent++;
-          else summary.skipped++;
-          summary.details.push({
-            org: org.id,
-            dry: true,
-            force,
-            severity,
-            open,
-            open_days: openDays,
-            open_day_keys: openDayKeys,
-            window_days: lookaheadDays,
-            thin_slots: thinSlots,
-            would_send: wouldSend,
-            enabled: isEventEnabled(setting),
-            recipients,
-            last_state: org.availability_tripwire_last_state ?? null,
-            last_alert_on: org.availability_tripwire_last_alert_on ?? null,
-            next_last_state: decision.nextLastState,
-            next_last_alert_on: decision.nextLastAlertOn,
-            subject: rendered.subject,
-            body: rendered.body,
-          });
-          continue;
-        }
-
-        const result = await sendOrgNotification({
-          client: admin,
-          org: {
-            id: org.id,
-            name: org.name,
-            brand_color: org.brand_color,
-            logo_url: org.logo_url,
-            reply_to_email: org.reply_to_email,
-          },
-          eventKey: EVENT_KEY,
-          vars,
+        stage = "dry_render";
+        const { data: settingRow } = await admin
+          .from("notification_settings")
+          .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
+          .eq("organization_id", org.id)
+          .eq("event_key", EVENT_KEY)
+          .maybeSingle();
+        const setting = (settingRow as NotificationSettingRow | null) ?? null;
+        const rendered = renderNotification(event, setting, vars);
+        const recipients = resolveNotificationRecipients({
+          audience: event.audience,
+          configured: setting?.recipients ?? [],
           operatorFallback,
           alwaysInclude,
-          action: { label: "Set your viewing times", url: viewingTimesUrl },
         });
+        const wouldSend = alert && isEventEnabled(setting) && recipients.length > 0;
+        if (wouldSend) summary.sent++;
+        else summary.skipped++;
+        logOrgTripwireResult({
+          orgId: org.id,
+          outcome: wouldSend ? "dry_would_send" : "dry_skipped",
+          severity,
+          open,
+          openDays,
+          nextLastState: decision.nextLastState,
+          alert,
+          force,
+          dry,
+          updateRan: false,
+        });
+        summary.details.push({
+          org: org.id,
+          dry: true,
+          force,
+          severity,
+          open,
+          open_days: openDays,
+          open_day_keys: openDayKeys,
+          window_days: lookaheadDays,
+          thin_slots: thinSlots,
+          would_send: wouldSend,
+          enabled: isEventEnabled(setting),
+          recipients,
+          last_state: org.availability_tripwire_last_state ?? null,
+          last_alert_on: org.availability_tripwire_last_alert_on ?? null,
+          next_last_state: decision.nextLastState,
+          next_last_alert_on: decision.nextLastAlertOn,
+          subject: rendered.subject,
+          body: rendered.body,
+        });
+        continue;
+      }
 
+      if (alert) {
+        let result: Awaited<ReturnType<typeof sendOrgNotification>> | null = null;
+        let sendErrMessage: string | null = null;
+
+        stage = "send_notification";
+        try {
+          const members = await loadMembers(admin, org.id);
+          const operatorFallback = resolveLeadNotifyEmails(members, [
+            org.reply_to_email,
+            org.public_contact_email,
+          ]).slice(0, MAX_RECIPIENTS);
+          const alwaysInclude = ownerAdminEmails(members);
+
+          result = await sendOrgNotification({
+            client: admin,
+            org: {
+              id: org.id,
+              name: org.name,
+              brand_color: org.brand_color,
+              logo_url: org.logo_url,
+              reply_to_email: org.reply_to_email,
+            },
+            eventKey: EVENT_KEY,
+            vars,
+            operatorFallback,
+            alwaysInclude,
+            action: { label: "Set your viewing times", url: viewingTimesUrl },
+          });
+        } catch (err) {
+          sendErrMessage = safeErrorMessage(err);
+          console.error(
+            `[availability-tripwire] org=${org.id} stage=send_notification sendErr=${sendErrMessage}`,
+          );
+        }
+
+        stage = "state_update_alert";
         const { error: updateErr } = await admin
           .from("organizations")
           .update({
@@ -324,27 +401,66 @@ export async function GET(req: NextRequest) {
             availability_tripwire_last_alert_on: decision.nextLastAlertOn,
           })
           .eq("id", org.id);
-        if (updateErr) throw new Error(`state_update:${updateErr.message}`);
+        const updateErrMessage = updateErr ? safeErrorMessage(updateErr) : null;
+        if (updateErr) {
+          console.error(
+            `[availability-tripwire] org=${org.id} stage=state_update_alert updateErr=${updateErrMessage}`,
+          );
+          logOrgTripwireResult({
+            orgId: org.id,
+            outcome: "alert_state_update_error",
+            severity,
+            open,
+            openDays,
+            nextLastState: decision.nextLastState,
+            alert,
+            force,
+            dry,
+            updateRan: true,
+            updateErr: updateErrMessage,
+            delivered: result?.delivered ?? false,
+            sendErr: sendErrMessage,
+          });
+          throw new Error(`state_update:${updateErrMessage}`);
+        }
 
-        summary.sent++;
+        if (sendErrMessage) summary.errors++;
+        else summary.sent++;
+        logOrgTripwireResult({
+          orgId: org.id,
+          outcome: sendErrMessage ? "alert_send_failed_state_stamped" : "alert_sent_state_stamped",
+          severity,
+          open,
+          openDays,
+          nextLastState: decision.nextLastState,
+          alert,
+          force,
+          dry,
+          updateRan: true,
+          updateErr: null,
+          delivered: result?.delivered ?? false,
+          sendErr: sendErrMessage,
+        });
         summary.details.push({
           org: org.id,
-          sent: true,
+          sent: sendErrMessage == null,
           force,
           severity,
           open,
           open_days: openDays,
           open_day_keys: openDayKeys,
-          delivered: result.delivered,
-          sent_count: result.sentCount,
-          attempted: result.attempted,
-          skipped_by_substrate: result.skipped ?? null,
+          delivered: result?.delivered ?? false,
+          sent_count: result?.sentCount ?? 0,
+          attempted: result?.attempted ?? 0,
+          skipped_by_substrate: result?.skipped ?? null,
+          send_error: sendErrMessage,
           stamped_state: decision.nextLastState,
           stamped_alert_on: decision.nextLastAlertOn,
         });
         continue;
       }
 
+      stage = "state_update_ok";
       const { error: updateErr } = await admin
         .from("organizations")
         .update({
@@ -352,9 +468,41 @@ export async function GET(req: NextRequest) {
           availability_tripwire_last_alert_on: decision.nextLastAlertOn,
         })
         .eq("id", org.id);
-      if (updateErr) throw new Error(`state_update:${updateErr.message}`);
+      const updateErrMessage = updateErr ? safeErrorMessage(updateErr) : null;
+      if (updateErr) {
+        console.error(
+          `[availability-tripwire] org=${org.id} stage=state_update_ok updateErr=${updateErrMessage}`,
+        );
+        logOrgTripwireResult({
+          orgId: org.id,
+          outcome: "ok_state_update_error",
+          severity,
+          open,
+          openDays,
+          nextLastState: decision.nextLastState,
+          alert,
+          force,
+          dry,
+          updateRan: true,
+          updateErr: updateErrMessage,
+        });
+        throw new Error(`state_update:${updateErrMessage}`);
+      }
 
       summary.skipped++;
+      logOrgTripwireResult({
+        orgId: org.id,
+        outcome: severity === "ok" ? "ok_state_stamped" : "debounced_state_stamped",
+        severity,
+        open,
+        openDays,
+        nextLastState: decision.nextLastState,
+        alert,
+        force,
+        dry,
+        updateRan: true,
+        updateErr: null,
+      });
       summary.details.push({
         org: org.id,
         skipped: severity === "ok" ? "ok" : "debounced",
@@ -366,13 +514,22 @@ export async function GET(req: NextRequest) {
         stamped_alert_on: decision.nextLastAlertOn,
       });
     } catch (err) {
+      const msg = safeErrorMessage(err);
+      console.error(
+        `[availability-tripwire] org=${(org as any)?.id ?? "unknown"} stage=${stage} threw=${msg}`,
+      );
       summary.errors++;
       summary.details.push({
         org: (org as any)?.id,
-        error: `org_threw:${err instanceof Error ? err.message : "unknown"}`,
+        stage,
+        error: `org_threw:${msg}`,
       });
     }
   }
+
+  console.log(
+    `[availability-tripwire] summary scanned=${summary.scanned} sent=${summary.sent} skipped=${summary.skipped} errors=${summary.errors} orgIds=${((orgs ?? []) as any[]).map((org) => org.id).join(",")}`,
+  );
 
   return NextResponse.json(summary, { status: 200 });
 }
