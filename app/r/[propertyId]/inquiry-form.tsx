@@ -291,6 +291,9 @@ export function InquiryForm({
         {hasSlots && selectedSlot && !selectedSlotVisible && (
           <input type="hidden" name="slot" value={selectedSlot} />
         )}
+        {(!hasSlots || skipTime) && (
+          <input type="hidden" name="no_suitable_time" value="1" />
+        )}
 
         {/* STEP 1 — Choose a viewing time (primary action, first) ------------ */}
         {hasSlots && (

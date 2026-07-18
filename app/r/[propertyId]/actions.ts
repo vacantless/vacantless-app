@@ -198,7 +198,7 @@ async function attemptBooking(
 // supplies the default audience + the {{token}} values.
 async function notifyOperatorsOfNewLead(
   payload: AutoReplyPayload,
-  extra: { phone: string; moveIn: string },
+  extra: { phone: string; moveIn: string; noSuitableTime: boolean },
 ): Promise<void> {
   try {
     const admin = createAdminClient();
@@ -265,6 +265,9 @@ async function notifyOperatorsOfNewLead(
         lead_email: payload.renter_email?.trim() || "(no email)",
         lead_phone: extra.phone.trim() || "(no phone)",
         move_in: extra.moveIn.trim() || "(not specified)",
+        no_suitable_time_note: extra.noSuitableTime
+          ? "⚠ This renter couldn't find a workable viewing time — offer alternate times."
+          : "",
         screening,
         dashboard_url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
       },
@@ -600,6 +603,7 @@ export async function submitLead(formData: FormData) {
   const moveInRaw = String(formData.get("move_in") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const slot = String(formData.get("slot") ?? "").trim();
+  const noSuitableTime = formData.get("no_suitable_time") === "1";
   // Source-tracking: a per-post tracked link carries ?p=<listing_post_id>. The
   // RPC validates it belongs to this property before stamping the lead's
   // source; an absent/foreign value safely falls back to 'website'.
@@ -652,6 +656,7 @@ export async function submitLead(formData: FormData) {
     p_has_pets: hasPets,
     p_pets_detail: petsDetail || null,
     p_custom_answers: customAnswers,
+    p_no_suitable_time: noSuitableTime,
   });
 
   if (error) {
@@ -689,7 +694,11 @@ export async function submitLead(formData: FormData) {
   // renter). Suppress this on RPC-reused leads so server-side dedup also dedups
   // the "new inquiry" operator email, not only the row insert.
   if (initialEffects.notifyNewLead) {
-    await notifyOperatorsOfNewLead(payload, { phone, moveIn: moveInRaw });
+    await notifyOperatorsOfNewLead(payload, {
+      phone,
+      moveIn: moveInRaw,
+      noSuitableTime,
+    });
   }
 
   // The renter picked a time but it was no longer bookable (already taken

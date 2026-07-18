@@ -1222,6 +1222,7 @@ export type NurturePayload = {
   reply_to_email: string | null;
   property_address: string | null;
   rent_cents: number | null;
+  no_suitable_time?: boolean | null;
 };
 
 function nurtureHtml(p: NurturePayload, copy: NurtureCopy): string {
@@ -1293,7 +1294,7 @@ export async function sendNurtureEmail(p: NurturePayload): Promise<SendResult> {
   if (!apiKey) return { sent: false, reason: "no_api_key" };
   if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
 
-  const copy = nurtureCopy(p.step);
+  const copy = nurtureCopy(p.step, p.no_suitable_time === true);
   const subject = p.property_address
     ? `${copy.subject} - ${p.property_address}`
     : copy.subject;

@@ -132,10 +132,29 @@ const STEP_COPY: Record<number, NurtureCopy> = {
   },
 };
 
+const NO_SUITABLE_TIME_STEP_COPY: Record<number, NurtureCopy> = {
+  1: {
+    subject: "We'll help find another viewing time",
+    lead: "Thanks for sending your details. We're lining up more viewing times and will let you know the moment one opens.",
+    cta: "View the listing",
+  },
+  2: {
+    subject: "Still looking for a viewing time?",
+    lead: "We're still keeping an eye on viewing times for the home you asked about. As soon as more options open, we'll let you know.",
+    cta: "View the listing",
+  },
+  3: {
+    subject: "We'll keep you posted on viewing times",
+    lead: "One last note for now: we have your details and will let you know when a workable viewing time opens. If your timing changes, just reply and tell us what works.",
+    cta: "View the listing",
+  },
+};
+
 /**
  * Per-step nurture copy. Steps outside 1..NURTURE_STEPS fall back to step 1 so
  * the composer never renders empty strings.
  */
-export function nurtureCopy(step: number): NurtureCopy {
-  return STEP_COPY[step] ?? STEP_COPY[1];
+export function nurtureCopy(step: number, noSuitableTime = false): NurtureCopy {
+  const copy = noSuitableTime ? NO_SUITABLE_TIME_STEP_COPY : STEP_COPY;
+  return copy[step] ?? copy[1];
 }

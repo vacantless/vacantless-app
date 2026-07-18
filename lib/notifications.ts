@@ -217,6 +217,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "lead_email",
       "lead_phone",
       "move_in",
+      "no_suitable_time_note",
       "screening",
       "dashboard_url",
     ],
@@ -229,7 +230,7 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     // collapse, so the email still reads cleanly. Runs of blank lines collapse
     // into one paragraph break (bodyToParagraphs splits on \n{2,}).
     defaultBody:
-      "New inquiry from {{lead_name}} for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{screening}}\n\nReply when you can and log the contact in your dashboard: {{dashboard_url}}",
+      "New inquiry from {{lead_name}} for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{no_suitable_time_note}}\n\n{{screening}}\n\nReply when you can and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
   },
   // Real-time viewing-booked alert (S490). Audience operator; complements

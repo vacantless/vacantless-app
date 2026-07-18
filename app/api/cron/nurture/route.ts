@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     .from("leads")
     .select(
       "id, created_at, organization_id, property_id, name, email, status, " +
-        "nurture_step_sent, nurture_last_sent_at, " +
+        "no_suitable_time, nurture_step_sent, nurture_last_sent_at, " +
         "properties(address, rent_cents, status), " +
         "organizations(name, brand_color, logo_url, reply_to_email, nurture_enabled)",
     )
@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
       reply_to_email: org?.reply_to_email ?? null,
       property_address: property?.address ?? null,
       rent_cents: property?.rent_cents ?? null,
+      no_suitable_time: row.no_suitable_time === true,
     });
 
     if (!result.sent) {
@@ -159,7 +160,12 @@ export async function GET(req: NextRequest) {
     });
 
     summary.sent++;
-    summary.details.push({ lead: row.id, step, to: renterEmail });
+    summary.details.push({
+      lead: row.id,
+      step,
+      to: renterEmail,
+      no_suitable_time: row.no_suitable_time === true,
+    });
    } catch (err) {
      summary.errors++;
      summary.details.push({

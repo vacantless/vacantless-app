@@ -180,6 +180,26 @@ eq("copy steps 1 and 2 differ", nurtureCopy(1).lead !== nurtureCopy(2).lead, tru
 eq("copy steps 2 and 3 differ", nurtureCopy(2).lead !== nurtureCopy(3).lead, true);
 eq("copy out-of-range falls back to step 1", nurtureCopy(99).lead, nurtureCopy(1).lead);
 eq("copy step 0 falls back to step 1", nurtureCopy(0).subject, nurtureCopy(1).subject);
+eq(
+  "copy no-suitable-time step 1 uses alternate viewing-time copy",
+  nurtureCopy(1, true).lead.includes("lining up more viewing times"),
+  true,
+);
+eq(
+  "copy no-suitable-time differs from normal step 1",
+  nurtureCopy(1, true).lead !== nurtureCopy(1).lead,
+  true,
+);
+eq(
+  "copy no-suitable-time avoids booking CTA",
+  /book/i.test(nurtureCopy(1, true).cta),
+  false,
+);
+eq(
+  "copy no-suitable-time out-of-range falls back to flagged step 1",
+  nurtureCopy(99, true).lead,
+  nurtureCopy(1, true).lead,
+);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

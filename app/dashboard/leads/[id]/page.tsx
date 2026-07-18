@@ -11,6 +11,7 @@ import {
 } from "@/lib/screening-questions";
 import {
   resolveLeadSource,
+  noSuitableTimeBadge,
   followUpStatus,
   followUpLabel,
   suggestedNextStageOptions,
@@ -56,6 +57,7 @@ type Lead = {
   phone: string | null;
   source: string | null;
   source_detail: string | null;
+  no_suitable_time: boolean | null;
   status: LeadStatus;
   notes: string | null;
   move_in: string | null;
@@ -98,7 +100,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -181,6 +183,7 @@ export default async function LeadDetailPage({
     source_detail: l.source_detail,
     post: l.listing_post,
   });
+  const noSuitableTimeText = noSuitableTimeBadge(l.no_suitable_time);
   const followStatus = followUpStatus(l.next_action_at, today);
   const followText = followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
@@ -237,6 +240,14 @@ export default async function LeadDetailPage({
                     {sourceDisplay.label}
                   </span>
                 )}
+              </>
+            ) : null}
+            {noSuitableTimeText ? (
+              <>
+                {" · "}
+                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  {noSuitableTimeText}
+                </span>
               </>
             ) : null}
           </>

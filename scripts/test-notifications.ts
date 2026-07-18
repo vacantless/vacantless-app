@@ -238,6 +238,7 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
     );
     ok("new_lead: all template tokens declared", used.every((t) => declared.has(t)));
     ok("new_lead: declares screening token", declared.has("screening"));
+    ok("new_lead: declares no suitable time note", declared.has("no_suitable_time_note"));
     // Calmer default (post-S402): no alarmist emoji, no forced red accent — the
     // stripe falls back to the org brand color unless the landlord picks red.
     ok("new_lead: subject has no alert emoji", !ev.defaultSubject.includes("🔴"));
@@ -252,11 +253,17 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       lead_email: "karen@example.com",
       lead_phone: "519-555-0100",
       move_in: "2026-08-01",
+      no_suitable_time_note:
+        "⚠ This renter couldn't find a workable viewing time — offer alternate times.",
       screening: "Screening\nOccupants: 3\nEmployment: Employed full-time",
       dashboard_url: "https://x/dashboard/leads/abc",
     });
     ok("new_lead: renders name", rendered.body.includes("Karen Kenney"));
     ok("new_lead: renders address in subject", rendered.subject.includes("833 Pillette"));
+    ok(
+      "new_lead: renders no suitable time note",
+      rendered.body.includes("couldn't find a workable viewing time"),
+    );
     ok("new_lead: inlines screening", rendered.body.includes("Employment: Employed full-time"));
     ok("new_lead: no leftover tokens", !/\{\{/.test(rendered.subject + rendered.body));
     // Empty screening collapses cleanly (no orphan label, no literal token).
@@ -267,6 +274,7 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       lead_email: "karen@example.com",
       lead_phone: "519-555-0100",
       move_in: "2026-08-01",
+      no_suitable_time_note: "",
       screening: "",
       dashboard_url: "https://x/dashboard/leads/abc",
     });

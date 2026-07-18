@@ -87,6 +87,13 @@ export function resolveLeadSource(input: {
   return null;
 }
 
+/** Operator badge for leads who tried to book but found no workable time. */
+export function noSuitableTimeBadge(
+  noSuitableTime: boolean | null | undefined,
+): string | null {
+  return noSuitableTime ? "Wanted to book — no suitable time" : null;
+}
+
 // --- follow-up / next action ----------------------------------------------
 
 export type FollowUpStatus = "none" | "overdue" | "today" | "upcoming";
