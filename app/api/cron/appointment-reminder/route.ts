@@ -6,7 +6,7 @@ import {
   isDripEnqueueEnabled,
   type NotificationSettingRow,
 } from "@/lib/notifications";
-import { sendSms, repairReminderSms } from "@/lib/sms";
+import { sendSms, repairReminderSms, smsLive } from "@/lib/sms";
 import {
   appointmentReminderDue,
   isoDaysBetween,
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const smsAllowed = org.sms_enabled === true && canUseRepairSms(org.plan);
+      const smsAllowed = org.sms_enabled === true && canUseRepairSms(org.plan) && smsLive();
 
       // Confirmed appointments for the org whose chosen date is today or tomorrow
       // and that still have at least one reminder (email OR sms) unsent. The

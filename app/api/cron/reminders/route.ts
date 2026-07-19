@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendShowingReminder } from "@/lib/email";
-import { normalizePhoneE164, sendSms, showingReminderSms } from "@/lib/sms";
+import { normalizePhoneE164, sendSms, showingReminderSms, smsLive } from "@/lib/sms";
 import { formatSlotLong } from "@/lib/booking";
 import {
   channelPlan,
@@ -277,7 +277,7 @@ export async function GET(req: NextRequest) {
     // site, not just the sms_enabled toggle (Codex P2 "Free = no texting").
     const smsEnabled: boolean = org?.sms_enabled === true && canUseRenterSms(org?.plan);
     const optedOut: boolean = lead?.sms_opt_out === true;
-    const smsDeliverable = smsEnabled && normalizedPhone != null && !optedOut;
+    const smsDeliverable = smsEnabled && smsLive() && normalizedPhone != null && !optedOut;
 
     const kind = reminderDue({
       scheduledAtMs,

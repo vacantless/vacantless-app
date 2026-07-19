@@ -7,7 +7,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { canUseWaitlist, canUseRenterSms } from "@/lib/billing";
 import { sendWaitlistVacancyAlert } from "@/lib/email";
-import { sendSms, waitlistVacancySms } from "@/lib/sms";
+import { sendSms, waitlistVacancySms, smsLive } from "@/lib/sms";
 import {
   parseBeds,
   parseRentToCents,
@@ -193,7 +193,7 @@ export async function notifyWaitlist(formData: FormData) {
   // Text renters too when the org has SMS on AND the plan carries the renter-SMS
   // entitlement (mirrors the booking-confirmation gate). Email stays the
   // baseline; SMS is the paid reach that finally lands phone-only waiters.
-  const smsOn = !!orgRow?.sms_enabled && canUseRenterSms(org.plan);
+  const smsOn = !!orgRow?.sms_enabled && canUseRenterSms(org.plan) && smsLive();
   const rentLabel =
     vacancy.rent_cents != null
       ? "$" + Math.round(vacancy.rent_cents / 100).toLocaleString("en-CA") + "/month"

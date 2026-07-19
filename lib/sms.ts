@@ -544,9 +544,14 @@ export function selectSmsProvider(env = process.env): SmsProvider {
   return "none";
 }
 
+/** Default-closed master go-live switch. Only SMS_LIVE=true opens outbound SMS. */
+export function smsLive(env = process.env): boolean {
+  return env.SMS_LIVE === "true";
+}
+
 /** Whether enough provider config exists to actually send. */
 export function isSmsConfigured(): boolean {
-  return selectSmsProvider() !== "none";
+  return smsLive() && selectSmsProvider() !== "none";
 }
 
 /**
@@ -555,6 +560,7 @@ export function isSmsConfigured(): boolean {
  * provider rejects it.
  */
 export async function sendSms({ to, body }: SendSmsInput): Promise<SmsResult> {
+  if (!smsLive()) return { sent: false, reason: "sms_not_live" };
   const provider = selectSmsProvider();
   return provider === "none"
     ? { sent: false, reason: "no_credentials" }

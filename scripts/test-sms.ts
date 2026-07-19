@@ -1,6 +1,7 @@
 // Run with: npx tsx scripts/test-sms.ts
 import {
   buildQuoPayload,
+  isSmsConfigured,
   normalizePhoneE164,
   selectSmsProvider,
   samePhone,
@@ -10,9 +11,12 @@ import {
   showingReminderSms,
   waitlistVacancySms,
   smsSegments,
+  smsLive,
+  sendSms,
   computeTwilioSignature,
   verifyTwilioSignature,
 } from "../lib/sms";
+import { channelPlan } from "../lib/reminders";
 
 let pass = 0;
 let fail = 0;
@@ -71,6 +75,72 @@ eq(
   selectSmsProvider(env({ ...twilioEnv, SMS_PROVIDER: "quo" })),
   "none",
 );
+eq("provider selection ignores SMS_LIVE when creds exist", selectSmsProvider(env({ ...twilioEnv, SMS_LIVE: "false" })), "twilio");
+
+// --- smsLive master gate ----------------------------------------------------
+eq("smsLive unset -> false", smsLive(env({})), false);
+eq("smsLive false -> false", smsLive(env({ SMS_LIVE: "false" })), false);
+eq("smsLive TRUE -> false", smsLive(env({ SMS_LIVE: "TRUE" })), false);
+eq("smsLive true -> true", smsLive(env({ SMS_LIVE: "true" })), true);
+deepEq(
+  "SMS_LIVE closed makes same-day reminder email-fallback",
+  channelPlan("sameday", { smsDeliverable: smsLive(env({})) && true }),
+  { email: true, sms: false },
+);
+deepEq(
+  "SMS_LIVE open preserves same-day SMS when otherwise deliverable",
+  channelPlan("sameday", { smsDeliverable: smsLive(env({ SMS_LIVE: "true" })) && true }),
+  { email: false, sms: true },
+);
+
+const SMS_ENV_KEYS = [
+  "SMS_LIVE",
+  "SMS_PROVIDER",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_MESSAGING_SERVICE_SID",
+  "TWILIO_FROM",
+  "QUO_API_KEY",
+  "QUO_FROM",
+  "QUO_PHONE_NUMBER_ID",
+] as const;
+const savedSmsEnv: Partial<Record<(typeof SMS_ENV_KEYS)[number], string>> = {};
+for (const key of SMS_ENV_KEYS) savedSmsEnv[key] = process.env[key];
+const originalFetch = globalThis.fetch;
+let fetchCalled = false;
+const sendSmsDarkNoOpCheck = (async () => {
+try {
+  delete process.env.SMS_LIVE;
+  delete process.env.SMS_PROVIDER;
+  process.env.TWILIO_ACCOUNT_SID = "AC123";
+  process.env.TWILIO_AUTH_TOKEN = "token";
+  process.env.TWILIO_MESSAGING_SERVICE_SID = "MG123";
+  delete process.env.TWILIO_FROM;
+  delete process.env.QUO_API_KEY;
+  delete process.env.QUO_FROM;
+  delete process.env.QUO_PHONE_NUMBER_ID;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    return new Response("should not fetch", { status: 500 });
+  }) as typeof fetch;
+  deepEq(
+    "sendSms returns dark no-op when SMS_LIVE is unset",
+    await sendSms({ to: "+15195551234", body: "Hello" }),
+    { sent: false, reason: "sms_not_live" },
+  );
+  ok("sendSms dark no-op makes no network call", !fetchCalled);
+  eq("isSmsConfigured false when provider creds exist but SMS_LIVE is unset", isSmsConfigured(), false);
+  process.env.SMS_LIVE = "true";
+  eq("isSmsConfigured true when provider creds exist and SMS_LIVE=true", isSmsConfigured(), true);
+} finally {
+  globalThis.fetch = originalFetch;
+  for (const key of SMS_ENV_KEYS) {
+    const value = savedSmsEnv[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+})();
 
 // --- buildQuoPayload --------------------------------------------------------
 deepEq("quo payload 10-digit NANP", buildQuoPayload("519-555-1234", "Hello", "+15195550000"), {
@@ -237,5 +307,14 @@ const wlBare = waitlistVacancySms({ org_name: null, property_address: null, rent
 ok("bare waitlist alert still has opt-out", wlBare.includes("Reply STOP to opt out."));
 ok("bare waitlist alert has fallback phrasing", wlBare.includes("a rental you asked about"));
 
-console.log(`\nsms: ${pass} passed, ${fail} failed`);
-if (fail > 0) process.exit(1);
+sendSmsDarkNoOpCheck
+  .then(() => {
+    console.log(`\nsms: ${pass} passed, ${fail} failed`);
+    if (fail > 0) process.exit(1);
+  })
+  .catch((err) => {
+    fail++;
+    console.error(`FAIL: sendSms dark no-op threw ${err instanceof Error ? err.message : String(err)}`);
+    console.log(`\nsms: ${pass} passed, ${fail} failed`);
+    process.exit(1);
+  });

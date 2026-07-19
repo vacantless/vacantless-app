@@ -17,7 +17,7 @@ import {
 } from "@/lib/tenant-comms";
 import { canUseSms } from "@/lib/billing";
 import { sendTenantMessageEmail } from "@/lib/email";
-import { sendSms } from "@/lib/sms";
+import { sendSms, smsLive } from "@/lib/sms";
 
 // Send a landlord -> tenant message (platform pivot step 3). Guarded on
 // manage_tenancies (the post-lease property-management capability, same as the
@@ -99,10 +99,11 @@ export async function sendTenantMessage(formData: FormData) {
   // but a hand-crafted POST must still be blocked. An SMS-only send on a plan
   // without SMS is rejected outright with an upsell; a "both" send proceeds over
   // email and the SMS legs are skipped below (applySmsEntitlement).
-  const smsAllowed = canUseSms(org.plan);
-  if (check.value.channel === "sms" && !smsAllowed) {
+  const smsEntitled = canUseSms(org.plan);
+  if (check.value.channel === "sms" && !smsEntitled) {
     redirect(`${tenancyPath(tenancyId)}?msg=sms_locked`);
   }
+  const smsAllowed = org.sms_enabled === true && smsEntitled && smsLive();
 
   const plan = applySmsEntitlement(
     planDeliveries(check.value.channel, tenants, selectedSet),

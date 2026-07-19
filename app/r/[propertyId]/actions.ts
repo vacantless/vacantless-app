@@ -9,7 +9,7 @@ import {
   sendBookingConfirmation,
   type AutoReplyPayload,
 } from "@/lib/email";
-import { sendSms, bookingConfirmationSms } from "@/lib/sms";
+import { sendSms, bookingConfirmationSms, smsLive } from "@/lib/sms";
 import { canUseRenterSms } from "@/lib/billing";
 import { parseBeds, parseRentToCents, parseDateOrNull } from "@/lib/waitlist";
 import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
@@ -155,7 +155,8 @@ async function attemptBooking(
             p_subject: result.subject ?? null,
           });
         }
-        if (b.sms_enabled && canUseRenterSms(orgPlan) && b.renter_phone && !b.sms_opt_out) {
+        const smsAllowed = b.sms_enabled === true && canUseRenterSms(orgPlan) && smsLive();
+        if (smsAllowed && b.renter_phone && !b.sms_opt_out) {
           const sms = await sendSms({
             to: b.renter_phone,
             body: bookingConfirmationSms({
