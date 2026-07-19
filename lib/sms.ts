@@ -1,29 +1,34 @@
-// Server-only Twilio SMS helper.
+// Server-only SMS helper.
 //
 // Sends best-effort transactional texts to RENTERS for the two no-show-reducing
 // moments: a booking confirmation and the 24h / 2h showing reminders. It mirrors
 // lib/email.ts (Brevo): it reads its credentials from server-only env vars and
-// DEGRADES GRACEFULLY — if the Twilio credentials are not set (or the renter
+// DEGRADES GRACEFULLY - if the provider credentials are not set (or the renter
 // left no usable phone, or they opted out) it simply returns { sent: false } and
 // the lead/showing is unaffected. This lets the feature ship now and activate the
-// moment the credentials are added to Vercel — no code change needed.
+// moment the credentials are added to Vercel - no code change needed.
 //
 // Credentials (set in Vercel, server-only, NO NEXT_PUBLIC_):
 //   TWILIO_ACCOUNT_SID            (AC...)
 //   TWILIO_AUTH_TOKEN             (also used to validate the inbound webhook)
-//   TWILIO_MESSAGING_SERVICE_SID  (MG...; preferred sender) — OR — TWILIO_FROM (+1...)
+//   TWILIO_MESSAGING_SERVICE_SID  (MG...; preferred sender) - OR - TWILIO_FROM (+1...)
 //   TWILIO_STATUS_CALLBACK_URL    (optional delivery-status webhook)
+//   SMS_PROVIDER                  (optional: twilio | quo)
+//   QUO_API_KEY                   (raw API key for Authorization header)
+//   QUO_FROM                      (+1...; preferred sender) - OR - QUO_PHONE_NUMBER_ID
+//   QUO_API_BASE                  (optional; defaults to OpenPhone messages endpoint)
 //
 // Compliance: every renter-facing message carries an opt-out line ("Reply STOP
-// to opt out"); inbound STOP is honored by app/api/sms/inbound (sets
-// leads.sms_opt_out) and callers must skip opted-out leads before sending. These
-// are TRANSACTIONAL messages tied to an appointment the renter created, so they
-// are exempt from quiet-hours throttling; the quiet-hours helper below is kept
-// pure + tested for any future promotional path.
+// to opt out"); inbound STOP is honored in-app for Twilio by app/api/sms/inbound
+// (sets leads.sms_opt_out) and callers must skip opted-out leads before sending.
+// These are TRANSACTIONAL messages tied to an appointment the renter created, so
+// they are exempt from quiet-hours throttling; the quiet-hours helper below is
+// kept pure + tested for any future promotional path.
 
 import { createHmac, timingSafeEqual } from "crypto";
 
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01/Accounts";
+const QUO_MESSAGES_ENDPOINT = "https://api.openphone.com/v1/messages";
 
 export type SmsResult = { sent: boolean; reason?: string; sid?: string };
 
@@ -64,6 +69,20 @@ export function normalizePhoneE164(
     return `+${digits}`;
   }
   return null; // ambiguous without a country code — don't guess
+}
+
+export type QuoPayload = { content: string; from: string; to: string[] };
+
+/** Build the QUO/OpenPhone messages POST body, or null if unusable. */
+export function buildQuoPayload(
+  to: string | null | undefined,
+  body: string,
+  from: string,
+): QuoPayload | null {
+  const e164 = normalizePhoneE164(to);
+  if (!e164) return null;
+  if (!body || !body.trim()) return null;
+  return { content: body, from, to: [e164] };
 }
 
 /** True if two free-text numbers resolve to the same E.164 number. */
@@ -277,23 +296,33 @@ export function verifyTwilioSignature(
 // Sender (I/O). Best-effort; never throws.
 // ---------------------------------------------------------------------------
 
-/** Whether enough Twilio config exists to actually send. */
-export function isSmsConfigured(): boolean {
+export type SendSmsInput = { to: string | null | undefined; body: string };
+export type SmsProvider = "twilio" | "quo" | "none";
+
+type ActiveSmsProvider = Exclude<SmsProvider, "none">;
+type SmsBackend = {
+  ready: (env: NodeJS.ProcessEnv) => boolean;
+  send: (input: SendSmsInput) => Promise<SmsResult>;
+};
+
+function twilioReady(env: NodeJS.ProcessEnv): boolean {
   return Boolean(
-    process.env.TWILIO_ACCOUNT_SID &&
-      process.env.TWILIO_AUTH_TOKEN &&
-      (process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_FROM),
+    env.TWILIO_ACCOUNT_SID &&
+      env.TWILIO_AUTH_TOKEN &&
+      (env.TWILIO_MESSAGING_SERVICE_SID || env.TWILIO_FROM),
   );
 }
 
-export type SendSmsInput = { to: string | null | undefined; body: string };
+function quoReady(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.QUO_API_KEY && (env.QUO_FROM || env.QUO_PHONE_NUMBER_ID));
+}
 
 /**
  * Send one SMS via the Twilio REST API (no SDK — raw fetch, mirrors the Brevo
  * helper). Never throws; returns { sent:false, reason } when unconfigured, the
  * number is unusable, or Twilio rejects it.
  */
-export async function sendSms({ to, body }: SendSmsInput): Promise<SmsResult> {
+async function sendViaTwilio({ to, body }: SendSmsInput): Promise<SmsResult> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
@@ -340,4 +369,87 @@ export async function sendSms({ to, body }: SendSmsInput): Promise<SmsResult> {
   } catch (e) {
     return { sent: false, reason: `fetch_error:${(e as Error).message}` };
   }
+}
+
+/**
+ * Send one SMS via the QUO/OpenPhone REST API. Never throws; returns the same
+ * caller-facing no_credentials / invalid_number / no_body reasons as Twilio.
+ */
+async function sendViaQuo({ to, body }: SendSmsInput): Promise<SmsResult> {
+  const apiKey = process.env.QUO_API_KEY;
+  const from = process.env.QUO_FROM || process.env.QUO_PHONE_NUMBER_ID;
+
+  if (!apiKey || !from) {
+    return { sent: false, reason: "no_credentials" };
+  }
+  const e164 = normalizePhoneE164(to);
+  if (!e164) return { sent: false, reason: "invalid_number" };
+  if (!body || !body.trim()) return { sent: false, reason: "no_body" };
+
+  const payload = buildQuoPayload(e164, body, from);
+  if (!payload) return { sent: false, reason: "invalid_number" };
+
+  try {
+    const res = await fetch(process.env.QUO_API_BASE || QUO_MESSAGES_ENDPOINT, {
+      method: "POST",
+      headers: {
+        authorization: apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `quo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    const json = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      data?: { id?: string };
+    };
+    return { sent: true, sid: json.data?.id || json.id };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+const SMS_BACKENDS: Record<ActiveSmsProvider, SmsBackend> = {
+  twilio: { ready: twilioReady, send: sendViaTwilio },
+  quo: { ready: quoReady, send: sendViaQuo },
+};
+const SMS_PROVIDER_ORDER: ActiveSmsProvider[] = ["twilio", "quo"];
+
+function isSmsBackendName(value: string): value is ActiveSmsProvider {
+  return Object.prototype.hasOwnProperty.call(SMS_BACKENDS, value);
+}
+
+/** Which backend sendSms will use, given current env. Pure; no I/O. */
+export function selectSmsProvider(env = process.env): SmsProvider {
+  const pref = (env.SMS_PROVIDER || "").trim().toLowerCase();
+  if (pref) {
+    if (!isSmsBackendName(pref)) return "none";
+    return SMS_BACKENDS[pref].ready(env) ? pref : "none";
+  }
+  for (const provider of SMS_PROVIDER_ORDER) {
+    if (SMS_BACKENDS[provider].ready(env)) return provider;
+  }
+  return "none";
+}
+
+/** Whether enough provider config exists to actually send. */
+export function isSmsConfigured(): boolean {
+  return selectSmsProvider() !== "none";
+}
+
+/**
+ * Send one SMS through the selected provider. Never throws; returns
+ * { sent:false, reason } when unconfigured, the number is unusable, or the
+ * provider rejects it.
+ */
+export async function sendSms({ to, body }: SendSmsInput): Promise<SmsResult> {
+  const provider = selectSmsProvider();
+  return provider === "none"
+    ? { sent: false, reason: "no_credentials" }
+    : SMS_BACKENDS[provider].send({ to, body });
 }

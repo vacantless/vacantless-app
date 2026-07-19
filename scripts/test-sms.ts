@@ -1,6 +1,8 @@
 // Run with: npx tsx scripts/test-sms.ts
 import {
+  buildQuoPayload,
   normalizePhoneE164,
+  selectSmsProvider,
   samePhone,
   classifyInbound,
   isWithinQuietHours,
@@ -21,6 +23,13 @@ function eq(name: string, got: unknown, want: unknown) {
     console.error(`FAIL: ${name} — got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
   }
 }
+function deepEq(name: string, got: unknown, want: unknown) {
+  if (JSON.stringify(got) === JSON.stringify(want)) pass++;
+  else {
+    fail++;
+    console.error(`FAIL: ${name} — got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  }
+}
 function ok(name: string, cond: boolean) {
   if (cond) pass++;
   else {
@@ -28,6 +37,54 @@ function ok(name: string, cond: boolean) {
     console.error(`FAIL: ${name}`);
   }
 }
+
+function env(values: Record<string, string | undefined>): NodeJS.ProcessEnv {
+  return values as NodeJS.ProcessEnv;
+}
+
+const twilioEnv = env({
+  TWILIO_ACCOUNT_SID: "AC123",
+  TWILIO_AUTH_TOKEN: "token",
+  TWILIO_MESSAGING_SERVICE_SID: "MG123",
+});
+const quoEnv = env({
+  QUO_API_KEY: "quo_key",
+  QUO_FROM: "+15195551234",
+});
+
+// --- selectSmsProvider ------------------------------------------------------
+eq("provider twilio-only -> twilio", selectSmsProvider(twilioEnv), "twilio");
+eq("provider quo-only -> quo", selectSmsProvider(quoEnv), "quo");
+eq(
+  "provider both + SMS_PROVIDER=quo -> quo",
+  selectSmsProvider(env({ ...twilioEnv, ...quoEnv, SMS_PROVIDER: "quo" })),
+  "quo",
+);
+eq(
+  "provider both + unset -> twilio",
+  selectSmsProvider(env({ ...twilioEnv, ...quoEnv })),
+  "twilio",
+);
+eq("provider neither -> none", selectSmsProvider(env({})), "none");
+eq(
+  "provider SMS_PROVIDER=quo but no QUO creds -> none",
+  selectSmsProvider(env({ ...twilioEnv, SMS_PROVIDER: "quo" })),
+  "none",
+);
+
+// --- buildQuoPayload --------------------------------------------------------
+deepEq("quo payload 10-digit NANP", buildQuoPayload("519-555-1234", "Hello", "+15195550000"), {
+  content: "Hello",
+  from: "+15195550000",
+  to: ["+15195551234"],
+});
+deepEq("quo payload already E.164", buildQuoPayload("+14165551234", "Hello", "+15195550000"), {
+  content: "Hello",
+  from: "+15195550000",
+  to: ["+14165551234"],
+});
+eq("quo payload junk number -> null", buildQuoPayload("call me", "Hello", "+15195550000"), null);
+eq("quo payload empty body -> null", buildQuoPayload("519-555-1234", "  ", "+15195550000"), null);
 
 // --- normalizePhoneE164 -----------------------------------------------------
 eq("10-digit NANP -> +1", normalizePhoneE164("519-555-1234"), "+15195551234");
