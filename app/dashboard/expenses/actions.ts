@@ -13,6 +13,7 @@ import { validateExpenseInput } from "@/lib/expenses";
 import { draftRuleFromAssignment, validateRuleInput } from "@/lib/categorization-rules";
 import { normalizePeriodMonth, parseAmountToCents } from "@/lib/payments";
 import { isRentFromBankEnabled, validateRentSplit } from "@/lib/rent-from-bank";
+import { railPaymentLinkCandidatesForTransaction } from "@/lib/rent-classify";
 import { autoApplyRules, insertExpenseAndAssign } from "./triage-core";
 
 // Bank-feed + expense triage actions (bank-feed module, Slice 2b — see
@@ -29,6 +30,7 @@ import { autoApplyRules, insertExpenseAndAssign } from "./triage-core";
 // bank_connection_secrets has NO authenticated grant (migration 0058).
 
 const BASE = "/dashboard/expenses";
+const RAIL_PAYMENT_SOURCES = ["stripe", "rotessa"];
 
 function s(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
@@ -461,7 +463,7 @@ export async function recordRentFromTransaction(formData: FormData) {
   // Must be a PENDING CREDIT in the caller's org (RLS scopes the read).
   const { data: txn } = await supabase
     .from("bank_transactions")
-    .select("id, amount_cents, posted_on, direction, triage_status")
+    .select("id, amount_cents, posted_on, merchant, description, raw_category, direction, triage_status")
     .eq("id", txnId)
     .maybeSingle();
   if (!txn) redirect(`${BASE}?bank=notfound`);
@@ -472,9 +474,49 @@ export async function recordRentFromTransaction(formData: FormData) {
   // The org's active tenancies (RLS-scoped) are the only valid split targets.
   const { data: tenData } = await supabase
     .from("tenancies")
-    .select("id")
+    .select("id, rent_cents")
     .eq("status", "active");
-  const validIds = new Set(((tenData ?? []) as { id: string }[]).map((t) => t.id));
+  const activeTenancies = ((tenData ?? []) as { id: string; rent_cents: number | null }[]).map((t) => ({
+    tenancyId: t.id,
+    rentCents: t.rent_cents,
+    label: "Tenancy",
+  }));
+  const validIds = new Set(activeTenancies.map((t) => t.tenancyId));
+
+  // Close the server-side double-count hole too: if a Stripe/Rotessa-looking
+  // bank deposit already has a matching unlinked rail ledger row, the operator
+  // must link that row instead of creating a second rent_payments row.
+  const { data: railData } = await supabase
+    .from("rent_payments")
+    .select("id, tenancy_id, amount_cents, period_month, source, bank_transaction_id")
+    .eq("organization_id", org.id)
+    .in("source", RAIL_PAYMENT_SOURCES)
+    .is("bank_transaction_id", null);
+  const railLinks = railPaymentLinkCandidatesForTransaction(
+    {
+      amountCents: txn.amount_cents,
+      postedOn: txn.posted_on,
+      description: txn.description,
+      source: [txn.merchant, txn.raw_category].filter(Boolean).join(" "),
+    },
+    activeTenancies,
+    ((railData ?? []) as {
+      id: string;
+      tenancy_id: string | null;
+      amount_cents: number;
+      period_month: string | null;
+      source: string | null;
+      bank_transaction_id: string | null;
+    }[]).map((payment) => ({
+      id: payment.id,
+      tenancyId: payment.tenancy_id,
+      amountCents: payment.amount_cents,
+      periodMonth: payment.period_month,
+      source: payment.source,
+      bankTransactionId: payment.bank_transaction_id,
+    })),
+  );
+  if (railLinks.length > 0) redirect(`${BASE}?rent=rail_duplicate`);
 
   // Per-tenancy allocations arrive as alloc_<tenancyId> dollar amounts.
   const allocations: { tenancyId: string; amountCents: number }[] = [];
@@ -518,4 +560,98 @@ export async function recordRentFromTransaction(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?rent=${check.value.length}`);
+}
+
+export async function linkRailRentPaymentToTransaction(formData: FormData) {
+  await requireCapability("manage_tenancies", `${BASE}?rent=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!isRentFromBankEnabled() || providerForPlan(planEntitlements(org.plan)) === null) {
+    redirect(`${BASE}?rent=locked`);
+  }
+
+  const txnId = s(formData, "transaction_id");
+  const paymentId = s(formData, "rent_payment_id");
+  if (!txnId || !paymentId) redirect(`${BASE}?bank=notfound`);
+
+  const supabase = createClient();
+  const [{ data: txn }, { data: payment }] = await Promise.all([
+    supabase
+      .from("bank_transactions")
+      .select("id, amount_cents, posted_on, merchant, description, raw_category, direction, triage_status")
+      .eq("organization_id", org.id)
+      .eq("id", txnId)
+      .maybeSingle(),
+    supabase
+      .from("rent_payments")
+      .select("id, tenancy_id, amount_cents, period_month, source, bank_transaction_id")
+      .eq("organization_id", org.id)
+      .eq("id", paymentId)
+      .maybeSingle(),
+  ]);
+  if (!txn || !payment) redirect(`${BASE}?bank=notfound`);
+  if (txn.direction !== "credit" || txn.triage_status !== "pending") {
+    redirect(`${BASE}?bank=already`);
+  }
+
+  const { data: tenancy } = await supabase
+    .from("tenancies")
+    .select("id, rent_cents, status")
+    .eq("organization_id", org.id)
+    .eq("id", payment.tenancy_id)
+    .maybeSingle();
+  if (!tenancy || tenancy.status !== "active") redirect(`${BASE}?rent=link_mismatch`);
+
+  const railLinks = railPaymentLinkCandidatesForTransaction(
+    {
+      amountCents: txn.amount_cents,
+      postedOn: txn.posted_on,
+      description: txn.description,
+      source: [txn.merchant, txn.raw_category].filter(Boolean).join(" "),
+    },
+    [{ tenancyId: tenancy.id, rentCents: tenancy.rent_cents, label: "Tenancy" }],
+    [
+      {
+        id: payment.id,
+        tenancyId: payment.tenancy_id,
+        amountCents: payment.amount_cents,
+        periodMonth: payment.period_month,
+        source: payment.source,
+        bankTransactionId: payment.bank_transaction_id,
+      },
+    ],
+  );
+  if (railLinks.length === 0) redirect(`${BASE}?rent=link_mismatch`);
+
+  const { data: claimed } = await supabase
+    .from("bank_transactions")
+    .update({ triage_status: "assigned" })
+    .eq("organization_id", org.id)
+    .eq("id", txn.id)
+    .eq("triage_status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (!claimed) redirect(`${BASE}?bank=already`);
+
+  const { data: linked, error } = await supabase
+    .from("rent_payments")
+    .update({ bank_transaction_id: txn.id })
+    .eq("organization_id", org.id)
+    .eq("id", payment.id)
+    .in("source", RAIL_PAYMENT_SOURCES)
+    .is("bank_transaction_id", null)
+    .select("id")
+    .maybeSingle();
+  if (error || !linked) {
+    await supabase
+      .from("bank_transactions")
+      .update({ triage_status: "pending" })
+      .eq("organization_id", org.id)
+      .eq("id", txn.id);
+    redirect(`${BASE}?rent=${error ? "save" : "link_taken"}`);
+  }
+
+  revalidatePath(BASE);
+  revalidatePath("/dashboard/rent/statement");
+  redirect(`${BASE}?rent=linked`);
 }

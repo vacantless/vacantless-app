@@ -59,6 +59,9 @@ const RENT_ERROR_MESSAGES: Record<string, string> = {
   notenancy: "Pick which tenancy the rent belongs to.",
   locked: "Recording rent from the bank isn't enabled yet.",
   notfound: "That deposit could not be found.",
+  rail_duplicate: "That deposit looks like rent already recorded by Stripe or Rotessa. Link it instead of recording a second payment.",
+  link_mismatch: "That rent payment no longer matches this deposit. Refresh and try again.",
+  link_taken: "That rent payment is already linked to a bank deposit.",
   save: "Couldn't record the rent. Please try again.",
 };
 

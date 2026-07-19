@@ -24,6 +24,7 @@ import {
 } from "@/lib/categorization-rules";
 import { formatMoneyCents } from "@/lib/payments";
 import { isRentFromBankEnabled, prefillRentSplit, rentFromBankErrorMessage } from "@/lib/rent-from-bank";
+import { classifyCredit, railPaymentLinkCandidatesForTransaction } from "@/lib/rent-classify";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { PlaidConnectButton } from "./PlaidConnectButton";
 import {
@@ -32,6 +33,7 @@ import {
   ignoreTransaction,
   ignoreAllPending,
   recordRentFromTransaction,
+  linkRailRentPaymentToTransaction,
   applyRulesToQueue,
 } from "./actions";
 import { importTransactionsFromFile } from "./import-actions";
@@ -88,6 +90,14 @@ type RuleRow = {
 };
 
 type PropertyRef = { id: string; address: string; building_key: string | null };
+type RailRentPaymentRow = {
+  id: string;
+  tenancy_id: string | null;
+  amount_cents: number;
+  period_month: string | null;
+  source: string | null;
+  bank_transaction_id: string | null;
+};
 
 /** What a matched rule pre-fills on a triage card (and whether to flag it). */
 type Suggestion = {
@@ -260,8 +270,9 @@ export default async function ExpensesPage({
   const rentFromBank = isRentFromBankEnabled();
   let credits: TxnRow[] = [];
   let activeTenancies: { id: string; rentCents: number | null; label: string }[] = [];
+  let railRentPayments: RailRentPaymentRow[] = [];
   if (rentFromBank) {
-    const [{ data: creditData }, { data: tenData }] = await Promise.all([
+    const [{ data: creditData }, { data: tenData }, { data: railPaymentData }] = await Promise.all([
       supabase
         .from("bank_transactions")
         .select(
@@ -275,8 +286,15 @@ export default async function ExpensesPage({
         .from("tenancies")
         .select("id, rent_cents, property_id, properties(address), tenants(name, is_primary)")
         .eq("status", "active"),
+      supabase
+        .from("rent_payments")
+        .select("id, tenancy_id, amount_cents, period_month, source, bank_transaction_id")
+        .eq("organization_id", org.id)
+        .in("source", ["stripe", "rotessa"])
+        .is("bank_transaction_id", null),
     ]);
     credits = (creditData ?? []) as TxnRow[];
+    railRentPayments = (railPaymentData ?? []) as RailRentPaymentRow[];
     const propAddr = new Map(properties.map((p) => [p.id, p.address]));
     type TenRow = {
       id: string;
@@ -340,6 +358,9 @@ export default async function ExpensesPage({
       };
     }
     if (searchParams.rent != null) {
+      if (searchParams.rent === "linked") {
+        return { tone: "success" as const, text: "Bank deposit linked to the existing rent payment." };
+      }
       const n = parseInt(searchParams.rent, 10);
       if (Number.isFinite(n) && n > 0) {
         return { tone: "success" as const, text: `Rent recorded across ${n} tenanc${n === 1 ? "y" : "ies"}.` };
@@ -493,12 +514,51 @@ export default async function ExpensesPage({
           ) : (
             <div className="space-y-3">
               {credits.map((c) => {
-                const prefill = new Map(
-                  prefillRentSplit(
-                    c.amount_cents,
-                    activeTenancies.map((t) => ({ tenancyId: t.id, rentCents: t.rentCents })),
-                  ).map((a) => [a.tenancyId, a.amountCents]),
+                const rentTenancies = activeTenancies.map((t) => ({
+                  tenancyId: t.id,
+                  rentCents: t.rentCents,
+                  label: t.label,
+                }));
+                const creditForClassify = {
+                  amountCents: c.amount_cents,
+                  postedOn: c.posted_on,
+                  description: c.description,
+                  source: [c.merchant, c.raw_category].filter(Boolean).join(" "),
+                };
+                const classification = classifyCredit(creditForClassify, rentTenancies);
+                const railLinks = railPaymentLinkCandidatesForTransaction(
+                  creditForClassify,
+                  rentTenancies,
+                  railRentPayments.map((payment) => ({
+                    id: payment.id,
+                    tenancyId: payment.tenancy_id,
+                    amountCents: payment.amount_cents,
+                    periodMonth: payment.period_month,
+                    source: payment.source,
+                    bankTransactionId: payment.bank_transaction_id,
+                  })),
                 );
+                const prefill = new Map<string, number>();
+                if (classification.suggestRent && classification.amountCandidates[0]) {
+                  const best = classification.amountCandidates[0];
+                  prefillRentSplit(c.amount_cents, [
+                    { tenancyId: best.tenancyId, rentCents: best.rentCents },
+                  ]).forEach((a) => prefill.set(a.tenancyId, a.amountCents));
+                }
+                const hint = (() => {
+                  if (classification.classification === "rail") {
+                    return railLinks.length > 0
+                      ? "This looks like a Stripe or Rotessa deposit that is already in the rent ledger. Link it instead of recording rent again."
+                      : "This looks like a Stripe or Rotessa deposit. No matching unlinked rent payment was found; leave the fields blank unless it is not already recorded.";
+                  }
+                  if (classification.classification === "possible_offcycle") {
+                    return "Possible off-cycle rent payment. The amounts are blank so you can decide what to record.";
+                  }
+                  if (classification.classification === "likely_rent") {
+                    return "Likely rent payment. Review the suggested amount before recording.";
+                  }
+                  return null;
+                })();
                 return (
                   <Card key={c.id}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -519,36 +579,52 @@ export default async function ExpensesPage({
                       </p>
                     </div>
 
-                    <form action={recordRentFromTransaction} className="mt-4">
-                      <input type="hidden" name="transaction_id" value={c.id} />
-                      <p className="mb-2 text-sm text-gray-600">Rent for each tenancy (edit or clear any that don&apos;t apply):</p>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {activeTenancies.map((t) => {
-                          const cents = prefill.get(t.id) ?? 0;
-                          return (
-                            <label key={t.id} className="text-sm">
-                              <span className="mb-1 block text-gray-600">{t.label}</span>
-                              <div className="flex items-center gap-1">
-                                <span className="text-gray-400">$</span>
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  name={`alloc_${t.id}`}
-                                  defaultValue={cents > 0 ? (cents / 100).toFixed(2) : ""}
-                                  placeholder="0.00"
-                                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                                />
-                              </div>
-                            </label>
-                          );
-                        })}
+                    {hint && <p className="mt-3 text-sm text-gray-600">{hint}</p>}
+
+                    {railLinks.length > 0 ? (
+                      <div className="mt-4 space-y-2">
+                        {railLinks.map((link) => (
+                          <form key={link.paymentId} action={linkRailRentPaymentToTransaction}>
+                            <input type="hidden" name="transaction_id" value={c.id} />
+                            <input type="hidden" name="rent_payment_id" value={link.paymentId} />
+                            <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Linking…">
+                              Link existing {link.source} rent payment for {link.label}
+                            </SubmitButton>
+                          </form>
+                        ))}
                       </div>
-                      <div className="mt-4">
-                        <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Recording…">
-                          Record as rent
-                        </SubmitButton>
-                      </div>
-                    </form>
+                    ) : (
+                      <form action={recordRentFromTransaction} className="mt-4">
+                        <input type="hidden" name="transaction_id" value={c.id} />
+                        <p className="mb-2 text-sm text-gray-600">Rent for each tenancy (edit or clear any that don&apos;t apply):</p>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          {activeTenancies.map((t) => {
+                            const cents = prefill.get(t.id) ?? 0;
+                            return (
+                              <label key={t.id} className="text-sm">
+                                <span className="mb-1 block text-gray-600">{t.label}</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-400">$</span>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    name={`alloc_${t.id}`}
+                                    defaultValue={cents > 0 ? (cents / 100).toFixed(2) : ""}
+                                    placeholder="0.00"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                                  />
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-4">
+                          <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Recording…">
+                            Record as rent
+                          </SubmitButton>
+                        </div>
+                      </form>
+                    )}
 
                     <form action={ignoreTransaction} className="mt-2">
                       <input type="hidden" name="transaction_id" value={c.id} />
