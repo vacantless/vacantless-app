@@ -49,6 +49,12 @@ const SECTIONS: Section[] = [
     icon: "chart",
   },
   {
+    href: "/dashboard/money/tax-package",
+    title: "Tax package (T776)",
+    desc: "Your year of rent and expenses mapped to the T776 tax lines, ready for your accountant. Premium.",
+    icon: "chart",
+  },
+  {
     href: "/dashboard/expenses",
     title: "Expenses",
     desc: "Log and categorize what each rental costs - import a bank feed, sort the money out, and keep every expense against the right unit.",
@@ -120,7 +126,8 @@ export default async function MoneyHubPage() {
           const Icon = Icons[s.icon];
           const locked =
             (s.href === "/dashboard/money/reconcile" ||
-              s.href === "/dashboard/money/income-statement") &&
+              s.href === "/dashboard/money/income-statement" ||
+              s.href === "/dashboard/money/tax-package") &&
             !accounting;
           return (
             <Link key={s.href} href={s.href} className="block">
