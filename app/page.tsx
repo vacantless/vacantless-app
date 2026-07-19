@@ -989,7 +989,7 @@ const PLANS: {
 }[] = [
   {
     name: "Free",
-    price: "$0",
+    price: "CA$0",
     priceNote: "/ month",
     body: "Fill one vacancy at a time. Post the page, collect inquiries, and book viewings. No card needed.",
     includes: [
@@ -1002,7 +1002,7 @@ const PLANS: {
   },
   {
     name: "Growth",
-    price: "$99",
+    price: "CA$99",
     priceNote: "/ month",
     body: "The plan for a landlord who wants to stop chasing rent. Everything in Free, plus automatic rent collection and full tenant management.",
     includes: [
@@ -1020,7 +1020,7 @@ const PLANS: {
   },
   {
     name: "Premium",
-    price: "$249",
+    price: "CA$249",
     priceNote: "/ month",
     body: "For a portfolio. Everything in Growth, plus your books, repair coordination, and higher-capacity operations.",
     includes: [
