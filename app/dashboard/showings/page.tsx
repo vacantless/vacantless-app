@@ -21,6 +21,7 @@ import {
   type AgentSuggestion,
   type SuggestCandidate,
 } from "@/lib/showing-agents";
+import { isAtRisk } from "@/lib/reminders";
 import { getCurrentRole } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
 import { OutcomeSelect } from "./outcome-select";
@@ -31,7 +32,12 @@ import {
   SuggestTimeControl,
   type SuggestTimeSlotOption,
 } from "./suggest-time-control";
-import { assignAllUnassigned } from "./actions";
+import {
+  assignAllUnassigned,
+  confirmShowingByOperator,
+  nudgeRenterForConfirmation,
+  releaseUnconfirmedShowingByOperator,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -201,6 +207,19 @@ export default async function ShowingsPage({
       }),
     ),
   ).length;
+  const showingConfirmMode = org?.showing_confirm_mode === "agent" ? "agent" : "auto";
+  const atRiskShowings =
+    showingConfirmMode === "agent"
+      ? upcoming.filter((s) =>
+          isAtRisk({
+            scheduledAtMs: new Date(s.scheduled_at ?? "").getTime(),
+            nowMs: now,
+            mode: showingConfirmMode,
+            confirmed: s.confirmed_at != null,
+            outcome: s.outcome,
+          }),
+        )
+      : [];
 
   // Suggested agent for the next viewing (S441) — a HINT the operator taps to
   // accept, never an auto-assign. Load-balances over each agent's non-cancelled
@@ -376,6 +395,10 @@ export default async function ShowingsPage({
         </div>
       )}
 
+      {showingConfirmMode === "agent" && (
+        <AtRiskBoard rows={atRiskShowings} timeZone={timeZone} />
+      )}
+
       <Section
         title={`Upcoming (${upcoming.length})`}
         rows={upcoming}
@@ -433,6 +456,85 @@ export default async function ShowingsPage({
           agentContactById={agentContactById}
           canAssign={canAssign}
         />
+      )}
+    </div>
+  );
+}
+
+function AtRiskBoard({
+  rows,
+  timeZone,
+}: {
+  rows: ShowingRow[];
+  timeZone: string;
+}) {
+  return (
+    <div className="mb-8">
+      <SectionHeading>Unconfirmed viewings (next 48h)</SectionHeading>
+      {rows.length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
+          No unconfirmed viewings in the next 48 hours.
+        </div>
+      ) : (
+        <ul className="divide-y divide-amber-100 rounded-2xl border border-amber-200 bg-amber-50/60 shadow-sm">
+          {rows.map((s) => (
+            <li
+              key={s.id}
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-950">
+                  {fmt(s.scheduled_at, timeZone)}
+                </p>
+                <p className="truncate text-xs text-amber-800">
+                  {s.lead ? (
+                    <Link
+                      href={`/dashboard/leads/${s.lead.id}`}
+                      className="font-medium text-amber-900 hover:underline"
+                    >
+                      {s.lead.name || s.lead.email || "Renter"}
+                    </Link>
+                  ) : (
+                    "Renter"
+                  )}
+                  {s.property ? ` · ${s.property.address}` : ""}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <form action={confirmShowingByOperator}>
+                  <input type="hidden" name="id" value={s.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-lg border border-green-300 bg-white px-2.5 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-50"
+                  >
+                    <Icons.check className="h-3.5 w-3.5" />
+                    Confirm
+                  </button>
+                </form>
+                <form action={nudgeRenterForConfirmation}>
+                  <input type="hidden" name="id" value={s.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100"
+                  >
+                    <Icons.mail className="h-3.5 w-3.5" />
+                    Nudge renter
+                  </button>
+                </form>
+                <form action={releaseUnconfirmedShowingByOperator}>
+                  <input type="hidden" name="id" value={s.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                  >
+                    <Icons.calendar className="h-3.5 w-3.5" />
+                    Release
+                  </button>
+                </form>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

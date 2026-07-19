@@ -5,6 +5,7 @@ import { normalizePhoneE164, sendSms, showingReminderSms } from "@/lib/sms";
 import { formatSlotLong } from "@/lib/booking";
 import {
   channelPlan,
+  autoReleaseDue,
   pendingRescheduleShowingIds,
   reminderDue,
   REMINDER_SMS_SENT_COLUMN,
@@ -12,6 +13,7 @@ import {
   type PendingRescheduleProposalRow,
 } from "@/lib/reminders";
 import { canUseRenterSms } from "@/lib/billing";
+import { releaseUnconfirmedShowing } from "@/lib/showing-release";
 
 // Reminder sweep. Finds booked showings that are ~24h, same-day, or optionally
 // ~2h out and haven't had that tier sent yet, then sends exactly one coordinated
@@ -43,6 +45,7 @@ type Summary = {
   scanned: number;
   sent: number; // emails sent
   smsSent: number; // texts sent
+  released: number; // unconfirmed viewings released by S522
   skipped: number;
   errors: number;
   details: Array<Record<string, unknown>>;
@@ -59,6 +62,107 @@ function authorized(req: NextRequest): boolean {
   return qp === secret;
 }
 
+function one<T>(rel: T | T[] | null | undefined): T | null {
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  return (rel as T) ?? null;
+}
+
+async function runAutoReleasePass(
+  admin: any,
+  now: Date,
+): Promise<{ released: number; errors: number; details: Array<Record<string, unknown>> }> {
+  const nowMs = now.getTime();
+  const nowIso = now.toISOString();
+  const maxReleaseIso = new Date(nowMs + 24 * 3_600_000).toISOString();
+  const details: Array<Record<string, unknown>> = [];
+  let released = 0;
+  let errors = 0;
+
+  const { data, error } = await admin
+    .from("showings")
+    .select(
+      "id, scheduled_at, outcome, confirmed_at, organization_id, " +
+        "organizations!inner(id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours)",
+    )
+    .eq("outcome", "scheduled")
+    .is("confirmed_at", null)
+    .gt("scheduled_at", nowIso)
+    .lte("scheduled_at", maxReleaseIso)
+    .eq("organizations.showing_confirm_mode", "agent")
+    .eq("organizations.auto_release_unconfirmed_enabled", true);
+  if (error) {
+    return {
+      released: 0,
+      errors: 1,
+      details: [{ auto_release: false, error: `query_error:${error.message}` }],
+    };
+  }
+
+  for (const row of (data ?? []) as any[]) {
+    try {
+      const org = one<{
+        id: string;
+        name: string | null;
+        brand_color: string | null;
+        logo_url: string | null;
+        reply_to_email: string | null;
+        public_contact_email: string | null;
+        booking_timezone: string | null;
+        showing_confirm_mode: string | null;
+        auto_release_unconfirmed_enabled: boolean | null;
+        auto_release_unconfirmed_hours: number | null;
+      }>(row.organizations);
+      if (!org || !row.scheduled_at) {
+        continue;
+      }
+      const hours =
+        typeof org.auto_release_unconfirmed_hours === "number"
+          ? org.auto_release_unconfirmed_hours
+          : 2;
+      const due = autoReleaseDue({
+        scheduledAtMs: new Date(row.scheduled_at).getTime(),
+        nowMs,
+        mode: org.showing_confirm_mode,
+        enabled: org.auto_release_unconfirmed_enabled === true,
+        hoursBefore: hours,
+        confirmed: row.confirmed_at != null,
+        outcome: row.outcome,
+      });
+      if (!due) {
+        continue;
+      }
+
+      const result = await releaseUnconfirmedShowing(admin, {
+        org,
+        showingId: row.id,
+        appUrl: APP_BASE_URL,
+        nowIso,
+        noteBody: `Viewing auto-released ${hours} hour${hours === 1 ? "" : "s"} before start because it was still unconfirmed.`,
+      });
+      if (result.released) {
+        released++;
+        details.push({ auto_release: true, showing: row.id, org: org.id, hours });
+      } else {
+        details.push({
+          auto_release: false,
+          showing: row.id,
+          org: org.id,
+          reason: result.reason,
+        });
+      }
+    } catch (err) {
+      errors++;
+      details.push({
+        auto_release: false,
+        showing: row?.id,
+        error: `row_threw:${err instanceof Error ? err.message : "unknown"}`,
+      });
+    }
+  }
+
+  return { released, errors, details };
+}
+
 export async function GET(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
@@ -67,7 +171,7 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
-      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, smsSent: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
+      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, smsSent: 0, released: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -75,6 +179,7 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const nowMs = now.getTime();
   const in24hIso = new Date(nowMs + 24 * 3_600_000).toISOString();
+  const autoRelease = await runAutoReleasePass(admin, now);
 
   // Pull soon-upcoming scheduled showings that still have at least one reminder
   // (email OR sms) unsent, with the lead/property/org data we need.
@@ -96,7 +201,7 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     return NextResponse.json(
-      { ok: false, reason: `query_error:${error.message}`, scanned: 0, sent: 0, smsSent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: `query_error:${error.message}`, scanned: 0, sent: 0, smsSent: 0, released: autoRelease.released, skipped: 0, errors: 1 + autoRelease.errors, details: autoRelease.details } satisfies Summary,
       { status: 200 },
     );
   }
@@ -115,7 +220,7 @@ export async function GET(req: NextRequest) {
       .is("responded_at", null);
     if (proposalErr) {
       return NextResponse.json(
-        { ok: false, reason: `query_error:${proposalErr.message}`, scanned: 0, sent: 0, smsSent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+        { ok: false, reason: `query_error:${proposalErr.message}`, scanned: 0, sent: 0, smsSent: 0, released: autoRelease.released, skipped: 0, errors: 1 + autoRelease.errors, details: autoRelease.details } satisfies Summary,
         { status: 200 },
       );
     }
@@ -126,7 +231,16 @@ export async function GET(req: NextRequest) {
       (row) => !pendingRescheduleIds.has(row.id),
     );
   }
-  const summary: Summary = { ok: true, scanned: rows.length, sent: 0, smsSent: 0, skipped: 0, errors: 0, details: [] };
+  const summary: Summary = {
+    ok: true,
+    scanned: rows.length,
+    sent: 0,
+    smsSent: 0,
+    released: autoRelease.released,
+    skipped: 0,
+    errors: autoRelease.errors,
+    details: [...autoRelease.details],
+  };
 
   for (const row of rows as any[]) {
    // Per-row isolation (audit C2): a thrown PostgREST/network error inside one

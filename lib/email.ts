@@ -853,6 +853,101 @@ export async function sendShowingReminder(p: ReminderPayload): Promise<SendResul
   }
 }
 
+export type ShowingAutoReleasedPayload = {
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  when_label: string;
+  renter_url?: string | null;
+};
+
+function autoReleasedHtml(p: ShowingAutoReleasedPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const when = escapeHtml(p.when_label);
+  const renterUrl = p.renter_url?.trim() || null;
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">We released your viewing time because it had not been confirmed.</p>
+      <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
+        <p style="margin:0;color:#3f3f46;">${when}</p>
+      </div>
+      <p style="margin:0 0 16px;">If you still want to see the home, reply to this email or book another available time.</p>
+      ${
+        renterUrl
+          ? `<p style="margin:0 0 16px;text-align:center;">
+        <a href="${escapeHtml(renterUrl)}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:9px;font-weight:700;">Book another time</a>
+      </p>`
+          : ""
+      }
+      <p style="margin:24px 0 0;color:#52525b;">Thanks,<br/><strong>${org}</strong></p>
+    </div>
+  </div>
+</body></html>`;
+}
+
+export async function sendShowingAutoReleased(
+  p: ShowingAutoReleasedPayload,
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `Viewing time released at ${p.property_address}`
+    : "Viewing time released";
+
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: autoReleasedHtml(p),
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Post-showing feedback request (M5). Sent a few hours after an attended
 // showing, inviting the renter to rate the visit on the public /f page.

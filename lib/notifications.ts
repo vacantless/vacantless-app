@@ -400,6 +400,31 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // Auto-release of an unconfirmed viewing (S522). Audience operator; fired when
+  // an operator manually releases an at-risk viewing or when the opt-in reminders
+  // cron cancels a still-unconfirmed agent-mode viewing inside the configured
+  // T-Nh window. Defaults to the assigned agent when present, with the operator
+  // fallback as backup. The renter gets a separate direct email from lib/email.
+  {
+    key: "leasing.showing_auto_released",
+    family: "leasing",
+    audience: "operator",
+    label: "Unconfirmed viewing released",
+    description:
+      "When an unconfirmed viewing is released, the assigned agent or leasing team is notified so they know the slot is free and can follow up if needed.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "agent_name",
+      "lead_name",
+      "showing_time",
+      "dashboard_url",
+    ],
+    defaultSubject: "Unconfirmed viewing released - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "Hi {{agent_name}}, the unconfirmed viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) was released.\n\nThe renter has been notified and the time slot is free again.\n\nOpen the inquiry: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the
   // scheduled daily Zap 365197456). Audience operator; ONE email per weekday at
   // start-of-shift summarizing four buckets, not one-per-event. The scheduled

@@ -379,3 +379,77 @@ export function confirmationNudgeDue(input: ConfirmationNudgeDueInput): boolean 
 }
 
 export const CONFIRMATION_NUDGE_SENT_COLUMN = "confirmation_nudge_sent_at";
+
+// ---------------------------------------------------------------------------
+// Operator confirmation modes + auto-release (S522).
+//
+// These helpers are intentionally pure: no Supabase, no notification/email
+// calls, no Date.now(). The dashboard and reminders cron pass the current time
+// and org settings in, so the at-risk board and auto-release sweep agree on the
+// same boundaries without duplicating scheduling logic in I/O code.
+// ---------------------------------------------------------------------------
+
+export type ShowingConfirmMode = "auto" | "agent";
+
+export type AtRiskInput = {
+  scheduledAtMs: number;
+  nowMs: number;
+  mode: ShowingConfirmMode | string | null | undefined;
+  confirmed: boolean;
+  outcome: string | null;
+  horizonMs?: number;
+};
+
+export const AT_RISK_HORIZON_MS = 48 * HOUR_MS;
+
+export function isAtRisk(input: AtRiskInput): boolean {
+  const {
+    scheduledAtMs,
+    nowMs,
+    mode,
+    confirmed,
+    outcome,
+    horizonMs = AT_RISK_HORIZON_MS,
+  } = input;
+  if (mode !== "agent") return false;
+  if (!Number.isFinite(scheduledAtMs) || !Number.isFinite(nowMs)) return false;
+  if (confirmed) return false;
+  if (outcome !== null && outcome !== "scheduled") return false;
+  const remaining = scheduledAtMs - nowMs;
+  if (remaining <= 0) return false;
+  if (remaining > horizonMs) return false;
+  return true;
+}
+
+export type AutoReleaseDueInput = {
+  scheduledAtMs: number;
+  nowMs: number;
+  mode: ShowingConfirmMode | string | null | undefined;
+  enabled: boolean;
+  hoursBefore: number;
+  confirmed: boolean;
+  outcome: string | null;
+};
+
+export function autoReleaseDue(input: AutoReleaseDueInput): boolean {
+  const {
+    scheduledAtMs,
+    nowMs,
+    mode,
+    enabled,
+    hoursBefore,
+    confirmed,
+    outcome,
+  } = input;
+  if (!enabled) return false;
+  if (mode !== "agent") return false;
+  if (!Number.isFinite(scheduledAtMs) || !Number.isFinite(nowMs)) return false;
+  if (!Number.isFinite(hoursBefore) || hoursBefore < 1 || hoursBefore > 24) {
+    return false;
+  }
+  if (confirmed) return false;
+  if (outcome !== null && outcome !== "scheduled") return false;
+  const remaining = scheduledAtMs - nowMs;
+  if (remaining <= 0) return false;
+  return remaining <= hoursBefore * HOUR_MS;
+}

@@ -588,6 +588,40 @@ export async function updateTextMessages(formData: FormData) {
   redirect("/dashboard/settings?tab=comms&sms=saved");
 }
 
+export async function updateShowingConfirmationSettings(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const modeRaw = String(formData.get("showing_confirm_mode") ?? "").trim();
+  const mode = modeRaw === "agent" ? "agent" : modeRaw === "auto" ? "auto" : null;
+  if (!mode) {
+    redirect("/dashboard/settings?tab=comms&confirm=invalid");
+  }
+
+  const hoursRaw = String(formData.get("auto_release_unconfirmed_hours") ?? "").trim();
+  const hours = Number(hoursRaw);
+  if (!Number.isInteger(hours) || hours < 1 || hours > 24) {
+    redirect("/dashboard/settings?tab=comms&confirm=invalid");
+  }
+
+  const autoReleaseEnabled =
+    mode === "agent" && formData.get("auto_release_unconfirmed_enabled") != null;
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({
+      showing_confirm_mode: mode,
+      auto_release_unconfirmed_enabled: autoReleaseEnabled,
+      auto_release_unconfirmed_hours: hours,
+    })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=comms&confirm=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&confirm=saved");
+}
+
 // Send the operator a copy of their branded renter auto-reply so they can
 // confirm deliverability + branding before going live. Redirect-based (same
 // reasoning as updateBranding re: the S170 edge-503 WATCH). The result reason

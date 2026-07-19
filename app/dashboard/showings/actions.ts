@@ -20,11 +20,22 @@ import {
   type Availability,
   type ClusterCandidate,
 } from "@/lib/booking";
-import { sendShowingRescheduled, sendRescheduleProposal } from "@/lib/email";
+import {
+  sendShowingReminder,
+  sendShowingRescheduled,
+  sendRescheduleProposal,
+} from "@/lib/email";
 import { normalizeProposedSlots } from "@/lib/reschedule-proposals";
 import { sendOrgNotification } from "@/lib/notifications-server";
+import { resolveArrivalPhone } from "@/lib/showing-contact";
+import { releaseUnconfirmedShowing } from "@/lib/showing-release";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
+
+function one<T>(rel: T | T[] | null | undefined): T | null {
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  return (rel as T) ?? null;
+}
 
 // Operator sets the outcome of a showing. RLS scopes everything to the org.
 // attended -> advance the lead to 'showed'; the change is logged to the lead
@@ -605,7 +616,7 @@ export async function setShowingConfirmed(formData: FormData) {
     if (!canConfirmShowing(status)) return;
     const { data: updated } = await supabase
       .from("showings")
-      .update({ confirmed_at: new Date().toISOString(), confirmed_by: "lead" })
+      .update({ confirmed_at: new Date().toISOString(), confirmed_by: "agent" })
       .eq("id", id)
       .eq("organization_id", org.id)
       .not("assigned_agent_id", "is", null)
@@ -644,6 +655,148 @@ export async function setShowingConfirmed(formData: FormData) {
     });
     revalidatePath(`/dashboard/leads/${s.lead_id}`);
   }
+
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+}
+
+function showingIdFrom(input: FormData | string): string {
+  if (typeof input === "string") return input.trim();
+  return String(input.get("id") ?? "").trim();
+}
+
+export async function confirmShowingByOperator(input: FormData | string) {
+  await requireCapability("manage_leads", "/dashboard/showings?forbidden=1");
+  const id = showingIdFrom(input);
+  if (!id) return;
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return;
+
+  const { data: updated } = await supabase
+    .from("showings")
+    .update({ confirmed_at: new Date().toISOString(), confirmed_by: "agent" })
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .eq("outcome", "scheduled")
+    .is("confirmed_at", null)
+    .select("id, organization_id, lead_id")
+    .maybeSingle();
+  if (!updated) return;
+  const u = updated as { organization_id: string; lead_id: string | null };
+
+  if (u.lead_id) {
+    await supabase.from("messages").insert({
+      organization_id: u.organization_id,
+      lead_id: u.lead_id,
+      channel: "note",
+      direction: "outbound",
+      body: "Viewing confirmed by the operator.",
+    });
+    revalidatePath(`/dashboard/leads/${u.lead_id}`);
+  }
+
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+}
+
+export async function nudgeRenterForConfirmation(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/showings?forbidden=1");
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org || org.showing_confirm_mode !== "agent") return;
+
+  const { data: row } = await supabase
+    .from("showings")
+    .select(
+      "id, cancel_token, scheduled_at, outcome, confirmed_at, lead_id, " +
+        "lead:leads(id, name, email), property:properties(id, address, showing_arrival_phone)",
+    )
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!row) return;
+  const showing = row as unknown as {
+    id: string;
+    cancel_token: string | null;
+    scheduled_at: string | null;
+    outcome: string | null;
+    confirmed_at: string | null;
+    lead_id: string | null;
+    lead: { id: string; name: string | null; email: string | null } | null;
+    property: {
+      id: string;
+      address: string | null;
+      showing_arrival_phone: string | null;
+    } | null;
+  };
+  if (
+    showing.outcome !== "scheduled" ||
+    showing.confirmed_at != null ||
+    !showing.scheduled_at ||
+    new Date(showing.scheduled_at).getTime() <= Date.now()
+  ) {
+    return;
+  }
+
+  const lead = one(showing.lead);
+  const property = one(showing.property);
+  const scheduledAtMs = new Date(showing.scheduled_at).getTime();
+  const hoursUntil = (scheduledAtMs - Date.now()) / 3_600_000;
+  const result = await sendShowingReminder({
+    lead_id: lead?.id ?? showing.lead_id ?? "",
+    kind: hoursUntil <= 4 ? "sameday" : "24h",
+    renter_name: lead?.name ?? null,
+    renter_email: lead?.email ?? null,
+    org_name: org.name,
+    brand_color: org.brand_color,
+    logo_url: org.logo_url,
+    reply_to_email: org.reply_to_email,
+    property_address: property?.address ?? null,
+    leasing_phone: resolveArrivalPhone(
+      property?.showing_arrival_phone,
+      org.showing_arrival_phone,
+      org.public_contact_phone,
+    ),
+    cancel_token: showing.cancel_token ?? null,
+    when_label: formatSlotLong(showing.scheduled_at, org.booking_timezone ?? "America/Toronto"),
+  });
+
+  if (result.sent && showing.lead_id) {
+    await supabase.from("messages").insert({
+      organization_id: org.id,
+      lead_id: showing.lead_id,
+      channel: "email",
+      direction: "outbound",
+      body: "Operator sent a renter confirmation nudge.",
+    });
+    revalidatePath(`/dashboard/leads/${showing.lead_id}`);
+  }
+
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+}
+
+export async function releaseUnconfirmedShowingByOperator(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/showings?forbidden=1");
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org || org.showing_confirm_mode !== "agent") return;
+
+  const result = await releaseUnconfirmedShowing(supabase, {
+    org,
+    showingId: id,
+    appUrl: APP_URL,
+    noteBody: "Viewing released by the operator because it was still unconfirmed.",
+  });
+  if (!result.released) return;
 
   revalidatePath("/dashboard/showings");
   revalidatePath("/dashboard");

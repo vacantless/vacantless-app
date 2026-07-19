@@ -1,5 +1,5 @@
 import type { CoordinationStatus } from "@/lib/showing-agents";
-import { setShowingConfirmed } from "./actions";
+import { confirmShowingByOperator, setShowingConfirmed } from "./actions";
 
 // The confirmation affordance for an assigned viewing (Slice 2 — the "did the
 // agent actually confirm?" trail). Plain forms, no client JS (like OutcomeSelect):
@@ -16,9 +16,8 @@ export function ConfirmControl({
 }) {
   if (status === "awaiting_confirmation") {
     return (
-      <form action={setShowingConfirmed}>
+      <form action={confirmShowingByOperator}>
         <input type="hidden" name="id" value={showingId} />
-        <input type="hidden" name="confirmed" value="true" />
         <button
           type="submit"
           className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100"

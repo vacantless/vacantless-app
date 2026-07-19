@@ -16,6 +16,7 @@ import {
   updateEmailSender,
   updateRenterMessages,
   updateTextMessages,
+  updateShowingConfirmationSettings,
   sendTestEmailAction,
   uploadOrgLogo,
   removeOrgLogo,
@@ -78,7 +79,7 @@ function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   }
   if (sp.distribution) return "distribution";
   if (sp.rotessa || sp.stripeconnect) return "banking";
-  if (sp.test || sp.sender || sp.renter || sp.sms) {
+  if (sp.test || sp.sender || sp.renter || sp.sms || sp.confirm) {
     return "comms";
   }
   // saved / error / logo / logoerr all belong to the brand tab.
@@ -131,6 +132,7 @@ export default async function SettingsPage({
     sender?: string; // Communications → Email sender flash
     renter?: string; // Communications → Renter messages flash
     sms?: string; // Communications → Text messages flash
+    confirm?: string; // Communications → Showing confirmation flash
     feed?: string; // Public Page & Brand → syndication contact flash
     distribution?: string; // Distribution → channel account/setup flash
   };
@@ -316,6 +318,13 @@ export default async function SettingsPage({
   });
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
+  const showingConfirmMode = org.showing_confirm_mode === "agent" ? "agent" : "auto";
+  const autoReleaseHours =
+    Number.isInteger(org.auto_release_unconfirmed_hours) &&
+    org.auto_release_unconfirmed_hours >= 1 &&
+    org.auto_release_unconfirmed_hours <= 24
+      ? org.auto_release_unconfirmed_hours
+      : 2;
   // The preview mirrors what renters actually see: the dashboard header and
   // public pages use an accessibility-guardrailed (darkened-as-needed) variant
   // so white text stays readable on a pale color.
@@ -344,6 +353,7 @@ export default async function SettingsPage({
   const senderFlash = searchParams.sender;
   const renterFlash = searchParams.renter;
   const smsFlash = searchParams.sms;
+  const confirmFlash = searchParams.confirm;
   const canRenterSms = canUseRenterSms(org.plan);
 
   return (
@@ -1335,6 +1345,124 @@ export default async function SettingsPage({
 
             <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
               Save renter messages
+            </button>
+          </form>
+
+          {/* --- Viewing confirmation --- */}
+          <form
+            action={updateShowingConfirmationSettings}
+            className="rounded-2xl border border-gray-200 bg-white p-5"
+          >
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Viewing confirmation
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Choose whether booked viewings proceed automatically or stay
+              visible to your team until someone confirms them.
+            </p>
+
+            {confirmFlash === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Viewing confirmation settings saved.
+              </div>
+            )}
+            {confirmFlash === "invalid" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Pick a confirmation mode and an auto-release window from 1 to 24
+                hours.
+              </div>
+            )}
+            {confirmFlash === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving these settings. Please try again.
+              </div>
+            )}
+
+            <fieldset className="mt-5 space-y-3">
+              <legend className="text-sm font-medium text-gray-700">
+                Confirmation mode
+              </legend>
+              <label className="flex items-start gap-3">
+                <input
+                  name="showing_confirm_mode"
+                  type="radio"
+                  value="auto"
+                  defaultChecked={showingConfirmMode === "auto"}
+                  className="mt-0.5 h-4 w-4 border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Auto-confirm booked viewings
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Renters still get the one-tap confirm links in reminders.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  name="showing_confirm_mode"
+                  type="radio"
+                  value="agent"
+                  defaultChecked={showingConfirmMode === "agent"}
+                  className="mt-0.5 h-4 w-4 border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Agent confirms before the viewing
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Unconfirmed viewings appear in an at-risk board on Viewings.
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <label className="flex items-start gap-3">
+                <input
+                  name="auto_release_unconfirmed_enabled"
+                  type="checkbox"
+                  defaultChecked={
+                    showingConfirmMode === "agent" &&
+                    org.auto_release_unconfirmed_enabled
+                  }
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Automatically release still-unconfirmed viewings
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Applies only in agent-confirm mode. Existing orgs stay off
+                    until you turn this on.
+                  </span>
+                </span>
+              </label>
+              <label className="mt-4 block max-w-[12rem]">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Release window
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    name="auto_release_unconfirmed_hours"
+                    type="number"
+                    min={1}
+                    max={24}
+                    step={1}
+                    defaultValue={autoReleaseHours}
+                    className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <span className="text-sm text-gray-500">hours before</span>
+                </div>
+              </label>
+            </div>
+
+            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+              Save viewing confirmation
             </button>
           </form>
 
