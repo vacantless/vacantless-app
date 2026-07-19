@@ -304,6 +304,101 @@ export function verifyTwilioSignature(
   }
 }
 
+export type OpenPhoneInboundMessage = {
+  kind: "message_received";
+  from: string;
+  to: string;
+  body: string;
+};
+
+function decodeBase64(value: string | null | undefined): Buffer | null {
+  const trimmed = (value || "").trim();
+  if (!trimmed || !/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) return null;
+  try {
+    const decoded = Buffer.from(trimmed, "base64");
+    return decoded.length > 0 ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verify OpenPhone/QUO's inbound webhook signature:
+ *   openphone-signature: hmac;1;<unixMillisTimestamp>;<base64Sig>
+ *
+ * The signature is base64( HMAC-SHA256( base64decode(secret),
+ * timestamp + "." + rawBody ) ). Multiple comma-separated signatures are
+ * accepted so future key rotation can work without changing the route.
+ */
+export function verifyOpenPhoneSignature(
+  signingSecretBase64: string,
+  signatureHeader: string | null | undefined,
+  rawBody: string,
+  opts: { toleranceSec?: number; nowMs?: number } = {},
+): boolean {
+  const key = decodeBase64(signingSecretBase64);
+  if (!key || !signatureHeader) return false;
+
+  const toleranceMs = (opts.toleranceSec ?? 300) * 1000;
+  const nowMs = opts.nowMs ?? Date.now();
+
+  for (const part of signatureHeader.split(",")) {
+    const pieces = part.trim().split(";");
+    if (pieces.length !== 4) continue;
+    const [scheme, version, timestampRaw, signatureRaw] = pieces;
+    if (scheme !== "hmac" || version !== "1") continue;
+
+    const timestamp = Number(timestampRaw);
+    if (!Number.isFinite(timestamp) || !Number.isInteger(timestamp)) continue;
+    if (Math.abs(nowMs - timestamp) > toleranceMs) continue;
+
+    const received = decodeBase64(signatureRaw);
+    if (!received) continue;
+
+    const computed = createHmac("sha256", key)
+      .update(`${timestampRaw}.${rawBody}`, "utf-8")
+      .digest();
+    if (computed.length !== received.length) continue;
+
+    try {
+      if (timingSafeEqual(computed, received)) return true;
+    } catch {
+      // Length is checked above; keep this defensive for malformed buffers.
+    }
+  }
+  return false;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+/**
+ * Extract the only QUO/OpenPhone webhook event this route acts on. All delivery,
+ * call, contact, and outbound events return null and are acknowledged by the
+ * route without side effects.
+ */
+export function parseOpenPhoneInbound(payload: unknown): OpenPhoneInboundMessage | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as any;
+  if (root.type !== "message.received") return null;
+
+  const object = root.data?.object;
+  if (!object || typeof object !== "object") return null;
+  if (object.direction !== "incoming") return null;
+
+  const from = stringValue(object.from);
+  const body =
+    stringValue(object.body) ??
+    stringValue(object.text) ??
+    stringValue(object.content);
+  const rawTo = object.to;
+  const to = Array.isArray(rawTo) ? stringValue(rawTo[0]) : stringValue(rawTo);
+  if (!from || !to || !body) return null;
+
+  return { kind: "message_received", from, to, body };
+}
+
 // ---------------------------------------------------------------------------
 // Sender (I/O). Best-effort; never throws.
 // ---------------------------------------------------------------------------
