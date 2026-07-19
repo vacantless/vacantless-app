@@ -2,6 +2,8 @@ import Link from "next/link";
 import { BrandBanner, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
+import { hasEntitlement } from "@/lib/billing";
 import { isRentCollectionActive } from "@/lib/rent-status";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +31,12 @@ type Section = {
 
 const SECTIONS: Section[] = [
   {
+    href: "/dashboard/money/reconcile",
+    title: "Reconcile",
+    desc: "Match bank transactions to rent, expenses, or exclusions, and keep the accounting queue clean.",
+    icon: "check",
+  },
+  {
     href: "/dashboard/expenses",
     title: "Expenses",
     desc: "Log and categorize what each rental costs - import a bank feed, sort the money out, and keep every expense against the right unit.",
@@ -44,6 +52,8 @@ const SECTIONS: Section[] = [
 
 export default async function MoneyHubPage() {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  const accounting = hasEntitlement(org?.plan, "accounting");
   // RLS scopes both reads to the current org; we select only the status fields
   // needed to decide whether a rent rail is connected.
   const [{ data: stripeRows }, { data: rotessaRows }] = await Promise.all([
@@ -96,6 +106,7 @@ export default async function MoneyHubPage() {
 
         {SECTIONS.map((s) => {
           const Icon = Icons[s.icon];
+          const locked = s.href === "/dashboard/money/reconcile" && !accounting;
           return (
             <Link key={s.href} href={s.href} className="block">
               <Card hover className="h-full">
@@ -104,7 +115,14 @@ export default async function MoneyHubPage() {
                     <Icon className="h-5 w-5" />
                   </IconTile>
                   <div className="min-w-0">
-                    <h2 className="font-semibold text-gray-900">{s.title}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-semibold text-gray-900">{s.title}</h2>
+                      {locked && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-100">
+                          Premium
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-sm leading-relaxed text-gray-600">
                       {s.desc}
                     </p>
