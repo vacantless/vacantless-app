@@ -37,6 +37,12 @@ const SECTIONS: Section[] = [
     icon: "check",
   },
   {
+    href: "/dashboard/money/import-history",
+    title: "Import history",
+    desc: "Upload categorized FreshBooks history, preview the matches, and seed accounting rules before committing anything.",
+    icon: "page",
+  },
+  {
     href: "/dashboard/expenses",
     title: "Expenses",
     desc: "Log and categorize what each rental costs - import a bank feed, sort the money out, and keep every expense against the right unit.",
