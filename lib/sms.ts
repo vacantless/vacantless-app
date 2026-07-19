@@ -166,6 +166,9 @@ export type SmsCopyInput = {
   property_address: string | null;
   when_label: string; // already formatted in the org timezone
   booking_requires_confirmation?: boolean | null;
+  confirm_url?: string | null;
+  reschedule_url?: string | null;
+  cancel_url?: string | null;
 };
 
 /** Booking-confirmation text. The renter just self-booked; first SMS touch. */
@@ -185,17 +188,26 @@ export function bookingConfirmationSms(p: SmsCopyInput): string {
   );
 }
 
-/** Showing-reminder text (24h or 2h before). */
-export function showingReminderSms(p: SmsCopyInput, kind: "24h" | "2h"): string {
+/** Showing-reminder text (24h, same-day, or optional 2h before). */
+export function showingReminderSms(p: SmsCopyInput, kind: "24h" | "sameday" | "2h"): string {
   const org = (p.org_name || "Our leasing team").trim();
   const addr = p.property_address ? p.property_address.trim() : "the property";
   const lead =
     kind === "2h"
       ? "your viewing is coming up soon"
+      : kind === "sameday"
+        ? "you're booked for a viewing today"
       : "a reminder of your upcoming viewing";
+  const confirm = p.confirm_url?.trim();
+  const reschedule = p.reschedule_url?.trim();
+  const cancel = p.cancel_url?.trim();
+  const actionLine = confirm
+    ? `Confirm: ${confirm}` +
+      (reschedule ? ` Reschedule: ${reschedule}` : "") +
+      (cancel ? ` Cancel: ${cancel}` : "")
+    : "Reply here to reschedule.";
   return noEmDash(
-    `${org}: ${lead} at ${addr} on ${p.when_label}. ` +
-      `Reply here to reschedule. ${OPT_OUT_LINE}`,
+    `${org}: ${lead} at ${addr} for ${p.when_label}. ${actionLine} ${OPT_OUT_LINE}`,
   );
 }
 

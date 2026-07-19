@@ -723,7 +723,7 @@ export async function sendShowingRescheduled(
 
 export type ReminderPayload = {
   lead_id: string;
-  kind: "24h" | "2h";
+  kind: "24h" | "sameday" | "2h";
   renter_name: string | null;
   renter_email: string | null;
   org_name: string | null;
@@ -754,10 +754,15 @@ function reminderHtml(p: ReminderPayload): string {
   const rescheduleUrl = cancelToken
     ? `${APP_BASE_URL}/showing/reschedule/${encodeURIComponent(cancelToken)}`
     : null;
+  const cancelUrl = cancelToken
+    ? `${APP_BASE_URL}/showing/cancel/${encodeURIComponent(cancelToken)}`
+    : null;
 
   const lead =
     p.kind === "2h"
       ? "Just a quick reminder - your viewing is coming up soon:"
+      : p.kind === "sameday"
+        ? "Your viewing is today. Tap below to confirm you'll be there:"
       : "This is a friendly reminder of your upcoming viewing:";
 
   const logo = p.logo_url
@@ -780,16 +785,18 @@ function reminderHtml(p: ReminderPayload): string {
       </div>
       ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
       ${
-        confirmUrl && rescheduleUrl
+        confirmUrl && rescheduleUrl && cancelUrl
           ? `<p style="margin:0 0 14px;text-align:center;">
         <a href="${escapeHtml(confirmUrl)}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:9px;font-weight:700;">✓ Confirm you're coming</a>
       </p>
       <p style="margin:0 0 16px;text-align:center;font-size:13px;">
         <a href="${escapeHtml(rescheduleUrl)}" style="color:${escapeHtml(brand)};font-weight:600;text-decoration:none;">Can't make it? Reschedule</a>
+        <span style="color:#d4d4d8;padding:0 8px;">|</span>
+        <a href="${escapeHtml(cancelUrl)}" style="color:${escapeHtml(brand)};font-weight:600;text-decoration:none;">Cancel this viewing</a>
       </p>`
           : ""
       }
-      <p style="margin:0 0 16px;">If you can no longer make it or need to reschedule, just reply to this email and we'll sort it out.</p>
+      <p style="margin:0 0 16px;">If anything has changed, use the links above or reply to this email and we'll sort it out.</p>
       <p style="margin:24px 0 0;color:#52525b;">See you then,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">

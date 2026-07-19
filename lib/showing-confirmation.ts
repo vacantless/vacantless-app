@@ -29,7 +29,7 @@ export async function confirmShowingByCancelToken(
 
   const { data, error } = await client
     .from("showings")
-    .update({ confirmed_at: nowIso, confirmed_by: "lead" })
+    .update({ confirmed_at: nowIso, confirmed_by: "renter" })
     .eq("cancel_token", cleanToken)
     .eq("outcome", "scheduled")
     .is("confirmed_at", null)

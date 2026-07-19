@@ -1,22 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendShowingReminder } from "@/lib/email";
-import { sendSms, showingReminderSms } from "@/lib/sms";
+import { normalizePhoneE164, sendSms, showingReminderSms } from "@/lib/sms";
 import { formatSlotLong } from "@/lib/booking";
 import {
+  channelPlan,
   pendingRescheduleShowingIds,
   reminderDue,
+  REMINDER_SMS_SENT_COLUMN,
   REMINDER_SENT_COLUMN,
-  type ReminderKind,
   type PendingRescheduleProposalRow,
 } from "@/lib/reminders";
 import { canUseRenterSms } from "@/lib/billing";
 
-// Reminder sweep. Finds booked showings that are ~24h or ~2h out and haven't
-// had that reminder sent yet, then sends a branded EMAIL reminder and — when the
-// org has SMS on and we have a usable, non-opted-out number — a parallel SMS
-// reminder. Email and SMS are tracked on SEPARATE stamp columns so each sends
-// (and never double-sends) on its own track; one failing never blocks the other.
+// Reminder sweep. Finds booked showings that are ~24h, same-day, or optionally
+// ~2h out and haven't had that tier sent yet, then sends exactly one coordinated
+// channel for that tier: email for the day-ahead touch, SMS for the same-day
+// touch when deliverable, and email fallback for same-day when SMS cannot go.
+// Email and SMS still stamp SEPARATE columns for audit/idempotency, but channel
+// planning prevents a same-tier double ping.
 //
 // Idempotent + catch-up safe: re-runs never double-send (the stamped column
 // gates each kind/channel).
@@ -31,10 +33,9 @@ import { canUseRenterSms } from "@/lib/billing";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const REMINDER_SMS_SENT_COLUMN: Record<ReminderKind, string> = {
-  "24h": "reminder_24h_sms_sent_at",
-  "2h": "reminder_2h_sms_sent_at",
-};
+const APP_BASE_URL = (
+  process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app"
+).replace(/\/+$/, "");
 
 type Summary = {
   ok: boolean;
@@ -80,8 +81,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin
     .from("showings")
     .select(
-      "id, cancel_token, scheduled_at, reminder_24h_sent_at, reminder_2h_sent_at, " +
-        "reminder_24h_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
+      "id, cancel_token, scheduled_at, reminder_24h_sent_at, reminder_sameday_sent_at, reminder_2h_sent_at, " +
+        "reminder_24h_sms_sent_at, reminder_sameday_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
         "leads(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone), " +
         "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
     )
@@ -89,8 +90,8 @@ export async function GET(req: NextRequest) {
     .gt("scheduled_at", now.toISOString())
     .lte("scheduled_at", in24hIso)
     .or(
-      "reminder_24h_sent_at.is.null,reminder_2h_sent_at.is.null," +
-        "reminder_24h_sms_sent_at.is.null,reminder_2h_sms_sent_at.is.null",
+      "reminder_24h_sent_at.is.null,reminder_sameday_sent_at.is.null,reminder_2h_sent_at.is.null," +
+        "reminder_24h_sms_sent_at.is.null,reminder_sameday_sms_sent_at.is.null,reminder_2h_sms_sent_at.is.null",
     );
 
   if (error) {
@@ -156,18 +157,43 @@ export async function GET(req: NextRequest) {
 
     let didSomething = false;
 
-    // --- Email reminder (own stamp track) ---------------------------------
-    const emailKind: ReminderKind | null = reminderDue({
+    const phone: string | null = lead?.phone ?? null;
+    const normalizedPhone = normalizePhoneE164(phone);
+    // Renter SMS is a paid (Growth+) capability: enforce the plan at the send
+    // site, not just the sms_enabled toggle (Codex P2 "Free = no texting").
+    const smsEnabled: boolean = org?.sms_enabled === true && canUseRenterSms(org?.plan);
+    const optedOut: boolean = lead?.sms_opt_out === true;
+    const smsDeliverable = smsEnabled && normalizedPhone != null && !optedOut;
+
+    const kind = reminderDue({
       scheduledAtMs,
       nowMs,
-      sent24h: row.reminder_24h_sent_at != null,
-      sent2h: row.reminder_2h_sent_at != null,
+      sent24h: row.reminder_24h_sent_at != null || row.reminder_24h_sms_sent_at != null,
+      sentSameday:
+        row.reminder_sameday_sent_at != null ||
+        row.reminder_sameday_sms_sent_at != null,
+      sent2h: row.reminder_2h_sent_at != null || row.reminder_2h_sms_sent_at != null,
     });
+    const plan = kind ? channelPlan(kind, { smsDeliverable }) : { email: false, sms: false };
+    const label =
+      kind === "2h" ? "2-hour" : kind === "sameday" ? "same-day" : "24-hour";
+    const token = typeof row.cancel_token === "string" ? row.cancel_token.trim() : "";
+    const confirmUrl = token
+      ? `${APP_BASE_URL}/showing/confirm/${encodeURIComponent(token)}`
+      : null;
+    const rescheduleUrl = token
+      ? `${APP_BASE_URL}/showing/reschedule/${encodeURIComponent(token)}`
+      : null;
+    const cancelUrl = token
+      ? `${APP_BASE_URL}/showing/cancel/${encodeURIComponent(token)}`
+      : null;
+
+    // --- Coordinated email reminder ---------------------------------------
     const renterEmail: string | null = lead?.email ?? null;
-    if (emailKind && renterEmail) {
+    if (kind && plan.email && renterEmail) {
       const result = await sendShowingReminder({
         lead_id: row.lead_id,
-        kind: emailKind,
+        kind,
         renter_name: lead?.name ?? null,
         renter_email: renterEmail,
         org_name: orgName,
@@ -182,48 +208,47 @@ export async function GET(req: NextRequest) {
 
       if (!result.sent) {
         summary.errors++;
-        summary.details.push({ showing: row.id, channel: "email", kind: emailKind, error: result.reason });
+        summary.details.push({ showing: row.id, channel: "email", kind, error: result.reason });
       } else {
-        const column = REMINDER_SENT_COLUMN[emailKind];
+        const column = REMINDER_SENT_COLUMN[kind];
         const { error: stampErr } = await admin
           .from("showings")
           .update({ [column]: new Date().toISOString() })
           .eq("id", row.id);
         if (stampErr) {
           summary.errors++;
-          summary.details.push({ showing: row.id, channel: "email", kind: emailKind, error: `stamp_failed:${stampErr.message}` });
+          summary.details.push({ showing: row.id, channel: "email", kind, error: `stamp_failed:${stampErr.message}` });
         } else {
           await admin.from("messages").insert({
             organization_id: row.organization_id,
             lead_id: row.lead_id,
             channel: "email",
             direction: "outbound",
-            body: `${emailKind === "2h" ? "2-hour" : "24-hour"} viewing reminder sent to ${renterEmail}` +
+            body: `${label} viewing reminder sent to ${renterEmail}` +
               (result.subject ? ` — "${result.subject}"` : ""),
           });
           summary.sent++;
           didSomething = true;
-          summary.details.push({ showing: row.id, channel: "email", kind: emailKind, to: renterEmail });
+          summary.details.push({ showing: row.id, channel: "email", kind, to: renterEmail });
         }
       }
     }
 
-    // --- SMS reminder (own stamp track; independent of email) -------------
-    const smsKind: ReminderKind | null = reminderDue({
-      scheduledAtMs,
-      nowMs,
-      sent24h: row.reminder_24h_sms_sent_at != null,
-      sent2h: row.reminder_2h_sms_sent_at != null,
-    });
-    const phone: string | null = lead?.phone ?? null;
-    // Renter SMS is a paid (Growth+) capability: enforce the plan at the send
-    // site, not just the sms_enabled toggle (Codex P2 "Free = no texting").
-    const smsEnabled: boolean = org?.sms_enabled === true && canUseRenterSms(org?.plan);
-    const optedOut: boolean = lead?.sms_opt_out === true;
-    if (smsKind && smsEnabled && phone && !optedOut) {
+    // --- Coordinated SMS reminder -----------------------------------------
+    if (kind && plan.sms && normalizedPhone) {
       const result = await sendSms({
-        to: phone,
-        body: showingReminderSms({ org_name: orgName, property_address: addr, when_label: whenLabel }, smsKind),
+        to: normalizedPhone,
+        body: showingReminderSms(
+          {
+            org_name: orgName,
+            property_address: addr,
+            when_label: whenLabel,
+            confirm_url: confirmUrl,
+            reschedule_url: rescheduleUrl,
+            cancel_url: cancelUrl,
+          },
+          kind,
+        ),
       });
 
       if (!result.sent) {
@@ -231,28 +256,28 @@ export async function GET(req: NextRequest) {
         // error worth alarming on; everything else is logged.
         if (result.reason !== "no_credentials") {
           summary.errors++;
-          summary.details.push({ showing: row.id, channel: "sms", kind: smsKind, error: result.reason });
+          summary.details.push({ showing: row.id, channel: "sms", kind, error: result.reason });
         }
       } else {
-        const column = REMINDER_SMS_SENT_COLUMN[smsKind];
+        const column = REMINDER_SMS_SENT_COLUMN[kind];
         const { error: stampErr } = await admin
           .from("showings")
           .update({ [column]: new Date().toISOString() })
           .eq("id", row.id);
         if (stampErr) {
           summary.errors++;
-          summary.details.push({ showing: row.id, channel: "sms", kind: smsKind, error: `stamp_failed:${stampErr.message}` });
+          summary.details.push({ showing: row.id, channel: "sms", kind, error: `stamp_failed:${stampErr.message}` });
         } else {
           await admin.from("messages").insert({
             organization_id: row.organization_id,
             lead_id: row.lead_id,
             channel: "sms",
             direction: "outbound",
-            body: `${smsKind === "2h" ? "2-hour" : "24-hour"} viewing reminder text sent to ${phone}`,
+            body: `${label} viewing reminder text sent to ${normalizedPhone}`,
           });
           summary.smsSent++;
           didSomething = true;
-          summary.details.push({ showing: row.id, channel: "sms", kind: smsKind, to: phone });
+          summary.details.push({ showing: row.id, channel: "sms", kind, to: normalizedPhone });
         }
       }
     }

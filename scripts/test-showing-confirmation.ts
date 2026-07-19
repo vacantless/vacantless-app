@@ -112,7 +112,7 @@ async function testConfirmHelper() {
   );
   ok("scheduled showing confirms", first.ok && first.confirmed);
   eq("confirmed_at set", scheduled.state.row?.confirmed_at, "2026-07-16T10:00:00.000Z");
-  eq("confirmed_by lead", scheduled.state.row?.confirmed_by, "lead");
+  eq("confirmed_by renter", scheduled.state.row?.confirmed_by, "renter");
   eq("one message inserted", scheduled.state.messages.length, 1);
   ok(
     "message body records renter confirmation",
@@ -183,6 +183,9 @@ async function testReminderEmail() {
   ok("reminder renders reschedule link when token present",
     withHtml.includes("Can't make it? Reschedule") &&
       withHtml.includes("https://app.vacantless.test/showing/reschedule/tok%20live%2Fspace"));
+  ok("reminder renders cancel link when token present",
+    withHtml.includes("Cancel this viewing") &&
+      withHtml.includes("https://app.vacantless.test/showing/cancel/tok%20live%2Fspace"));
 
   sends.length = 0;
   await sendShowingReminder({ ...base, cancel_token: null });
@@ -194,6 +197,8 @@ async function testReminderEmail() {
     !withoutHtml.includes("/showing/confirm/"));
   ok("reminder omits reschedule URL when token absent",
     !withoutHtml.includes("/showing/reschedule/"));
+  ok("reminder omits cancel URL when token absent",
+    !withoutHtml.includes("/showing/cancel/"));
 }
 
 function testSourceWiring() {
@@ -214,6 +219,7 @@ function testSourceWiring() {
     "utf8",
   );
   ok("confirm page lookup is by cancel_token", pageSource.includes('.eq("cancel_token", params.token)'));
+  ok("confirm page links to cancel page", pageSource.includes("/showing/cancel/"));
   ok("confirm page only shows confirmed state for scheduled rows",
     pageSource.includes("isScheduled && (searchParams.status === \"confirmed\" || row.confirmed_at != null)"));
   ok("confirm action uses admin client", actionSource.includes("createAdminClient"));

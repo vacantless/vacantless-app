@@ -77,6 +77,7 @@ export default async function ConfirmShowingPage({
     isScheduled && (searchParams.status === "confirmed" || row.confirmed_at != null);
   const canConfirm = isScheduled && !isConfirmed;
   const rescheduleUrl = `/showing/reschedule/${encodeURIComponent(params.token)}`;
+  const cancelUrl = `/showing/cancel/${encodeURIComponent(params.token)}`;
 
   return (
     <div
@@ -106,6 +107,20 @@ export default async function ConfirmShowingPage({
               <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
                 <p className="font-medium text-gray-900">{address}</p>
                 <p className="mt-1 text-gray-600">{when}</p>
+              </div>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <a
+                  href={rescheduleUrl}
+                  className="block rounded-xl border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Need another time?
+                </a>
+                <a
+                  href={cancelUrl}
+                  className="block rounded-xl border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel this viewing
+                </a>
               </div>
             </>
           ) : canConfirm ? (
@@ -142,6 +157,12 @@ export default async function ConfirmShowingPage({
                   className="block rounded-xl border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Can&apos;t make it? Reschedule
+                </a>
+                <a
+                  href={cancelUrl}
+                  className="block rounded-xl border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel this viewing
                 </a>
               </div>
             </>

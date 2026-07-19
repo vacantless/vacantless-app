@@ -154,13 +154,28 @@ ok("booking confirm-first has no em dash", !/[‒–—―]/.test(bookingConfirm
 ok("booking confirm-first <= 2 segments", smsSegments(bookingConfirmFirst) <= 2);
 
 const r24 = showingReminderSms(copy, "24h");
+const rSameDay = showingReminderSms(copy, "sameday");
 const r2 = showingReminderSms(copy, "2h");
 ok("24h reminder opt-out", r24.includes("Reply STOP to opt out."));
+ok("sameday reminder opt-out", rSameDay.includes("Reply STOP to opt out."));
 ok("2h reminder opt-out", r2.includes("Reply STOP to opt out."));
-ok("24h vs 2h differ", r24 !== r2);
+ok("24h vs sameday vs 2h differ", r24 !== rSameDay && rSameDay !== r2);
+ok("sameday says viewing is today", rSameDay.includes("viewing today"));
 ok("2h says coming up soon", r2.includes("coming up soon"));
-ok("reminder no em dash", !/[‒–—―]/.test(r24) && !/[‒–—―]/.test(r2));
+ok("reminder no em dash", !/[‒–—―]/.test(r24) && !/[‒–—―]/.test(rSameDay) && !/[‒–—―]/.test(r2));
 ok("24h reminder <= 2 segments", smsSegments(r24) <= 2);
+const linkedSameDay = showingReminderSms(
+  {
+    ...copy,
+    confirm_url: "https://app.vacantless.test/showing/confirm/tok",
+    reschedule_url: "https://app.vacantless.test/showing/reschedule/tok",
+    cancel_url: "https://app.vacantless.test/showing/cancel/tok",
+  },
+  "sameday",
+);
+ok("linked reminder includes confirm URL", linkedSameDay.includes("/showing/confirm/tok"));
+ok("linked reminder includes reschedule URL", linkedSameDay.includes("/showing/reschedule/tok"));
+ok("linked reminder includes cancel URL", linkedSameDay.includes("/showing/cancel/tok"));
 
 // builders degrade with missing fields
 const bare = bookingConfirmationSms({ org_name: null, property_address: null, when_label: "soon" });
