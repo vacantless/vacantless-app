@@ -43,6 +43,12 @@ const SECTIONS: Section[] = [
     icon: "page",
   },
   {
+    href: "/dashboard/money/income-statement",
+    title: "Income statement (P&L)",
+    desc: "Revenue minus operating expenses is your NOI; less interest is net income - the monthly profit picture. Premium.",
+    icon: "chart",
+  },
+  {
     href: "/dashboard/expenses",
     title: "Expenses",
     desc: "Log and categorize what each rental costs - import a bank feed, sort the money out, and keep every expense against the right unit.",
@@ -112,7 +118,10 @@ export default async function MoneyHubPage() {
 
         {SECTIONS.map((s) => {
           const Icon = Icons[s.icon];
-          const locked = s.href === "/dashboard/money/reconcile" && !accounting;
+          const locked =
+            (s.href === "/dashboard/money/reconcile" ||
+              s.href === "/dashboard/money/income-statement") &&
+            !accounting;
           return (
             <Link key={s.href} href={s.href} className="block">
               <Card hover className="h-full">
