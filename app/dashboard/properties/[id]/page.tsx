@@ -125,6 +125,10 @@ import {
   type RunItemStatus,
 } from "@/lib/distribution-run";
 import {
+  runItemHasFreshnessState,
+  runItemNeedsRefresh,
+} from "@/lib/distribution-freshness";
+import {
   normalizePublishChannel,
   normalizePublishMode,
   normalizePublishStatus,
@@ -1194,13 +1198,14 @@ export default async function PropertyDetailPage({
     transport: string | null;
     verification_status: string | null;
     proof_url: string | null;
+    stale_after: string | null;
   };
   let runItemRows: RunItemRow[] = [];
   if (activeRun) {
     const { data: ri } = await supabase
       .from("distribution_run_items")
       .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url",
+        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, stale_after",
       )
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
@@ -1347,8 +1352,18 @@ export default async function PropertyDetailPage({
       }),
       canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
       copilotScript,
-      // S488 Slice 1: merged where-posted staleness/problem for this channel.
-      staleRefresh: channelStatusValueByKey.get(r.channel) === "needs_refresh",
+      // S543: explicit item freshness state wins; only older rows without it
+      // fall back to the where-posted tracker's coarse posted_on age.
+      staleRefresh: runItemHasFreshnessState({
+        verificationStatus: r.verification_status,
+        staleAfter: r.stale_after,
+      })
+        ? runItemNeedsRefresh({
+            verificationStatus: r.verification_status,
+            staleAfter: r.stale_after,
+            nowISO: new Date(nowMs).toISOString(),
+          })
+        : channelStatusValueByKey.get(r.channel) === "needs_refresh",
       liveWithoutUrl: channelStatusValueByKey.get(r.channel) === "problem",
     };
   });

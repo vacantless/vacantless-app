@@ -36,6 +36,9 @@ name: Vacantless background sweeps
 #   * /api/cron/showing-outcome-nudge — one "how did the viewing go?" email to the
 #     operator once a showing's time passes with no outcome recorded; opt-in per
 #     org+event, one nudge per showing via the outcome_nudge_sent_at stamp
+#   * /api/cron/distribution-freshness — re-checks Vacantless-owned distribution
+#     proof and flags stale external portal rows for manual refresh; dark unless
+#     DISTRIBUTION_FRESHNESS_ENABLED=true
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -174,4 +177,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/showing-confirmation-nudge" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger distribution-freshness sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/distribution-freshness" \
             -w "\nHTTP %{http_code}\n"
