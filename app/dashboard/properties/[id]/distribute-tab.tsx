@@ -233,10 +233,11 @@ function distributionHealth({
   return {
     totalChannels: channelCards.length,
     activeChannels,
+    // S533: only "posted" counts as live. A needs_refresh channel is a stale
+    // posting — it already shows under "refreshes due", and counting it as
+    // live coverage overstated the health line (proof-before-Live honesty).
     liveChannels: channelCards.filter(
-      (card) =>
-        card.status.value === "posted" ||
-        card.status.value === "needs_refresh",
+      (card) => card.status.value === "posted",
     ).length,
     submittedChannels,
     attentionChannels,
@@ -281,8 +282,10 @@ export function DistributeTab({
   qaExpected: QaExpected;
   reservedTrackedLinksByChannel: Record<string, string>;
 }) {
+  // S533: posted only — a stale (needs_refresh) channel is not "posted" for
+  // the header chip either; it surfaces via the health panel's refresh count.
   const liveChannels = channelCards.filter(
-    (c) => c.status.value === "posted" || c.status.value === "needs_refresh",
+    (c) => c.status.value === "posted",
   ).length;
   const nextAction = launchRun.run ? nextRunAction(launchRun.items) : null;
   const health = distributionHealth({
