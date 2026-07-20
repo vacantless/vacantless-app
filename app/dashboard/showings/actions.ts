@@ -749,6 +749,7 @@ export async function nudgeRenterForConfirmation(formData: FormData) {
   const hoursUntil = (scheduledAtMs - Date.now()) / 3_600_000;
   const result = await sendShowingReminder({
     lead_id: lead?.id ?? showing.lead_id ?? "",
+    showing_id: showing.id,
     kind: hoursUntil <= 4 ? "sameday" : "24h",
     renter_name: lead?.name ?? null,
     renter_email: lead?.email ?? null,

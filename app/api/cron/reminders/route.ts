@@ -307,6 +307,7 @@ export async function GET(req: NextRequest) {
     if (kind && plan.email && renterEmail) {
       const result = await sendShowingReminder({
         lead_id: row.lead_id,
+        showing_id: row.id,
         kind,
         renter_name: lead?.name ?? null,
         renter_email: renterEmail,

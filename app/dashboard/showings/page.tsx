@@ -24,6 +24,7 @@ import {
 import { isAtRisk } from "@/lib/reminders";
 import { getCurrentRole } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
+import { undeliverableSince } from "@/lib/email-delivery";
 import { OutcomeSelect } from "./outcome-select";
 import { AssignSelect } from "./assign-select";
 import { ConfirmControl } from "./confirm-control";
@@ -43,6 +44,7 @@ export const dynamic = "force-dynamic";
 
 type ShowingRow = {
   id: string;
+  created_at: string | null;
   scheduled_at: string | null;
   outcome: string;
   assigned_agent_id: string | null;
@@ -51,6 +53,17 @@ type ShowingRow = {
   property: { id: string; address: string; status: string | null } | null;
   feedback: { rating: number | null; comments: string | null }[] | null;
 };
+
+type EmailDeliveryEventRow = {
+  email: string | null;
+  event: string | null;
+  occurred_at: string | null;
+};
+
+function emailKey(email: string | null | undefined): string | null {
+  const value = email?.trim().toLowerCase() ?? "";
+  return value.includes("@") ? value : null;
+}
 
 type AgentRow = {
   id: string;
@@ -121,7 +134,7 @@ export default async function ShowingsPage({
   const { data } = await supabase
     .from("showings")
     .select(
-      "id, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address, status), feedback(rating, comments)",
+      "id, created_at, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address, status), feedback(rating, comments)",
     )
     .order("scheduled_at", { ascending: true });
 
@@ -220,6 +233,38 @@ export default async function ShowingsPage({
           }),
         )
       : [];
+  const atRiskEmails = Array.from(
+    new Set(
+      atRiskShowings
+        .map((s) => emailKey(s.lead?.email))
+        .filter((email): email is string => email != null),
+    ),
+  );
+  const { data: deliveryData } =
+    atRiskEmails.length > 0
+      ? await supabase
+          .from("email_delivery_events")
+          .select("email, event, occurred_at")
+          .in("email", atRiskEmails)
+      : { data: [] };
+  const deliveryEventsByEmail = new Map<string, EmailDeliveryEventRow[]>();
+  for (const event of (deliveryData ?? []) as EmailDeliveryEventRow[]) {
+    const key = emailKey(event.email);
+    if (!key) continue;
+    const rows = deliveryEventsByEmail.get(key) ?? [];
+    rows.push(event);
+    deliveryEventsByEmail.set(key, rows);
+  }
+  const undeliverableAtRiskIds = new Set<string>();
+  for (const showing of atRiskShowings) {
+    const key = emailKey(showing.lead?.email);
+    if (
+      key &&
+      undeliverableSince(deliveryEventsByEmail.get(key) ?? [], showing.created_at)
+    ) {
+      undeliverableAtRiskIds.add(showing.id);
+    }
+  }
 
   // Suggested agent for the next viewing (S441) — a HINT the operator taps to
   // accept, never an auto-assign. Load-balances over each agent's non-cancelled
@@ -396,7 +441,11 @@ export default async function ShowingsPage({
       )}
 
       {showingConfirmMode === "agent" && (
-        <AtRiskBoard rows={atRiskShowings} timeZone={timeZone} />
+        <AtRiskBoard
+          rows={atRiskShowings}
+          timeZone={timeZone}
+          undeliverableShowingIds={undeliverableAtRiskIds}
+        />
       )}
 
       <Section
@@ -464,9 +513,11 @@ export default async function ShowingsPage({
 function AtRiskBoard({
   rows,
   timeZone,
+  undeliverableShowingIds,
 }: {
   rows: ShowingRow[];
   timeZone: string;
+  undeliverableShowingIds: Set<string>;
 }) {
   return (
     <div className="mb-8">
@@ -478,6 +529,7 @@ function AtRiskBoard({
           &ldquo;Mark confirmed&rdquo; only records it — no message.
           &ldquo;Nudge renter&rdquo; emails the renter a confirm link now.
           &ldquo;Release&rdquo; cancels the booking and reopens the slot.
+          &ldquo;Email bouncing&rdquo; means the reminder did not reach the renter; call them.
         </p>
       )}
       {rows.length === 0 ? (
@@ -510,6 +562,12 @@ function AtRiskBoard({
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
+                {undeliverableShowingIds.has(s.id) && (
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700">
+                    <Icons.mail className="h-3.5 w-3.5" />
+                    Email bouncing - call them
+                  </span>
+                )}
                 <form action={confirmShowingByOperator}>
                   <input type="hidden" name="id" value={s.id} />
                   <button

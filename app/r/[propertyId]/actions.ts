@@ -139,6 +139,7 @@ async function attemptBooking(
         }
         const result = await sendBookingConfirmation({
           lead_id: leadId,
+          showing_id: b.showing_id ?? null,
           renter_name: b.renter_name,
           renter_email: b.renter_email,
           org_name: b.org_name,

@@ -133,6 +133,7 @@ function defaultHtml(p: AutoReplyPayload): string {
 
 export type BookingPayload = {
   lead_id: string;
+  showing_id?: string | null;
   renter_name: string | null;
   renter_email: string | null;
   org_name: string | null;
@@ -275,6 +276,11 @@ export async function sendBookingConfirmation(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: bookingHtml(p),
+    tags: [
+      "kind:booking_confirmation",
+      `lead:${p.lead_id}`,
+      ...(p.showing_id ? [`showing:${p.showing_id}`] : []),
+    ],
   };
 
   try {
@@ -378,6 +384,7 @@ export async function sendRentalApplicationInvite(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: rentalApplicationInviteHtml(p),
+    tags: ["kind:rental_application_invite"],
   };
 
   try {
@@ -503,6 +510,7 @@ export async function sendRescheduleProposal(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: rescheduleProposalHtml(p),
+    tags: ["kind:reschedule_proposal"],
   };
 
   try {
@@ -587,6 +595,7 @@ export async function sendRescheduleAcceptedConfirmation(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: rescheduleAcceptedConfirmationHtml(p),
+    tags: ["kind:reschedule_accepted_confirmation"],
   };
 
   try {
@@ -694,6 +703,7 @@ export async function sendShowingRescheduled(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: rescheduleHtml(p),
+    tags: ["kind:showing_rescheduled"],
   };
 
   try {
@@ -723,6 +733,7 @@ export async function sendShowingRescheduled(
 
 export type ReminderPayload = {
   lead_id: string;
+  showing_id?: string | null;
   kind: "24h" | "sameday" | "2h";
   renter_name: string | null;
   renter_email: string | null;
@@ -830,6 +841,11 @@ export async function sendShowingReminder(p: ReminderPayload): Promise<SendResul
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: reminderHtml(p),
+    tags: [
+      `kind:reminder_${p.kind}`,
+      `lead:${p.lead_id}`,
+      ...(p.showing_id ? [`showing:${p.showing_id}`] : []),
+    ],
   };
 
   try {
@@ -925,6 +941,7 @@ export async function sendShowingAutoReleased(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: autoReleasedHtml(p),
+    tags: ["kind:showing_auto_released"],
   };
 
   try {
@@ -1028,6 +1045,7 @@ export async function sendFeedbackRequest(p: FeedbackPayload): Promise<SendResul
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: feedbackHtml(p),
+    tags: ["kind:feedback_request"],
   };
 
   try {
@@ -1162,6 +1180,7 @@ export async function sendPriceDropAlert(p: PriceDropPayload): Promise<SendResul
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: priceDropHtml(p),
+    tags: ["kind:price_drop_alert"],
   };
 
   try {
@@ -1282,6 +1301,7 @@ export async function sendWaitlistVacancyAlert(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: waitlistAlertHtml(p),
+    tags: ["kind:waitlist_vacancy_alert"],
   };
 
   try {
@@ -1403,6 +1423,7 @@ export async function sendViewingTimesOpenedEmail(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: viewingTimesOpenedHtml(p),
+    tags: ["kind:viewing_times_opened"],
   };
 
   try {
@@ -1533,6 +1554,7 @@ export async function sendNurtureEmail(p: NurturePayload): Promise<SendResult> {
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: nurtureHtml(p, copy),
+    tags: ["kind:nurture_email"],
   };
 
   try {
@@ -1606,6 +1628,7 @@ export async function sendTestEmail(p: TestEmailPayload): Promise<SendResult> {
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: defaultHtml(sample),
+    tags: ["kind:test_email"],
   };
 
   try {
@@ -1711,6 +1734,7 @@ export async function sendTenantMessageEmail(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject: p.subject,
     htmlContent: tenantMessageHtml(p),
+    tags: ["kind:tenant_message"],
   };
 
   try {
@@ -1817,6 +1841,7 @@ export async function sendLeaseSignatureRequest(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: leaseSignatureHtml(p),
+    tags: ["kind:lease_signature_request"],
   };
 
   try {
@@ -1930,6 +1955,7 @@ export async function sendIncidentReportNotification(
     to: [{ email: p.to_email }],
     subject,
     htmlContent: incidentNotificationHtml(p),
+    tags: ["kind:incident_report_notification"],
   };
 
   try {
@@ -2028,6 +2054,7 @@ export async function sendSenderConfirmation(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: senderConfirmationHtml(p),
+    tags: ["kind:sender_confirmation"],
   };
 
   try {
@@ -2087,6 +2114,7 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent,
+    tags: ["kind:auto_reply"],
   };
 
   try {
@@ -2201,6 +2229,7 @@ export async function sendTradeDispatchInvite(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: tradeDispatchHtml(p),
+    tags: ["kind:trade_dispatch_invite"],
   };
 
   try {
@@ -2351,6 +2380,7 @@ export async function sendNotificationEmail(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject: p.subject,
     htmlContent: notificationHtml(p),
+    tags: ["kind:notification_email"],
   };
 
   try {
