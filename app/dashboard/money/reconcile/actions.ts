@@ -8,13 +8,17 @@ import { hasEntitlement } from "@/lib/billing";
 import { requireCapability } from "@/lib/membership";
 import {
   bestRuleForTxn,
+  draftRuleFromAssignment,
   ruleAutoFiles,
   resolveRuleAssignment,
+  validateRuleInput,
   type MatchableTxn,
 } from "@/lib/categorization-rules";
+import { chooseReconcileAssignment, type ResolvedAssignment } from "@/lib/reconcile-assign";
 import { normalizePeriodMonth } from "@/lib/payments";
 import { rentMatchCandidatesForTransaction } from "@/lib/reconciliation";
 import {
+  autoApplyRules,
   insertExpenseAndAssign,
   mapRuleRow,
   RULE_COLUMNS,
@@ -26,6 +30,10 @@ const BASE = "/dashboard/money/reconcile";
 function s(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
+function orNull(formData: FormData, name: string): string | null {
+  const value = s(formData, name);
+  return value === "" ? null : value;
+}
 
 async function requireAccountingOrg() {
   const org = await getCurrentOrg();
@@ -34,10 +42,43 @@ async function requireAccountingOrg() {
   return org;
 }
 
+async function propertyBelongsToOrg(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  propertyId: string | null,
+): Promise<boolean> {
+  if (!propertyId) return true;
+  const { data } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("id", propertyId)
+    .maybeSingle();
+  return !!data;
+}
+
+async function buildingBelongsToOrg(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  buildingKey: string | null,
+): Promise<boolean> {
+  if (!buildingKey) return true;
+  const { data } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("building_key", buildingKey)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
 export async function reconcileDebitAsExpense(formData: FormData) {
   await requireCapability("manage_work_orders", `${BASE}?error=forbidden`);
   const org = await requireAccountingOrg();
   const txnId = s(formData, "transaction_id");
+  const category = s(formData, "category");
+  const propertyId = orNull(formData, "property_id");
+  const buildingKey = orNull(formData, "building_key");
   if (!txnId) redirect(`${BASE}?error=notfound`);
 
   const supabase = createClient();
@@ -68,16 +109,81 @@ export async function reconcileDebitAsExpense(formData: FormData) {
     postedOn: txn.posted_on,
   };
   const rule = bestRuleForTxn(rules, matchTxn);
-  const assignment =
+  const ruleSuggestion: ResolvedAssignment | null =
     rule && ruleAutoFiles(rule)
       ? resolveRuleAssignment(rule)
-      : {
-          category: rule?.category ?? "other",
-          propertyId: null,
-          buildingKey: null,
-        };
+      : rule?.category
+        ? { category: rule.category, propertyId: null, buildingKey: null }
+        : null;
+  const assignment = chooseReconcileAssignment(
+    { category, propertyId, buildingKey },
+    ruleSuggestion,
+  );
+  if (!(await propertyBelongsToOrg(supabase, org.id, assignment.propertyId))) {
+    redirect(`${BASE}?error=notfound`);
+  }
+  if (!(await buildingBelongsToOrg(supabase, org.id, assignment.buildingKey))) {
+    redirect(`${BASE}?error=notfound`);
+  }
   const expenseId = await insertExpenseAndAssign(supabase, org.id, txn, assignment);
   if (!expenseId) redirect(`${BASE}?error=save`);
+
+  let savedScopedRule = false;
+  if (s(formData, "remember") !== "") {
+    try {
+      const scopeKind =
+        assignment.propertyId != null || assignment.buildingKey != null ? "stream" : "merchant";
+      const draft = draftRuleFromAssignment(
+        {
+          merchantEntityId: txn.merchant_entity_id ?? null,
+          streamId: txn.stream_id ?? null,
+          merchant: txn.merchant ?? null,
+          accountExternalId: txn.account_external_id ?? null,
+          amountCents: txn.amount_cents,
+        },
+        {
+          scopeKind,
+          category: assignment.category,
+          propertyId: assignment.propertyId,
+          buildingKey: assignment.buildingKey,
+          amountToleranceCents: Math.max(200, Math.round(txn.amount_cents * 0.05)),
+        },
+      );
+      if (draft) {
+        const ruleInput = validateRuleInput(draft);
+        if (ruleInput.ok) {
+          const { error: ruleErr } = await supabase.from("categorization_rules").insert({
+            organization_id: org.id,
+            scope_kind: ruleInput.value.scopeKind,
+            merchant_entity_id: ruleInput.value.merchantEntityId,
+            stream_id: ruleInput.value.streamId,
+            merchant_norm: ruleInput.value.merchantNorm,
+            account_external_id: ruleInput.value.accountExternalId,
+            amount_min_cents: ruleInput.value.amountMinCents,
+            amount_max_cents: ruleInput.value.amountMaxCents,
+            day_min: ruleInput.value.dayMin,
+            day_max: ruleInput.value.dayMax,
+            category: ruleInput.value.category,
+            property_id: ruleInput.value.propertyId,
+            building_key: ruleInput.value.buildingKey,
+          });
+          if (!ruleErr && (ruleInput.value.propertyId != null || ruleInput.value.buildingKey != null)) {
+            savedScopedRule = true;
+          }
+        }
+      }
+    } catch {
+      savedScopedRule = false;
+    }
+  }
+
+  if (savedScopedRule) {
+    try {
+      await autoApplyRules(org.id);
+    } catch {
+      // Best-effort sweep; the expense itself was already logged above.
+    }
+  }
 
   revalidatePath(BASE);
   revalidatePath("/dashboard/expenses");

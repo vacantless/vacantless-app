@@ -5,10 +5,10 @@ import { getCurrentOrg } from "@/lib/org";
 import { hasEntitlement } from "@/lib/billing";
 import { txnDetailLine } from "@/lib/bank-feed";
 import { bestRuleForTxn, ruleAutoFiles, resolveRuleAssignment, type CategorizationRule, type MatchableTxn } from "@/lib/categorization-rules";
+import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/expenses";
 import { formatMoneyCents } from "@/lib/payments";
 import {
   buildReconciliationSummary,
-  expenseMatchCandidateForTransaction,
   rentMatchCandidatesForTransaction,
   type BankTransactionForReconciliation,
   type RentPaymentReconciliationLink,
@@ -74,6 +74,8 @@ type TenancyRow = {
   status: string;
   properties: { address: string } | { address: string }[] | null;
 };
+
+type PropertyRef = { id: string; address: string; building_key: string | null };
 
 type SearchParams = {
   reconciled?: string;
@@ -215,6 +217,7 @@ export default async function ReconcilePage({
     { data: rentData },
     { data: tenancyData },
     { data: ruleData },
+    { data: propData },
   ] = await Promise.all([
     supabase
       .from("bank_transactions")
@@ -242,9 +245,19 @@ export default async function ReconcilePage({
         "id, scope_kind, merchant_entity_id, stream_id, merchant_norm, account_external_id, amount_min_cents, amount_max_cents, day_min, day_max, category, property_id, building_key, times_applied, last_applied_at, created_at",
       )
       .eq("organization_id", org.id),
+    supabase.from("properties").select("id, address, building_key"),
   ]);
 
   const rows = (txnData ?? []) as BankTxnRow[];
+  const properties = (propData ?? []) as PropertyRef[];
+  const buildingLabels = new Map<string, string>();
+  for (const property of properties) {
+    if (!property.building_key) continue;
+    if (!buildingLabels.has(property.building_key)) {
+      buildingLabels.set(property.building_key, splitAddressUnit(property.address).street ?? property.address);
+    }
+  }
+  const buildingOptions = [...buildingLabels.entries()].map(([key, label]) => ({ key, label }));
   const byId = new Map(rows.map((row) => [row.id, row]));
   const transactions = rows.map(toTransaction);
   const tenancies = ((tenancyData ?? []) as unknown as TenancyRow[]).map((row) => ({
@@ -344,7 +357,6 @@ export default async function ReconcilePage({
                 {account.transactions.map((txn) => {
                   const raw = byId.get(txn.id);
                   const suggestion = raw && txn.direction === "debit" ? suggestionFor(rules, raw) : null;
-                  const expenseCandidate = expenseMatchCandidateForTransaction(txn, suggestion);
                   const rentCandidates =
                     txn.direction === "credit"
                       ? rentMatchCandidatesForTransaction(txn, tenancies).slice(0, 3)
@@ -381,12 +393,44 @@ export default async function ReconcilePage({
 
                       {!txn.state.reconciled ? (
                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                          {txn.direction === "debit" && expenseCandidate && (
-                            <form action={reconcileDebitAsExpense}>
+                          {txn.direction === "debit" && (
+                            <form action={reconcileDebitAsExpense} className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-[34rem] xl:grid-cols-3">
                               <input type="hidden" name="transaction_id" value={txn.id} />
-                              <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Logging...">
-                                {expenseCandidate.confidence === "rule" ? "Log from rule" : "Log as Other"}
-                              </SubmitButton>
+                              <label className="text-sm">
+                                <span className="mb-1 block text-gray-600">Category</span>
+                                <select name="category" defaultValue={suggestion?.category ?? "other"} className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                                  {EXPENSE_CATEGORIES.map((category) => (
+                                    <option key={category} value={category}>{expenseCategoryLabel(category)}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="text-sm">
+                                <span className="mb-1 block text-gray-600">Unit</span>
+                                <select name="property_id" defaultValue={suggestion?.propertyId ?? ""} className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                                  <option value="">-</option>
+                                  {properties.map((property) => (
+                                    <option key={property.id} value={property.id}>{property.address}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="text-sm">
+                                <span className="mb-1 block text-gray-600">Building</span>
+                                <select name="building_key" defaultValue={suggestion?.buildingKey ?? ""} className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                                  <option value="">-</option>
+                                  {buildingOptions.map((building) => (
+                                    <option key={building.key} value={building.key}>{building.label}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:col-span-2 xl:col-span-3">
+                                <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Logging...">
+                                  Log expense
+                                </SubmitButton>
+                                <label className="flex items-center gap-2 text-sm text-gray-600">
+                                  <input type="checkbox" name="remember" value="1" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
+                                  Remember - always categorize {transactionLabel(txn)} this way
+                                </label>
+                              </div>
                             </form>
                           )}
                           {txn.direction === "credit" &&
