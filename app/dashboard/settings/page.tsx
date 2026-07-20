@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { canUseRenterSms } from "@/lib/billing";
+import { isSmsConfigured } from "@/lib/sms";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import {
@@ -355,13 +356,17 @@ export default async function SettingsPage({
   const smsFlash = searchParams.sms;
   const confirmFlash = searchParams.confirm;
   const canRenterSms = canUseRenterSms(org.plan);
+  // S528 honesty: the toggle is a PLAN feature, but whether texts actually go
+  // out is a TRANSPORT fact (SMS_LIVE + provider creds). Read it so the UI
+  // never implies texting while the account's SMS is not connected.
+  const smsTransportReady = isSmsConfigured();
 
   return (
     <div>
       <PageHeader
         icon={<Icons.settings />}
         title="Settings"
-        subtitle="Control how your brand appears to renters and how automated emails and texts behave."
+        subtitle="Control how your brand appears to renters and how automated messages behave."
       />
 
       <SettingsTabs active={tab} />
@@ -1510,7 +1515,9 @@ export default async function SettingsPage({
 
             {smsFlash === "saved" && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Text message setting saved.
+                {smsTransportReady
+                  ? "Text message setting saved."
+                  : "Saved. Texts start once your account's SMS is connected — nothing is sending yet."}
               </div>
             )}
             {smsFlash === "error" && (
@@ -1534,6 +1541,19 @@ export default async function SettingsPage({
               </div>
             )}
 
+            {/* S528 honesty: when the transport isn't connected, lead with
+                "not sending yet" and keep every verb conditional, so an
+                operator can never read this toggle as live texting. */}
+            {canRenterSms && !smsTransportReady && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                <span className="font-medium">Not sending yet.</span> Your
+                account&apos;s SMS isn&apos;t connected, so no texts go out
+                regardless of this setting. Your choice here is saved and takes
+                effect when SMS is connected. Renters get email confirmations
+                and reminders either way.
+              </div>
+            )}
+
             <label className="mt-4 flex items-start gap-3">
               <input
                 name="sms_enabled"
@@ -1548,12 +1568,22 @@ export default async function SettingsPage({
                   reminders
                 </span>
                 <span className="block text-xs text-gray-400">
-                  When a renter leaves a phone number, we send a short text
-                  confirming their booking and reminders about 24 hours and 2
-                  hours before the viewing, alongside the emails. Every text
-                  includes &quot;Reply STOP to opt out,&quot; and a renter who
-                  replies STOP is never texted again. Texting starts once your
-                  account&apos;s SMS is connected.
+                  {smsTransportReady ? (
+                    <>
+                      When a renter leaves a phone number, we send a short text
+                      confirming their booking and reminders about 24 hours and
+                      2 hours before the viewing, alongside the emails.
+                    </>
+                  ) : (
+                    <>
+                      Once your account&apos;s SMS is connected: when a renter
+                      leaves a phone number, we&apos;ll send a short text
+                      confirming their booking and reminders about 24 hours and
+                      2 hours before the viewing, alongside the emails.
+                    </>
+                  )}{" "}
+                  Every text includes &quot;Reply STOP to opt out,&quot; and a
+                  renter who replies STOP is never texted again.
                 </span>
               </span>
             </label>

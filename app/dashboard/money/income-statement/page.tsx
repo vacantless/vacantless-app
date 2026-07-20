@@ -252,6 +252,11 @@ export default async function IncomeStatementPage({
         icon={<Icons.chart className="h-6 w-6" />}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {/* S528: the statement trio should reciprocally link — the T776
+                package reconciles to this P&L. */}
+            <Link href="/dashboard/money/tax-package" className={SECONDARY_ACTION_CLASS}>
+              Tax package
+            </Link>
             <Link href="/dashboard/rent/statement" className={SECONDARY_ACTION_CLASS}>
               Owner statement
             </Link>
@@ -312,6 +317,23 @@ export default async function IncomeStatementPage({
         Showing <span className="font-medium text-gray-700">{describeRange(range)}</span>. Rent is
         counted by paid date; expenses by incurred/completed date.
       </p>
+
+      {/* S528: with no activity in the range, an all-zeros table tells the
+          operator nothing — say so and point at the next action instead. */}
+      {statement.totals.rentCount === 0 &&
+        statement.totals.revenueCents === 0 &&
+        statement.totals.operatingExpensesCents === 0 &&
+        statement.totals.interestCents === 0 &&
+        statement.totals.principalCents === 0 && (
+          <div className="mb-5">
+            <EmptyState
+              icon={<Icons.chart className="h-5 w-5" />}
+              title="Nothing to report for this period"
+              description="No rent was collected and no expenses were logged in this range. Pick another period above, or log rent and expenses first — the statement fills in from what you record."
+              cta={{ href: "/dashboard/expenses", label: "Log expenses" }}
+            />
+          </div>
+        )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

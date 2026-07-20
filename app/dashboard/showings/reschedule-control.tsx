@@ -22,23 +22,29 @@ export function RescheduleControl({
       <summary className="cursor-pointer list-none text-gray-500 hover:text-brand hover:underline">
         Reschedule
       </summary>
-      <form action={rescheduleShowing} className="mt-1.5 flex items-center gap-1.5">
-        <input type="hidden" name="id" value={showingId} />
-        <input
-          type="datetime-local"
-          name="scheduled_at"
-          defaultValue={defaultLocalValue}
-          min={minLocalValue}
-          required
-          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900"
-          aria-label="New viewing time"
-        />
-        <button
-          type="submit"
-          className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Save
-        </button>
+      <form action={rescheduleShowing} className="mt-1.5">
+        <div className="flex items-center gap-1.5">
+          <input type="hidden" name="id" value={showingId} />
+          <input
+            type="datetime-local"
+            name="scheduled_at"
+            defaultValue={defaultLocalValue}
+            min={minLocalValue}
+            required
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900"
+            aria-label="New viewing time"
+          />
+          <button
+            type="submit"
+            className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Save &amp; notify
+          </button>
+        </div>
+        {/* Point-of-action send clarity (S528): this action emails people. */}
+        <p className="mt-1 text-[11px] leading-snug text-gray-400">
+          Emails the renter and the assigned agent the new time.
+        </p>
       </form>
     </details>
   );

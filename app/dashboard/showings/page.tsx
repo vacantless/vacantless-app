@@ -471,6 +471,15 @@ function AtRiskBoard({
   return (
     <div className="mb-8">
       <SectionHeading>Unconfirmed viewings (next 48h)</SectionHeading>
+      {/* S528 send-clarity legend: say up front which buttons email people, so
+          the operator never has to guess what a click sends. */}
+      {rows.length > 0 && (
+        <p className="mb-2 text-xs text-gray-500">
+          &ldquo;Mark confirmed&rdquo; only records it — no message.
+          &ldquo;Nudge renter&rdquo; emails the renter a confirm link now.
+          &ldquo;Release&rdquo; cancels the booking and reopens the slot.
+        </p>
+      )}
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
           No unconfirmed viewings in the next 48 hours.
@@ -505,16 +514,20 @@ function AtRiskBoard({
                   <input type="hidden" name="id" value={s.id} />
                   <button
                     type="submit"
+                    // S528: same verb as the per-row ConfirmControl; records
+                    // only, sends nothing.
+                    title="Records the confirmation. No message is sent."
                     className="inline-flex items-center gap-1 rounded-lg border border-green-300 bg-white px-2.5 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-50"
                   >
                     <Icons.check className="h-3.5 w-3.5" />
-                    Confirm
+                    Mark confirmed
                   </button>
                 </form>
                 <form action={nudgeRenterForConfirmation}>
                   <input type="hidden" name="id" value={s.id} />
                   <button
                     type="submit"
+                    title="Emails the renter a confirm-your-viewing link now"
                     className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100"
                   >
                     <Icons.mail className="h-3.5 w-3.5" />

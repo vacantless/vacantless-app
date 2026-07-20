@@ -112,7 +112,7 @@ function transactionLabel(txn: ReconciledTransaction): string {
 
 function accountHint(count: number, cents: number): string {
   if (count === 0) return "All transactions accounted for";
-  return `${count} transaction${count === 1 ? "" : "s"} - ${formatMoneyCents(cents)} unreconciled`;
+  return `${count} transaction${count === 1 ? "" : "s"} - ${formatMoneyCents(cents)} waiting for a decision`;
 }
 
 function tenancyLabel(row: TenancyRow): string {
@@ -317,9 +317,9 @@ export default async function ReconcilePage({
           icon={<Icons.chart />}
         />
         <StatCard
-          label="Unreconciled"
+          label="Waiting on you"
           value={summary.unreconciledCount}
-          hint={`${formatMoneyCents(summary.unreconciledCents)} to clear`}
+          hint={`${formatMoneyCents(summary.unreconciledCents)} to match, log, or exclude`}
           icon={<Icons.list />}
         />
         <StatCard
@@ -336,6 +336,7 @@ export default async function ReconcilePage({
             icon={<Icons.card />}
             title="No bank transactions yet"
             description="Connect or import a bank account from Expenses, then reconcile the staged transactions here."
+            cta={{ href: "/dashboard/expenses", label: "Go to Expenses" }}
           />
         ) : (
           summary.accounts.map((account) => (

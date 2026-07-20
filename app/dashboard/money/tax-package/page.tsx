@@ -246,6 +246,14 @@ export default async function TaxPackagePage({
         icon={<Icons.chart className="h-6 w-6" />}
         action={
           <div className="print:hidden flex flex-wrap items-center gap-2">
+            {/* S528: the statement trio (P&L / owner statement / T776) should
+                reciprocally link — this package reconciles to the P&L. */}
+            <Link
+              href="/dashboard/money/income-statement"
+              className={SECONDARY_ACTION_CLASS}
+            >
+              Income statement
+            </Link>
             <PrintButton />
             <a href={exportHref(year)} className={SECONDARY_ACTION_CLASS}>
               Download CSV
@@ -283,7 +291,8 @@ export default async function TaxPackagePage({
         <EmptyState
           icon={<Icons.chart className="h-5 w-5" />}
           title="Nothing in this tax year"
-          description="No rent payments, expenses, or completed maintenance fall in this calendar year."
+          description="No rent payments, expenses, or completed maintenance fall in this calendar year. Pick another year above, or log the year's rent and expenses first."
+          cta={{ href: "/dashboard/expenses", label: "Log expenses" }}
         />
       ) : (
         <div className="space-y-6">

@@ -506,11 +506,25 @@ export default async function LeadDetailPage({
         </div>
       )}
 
-      {showings.length > 0 && (
+      {/* S528: always render the Viewings section — hiding it entirely when
+          empty left the pipeline's next step invisible from the lead. */}
+      <div className="mt-8">
+        <SectionHeading>Viewings</SectionHeading>
+      </div>
+      {showings.length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
+          No viewings booked yet. Renters book from your listing page — if
+          nothing is bookable, check{" "}
+          <Link
+            href="/dashboard/availability"
+            className="font-medium text-brand hover:underline"
+          >
+            Viewing Times
+          </Link>
+          .
+        </div>
+      ) : (
         <>
-          <div className="mt-8">
-            <SectionHeading>Viewings</SectionHeading>
-          </div>
           <ul className="space-y-2">
             {showings.map((s) => (
               <li

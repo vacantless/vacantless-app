@@ -70,6 +70,9 @@ export function AssignSelect({
           name="agent_id"
           defaultValue={assignedAgentId ?? ""}
           onChange={() => formRef.current?.requestSubmit()}
+          // Point-of-action send clarity (S528): assigning emails the agent.
+          // The same note lives on the Showing agents page; surface it here too.
+          title="Assigning emails the agent the renter, property, and time"
           className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
         >
           <option value="">Unassigned</option>

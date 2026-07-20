@@ -129,6 +129,26 @@ function statusTone(status: string): ChipTone {
   return "neutral";
 }
 
+// S528: raw DB enums ("staged", "committed", "pending") tell the operator a
+// database fact, not what to do — map every chip to plain English.
+const BATCH_STATUS_LABELS: Record<string, string> = {
+  staged: "Awaiting your review",
+  committed: "Applied",
+  discarded: "Discarded",
+};
+
+const ROW_STATUS_LABELS: Record<string, string> = {
+  pending: "Awaiting review",
+  applied: "Applied",
+  skipped: "Skipped",
+};
+
+const TRIAGE_STATUS_LABELS: Record<string, string> = {
+  pending: "Free to match",
+  categorized: "Already categorized",
+  excluded: "Excluded",
+};
+
 function rowReason(row: ImportRow, matched: BankTxnRow | undefined): string | null {
   if (row.status !== "pending") return row.applied_ref ?? null;
   if (row.planned_action !== "needs_review") return null;
@@ -356,7 +376,7 @@ export default async function ImportHistoryPage({
                     {selectedBatch.filename ?? "FreshBooks import"}
                   </h2>
                   <StatusChip tone={selectedBatch.status === "staged" ? "brand" : statusTone(selectedBatch.status)}>
-                    {selectedBatch.status}
+                    {BATCH_STATUS_LABELS[selectedBatch.status] ?? selectedBatch.status}
                   </StatusChip>
                 </div>
                 <p className="mt-1 text-sm text-gray-600">
@@ -439,7 +459,7 @@ export default async function ImportHistoryPage({
                                 {fmtDate(matched.posted_on)} · {matched.direction} · {formatMoneyCents(matched.amount_cents)}
                               </p>
                               <StatusChip tone={matched.triage_status === "pending" ? "success" : "neutral"}>
-                                {matched.triage_status}
+                                {TRIAGE_STATUS_LABELS[matched.triage_status] ?? matched.triage_status}
                               </StatusChip>
                             </>
                           ) : (
@@ -462,7 +482,9 @@ export default async function ImportHistoryPage({
                               </p>
                             )}
                             {row.status !== "pending" && (
-                              <StatusChip tone={statusTone(row.status)}>{row.status}</StatusChip>
+                              <StatusChip tone={statusTone(row.status)}>
+                                {ROW_STATUS_LABELS[row.status] ?? row.status}
+                              </StatusChip>
                             )}
                             {reason && <p className="max-w-xs text-xs leading-relaxed text-amber-700">{reason}</p>}
                           </div>

@@ -124,8 +124,12 @@ export default async function MoneyHubPage() {
 
         {SECTIONS.map((s) => {
           const Icon = Icons[s.icon];
+          // Every accounting-gated child gets the Premium chip so no card is
+          // an unmarked door into a lock screen (S528: import-history was
+          // gated on the page but unmarked here — a dead-end for Free/Growth).
           const locked =
             (s.href === "/dashboard/money/reconcile" ||
+              s.href === "/dashboard/money/import-history" ||
               s.href === "/dashboard/money/income-statement" ||
               s.href === "/dashboard/money/tax-package") &&
             !accounting;

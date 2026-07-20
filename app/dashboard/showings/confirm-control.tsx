@@ -20,6 +20,8 @@ export function ConfirmControl({
         <input type="hidden" name="id" value={showingId} />
         <button
           type="submit"
+          // S528: records the confirmation only — reassure that nothing sends.
+          title="Records the confirmation. No message is sent."
           className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100"
         >
           Mark confirmed
