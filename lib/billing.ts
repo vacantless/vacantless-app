@@ -350,6 +350,33 @@ export function leaseOcrMonthlyCap(plan: string | null | undefined): number {
   return plan === "premium" || plan === "pilot" ? LEASE_OCR_CAP_PREMIUM : LEASE_OCR_CAP_GROWTH;
 }
 
+// Soft included monthly concierge posting allowance. This is DISPLAY ONLY for
+// S538: no cap, Stripe hook, overage charge, or claim function reads this value.
+export const CONCIERGE_INCLUDED_GROWTH = 2;
+export const CONCIERGE_INCLUDED_PREMIUM = 5;
+
+export function conciergeMonthlyIncluded(plan: string | null | undefined): number {
+  if (!canUseListingMarketing(plan)) return 0;
+  return plan === "premium" || plan === "pilot"
+    ? CONCIERGE_INCLUDED_PREMIUM
+    : CONCIERGE_INCLUDED_GROWTH;
+}
+
+export function conciergeUsageLabel({
+  used,
+  included,
+}: {
+  used: number | null | undefined;
+  included: number | null | undefined;
+}): string {
+  const safeUsed = Math.max(0, Math.floor(used ?? 0));
+  const safeIncluded = Math.max(0, Math.floor(included ?? 0));
+  if (safeIncluded === 0) {
+    return `${safeUsed} done-for-you post${safeUsed === 1 ? "" : "s"} this month`;
+  }
+  return `${safeUsed} of ${safeIncluded} done-for-you posts this month`;
+}
+
 // --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------
 // Photos are the heaviest stored asset per rental, so the per-rental photo cap
 // is a natural paid lever. BASE_PHOTO_CAP must equal MAX_PHOTOS_PER_PROPERTY in

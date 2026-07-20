@@ -42,6 +42,7 @@ import {
   listingPostStatusLabel,
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
+import { conciergeUsageLabel } from "@/lib/billing";
 import {
   LaunchRunPanel,
   type PublishChannelChoiceView,
@@ -75,6 +76,9 @@ export type LaunchRunData = {
   selectable: PublishChannelChoiceView[];
   startChannels: PublishChannelChoiceView[];
   conciergeEnabled: boolean;
+  conciergeDeskEnabled: boolean;
+  conciergeUsage: { used: number; included: number };
+  conciergeDailyLostLabel: string | null;
   // Distribution Lane B: REALTOR_REFERRAL_ENABLED firewall, threaded to the
   // Realtor.ca "dispatch a network agent" referral option in the run panel.
   realtorReferralEnabled: boolean;
@@ -363,7 +367,7 @@ export function DistributeTab({
 
       <DistributionHealthPanel health={health} />
 
-      {launchRun.conciergeEnabled && (
+      {launchRun.conciergeDeskEnabled && (
         <ConciergeDeskEntry
           href={
             conciergeTarget
@@ -371,6 +375,8 @@ export function DistributeTab({
               : "#publish-checklist"
           }
           hasEligibleItem={Boolean(conciergeTarget)}
+          usage={launchRun.conciergeUsage}
+          dailyLostLabel={launchRun.conciergeDailyLostLabel}
         />
       )}
 
@@ -488,9 +494,13 @@ export function DistributeTab({
 function ConciergeDeskEntry({
   href,
   hasEligibleItem,
+  usage,
+  dailyLostLabel,
 }: {
   href: string;
   hasEligibleItem: boolean;
+  usage: { used: number; included: number };
+  dailyLostLabel: string | null;
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-5 py-3">
@@ -503,6 +513,15 @@ function ConciergeDeskEntry({
             ? "The existing publishing desk can take over an eligible manual channel and still records live proof here."
             : "Choose a manual channel in the checklist, then the existing publishing desk handoff appears on that channel."}
         </p>
+        <p className="mt-1 text-xs font-medium text-brand">
+          {conciergeUsageLabel(usage)}
+        </p>
+        {dailyLostLabel && (
+          <p className="mt-1 text-xs text-gray-600">
+            Every day vacant costs about {dailyLostLabel} - we post everywhere and
+            keep it live.
+          </p>
+        )}
       </div>
       <a
         href={href}

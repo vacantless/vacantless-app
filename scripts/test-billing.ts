@@ -40,6 +40,10 @@ import {
   leaseOcrMonthlyCap,
   LEASE_OCR_CAP_GROWTH,
   LEASE_OCR_CAP_PREMIUM,
+  conciergeMonthlyIncluded,
+  conciergeUsageLabel,
+  CONCIERGE_INCLUDED_GROWTH,
+  CONCIERGE_INCLUDED_PREMIUM,
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
@@ -568,6 +572,35 @@ ok("lease_ocr cap: growth = growth cap", leaseOcrMonthlyCap("growth") === LEASE_
 ok("lease_ocr cap: premium = premium cap", leaseOcrMonthlyCap("premium") === LEASE_OCR_CAP_PREMIUM);
 ok("lease_ocr cap: pilot = premium cap", leaseOcrMonthlyCap("pilot") === LEASE_OCR_CAP_PREMIUM);
 ok("lease_ocr cap: premium > growth", LEASE_OCR_CAP_PREMIUM > LEASE_OCR_CAP_GROWTH);
+ok("concierge included: free 0", conciergeMonthlyIncluded("free") === 0);
+ok("concierge included: growth allowance", conciergeMonthlyIncluded("growth") === CONCIERGE_INCLUDED_GROWTH);
+ok("concierge included: premium allowance", conciergeMonthlyIncluded("premium") === CONCIERGE_INCLUDED_PREMIUM);
+ok("concierge included: pilot premium allowance", conciergeMonthlyIncluded("pilot") === CONCIERGE_INCLUDED_PREMIUM);
+ok("concierge included: unknown 0", conciergeMonthlyIncluded("enterprise") === 0);
+ok("concierge included: premium > growth", CONCIERGE_INCLUDED_PREMIUM > CONCIERGE_INCLUDED_GROWTH);
+ok(
+  "concierge usage label: zero usage of allowance",
+  conciergeUsageLabel({ used: 0, included: CONCIERGE_INCLUDED_GROWTH }) ===
+    `0 of ${CONCIERGE_INCLUDED_GROWTH} done-for-you posts this month`,
+);
+ok(
+  "concierge usage label: partial allowance",
+  conciergeUsageLabel({ used: 1, included: CONCIERGE_INCLUDED_GROWTH }) ===
+    `1 of ${CONCIERGE_INCLUDED_GROWTH} done-for-you posts this month`,
+);
+ok(
+  "concierge usage label: over allowance is non-blocking",
+  conciergeUsageLabel({ used: CONCIERGE_INCLUDED_GROWTH + 2, included: CONCIERGE_INCLUDED_GROWTH }) ===
+    `${CONCIERGE_INCLUDED_GROWTH + 2} of ${CONCIERGE_INCLUDED_GROWTH} done-for-you posts this month`,
+);
+ok(
+  "concierge usage label: no included allowance",
+  conciergeUsageLabel({ used: 0, included: 0 }) === "0 done-for-you posts this month",
+);
+ok(
+  "concierge usage label: floors negative and decimal values",
+  conciergeUsageLabel({ used: -3.5, included: 2.9 }) === "0 of 2 done-for-you posts this month",
+);
 
 // --- incident_intake (Growth & up; Option B Slices 1-4) --------------------
 ok("incident_intake: growth true", hasEntitlement("growth", "incident_intake") === true);

@@ -63,6 +63,7 @@ import {
   storageUpsellNote,
   canUseListingMarketing,
   canUseWaitlist,
+  conciergeMonthlyIncluded,
 } from "@/lib/billing";
 import { WaitlistCard, type WaitlistEntryView } from "./waitlist-card";
 import { matchesVacancy } from "@/lib/waitlist";
@@ -73,7 +74,11 @@ import {
   formatMoney,
   formatRentLabel,
 } from "@/lib/price-drop";
-import { vacancyStripModel } from "@/lib/vacancy-cost";
+import {
+  daysVacant,
+  dollarsLostSoFar,
+  vacancyStripModel,
+} from "@/lib/vacancy-cost";
 import {
   LAUNDRY_OPTIONS,
   laundryLabel,
@@ -275,6 +280,15 @@ type PhotoRow = {
   is_cover: boolean;
 };
 
+function currentUtcMonthWindow(now: Date): { startIso: string; endIso: string } {
+  const period = now.toISOString().slice(0, 7); // YYYY-MM (UTC), matching lease_ocr_usage.
+  const [year, month] = period.split("-").map((part) => Number(part));
+  return {
+    startIso: new Date(Date.UTC(year, month - 1, 1)).toISOString(),
+    endIso: new Date(Date.UTC(year, month, 1)).toISOString(),
+  };
+}
+
 export default async function PropertyDetailPage({
   params,
   searchParams,
@@ -329,6 +343,7 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound();
   const p = property as Property;
+  const nowMs = Date.now();
   // S480: this page is scoped to ONE property = ONE org; every distribution
   // account/proof read is filtered to THIS property's org (KI744 / Codex fold).
   const propertyOrgId = (p as unknown as { organization_id: string }).organization_id;
@@ -1196,6 +1211,31 @@ export default async function PropertyDetailPage({
       ? value.filter((item): item is string => typeof item === "string")
       : [];
   const conciergeEnabled = hasEntitlement(org?.plan, "listing_marketing");
+  const conciergeDeskEnabled =
+    conciergeEnabled && process.env.CONCIERGE_DESK_ENABLED === "true";
+  const conciergeUsage = {
+    used: 0,
+    included: conciergeMonthlyIncluded(org?.plan),
+  };
+  if (conciergeDeskEnabled) {
+    const { startIso, endIso } = currentUtcMonthWindow(new Date(nowMs));
+    const { count, error } = await supabase
+      .from("distribution_run_items")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", propertyOrgId)
+      .gte("concierge_requested_at", startIso)
+      .lt("concierge_requested_at", endIso);
+    if (!error) conciergeUsage.used = count ?? 0;
+  }
+  const conciergeDaysVacant = daysVacant({
+    status: p.status,
+    availableSince: p.available_since,
+    now: nowMs,
+  });
+  const conciergeDailyLostLabel =
+    conciergeDaysVacant == null
+      ? null
+      : formatMoney(dollarsLostSoFar({ rentCents: p.rent_cents, days: 1 }));
   const runItems: RunItemView[] = runItemRows.map((r) => {
     const publishKey = normalizePublishChannel(r.channel);
     const meta = publishKey ? publishChannelMeta(publishKey) : null;
@@ -1275,6 +1315,9 @@ export default async function PropertyDetailPage({
     selectable: publishStartChannels.filter((c) => !alreadyInRun.has(c.key)),
     startChannels: publishStartChannels,
     conciergeEnabled,
+    conciergeDeskEnabled,
+    conciergeUsage,
+    conciergeDailyLostLabel,
     realtorReferralEnabled,
   };
   const replyInputs: ReplyInputs = {
@@ -1458,7 +1501,7 @@ export default async function PropertyDetailPage({
         rentCents: p.rent_cents,
       },
     ],
-    Date.now(),
+    nowMs,
   );
   const vacancyUnit = vacancyModel.units[0] ?? null;
   const vacancyLostLabel = formatMoney(vacancyUnit?.lostCents ?? null);
