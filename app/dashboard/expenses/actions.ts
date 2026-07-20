@@ -6,12 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { planEntitlements } from "@/lib/billing";
+import { canUseCaptureEmailIn, planEntitlements } from "@/lib/billing";
 import { providerForPlan, filterNewTransactions } from "@/lib/bank-feed";
 import { getBankFeedProvider } from "@/lib/bank-feed/plaid";
 import { validateExpenseInput } from "@/lib/expenses";
 import { draftRuleFromAssignment, validateRuleInput } from "@/lib/categorization-rules";
-import { normalizePeriodMonth, parseAmountToCents } from "@/lib/payments";
+import { normalizePeriodMonth, parseAmountToCents, validatePaymentInput } from "@/lib/payments";
 import { isRentFromBankEnabled, validateRentSplit } from "@/lib/rent-from-bank";
 import { railPaymentLinkCandidatesForTransaction } from "@/lib/rent-classify";
 import { autoApplyRules, insertExpenseAndAssign } from "./triage-core";
@@ -39,6 +39,15 @@ function orNull(formData: FormData, name: string): string | null {
   const v = s(formData, name);
   return v === "" ? null : v;
 }
+
+type EtransferCaptureRow = {
+  id: string;
+  direction: "received" | "sent";
+  counterparty_name: string;
+  amount_cents: number;
+  txn_date: string;
+  status: string;
+};
 
 // 90 days back, ISO date — the default first-pull window (Plaid often caps here).
 function ninetyDaysAgoIso(): string {
@@ -382,6 +391,253 @@ export async function applyRulesToQueue() {
 
   revalidatePath(BASE);
   redirect(`${BASE}?swept=${swept}`);
+}
+
+async function gateEtransferCapture() {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!canUseCaptureEmailIn(org.plan)) redirect(`${BASE}?etransfer=locked`);
+  return org;
+}
+
+async function propertyBelongsToOrg(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  propertyId: string | null,
+): Promise<boolean> {
+  if (!propertyId) return true;
+  const { data } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("id", propertyId)
+    .maybeSingle();
+  return !!data;
+}
+
+async function buildingBelongsToOrg(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  buildingKey: string | null,
+): Promise<boolean> {
+  if (!buildingKey) return true;
+  const { data } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("building_key", buildingKey)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
+async function loadEtransferCapture(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  id: string,
+): Promise<EtransferCaptureRow | null> {
+  const { data } = await supabase
+    .from("etransfer_captures")
+    .select("id, direction, counterparty_name, amount_cents, txn_date, status")
+    .eq("organization_id", orgId)
+    .eq("id", id)
+    .maybeSingle();
+  return (data ?? null) as EtransferCaptureRow | null;
+}
+
+async function claimEtransferCapture(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  id: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("etransfer_captures")
+    .update({ status: "confirmed", updated_at: new Date().toISOString() })
+    .eq("organization_id", orgId)
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+  return !!data;
+}
+
+async function releaseEtransferClaim(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  id: string,
+) {
+  await supabase
+    .from("etransfer_captures")
+    .update({ status: "pending", updated_at: new Date().toISOString() })
+    .eq("organization_id", orgId)
+    .eq("id", id)
+    .eq("status", "confirmed")
+    .is("rent_payment_id", null)
+    .is("expense_id", null);
+}
+
+export async function confirmEtransferRent(formData: FormData) {
+  await requireCapability("manage_tenancies", `${BASE}?etransfer=forbidden`);
+  const org = await gateEtransferCapture();
+  const captureId = s(formData, "capture_id");
+  const tenancyId = s(formData, "tenancy_id");
+  if (!captureId || !tenancyId) redirect(`${BASE}?etransfer=missing`);
+
+  const supabase = createClient();
+  const capture = await loadEtransferCapture(supabase, org.id, captureId);
+  if (!capture || capture.status !== "pending" || capture.direction !== "received") {
+    redirect(`${BASE}?etransfer=gone`);
+  }
+
+  const { data: tenancy } = await supabase
+    .from("tenancies")
+    .select("id, status")
+    .eq("organization_id", org.id)
+    .eq("id", tenancyId)
+    .maybeSingle();
+  if (!tenancy || tenancy.status !== "active") redirect(`${BASE}?etransfer=notfound`);
+
+  const check = validatePaymentInput({
+    amountCents: capture.amount_cents,
+    method: "e_transfer",
+    paidOn: capture.txn_date,
+  });
+  if (!check.ok) redirect(`${BASE}?etransfer=${check.code}`);
+
+  if (!(await claimEtransferCapture(supabase, org.id, capture.id))) {
+    redirect(`${BASE}?etransfer=gone`);
+  }
+
+  const { data: payment, error } = await supabase
+    .from("rent_payments")
+    .insert({
+      organization_id: org.id,
+      tenancy_id: tenancy.id,
+      amount_cents: check.value.amountCents,
+      method: check.value.method,
+      paid_on: check.value.paidOn,
+      period_month: normalizePeriodMonth(check.value.paidOn),
+      reference: null,
+      note: `Recorded from forwarded e-Transfer from ${capture.counterparty_name}`,
+    })
+    .select("id")
+    .single();
+  if (error || !payment) {
+    await releaseEtransferClaim(supabase, org.id, capture.id);
+    redirect(`${BASE}?etransfer=save`);
+  }
+
+  await supabase
+    .from("etransfer_captures")
+    .update({
+      rent_payment_id: payment.id,
+      confirmed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("organization_id", org.id)
+    .eq("id", capture.id);
+
+  revalidatePath(BASE);
+  revalidatePath("/dashboard/rent/statement");
+  redirect(`${BASE}?etransfer=rent`);
+}
+
+export async function confirmEtransferExpense(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?etransfer=forbidden`);
+  const org = await gateEtransferCapture();
+  const captureId = s(formData, "capture_id");
+  if (!captureId) redirect(`${BASE}?etransfer=missing`);
+
+  const supabase = createClient();
+  const capture = await loadEtransferCapture(supabase, org.id, captureId);
+  if (!capture || capture.status !== "pending" || capture.direction !== "sent") {
+    redirect(`${BASE}?etransfer=gone`);
+  }
+
+  const propertyId = orNull(formData, "property_id");
+  const buildingKey = orNull(formData, "building_key");
+  const check = validateExpenseInput({
+    category: s(formData, "category"),
+    amountCents: capture.amount_cents,
+    incurredOn: capture.txn_date,
+    propertyId,
+    buildingKey,
+    merchant: capture.counterparty_name,
+    note: `Recorded from forwarded e-Transfer to ${capture.counterparty_name}`,
+    source: "manual",
+    bankTransactionId: null,
+  });
+  if (!check.ok) redirect(`${BASE}?etransfer=${check.code}`);
+
+  if (!(await propertyBelongsToOrg(supabase, org.id, check.value.propertyId))) {
+    redirect(`${BASE}?etransfer=notfound`);
+  }
+  if (!(await buildingBelongsToOrg(supabase, org.id, check.value.buildingKey))) {
+    redirect(`${BASE}?etransfer=notfound`);
+  }
+
+  if (!(await claimEtransferCapture(supabase, org.id, capture.id))) {
+    redirect(`${BASE}?etransfer=gone`);
+  }
+
+  const { data: expense, error } = await supabase
+    .from("expenses")
+    .insert({
+      organization_id: org.id,
+      property_id: check.value.propertyId,
+      building_key: check.value.buildingKey,
+      category: check.value.category,
+      amount_cents: check.value.amountCents,
+      incurred_on: check.value.incurredOn,
+      merchant: check.value.merchant,
+      note: check.value.note,
+      source: check.value.source,
+      bank_transaction_id: null,
+    })
+    .select("id")
+    .single();
+  if (error || !expense) {
+    await releaseEtransferClaim(supabase, org.id, capture.id);
+    redirect(`${BASE}?etransfer=save`);
+  }
+
+  await supabase
+    .from("etransfer_captures")
+    .update({
+      expense_id: expense.id,
+      confirmed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("organization_id", org.id)
+    .eq("id", capture.id);
+
+  revalidatePath(BASE);
+  revalidatePath("/dashboard/rent/statement");
+  redirect(`${BASE}?etransfer=expense`);
+}
+
+export async function dismissEtransferCapture(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?etransfer=forbidden`);
+  const org = await gateEtransferCapture();
+  const captureId = s(formData, "capture_id");
+  if (!captureId) redirect(`${BASE}?etransfer=missing`);
+
+  const supabase = createClient();
+  const { data: dismissed } = await supabase
+    .from("etransfer_captures")
+    .update({
+      status: "dismissed",
+      dismissed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("organization_id", org.id)
+    .eq("id", captureId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (!dismissed) redirect(`${BASE}?etransfer=gone`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?etransfer=dismissed`);
 }
 
 // --- Triage: ignore a staged transaction (not an expense) --------------------

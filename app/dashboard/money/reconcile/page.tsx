@@ -9,6 +9,7 @@ import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/expenses";
 import { formatMoneyCents } from "@/lib/payments";
 import {
   buildReconciliationSummary,
+  expenseMatchCandidateForTransaction,
   rentMatchCandidatesForTransaction,
   type BankTransactionForReconciliation,
   type RentPaymentReconciliationLink,
@@ -31,6 +32,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { mapRuleRow, type RuleRow } from "../../expenses/triage-core";
 import {
   excludeTransaction,
+  linkExistingExpenseToTransaction,
   reconcileCreditAsRent,
   reconcileDebitAsExpense,
 } from "./actions";
@@ -57,6 +59,11 @@ type ExpenseLinkRow = {
   id: string;
   bank_transaction_id: string | null;
   category: string | null;
+  amount_cents: number | null;
+  incurred_on: string | null;
+  merchant: string | null;
+  property_id: string | null;
+  building_key: string | null;
 };
 
 type RentPaymentRow = {
@@ -158,9 +165,43 @@ function suggestionFor(
   };
 }
 
+function daysBetween(a: string | null | undefined, b: string | null | undefined): number | null {
+  const left = Date.parse(String(a ?? "").slice(0, 10));
+  const right = Date.parse(String(b ?? "").slice(0, 10));
+  if (Number.isNaN(left) || Number.isNaN(right)) return null;
+  return Math.abs(left - right) / 86_400_000;
+}
+
+function existingExpenseCandidates(
+  txn: ReconciledTransaction,
+  expenses: ExpenseLinkRow[],
+): ExpenseLinkRow[] {
+  if (txn.direction !== "debit" || txn.state.reconciled) return [];
+  return expenses
+    .filter((expense) => {
+      if (expense.bank_transaction_id) return false;
+      if (expense.amount_cents !== txn.amountCents) return false;
+      const days = daysBetween(txn.postedOn, expense.incurred_on);
+      if (days == null || days > 14) return false;
+      return expenseMatchCandidateForTransaction(txn, {
+        category: expense.category,
+        propertyId: expense.property_id,
+        buildingKey: expense.building_key,
+      }) != null;
+    })
+    .sort((a, b) => {
+      const date = String(b.incurred_on ?? "").localeCompare(String(a.incurred_on ?? ""));
+      return date !== 0 ? date : String(a.merchant ?? "").localeCompare(String(b.merchant ?? ""));
+    })
+    .slice(0, 3);
+}
+
 function banner(searchParams: SearchParams) {
   if (searchParams.reconciled === "expense") {
     return { tone: "success" as const, text: "Expense reconciled." };
+  }
+  if (searchParams.reconciled === "expense_linked") {
+    return { tone: "success" as const, text: "Bank debit linked to the existing expense." };
   }
   if (searchParams.reconciled === "rent") {
     return { tone: "success" as const, text: "Rent deposit reconciled." };
@@ -176,6 +217,9 @@ function banner(searchParams: SearchParams) {
   }
   if (searchParams.error === "no_rent_match") {
     return { tone: "warn" as const, text: "No close rent match was found for that deposit." };
+  }
+  if (searchParams.error === "link_mismatch") {
+    return { tone: "warn" as const, text: "That debit no longer matches the existing expense." };
   }
   if (searchParams.error) {
     return { tone: "danger" as const, text: "That transaction could not be reconciled." };
@@ -228,7 +272,7 @@ export default async function ReconcilePage({
       .order("posted_on", { ascending: true }),
     supabase
       .from("expenses")
-      .select("id, bank_transaction_id, category")
+      .select("id, bank_transaction_id, category, amount_cents, incurred_on, merchant, property_id, building_key")
       .eq("organization_id", org.id),
     supabase
       .from("rent_payments")
@@ -280,6 +324,7 @@ export default async function ReconcilePage({
     bankTransactionId: row.bank_transaction_id,
     category: row.category,
   }));
+  const expenseRows = (expenseData ?? []) as ExpenseLinkRow[];
   const rules = ((ruleData ?? []) as RuleRow[]).map(mapRuleRow);
   const summary = buildReconciliationSummary(transactions, { expenses, rentPayments });
   const notice = banner(searchParams);
@@ -358,6 +403,8 @@ export default async function ReconcilePage({
                 {account.transactions.map((txn) => {
                   const raw = byId.get(txn.id);
                   const suggestion = raw && txn.direction === "debit" ? suggestionFor(rules, raw) : null;
+                  const existingExpenses =
+                    txn.direction === "debit" ? existingExpenseCandidates(txn, expenseRows) : [];
                   const rentCandidates =
                     txn.direction === "credit"
                       ? rentMatchCandidatesForTransaction(txn, tenancies).slice(0, 3)
@@ -394,6 +441,23 @@ export default async function ReconcilePage({
 
                       {!txn.state.reconciled ? (
                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                          {existingExpenses.length > 0 && (
+                            <div className="w-full space-y-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 xl:w-[34rem]">
+                              <p className="text-xs font-medium text-emerald-800">
+                                This may already be logged. Link the bank debit instead of recording it twice.
+                              </p>
+                              {existingExpenses.map((expense) => (
+                                <form key={expense.id} action={linkExistingExpenseToTransaction}>
+                                  <input type="hidden" name="transaction_id" value={txn.id} />
+                                  <input type="hidden" name="expense_id" value={expense.id} />
+                                  <SubmitButton className={SECONDARY_ACTION_CLASS} pendingLabel="Linking...">
+                                    Link existing {expense.category ? expenseCategoryLabel(expense.category) : "expense"}
+                                    {expense.merchant ? ` - ${expense.merchant}` : ""}
+                                  </SubmitButton>
+                                </form>
+                              ))}
+                            </div>
+                          )}
                           {txn.direction === "debit" && (
                             <form action={reconcileDebitAsExpense} className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-[34rem] xl:grid-cols-3">
                               <input type="hidden" name="transaction_id" value={txn.id} />

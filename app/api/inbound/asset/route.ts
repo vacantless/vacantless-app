@@ -8,11 +8,21 @@ import {
   readIngestSecretFromAuth,
   ingestDedupeKey,
   decideIngest,
+  isAllowedSenderEmail,
+  isAutoReplyOrLoop,
   MAX_INGEST_ATTACHMENT_BYTES,
   type IngestAttachmentInput,
   type IngestLoopHeaders,
 } from "@/lib/email-ingest";
 import { canUseCaptureEmailIn } from "@/lib/billing";
+import {
+  etransferDedupeKey,
+  parseEtransferNotification,
+  proposeEtransferSuggestion,
+  type ParsedEtransferNotification,
+} from "@/lib/etransfer-ingest";
+import type { CategorizationRule } from "@/lib/categorization-rules";
+import type { RentMatchTenancy } from "@/lib/reconciliation";
 import { parseAssetImage } from "@/lib/asset-capture-vision";
 import type { AssetDraft } from "@/lib/asset-capture";
 import {
@@ -34,7 +44,8 @@ import { pendingCaptureUntil } from "@/lib/document-retention";
 //
 // SECURITY is the bulk of this — and it lives in lib/email-ingest (pure, unit-
 // tested). This route is thin glue: authenticate -> normalize the provider
-// payload -> decode attachments -> decideIngest() -> act. The body is never read.
+// payload -> try the S530 e-Transfer body parser after the trust gates -> decode
+// attachments -> decideIngest() -> act.
 //
 // SHIPS DARK: with no INBOUND_WEBHOOK_SECRET set (or no service-role key), the
 // route returns 404 and does nothing — exactly like the SMS webhook no-ops when
@@ -47,8 +58,9 @@ import { pendingCaptureUntil } from "@/lib/document-retention";
 // unexpected server fault (the provider SHOULD retry that).
 //
 // PII posture (standing rule): store ONLY the validated attachment into the
-// org-gated vault; never persist the email body or headers (only the From + a
-// hashed message-id for dedupe). A non-image/PDF payload is dropped before storage.
+// org-gated vault, or for S530 e-Transfer capture store ONLY the parsed tuple
+// (direction, counterparty, amount, date, suggestions) plus a hashed dedupe key.
+// Never persist the email body or headers.
 // ============================================================================
 
 export const dynamic = "force-dynamic";
@@ -67,6 +79,47 @@ const PROVIDER = "inbound";
  * selectIngestAttachment still applies the authoritative magic-byte + size cap;
  * this just stops us buffering a huge/large-count payload before that runs. */
 const MAX_INBOUND_ATTACHMENTS = 10;
+
+const RULE_COLUMNS =
+  "id, scope_kind, merchant_entity_id, stream_id, merchant_norm, account_external_id, amount_min_cents, amount_max_cents, day_min, day_max, category, property_id, building_key, times_applied, last_applied_at, created_at";
+
+type RuleRow = {
+  id: string;
+  scope_kind: string;
+  merchant_entity_id: string | null;
+  stream_id: string | null;
+  merchant_norm: string | null;
+  account_external_id: string | null;
+  amount_min_cents: number | null;
+  amount_max_cents: number | null;
+  day_min: number | null;
+  day_max: number | null;
+  category: string;
+  property_id: string | null;
+  building_key: string | null;
+  last_applied_at: string | null;
+  created_at: string | null;
+};
+
+function mapRuleRow(r: RuleRow): CategorizationRule {
+  return {
+    id: r.id,
+    scopeKind: r.scope_kind === "stream" ? "stream" : "merchant",
+    merchantEntityId: r.merchant_entity_id,
+    streamId: r.stream_id,
+    merchantNorm: r.merchant_norm,
+    accountExternalId: r.account_external_id,
+    amountMinCents: r.amount_min_cents,
+    amountMaxCents: r.amount_max_cents,
+    dayMin: r.day_min,
+    dayMax: r.day_max,
+    category: r.category,
+    propertyId: r.property_id,
+    buildingKey: r.building_key,
+    lastAppliedAt: r.last_applied_at,
+    createdAt: r.created_at,
+  };
+}
 
 export async function POST(req: NextRequest) {
   const secret = process.env.INBOUND_WEBHOOK_SECRET;
@@ -212,6 +265,46 @@ export async function POST(req: NextRequest) {
       .filter((a: string | null): a is string => a != null);
   }
 
+  // ---- S530: e-Transfer body capture ---------------------------------------
+  // Deliberate narrow departure from the attachment-only ingress lock:
+  // after webhook auth, token->org, entitlement, loop, and verified-sender gates,
+  // parse only Interac e-Transfer notification bodies, store only the parsed
+  // tuple + hashed dedupe key, and stop before the attachment path.
+  const messageId = str(payload.MessageID) || str(payload.MessageId);
+  const bodyTrusted =
+    orgId != null &&
+    !isAutoReplyOrLoop(loopHeaders) &&
+    isAllowedSenderEmail(from, allowlist);
+  if (bodyTrusted) {
+    const trustedOrgId = orgId as string;
+    const parsedEtransfer = parseEtransferNotification({
+      subject: str(payload.Subject),
+      textBody: str(payload.TextBody) || str(payload.StrippedTextReply),
+      htmlBody: str(payload.HtmlBody),
+    });
+    if (parsedEtransfer) {
+      const dedupeKey = etransferDedupeKey(PROVIDER, messageId, parsedEtransfer);
+      const { data: dupe } = await admin
+        .from("etransfer_captures")
+        .select("id")
+        .eq("organization_id", trustedOrgId)
+        .eq("dedupe_key", dedupeKey)
+        .maybeSingle();
+      if (dupe?.id) {
+        return NextResponse.json({ ok: true, handled: "duplicate_etransfer" });
+      }
+
+      const stored = await storeEtransferCapture(admin, trustedOrgId, parsedEtransfer, dedupeKey);
+      if (stored === "duplicate") {
+        return NextResponse.json({ ok: true, handled: "duplicate_etransfer" });
+      }
+      if (!stored) {
+        return new NextResponse("Storage error", { status: 503 });
+      }
+      return NextResponse.json({ ok: true, handled: "captured_etransfer" });
+    }
+  }
+
   // ---- The composed policy decision (pure, tested) --------------------------
   const decision = decideIngest({
     channel: "email",
@@ -237,7 +330,6 @@ export async function POST(req: NextRequest) {
   }
 
   // ---- Accept: dedupe, parse (if image), store the pending capture ----------
-  const messageId = str(payload.MessageID) || str(payload.MessageId);
   const dedupeKey = ingestDedupeKey(
     PROVIDER,
     messageId,
@@ -290,6 +382,62 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, handled: "captured", parseable: decision.attachment.parseable });
+}
+
+async function storeEtransferCapture(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  orgId: string,
+  parsed: ParsedEtransferNotification,
+  dedupeKey: string,
+): Promise<string | "duplicate" | null> {
+  try {
+    const [{ data: tenData }, { data: ruleData }] = await Promise.all([
+      admin
+        .from("tenancies")
+        .select("id, rent_cents, status")
+        .eq("organization_id", orgId)
+        .eq("status", "active"),
+      admin
+        .from("categorization_rules")
+        .select(RULE_COLUMNS)
+        .eq("organization_id", orgId),
+    ]);
+    const tenancies: RentMatchTenancy[] = ((tenData ?? []) as {
+      id: string;
+      rent_cents: number | null;
+    }[]).map((t) => ({
+      tenancyId: t.id,
+      rentCents: t.rent_cents,
+      label: "Tenancy",
+    }));
+    const rules = ((ruleData ?? []) as RuleRow[]).map(mapRuleRow);
+    const suggestion = proposeEtransferSuggestion(parsed, tenancies, rules);
+
+    const { data, error } = await admin
+      .from("etransfer_captures")
+      .insert({
+        organization_id: orgId,
+        source: "email",
+        direction: parsed.direction,
+        counterparty_name: parsed.counterpartyName,
+        amount_cents: parsed.amountCents,
+        txn_date: parsed.txnDate,
+        suggested_tenancy_id: suggestion.suggestedTenancyId,
+        suggested_category: suggestion.suggestedCategory,
+        suggested_property_id: suggestion.suggestedPropertyId,
+        suggested_building_key: suggestion.suggestedBuildingKey,
+        dedupe_key: dedupeKey,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    if (error) {
+      return (error as { code?: string }).code === "23505" ? "duplicate" : null;
+    }
+    return data?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**

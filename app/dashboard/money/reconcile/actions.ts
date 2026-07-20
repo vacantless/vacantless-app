@@ -16,7 +16,10 @@ import {
 } from "@/lib/categorization-rules";
 import { chooseReconcileAssignment, type ResolvedAssignment } from "@/lib/reconcile-assign";
 import { normalizePeriodMonth } from "@/lib/payments";
-import { rentMatchCandidatesForTransaction } from "@/lib/reconciliation";
+import {
+  expenseMatchCandidateForTransaction,
+  rentMatchCandidatesForTransaction,
+} from "@/lib/reconciliation";
 import {
   autoApplyRules,
   insertExpenseAndAssign,
@@ -33,6 +36,13 @@ function s(formData: FormData, name: string): string {
 function orNull(formData: FormData, name: string): string | null {
   const value = s(formData, name);
   return value === "" ? null : value;
+}
+
+function dateDistanceDays(a: string | null | undefined, b: string | null | undefined): number | null {
+  const left = Date.parse(String(a ?? "").slice(0, 10));
+  const right = Date.parse(String(b ?? "").slice(0, 10));
+  if (Number.isNaN(left) || Number.isNaN(right)) return null;
+  return Math.abs(left - right) / 86_400_000;
 }
 
 async function requireAccountingOrg() {
@@ -189,6 +199,97 @@ export async function reconcileDebitAsExpense(formData: FormData) {
   revalidatePath("/dashboard/expenses");
   revalidatePath("/dashboard/rent/statement");
   redirect(`${BASE}?reconciled=expense`);
+}
+
+export async function linkExistingExpenseToTransaction(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?error=forbidden`);
+  const org = await requireAccountingOrg();
+  const txnId = s(formData, "transaction_id");
+  const expenseId = s(formData, "expense_id");
+  if (!txnId || !expenseId) redirect(`${BASE}?error=notfound`);
+
+  const supabase = createClient();
+  const [{ data: txn }, { data: expense }] = await Promise.all([
+    supabase
+      .from("bank_transactions")
+      .select("id, amount_cents, posted_on, direction, triage_status")
+      .eq("organization_id", org.id)
+      .eq("id", txnId)
+      .maybeSingle(),
+    supabase
+      .from("expenses")
+      .select("id, amount_cents, incurred_on, category, property_id, building_key, bank_transaction_id")
+      .eq("organization_id", org.id)
+      .eq("id", expenseId)
+      .maybeSingle(),
+  ]);
+  if (!txn || !expense) redirect(`${BASE}?error=notfound`);
+  if (txn.direction !== "debit" || txn.triage_status !== "pending") {
+    redirect(`${BASE}?error=already`);
+  }
+  if (expense.bank_transaction_id || expense.amount_cents !== txn.amount_cents) {
+    redirect(`${BASE}?error=link_mismatch`);
+  }
+  const days = dateDistanceDays(txn.posted_on, expense.incurred_on);
+  if (days == null || days > 14) redirect(`${BASE}?error=link_mismatch`);
+
+  const candidate = expenseMatchCandidateForTransaction(txn, {
+    category: expense.category,
+    propertyId: expense.property_id,
+    buildingKey: expense.building_key,
+  });
+  if (!candidate) redirect(`${BASE}?error=link_mismatch`);
+
+  const { data: claimed } = await supabase
+    .from("bank_transactions")
+    .update({ triage_status: "assigned" })
+    .eq("organization_id", org.id)
+    .eq("id", txn.id)
+    .eq("triage_status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (!claimed) redirect(`${BASE}?error=already`);
+
+  const { data: linked, error: linkErr } = await supabase
+    .from("expenses")
+    .update({ bank_transaction_id: txn.id })
+    .eq("organization_id", org.id)
+    .eq("id", expense.id)
+    .is("bank_transaction_id", null)
+    .select("id")
+    .maybeSingle();
+  if (linkErr || !linked) {
+    await supabase
+      .from("bank_transactions")
+      .update({ triage_status: "pending" })
+      .eq("organization_id", org.id)
+      .eq("id", txn.id);
+    redirect(`${BASE}?error=link_taken`);
+  }
+
+  const { error: txnErr } = await supabase
+    .from("bank_transactions")
+    .update({ expense_id: expense.id })
+    .eq("organization_id", org.id)
+    .eq("id", txn.id);
+  if (txnErr) {
+    await supabase
+      .from("expenses")
+      .update({ bank_transaction_id: null })
+      .eq("organization_id", org.id)
+      .eq("id", expense.id);
+    await supabase
+      .from("bank_transactions")
+      .update({ triage_status: "pending" })
+      .eq("organization_id", org.id)
+      .eq("id", txn.id);
+    redirect(`${BASE}?error=save`);
+  }
+
+  revalidatePath(BASE);
+  revalidatePath("/dashboard/expenses");
+  revalidatePath("/dashboard/rent/statement");
+  redirect(`${BASE}?reconciled=expense_linked`);
 }
 
 export async function reconcileCreditAsRent(formData: FormData) {

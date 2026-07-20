@@ -14,8 +14,9 @@ import {
 import { Icons } from "@/components/icons";
 import { SubmitButton } from "@/components/submit-button";
 import { getCurrentOrg } from "@/lib/org";
-import { planEntitlements } from "@/lib/billing";
+import { canUseCaptureEmailIn, planEntitlements } from "@/lib/billing";
 import { providerForPlan, txnDetailLine } from "@/lib/bank-feed";
+import { DEFAULT_INGEST_DOMAIN, ingestAddressFromToken } from "@/lib/email-ingest";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/expenses";
 import {
   bestRuleForTxn,
@@ -26,6 +27,7 @@ import { formatMoneyCents } from "@/lib/payments";
 import { isRentFromBankEnabled, prefillRentSplit, rentFromBankErrorMessage } from "@/lib/rent-from-bank";
 import { classifyCredit, railPaymentLinkCandidatesForTransaction } from "@/lib/rent-classify";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
+import { CopyTextButton } from "@/components/copy-text-button";
 import { PlaidConnectButton } from "./PlaidConnectButton";
 import {
   syncConnection,
@@ -35,6 +37,9 @@ import {
   recordRentFromTransaction,
   linkRailRentPaymentToTransaction,
   applyRulesToQueue,
+  confirmEtransferRent,
+  confirmEtransferExpense,
+  dismissEtransferCapture,
 } from "./actions";
 import { importTransactionsFromFile } from "./import-actions";
 
@@ -90,6 +95,7 @@ type RuleRow = {
 };
 
 type PropertyRef = { id: string; address: string; building_key: string | null };
+type ActiveTenancy = { id: string; rentCents: number | null; label: string };
 type RailRentPaymentRow = {
   id: string;
   tenancy_id: string | null;
@@ -97,6 +103,18 @@ type RailRentPaymentRow = {
   period_month: string | null;
   source: string | null;
   bank_transaction_id: string | null;
+};
+type EtransferCaptureRow = {
+  id: string;
+  direction: "received" | "sent";
+  counterparty_name: string;
+  amount_cents: number;
+  txn_date: string;
+  suggested_tenancy_id: string | null;
+  suggested_category: string | null;
+  suggested_property_id: string | null;
+  suggested_building_key: string | null;
+  created_at: string;
 };
 
 /** What a matched rule pre-fills on a triage card (and whether to flag it). */
@@ -190,12 +208,14 @@ export default async function ExpensesPage({
     skipped?: string;
     import?: string;
     rent?: string;
+    etransfer?: string;
   };
 }) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
   const provider = providerForPlan(planEntitlements(org.plan));
+  const emailCaptureAllowed = canUseCaptureEmailIn(org.plan);
 
   // --- Locked (Free / no live feed): upsell, no data load --------------------
   if (provider === null) {
@@ -207,7 +227,7 @@ export default async function ExpensesPage({
           <EmptyState
             icon={<Icons.card />}
             title="Bank sync is a Growth feature"
-            description="Connect your bank and credit cards to pull every property expense — e-transfers, card payments, pre-authorized debits — and sort them by unit and building. Upgrade to turn it on."
+            description="Connect your bank and cards, and forward Interac e-Transfer notices for rent or trade payments, then sort everything by unit and building. Upgrade to turn it on."
             cta={{ href: "/dashboard/billing", label: "See plans" }}
           />
         </div>
@@ -263,38 +283,13 @@ export default async function ExpensesPage({
   const properties = (propData ?? []) as PropertyRef[];
   const rules = ((ruleData ?? []) as RuleRow[]).map(ruleFromRow);
 
-  // --- "Is any of this rent?" — money-in lane (dark behind RENT_FROM_BANK) ----
-  // The import stores incoming money as credits but the triage above only shows
-  // debits, so a rent deposit had no path to "Rent collected". Here the owner
-  // splits a credit across active tenancies into rent_payments the statement sums.
   const rentFromBank = isRentFromBankEnabled();
-  let credits: TxnRow[] = [];
-  let activeTenancies: { id: string; rentCents: number | null; label: string }[] = [];
-  let railRentPayments: RailRentPaymentRow[] = [];
-  if (rentFromBank) {
-    const [{ data: creditData }, { data: tenData }, { data: railPaymentData }] = await Promise.all([
-      supabase
-        .from("bank_transactions")
-        .select(
-          "id, posted_on, amount_cents, merchant, description, raw_category, account_name, currency, merchant_entity_id, stream_id, account_external_id",
-        )
-        .eq("triage_status", "pending")
-        .eq("direction", "credit")
-        .order("posted_on", { ascending: false })
-        .limit(100),
-      supabase
-        .from("tenancies")
-        .select("id, rent_cents, property_id, properties(address), tenants(name, is_primary)")
-        .eq("status", "active"),
-      supabase
-        .from("rent_payments")
-        .select("id, tenancy_id, amount_cents, period_month, source, bank_transaction_id")
-        .eq("organization_id", org.id)
-        .in("source", ["stripe", "rotessa"])
-        .is("bank_transaction_id", null),
-    ]);
-    credits = (creditData ?? []) as TxnRow[];
-    railRentPayments = (railPaymentData ?? []) as RailRentPaymentRow[];
+  let activeTenancies: ActiveTenancy[] = [];
+  if (rentFromBank || emailCaptureAllowed) {
+    const { data: tenData } = await supabase
+      .from("tenancies")
+      .select("id, rent_cents, property_id, properties(address), tenants(name, is_primary)")
+      .eq("status", "active");
     const propAddr = new Map(properties.map((p) => [p.id, p.address]));
     type TenRow = {
       id: string;
@@ -312,6 +307,64 @@ export default async function ExpensesPage({
       const label = primary?.name ? `${unit} · ${primary.name}` : unit;
       return { id: t.id, rentCents: t.rent_cents, label };
     });
+  }
+
+  let etransferCaptures: EtransferCaptureRow[] = [];
+  let ingestAddress: string | null = null;
+  if (emailCaptureAllowed) {
+    const [{ data: captureData }, { data: addr }] = await Promise.all([
+      supabase
+        .from("etransfer_captures")
+        .select(
+          "id, direction, counterparty_name, amount_cents, txn_date, suggested_tenancy_id, suggested_category, suggested_property_id, suggested_building_key, created_at",
+        )
+        .eq("organization_id", org.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("org_ingest_addresses")
+        .select("token")
+        .eq("organization_id", org.id)
+        .eq("channel", "email")
+        .eq("active", true)
+        .maybeSingle(),
+    ]);
+    etransferCaptures = (captureData ?? []) as EtransferCaptureRow[];
+    if (addr?.token) {
+      ingestAddress = ingestAddressFromToken(
+        addr.token,
+        process.env.INGEST_EMAIL_DOMAIN || DEFAULT_INGEST_DOMAIN,
+      );
+    }
+  }
+
+  // --- "Is any of this rent?" — money-in lane (dark behind RENT_FROM_BANK) ----
+  // The import stores incoming money as credits but the triage above only shows
+  // debits, so a rent deposit had no path to "Rent collected". Here the owner
+  // splits a credit across active tenancies into rent_payments the statement sums.
+  let credits: TxnRow[] = [];
+  let railRentPayments: RailRentPaymentRow[] = [];
+  if (rentFromBank) {
+    const [{ data: creditData }, { data: railPaymentData }] = await Promise.all([
+      supabase
+        .from("bank_transactions")
+        .select(
+          "id, posted_on, amount_cents, merchant, description, raw_category, account_name, currency, merchant_entity_id, stream_id, account_external_id",
+        )
+        .eq("triage_status", "pending")
+        .eq("direction", "credit")
+        .order("posted_on", { ascending: false })
+        .limit(100),
+      supabase
+        .from("rent_payments")
+        .select("id, tenancy_id, amount_cents, period_month, source, bank_transaction_id")
+        .eq("organization_id", org.id)
+        .in("source", ["stripe", "rotessa"])
+        .is("bank_transaction_id", null),
+    ]);
+    credits = (creditData ?? []) as TxnRow[];
+    railRentPayments = (railPaymentData ?? []) as RailRentPaymentRow[];
   }
 
   // Building options (street label per building_key), like the maintenance form.
@@ -368,6 +421,27 @@ export default async function ExpensesPage({
       const msg = rentFromBankErrorMessage(searchParams.rent);
       return { tone: "danger" as const, text: msg ?? "Could not record the rent." };
     }
+    if (searchParams.etransfer != null) {
+      if (searchParams.etransfer === "rent") {
+        return { tone: "success" as const, text: "Captured e-Transfer recorded as rent." };
+      }
+      if (searchParams.etransfer === "expense") {
+        return { tone: "success" as const, text: "Captured e-Transfer logged as an expense." };
+      }
+      if (searchParams.etransfer === "dismissed") {
+        return { tone: "neutral" as const, text: "Captured e-Transfer dismissed." };
+      }
+      if (searchParams.etransfer === "locked") {
+        return { tone: "danger" as const, text: "Email-in capture is not available on this plan." };
+      }
+      if (searchParams.etransfer === "forbidden") {
+        return { tone: "danger" as const, text: "You do not have permission to file captured e-Transfers." };
+      }
+      if (searchParams.etransfer === "gone") {
+        return { tone: "warn" as const, text: "That captured e-Transfer was already handled." };
+      }
+      return { tone: "danger" as const, text: "Could not file that captured e-Transfer." };
+    }
     if (searchParams.imported != null) {
       const n = parseInt(searchParams.imported, 10) || 0;
       const sk = parseInt(searchParams.skipped ?? "0", 10) || 0;
@@ -408,9 +482,10 @@ export default async function ExpensesPage({
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatCard label="Connected banks" value={connections.length} icon={<Icons.card />} />
         <StatCard label="To review" value={pending.length} icon={<Icons.list />} />
+        <StatCard label="Captured e-Transfers" value={emailCaptureAllowed ? etransferCaptures.length : 0} icon={<Icons.mail />} />
         <StatCard label="Logged from bank" value={assignedCount ?? 0} icon={<Icons.chart />} />
       </div>
 
@@ -630,6 +705,173 @@ export default async function ExpensesPage({
                       <input type="hidden" name="transaction_id" value={c.id} />
                       <SubmitButton className="text-sm text-gray-500 underline" pendingLabel="…">
                         Not rent
+                      </SubmitButton>
+                    </form>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- Captured e-Transfers ------------------------------------------- */}
+      {emailCaptureAllowed && (
+        <div className="mt-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <SectionHeading>Captured e-Transfers</SectionHeading>
+            {ingestAddress ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <span>Forward notices to</span>
+                <code className="rounded bg-gray-50 px-2 py-1 text-gray-700">{ingestAddress}</code>
+                <CopyTextButton value={ingestAddress} />
+              </div>
+            ) : (
+              <Link href="/dashboard/captures" className={SECONDARY_ACTION_CLASS}>
+                Set up forwarding
+              </Link>
+            )}
+          </div>
+          <p className="mb-3 mt-1 text-sm text-gray-600">
+            Forward Interac notices from a verified sender. Vacantless queues a suggestion here; it never records rent or expenses until you confirm.
+          </p>
+          {!ingestAddress ? (
+            <EmptyState
+              icon={<Icons.mail />}
+              title="Set up your forwarding address"
+              description="Generate your private capture address and confirm the email address you forward from before e-Transfers can land here."
+              cta={{ href: "/dashboard/captures", label: "Open capture setup" }}
+            />
+          ) : etransferCaptures.length === 0 ? (
+            <EmptyState
+              icon={<Icons.check />}
+              title="No captured e-Transfers waiting"
+              description="Received rent notices and sent trade-payment notices will appear here for you to confirm or dismiss."
+            />
+          ) : (
+            <div className="space-y-3">
+              {etransferCaptures.map((capture) => {
+                const isReceived = capture.direction === "received";
+                return (
+                  <Card key={capture.id}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-gray-900">
+                            {isReceived ? "Money received" : "Payment sent"} - {capture.counterparty_name}
+                          </p>
+                          <StatusChip tone={isReceived ? "success" : "brand"}>
+                            {isReceived ? "Rent suggestion" : "Expense suggestion"}
+                          </StatusChip>
+                        </div>
+                        <p className="mt-1 text-sm text-gray-700">
+                          {fmtDate(capture.txn_date)} - {formatMoneyCents(capture.amount_cents)}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Parsed from a forwarded Interac notice. Raw email body was discarded.
+                        </p>
+                      </div>
+                    </div>
+
+                    {isReceived ? (
+                      activeTenancies.length === 0 ? (
+                        <p className="mt-3 text-sm text-gray-600">
+                          Add an active tenancy before recording this as rent.
+                        </p>
+                      ) : (
+                        <form action={confirmEtransferRent} className="mt-4 flex flex-wrap items-end gap-3">
+                          <input type="hidden" name="capture_id" value={capture.id} />
+                          <label className="text-sm">
+                            <span className="mb-1 block text-gray-600">Record rent for</span>
+                            <select
+                              name="tenancy_id"
+                              required
+                              defaultValue={capture.suggested_tenancy_id ?? ""}
+                              className="min-w-56 rounded-lg border border-gray-300 px-3 py-2"
+                            >
+                              <option value="" disabled>
+                                Choose tenancy...
+                              </option>
+                              {activeTenancies.map((tenancy) => (
+                                <option key={tenancy.id} value={tenancy.id}>
+                                  {tenancy.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Recording...">
+                            Record as rent
+                          </SubmitButton>
+                        </form>
+                      )
+                    ) : (
+                      <form action={confirmEtransferExpense} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+                        <input type="hidden" name="capture_id" value={capture.id} />
+                        <label className="text-sm">
+                          <span className="mb-1 block text-gray-600">Category</span>
+                          <select
+                            name="category"
+                            required
+                            defaultValue={capture.suggested_category ?? ""}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                          >
+                            <option value="" disabled>
+                              Choose...
+                            </option>
+                            {EXPENSE_CATEGORIES.map((category) => (
+                              <option key={category} value={category}>
+                                {expenseCategoryLabel(category)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-sm">
+                          <span className="mb-1 block text-gray-600">Unit</span>
+                          <select
+                            name="property_id"
+                            defaultValue={capture.suggested_property_id ?? ""}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                          >
+                            <option value="">-</option>
+                            {properties.map((property) => (
+                              <option key={property.id} value={property.id}>
+                                {property.address}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-sm">
+                          <span className="mb-1 block text-gray-600">Building</span>
+                          <select
+                            name="building_key"
+                            defaultValue={capture.suggested_building_key ?? ""}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                          >
+                            <option value="">-</option>
+                            {buildingOptions.map((building) => (
+                              <option key={building.key} value={building.key}>
+                                {building.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="flex items-end">
+                          <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Logging...">
+                            Log expense
+                          </SubmitButton>
+                        </div>
+                        {capture.suggested_category && (
+                          <p className="text-xs text-gray-500 sm:col-span-4">
+                            Pre-filled from a saved payee rule. Confirm or change it before logging.
+                          </p>
+                        )}
+                      </form>
+                    )}
+
+                    <form action={dismissEtransferCapture} className="mt-2">
+                      <input type="hidden" name="capture_id" value={capture.id} />
+                      <SubmitButton className="text-sm text-gray-500 underline" pendingLabel="...">
+                        Dismiss
                       </SubmitButton>
                     </form>
                   </Card>
