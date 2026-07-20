@@ -3638,7 +3638,23 @@ export async function requestConciergePublish(formData: FormData) {
       capOrg as { concierge_leaseup_cap_override?: number | null } | null
     )?.concierge_leaseup_cap_override ?? null;
     const period = new Date().toISOString().slice(0, 7);
-    const cap = conciergeMonthlyCap(runOrgPlan, { overrideCap });
+    const { data: packRows, error: packError } = await supabase
+      .from("concierge_pack_purchases")
+      .select("quantity")
+      .eq("organization_id", runOrgId)
+      .eq("period", period);
+    if (packError) {
+      console.error("requestConciergePublish: pack total read failed", {
+        organizationId: runOrgId,
+        period,
+        error: packError,
+      });
+    }
+    const packs = ((packRows ?? []) as { quantity: number | null }[]).reduce(
+      (sum, row) => sum + Math.max(0, Math.floor(row.quantity ?? 0)),
+      0,
+    );
+    const cap = conciergeMonthlyCap(runOrgPlan, { overrideCap, packs });
     const { data, error } = await supabase.rpc("claim_concierge_leaseup", {
       p_org: runOrgId,
       p_period: period,

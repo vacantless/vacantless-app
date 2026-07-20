@@ -5,7 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { getStripe, priceIdForPlan, depositPriceId } from "@/lib/stripe";
-import { isPaidPlan, isPilotPlan, PILOT_DEPOSIT_CENTS, normalizeDepositStatus } from "@/lib/billing";
+import {
+  isPaidPlan,
+  isPilotPlan,
+  PILOT_DEPOSIT_CENTS,
+  normalizeDepositStatus,
+  canUseListingMarketing,
+  CONCIERGE_PACK_PRICE_CENTS,
+  CONCIERGE_PACK_QUANTITY,
+} from "@/lib/billing";
 
 // Start a 30-day, founder-led pilot ($0/month, refundable $200 setup deposit
 // collected out-of-band). Records plan='pilot' + pilot_started_at=now via the
@@ -36,6 +44,21 @@ export async function startPilot() {
 const APP_BASE_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app"
 ).replace(/\/+$/, "");
+
+function currentUtcPeriod(date = new Date()): string {
+  return date.toISOString().slice(0, 7);
+}
+
+function propertyDistributeUrl(
+  propertyId: string,
+  query: string,
+): string | null {
+  const id = propertyId.trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return null;
+  }
+  return `/dashboard/properties/${id}?${query}#distribute-header`;
+}
 
 // Ensure the org has a Stripe customer, creating one (and persisting the id)
 // on first use. Returns the customer id, or null if Stripe isn't configured.
@@ -169,6 +192,84 @@ export async function startDepositCheckout() {
   });
 
   if (!session.url) redirect("/dashboard/billing?error=deposit");
+  redirect(session.url);
+}
+
+// One-time concierge capacity pack (+3 done-for-you lease-ups for the current
+// UTC month). Dark behind CONCIERGE_DESK_ENABLED and owner-only because it
+// creates a Stripe payment.
+export async function startConciergePackCheckout(formData: FormData) {
+  const propertyId = String(formData.get("property_id") ?? "").trim();
+  const successPath = propertyDistributeUrl(propertyId, "run=packsuccess");
+  const cancelPath = propertyDistributeUrl(propertyId, "run=packcancel");
+  const fallbackPath = successPath
+    ? `/dashboard/properties/${propertyId}?runerr=packcheckout#distribute-header`
+    : "/dashboard/billing?error=checkout";
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_billing", fallbackPath);
+  if (!successPath || !cancelPath) redirect("/dashboard/billing?error=checkout");
+  if (process.env.CONCIERGE_DESK_ENABLED !== "true") {
+    redirect(`/dashboard/properties/${propertyId}?runerr=packdisabled#distribute-header`);
+  }
+  if (!canUseListingMarketing(org.plan)) {
+    redirect(`/dashboard/properties/${propertyId}?run=conciergeupgrade#distribute-header`);
+  }
+
+  const stripe = getStripe();
+  if (!stripe) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=packcheckout#distribute-header`);
+  }
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const customerId = await ensureCustomer(org, user?.email ?? null);
+  if (!customerId) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=packcheckout#distribute-header`);
+  }
+
+  const packPrice = process.env.STRIPE_PRICE_CONCIERGE_PACK || null;
+  const lineItem = packPrice
+    ? { price: packPrice, quantity: 1 }
+    : {
+        quantity: 1,
+        price_data: {
+          currency: "cad",
+          unit_amount: CONCIERGE_PACK_PRICE_CENTS,
+          product_data: {
+            name: `Vacantless concierge ${CONCIERGE_PACK_QUANTITY}-pack (${CONCIERGE_PACK_QUANTITY} done-for-you lease-ups)`,
+          },
+        },
+      };
+  const period = currentUtcPeriod();
+  const metadata = {
+    kind: "concierge_pack",
+    org_id: org.id,
+    period,
+    quantity: String(CONCIERGE_PACK_QUANTITY),
+  };
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer: customerId,
+    line_items: [lineItem],
+    client_reference_id: org.id,
+    metadata,
+    payment_intent_data: {
+      metadata,
+      description: `Vacantless concierge ${CONCIERGE_PACK_QUANTITY}-pack`,
+    },
+    success_url: `${APP_BASE_URL}${successPath}`,
+    cancel_url: `${APP_BASE_URL}${cancelPath}`,
+  });
+
+  if (!session.url) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=packcheckout#distribute-header`);
+  }
   redirect(session.url);
 }
 

@@ -21,6 +21,7 @@ import {
   removeListingPost,
   upsertPartnerAccount,
 } from "../actions";
+import { startConciergePackCheckout } from "../../billing/actions";
 import {
   PARTNER_STATUSES,
   partnerStatusLabel,
@@ -42,7 +43,12 @@ import {
   listingPostStatusLabel,
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
-import { conciergeUsageLabel } from "@/lib/billing";
+import {
+  conciergeUsageLabel,
+  CONCIERGE_PACK_PRICE_CENTS,
+  CONCIERGE_PACK_QUANTITY,
+  formatAmount,
+} from "@/lib/billing";
 import {
   LaunchRunPanel,
   type PublishChannelChoiceView,
@@ -158,6 +164,7 @@ export type DistributeRunNotice = {
   tone: "success" | "warning" | "danger" | "info";
   title: string;
   body: string;
+  showConciergeActions?: boolean;
 };
 
 const RUN_NOTICE_CLASS: Record<DistributeRunNotice["tone"], string> = {
@@ -372,6 +379,23 @@ export function DistributeTab({
             <p>
               <strong>{runNotice.title}</strong> {runNotice.body}
             </p>
+            {runNotice.showConciergeActions && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <form action={startConciergePackCheckout}>
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <button className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                    Add a {CONCIERGE_PACK_QUANTITY}-pack -{" "}
+                    {formatAmount(CONCIERGE_PACK_PRICE_CENTS)}
+                  </button>
+                </form>
+                <a
+                  href="/dashboard/billing"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Upgrade to Managed
+                </a>
+              </div>
+            )}
           </div>
         )}
       </div>

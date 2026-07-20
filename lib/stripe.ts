@@ -12,6 +12,10 @@
 //   STRIPE_WEBHOOK_SECRET  — whsec_…  (used by app/api/stripe/webhook)
 //   STRIPE_PRICE_GROWTH    — the Stripe price id for the Growth tier ($99/mo CAD)
 //   STRIPE_PRICE_PREMIUM   — the Stripe price id for the Premium tier ($249/mo CAD)
+//   STRIPE_PRICE_MANAGED   — the Stripe price id for the Managed tier ($399/mo CAD)
+//   STRIPE_PRICE_CONCIERGE_PACK — (optional) a one-time Price for the $49
+//                            concierge 3-pack. If unset, pack Checkout falls
+//                            back to an inline price built in the server action.
 //   STRIPE_PRICE_PILOT_DEPOSIT — (optional) a one-time Price for the refundable
 //                            pilot setup deposit. If unset, the deposit Checkout
 //                            falls back to an inline price built from
@@ -33,7 +37,7 @@ export function getStripe(): Stripe | null {
 
 // The configured Stripe price id for a given paid plan (from env), or null if
 // that tier's price env var isn't set. Reads the price-id env name straight off
-// the live TIERS config (growth/premium each carry their `priceEnv`).
+// the live TIERS config (growth/premium/managed each carry their `priceEnv`).
 export function priceIdForPlan(plan: PaidPlanKey): string | null {
   const env = TIERS[plan].priceEnv;
   return env ? process.env[env] || null : null;

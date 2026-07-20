@@ -1218,6 +1218,7 @@ export default async function PropertyDetailPage({
   const conciergeDeskEnabled =
     conciergeEnabled && process.env.CONCIERGE_DESK_ENABLED === "true";
   let conciergeOverrideCap: number | null = null;
+  let conciergePackQuantity = 0;
   if (conciergeDeskEnabled) {
     const { data: conciergeOrg } = await supabase
       .from("organizations")
@@ -1230,11 +1231,24 @@ export default async function PropertyDetailPage({
           | { concierge_leaseup_cap_override?: number | null }
           | null
       )?.concierge_leaseup_cap_override ?? null;
+    const period = new Date(nowMs).toISOString().slice(0, 7);
+    const { data: packRows } = await supabase
+      .from("concierge_pack_purchases")
+      .select("quantity")
+      .eq("organization_id", propertyOrgId)
+      .eq("period", period);
+    conciergePackQuantity = (
+      (packRows ?? []) as { quantity: number | null }[]
+    ).reduce(
+      (sum, row) => sum + Math.max(0, Math.floor(row.quantity ?? 0)),
+      0,
+    );
   }
   const conciergeUsage = {
     used: 0,
     included: conciergeMonthlyCap(org?.plan, {
       overrideCap: conciergeOverrideCap,
+      packs: conciergePackQuantity,
     }),
   };
   if (conciergeDeskEnabled) {
@@ -1373,7 +1387,7 @@ export default async function PropertyDetailPage({
             tone: "warning",
             title: "Done-for-you posting is a Growth feature.",
             body:
-              "Choose Growth or Premium to hand posting work to the Vacantless desk.",
+              "Choose Growth, Premium, or Managed to hand posting work to the Vacantless desk.",
           }
         : searchParams.run === "conciergeineligible"
           ? {
@@ -1387,15 +1401,43 @@ export default async function PropertyDetailPage({
                 tone: "info",
                 title: "Included desk capacity used.",
                 body: `You've used all ${conciergeUsage.used} of ${conciergeUsage.included} included done-for-you lease-ups this month. Expanded capacity is coming soon.`,
+                showConciergeActions: conciergeDeskEnabled,
               }
-            : searchParams.runerr === "claimfailed"
+            : searchParams.run === "packsuccess"
               ? {
-                  tone: "danger",
-                  title: "Desk handoff failed.",
+                  tone: "success",
+                  title: "Pack checkout complete.",
                   body:
-                    "Something went wrong handing this to the desk - try again.",
+                    "Your extra done-for-you lease-ups are being added. Refresh if the balance has not updated yet.",
                 }
-              : null;
+              : searchParams.run === "packcancel"
+                ? {
+                    tone: "warning",
+                    title: "Pack checkout canceled.",
+                    body: "No charge was made.",
+                  }
+                : searchParams.runerr === "packdisabled"
+                  ? {
+                      tone: "warning",
+                      title: "Desk capacity is not live yet.",
+                      body:
+                        "Concierge pack checkout will appear when the desk is enabled.",
+                    }
+                  : searchParams.runerr === "packcheckout"
+                    ? {
+                        tone: "danger",
+                        title: "Pack checkout failed.",
+                        body:
+                          "Something went wrong starting checkout - try again.",
+                      }
+                    : searchParams.runerr === "claimfailed"
+                      ? {
+                          tone: "danger",
+                          title: "Desk handoff failed.",
+                          body:
+                            "Something went wrong handing this to the desk - try again.",
+                        }
+                      : null;
   const replyInputs: ReplyInputs = {
     address: p.address,
     bookingUrl: linkIsLive ? publicUrl : null,

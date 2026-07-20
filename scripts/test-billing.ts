@@ -45,7 +45,10 @@ import {
   conciergeUsageLabel,
   CONCIERGE_INCLUDED_GROWTH,
   CONCIERGE_INCLUDED_PREMIUM,
+  CONCIERGE_INCLUDED_MANAGED,
   CONCIERGE_INCLUDED_PILOT,
+  CONCIERGE_PACK_QUANTITY,
+  CONCIERGE_PACK_PRICE_CENTS,
   conciergeMonthlyCap,
   TIERS,
   TIER_KEYS,
@@ -70,13 +73,18 @@ function ok(name: string, cond: boolean) {
   }
 }
 
-// --- Plan catalog (S299: live paid plans = growth/premium via TIERS) --------
+// --- Plan catalog (S299/S541: live paid plans = growth/premium/managed) -----
 ok("growth price env name", TIERS.growth.priceEnv === "STRIPE_PRICE_GROWTH");
 ok("premium price env name", TIERS.premium.priceEnv === "STRIPE_PRICE_PREMIUM");
+ok("managed price env name", TIERS.managed.priceEnv === "STRIPE_PRICE_MANAGED");
 ok("growth carries a price env (config-shape purchasable)", isTierPurchasable(TIERS.growth));
 ok("premium carries a price env (config-shape purchasable)", isTierPurchasable(TIERS.premium));
+ok("managed carries a price env (config-shape purchasable)", isTierPurchasable(TIERS.managed));
 ok("formatPlanPrice growth", formatPlanPrice(9900) === "$99/month");
 ok("formatPlanPrice premium", formatPlanPrice(24900) === "$249/month");
+ok("formatPlanPrice managed", formatPlanPrice(39900) === "$399/month");
+ok("concierge pack price", CONCIERGE_PACK_PRICE_CENTS === 4900);
+ok("concierge pack quantity", CONCIERGE_PACK_QUANTITY === 3);
 ok("formatPlanPrice thousands separator", formatPlanPrice(120000) === "$1,200/month");
 const premiumCopy = `${TIERS.premium.blurb} ${TIERS.premium.features.join(" ")}`.toLowerCase();
 ok("premium copy does not promise post-viewing follow-up", !premiumCopy.includes("post-viewing"));
@@ -86,6 +94,7 @@ ok("premium copy names a concrete Premium-only ops feature", premiumCopy.include
 // --- isPaidPlan (narrow: the LIVE purchasable paid plans only) --------------
 ok("growth is paid", isPaidPlan("growth"));
 ok("premium is paid", isPaidPlan("premium"));
+ok("managed is paid", isPaidPlan("managed"));
 ok("core is NOT a live paid plan (retired legacy)", !isPaidPlan("core"));
 ok("plus is NOT a live paid plan (retired legacy)", !isPaidPlan("plus"));
 ok("trial is not paid", !isPaidPlan("trial"));
@@ -95,6 +104,7 @@ ok("garbage is not paid", !isPaidPlan("enterprise"));
 // --- isAnyPaidPlan (broad: live + retired legacy) ---------------------------
 ok("isAnyPaidPlan growth", isAnyPaidPlan("growth"));
 ok("isAnyPaidPlan premium", isAnyPaidPlan("premium"));
+ok("isAnyPaidPlan managed", isAnyPaidPlan("managed"));
 ok("isAnyPaidPlan core (legacy)", isAnyPaidPlan("core"));
 ok("isAnyPaidPlan plus (legacy)", isAnyPaidPlan("plus"));
 ok("isAnyPaidPlan trial false", !isAnyPaidPlan("trial"));
@@ -103,9 +113,14 @@ ok("isAnyPaidPlan pilot false", !isAnyPaidPlan("pilot"));
 ok("isAnyPaidPlan null false", !isAnyPaidPlan(null));
 
 // --- planForPriceId --------------------------------------------------------
-const MAP = { price_growth: "growth" as const, price_premium: "premium" as const };
+const MAP = {
+  price_growth: "growth" as const,
+  price_premium: "premium" as const,
+  price_managed: "managed" as const,
+};
 ok("price→growth", planForPriceId("price_growth", MAP) === "growth");
 ok("price→premium", planForPriceId("price_premium", MAP) === "premium");
+ok("price→managed", planForPriceId("price_managed", MAP) === "managed");
 ok("unknown price→null", planForPriceId("price_unknown", MAP) === null);
 ok("null price→null", planForPriceId(null, MAP) === null);
 ok("empty map→null", planForPriceId("price_growth", {}) === null);
@@ -179,6 +194,15 @@ const activePremium = buildBillingView({
   timezone: "America/Toronto",
 });
 ok("active premium: planKey + label + paid", activePremium.planKey === "premium" && activePremium.planLabel === "Premium" && activePremium.isPaid);
+
+const activeManaged = buildBillingView({
+  plan: "managed",
+  subscription_status: "active",
+  stripe_subscription_id: "sub_654",
+  current_period_end: "2026-07-15T12:00:00Z",
+  timezone: "America/Toronto",
+});
+ok("active managed: planKey + label + paid", activeManaged.planKey === "managed" && activeManaged.planLabel === "Managed" && activeManaged.isPaid);
 
 // Legacy core still RECOGNIZED as paid (no live org is on it, but a pre-migration
 // org must not silently drop to trial).
@@ -457,7 +481,7 @@ ok("hasEntitlement(plus, sms) true", hasEntitlement("plus", "sms") === true);
 ok("hasEntitlement(core, sms) false", hasEntitlement("core", "sms") === false);
 ok(
   "canUseSms mirrors hasEntitlement",
-  ["trial", "pilot", "core", "plus", "starter", "growth", "premium", "x", null].every(
+  ["trial", "pilot", "core", "plus", "starter", "growth", "premium", "managed", "x", null].every(
     (p) => canUseSms(p) === hasEntitlement(p, "sms"),
   ),
 );
@@ -478,6 +502,7 @@ ok("canUseRenterSms: trial false", canUseRenterSms("trial") === false);
 ok("canUseRenterSms: free false (email-only funnel)", canUseRenterSms("free") === false);
 ok("canUseRenterSms: growth true", canUseRenterSms("growth") === true);
 ok("canUseRenterSms: premium true", canUseRenterSms("premium") === true);
+ok("canUseRenterSms: managed true", canUseRenterSms("managed") === true);
 ok("canUseRenterSms: pilot true", canUseRenterSms("pilot") === true);
 ok("canUseRenterSms: core true (legacy leasing tier)", canUseRenterSms("core") === true);
 ok("canUseRenterSms: null false", canUseRenterSms(null) === false);
@@ -486,10 +511,12 @@ ok("canUseRenterSms: null false", canUseRenterSms(null) === false);
 ok("canCollectRentByPlan: free false", canCollectRentByPlan("free") === false);
 ok("canCollectRentByPlan: growth true", canCollectRentByPlan("growth") === true);
 ok("canCollectRentByPlan: premium true", canCollectRentByPlan("premium") === true);
+ok("canCollectRentByPlan: managed true", canCollectRentByPlan("managed") === true);
 ok("canCollectRentByPlan: trial false", canCollectRentByPlan("trial") === false);
 
 // --- accounting (Premium only) ---------------------------------------------
 ok("accounting: premium only", hasEntitlement("premium", "accounting") === true);
+ok("accounting: managed true", hasEntitlement("managed", "accounting") === true);
 ok("accounting: growth false", hasEntitlement("growth", "accounting") === false);
 
 // --- bank_feed (Growth & up; Free/trial false) -----------------------------
@@ -502,15 +529,17 @@ ok("bank_feed: trial false", hasEntitlement("trial", "bank_feed") === false);
 ok("capture_email_in: free false (funnel)", canUseCaptureEmailIn("free") === false);
 ok("capture_email_in: growth true (mid tier)", canUseCaptureEmailIn("growth") === true);
 ok("capture_email_in: premium true", canUseCaptureEmailIn("premium") === true);
+ok("capture_email_in: managed true", canUseCaptureEmailIn("managed") === true);
 ok("capture_email_in: trial false", canUseCaptureEmailIn("trial") === false);
 ok("capture_email_in: null false", canUseCaptureEmailIn(null) === false);
 ok("capture_text_in: free false", canUseCaptureTextIn("free") === false);
 ok("capture_text_in: growth false (gated above email)", canUseCaptureTextIn("growth") === false);
 ok("capture_text_in: premium true (upper tier)", canUseCaptureTextIn("premium") === true);
+ok("capture_text_in: managed true (upper tier)", canUseCaptureTextIn("managed") === true);
 ok("capture_text_in: pilot true (full access)", canUseCaptureTextIn("pilot") === true);
 ok(
   "text-in is strictly above email-in (no plan has text without email)",
-  (["free", "trial", "core", "plus", "growth", "premium", "pilot"] as const).every(
+  (["free", "trial", "core", "plus", "growth", "premium", "managed", "pilot"] as const).every(
     (p) => !canUseCaptureTextIn(p) || canUseCaptureEmailIn(p),
   ),
 );
@@ -520,6 +549,7 @@ ok(
 ok("repair_sms: free false", canUseRepairSms("free") === false);
 ok("repair_sms: growth false (gated to Premium)", canUseRepairSms("growth") === false);
 ok("repair_sms: premium true (upper tier)", canUseRepairSms("premium") === true);
+ok("repair_sms: managed true (upper tier)", canUseRepairSms("managed") === true);
 ok("repair_sms: pilot true (full access)", canUseRepairSms("pilot") === true);
 ok("repair_sms: trial false", canUseRepairSms("trial") === false);
 ok("repair_sms: null false", canUseRepairSms(null) === false);
@@ -527,6 +557,7 @@ ok("repair_sms: null false", canUseRepairSms(null) === false);
 ok("listing_marketing: free false", canUseListingMarketing("free") === false);
 ok("listing_marketing: growth true (paid convenience)", canUseListingMarketing("growth") === true);
 ok("listing_marketing: premium true", canUseListingMarketing("premium") === true);
+ok("listing_marketing: managed true", canUseListingMarketing("managed") === true);
 ok("listing_marketing: pilot true (full access)", canUseListingMarketing("pilot") === true);
 ok("listing_marketing: core false (legacy non-marketing)", canUseListingMarketing("core") === false);
 ok("listing_marketing: trial false", canUseListingMarketing("trial") === false);
@@ -536,6 +567,7 @@ ok("listing_marketing: null false", canUseListingMarketing(null) === false);
 ok("lease_ocr: free false", canUseLeaseOcr("free") === false);
 ok("lease_ocr: growth true", canUseLeaseOcr("growth") === true);
 ok("lease_ocr: premium true", canUseLeaseOcr("premium") === true);
+ok("lease_ocr: managed true", canUseLeaseOcr("managed") === true);
 ok("lease_ocr: pilot true (full access)", canUseLeaseOcr("pilot") === true);
 ok("lease_ocr: core false", canUseLeaseOcr("core") === false);
 ok("lease_ocr: trial false", canUseLeaseOcr("trial") === false);
@@ -544,6 +576,7 @@ ok("lease_ocr: null false", canUseLeaseOcr(null) === false);
 ok("listing_ai_import: free false", canUseListingAiImport("free") === false);
 ok("listing_ai_import: growth true", canUseListingAiImport("growth") === true);
 ok("listing_ai_import: premium true", canUseListingAiImport("premium") === true);
+ok("listing_ai_import: managed true", canUseListingAiImport("managed") === true);
 ok("listing_ai_import: pilot true (full access)", canUseListingAiImport("pilot") === true);
 ok("listing_ai_import: core false", canUseListingAiImport("core") === false);
 ok("listing_ai_import: plus false", canUseListingAiImport("plus") === false);
@@ -553,6 +586,7 @@ ok("listing_ai_import: null false", canUseListingAiImport(null) === false);
 ok("applications: free false", canUseRentalApplications("free") === false);
 ok("applications: growth true", canUseRentalApplications("growth") === true);
 ok("applications: premium true", canUseRentalApplications("premium") === true);
+ok("applications: managed true", canUseRentalApplications("managed") === true);
 ok("applications: pilot true (full access)", canUseRentalApplications("pilot") === true);
 ok("applications: core false", canUseRentalApplications("core") === false);
 ok("applications: plus false", canUseRentalApplications("plus") === false);
@@ -564,6 +598,7 @@ ok("applications mirrors hasEntitlement", canUseRentalApplications("growth") ===
 ok("serve_notice: free false", canUseServeNotice("free") === false);
 ok("serve_notice: growth true", canUseServeNotice("growth") === true);
 ok("serve_notice: premium true", canUseServeNotice("premium") === true);
+ok("serve_notice: managed true", canUseServeNotice("managed") === true);
 ok("serve_notice: pilot true (full access)", canUseServeNotice("pilot") === true);
 ok("serve_notice: core false", canUseServeNotice("core") === false);
 ok("serve_notice: plus false", canUseServeNotice("plus") === false);
@@ -573,6 +608,7 @@ ok("serve_notice mirrors hasEntitlement", canUseServeNotice("growth") === hasEnt
 ok("lease_ocr cap: free 0", leaseOcrMonthlyCap("free") === 0);
 ok("lease_ocr cap: growth = growth cap", leaseOcrMonthlyCap("growth") === LEASE_OCR_CAP_GROWTH);
 ok("lease_ocr cap: premium = premium cap", leaseOcrMonthlyCap("premium") === LEASE_OCR_CAP_PREMIUM);
+ok("lease_ocr cap: managed = premium cap", leaseOcrMonthlyCap("managed") === LEASE_OCR_CAP_PREMIUM);
 ok("lease_ocr cap: pilot = premium cap", leaseOcrMonthlyCap("pilot") === LEASE_OCR_CAP_PREMIUM);
 ok("lease_ocr cap: premium > growth", LEASE_OCR_CAP_PREMIUM > LEASE_OCR_CAP_GROWTH);
 ok("concierge included: free 0", conciergeMonthlyIncluded("free") === 0);
@@ -580,21 +616,27 @@ ok("concierge included: core 0", conciergeMonthlyIncluded("core") === 0);
 ok("concierge included: plus 0", conciergeMonthlyIncluded("plus") === 0);
 ok("concierge included: growth allowance", conciergeMonthlyIncluded("growth") === CONCIERGE_INCLUDED_GROWTH);
 ok("concierge included: premium allowance", conciergeMonthlyIncluded("premium") === CONCIERGE_INCLUDED_PREMIUM);
+ok("concierge included: managed allowance", conciergeMonthlyIncluded("managed") === CONCIERGE_INCLUDED_MANAGED);
 ok("concierge included: pilot founder allowance", conciergeMonthlyIncluded("pilot") === CONCIERGE_INCLUDED_PILOT);
 ok("concierge included: unknown 0", conciergeMonthlyIncluded("enterprise") === 0);
 ok("concierge included: premium > growth", CONCIERGE_INCLUDED_PREMIUM > CONCIERGE_INCLUDED_GROWTH);
+ok("concierge included: managed > premium", CONCIERGE_INCLUDED_MANAGED > CONCIERGE_INCLUDED_PREMIUM);
 ok("concierge included: pilot > premium", CONCIERGE_INCLUDED_PILOT > CONCIERGE_INCLUDED_PREMIUM);
 ok("concierge cap: free 0", conciergeMonthlyCap("free") === 0);
 ok("concierge cap: growth default", conciergeMonthlyCap("growth") === CONCIERGE_INCLUDED_GROWTH);
 ok("concierge cap: premium default", conciergeMonthlyCap("premium") === CONCIERGE_INCLUDED_PREMIUM);
+ok("concierge cap: managed default", conciergeMonthlyCap("managed") === CONCIERGE_INCLUDED_MANAGED);
 ok("concierge cap: pilot default", conciergeMonthlyCap("pilot") === CONCIERGE_INCLUDED_PILOT);
 ok("concierge cap: override wins", conciergeMonthlyCap("growth", { overrideCap: 99 }) === 99);
 ok("concierge cap: override can be zero", conciergeMonthlyCap("growth", { overrideCap: 0 }) === 0);
 ok("concierge cap: packs add to default", conciergeMonthlyCap("premium", { packs: 3 }) === CONCIERGE_INCLUDED_PREMIUM + 3);
+ok("concierge cap: growth pack total", conciergeMonthlyCap("growth", { packs: 3 }) === 5);
+ok("concierge cap: premium two packs total", conciergeMonthlyCap("premium", { packs: 6 }) === 12);
 ok("concierge cap: packs floor fractions", conciergeMonthlyCap("growth", { packs: 2.9 }) === CONCIERGE_INCLUDED_GROWTH + 2);
 ok("concierge cap: negative packs clamp", conciergeMonthlyCap("growth", { packs: -4 }) === CONCIERGE_INCLUDED_GROWTH);
 ok("concierge cap: override floors fractions", conciergeMonthlyCap("growth", { overrideCap: 4.9 }) === 4);
 ok("concierge cap: negative override clamps", conciergeMonthlyCap("growth", { overrideCap: -3 }) === 0);
+ok("concierge cap: override wins over packs", conciergeMonthlyCap("growth", { overrideCap: 8, packs: 3 }) === 8);
 ok("concierge used lease-ups: same property collapses to one", conciergeUsedLeaseUps([
   { propertyId: "p1" },
   { propertyId: "p1" },
@@ -637,6 +679,7 @@ ok(
 // --- incident_intake (Growth & up; Option B Slices 1-4) --------------------
 ok("incident_intake: growth true", hasEntitlement("growth", "incident_intake") === true);
 ok("incident_intake: premium true", hasEntitlement("premium", "incident_intake") === true);
+ok("incident_intake: managed true", hasEntitlement("managed", "incident_intake") === true);
 ok("incident_intake: pilot true", hasEntitlement("pilot", "incident_intake") === true);
 ok("incident_intake: free false", hasEntitlement("free", "incident_intake") === false);
 ok("incident_intake: trial false", hasEntitlement("trial", "incident_intake") === false);
@@ -645,21 +688,25 @@ ok("canUseIncidentIntake: free false", canUseIncidentIntake("free") === false);
 
 // --- incident_dispatch (Premium only; the guardrail amendment, Slices 5-7) --
 ok("incident_dispatch: premium true", hasEntitlement("premium", "incident_dispatch") === true);
+ok("incident_dispatch: managed true", hasEntitlement("managed", "incident_dispatch") === true);
 ok("incident_dispatch: pilot true", hasEntitlement("pilot", "incident_dispatch") === true);
 ok("incident_dispatch: growth false (intake yes, dispatch no)", hasEntitlement("growth", "incident_dispatch") === false);
 ok("incident_dispatch: free false", hasEntitlement("free", "incident_dispatch") === false);
 ok("canUseIncidentDispatch: premium true", canUseIncidentDispatch("premium") === true);
+ok("canUseIncidentDispatch: managed true", canUseIncidentDispatch("managed") === true);
 ok("canUseIncidentDispatch: growth false", canUseIncidentDispatch("growth") === false);
 
-// --- Live tier ladder shape (Free $0 < Growth $99 < Premium $249) -----------
-ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","growth","premium"]');
+// --- Live tier ladder shape (Free $0 < Growth $99 < Premium $249 < Managed $399) -----------
+ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","growth","premium","managed"]');
 ok("Free $0", TIERS.free.priceCents === 0);
 ok("Growth $99", TIERS.growth.priceCents === 9900);
 ok("Premium $249", TIERS.premium.priceCents === 24900);
+ok("Managed $399", TIERS.managed.priceCents === 39900);
 ok(
   "tier prices strictly ascending",
   TIERS.free.priceCents < TIERS.growth.priceCents &&
-    TIERS.growth.priceCents < TIERS.premium.priceCents,
+    TIERS.growth.priceCents < TIERS.premium.priceCents &&
+    TIERS.premium.priceCents < TIERS.managed.priceCents,
 );
 ok("Growth is the highlighted tier", TIERS.growth.highlight === true);
 // S299: the paid tiers now carry their price-id env names, so they are
@@ -667,18 +714,21 @@ ok("Growth is the highlighted tier", TIERS.growth.highlight === true);
 // gate is isBillingConfigured in lib/stripe.ts, which checks the env VALUES.)
 ok("Growth is config-shape purchasable", isTierPurchasable(TIERS.growth) === true);
 ok("Premium is config-shape purchasable", isTierPurchasable(TIERS.premium) === true);
+ok("Managed is config-shape purchasable", isTierPurchasable(TIERS.managed) === true);
 ok("Free is $0 and never purchasable", isTierPurchasable(TIERS.free) === false);
 
 // --- Listing allowance (Free funnel cap; config-only until wired) -----------
 ok("listing cap: free = 1", TIERS.free.maxActiveListings === 1);
 ok("listing cap: growth unlimited", TIERS.growth.maxActiveListings === null);
 ok("listing cap: premium unlimited", TIERS.premium.maxActiveListings === null);
+ok("listing cap: managed unlimited", TIERS.managed.maxActiveListings === null);
 ok("listingCapForPlan free -> 1", listingCapForPlan("free") === 1);
 ok("listingCapForPlan trial -> free cap (1)", listingCapForPlan("trial") === 1);
 ok("listingCapForPlan unknown -> free cap (1)", listingCapForPlan("zzz") === 1);
 ok("listingCapForPlan null -> free cap (1)", listingCapForPlan(null) === 1);
 ok("listingCapForPlan growth -> unlimited", listingCapForPlan("growth") === null);
 ok("listingCapForPlan premium -> unlimited", listingCapForPlan("premium") === null);
+ok("listingCapForPlan managed -> unlimited", listingCapForPlan("managed") === null);
 ok("listingCapForPlan pilot -> unlimited", listingCapForPlan("pilot") === null);
 ok("listingCapForPlan core -> unlimited (legacy paid)", listingCapForPlan("core") === null);
 ok("listingCapForPlan plus -> unlimited (legacy paid)", listingCapForPlan("plus") === null);
@@ -692,8 +742,7 @@ ok(
 );
 ok("Premium cap is higher than base", PREMIUM_PHOTO_CAP > BASE_PHOTO_CAP);
 
-// Every CURRENT plan resolves to the base cap -> wiring this changes no live
-// behavior (no live org is on premium). Only premium gets more.
+// Every non-top plan resolves to the base cap. Premium and Managed get more.
 ok("photoCapForPlan trial -> base", photoCapForPlan("trial") === BASE_PHOTO_CAP);
 ok("photoCapForPlan core -> base", photoCapForPlan("core") === BASE_PHOTO_CAP);
 ok("photoCapForPlan plus -> base", photoCapForPlan("plus") === BASE_PHOTO_CAP);
@@ -703,6 +752,7 @@ ok("photoCapForPlan growth -> base", photoCapForPlan("growth") === BASE_PHOTO_CA
 ok("photoCapForPlan null -> base", photoCapForPlan(null) === BASE_PHOTO_CAP);
 ok("photoCapForPlan unknown -> base", photoCapForPlan("zzz") === BASE_PHOTO_CAP);
 ok("photoCapForPlan premium -> premium cap", photoCapForPlan("premium") === PREMIUM_PHOTO_CAP);
+ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREMIUM_PHOTO_CAP);
 
 // --- storageUpsellNote ------------------------------------------------------
 {
@@ -725,10 +775,13 @@ ok("photoCapForPlan premium -> premium cap", photoCapForPlan("premium") === PREM
   ok("storageUpsell: at cap true", at.atCap === true);
   ok("storageUpsell: at cap shows", at.showUpsell === true);
 
-  // Premium has no higher tier above it -> never nudged, even at its cap.
+  // Premium/Managed share the top photo capacity -> never nudged, even at cap.
   const premiumAt = storageUpsellNote("premium", PREMIUM_PHOTO_CAP);
   ok("storageUpsell: premium at cap is atCap", premiumAt.atCap === true);
   ok("storageUpsell: premium never nudged", premiumAt.showUpsell === false);
+  const managedAt = storageUpsellNote("managed", PREMIUM_PHOTO_CAP);
+  ok("storageUpsell: managed at cap is atCap", managedAt.atCap === true);
+  ok("storageUpsell: managed never nudged", managedAt.showUpsell === false);
 
   // Negative/garbage count floors to 0 used.
   const neg = storageUpsellNote("free", -5);

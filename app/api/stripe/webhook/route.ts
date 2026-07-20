@@ -157,6 +157,46 @@ async function applyDepositPaid(
   return { matched: true as const, orgId };
 }
 
+// Record a one-time concierge pack purchase for the current month. Idempotent:
+// Stripe retries reuse the same PaymentIntent id, and the table has a unique
+// stripe_payment_intent_id.
+async function applyConciergePack(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  session: Stripe.Checkout.Session,
+) {
+  const orgId =
+    (session.metadata?.org_id as string | undefined) ||
+    session.client_reference_id ||
+    null;
+  const period = (session.metadata?.period as string | undefined) || null;
+  const rawQuantity = Number(session.metadata?.quantity ?? 0);
+  const quantity =
+    Number.isFinite(rawQuantity) && rawQuantity > 0
+      ? Math.floor(rawQuantity)
+      : 0;
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id ?? null;
+
+  if (!orgId || !period || quantity <= 0 || !paymentIntentId) {
+    return { matched: false as const };
+  }
+
+  const { error } = await admin.from("concierge_pack_purchases").upsert(
+    {
+      organization_id: orgId,
+      period,
+      quantity,
+      stripe_payment_intent_id: paymentIntentId,
+      amount_cents: session.amount_total ?? null,
+    },
+    { onConflict: "stripe_payment_intent_id", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+  return { matched: true as const, orgId, period, quantity };
+}
+
 // Flip a paid deposit to 'refunded' when its charge is fully refunded. Matches
 // the org by the stored PaymentIntent id. Order-independent (audit C4): it acts
 // on any matched org whose deposit isn't already 'refunded', regardless of the
@@ -333,6 +373,10 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.kind === "concierge_pack") {
+          await applyConciergePack(admin, session);
+          break;
+        }
         // The one-time pilot deposit is recognized SOLELY by its stamped kind
         // (audit C3). startDepositCheckout always sets metadata.kind='pilot_deposit'
         // on the session, so this is precise; a future one-time payment Checkout

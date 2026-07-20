@@ -55,11 +55,16 @@ export default async function BillingPage({
   const error = searchParams.error;
   const pilot = searchParams.pilot;
   const deposit = searchParams.deposit;
+  const conciergeDeskEnabled = process.env.CONCIERGE_DESK_ENABLED === "true";
+  const visibleTierKeys = TIER_KEYS.filter(
+    (key) => key !== "managed" || conciergeDeskEnabled,
+  );
 
   const errorCopy: Record<string, string> = {
     not_configured:
       "Card subscriptions aren't available yet. Your pilot access is unaffected - you can start a pilot with full access below.",
-    plan: "That plan isn't recognized. Please choose Growth or Premium and try again.",
+    plan:
+      "That plan isn't recognized. Please choose Growth, Premium, or Managed and try again.",
     checkout: "Couldn't start checkout. Please try again.",
     portal:
       "No billing account yet. Subscribe to a plan first, then you can manage it here.",
@@ -314,10 +319,10 @@ export default async function BillingPage({
         </div>
       )}
 
-      {/* Plan options — the live Free / Growth / Premium ladder (S299). Free is
-          the funnel baseline; Growth/Premium are the purchasable subscriptions
-          (Subscribe wired to startCheckout with the tier key). Usage costs
-          (texts, ad spend, payment processing) always pass through at cost. */}
+      {/* Plan options — the live Free / Growth / Premium ladder plus dark
+          Managed (S541). Free is the funnel baseline; paid cards subscribe via
+          startCheckout with the tier key. Usage costs (texts, ad spend,
+          payment processing) always pass through at cost. */}
       <h3 className="mt-8 text-sm font-semibold uppercase tracking-wider text-gray-500">
         {view.pilotActive
           ? "Continue after your pilot"
@@ -333,10 +338,17 @@ export default async function BillingPage({
           away - no setup call needed.
         </p>
       )}
-      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {TIER_KEYS.map((key) => {
+      <div
+        className={`mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3 ${
+          conciergeDeskEnabled ? "xl:grid-cols-4" : ""
+        }`}
+      >
+        {visibleTierKeys.map((key) => {
           const tier = TIERS[key];
           const isFree = tier.priceCents === 0;
+          const tierConfigured =
+            configured &&
+            (key !== "managed" || Boolean(process.env.STRIPE_PRICE_MANAGED));
           // "Current plan" when the org is on this exact tier. The free card is
           // also the current plan for a fresh free/trial org (anyone not on a
           // paid plan or an active/expired pilot).
@@ -386,10 +398,12 @@ export default async function BillingPage({
                   <form action={startCheckout}>
                     <input type="hidden" name="plan" value={key} />
                     <button
-                      disabled={!configured}
+                      disabled={!tierConfigured}
                       className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {view.isPaid
+                      {!tierConfigured
+                        ? "Billing not configured"
+                        : view.isPaid
                         ? `Switch to ${tier.name}`
                         : view.isPilot
                           ? `Continue on ${tier.name}`

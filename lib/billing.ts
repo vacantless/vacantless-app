@@ -5,8 +5,8 @@
 // (the Stripe client, env-driven price-id lookup) live in lib/stripe.ts.
 
 // `free` is the permanent, no-card funnel tier (Package B, S296). `trial` stays
-// the pre-anything default for legacy orgs. `growth`/`premium` are the LIVE
-// purchasable paid plans (S299 Stripe-product migration). `core`/`plus` are the
+// the pre-anything default for legacy orgs. `growth`/`premium`/`managed` are the LIVE
+// purchasable paid plans (S299/S541 Stripe-product migrations). `core`/`plus` are the
 // retired leasing-era plans — recognized for any pre-migration org (see
 // isAnyPaidPlan / the entitlements matrix) but never offered for sale.
 export type PlanKey =
@@ -15,31 +15,36 @@ export type PlanKey =
   | "pilot"
   | "growth"
   | "premium"
+  | "managed"
   | "core"
   | "plus";
 
-// The purchasable paid plans. As of S299 these are the live Free/Growth/Premium
-// ladder's two paid tiers — they are exactly the paid keys of TIERS, so the
+// The purchasable paid plans. As of S541 these are the live Free/Growth/Premium/Managed
+// ladder's paid tiers — they are exactly the paid keys of TIERS, so the
 // Stripe price layer (lib/stripe.ts) reads each plan's `priceEnv` straight off
 // TIERS. Core/Plus are NO LONGER part of this union (they are retired legacy).
-export type PaidPlanKey = "growth" | "premium";
+export type PaidPlanKey = "growth" | "premium" | "managed";
 
-export const PAID_PLAN_KEYS: PaidPlanKey[] = ["growth", "premium"];
+export const PAID_PLAN_KEYS: PaidPlanKey[] = ["growth", "premium", "managed"];
 
-// True for a LIVE purchasable paid plan (growth/premium). This narrows the type,
+// True for a LIVE purchasable paid plan (growth/premium/managed). This narrows the type,
 // so checkout/price-lookup callers can pass the result straight to TIERS[plan].
 export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey {
-  return plan === "growth" || plan === "premium";
+  return plan === "growth" || plan === "premium" || plan === "managed";
 }
 
-// True for ANY paid subscription plan — the live ones (growth/premium) PLUS the
+// True for ANY paid subscription plan — the live ones (growth/premium/managed) PLUS the
 // retired legacy plans (core/plus). Used by the billing view + the "already on a
 // paid plan" guards so a pre-migration paid org still reads as paid even though
 // Core/Plus are no longer sold. (No live org is on core/plus today; this is the
 // defensive belt-and-suspenders for the migration.)
 export function isAnyPaidPlan(plan: string | null | undefined): boolean {
   return (
-    plan === "growth" || plan === "premium" || plan === "core" || plan === "plus"
+    plan === "growth" ||
+    plan === "premium" ||
+    plan === "managed" ||
+    plan === "core" ||
+    plan === "plus"
   );
 }
 
@@ -174,14 +179,14 @@ function noEntitlements(): PlanEntitlements {
   };
 }
 
-// The live Free / Growth / Premium ladder (S296, Package B; numbers validated
+// The live Free / Growth / Premium / Managed ladder (S296/S541; initial numbers validated
 // 2026-06-22 — see PRICING-RESEARCH-2026-06-22.md). Replaces the S220 three-
 // paid-tier draft: the $49 Starter is dropped (the leasing wedge moves into the
 // Free funnel, matching how Avail/TurboTenant convert), so the ladder is one
 // free tier + two paid tiers. Tier keys are distinct from the legacy plan keys
 // so both can coexist through the Stripe-product migration.
-export type TierKey = "free" | "growth" | "premium";
-export const TIER_KEYS: TierKey[] = ["free", "growth", "premium"];
+export type TierKey = "free" | "growth" | "premium" | "managed";
+export const TIER_KEYS: TierKey[] = ["free", "growth", "premium", "managed"];
 
 // Any stored plan string we recognize: the new ladder + the legacy plans.
 export type AnyPlanKey = PlanKey | TierKey;
@@ -207,6 +212,7 @@ export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
   growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import
   premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import
+  managed: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Premium feature set plus the larger concierge allowance.
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -347,18 +353,24 @@ export function leaseOcrMonthlyCap(plan: string | null | undefined): number {
   if (!canUseLeaseOcr(plan)) return 0;
   // Premium (and the founder pilot) get the higher ceiling; every other gated
   // plan (Growth) gets the standard one.
-  return plan === "premium" || plan === "pilot" ? LEASE_OCR_CAP_PREMIUM : LEASE_OCR_CAP_GROWTH;
+  return plan === "premium" || plan === "managed" || plan === "pilot"
+    ? LEASE_OCR_CAP_PREMIUM
+    : LEASE_OCR_CAP_GROWTH;
 }
 
 // Soft included monthly concierge posting allowance. This is DISPLAY ONLY for
 // S538: no cap, Stripe hook, overage charge, or claim function reads this value.
 export const CONCIERGE_INCLUDED_GROWTH = 2;
 export const CONCIERGE_INCLUDED_PREMIUM = 6;
+export const CONCIERGE_INCLUDED_MANAGED = 20;
 export const CONCIERGE_INCLUDED_PILOT = 99;
+export const CONCIERGE_PACK_QUANTITY = 3;
+export const CONCIERGE_PACK_PRICE_CENTS = 4900;
 
 export function conciergeMonthlyIncluded(plan: string | null | undefined): number {
   if (!canUseListingMarketing(plan)) return 0;
   if (plan === "pilot") return CONCIERGE_INCLUDED_PILOT;
+  if (plan === "managed") return CONCIERGE_INCLUDED_MANAGED;
   return plan === "premium" ? CONCIERGE_INCLUDED_PREMIUM : CONCIERGE_INCLUDED_GROWTH;
 }
 
@@ -413,7 +425,7 @@ export const PREMIUM_PHOTO_CAP = 60;
 // The per-rental photo allowance for a plan. Everything below Premium gets the
 // base; Premium gets more. Unknown/missing plan -> base (never less).
 export function photoCapForPlan(plan: string | null | undefined): number {
-  return plan === "premium" ? PREMIUM_PHOTO_CAP : BASE_PHOTO_CAP;
+  return plan === "premium" || plan === "managed" ? PREMIUM_PHOTO_CAP : BASE_PHOTO_CAP;
 }
 
 // Soft, non-blocking upsell for the Photos card. "Show, don't block" (the
@@ -442,8 +454,8 @@ export function storageUpsellNote(
   return { cap, used, remaining, atCap, showUpsell };
 }
 
-// --- Live Free / Growth / Premium ladder (S296, Package B) -------------------
-// Display config for the live 3-tier ladder. NUMBERS VALIDATED 2026-06-22
+// --- Live Free / Growth / Premium / Managed ladder (S296 + S541) ------------
+// Display config for the live tier ladder. NUMBERS VALIDATED 2026-06-22
 // against the market (PRICING-RESEARCH-2026-06-22.md): $0 Free funnel + $99
 // Growth anchor + $249 Premium, all flat (no per-unit caps — the 20–100 door
 // ICP balks at per-unit math; flat is the wedge). The paid tiers are NOT yet
@@ -452,12 +464,12 @@ export function storageUpsellNote(
 //
 // MIGRATION (S299): the ladder is now WIRED as the live billing surface. The
 // paid tiers carry their Stripe price-id env vars (STRIPE_PRICE_GROWTH /
-// STRIPE_PRICE_PREMIUM); once those envs hold a real price id, isTierPurchasable
+// STRIPE_PRICE_PREMIUM / STRIPE_PRICE_MANAGED); once those envs hold a real price id, isTierPurchasable
 // -> true and the billing page's Subscribe buttons go live. Done in S299:
-//   [x] Growth/Premium `priceEnv` set (below).
+//   [x] Growth/Premium/Managed `priceEnv` set (below).
 //   [x] lib/stripe.ts priceIdForPlan/priceMap read the paid TIERS.
-//   [x] PaidPlanKey = growth|premium; billing page renders TIERS (Core/Plus cards removed).
-//   [x] startCheckout accepts the tier key; webhook maps the price -> growth/premium.
+//   [x] PaidPlanKey = growth|premium|managed; billing page renders TIERS (Core/Plus cards removed).
+//   [x] startCheckout accepts the tier key; webhook maps the price -> growth/premium/managed.
 //   [x] A fresh org defaults to plan='free' at signup (onboarding actions).
 // ENFORCED (post-S402): `publishProperty` (app/dashboard/properties/actions.ts)
 // checks `listingCapForPlan` before flipping a rental Live and bounces a
@@ -530,10 +542,24 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Priority support",
     ],
   },
+  managed: {
+    key: "managed",
+    name: "Managed",
+    priceCents: 39900,
+    priceEnv: "STRIPE_PRICE_MANAGED",
+    maxActiveListings: null,
+    blurb:
+      "Everything in Premium, plus done-for-you posting for portfolio operators.",
+    features: [
+      "Everything in Premium",
+      "20 done-for-you lease-ups per month",
+      "Priority publishing desk",
+    ],
+  },
 };
 
 // Config-shape check: the tier is set up to be SOLD — it has a price and a
-// price-id env name. True for the paid tiers (growth/premium), false for Free
+// price-id env name. True for the paid tiers (growth/premium/managed), false for Free
 // ($0, never purchasable). NOTE: this does not read the env VALUE, so it does
 // not by itself prove a Stripe product exists. The live runtime gate the
 // billing page uses is isBillingConfigured() in lib/stripe.ts (it checks the
@@ -547,7 +573,7 @@ export function isTierPurchasable(tier: TierInfo): boolean {
 // org's other live listings before it makes a rental public. Unknown/missing
 // plan -> the Free cap (never more).
 export function listingCapForPlan(plan: string | null | undefined): number | null {
-  // Any paid plan (live growth/premium or legacy core/plus) + pilot = unlimited.
+  // Any paid plan (live growth/premium/managed or legacy core/plus) + pilot = unlimited.
   if (isAnyPaidPlan(plan) || isPilotPlan(plan)) return null;
   return TIERS.free.maxActiveListings; // free / trial / unknown
 }
@@ -762,8 +788,8 @@ export function statusLabel(status: string | null | undefined): string {
 
 export type BillingView = {
   planKey: PlanKey;
-  planLabel: string; // "Trial" | "Free" | "Pilot" | "Growth" | "Premium" | (legacy) "Core" | "Plus"
-  isPaid: boolean; // org is on a paid tier (growth/premium, or legacy core/plus)
+  planLabel: string; // "Trial" | "Free" | "Pilot" | "Growth" | "Premium" | "Managed" | (legacy) "Core" | "Plus"
+  isPaid: boolean; // org is on a paid tier (growth/premium/managed, or legacy core/plus)
   isPilot: boolean; // org is on the pilot plan (active OR expired-not-yet-converted)
   pilotActive: boolean; // pilot started and within the 30-day window
   pilotExpired: boolean; // pilot started but the 30 days have passed
@@ -801,6 +827,7 @@ export type BillingInput = {
 function planLabelOf(plan: PlanKey): string {
   if (plan === "growth") return "Growth";
   if (plan === "premium") return "Premium";
+  if (plan === "managed") return "Managed";
   if (plan === "core") return "Core"; // retired legacy plan, still labeled for any pre-migration org
   if (plan === "plus") return "Plus"; // retired legacy plan, still labeled for any pre-migration org
   if (plan === "pilot") return "Pilot";
@@ -827,7 +854,7 @@ export function formatPeriodEnd(
 
 // Build the view-model the Billing page + settings Account panel render from.
 export function buildBillingView(input: BillingInput): BillingView {
-  // A paid Stripe plan wins (live growth/premium OR retired legacy core/plus);
+  // A paid Stripe plan wins (live growth/premium/managed OR retired legacy core/plus);
   // otherwise pilot; otherwise the free funnel tier; else trial (the legacy
   // pre-anything default).
   const planKey: PlanKey = isAnyPaidPlan(input.plan)
