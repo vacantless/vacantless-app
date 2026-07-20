@@ -55,6 +55,12 @@ const SECTIONS: Section[] = [
     icon: "chart",
   },
   {
+    href: "/dashboard/money/accountant-package",
+    title: "Accountant package",
+    desc: "The whole year - ledger, T776, statements, and QuickBooks/Xero import files - as one zip to hand to whoever does the taxes. Premium.",
+    icon: "page",
+  },
+  {
     href: "/dashboard/expenses",
     title: "Expenses",
     desc: "Log and categorize what each rental costs - import a bank feed, sort the money out, and keep every expense against the right unit.",
@@ -131,7 +137,8 @@ export default async function MoneyHubPage() {
             (s.href === "/dashboard/money/reconcile" ||
               s.href === "/dashboard/money/import-history" ||
               s.href === "/dashboard/money/income-statement" ||
-              s.href === "/dashboard/money/tax-package") &&
+              s.href === "/dashboard/money/tax-package" ||
+              s.href === "/dashboard/money/accountant-package") &&
             !accounting;
           return (
             <Link key={s.href} href={s.href} className="block">
