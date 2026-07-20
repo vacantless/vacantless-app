@@ -353,13 +353,24 @@ export function leaseOcrMonthlyCap(plan: string | null | undefined): number {
 // Soft included monthly concierge posting allowance. This is DISPLAY ONLY for
 // S538: no cap, Stripe hook, overage charge, or claim function reads this value.
 export const CONCIERGE_INCLUDED_GROWTH = 2;
-export const CONCIERGE_INCLUDED_PREMIUM = 5;
+export const CONCIERGE_INCLUDED_PREMIUM = 6;
+export const CONCIERGE_INCLUDED_PILOT = 99;
 
 export function conciergeMonthlyIncluded(plan: string | null | undefined): number {
   if (!canUseListingMarketing(plan)) return 0;
-  return plan === "premium" || plan === "pilot"
-    ? CONCIERGE_INCLUDED_PREMIUM
-    : CONCIERGE_INCLUDED_GROWTH;
+  if (plan === "pilot") return CONCIERGE_INCLUDED_PILOT;
+  return plan === "premium" ? CONCIERGE_INCLUDED_PREMIUM : CONCIERGE_INCLUDED_GROWTH;
+}
+
+export function conciergeUsedLeaseUps(
+  rows: readonly { propertyId: string | null | undefined }[],
+): number {
+  const propertyIds = new Set<string>();
+  for (const row of rows) {
+    const propertyId = row.propertyId?.trim();
+    if (propertyId) propertyIds.add(propertyId);
+  }
+  return propertyIds.size;
 }
 
 export function conciergeUsageLabel({
@@ -372,9 +383,11 @@ export function conciergeUsageLabel({
   const safeUsed = Math.max(0, Math.floor(used ?? 0));
   const safeIncluded = Math.max(0, Math.floor(included ?? 0));
   if (safeIncluded === 0) {
-    return `${safeUsed} done-for-you post${safeUsed === 1 ? "" : "s"} this month`;
+    return `${safeUsed} done-for-you lease-up${
+      safeUsed === 1 ? "" : "s"
+    } this month`;
   }
-  return `${safeUsed} of ${safeIncluded} done-for-you posts this month`;
+  return `${safeUsed} of ${safeIncluded} done-for-you lease-ups this month`;
 }
 
 // --- Photo storage allowance (per-tier; an expansion-revenue lever) ---------

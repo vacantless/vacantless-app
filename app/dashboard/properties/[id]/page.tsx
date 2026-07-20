@@ -64,6 +64,7 @@ import {
   canUseListingMarketing,
   canUseWaitlist,
   conciergeMonthlyIncluded,
+  conciergeUsedLeaseUps,
 } from "@/lib/billing";
 import { WaitlistCard, type WaitlistEntryView } from "./waitlist-card";
 import { matchesVacancy } from "@/lib/waitlist";
@@ -1219,13 +1220,33 @@ export default async function PropertyDetailPage({
   };
   if (conciergeDeskEnabled) {
     const { startIso, endIso } = currentUtcMonthWindow(new Date(nowMs));
-    const { count, error } = await supabase
+    const { data: conciergeRows, error: conciergeRowsError } = await supabase
       .from("distribution_run_items")
-      .select("id", { count: "exact", head: true })
+      .select("run_id")
       .eq("organization_id", propertyOrgId)
       .gte("concierge_requested_at", startIso)
       .lt("concierge_requested_at", endIso);
-    if (!error) conciergeUsage.used = count ?? 0;
+    const runIds = Array.from(
+      new Set(
+        ((conciergeRows ?? []) as { run_id: string | null }[])
+          .map((row) => row.run_id)
+          .filter((runId): runId is string => Boolean(runId)),
+      ),
+    );
+    if (!conciergeRowsError && runIds.length > 0) {
+      const { data: runRows, error: runRowsError } = await supabase
+        .from("distribution_runs")
+        .select("property_id")
+        .eq("organization_id", propertyOrgId)
+        .in("id", runIds);
+      if (!runRowsError) {
+        conciergeUsage.used = conciergeUsedLeaseUps(
+          ((runRows ?? []) as { property_id: string | null }[]).map((row) => ({
+            propertyId: row.property_id,
+          })),
+        );
+      }
+    }
   }
   const conciergeDaysVacant = daysVacant({
     status: p.status,
