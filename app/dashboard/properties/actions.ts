@@ -83,7 +83,13 @@ import {
   type DropboxEntry,
   type DropboxLeafFolder,
 } from "@/lib/dropbox-import";
-import { photoCapForPlan, listingCapForPlan, canUseListingAiImport, hasEntitlement } from "@/lib/billing";
+import {
+  photoCapForPlan,
+  listingCapForPlan,
+  canUseListingAiImport,
+  hasEntitlement,
+  conciergeMonthlyCap,
+} from "@/lib/billing";
 import { createHash } from "crypto";
 import {
   validateDocumentUpload,
@@ -3522,11 +3528,17 @@ export async function logScanExpense(formData: FormData) {
   redirect(scanExpAnchor("logged"));
 }
 
+type ConciergeClaimRow = {
+  allowed?: boolean | null;
+  used?: number | null;
+};
+
 // Operator "Publish for me" (S474b): hand a human-action channel to the Vacantless
 // publishing desk. Flips the run item to concierge mode + queued so a staff member
 // posts it and marks it live. Gated on the listing_marketing entitlement (a paid
-// distribution feature; the Free funnel tier stays self-serve). Each request is one
-// countable done-for-you unit — the row itself is the billing meter.
+// distribution feature; the Free funnel tier stays self-serve). When the desk is
+// live, the claim is per vacancy/month, so extra channels for the same property
+// stay idempotent instead of burning more lease-ups.
 export async function requestConciergePublish(formData: FormData) {
   const propertyIdForm = String(formData.get("property_id") ?? "");
   const itemId = String(formData.get("item_id") ?? "");
@@ -3578,7 +3590,8 @@ export async function requestConciergePublish(formData: FormData) {
   if (!runOrg || role == null || !roleCan(role, "manage_properties")) {
     redirect(`/dashboard/properties/${propertyId}?forbidden=1#distribute-header`);
   }
-  if (!hasEntitlement((runOrg as { plan: string | null }).plan, "listing_marketing")) {
+  const runOrgPlan = (runOrg as { plan: string | null }).plan;
+  if (!hasEntitlement(runOrgPlan, "listing_marketing")) {
     redirect(
       `/dashboard/properties/${propertyId}?run=conciergeupgrade#distribute-header`,
     );
@@ -3603,6 +3616,55 @@ export async function requestConciergePublish(formData: FormData) {
     redirect(
       `/dashboard/properties/${propertyId}?run=conciergeineligible#distribute-header`,
     );
+  }
+
+  if (process.env.CONCIERGE_DESK_ENABLED === "true") {
+    const { data: capOrg, error: capOrgError } = await supabase
+      .from("organizations")
+      .select("concierge_leaseup_cap_override")
+      .eq("id", runOrgId)
+      .maybeSingle();
+    if (capOrgError) {
+      console.error("requestConciergePublish: cap override read failed", {
+        organizationId: runOrgId,
+        propertyId,
+        error: capOrgError,
+      });
+      redirect(
+        `/dashboard/properties/${propertyId}?runerr=claimfailed#distribute-header`,
+      );
+    }
+    const overrideCap = (
+      capOrg as { concierge_leaseup_cap_override?: number | null } | null
+    )?.concierge_leaseup_cap_override ?? null;
+    const period = new Date().toISOString().slice(0, 7);
+    const cap = conciergeMonthlyCap(runOrgPlan, { overrideCap });
+    const { data, error } = await supabase.rpc("claim_concierge_leaseup", {
+      p_org: runOrgId,
+      p_period: period,
+      p_property: propertyId,
+      p_cap: cap,
+    });
+    if (error) {
+      console.error("requestConciergePublish: claim RPC failed", {
+        organizationId: runOrgId,
+        propertyId,
+        period,
+        cap,
+        error,
+      });
+      redirect(
+        `/dashboard/properties/${propertyId}?runerr=claimfailed#distribute-header`,
+      );
+    }
+    const claim = Array.isArray(data)
+      ? (data[0] as ConciergeClaimRow | undefined)
+      : (data as ConciergeClaimRow | null);
+    if (!claim || claim.allowed !== true) {
+      redirect(
+        `/dashboard/properties/${propertyId}?run=conciergeatcap#distribute-header`,
+      );
+    }
   }
 
   const now = new Date().toISOString();

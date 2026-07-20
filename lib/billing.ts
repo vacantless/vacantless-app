@@ -362,6 +362,15 @@ export function conciergeMonthlyIncluded(plan: string | null | undefined): numbe
   return plan === "premium" ? CONCIERGE_INCLUDED_PREMIUM : CONCIERGE_INCLUDED_GROWTH;
 }
 
+export function conciergeMonthlyCap(
+  plan: string | null | undefined,
+  opts?: { overrideCap?: number | null; packs?: number },
+): number {
+  if (!canUseListingMarketing(plan)) return 0;
+  if (opts?.overrideCap != null) return Math.max(0, Math.floor(opts.overrideCap));
+  return conciergeMonthlyIncluded(plan) + Math.max(0, Math.floor(opts?.packs ?? 0));
+}
+
 export function conciergeUsedLeaseUps(
   rows: readonly { propertyId: string | null | undefined }[],
 ): number {

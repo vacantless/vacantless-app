@@ -154,6 +154,19 @@ type DistributionHealth = {
   advancedLeads: number;
 };
 
+export type DistributeRunNotice = {
+  tone: "success" | "warning" | "danger" | "info";
+  title: string;
+  body: string;
+};
+
+const RUN_NOTICE_CLASS: Record<DistributeRunNotice["tone"], string> = {
+  success: "border-green-200 bg-green-50 text-green-700",
+  warning: "border-amber-200 bg-amber-50 text-amber-800",
+  danger: "border-red-200 bg-red-50 text-red-700",
+  info: "border-blue-200 bg-blue-50 text-blue-800",
+};
+
 // --- next-action banner (Slice 1) ------------------------------------------
 // One prioritized "do this next" line across all run channels, so the command
 // center leads with a single obvious step (Codex #1/#4). Pure — derived only
@@ -270,6 +283,7 @@ export function DistributeTab({
   quality,
   qaExpected,
   reservedTrackedLinksByChannel,
+  runNotice,
 }: {
   propertyId: string;
   linkIsLive: boolean;
@@ -286,6 +300,7 @@ export function DistributeTab({
   quality: QualityView;
   qaExpected: QaExpected;
   reservedTrackedLinksByChannel: Record<string, string>;
+  runNotice: DistributeRunNotice | null;
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -349,6 +364,15 @@ export function DistributeTab({
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             {promotionNote}
           </p>
+        )}
+        {runNotice && (
+          <div
+            className={`mt-3 rounded-lg border px-3 py-2 text-xs ${RUN_NOTICE_CLASS[runNotice.tone]}`}
+          >
+            <p>
+              <strong>{runNotice.title}</strong> {runNotice.body}
+            </p>
+          </div>
         )}
       </div>
 

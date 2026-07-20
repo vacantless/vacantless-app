@@ -63,7 +63,7 @@ import {
   storageUpsellNote,
   canUseListingMarketing,
   canUseWaitlist,
-  conciergeMonthlyIncluded,
+  conciergeMonthlyCap,
   conciergeUsedLeaseUps,
 } from "@/lib/billing";
 import { WaitlistCard, type WaitlistEntryView } from "./waitlist-card";
@@ -152,6 +152,7 @@ import {
   DistributeTab,
   type DistributeChannelCard,
   type DistributePostRow,
+  type DistributeRunNotice,
   type LaunchRunData,
   type ReplyInputs,
   type PartnerAccountView,
@@ -312,6 +313,8 @@ export default async function PropertyDetailPage({
     photoerr?: string;
     duplicated?: string;
     imported?: string;
+    run?: string;
+    runerr?: string;
     tourerr?: string;
     // Relist-over-active-tenancy confirmation (S447 Codex P2).
     relist?: string;
@@ -1214,9 +1217,25 @@ export default async function PropertyDetailPage({
   const conciergeEnabled = hasEntitlement(org?.plan, "listing_marketing");
   const conciergeDeskEnabled =
     conciergeEnabled && process.env.CONCIERGE_DESK_ENABLED === "true";
+  let conciergeOverrideCap: number | null = null;
+  if (conciergeDeskEnabled) {
+    const { data: conciergeOrg } = await supabase
+      .from("organizations")
+      .select("concierge_leaseup_cap_override")
+      .eq("id", propertyOrgId)
+      .maybeSingle();
+    conciergeOverrideCap =
+      (
+        conciergeOrg as
+          | { concierge_leaseup_cap_override?: number | null }
+          | null
+      )?.concierge_leaseup_cap_override ?? null;
+  }
   const conciergeUsage = {
     used: 0,
-    included: conciergeMonthlyIncluded(org?.plan),
+    included: conciergeMonthlyCap(org?.plan, {
+      overrideCap: conciergeOverrideCap,
+    }),
   };
   if (conciergeDeskEnabled) {
     const { startIso, endIso } = currentUtcMonthWindow(new Date(nowMs));
@@ -1341,6 +1360,42 @@ export default async function PropertyDetailPage({
     conciergeDailyLostLabel,
     realtorReferralEnabled,
   };
+  const distributeRunNotice: DistributeRunNotice | null =
+    searchParams.run === "concierge"
+      ? {
+          tone: "success",
+          title: "Handed to the desk.",
+          body:
+            "Vacantless will post this channel and keep the checklist updated.",
+        }
+      : searchParams.run === "conciergeupgrade"
+        ? {
+            tone: "warning",
+            title: "Done-for-you posting is a Growth feature.",
+            body:
+              "Choose Growth or Premium to hand posting work to the Vacantless desk.",
+          }
+        : searchParams.run === "conciergeineligible"
+          ? {
+              tone: "warning",
+              title: "This channel is not ready for the desk.",
+              body:
+                "Choose an eligible manual channel before handing it to Vacantless.",
+            }
+          : searchParams.run === "conciergeatcap"
+            ? {
+                tone: "info",
+                title: "Included desk capacity used.",
+                body: `You've used all ${conciergeUsage.used} of ${conciergeUsage.included} included done-for-you lease-ups this month. Expanded capacity is coming soon.`,
+              }
+            : searchParams.runerr === "claimfailed"
+              ? {
+                  tone: "danger",
+                  title: "Desk handoff failed.",
+                  body:
+                    "Something went wrong handing this to the desk - try again.",
+                }
+              : null;
   const replyInputs: ReplyInputs = {
     address: p.address,
     bookingUrl: linkIsLive ? publicUrl : null,
@@ -2918,6 +2973,7 @@ export default async function PropertyDetailPage({
           quality={listingQuality}
           qaExpected={qaExpected}
           reservedTrackedLinksByChannel={reservedTrackedLinksByChannel}
+          runNotice={distributeRunNotice}
         />
       </TabPanel>
 

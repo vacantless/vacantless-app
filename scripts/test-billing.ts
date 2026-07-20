@@ -46,6 +46,7 @@ import {
   CONCIERGE_INCLUDED_GROWTH,
   CONCIERGE_INCLUDED_PREMIUM,
   CONCIERGE_INCLUDED_PILOT,
+  conciergeMonthlyCap,
   TIERS,
   TIER_KEYS,
   isTierPurchasable,
@@ -583,6 +584,17 @@ ok("concierge included: pilot founder allowance", conciergeMonthlyIncluded("pilo
 ok("concierge included: unknown 0", conciergeMonthlyIncluded("enterprise") === 0);
 ok("concierge included: premium > growth", CONCIERGE_INCLUDED_PREMIUM > CONCIERGE_INCLUDED_GROWTH);
 ok("concierge included: pilot > premium", CONCIERGE_INCLUDED_PILOT > CONCIERGE_INCLUDED_PREMIUM);
+ok("concierge cap: free 0", conciergeMonthlyCap("free") === 0);
+ok("concierge cap: growth default", conciergeMonthlyCap("growth") === CONCIERGE_INCLUDED_GROWTH);
+ok("concierge cap: premium default", conciergeMonthlyCap("premium") === CONCIERGE_INCLUDED_PREMIUM);
+ok("concierge cap: pilot default", conciergeMonthlyCap("pilot") === CONCIERGE_INCLUDED_PILOT);
+ok("concierge cap: override wins", conciergeMonthlyCap("growth", { overrideCap: 99 }) === 99);
+ok("concierge cap: override can be zero", conciergeMonthlyCap("growth", { overrideCap: 0 }) === 0);
+ok("concierge cap: packs add to default", conciergeMonthlyCap("premium", { packs: 3 }) === CONCIERGE_INCLUDED_PREMIUM + 3);
+ok("concierge cap: packs floor fractions", conciergeMonthlyCap("growth", { packs: 2.9 }) === CONCIERGE_INCLUDED_GROWTH + 2);
+ok("concierge cap: negative packs clamp", conciergeMonthlyCap("growth", { packs: -4 }) === CONCIERGE_INCLUDED_GROWTH);
+ok("concierge cap: override floors fractions", conciergeMonthlyCap("growth", { overrideCap: 4.9 }) === 4);
+ok("concierge cap: negative override clamps", conciergeMonthlyCap("growth", { overrideCap: -3 }) === 0);
 ok("concierge used lease-ups: same property collapses to one", conciergeUsedLeaseUps([
   { propertyId: "p1" },
   { propertyId: "p1" },
@@ -609,7 +621,7 @@ ok(
     `1 of ${CONCIERGE_INCLUDED_GROWTH} done-for-you lease-ups this month`,
 );
 ok(
-  "concierge usage label: over allowance is non-blocking",
+  "concierge usage label: formats over allowance",
   conciergeUsageLabel({ used: CONCIERGE_INCLUDED_GROWTH + 2, included: CONCIERGE_INCLUDED_GROWTH }) ===
     `${CONCIERGE_INCLUDED_GROWTH + 2} of ${CONCIERGE_INCLUDED_GROWTH} done-for-you lease-ups this month`,
 );
