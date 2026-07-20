@@ -312,6 +312,20 @@ export type LeaseTiming = {
   avgDays: number | null; // null when no dated leases
 };
 
+export function averageKnownDays(
+  days: readonly (number | null | undefined)[],
+): { averageDays: number | null; sampleSize: number } {
+  const known = days.filter(
+    (d): d is number => typeof d === "number" && Number.isFinite(d),
+  );
+  if (known.length === 0) return { averageDays: null, sampleSize: 0 };
+  const sum = known.reduce((n, d) => n + Math.max(0, d), 0);
+  return {
+    averageDays: Math.round(sum / known.length),
+    sampleSize: known.length,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Post-showing feedback (M5): response volume + average rating + the 1–5 star
 // distribution, over the feedback rows in the window.
@@ -354,15 +368,16 @@ export function buildLeaseTiming(leads: LeadLite[]): LeaseTiming {
     return { leasedCount: leased.length, withDate: 0, avgDays: null };
   }
   const DAY = 24 * 60 * 60 * 1000;
-  let sum = 0;
-  for (const l of dated) {
-    const start = new Date(l.created_at).getTime();
-    const end = new Date(l.leased_date as string).getTime();
-    sum += Math.max(0, (end - start) / DAY);
-  }
+  const timing = averageKnownDays(
+    dated.map((l) => {
+      const start = new Date(l.created_at).getTime();
+      const end = new Date(l.leased_date as string).getTime();
+      return (end - start) / DAY;
+    }),
+  );
   return {
     leasedCount: leased.length,
     withDate: dated.length,
-    avgDays: Math.round(sum / dated.length),
+    avgDays: timing.averageDays,
   };
 }

@@ -70,8 +70,10 @@ import { CopyLink } from "./copy-link";
 import {
   countEligible,
   blastOfferable,
+  formatMoney,
   formatRentLabel,
 } from "@/lib/price-drop";
+import { vacancyStripModel } from "@/lib/vacancy-cost";
 import {
   LAUNDRY_OPTIONS,
   laundryLabel,
@@ -217,6 +219,7 @@ type Property = {
   showing_instructions: string | null;
   showing_arrival_phone: string | null;
   status: string;
+  available_since: string | null;
   price_drop_pending_cents: number | null;
   available_date: string | null;
   virtual_tour_url: string | null;
@@ -319,7 +322,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1271,6 +1274,7 @@ export default async function PropertyDetailPage({
     progress: runProgress(runItems),
     selectable: publishStartChannels.filter((c) => !alreadyInRun.has(c.key)),
     startChannels: publishStartChannels,
+    conciergeEnabled,
     realtorReferralEnabled,
   };
   const replyInputs: ReplyInputs = {
@@ -1445,6 +1449,19 @@ export default async function PropertyDetailPage({
       : inquiriesOpen
         ? "inquiries"
         : "market";
+  const vacancyModel = vacancyStripModel(
+    [
+      {
+        id: p.id,
+        status: p.status,
+        availableSince: p.available_since,
+        rentCents: p.rent_cents,
+      },
+    ],
+    Date.now(),
+  );
+  const vacancyUnit = vacancyModel.units[0] ?? null;
+  const vacancyLostLabel = formatMoney(vacancyUnit?.lostCents ?? null);
 
   return (
     <div>
@@ -1677,11 +1694,11 @@ export default async function PropertyDetailPage({
                 <input type="hidden" name="id" value={p.id} />
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+                  className={SECONDARY_ACTION_CLASS}
                 >
                   {normalizedStatus === "paused"
                     ? "Set Live again"
-                    : "Publish property"}
+                    : "Set Live"}
                 </button>
               </form>
             )}
@@ -1694,6 +1711,33 @@ export default async function PropertyDetailPage({
           </div>
         }
       />
+
+      {normalizedStatus === "available" && vacancyUnit && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+              Vacancy cost
+            </span>
+            <p className="text-sm font-semibold text-amber-950">
+              {vacancyUnit.days == null
+                ? "Vacancy start unknown"
+                : `Vacant ${vacancyUnit.days} ${
+                    vacancyUnit.days === 1 ? "day" : "days"
+                  }`}
+              {vacancyUnit.days != null && vacancyLostLabel
+                ? ` · about ${vacancyLostLabel} lost at asking so far`
+                : ""}
+            </p>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-amber-800">
+            {vacancyUnit.days == null
+              ? "Tracked from when you mark a rental available. Older available rentals keep an unknown start instead of a guessed vacancy date."
+              : vacancyLostLabel
+                ? "Estimated with asking rent divided by 30 days, so the number stays honest and easy to audit."
+                : "Add an asking rent to estimate dollars lost so far; the vacancy days are still tracked."}
+          </p>
+        </div>
+      )}
 
       <LifecycleRail lifecycle={lifecycle} />
 
@@ -2724,10 +2768,10 @@ export default async function PropertyDetailPage({
         {linkIsLive && <FillSheetCard sheets={fillSheets} />}
 
         {/* Bridge to the Distribute command center (S412). */}
-        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-gray-900">
-              Market this property
+              Distribute tools
             </p>
             <p className="text-xs text-gray-600">
               Your copy, photos, and field sheet are ready. Open Distribute to
@@ -2736,10 +2780,9 @@ export default async function PropertyDetailPage({
           </div>
           <a
             href="#distribute-header"
-            className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: "var(--brand-color)" }}
+            className={SECONDARY_ACTION_CLASS}
           >
-            Publish / Market →
+            Open Distribute →
           </a>
         </div>
       </div>

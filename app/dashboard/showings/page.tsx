@@ -682,6 +682,33 @@ function Section({
               assignedAgentId: s.assigned_agent_id,
               confirmedAt: s.confirmed_at,
             });
+            const canManageShowing = canAssignShowing(s.outcome);
+            const showAssignment = Boolean(
+              (canManageShowing && canAssign) ||
+                (canManageShowing && !canAssign && assignedLabel),
+            );
+            const showConfirm =
+              canAssign &&
+              (coordStatus === "awaiting_confirmation" ||
+                coordStatus === "confirmed");
+            const showReschedule =
+              allowReschedule &&
+              canAssign &&
+              canManageShowing &&
+              Boolean(s.scheduled_at);
+            const showSuggestTimes =
+              allowReschedule &&
+              canSuggestTimes &&
+              canManageShowing &&
+              Boolean(s.scheduled_at) &&
+              Boolean(s.property?.id);
+            const showContact = Boolean(contact && contactDigits !== "");
+            const hasSecondaryActions =
+              showAssignment ||
+              showConfirm ||
+              showReschedule ||
+              showSuggestTimes ||
+              showContact;
             return (
               <li
                 key={s.id}
@@ -714,35 +741,34 @@ function Section({
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {canAssignShowing(s.outcome) && canAssign && (
-                      <AssignSelect
-                        showingId={s.id}
-                        assignedAgentId={s.assigned_agent_id}
-                        agents={rowAgentOptions}
-                        suggestion={
-                          !s.assigned_agent_id &&
-                          suggestion &&
-                          rowAgentOptions.some((o) => o.id === suggestion.agentId)
-                            ? suggestion
-                            : null
-                        }
-                      />
+                  <OutcomeSelect showingId={s.id} outcome={s.outcome} />
+
+                  <div className="hidden flex-col items-end gap-1.5 sm:flex">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {canManageShowing && canAssign && (
+                        <AssignSelect
+                          showingId={s.id}
+                          assignedAgentId={s.assigned_agent_id}
+                          agents={rowAgentOptions}
+                          suggestion={
+                            !s.assigned_agent_id &&
+                            suggestion &&
+                            rowAgentOptions.some((o) => o.id === suggestion.agentId)
+                              ? suggestion
+                              : null
+                          }
+                        />
+                      )}
+                      {canManageShowing && !canAssign && assignedLabel && (
+                        <span className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-600">
+                          {assignedLabel}
+                        </span>
+                      )}
+                    </div>
+                    {showConfirm && (
+                      <ConfirmControl showingId={s.id} status={coordStatus} />
                     )}
-                    {canAssignShowing(s.outcome) && !canAssign && assignedLabel && (
-                      <span className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-medium text-gray-600">
-                        {assignedLabel}
-                      </span>
-                    )}
-                    <OutcomeSelect showingId={s.id} outcome={s.outcome} />
-                  </div>
-                  {canAssign && (
-                    <ConfirmControl showingId={s.id} status={coordStatus} />
-                  )}
-                  {allowReschedule &&
-                    canAssign &&
-                    canAssignShowing(s.outcome) &&
-                    s.scheduled_at && (
+                    {showReschedule && s.scheduled_at && (
                       <RescheduleControl
                         showingId={s.id}
                         defaultLocalValue={utcToLocalInputValue(
@@ -752,33 +778,97 @@ function Section({
                         minLocalValue={nowLocalValue ?? ""}
                       />
                     )}
-                  {allowReschedule &&
-                    canSuggestTimes &&
-                    canAssignShowing(s.outcome) &&
-                    s.scheduled_at &&
-                    s.property?.id && (
+                    {showSuggestTimes && s.scheduled_at && s.property?.id && (
                       <SuggestTimeControl
                         showingId={s.id}
                         slots={slotOptionsByShowingId?.get(s.id) ?? []}
                       />
                     )}
-                  {contact && contactDigits !== "" && (
-                    <p className="text-xs text-gray-500">
-                      {contact.name}:{" "}
-                      <a
-                        href={`sms:${contactDigits}`}
-                        className="font-medium text-brand hover:underline"
-                      >
-                        Text
-                      </a>
-                      {" · "}
-                      <a
-                        href={`tel:${contactDigits}`}
-                        className="font-medium text-brand hover:underline"
-                      >
-                        Call
-                      </a>
-                    </p>
+                    {contact && contactDigits !== "" && (
+                      <p className="text-xs text-gray-500">
+                        {contact.name}:{" "}
+                        <a
+                          href={`sms:${contactDigits}`}
+                          className="font-medium text-brand hover:underline"
+                        >
+                          Text
+                        </a>
+                        {" · "}
+                        <a
+                          href={`tel:${contactDigits}`}
+                          className="font-medium text-brand hover:underline"
+                        >
+                          Call
+                        </a>
+                      </p>
+                    )}
+                  </div>
+
+                  {hasSecondaryActions && (
+                    <details className="text-right text-xs sm:hidden">
+                      <summary className="cursor-pointer list-none rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-medium text-gray-700">
+                        More actions
+                      </summary>
+                      <div className="mt-2 flex flex-col items-end gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">
+                        {canManageShowing && canAssign && (
+                          <AssignSelect
+                            showingId={s.id}
+                            assignedAgentId={s.assigned_agent_id}
+                            agents={rowAgentOptions}
+                            suggestion={
+                              !s.assigned_agent_id &&
+                              suggestion &&
+                              rowAgentOptions.some((o) => o.id === suggestion.agentId)
+                                ? suggestion
+                                : null
+                            }
+                            idSuffix="mobile"
+                          />
+                        )}
+                        {canManageShowing && !canAssign && assignedLabel && (
+                          <span className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600">
+                            {assignedLabel}
+                          </span>
+                        )}
+                        {showConfirm && (
+                          <ConfirmControl showingId={s.id} status={coordStatus} />
+                        )}
+                        {showReschedule && s.scheduled_at && (
+                          <RescheduleControl
+                            showingId={s.id}
+                            defaultLocalValue={utcToLocalInputValue(
+                              s.scheduled_at,
+                              timeZone,
+                            )}
+                            minLocalValue={nowLocalValue ?? ""}
+                          />
+                        )}
+                        {showSuggestTimes && s.scheduled_at && s.property?.id && (
+                          <SuggestTimeControl
+                            showingId={s.id}
+                            slots={slotOptionsByShowingId?.get(s.id) ?? []}
+                          />
+                        )}
+                        {contact && contactDigits !== "" && (
+                          <p className="text-xs text-gray-500">
+                            {contact.name}:{" "}
+                            <a
+                              href={`sms:${contactDigits}`}
+                              className="font-medium text-brand hover:underline"
+                            >
+                              Text
+                            </a>
+                            {" · "}
+                            <a
+                              href={`tel:${contactDigits}`}
+                              className="font-medium text-brand hover:underline"
+                            >
+                              Call
+                            </a>
+                          </p>
+                        )}
+                      </div>
+                    </details>
                   )}
                 </div>
               </li>

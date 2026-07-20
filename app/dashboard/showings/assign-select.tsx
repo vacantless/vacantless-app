@@ -19,13 +19,18 @@ export function AssignSelect({
   assignedAgentId,
   agents,
   suggestion,
+  idSuffix,
 }: {
   showingId: string;
   assignedAgentId: string | null;
   agents: { id: string; label: string }[];
   suggestion?: Suggestion | null;
+  idSuffix?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const fieldId = idSuffix
+    ? `assign-${showingId}-${idSuffix}`
+    : `assign-${showingId}`;
 
   return (
     <div className="inline-flex flex-wrap items-center gap-1.5">
@@ -62,11 +67,11 @@ export function AssignSelect({
       )}
       <form ref={formRef} action={assignShowing} className="inline-flex items-center gap-1.5">
         <input type="hidden" name="id" value={showingId} />
-        <label className="sr-only" htmlFor={`assign-${showingId}`}>
+        <label className="sr-only" htmlFor={fieldId}>
           Assign viewing to an agent
         </label>
         <select
-          id={`assign-${showingId}`}
+          id={fieldId}
           name="agent_id"
           defaultValue={assignedAgentId ?? ""}
           onChange={() => formRef.current?.requestSubmit()}

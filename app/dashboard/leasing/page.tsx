@@ -4,6 +4,8 @@ import { Icons } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { isAtRisk } from "@/lib/reminders";
+import { formatMoney } from "@/lib/price-drop";
+import { vacancyStripModel } from "@/lib/vacancy-cost";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,17 @@ type Section = {
   /** Live "needs you" badge (amber when > 0) + quiet context line. */
   badge?: { count: number; label: string } | null;
   context?: string | null;
+};
+
+type VacancyPropertyRow = {
+  id: string;
+  status: string | null;
+  rent_cents: number | null;
+  available_since: string | null;
+};
+
+type LeaseOutcomeRow = {
+  days_on_market: number | null;
 };
 
 export default async function LeasingHubPage() {
@@ -69,6 +82,34 @@ export default async function LeasingHubPage() {
           }),
         ).length
       : 0;
+
+  const { data: propertyRows } = await supabase
+    .from("properties")
+    .select("id, status, rent_cents, available_since")
+    .limit(500);
+  const vacancyProperties = (propertyRows ?? []) as VacancyPropertyRow[];
+
+  const { data: leaseOutcomeRows } = await supabase
+    .from("leased_outcomes")
+    .select("days_on_market")
+    .order("leased_at", { ascending: false })
+    .limit(500);
+  const leaseOutcomes = (leaseOutcomeRows ?? []) as LeaseOutcomeRow[];
+
+  const vacancyModel = vacancyStripModel(
+    [
+      ...vacancyProperties.map((p) => ({
+        id: p.id,
+        status: p.status,
+        rentCents: p.rent_cents,
+        availableSince: p.available_since,
+      })),
+      ...leaseOutcomes.map((o) => ({ daysOnMarket: o.days_on_market })),
+    ],
+    nowMs,
+  );
+  const vacancyPortfolio = vacancyModel.portfolio;
+  const totalLostLabel = formatMoney(vacancyPortfolio.totalLostCents);
 
   const newCount = newLeadCount ?? 0;
   const sections: Section[] = [
@@ -138,6 +179,70 @@ export default async function LeasingHubPage() {
         }
         icon={<Icons.key className="h-6 w-6" />}
       />
+
+      <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <div className="mb-3 flex items-center gap-2.5">
+          <IconTile>
+            <Icons.chart className="h-5 w-5" />
+          </IconTile>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">
+              Vacancy ROI
+            </h2>
+            <p className="text-xs text-amber-800">
+              Asking-rent cost is tracked from the day a rental is marked
+              available.
+            </p>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+              Currently vacant
+            </p>
+            <p className="mt-1 text-2xl font-semibold text-amber-950">
+              {vacancyPortfolio.vacantUnits}
+            </p>
+            {vacancyPortfolio.unknownVacantUnits > 0 && (
+              <p className="mt-1 text-xs text-amber-800">
+                {vacancyPortfolio.unknownVacantUnits} with unknown start
+              </p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+              Lost at asking so far
+            </p>
+            <p className="mt-1 text-2xl font-semibold text-amber-950">
+              {totalLostLabel ?? "Unknown"}
+            </p>
+            <p className="mt-1 text-xs text-amber-800">
+              {totalLostLabel
+                ? "Known vacancy days only"
+                : "Needs a known vacancy start and rent"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+              Avg time to lease
+            </p>
+            <p className="mt-1 text-2xl font-semibold text-amber-950">
+              {vacancyPortfolio.timeToLease.averageDays == null
+                ? "Not enough history yet"
+                : `${vacancyPortfolio.timeToLease.averageDays} days`}
+            </p>
+            <p className="mt-1 text-xs text-amber-800">
+              {vacancyPortfolio.timeToLease.sampleSize === 0
+                ? "No known leased outcomes"
+                : `${vacancyPortfolio.timeToLease.sampleSize} known leased ${
+                    vacancyPortfolio.timeToLease.sampleSize === 1
+                      ? "outcome"
+                      : "outcomes"
+                  }`}
+            </p>
+          </div>
+        </div>
+      </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {sections.map((s) => {

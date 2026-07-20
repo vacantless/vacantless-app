@@ -74,6 +74,7 @@ export type LaunchRunData = {
   progress: RunProgress;
   selectable: PublishChannelChoiceView[];
   startChannels: PublishChannelChoiceView[];
+  conciergeEnabled: boolean;
   // Distribution Lane B: REALTOR_REFERRAL_ENABLED firewall, threaded to the
   // Realtor.ca "dispatch a network agent" referral option in the run panel.
   realtorReferralEnabled: boolean;
@@ -288,6 +289,11 @@ export function DistributeTab({
     (c) => c.status.value === "posted",
   ).length;
   const nextAction = launchRun.run ? nextRunAction(launchRun.items) : null;
+  const conciergeTarget = launchRun.items.find(
+    (item) =>
+      item.canConcierge &&
+      (item.channel !== "realtor_ca" || launchRun.realtorReferralEnabled),
+  );
   const health = distributionHealth({
     channelCards,
     otherPosts,
@@ -356,6 +362,17 @@ export function DistributeTab({
       )}
 
       <DistributionHealthPanel health={health} />
+
+      {launchRun.conciergeEnabled && (
+        <ConciergeDeskEntry
+          href={
+            conciergeTarget
+              ? `#concierge-${conciergeTarget.id}`
+              : "#publish-checklist"
+          }
+          hasEligibleItem={Boolean(conciergeTarget)}
+        />
+      )}
 
       {/* THE command center — one guided surface: pick channels, follow one next
           action per channel, paste the live URL. After the Slice 1 merge this is
@@ -464,6 +481,36 @@ export function DistributeTab({
           <AnalyticsPanel rows={analytics} />
         </div>
       </details>
+    </div>
+  );
+}
+
+function ConciergeDeskEntry({
+  href,
+  hasEligibleItem,
+}: {
+  href: string;
+  hasEligibleItem: boolean;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-5 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-900">
+          Done-for-you posting
+        </p>
+        <p className="text-xs text-gray-600">
+          {hasEligibleItem
+            ? "The existing publishing desk can take over an eligible manual channel and still records live proof here."
+            : "Choose a manual channel in the checklist, then the existing publishing desk handoff appears on that channel."}
+        </p>
+      </div>
+      <a
+        href={href}
+        className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-white"
+        style={{ backgroundColor: "var(--brand-color)" }}
+      >
+        Ask Vacantless to post it
+      </a>
     </div>
   );
 }

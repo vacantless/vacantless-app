@@ -156,7 +156,10 @@ export function LaunchRunPanel({
   // No active run: offer to start one.
   if (!run) {
     return (
-      <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
+      <div
+        id="publish-checklist"
+        className="mb-4 scroll-mt-6 rounded-2xl border border-brand/30 bg-brand/5 p-5"
+      >
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-900">
             Publish to channels
@@ -239,7 +242,10 @@ export function LaunchRunPanel({
 
   // Active run: progress + per-channel checklists.
   return (
-    <div className="mb-4 rounded-2xl border border-brand/30 bg-brand/5 p-5">
+    <div
+      id="publish-checklist"
+      className="mb-4 scroll-mt-6 rounded-2xl border border-brand/30 bg-brand/5 p-5"
+    >
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-gray-900">
           Publish checklist
@@ -267,6 +273,12 @@ export function LaunchRunPanel({
         {items.map((item) => (
           <li
             key={item.id}
+            id={
+              item.canConcierge &&
+              (item.channel !== "realtor_ca" || realtorReferralEnabled)
+                ? `concierge-${item.id}`
+                : undefined
+            }
             className="rounded-xl border border-gray-200 bg-white p-4"
           >
             <div className="mb-2 flex flex-wrap items-center gap-2">

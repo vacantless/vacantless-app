@@ -86,7 +86,8 @@ export function LifecycleRail({ lifecycle }: { lifecycle: RentalLifecycle }) {
 
       {currentStep !== null && (
         <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
-          <span className="font-medium text-gray-700">Next:</span>{" "}
+          <span className="font-medium text-gray-700">Current step:</span>{" "}
+          {steps.find((s) => s.step === currentStep)!.label} -{" "}
           {steps.find((s) => s.step === currentStep)!.detail.toLowerCase()}.
         </p>
       )}
