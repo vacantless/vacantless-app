@@ -179,6 +179,18 @@ ok("renter reminder route selects same-day reminder stamps",
     renterRoute.includes("reminder_sameday_sms_sent_at"));
 ok("renter reminder route uses channelPlan",
   renterRoute.includes("channelPlan(kind, { smsDeliverable })"));
+ok("renter reminder route hints the showing lead relationship",
+  renterRoute.includes("leads:leads!showings_lead_id_fkey(name, email, phone, sms_opt_out)"));
+ok("renter reminder route falls back to direct lead lookup",
+  renterRoute.includes('function reminderLeadFor') &&
+    renterRoute.includes('.from("leads")') &&
+    renterRoute.includes('.in("id", missingLeadIds)'));
+ok("renter reminder route records skipped channel context",
+  renterRoute.includes("hasEmail: input.renterEmail != null") &&
+    renterRoute.includes("planEmail: input.plan.email") &&
+    renterRoute.includes("planSms: input.plan.sms"));
+ok("renter reminder route logs the cron summary",
+  renterRoute.includes('console.log("[reminders-cron]", JSON.stringify(summary))'));
 ok("confirmation nudge route queries unresponded pending proposals",
   confirmationRoute.includes('.from("showing_reschedule_proposals")') &&
     confirmationRoute.includes('.eq("status", "pending")') &&

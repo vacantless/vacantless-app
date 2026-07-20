@@ -14,6 +14,7 @@ import {
 } from "@/lib/reminders";
 import { canUseRenterSms } from "@/lib/billing";
 import { releaseUnconfirmedShowing } from "@/lib/showing-release";
+import { resolveArrivalPhone } from "@/lib/showing-contact";
 
 // Reminder sweep. Finds booked showings that are ~24h, same-day, or optionally
 // ~2h out and haven't had that tier sent yet, then sends exactly one coordinated
@@ -51,7 +52,13 @@ type Summary = {
   details: Array<Record<string, unknown>>;
 };
 
-import { resolveArrivalPhone } from "@/lib/showing-contact";
+type ReminderLead = {
+  id?: string | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  sms_opt_out: boolean | null;
+};
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -65,6 +72,75 @@ function authorized(req: NextRequest): boolean {
 function one<T>(rel: T | T[] | null | undefined): T | null {
   if (Array.isArray(rel)) return rel[0] ?? null;
   return (rel as T) ?? null;
+}
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function embeddedLead(row: any): ReminderLead | null {
+  return one<ReminderLead>(row?.leads);
+}
+
+function reminderLeadFor(row: any, fallbacks: Map<string, ReminderLead>): ReminderLead | null {
+  const embedded = embeddedLead(row);
+  if (textOrNull(embedded?.email)) return embedded;
+  const leadId = textOrNull(row?.lead_id);
+  return (leadId ? fallbacks.get(leadId) : null) ?? embedded ?? null;
+}
+
+async function loadMissingReminderLeads(
+  admin: any,
+  rows: any[],
+): Promise<{ leadsById: Map<string, ReminderLead>; error?: string }> {
+  const leadsById = new Map<string, ReminderLead>();
+  const missingLeadIds = Array.from(
+    new Set(
+      rows
+        .filter((row) => !textOrNull(embeddedLead(row)?.email))
+        .map((row) => textOrNull(row?.lead_id))
+        .filter((id): id is string => id != null),
+    ),
+  );
+  if (missingLeadIds.length === 0) {
+    return { leadsById };
+  }
+
+  const { data, error } = await admin
+    .from("leads")
+    .select("id, name, email, phone, sms_opt_out")
+    .in("id", missingLeadIds);
+  if (error) {
+    return { leadsById, error: error.message };
+  }
+
+  for (const row of (data ?? []) as ReminderLead[]) {
+    const id = textOrNull(row.id);
+    if (id) leadsById.set(id, row);
+  }
+  return { leadsById };
+}
+
+function skippedDetail(input: {
+  row: any;
+  reason: string;
+  kind: string | null;
+  renterEmail: string | null;
+  plan: { email: boolean; sms: boolean };
+}) {
+  return {
+    showing: input.row?.id,
+    reason: input.reason,
+    kind: input.kind,
+    hasEmail: input.renterEmail != null,
+    planEmail: input.plan.email,
+    planSms: input.plan.sms,
+  };
+}
+
+function respondSummary(summary: Summary) {
+  console.log("[reminders-cron]", JSON.stringify(summary));
+  return NextResponse.json(summary, { status: 200 });
 }
 
 async function runAutoReleasePass(
@@ -170,10 +246,17 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminClient();
   if (!admin) {
-    return NextResponse.json(
-      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, smsSent: 0, released: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
-      { status: 200 },
-    );
+    return respondSummary({
+      ok: false,
+      reason: "service_role_not_configured",
+      scanned: 0,
+      sent: 0,
+      smsSent: 0,
+      released: 0,
+      skipped: 0,
+      errors: 0,
+      details: [],
+    } satisfies Summary);
   }
 
   const now = new Date();
@@ -188,7 +271,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, cancel_token, scheduled_at, reminder_24h_sent_at, reminder_sameday_sent_at, reminder_2h_sent_at, " +
         "reminder_24h_sms_sent_at, reminder_sameday_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
-        "leads(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone), " +
+        "leads:leads!showings_lead_id_fkey(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone), " +
         "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
     )
     .eq("outcome", "scheduled")
@@ -200,10 +283,17 @@ export async function GET(req: NextRequest) {
     );
 
   if (error) {
-    return NextResponse.json(
-      { ok: false, reason: `query_error:${error.message}`, scanned: 0, sent: 0, smsSent: 0, released: autoRelease.released, skipped: 0, errors: 1 + autoRelease.errors, details: autoRelease.details } satisfies Summary,
-      { status: 200 },
-    );
+    return respondSummary({
+      ok: false,
+      reason: `query_error:${error.message}`,
+      scanned: 0,
+      sent: 0,
+      smsSent: 0,
+      released: autoRelease.released,
+      skipped: 0,
+      errors: 1 + autoRelease.errors,
+      details: autoRelease.details,
+    } satisfies Summary);
   }
 
   const candidateRows = data ?? [];
@@ -219,10 +309,17 @@ export async function GET(req: NextRequest) {
       .eq("status", "pending")
       .is("responded_at", null);
     if (proposalErr) {
-      return NextResponse.json(
-        { ok: false, reason: `query_error:${proposalErr.message}`, scanned: 0, sent: 0, smsSent: 0, released: autoRelease.released, skipped: 0, errors: 1 + autoRelease.errors, details: autoRelease.details } satisfies Summary,
-        { status: 200 },
-      );
+      return respondSummary({
+        ok: false,
+        reason: `query_error:${proposalErr.message}`,
+        scanned: 0,
+        sent: 0,
+        smsSent: 0,
+        released: autoRelease.released,
+        skipped: 0,
+        errors: 1 + autoRelease.errors,
+        details: autoRelease.details,
+      } satisfies Summary);
     }
     const pendingRescheduleIds = pendingRescheduleShowingIds(
       (proposalRows ?? []) as PendingRescheduleProposalRow[],
@@ -242,19 +339,48 @@ export async function GET(req: NextRequest) {
     details: [...autoRelease.details],
   };
 
+  const fallbackLeads = await loadMissingReminderLeads(admin, rows as any[]);
+  if (fallbackLeads.error) {
+    summary.ok = false;
+    summary.reason = `query_error:lead_fallback:${fallbackLeads.error}`;
+    summary.errors++;
+    summary.details.push({
+      lead_fallback: false,
+      error: fallbackLeads.error,
+    });
+    return respondSummary(summary);
+  }
+  if (fallbackLeads.leadsById.size > 0) {
+    summary.details.push({
+      lead_fallback: true,
+      resolved: fallbackLeads.leadsById.size,
+    });
+  }
+
   for (const row of rows as any[]) {
    // Per-row isolation (audit C2): a thrown PostgREST/network error inside one
    // row must not abort the sweep for the remaining (timing-sensitive) rows.
    try {
+    const lead = reminderLeadFor(row, fallbackLeads.leadsById);
+    const renterEmail = textOrNull(lead?.email);
+    let skippedReason: string | null = null;
     const scheduledAt: string | null = row.scheduled_at;
     if (!scheduledAt) {
       summary.skipped++;
+      summary.details.push(
+        skippedDetail({
+          row,
+          reason: "missing_scheduled_at",
+          kind: null,
+          renterEmail,
+          plan: { email: false, sms: false },
+        }),
+      );
       continue;
     }
     const scheduledAtMs = new Date(scheduledAt).getTime();
 
     // Supabase returns to-one relations as an object (or array on some shapes).
-    const lead = Array.isArray(row.leads) ? row.leads[0] : row.leads;
     const property = Array.isArray(row.properties) ? row.properties[0] : row.properties;
     const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
 
@@ -289,6 +415,15 @@ export async function GET(req: NextRequest) {
       sent2h: row.reminder_2h_sent_at != null || row.reminder_2h_sms_sent_at != null,
     });
     const plan = kind ? channelPlan(kind, { smsDeliverable }) : { email: false, sms: false };
+    if (kind && plan.email && !renterEmail) {
+      skippedReason = "missing_renter_email";
+    } else if (kind && plan.sms && !normalizedPhone) {
+      skippedReason = "missing_sms_phone";
+    } else if (!kind) {
+      skippedReason = "no_due_reminder";
+    } else if (!plan.email && !plan.sms) {
+      skippedReason = "no_channel_planned";
+    }
     const label =
       kind === "2h" ? "2-hour" : kind === "sameday" ? "same-day" : "24-hour";
     const token = typeof row.cancel_token === "string" ? row.cancel_token.trim() : "";
@@ -303,7 +438,6 @@ export async function GET(req: NextRequest) {
       : null;
 
     // --- Coordinated email reminder ---------------------------------------
-    const renterEmail: string | null = lead?.email ?? null;
     if (kind && plan.email && renterEmail) {
       const result = await sendShowingReminder({
         lead_id: row.lead_id,
@@ -322,6 +456,7 @@ export async function GET(req: NextRequest) {
       });
 
       if (!result.sent) {
+        skippedReason = `email_send_failed:${result.reason ?? "unknown"}`;
         summary.errors++;
         summary.details.push({ showing: row.id, channel: "email", kind, error: result.reason });
       } else {
@@ -331,6 +466,7 @@ export async function GET(req: NextRequest) {
           .update({ [column]: new Date().toISOString() })
           .eq("id", row.id);
         if (stampErr) {
+          skippedReason = `email_stamp_failed:${stampErr.message}`;
           summary.errors++;
           summary.details.push({ showing: row.id, channel: "email", kind, error: `stamp_failed:${stampErr.message}` });
         } else {
@@ -372,6 +508,9 @@ export async function GET(req: NextRequest) {
         if (result.reason !== "no_credentials") {
           summary.errors++;
           summary.details.push({ showing: row.id, channel: "sms", kind, error: result.reason });
+          skippedReason = `sms_send_failed:${result.reason ?? "unknown"}`;
+        } else {
+          skippedReason = "sms_send_skipped:no_credentials";
         }
       } else {
         const column = REMINDER_SMS_SENT_COLUMN[kind];
@@ -380,6 +519,7 @@ export async function GET(req: NextRequest) {
           .update({ [column]: new Date().toISOString() })
           .eq("id", row.id);
         if (stampErr) {
+          skippedReason = `sms_stamp_failed:${stampErr.message}`;
           summary.errors++;
           summary.details.push({ showing: row.id, channel: "sms", kind, error: `stamp_failed:${stampErr.message}` });
         } else {
@@ -397,7 +537,18 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (!didSomething) summary.skipped++;
+    if (!didSomething) {
+      summary.skipped++;
+      summary.details.push(
+        skippedDetail({
+          row,
+          reason: skippedReason ?? "no_send_attempt",
+          kind,
+          renterEmail,
+          plan,
+        }),
+      );
+    }
    } catch (err) {
      summary.errors++;
      summary.details.push({
@@ -407,5 +558,5 @@ export async function GET(req: NextRequest) {
    }
   }
 
-  return NextResponse.json(summary, { status: 200 });
+  return respondSummary(summary);
 }
