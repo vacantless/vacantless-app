@@ -9,6 +9,8 @@ import {
   isResolvedRunStatus,
   buildRunSteps,
   runProgress,
+  automationStatusForItem,
+  automationStatusSummary,
   selectableRunChannels,
 } from "../lib/distribution-run";
 import { DISTRIBUTION_CHANNELS } from "../lib/distribution-channels";
@@ -130,6 +132,58 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 {
   ok("active channel count is zero before a run starts", activeRunChannelCount({ hasRun: false, runItemCount: 6 }) === 0);
   ok("active channel count uses actual run items after start", activeRunChannelCount({ hasRun: true, runItemCount: 4 }) === 4);
+}
+
+// --- automation status (S532) ----------------------------------------------
+{
+  const auto = automationStatusForItem({
+    channel: "vacantless",
+    channelLabel: "Vacantless public page",
+    mode: "automatic",
+    publishStatus: "live",
+  });
+  ok("automatic live item is live_auto", auto.state === "live_auto");
+  ok("automatic live label is honest", /Live automatically/.test(auto.label));
+}
+{
+  const feed = automationStatusForItem({
+    channel: "org_feed",
+    channelLabel: "Listing feed",
+    mode: "automatic",
+    publishStatus: "submitted",
+  });
+  ok("submitted feed is processing, not live_auto", feed.state === "processing");
+  ok("submitted feed detail says not proven live", /not proven live/.test(feed.detail));
+}
+{
+  const portal = automationStatusForItem({
+    channel: "kijiji",
+    channelLabel: "Kijiji",
+    mode: "browser_copilot",
+    publishStatus: "needs_login",
+  });
+  ok("portal waiting state is one tap", portal.state === "one_tap");
+  ok("portal action is review and post", portal.actionLabel === "Review & post");
+}
+{
+  const stale = automationStatusForItem({
+    channel: "facebook",
+    channelLabel: "Facebook Marketplace",
+    publishStatus: "live",
+    staleRefresh: true,
+  });
+  ok("stale live row needs refresh", stale.state === "needs_refresh");
+}
+{
+  const summary = automationStatusSummary([
+    { channel: "vacantless", mode: "automatic", publishStatus: "live" },
+    { channel: "org_feed", mode: "automatic", publishStatus: "submitted" },
+    { channel: "kijiji", mode: "browser_copilot", publishStatus: "needs_login" },
+  ]);
+  ok("automation summary counts live auto", summary.liveAuto === 1);
+  ok("automation summary counts processing", summary.processing === 1);
+  ok("automation summary counts one tap", summary.oneTap === 1);
+  ok("automation summary line is ASCII", !/[—–·]/.test(summary.line));
 }
 
 // --- selectable channels ---------------------------------------------------

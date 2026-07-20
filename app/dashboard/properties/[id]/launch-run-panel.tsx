@@ -24,6 +24,8 @@ import {
 } from "@/lib/distribution-verification";
 import type { CopilotScript } from "@/lib/distribution-copilot";
 import {
+  automationStatusForItem,
+  type AutomationStatusState,
   type RunItemStatus,
   type RunStep,
   type RunProgress,
@@ -99,6 +101,45 @@ const STATUS_CHIP: Record<PublishTone, string> = {
   danger: "bg-red-50 text-red-700",
   neutral: "bg-gray-100 text-gray-600",
 };
+
+const AUTOMATION_DOT_CLASS: Record<AutomationStatusState, string> = {
+  live_auto: "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.16)]",
+  processing: "bg-emerald-500",
+  one_tap: "bg-amber-500",
+  needs_refresh: "bg-blue-500",
+  blocked: "bg-red-500",
+  idle: "bg-gray-400",
+};
+
+function AutomationDot({ state }: { state: AutomationStatusState }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="relative inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center"
+    >
+      {state === "processing" && (
+        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 motion-safe:animate-ping" />
+      )}
+      <span
+        className={`relative inline-flex h-2.5 w-2.5 rounded-full ${AUTOMATION_DOT_CLASS[state]}`}
+      />
+    </span>
+  );
+}
+
+function DisplayStatusChip({ item }: { item: RunItemView }) {
+  const shown = displayStatus(item);
+  const automation = automationStatusForItem(item);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[shown.tone]}`}
+      title={automation.detail}
+    >
+      <AutomationDot state={automation.state} />
+      {shown.label}
+    </span>
+  );
+}
 
 // Slice 1: the single derived status chip for a run row. Folds the two former
 // vocabularies (PublishStatus + the grid's ChannelStatusValue) into one, and
@@ -288,11 +329,7 @@ export function LaunchRunPanel({
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
                 {publishModeLabel(item.mode)}
               </span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[displayStatus(item).tone]}`}
-              >
-                {displayStatus(item).label}
-              </span>
+              <DisplayStatusChip item={item} />
               {item.verificationStatus && (
                 <span
                   title="Verification"

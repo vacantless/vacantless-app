@@ -13,6 +13,13 @@ import {
   type CapturedInput,
   type DraftFacts,
 } from "../lib/listing-description";
+import {
+  chooseAutoListingCopy,
+  descriptionNeedsAutoDraft,
+  deterministicAutoDescription,
+  envFlagEnabled,
+  usableAutoDescription,
+} from "../lib/auto-listing-copy";
 
 let passed = 0;
 let failed = 0;
@@ -147,6 +154,54 @@ ok("draft has viewing CTA", /Inquire to book a viewing/.test(draft));
 ok("draft has paragraphs", draft.includes("\n\n"));
 ok("draft has no links", !/https?:\/\//.test(draft));
 ok("draft has no em dash", !draft.includes("—"));
+
+// --- S532 auto listing copy decision ---------------------------------------
+ok("env flag accepts true", envFlagEnabled("true"));
+ok("env flag accepts 1", envFlagEnabled("1"));
+ok("env flag rejects unset", !envFlagEnabled(""));
+ok("blank description needs auto draft", descriptionNeedsAutoDraft("   "));
+ok("existing description is dirty and preserved", !descriptionNeedsAutoDraft("Cozy unit"));
+ok("usable auto description rejects short copy", usableAutoDescription("Too short") === null);
+{
+  const decision = chooseAutoListingCopy({
+    enabled: false,
+    currentDescription: "",
+    facts,
+    aiDescription: "Bright unit close to transit with in-suite laundry and a practical layout.",
+  });
+  ok("auto copy flag off is no-op", !decision.shouldWrite && decision.source === "disabled");
+}
+{
+  const decision = chooseAutoListingCopy({
+    enabled: true,
+    currentDescription: "Operator wrote this",
+    facts,
+    aiDescription:
+      "Bright unit with a practical layout and clear rental details. Inquire to book a viewing.",
+  });
+  ok("auto copy never overwrites operator text", !decision.shouldWrite && decision.source === "existing");
+}
+{
+  const decision = chooseAutoListingCopy({
+    enabled: true,
+    currentDescription: "",
+    facts,
+    aiDescription:
+      "Bright unit with a practical layout, useful storage, and clear rental details. Inquire to book a viewing.",
+  });
+  ok("auto copy uses usable AI draft", decision.shouldWrite && decision.source === "ai");
+}
+{
+  const decision = chooseAutoListingCopy({
+    enabled: true,
+    currentDescription: "",
+    facts,
+    aiDescription: null,
+  });
+  ok("auto copy falls back to deterministic draft", decision.shouldWrite && decision.source === "deterministic");
+  ok("deterministic auto draft clears 50 char floor", (decision.description ?? "").length >= 50);
+}
+ok("deterministic auto description exists", !!deterministicAutoDescription(facts));
 
 // Sparse input: still produces something useful, invents nothing.
 const sparse = buildDescriptionDraft({ beds: 1 }, {});

@@ -54,7 +54,13 @@ import {
   type PublishChannelChoiceView,
   type RunItemView,
 } from "./launch-run-panel";
-import { activeRunChannelCount, type RunProgress } from "@/lib/distribution-run";
+import {
+  activeRunChannelCount,
+  automationStatusSummary,
+  type AutomationStatusState,
+  type AutomationStatusSummary,
+  type RunProgress,
+} from "@/lib/distribution-run";
 import { buildReplySnippets } from "@/lib/reply-snippets";
 import {
   analyticsTotals,
@@ -173,6 +179,31 @@ const RUN_NOTICE_CLASS: Record<DistributeRunNotice["tone"], string> = {
   danger: "border-red-200 bg-red-50 text-red-700",
   info: "border-blue-200 bg-blue-50 text-blue-800",
 };
+
+const AUTOMATION_DOT_CLASS: Record<AutomationStatusState, string> = {
+  live_auto: "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.16)]",
+  processing: "bg-emerald-500",
+  one_tap: "bg-amber-500",
+  needs_refresh: "bg-blue-500",
+  blocked: "bg-red-500",
+  idle: "bg-gray-400",
+};
+
+function AutomationDot({ state }: { state: AutomationStatusState }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="relative inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center"
+    >
+      {state === "processing" && (
+        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 motion-safe:animate-ping" />
+      )}
+      <span
+        className={`relative inline-flex h-2.5 w-2.5 rounded-full ${AUTOMATION_DOT_CLASS[state]}`}
+      />
+    </span>
+  );
+}
 
 // --- next-action banner (Slice 1) ------------------------------------------
 // One prioritized "do this next" line across all run channels, so the command
@@ -326,6 +357,7 @@ export function DistributeTab({
     launchRun,
     analytics,
   });
+  const automationSummary = automationStatusSummary(launchRun.items);
 
   return (
     <div>
@@ -414,6 +446,13 @@ export function DistributeTab({
       )}
 
       <DistributionHealthPanel health={health} />
+
+      <AutomationStatusPanel
+        summary={automationSummary}
+        hasRun={Boolean(launchRun.run)}
+        readyToShare={readyToShare}
+        linkIsLive={linkIsLive}
+      />
 
       {launchRun.conciergeDeskEnabled && (
         <ConciergeDeskEntry
@@ -668,6 +707,87 @@ function HealthMetric({ label, value }: { label: string; value: string }) {
       </p>
       <p className="mt-1 text-base font-semibold text-gray-900">{value}</p>
     </div>
+  );
+}
+
+function AutomationStatusPanel({
+  summary,
+  hasRun,
+  readyToShare,
+  linkIsLive,
+}: {
+  summary: AutomationStatusSummary;
+  hasRun: boolean;
+  readyToShare: boolean;
+  linkIsLive: boolean;
+}) {
+  const state: AutomationStatusState =
+    summary.needsRefresh > 0
+      ? "needs_refresh"
+      : summary.oneTap > 0
+        ? "one_tap"
+        : summary.processing > 0
+          ? "processing"
+          : summary.liveAuto > 0
+            ? "live_auto"
+            : summary.blocked > 0
+              ? "blocked"
+              : "idle";
+  const label = hasRun
+    ? state === "one_tap"
+      ? "One tap waiting"
+      : state === "needs_refresh"
+        ? "Refresh due"
+        : state === "blocked"
+          ? "Needs setup"
+          : "Automating"
+    : readyToShare
+      ? "Ready to automate"
+      : "Waiting on setup";
+  const ownSurface = linkIsLive
+    ? "Vacantless renter page is live automatically."
+    : "Vacantless renter page turns on when this rental is Live.";
+
+  return (
+    <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-2">
+            <AutomationDot state={hasRun ? state : "idle"} />
+            <h3 className="text-sm font-semibold text-gray-900">
+              Automation status
+            </h3>
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+              {label}
+            </span>
+          </div>
+          <p className="text-xs text-gray-600">
+            {hasRun
+              ? summary.line
+              : readyToShare
+                ? "Set it Live or start the checklist to stage the default channels."
+                : "Finish the required listing details before automation can start."}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">{ownSurface}</p>
+        </div>
+        {summary.oneTap > 0 && (
+          <a
+            href="#publish-checklist"
+            className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+          >
+            Review &amp; post
+          </a>
+        )}
+        {summary.needsRefresh > 0 && (
+          <a
+            href="#publish-checklist"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Refresh
+          </a>
+        )}
+      </div>
+    </section>
   );
 }
 

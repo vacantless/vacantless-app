@@ -17,6 +17,7 @@ import {
 import {
   isPublishStatus,
   isResolvedPublishStatus,
+  type PublishMode,
   type PublishStatus,
 } from "./distribution-publish";
 
@@ -233,6 +234,158 @@ export function runProgress(items: ReadonlyArray<ProgressItem>): RunProgress {
     remaining,
     pct,
     allResolved: total > 0 && resolved === total,
+  };
+}
+
+// --- S532 automation status ------------------------------------------------
+// Derived display model only. It never creates a second source of truth:
+// submitted feed rows stay "submitted", proof gaps stay red, and external
+// portals remain one human final action.
+export const AUTOMATION_STATUS_STATES = [
+  "live_auto",
+  "processing",
+  "one_tap",
+  "needs_refresh",
+  "blocked",
+  "idle",
+] as const;
+export type AutomationStatusState = (typeof AUTOMATION_STATUS_STATES)[number];
+
+export type AutomationStatusItem = {
+  channel: string;
+  channelLabel?: string | null;
+  mode?: PublishMode | string | null;
+  publishStatus?: PublishStatus | string | null;
+  staleRefresh?: boolean;
+  liveWithoutUrl?: boolean;
+};
+
+export type AutomationStatusView = {
+  state: AutomationStatusState;
+  label: string;
+  detail: string;
+  actionLabel: string | null;
+};
+
+function itemLabel(item: AutomationStatusItem): string {
+  return item.channelLabel?.trim() || item.channel;
+}
+
+export function automationStatusForItem(
+  item: AutomationStatusItem,
+): AutomationStatusView {
+  const status = isPublishStatus(item.publishStatus)
+    ? item.publishStatus
+    : "queued";
+  const label = itemLabel(item);
+  const automatic = item.mode === "automatic";
+
+  if (item.liveWithoutUrl) {
+    return {
+      state: "blocked",
+      label: "Needs ad URL",
+      detail: `${label} is marked live but still needs proof.`,
+      actionLabel: "Add proof",
+    };
+  }
+  if (item.staleRefresh) {
+    return {
+      state: "needs_refresh",
+      label: "Needs refresh",
+      detail: `${label} looks stale or expired.`,
+      actionLabel: "Refresh",
+    };
+  }
+  if (status === "live") {
+    return {
+      state: automatic ? "live_auto" : "processing",
+      label: automatic ? "Live automatically" : "Live with proof",
+      detail: automatic
+        ? `${label} is live automatically.`
+        : `${label} is live from recorded proof.`,
+      actionLabel: null,
+    };
+  }
+  if (status === "submitted") {
+    return {
+      state: "processing",
+      label: "Submitted automatically",
+      detail: `${label} is submitted, not proven live on a partner site yet.`,
+      actionLabel: null,
+    };
+  }
+  if (
+    status === "needs_operator" ||
+    status === "needs_login" ||
+    status === "needs_payment"
+  ) {
+    return {
+      state: "one_tap",
+      label: "One tap to post",
+      detail: `${label} is prepared and waiting on your final action.`,
+      actionLabel: "Review & post",
+    };
+  }
+  if (status === "blocked" || status === "rejected") {
+    return {
+      state: "blocked",
+      label: status === "rejected" ? "Rejected" : "Blocked",
+      detail: `${label} needs a setup fix before it can continue.`,
+      actionLabel: null,
+    };
+  }
+  if (status === "queued" || status === "submitting") {
+    return {
+      state: "processing",
+      label: "Preparing your post",
+      detail: `${label} is being prepared by Vacantless.`,
+      actionLabel: null,
+    };
+  }
+  return {
+    state: "idle",
+    label: "Not started",
+    detail: `${label} is not in motion yet.`,
+    actionLabel: null,
+  };
+}
+
+export type AutomationStatusSummary = {
+  liveAuto: number;
+  processing: number;
+  oneTap: number;
+  needsRefresh: number;
+  blocked: number;
+  idle: number;
+  line: string;
+};
+
+export function automationStatusSummary(
+  items: ReadonlyArray<AutomationStatusItem>,
+): AutomationStatusSummary {
+  const models = items.map(automationStatusForItem);
+  const count = (state: AutomationStatusState) =>
+    models.filter((item) => item.state === state).length;
+  const liveAuto = count("live_auto");
+  const processing = count("processing");
+  const oneTap = count("one_tap");
+  const needsRefresh = count("needs_refresh");
+  const blocked = count("blocked");
+  const idle = count("idle");
+  const parts: string[] = [];
+  if (liveAuto > 0) parts.push(`${liveAuto} live automatically`);
+  if (processing > 0) parts.push(`${processing} preparing or submitted`);
+  if (oneTap > 0) parts.push(`${oneTap} waiting on your tap`);
+  if (needsRefresh > 0) parts.push(`${needsRefresh} needs refresh`);
+  if (blocked > 0) parts.push(`${blocked} blocked`);
+  return {
+    liveAuto,
+    processing,
+    oneTap,
+    needsRefresh,
+    blocked,
+    idle,
+    line: parts.length > 0 ? parts.join(" - ") : "No distribution automation running yet",
   };
 }
 

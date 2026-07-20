@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentOrg } from "@/lib/org";
+import { getCurrentOrg, type Org } from "@/lib/org";
 import { requireCapability, getRoleForOrg } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
 import { PROPERTY_STATUSES } from "@/lib/pipeline";
@@ -41,6 +41,7 @@ import {
   isPublishChannelKey,
   normalizePublishStatus,
   normalizePublishMode,
+  publishChannelChoices,
   canRequestConcierge,
   conciergeRequestAuditForChannel,
   preparePublishChannel,
@@ -51,6 +52,15 @@ import {
 import { isCopilotChannel } from "@/lib/distribution-copilot";
 import { buildShareReadiness, type ShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
+import { listingFeedReadiness } from "@/lib/listing-feed";
+import {
+  chooseAutoListingCopy,
+  descriptionNeedsAutoDraft,
+  deterministicAutoDescription,
+  envFlagEnabled,
+} from "@/lib/auto-listing-copy";
+import { draftAutoListingDescriptionWithAi } from "@/lib/auto-listing-copy-ai";
+import type { DraftFacts } from "@/lib/listing-description";
 import {
   isPublicBookable,
   normalizePropertyStatus,
@@ -531,6 +541,11 @@ export async function updateProperty(formData: FormData) {
     })
     .eq("id", id);
 
+  if (!relistBlocked && priorStatus !== "available" && effectiveStatus === "available") {
+    const org = await getCurrentOrg();
+    if (org) await maybePrepareAvailableListing(supabase, org, id);
+  }
+
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
   redirect(
@@ -616,6 +631,8 @@ export async function publishProperty(formData: FormData) {
     .update({ status: "available" })
     .eq("id", id);
 
+  if (org) await maybePrepareAvailableListing(supabase, org, id);
+
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
   redirect(`/dashboard/properties/${id}?published=1`);
@@ -640,6 +657,9 @@ export async function relistLeasedProperty(formData: FormData) {
     .update({ status: "available" })
     .eq("id", id)
     .eq("status", "leased");
+
+  const org = await getCurrentOrg();
+  if (org) await maybePrepareAvailableListing(supabase, org, id);
 
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
@@ -1082,6 +1102,25 @@ type PublishPostRow = {
   created_at?: string | null;
 };
 
+type AutoCopyPropertyRow = PublishPropertyRow & {
+  available_date: string | null;
+  sqft: number | null;
+  floor: string | null;
+  parking: string | null;
+  laundry: string | null;
+  air_conditioning: boolean | null;
+  balcony: boolean | null;
+  furnished: boolean | null;
+  pet_friendly: boolean | null;
+  pets_cats: boolean | null;
+  pets_dogs: boolean | null;
+  pets_dog_size: string | null;
+  pets_notes: string | null;
+  heat_included: boolean | null;
+  hydro_included: boolean | null;
+  water_included: boolean | null;
+};
+
 const REQUIRED_SHARE_BLOCKER_LABELS: Record<string, string> = {
   live: "Publish the Vacantless public page.",
   address: "Add the rental address.",
@@ -1128,31 +1167,151 @@ function publishItemResolved(row: {
   return row.status === "done" || row.status === "skipped";
 }
 
-export async function startDistributionRun(formData: FormData) {
-  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
-  const propertyId = String(formData.get("property_id") ?? "");
-  if (!propertyId) return;
-  const org = await getCurrentOrg();
-  if (!org) redirect("/onboarding");
+function autoCopyFacts(prop: AutoCopyPropertyRow): DraftFacts {
+  return {
+    beds: prop.beds,
+    baths: prop.baths,
+    unit_type: "unit",
+    rent_cents: prop.rent_cents,
+    parking: prop.parking,
+    available_date: prop.available_date,
+    sqft: prop.sqft,
+    floor: prop.floor,
+    laundry: prop.laundry,
+    air_conditioning: prop.air_conditioning,
+    balcony: prop.balcony,
+    furnished: prop.furnished,
+    pet_friendly: prop.pet_friendly,
+    pets_cats: prop.pets_cats,
+    pets_dogs: prop.pets_dogs,
+    pets_dog_size: prop.pets_dog_size,
+    pets_notes: prop.pets_notes,
+    heat_included: prop.heat_included,
+    hydro_included: prop.hydro_included,
+    water_included: prop.water_included,
+  };
+}
 
-  const channels = Array.from(new Set(
-    formData
-      .getAll("channels")
-      .map(normalizePublishChannel)
-      .filter((c): c is PublishChannelKey => c !== null),
-  ));
-  if (channels.length === 0) {
-    redirect(`/dashboard/properties/${propertyId}?runerr=nochannels#distribute-header`);
+async function maybeAutoDraftDescription(
+  supabase: ReturnType<typeof createClient>,
+  prop: AutoCopyPropertyRow,
+): Promise<string | null> {
+  const enabled = envFlagEnabled(process.env.AUTO_LISTING_COPY_ENABLED);
+  if (!enabled || !descriptionNeedsAutoDraft(prop.description)) {
+    return prop.description;
   }
+  const facts = autoCopyFacts(prop);
+  const fallback = deterministicAutoDescription(facts);
+  const aiDescription = await draftAutoListingDescriptionWithAi(facts, fallback);
+  const decision = chooseAutoListingCopy({
+    enabled,
+    currentDescription: prop.description,
+    facts,
+    aiDescription,
+  });
+  if (!decision.shouldWrite || !decision.description) return prop.description;
 
-  const supabase = createClient();
+  await supabase
+    .from("properties")
+    .update({ description: decision.description })
+    .eq("id", prop.id);
+  return decision.description;
+}
+
+async function propertyPhotoCount(
+  supabase: ReturnType<typeof createClient>,
+  propertyId: string,
+): Promise<number> {
+  const { count } = await supabase
+    .from("property_photos")
+    .select("id", { count: "exact", head: true })
+    .eq("property_id", propertyId);
+  return count ?? 0;
+}
+
+function autoDistributionChannels(): PublishChannelKey[] {
+  return publishChannelChoices({
+    includeNetworkFeed: Boolean(process.env.NETWORK_FEED_TOKEN?.trim()),
+  })
+    .filter((channel) => channel.defaultSelected)
+    .map((channel) => channel.key);
+}
+
+async function maybePrepareAvailableListing(
+  supabase: ReturnType<typeof createClient>,
+  org: Org,
+  propertyId: string,
+): Promise<void> {
+  const autoCopyEnabled = envFlagEnabled(process.env.AUTO_LISTING_COPY_ENABLED);
+  const autoDistributionEnabled = envFlagEnabled(
+    process.env.AUTO_DISTRIBUTION_ENABLED,
+  );
+  if (!autoCopyEnabled && !autoDistributionEnabled) return;
+
+  const { data: propRow } = await supabase
+    .from("properties")
+    .select(
+      "id, organization_id, status, address, rent_cents, beds, baths, description, parking, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included",
+    )
+    .eq("id", propertyId)
+    .maybeSingle();
+  const prop = propRow as AutoCopyPropertyRow | null;
+  if (!prop || normalizePropertyStatus(prop.status) !== "available") return;
+
+  const description = autoCopyEnabled
+    ? await maybeAutoDraftDescription(supabase, prop)
+    : prop.description;
+
+  if (!autoDistributionEnabled) return;
+  const photoCount = await propertyPhotoCount(supabase, propertyId);
+  const readiness = listingFeedReadiness({
+    id: prop.id,
+    address: prop.address,
+    rent_cents: prop.rent_cents,
+    beds: prop.beds,
+    baths: prop.baths,
+    description,
+    photos: photoCount > 0 ? new Array(photoCount).fill("x") : [],
+  });
+  if (!readiness.ready) return;
+
+  const channels = autoDistributionChannels();
+  if (channels.length === 0) return;
+  try {
+    await stageDistributionRunForProperty({
+      supabase,
+      org,
+      propertyId,
+      channels,
+    });
+  } catch (err) {
+    console.error("maybePrepareAvailableListing: auto distribution failed", {
+      propertyId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function stageDistributionRunForProperty({
+  supabase,
+  org,
+  propertyId,
+  channels,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  org: Org;
+  propertyId: string;
+  channels: PublishChannelKey[];
+}): Promise<boolean> {
+  if (!propertyId || channels.length === 0) return false;
+
   const { data: propRow } = await supabase
     .from("properties")
     .select("id, organization_id, status, address, rent_cents, beds, baths, description")
     .eq("id", propertyId)
     .maybeSingle();
   const prop = propRow as PublishPropertyRow | null;
-  if (!prop) redirect("/dashboard/properties?forbidden=1");
+  if (!prop) return false;
   const orgId = prop.organization_id;
 
   const [{ count: photoCount }, { count: availabilityCount }, { data: posts }, { data: partners }] =
@@ -1291,13 +1450,6 @@ export async function startDistributionRun(formData: FormData) {
   );
   const now = new Date().toISOString();
 
-  // Distribution hardening #2: reserve a per-channel tracked ?p= link BEFORE the
-  // operator posts. For each browser co-pilot portal channel (facebook/kijiji/
-  // viewit) with no tracker yet, reuse the property's existing tracker for that
-  // portal or create a draft listing_posts row (a non-live row may carry a null
-  // url per migration 0122). completeCopilotPost later promotes the SAME row to
-  // live in place. Org = the property's own org (KI748). A reserved draft carries
-  // no live claim; the where-posted tracker hides reserved-but-unposted rows.
   const reservedByChannel = new Map<string, string>();
   for (const plan of plans) {
     if (plan.listingPostId) continue;
@@ -1329,8 +1481,6 @@ export async function startDistributionRun(formData: FormData) {
     if (draft?.id) {
       reservedByChannel.set(plan.key, draft.id as string);
     } else if (draftErr) {
-      // Lost a concurrent reservation race (the 0144 partial unique index rejects
-      // a duplicate blank draft). Reuse the row the winner created.
       const { data: raced } = await supabase
         .from("listing_posts")
         .select("id")
@@ -1344,7 +1494,6 @@ export async function startDistributionRun(formData: FormData) {
     }
   }
 
-  // One active run per property: reuse an existing active run, else open one.
   const { data: existing } = await supabase
     .from("distribution_runs")
     .select("id")
@@ -1361,35 +1510,64 @@ export async function startDistributionRun(formData: FormData) {
       .single();
     runId = run?.id as string | undefined;
   }
-  if (runId) {
-    await supabase.from("distribution_run_items").upsert(
-      plans.map((plan) => ({
-        organization_id: orgId,
-        run_id: runId,
-        channel: plan.key,
-        status: legacyRunStatusForPublishStatus(plan.status),
-        publish_status: plan.status,
-        mode: plan.mode,
-        blockers: plan.blockers,
-        external_url: plan.externalUrl,
-        listing_post_id: plan.listingPostId ?? reservedByChannel.get(plan.key) ?? null,
-        operator_action_url: plan.operatorActionUrl,
-        audit_message: plan.auditMessage,
-        last_attempted_at: now,
-        last_verified_at: plan.status === "live" ? now : null,
-        error_code:
-          plan.status === "blocked" || plan.status === "rejected"
-            ? plan.status
-            : null,
-        error_message:
-          plan.status === "blocked" || plan.status === "rejected"
-            ? plan.blockers.join(" ")
-            : null,
-        updated_at: now,
-      })),
-      { onConflict: "run_id,channel" },
-    );
+  if (!runId) return false;
+
+  await supabase.from("distribution_run_items").upsert(
+    plans.map((plan) => ({
+      organization_id: orgId,
+      run_id: runId,
+      channel: plan.key,
+      status: legacyRunStatusForPublishStatus(plan.status),
+      publish_status: plan.status,
+      mode: plan.mode,
+      blockers: plan.blockers,
+      external_url: plan.externalUrl,
+      listing_post_id: plan.listingPostId ?? reservedByChannel.get(plan.key) ?? null,
+      operator_action_url: plan.operatorActionUrl,
+      audit_message: plan.auditMessage,
+      last_attempted_at: now,
+      last_verified_at: plan.status === "live" ? now : null,
+      error_code:
+        plan.status === "blocked" || plan.status === "rejected"
+          ? plan.status
+          : null,
+      error_message:
+        plan.status === "blocked" || plan.status === "rejected"
+          ? plan.blockers.join(" ")
+          : null,
+      updated_at: now,
+    })),
+    { onConflict: "run_id,channel" },
+  );
+
+  return true;
+}
+
+export async function startDistributionRun(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const channels = Array.from(new Set(
+    formData
+      .getAll("channels")
+      .map(normalizePublishChannel)
+      .filter((c): c is PublishChannelKey => c !== null),
+  ));
+  if (channels.length === 0) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=nochannels#distribute-header`);
   }
+
+  const supabase = createClient();
+  const staged = await stageDistributionRunForProperty({
+    supabase,
+    org,
+    propertyId,
+    channels,
+  });
+  if (!staged) redirect("/dashboard/properties?forbidden=1");
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   revalidatePath("/dashboard/properties");
