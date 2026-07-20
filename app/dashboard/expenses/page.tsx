@@ -799,6 +799,16 @@ export default async function ExpensesPage({
                               ))}
                             </select>
                           </label>
+                          <label className="text-sm">
+                            <span className="mb-1 block text-gray-600">Note (optional)</span>
+                            <input
+                              type="text"
+                              name="note"
+                              maxLength={200}
+                              placeholder="e.g. July rent, paid by e-transfer"
+                              className="min-w-56 rounded-lg border border-gray-300 px-3 py-2"
+                            />
+                          </label>
                           <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Recording...">
                             Record as rent
                           </SubmitButton>
@@ -854,6 +864,16 @@ export default async function ExpensesPage({
                               </option>
                             ))}
                           </select>
+                        </label>
+                        <label className="text-sm sm:col-span-3">
+                          <span className="mb-1 block text-gray-600">Note (optional)</span>
+                          <input
+                            type="text"
+                            name="note"
+                            maxLength={200}
+                            placeholder="e.g. 506 Manning toilet unit 2"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                          />
                         </label>
                         <div className="flex items-end">
                           <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Logging...">

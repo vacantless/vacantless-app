@@ -517,7 +517,16 @@ export async function confirmEtransferRent(formData: FormData) {
       paid_on: check.value.paidOn,
       period_month: normalizePeriodMonth(check.value.paidOn),
       reference: null,
-      note: `Recorded from forwarded e-Transfer from ${capture.counterparty_name}`,
+      // S531: optional operator note leads; provenance kept as a suffix.
+      note: (() => {
+        const operatorNote = (s(formData, "note") ?? "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 200);
+        return operatorNote
+          ? `${operatorNote} (recorded from forwarded e-Transfer)`
+          : `Recorded from forwarded e-Transfer from ${capture.counterparty_name}`;
+      })(),
     })
     .select("id")
     .single();
@@ -555,6 +564,9 @@ export async function confirmEtransferExpense(formData: FormData) {
 
   const propertyId = orNull(formData, "property_id");
   const buildingKey = orNull(formData, "building_key");
+  // S531: optional operator note ("506 Manning toilet unit 2") leads the memo;
+  // the e-Transfer provenance is kept as a suffix either way.
+  const operatorNote = (s(formData, "note") ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
   const check = validateExpenseInput({
     category: s(formData, "category"),
     amountCents: capture.amount_cents,
@@ -562,7 +574,9 @@ export async function confirmEtransferExpense(formData: FormData) {
     propertyId,
     buildingKey,
     merchant: capture.counterparty_name,
-    note: `Recorded from forwarded e-Transfer to ${capture.counterparty_name}`,
+    note: operatorNote
+      ? `${operatorNote} (recorded from forwarded e-Transfer)`
+      : `Recorded from forwarded e-Transfer to ${capture.counterparty_name}`,
     source: "manual",
     bankTransactionId: null,
   });
