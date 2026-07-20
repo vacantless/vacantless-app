@@ -20,6 +20,7 @@ import {
   resolveLeadNotifyEmailsPreferMemberFallback,
 } from "@/lib/leads-notify";
 import { buildTrackedLink } from "@/lib/listing-distribution";
+import { leadSourceHintFromParam } from "@/lib/listing-seo";
 import type { NotifyMember } from "@/lib/incident-reports";
 import {
   orgWeekWindow,
@@ -44,12 +45,16 @@ function savedLeadCookieName(propertyId: string): string {
   return `vl_lead_${propertyId}`;
 }
 
-// Preserve the tracked-post attribution (?p=) across every redirect so a
-// slot-taken retry (or a refresh of the confirmation) never loses the source.
-// Reuses the canonical tracked-link builder (lib/listing-distribution) rather
-// than re-deriving the append rule.
-function withTracking(path: string, listingPostId: string): string {
-  return buildTrackedLink(path, listingPostId);
+// Preserve tracked-post attribution (?p=) and the browse-surface source hint
+// across every redirect so a slot-taken retry never loses the source.
+function withTracking(
+  path: string,
+  listingPostId: string,
+  sourceHint: string | null = null,
+): string {
+  const tracked = buildTrackedLink(path, listingPostId);
+  if (!sourceHint) return tracked;
+  return `${tracked}${tracked.includes("?") ? "&" : "?"}src=${encodeURIComponent(sourceHint)}`;
 }
 
 // The booking side effect shared by the first submit and the slot-taken retry:
@@ -609,6 +614,7 @@ export async function submitLead(formData: FormData) {
   // RPC validates it belongs to this property before stamping the lead's
   // source; an absent/foreign value safely falls back to 'website'.
   const listingPostId = String(formData.get("listing_post_id") ?? "").trim();
+  const sourceHint = leadSourceHintFromParam(formData.get("src"));
 
   // Candidate pre-screening answers (only present when the org enabled it).
   // Parsed defensively; the RPC computes the authoritative qualify-out snapshot.
@@ -643,8 +649,7 @@ export async function submitLead(formData: FormData) {
     customAnswers.push({ question_id: key.slice(3), answer });
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("submit_public_lead", {
+  const leadParams: Record<string, unknown> = {
     p_property_id: propertyId,
     p_name: name || null,
     p_email: email || null,
@@ -658,15 +663,19 @@ export async function submitLead(formData: FormData) {
     p_pets_detail: petsDetail || null,
     p_custom_answers: customAnswers,
     p_no_suitable_time: noSuitableTime,
-  });
+  };
+  if (sourceHint) leadParams.p_source_hint = sourceHint;
+
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("submit_public_lead", leadParams);
 
   if (error) {
-    redirect(withTracking(`/r/${propertyId}?error=1`, listingPostId));
+    redirect(withTracking(`/r/${propertyId}?error=1`, listingPostId, sourceHint));
   }
 
   const payload = data as AutoReplyPayload | null;
   if (!payload?.lead_id) {
-    redirect(withTracking(`/r/${propertyId}?submitted=1`, listingPostId));
+    redirect(withTracking(`/r/${propertyId}?submitted=1`, listingPostId, sourceHint));
   }
 
   // Remember this lead server-side (httpOnly, per-property, short-lived) so a
@@ -746,7 +755,11 @@ export async function submitLead(formData: FormData) {
   const submittedState =
     outcome === "booked" ? "booked" : slotTaken ? "slottaken" : "1";
   redirect(
-    withTracking(`/r/${propertyId}?submitted=${submittedState}`, listingPostId),
+    withTracking(
+      `/r/${propertyId}?submitted=${submittedState}`,
+      listingPostId,
+      sourceHint,
+    ),
   );
 }
 
@@ -760,16 +773,17 @@ export async function rebookSavedLead(formData: FormData) {
   if (!propertyId) return;
   const slot = String(formData.get("slot") ?? "").trim();
   const listingPostId = String(formData.get("listing_post_id") ?? "").trim();
+  const sourceHint = leadSourceHintFromParam(formData.get("src"));
 
   const cookieName = savedLeadCookieName(propertyId);
   const leadId = cookies().get(cookieName)?.value ?? "";
   if (!leadId) {
     // No saved lead (cookie expired/cleared) — send them to the full form.
-    redirect(withTracking(`/r/${propertyId}`, listingPostId));
+    redirect(withTracking(`/r/${propertyId}`, listingPostId, sourceHint));
   }
   if (!slot) {
     redirect(
-      withTracking(`/r/${propertyId}?submitted=slottaken`, listingPostId),
+      withTracking(`/r/${propertyId}?submitted=slottaken`, listingPostId, sourceHint),
     );
   }
 
@@ -778,10 +792,10 @@ export async function rebookSavedLead(formData: FormData) {
 
   if (booked) {
     cookies().delete(cookieName);
-    redirect(withTracking(`/r/${propertyId}?submitted=booked`, listingPostId));
+    redirect(withTracking(`/r/${propertyId}?submitted=booked`, listingPostId, sourceHint));
   }
   // Still taken (or a race) — keep the cookie so they can try yet another time.
-  redirect(withTracking(`/r/${propertyId}?submitted=slottaken`, listingPostId));
+  redirect(withTracking(`/r/${propertyId}?submitted=slottaken`, listingPostId, sourceHint));
 }
 
 // ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@ export type LeadSourceDisplay = {
 // case-insensitively; unknown sources fall through to their own text.
 const FRIENDLY_SOURCE_LABELS: Record<string, string> = {
   website: "Public rental page",
+  vacantless_network: "Vacantless network",
 };
 
 type JoinedPost = {

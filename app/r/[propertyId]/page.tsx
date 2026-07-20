@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { submitLead, rebookSavedLead, joinWaitlist } from "./actions";
 import { InquiryForm } from "./inquiry-form";
@@ -15,8 +17,18 @@ import {
   utilitiesSummary,
 } from "@/lib/property-features";
 import { virtualTourFor } from "@/lib/virtual-tour";
+import {
+  buildListingJsonLd,
+  buildListingMetaDescription,
+  buildListingMetaTitle,
+  jsonLdScriptText,
+  leadSourceHintFromParam,
+} from "@/lib/listing-seo";
 
 export const dynamic = "force-dynamic";
+
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 
 type Listing = {
   id: string;
@@ -73,24 +85,77 @@ type Listing = {
   photos: string[];
 };
 
+const loadPublicListing = cache(async (propertyId: string): Promise<Listing | null> => {
+  const supabase = createClient();
+  const { data } = await supabase.rpc("get_public_listing", {
+    p_property_id: propertyId,
+  });
+  return (data as Listing | null) ?? null;
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { propertyId: string };
+}): Promise<Metadata> {
+  const listing = await loadPublicListing(params.propertyId);
+  if (!listing) {
+    return {
+      title: "Rental listing | Vacantless",
+      robots: { index: false },
+    };
+  }
+
+  const title = buildListingMetaTitle(listing);
+  const description = buildListingMetaDescription(listing);
+  const coverPhoto = Array.isArray(listing.photos)
+    ? listing.photos.find((photo) => photo.trim())
+    : null;
+  const metadata: Metadata = {
+    title,
+    description,
+  };
+
+  if (coverPhoto) {
+    metadata.openGraph = {
+      title,
+      description,
+      images: [coverPhoto],
+    };
+  }
+
+  if (listing.status !== "available") {
+    metadata.robots = { index: false };
+  }
+
+  return metadata;
+}
+
 export default async function PublicListingPage({
   params,
   searchParams,
 }: {
   params: { propertyId: string };
-  searchParams: { submitted?: string; error?: string; p?: string; waitlist?: string };
+  searchParams: {
+    submitted?: string;
+    error?: string;
+    p?: string;
+    waitlist?: string;
+    src?: string | string[];
+  };
 }) {
   // Per-post tracking id carried by a tracked inquiry link (/r/<id>?p=<postId>).
   const trackedPostId =
     typeof searchParams.p === "string" ? searchParams.p : "";
+  const sourceHint = leadSourceHintFromParam(searchParams.src);
   const supabase = createClient();
-  const [{ data }, { data: avData }] = await Promise.all([
-    supabase.rpc("get_public_listing", { p_property_id: params.propertyId }),
+  const [listing, { data: avData }] = await Promise.all([
+    loadPublicListing(params.propertyId),
     supabase.rpc("get_public_availability", { p_property_id: params.propertyId }),
   ]);
 
-  if (!data) notFound();
-  const l = data as Listing;
+  if (!listing) notFound();
+  const l = listing;
   // A unit can be marked "leased" (or off-market) after its link is shared. The
   // public action RPCs (availability / inquiry / booking) hard-block anything
   // that isn't 'available'; the page must visibly reflect that instead of still
@@ -118,6 +183,12 @@ export default async function PublicListingPage({
   const availability = formatAvailability(l.available_date);
   // Photos come pre-ordered from the RPC (cover first, then sort order).
   const photos = Array.isArray(l.photos) ? l.photos : [];
+  const canonicalUrl = `${APP_URL.replace(/\/+$/g, "")}/r/${encodeURIComponent(l.id)}`;
+  const listingHrefParams = new URLSearchParams();
+  if (trackedPostId) listingHrefParams.set("p", trackedPostId);
+  if (sourceHint) listingHrefParams.set("src", sourceHint);
+  const listingHrefQuery = listingHrefParams.toString();
+  const listingHref = `/r/${l.id}${listingHrefQuery ? `?${listingHrefQuery}` : ""}`;
 
   // Virtual tour / video (item S). Re-validated here against the host allow-list
   // so a value that somehow slipped past the write path can never inject an
@@ -184,6 +255,16 @@ export default async function PublicListingPage({
         ["--brand-gradient" as string]: brandBg,
       }}
     >
+      {isAvailable && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: jsonLdScriptText(
+              buildListingJsonLd(l, { canonicalUrl }),
+            ),
+          }}
+        />
+      )}
       <header
         className="relative text-white shadow-md"
         style={{ background: brandBg }}
@@ -425,6 +506,9 @@ export default async function PublicListingPage({
                       value={trackedPostId}
                     />
                   )}
+                  {sourceHint && (
+                    <input type="hidden" name="src" value={sourceHint} />
+                  )}
                   <fieldset className="rounded-lg border border-gray-200 p-4">
                     <legend className="px-1 text-sm font-medium text-gray-700">
                       Choose another viewing time
@@ -469,7 +553,7 @@ export default async function PublicListingPage({
               ) : (
                 <div className="text-center">
                   <a
-                    href={`/r/${l.id}${trackedPostId ? `?p=${encodeURIComponent(trackedPostId)}` : ""}`}
+                    href={listingHref}
                     className="mt-4 inline-block rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
                     style={{ background: brandBg }}
                   >
@@ -506,6 +590,7 @@ export default async function PublicListingPage({
               action={submitLead}
               propertyId={l.id}
               trackedPostId={trackedPostId}
+              sourceHint={sourceHint}
               orgName={l.org_name}
               brandBg={brandBg}
               brandColor={brand}

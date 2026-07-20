@@ -52,6 +52,7 @@ export type InquiryFormProps = {
   action: (formData: FormData) => void | Promise<void>;
   propertyId: string;
   trackedPostId: string | null;
+  sourceHint?: string | null;
   orgName: string;
   brandBg: string;
   brandColor: string;
@@ -88,6 +89,7 @@ export function InquiryForm({
   action,
   propertyId,
   trackedPostId,
+  sourceHint,
   orgName,
   brandBg,
   brandColor,
@@ -270,6 +272,7 @@ export function InquiryForm({
         {trackedPostId && (
           <input type="hidden" name="listing_post_id" value={trackedPostId} />
         )}
+        {sourceHint && <input type="hidden" name="src" value={sourceHint} />}
         {/* Client-state values ride hidden inputs so the field NAMES the submit
             action reads are unchanged. */}
         <input type="hidden" name="move_in" value={moveIn} />

@@ -1121,6 +1121,11 @@ function SiteFooter() {
           Rent collection, rental pages, viewings, tenant records, and reports.
         </span>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {process.env.BROWSE_SURFACE_ENABLED === "true" && (
+            <Link href="/rentals" className="hover:text-[#15211d]">
+              Browse rentals
+            </Link>
+          )}
           <Link href="/about" className="hover:text-[#15211d]">
             About
           </Link>
