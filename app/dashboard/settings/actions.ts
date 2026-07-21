@@ -622,6 +622,36 @@ export async function updateShowingConfirmationSettings(formData: FormData) {
   redirect("/dashboard/settings?tab=comms&confirm=saved");
 }
 
+// S546: the showing-outcome auto-close default. When a passed viewing sits with
+// no recorded outcome after the nudge series is spent, the cron closes it to the
+// honest `auto_closed` state (never attended/no_show). Off by default; the hours
+// bound (24..336) mirrors the DB check + the pure core's backlog bound.
+export async function updateShowingAutocloseSettings(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const hoursRaw = String(formData.get("showing_autoclose_after_hours") ?? "").trim();
+  const hours = Number(hoursRaw);
+  if (!Number.isInteger(hours) || hours < 24 || hours > 336) {
+    redirect("/dashboard/settings?tab=comms&autoclose=invalid");
+  }
+
+  const enabled = formData.get("showing_autoclose_enabled") != null;
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({
+      showing_autoclose_enabled: enabled,
+      showing_autoclose_after_hours: hours,
+    })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=comms&autoclose=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&autoclose=saved");
+}
+
 // Send the operator a copy of their branded renter auto-reply so they can
 // confirm deliverability + branding before going live. Redirect-based (same
 // reasoning as updateBranding re: the S170 edge-503 WATCH). The result reason

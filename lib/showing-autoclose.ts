@@ -91,3 +91,24 @@ export function showingAutoCloseDue(input: ShowingAutoCloseInput): boolean {
   if (elapsed > maxAgeMs) return false; // too old; backlog bound
   return true;
 }
+
+/**
+ * The scheduled_at band the cron sweep should query, so the impure route stays a
+ * thin translation of this pure rule. A showing is only ever a candidate when its
+ * time is in [now - maxAge, now - after]: newer than the backlog bound (so
+ * flipping the flag on can't sweep months of stale blanks) and older than the
+ * grace (so a just-passed showing still has its full nudge window). Per-row
+ * showingAutoCloseDue re-checks the exact predicate; this only bounds the query.
+ */
+export function autoCloseSweepBand(input: {
+  nowMs: number;
+  autoCloseAfterMs?: number;
+  maxAgeMs?: number;
+}): { oldestMs: number; newestMs: number } {
+  const {
+    nowMs,
+    autoCloseAfterMs = AUTOCLOSE_DEFAULT_AFTER_MS,
+    maxAgeMs = AUTOCLOSE_MAX_AGE_MS,
+  } = input;
+  return { oldestMs: nowMs - maxAgeMs, newestMs: nowMs - autoCloseAfterMs };
+}

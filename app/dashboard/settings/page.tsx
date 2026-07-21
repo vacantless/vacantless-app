@@ -18,6 +18,7 @@ import {
   updateRenterMessages,
   updateTextMessages,
   updateShowingConfirmationSettings,
+  updateShowingAutocloseSettings,
   sendTestEmailAction,
   uploadOrgLogo,
   removeOrgLogo,
@@ -134,6 +135,7 @@ export default async function SettingsPage({
     renter?: string; // Communications → Renter messages flash
     sms?: string; // Communications → Text messages flash
     confirm?: string; // Communications → Showing confirmation flash
+    autoclose?: string; // Communications → Showing auto-close flash
     feed?: string; // Public Page & Brand → syndication contact flash
     distribution?: string; // Distribution → channel account/setup flash
   };
@@ -326,6 +328,13 @@ export default async function SettingsPage({
     org.auto_release_unconfirmed_hours <= 24
       ? org.auto_release_unconfirmed_hours
       : 2;
+  const autocloseFlash = searchParams.autoclose;
+  const autocloseHours =
+    Number.isInteger(org.showing_autoclose_after_hours) &&
+    org.showing_autoclose_after_hours >= 24 &&
+    org.showing_autoclose_after_hours <= 336
+      ? org.showing_autoclose_after_hours
+      : 48;
   // The preview mirrors what renters actually see: the dashboard header and
   // public pages use an accessibility-guardrailed (darkened-as-needed) variant
   // so white text stays readable on a pale color.
@@ -1468,6 +1477,85 @@ export default async function SettingsPage({
 
             <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
               Save viewing confirmation
+            </button>
+          </form>
+
+          {/* S546: showing-outcome auto-close default */}
+          <form
+            action={updateShowingAutocloseSettings}
+            className="rounded-2xl border border-gray-200 bg-white p-5"
+          >
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Auto-close viewings with no outcome
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              After the reminder-to-record series is spent and a viewing has still
+              had no outcome recorded, close it automatically as{" "}
+              <span className="font-medium text-gray-700">
+                &ldquo;no outcome recorded&rdquo;
+              </span>
+              . This is not counted as attended or no-show and never affects your
+              attendance rate. A recorded outcome later always wins.
+            </p>
+
+            {autocloseFlash === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Auto-close settings saved.
+              </div>
+            )}
+            {autocloseFlash === "invalid" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Pick a grace window from 24 to 336 hours.
+              </div>
+            )}
+            {autocloseFlash === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving these settings. Please try again.
+              </div>
+            )}
+
+            <div className="mt-5">
+              <label className="flex items-start gap-3">
+                <input
+                  name="showing_autoclose_enabled"
+                  type="checkbox"
+                  defaultChecked={org.showing_autoclose_enabled === true}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Automatically close viewings with no recorded outcome
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Off by default. Only closes viewings whose reminders are spent;
+                    never touches ones older than 14 days.
+                  </span>
+                </span>
+              </label>
+              <label className="mt-4 block max-w-[14rem]">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Grace window
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    name="showing_autoclose_after_hours"
+                    type="number"
+                    min={24}
+                    max={336}
+                    step={1}
+                    defaultValue={autocloseHours}
+                    className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <span className="text-sm text-gray-500">hours after the viewing</span>
+                </div>
+              </label>
+            </div>
+
+            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+              Save auto-close settings
             </button>
           </form>
 

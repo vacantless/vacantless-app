@@ -18,7 +18,14 @@ import {
   OUTCOME_NUDGE_MAX_AGE_MS,
   OUTCOME_NUDGE_SENT_COLUMN,
   OUTCOME_NUDGE_COUNT_COLUMN,
+  HOUR_MS,
 } from "@/lib/reminders";
+import {
+  showingAutoCloseDue,
+  autoCloseSweepBand,
+  AUTO_CLOSED_OUTCOME,
+  AUTOCLOSE_DEFAULT_AFTER_MS,
+} from "@/lib/showing-autoclose";
 
 // Post-showing outcome-nudge sweep (S392, escalation added S445 slice 2) — the
 // trigger that lights up the one-tap outcome surface. Once a showing's time passes
@@ -64,6 +71,7 @@ type Summary = {
   reason?: string;
   scanned: number; // orgs scanned
   sent: number; // emails sent (or "would send" in dry mode)
+  autoClosed: number; // S546: showings the auto-close default closed (or "would close" in dry mode)
   skipped: number; // orgs/showings not actionable / opt-out
   errors: number;
   details: Array<Record<string, unknown>>;
@@ -122,7 +130,7 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
-      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
+      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, autoClosed: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -135,7 +143,7 @@ export async function GET(req: NextRequest) {
   const event = getNotificationEvent(EVENT_KEY);
   if (!event) {
     return NextResponse.json(
-      { ok: false, reason: "event_not_registered", scanned: 0, sent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: "event_not_registered", scanned: 0, sent: 0, autoClosed: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -143,14 +151,14 @@ export async function GET(req: NextRequest) {
   let orgQuery = admin
     .from("organizations")
     .select(
-      "id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone, outcome_nudge_max",
+      "id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone, outcome_nudge_max, showing_autoclose_enabled, showing_autoclose_after_hours",
     );
   if (onlyOrg) orgQuery = orgQuery.eq("id", onlyOrg);
   const { data: orgs, error: orgErr } = await orgQuery;
 
   if (orgErr) {
     return NextResponse.json(
-      { ok: false, reason: `org_query_error:${orgErr.message}`, scanned: 0, sent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: `org_query_error:${orgErr.message}`, scanned: 0, sent: 0, autoClosed: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -160,7 +168,7 @@ export async function GET(req: NextRequest) {
   const oldestIso = new Date(nowMs - OUTCOME_NUDGE_MAX_AGE_MS).toISOString();
   const newestIso = new Date(nowMs - OUTCOME_NUDGE_GRACE_MS).toISOString();
 
-  const summary: Summary = { ok: true, scanned: (orgs ?? []).length, sent: 0, skipped: 0, errors: 0, details: [] };
+  const summary: Summary = { ok: true, scanned: (orgs ?? []).length, sent: 0, autoClosed: 0, skipped: 0, errors: 0, details: [] };
 
   for (const org of (orgs ?? []) as any[]) {
     // Per-org isolation: one org's thrown error must not abort the sweep.
@@ -176,7 +184,12 @@ export async function GET(req: NextRequest) {
         .eq("event_key", EVENT_KEY)
         .maybeSingle();
       const setting = (settingRow as NotificationSettingRow | null) ?? null;
-      if (!isDripEnqueueEnabled(setting)) {
+      const nudgeEnabled = isDripEnqueueEnabled(setting);
+      const autocloseEnabled = org.showing_autoclose_enabled === true;
+      // Skip only when neither pass is opted in. The nudge pass ships dark behind
+      // the notification event; the S546 auto-close pass ships dark behind
+      // organizations.showing_autoclose_enabled. They are independent opt-ins.
+      if (!nudgeEnabled && !autocloseEnabled) {
         summary.skipped++;
         continue;
       }
@@ -188,16 +201,20 @@ export async function GET(req: NextRequest) {
       // outcomeNudgeStepDue re-checks precisely against the send count + the org's
       // cadence cap, so we no longer pre-filter on a single sent stamp (bounded
       // escalation can send more than once).
-      const { data: showRows } = await admin
-        .from("showings")
-        .select(
-          "id, scheduled_at, outcome, outcome_token, outcome_nudge_count, assigned_agent_id, " +
-            "lead:leads(name), property:properties(address)",
-        )
-        .eq("organization_id", org.id)
-        .gte("scheduled_at", oldestIso)
-        .lte("scheduled_at", newestIso)
-        .or("outcome.is.null,outcome.eq.scheduled");
+      // Only run the nudge machinery for orgs opted into the nudge event; an
+      // autoclose-only org falls straight through to the auto-close pass below.
+      const { data: showRows } = nudgeEnabled
+        ? await admin
+            .from("showings")
+            .select(
+              "id, scheduled_at, outcome, outcome_token, outcome_nudge_count, assigned_agent_id, " +
+                "lead:leads(name), property:properties(address)",
+            )
+            .eq("organization_id", org.id)
+            .gte("scheduled_at", oldestIso)
+            .lte("scheduled_at", newestIso)
+            .or("outcome.is.null,outcome.eq.scheduled")
+        : { data: [] as any[] };
 
       // The org's showing-agent roster (id -> contact), so a nudge for an ASSIGNED
       // viewing can go to the agent who was on-site (the person who actually knows
@@ -402,6 +419,106 @@ export async function GET(req: NextRequest) {
         } catch (e: any) {
           summary.errors++;
           summary.details.push({ org: org.id, showing: row?.id, error: `row_threw:${String(e?.message ?? e)}` });
+        }
+      }
+
+      // --- S546 auto-close pass ------------------------------------------------
+      // After the nudge series, close passed showings the operator never recorded.
+      // Opt-in per org (showing_autoclose_enabled). Writes the honest `auto_closed`
+      // terminal state — NOT attended/no_show — guarded so a real outcome recorded
+      // between our SELECT and UPDATE always wins, which also makes re-runs no-ops.
+      if (autocloseEnabled) {
+        const afterHours =
+          typeof org.showing_autoclose_after_hours === "number"
+            ? org.showing_autoclose_after_hours
+            : AUTOCLOSE_DEFAULT_AFTER_MS / HOUR_MS;
+        const afterMs = afterHours * HOUR_MS;
+        const band = autoCloseSweepBand({ nowMs, autoCloseAfterMs: afterMs });
+        const { data: acRows } = await admin
+          .from("showings")
+          .select("id, lead_id, scheduled_at, outcome, outcome_nudge_count")
+          .eq("organization_id", org.id)
+          .gte("scheduled_at", new Date(band.oldestMs).toISOString())
+          .lte("scheduled_at", new Date(band.newestMs).toISOString())
+          .or("outcome.is.null,outcome.eq.scheduled");
+
+        for (const rawAc of (acRows ?? []) as any[]) {
+          try {
+            const scheduledAt: string | null = rawAc.scheduled_at;
+            if (!scheduledAt) {
+              summary.skipped++;
+              continue;
+            }
+            const due = showingAutoCloseDue({
+              enabled: true,
+              scheduledAtMs: new Date(scheduledAt).getTime(),
+              nowMs,
+              outcome: rawAc.outcome,
+              nudgeCount: rawAc.outcome_nudge_count ?? 0,
+              maxNudges,
+              autoCloseAfterMs: afterMs,
+            });
+            if (!due) {
+              summary.skipped++;
+              continue;
+            }
+
+            if (dry) {
+              summary.autoClosed++; // "would close"
+              summary.details.push({
+                org: org.id,
+                showing: rawAc.id,
+                autoClosed: true,
+                dry: true,
+                after_hours: afterHours,
+              });
+              continue;
+            }
+
+            // Guarded, idempotent UPDATE: the .or() re-asserts the row is still
+            // unrecorded, so a concurrent operator/renter tap (or an earlier
+            // sweep) means 0 rows change and we do not fabricate a note.
+            const { data: updated, error: upErr } = await admin
+              .from("showings")
+              .update({ outcome: AUTO_CLOSED_OUTCOME })
+              .eq("id", rawAc.id)
+              .or("outcome.is.null,outcome.eq.scheduled")
+              .select("id");
+            if (upErr) {
+              summary.errors++;
+              summary.details.push({
+                org: org.id,
+                showing: rawAc.id,
+                autoClosed: false,
+                error: `update_error:${upErr.message}`,
+              });
+              continue;
+            }
+            if (!updated || updated.length === 0) {
+              // Lost the race — a real outcome landed first. Correct: it wins.
+              summary.skipped++;
+              continue;
+            }
+
+            if (rawAc.lead_id) {
+              await admin.from("messages").insert({
+                organization_id: org.id,
+                lead_id: rawAc.lead_id,
+                channel: "note",
+                direction: "outbound",
+                body: `Auto-closed: no outcome recorded within ${afterHours}h.`,
+              });
+            }
+            summary.autoClosed++;
+            summary.details.push({ org: org.id, showing: rawAc.id, autoClosed: true });
+          } catch (e: any) {
+            summary.errors++;
+            summary.details.push({
+              org: org.id,
+              showing: rawAc?.id,
+              error: `autoclose_row_threw:${String(e?.message ?? e)}`,
+            });
+          }
         }
       }
     } catch (e: any) {

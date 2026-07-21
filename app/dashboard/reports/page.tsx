@@ -256,14 +256,23 @@ export default async function ReportsPage({
         title="Viewings"
         subtitle="Actual viewings on your calendar (booked online by renters or scheduled by you), and how they turned out."
       >
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
           <Kpi label="Total" value={showRep.total} />
           <Kpi label="Attended" value={showRep.attended} />
           <Kpi label="No-show" value={showRep.noShow} />
           <Kpi label="Cancelled" value={showRep.cancelled} />
+          <Kpi label="Auto-closed" value={showRep.autoClosed} />
           <Kpi label="Upcoming" value={showRep.upcoming} />
           <Kpi label="Attendance" value={`${showRep.attendanceRate}%`} />
         </div>
+        {showRep.autoClosed > 0 && (
+          <p className="mt-3 text-xs text-gray-400">
+            Auto-closed viewings passed with no outcome recorded, so the system
+            closed them. They are not counted as attended or no-show, and are left
+            out of the attendance rate. A large bucket means outcomes are not being
+            recorded at the viewing.
+          </p>
+        )}
       </Section>
 
       {/* Feedback */}
