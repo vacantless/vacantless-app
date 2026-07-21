@@ -262,7 +262,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
             : input.openInquiryCount === 0
               ? [{ key: "market", label: "Refresh or add a renter channel" }]
               : [{ key: "share", label: "Share the link with more renters" }],
-        cta: { label: "Publish / Market", href: `${self}#distribute-header` },
+        cta: { label: "Open marketing checklist", href: `${self}#distribute-header` },
       };
     }
 

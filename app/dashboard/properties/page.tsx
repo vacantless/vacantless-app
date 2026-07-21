@@ -227,8 +227,9 @@ export default async function PropertiesPage({
                     <Link
                       href={`/dashboard/properties/${p.id}#distribute-header`}
                       className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
+                      title="Open the marketing checklist. Nothing is posted automatically."
                     >
-                      Publish / Market →
+                      Marketing checklist →
                     </Link>
                   </>
                 ) : isPubliclyVisible(p.status) ? (

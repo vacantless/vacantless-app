@@ -82,6 +82,38 @@ function CopyField({
   );
 }
 
+function GuidedPostingPromise({
+  channelLabel,
+}: {
+  channelLabel: string;
+}) {
+  return (
+    <div className="grid gap-2 text-[11px] text-gray-600 md:grid-cols-3">
+      <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+        <p className="font-semibold text-gray-900">On your screen</p>
+        <p className="mt-0.5">
+          A helper window opens beside {channelLabel} with the copy, steps,
+          tracked link, and final proof form.
+        </p>
+      </div>
+      <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+        <p className="font-semibold text-gray-900">Behind the scenes</p>
+        <p className="mt-0.5">
+          Vacantless keeps this channel waiting on you. It does not log in, pay,
+          submit, or mark the post as Live.
+        </p>
+      </div>
+      <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+        <p className="font-semibold text-gray-900">How you know it is done</p>
+        <p className="mt-0.5">
+          Paste the live ad URL; the row changes to Live, proof is saved here,
+          and checklist progress updates.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function CopilotPanel({
   propertyId,
   itemId,
@@ -202,6 +234,13 @@ export function CopilotPanel({
       </div>
 
       <div className="space-y-3">
+        <p className="text-xs text-gray-700">
+          Start once, then keep this checklist open. Vacantless prepares the post
+          and tracks the result; you still approve anything on{" "}
+          {script.channelLabel}.
+        </p>
+        <GuidedPostingPromise channelLabel={script.channelLabel} />
+
         {/* Honesty: what Vacantless does and does not do. */}
         <ul className="space-y-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
           {script.honesty.map((h) => (
@@ -233,12 +272,12 @@ export function CopilotPanel({
             onClick={openSidecar}
             className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white"
           >
-            Open helper window
+            Start guided posting
           </button>
           <p className="mt-1.5 text-[11px] text-gray-600">
-            Works now — no install. Keep this window beside the{" "}
-            {script.channelLabel} tab; it shows the copy and the Live URL form.
-            You still review and post.
+            One click opens the helper window. Nothing is posted or paid until
+            you do it on {script.channelLabel}; Vacantless only marks this
+            channel complete after the live ad URL is saved.
           </p>
         </div>
 
@@ -374,7 +413,8 @@ export function CopilotPanel({
           </button>
           <p className="text-[11px] text-gray-500">
             Saves proof and turns on the tracked inquiry link. Vacantless
-            never marks a channel live without a real ad URL.
+            never marks a channel live without a real ad URL. When this saves,
+            the checklist shows Live and the proof link stays on this channel.
           </p>
         </form>
       </div>

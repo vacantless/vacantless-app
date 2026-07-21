@@ -436,13 +436,28 @@ export function DistributeTab({
       {/* Next-action banner (Slice 1): one prioritized step across all channels,
           so the command center leads with a single obvious action (Codex #1/#4). */}
       {nextAction && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-brand/30 bg-brand/5 px-5 py-3">
-          <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
-            Next
-          </span>
-          <span className="text-sm font-semibold text-gray-900">
-            {nextAction.label}
-          </span>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+                Next
+              </span>
+              <span className="text-sm font-semibold text-gray-900">
+                {nextAction.label}
+              </span>
+            </div>
+            <p className="text-xs text-gray-600">
+              Vacantless prepares the copy, links, and checks. You still approve
+              any outside-site post or payment, and a channel counts as Live
+              only after real proof is saved.
+            </p>
+          </div>
+          <a
+            href="#publish-checklist"
+            className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+          >
+            Show checklist
+          </a>
         </div>
       )}
 

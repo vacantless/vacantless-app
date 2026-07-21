@@ -74,6 +74,38 @@ function CopyField({
   );
 }
 
+function SidecarPostingSteps({
+  channelLabel,
+}: {
+  channelLabel: string;
+}) {
+  return (
+    <div className="grid gap-2 text-[11px] text-gray-600">
+      <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+        <p className="font-semibold text-gray-900">1. Open the posting page</p>
+        <p className="mt-0.5">
+          Keep this helper beside {channelLabel}. Copy fields from here into the
+          outside site.
+        </p>
+      </div>
+      <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+        <p className="font-semibold text-gray-900">2. You approve the post</p>
+        <p className="mt-0.5">
+          You sign in, review, handle CAPTCHA or payment if it appears, and click
+          the final post button on {channelLabel}.
+        </p>
+      </div>
+      <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+        <p className="font-semibold text-gray-900">3. Save the live ad URL</p>
+        <p className="mt-0.5">
+          This is how Vacantless knows it is done: the channel changes to Live,
+          proof is saved, and checklist progress updates.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function SidecarCopilot({
   propertyId,
   itemId,
@@ -95,11 +127,13 @@ export function SidecarCopilot({
           Post to {channelLabel}
         </h1>
         <p className="text-xs text-gray-500">
-          Copy each field into {channelLabel}, post it yourself, then paste the
-          live ad URL below and mark it live. Vacantless never posts or submits
-          for you.
+          This helper makes the post easy to finish, but you stay in control.
+          Vacantless prepares the copy and tracked link; it does not log in, pay,
+          submit, or mark Live until you save the real ad URL.
         </p>
       </header>
+
+      <SidecarPostingSteps channelLabel={channelLabel} />
 
       {/* Honesty: what Vacantless does and does not do. */}
       <ul className="space-y-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
@@ -128,7 +162,7 @@ export function SidecarCopilot({
           rel="noopener noreferrer"
           className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
         >
-          Open {channelLabel} in a new tab
+          Open {channelLabel} posting page
         </a>
       )}
 
@@ -224,8 +258,9 @@ export function SidecarCopilot({
         </button>
         <p className="text-[11px] text-gray-500">
           Saves proof and turns on the tracked inquiry link. Vacantless
-          never marks a channel live without a real ad URL. You can close this
-          window when you are done.
+          never marks a channel live without a real ad URL. After this saves,
+          the main checklist shows Live and keeps the proof link on this channel.
+          You can close this window when you are done.
         </p>
       </form>
     </div>

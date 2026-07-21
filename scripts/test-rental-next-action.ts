@@ -148,7 +148,10 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   ok("inquiries: link fact present when live", !!findFact(a, "link"));
   ok("inquiries: market gap present", findGap(a, "market"));
   ok("inquiries: cta -> distribute", a?.cta.href === `/dashboard/properties/${PID}#distribute-header`);
-  ok("inquiries: cta says Publish / Market", a?.cta.label === "Publish / Market");
+  ok(
+    "inquiries: cta opens marketing checklist",
+    a?.cta.label === "Open marketing checklist",
+  );
 }
 {
   const a = deriveNextAction(inp({ currentStep: "inquiries", linkIsLive: true, listingPostCount: 3 }));

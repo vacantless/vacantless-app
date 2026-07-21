@@ -326,6 +326,7 @@ export default async function PropertyDetailPage({
     photoerr?: string;
     duplicated?: string;
     imported?: string;
+    dist?: string;
     run?: string;
     runerr?: string;
     tourerr?: string;
@@ -1446,8 +1447,61 @@ export default async function PropertyDetailPage({
     conciergeDailyLostLabel,
     realtorReferralEnabled,
   };
+  const copilotNotice: DistributeRunNotice | null =
+    searchParams.dist === "copilot_live"
+      ? {
+          tone: "success",
+          title: "Guided posting saved.",
+          body:
+            "This channel is now marked Live because a real ad URL was saved. The checklist progress and proof link update here.",
+        }
+      : searchParams.dist === "copilot_needsurl"
+        ? {
+            tone: "warning",
+            title: "Live ad URL needed.",
+            body:
+              "Vacantless did not mark this channel Live. After you post on the outside site, paste the real public ad URL.",
+          }
+        : searchParams.dist === "copilot_prooffail" ||
+            searchParams.dist === "copilot_trackerfail"
+          ? {
+              tone: "danger",
+              title: "Proof was not saved.",
+              body:
+                "Vacantless left the channel unfinished so it does not look Live without proof. Try saving the live ad URL again.",
+            }
+          : searchParams.dist === "copilot_run_closed"
+            ? {
+                tone: "warning",
+                title: "This publish run is closed.",
+                body:
+                  "Start or reopen a publish checklist before saving guided-posting proof.",
+              }
+            : searchParams.dist === "copilot_concierge"
+              ? {
+                  tone: "info",
+                  title: "The desk owns this channel now.",
+                  body:
+                    "Guided posting is paused because this channel was handed to Vacantless for done-for-you posting.",
+                }
+              : searchParams.dist === "copilot_already"
+                ? {
+                    tone: "info",
+                    title: "This channel is already being updated.",
+                    body:
+                      "Refresh the checklist and check the channel status before saving proof again.",
+                  }
+                : searchParams.dist === "copilot_channel"
+                  ? {
+                      tone: "warning",
+                      title: "Guided posting is not available here.",
+                      body:
+                        "Use the checklist action for this channel, then save proof when the outside listing is live.",
+                    }
+                  : null;
   const distributeRunNotice: DistributeRunNotice | null =
-    searchParams.run === "concierge"
+    copilotNotice ??
+    (searchParams.run === "concierge"
       ? {
           tone: "success",
           title: "Handed to the desk.",
@@ -1509,7 +1563,7 @@ export default async function PropertyDetailPage({
                           body:
                             "Something went wrong handing this to the desk - try again.",
                         }
-                      : null;
+                      : null);
   const replyInputs: ReplyInputs = {
     address: p.address,
     bookingUrl: linkIsLive ? publicUrl : null,

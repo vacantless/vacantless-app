@@ -172,6 +172,97 @@ function urlFieldLabel(item: RunItemView): string {
   return "Live ad URL";
 }
 
+const OPERATOR_ACTION_WEIGHT: Partial<Record<PublishStatus, number>> = {
+  needs_payment: 1,
+  needs_login: 1,
+  needs_operator: 2,
+  queued: 3,
+};
+
+function operatorActionWeight(item: RunItemView): number | null {
+  if (item.liveWithoutUrl) return 0;
+  if (item.staleRefresh) return 1;
+  return OPERATOR_ACTION_WEIGHT[item.publishStatus] ?? null;
+}
+
+function primaryOperatorItem(items: RunItemView[]): RunItemView | null {
+  let best: { weight: number; index: number; item: RunItemView } | null = null;
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const weight = operatorActionWeight(item);
+    if (weight == null) continue;
+    if (
+      !best ||
+      weight < best.weight ||
+      (weight === best.weight && index < best.index)
+    ) {
+      best = { weight, index, item };
+    }
+  }
+  return best?.item ?? null;
+}
+
+function operatorActionSummary(item: RunItemView): string {
+  if (item.liveWithoutUrl) {
+    return "Paste the real live ad URL before this channel can count as Live.";
+  }
+  if (item.staleRefresh) {
+    return "Refresh this ad, then save fresh proof so renters do not hit an old listing.";
+  }
+  if (item.mode === "browser_copilot") {
+    switch (item.publishStatus) {
+      case "needs_payment":
+        return `Start guided posting for ${item.channelLabel}; you approve any payment, then save the live ad URL.`;
+      case "needs_login":
+        return `Start guided posting for ${item.channelLabel}; you sign in and post, then save the live ad URL.`;
+      case "needs_operator":
+      case "queued":
+        return `Start guided posting for ${item.channelLabel}; Vacantless prepares the post and waits for your live ad URL.`;
+    }
+  }
+  switch (item.publishStatus) {
+    case "needs_payment":
+      return `Sign in or pay on ${item.channelLabel}, then paste the live ad URL here.`;
+    case "needs_login":
+      return `Sign in on ${item.channelLabel}, finish the post, then paste the live ad URL here.`;
+    case "needs_operator":
+      return `Follow the ${item.channelLabel} steps, then save proof when the post is really live.`;
+    case "queued":
+      return `Start ${item.channelLabel} when you are ready to work this channel.`;
+    case "submitting":
+      return `${item.channelLabel} is being submitted. Check back for proof before calling it Live.`;
+    case "submitted":
+      return `${item.channelLabel} was submitted, but that does not mean it is live on the partner site yet.`;
+    case "live":
+      return `${item.channelLabel} already has live proof. No action needed unless the ad changes.`;
+    case "blocked":
+      return `${item.channelLabel} is blocked. Fix the setup issue before posting.`;
+    case "rejected":
+      return `${item.channelLabel} was rejected. Review the note before trying again.`;
+    case "skipped":
+      return `${item.channelLabel} is skipped for this run.`;
+  }
+}
+
+function operatorOwnerLine(item: RunItemView): string {
+  if (item.mode === "automatic") {
+    return "Vacantless can check this inside the app, then it saves proof here.";
+  }
+  if (item.mode === "feed_partner") {
+    return "Vacantless prepares the feed; a partner site may still need to accept it before it is truly live.";
+  }
+  if (item.mode === "browser_copilot") {
+    return "The helper opens in front of you with copy and proof fields. Behind the scenes, Vacantless tracks this channel as waiting until you save the real ad URL.";
+  }
+  if (item.mode === "concierge") {
+    return "The Vacantless publishing desk can work this, but it still needs real live-ad proof before it counts.";
+  }
+  if (item.mode === "broker") {
+    return "A licensed broker or agent must complete the outside listing; Vacantless only tracks the proof.";
+  }
+  return "Use this to track another place you posted, so leads can be counted correctly.";
+}
+
 export function LaunchRunPanel({
   propertyId,
   run,
@@ -217,6 +308,26 @@ export function LaunchRunPanel({
           where a site needs login or payment, and keeps proof and renter leads
           in one checklist.
         </p>
+        <div className="mb-4 grid gap-2 text-xs text-gray-700 md:grid-cols-3">
+          <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+            <p className="font-semibold text-gray-900">1. Choose channels</p>
+            <p className="mt-0.5 text-gray-500">
+              Keep the defaults unless you know a site is not needed.
+            </p>
+          </div>
+          <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+            <p className="font-semibold text-gray-900">2. Post or verify</p>
+            <p className="mt-0.5 text-gray-500">
+              Automatic channels are checked here; outside sites need your login.
+            </p>
+          </div>
+          <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
+            <p className="font-semibold text-gray-900">3. Save proof</p>
+            <p className="mt-0.5 text-gray-500">
+              A channel counts as Live only after a real ad URL or proof is saved.
+            </p>
+          </div>
+        </div>
         <form action={startDistributionRun}>
           <input type="hidden" name="property_id" value={propertyId} />
           <div className="mb-3 grid gap-2 md:grid-cols-2">
@@ -282,6 +393,20 @@ export function LaunchRunPanel({
   }
 
   // Active run: progress + per-channel checklists.
+  const priorityItem = primaryOperatorItem(items);
+  const conciergeAnchorItem =
+    items.find(
+      (item) =>
+        item.canConcierge &&
+        (item.channel !== "realtor_ca" || realtorReferralEnabled),
+    ) ?? null;
+  const liveProofCount = items.filter(
+    (item) =>
+      item.publishStatus === "live" &&
+      !item.staleRefresh &&
+      !item.liveWithoutUrl,
+  ).length;
+
   return (
     <div
       id="publish-checklist"
@@ -309,36 +434,89 @@ export function LaunchRunPanel({
           style={{ width: `${progress.pct}%` }}
         />
       </div>
+      <div className="mb-4 rounded-xl border border-brand/25 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">
+              What to do next
+            </p>
+            <p className="mt-1 text-base font-semibold text-gray-900">
+              {priorityItem
+                ? operatorActionSummary(priorityItem)
+                : "No urgent publishing step. Keep an eye on refresh due dates or add another channel."}
+            </p>
+            <p className="mt-2 text-xs text-gray-600">
+              {priorityItem
+                ? operatorOwnerLine(priorityItem)
+                : "Your public page and finished channels stay tracked here. Submitted feed rows are not treated as Live until proof exists."}
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              {liveProofCount} of {progress.total} channels have live proof. A
+              channel only counts as Live after proof is saved, so you do
+              not have to guess what happened.
+            </p>
+          </div>
+          {priorityItem && (
+            <a
+              href={`#run-item-${priorityItem.id}`}
+              className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+            >
+              Open this step
+            </a>
+          )}
+        </div>
+      </div>
 
       <ul className="space-y-3">
         {items.map((item) => (
           <li
             key={item.id}
-            id={
-              item.canConcierge &&
-              (item.channel !== "realtor_ca" || realtorReferralEnabled)
-                ? `concierge-${item.id}`
-                : undefined
-            }
+            id={`run-item-${item.id}`}
             className="rounded-xl border border-gray-200 bg-white p-4"
           >
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-gray-900">
-                {item.channelLabel}
-              </span>
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                {publishModeLabel(item.mode)}
-              </span>
-              <DisplayStatusChip item={item} />
-              {item.verificationStatus && (
-                <span
-                  title="Verification"
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[verificationResultTone(item.verificationStatus)]}`}
-                >
-                  {verificationResultLabel(item.verificationStatus)}
-                </span>
+            {item.canConcierge &&
+              (item.channel !== "realtor_ca" || realtorReferralEnabled) && (
+                <span id={`concierge-${item.id}`} className="block scroll-mt-6" />
               )}
-            </div>
+            <details
+              open={
+                priorityItem?.id === item.id ||
+                conciergeAnchorItem?.id === item.id
+              }
+              className="group"
+            >
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">
+                      {item.channelLabel}
+                    </span>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                      {publishModeLabel(item.mode)}
+                    </span>
+                    <DisplayStatusChip item={item} />
+                    {item.verificationStatus && (
+                      <span
+                        title="Verification"
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[verificationResultTone(item.verificationStatus)]}`}
+                      >
+                        {verificationResultLabel(item.verificationStatus)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    {operatorActionSummary(item)}
+                  </p>
+                </div>
+                <span className="mt-0.5 text-xs font-medium text-brand group-open:hidden">
+                  Details
+                </span>
+                <span className="mt-0.5 hidden text-xs font-medium text-gray-400 group-open:inline">
+                  Hide
+                </span>
+              </summary>
+
+              <div className="mt-3 border-t border-gray-100 pt-3">
 
             {(item.auditMessage || item.errorMessage || item.blockers.length > 0) && (
               <div className="mb-3 space-y-2">
@@ -629,6 +807,8 @@ export function LaunchRunPanel({
                     </button>
                   </form>
                 )}
+              </div>
+            </details>
               </div>
             </details>
           </li>

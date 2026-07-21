@@ -1,5 +1,6 @@
 // Unit tests for the pure distribution-run helpers.
 // Run: npx tsx scripts/test-distribution-run.ts
+import { readFileSync } from "fs";
 import {
   RUN_ITEM_STATUSES,
   activeRunChannelCount,
@@ -200,6 +201,108 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok("excludes already-in-run facebook", !sel.some((c) => c.key === "facebook"));
   ok("excludes already-in-run other", !sel.some((c) => c.key === "other"));
   ok("selectable now 6", sel.length === 6);
+}
+
+// --- operator UI source checks ---------------------------------------------
+{
+  const panelSource = readFileSync(
+    "app/dashboard/properties/[id]/launch-run-panel.tsx",
+    "utf8",
+  );
+  ok("operator guide leads with what to do next", panelSource.includes("What to do next"));
+  ok("operator guide links to the priority item", panelSource.includes("Open this step"));
+  ok(
+    "operator guide explains proof before live",
+    panelSource.includes("only counts as Live after proof is saved"),
+  );
+  ok(
+    "priority (and concierge target) channel opens by default",
+    panelSource.includes("priorityItem?.id === item.id") &&
+      panelSource.includes("conciergeAnchorItem?.id === item.id"),
+  );
+  ok(
+    "channel rows have stable run-item anchors",
+    panelSource.includes("id={`run-item-${item.id}`}"),
+  );
+  ok(
+    "browser co-pilot summary explains front-screen helper",
+    panelSource.includes("The helper opens in front of you"),
+  );
+}
+{
+  const distributeSource = readFileSync(
+    "app/dashboard/properties/[id]/distribute-tab.tsx",
+    "utf8",
+  );
+  ok(
+    "next banner explains outside-site approval",
+    distributeSource.includes("You still approve") &&
+      distributeSource.includes("only after real proof is saved"),
+  );
+}
+{
+  const copilotSource = readFileSync(
+    "app/dashboard/properties/[id]/copilot-panel.tsx",
+    "utf8",
+  );
+  ok(
+    "guided posting primary CTA starts the flow",
+    copilotSource.includes("Start guided posting"),
+  );
+  ok(
+    "guided posting explains front and back of screen",
+    copilotSource.includes("On your screen") &&
+      copilotSource.includes("Behind the scenes"),
+  );
+  ok(
+    "guided posting explains how completion is shown",
+    copilotSource.includes("How you know it is done") &&
+      copilotSource.includes("checklist progress updates"),
+  );
+  ok(
+    "guided posting stays honest about no silent automation",
+    copilotSource.includes("Nothing is posted or paid") &&
+      copilotSource.includes("does not log in, pay"),
+  );
+}
+{
+  const sidecarSource = readFileSync(
+    "app/dashboard/properties/[id]/copilot/[itemId]/sidecar-copilot.tsx",
+    "utf8",
+  );
+  ok(
+    "sidecar repeats the three-step guided posting model",
+    sidecarSource.includes("1. Open the posting page") &&
+      sidecarSource.includes("2. You approve the post") &&
+      sidecarSource.includes("3. Save the live ad URL"),
+  );
+  ok(
+    "sidecar explains the main checklist update",
+    sidecarSource.includes("the main checklist shows Live"),
+  );
+}
+{
+  const propertyDetailSource = readFileSync(
+    "app/dashboard/properties/[id]/page.tsx",
+    "utf8",
+  );
+  ok(
+    "guided posting success return notice is explicit",
+    propertyDetailSource.includes("Guided posting saved.") &&
+      propertyDetailSource.includes("checklist progress and proof link update here"),
+  );
+  ok(
+    "guided posting missing URL return notice is explicit",
+    propertyDetailSource.includes("Live ad URL needed.") &&
+      propertyDetailSource.includes("Vacantless did not mark this channel Live"),
+  );
+}
+{
+  const propertiesSource = readFileSync("app/dashboard/properties/page.tsx", "utf8");
+  ok(
+    "properties list opens marketing checklist",
+    propertiesSource.includes("Marketing checklist"),
+  );
 }
 
 console.log(`\ndistribution-run: ${passed} passed, ${failed} failed`);
