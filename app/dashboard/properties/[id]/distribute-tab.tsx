@@ -12,6 +12,7 @@
 // and CopyTextButton (channel wording). Nothing here posts to a portal or logs
 // into anything: assisted-manual only, honest by design.
 
+import type { ReactNode } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import { CopyTextButton } from "@/components/copy-text-button";
@@ -445,27 +446,34 @@ export function DistributeTab({
         </div>
       )}
 
-      <DistributionHealthPanel health={health} />
+      <DistributionStatusStrip
+        health={health}
+        automationSummary={automationSummary}
+        conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
+        conciergeUsage={launchRun.conciergeUsage}
+      >
+        <DistributionHealthPanel health={health} />
 
-      <AutomationStatusPanel
-        summary={automationSummary}
-        hasRun={Boolean(launchRun.run)}
-        readyToShare={readyToShare}
-        linkIsLive={linkIsLive}
-      />
-
-      {launchRun.conciergeDeskEnabled && (
-        <ConciergeDeskEntry
-          href={
-            conciergeTarget
-              ? `#concierge-${conciergeTarget.id}`
-              : "#publish-checklist"
-          }
-          hasEligibleItem={Boolean(conciergeTarget)}
-          usage={launchRun.conciergeUsage}
-          dailyLostLabel={launchRun.conciergeDailyLostLabel}
+        <AutomationStatusPanel
+          summary={automationSummary}
+          hasRun={Boolean(launchRun.run)}
+          readyToShare={readyToShare}
+          linkIsLive={linkIsLive}
         />
-      )}
+
+        {launchRun.conciergeDeskEnabled && (
+          <ConciergeDeskEntry
+            href={
+              conciergeTarget
+                ? `#concierge-${conciergeTarget.id}`
+                : "#publish-checklist"
+            }
+            hasEligibleItem={Boolean(conciergeTarget)}
+            usage={launchRun.conciergeUsage}
+            dailyLostLabel={launchRun.conciergeDailyLostLabel}
+          />
+        )}
+      </DistributionStatusStrip>
 
       {/* THE command center — one guided surface: pick channels, follow one next
           action per channel, paste the live URL. After the Slice 1 merge this is
@@ -575,6 +583,106 @@ export function DistributeTab({
         </div>
       </details>
     </div>
+  );
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function distributionStatusSummaryParts({
+  health,
+  automationSummary,
+  conciergeDeskEnabled,
+  conciergeUsage,
+}: {
+  health: DistributionHealth;
+  automationSummary: AutomationStatusSummary;
+  conciergeDeskEnabled: boolean;
+  conciergeUsage: { used: number; included: number };
+}) {
+  const refreshCount = Math.max(
+    health.staleChannels,
+    automationSummary.needsRefresh,
+  );
+  const actionsNeeded = Math.max(
+    health.attentionChannels,
+    automationSummary.oneTap +
+      automationSummary.needsRefresh +
+      automationSummary.blocked +
+      health.proofIssueChannels,
+  );
+  const parts = [
+    `Live ${health.liveChannels}/${health.totalChannels}`,
+    `${automationSummary.oneTap} waiting on you`,
+    refreshCount > 0
+      ? `${refreshCount} ${refreshCount === 1 ? "needs" : "need"} refresh`
+      : "0 refresh due",
+    actionsNeeded > 0
+      ? `${pluralize(actionsNeeded, "action")} needed`
+      : "0 actions needed",
+  ];
+
+  if (conciergeDeskEnabled) {
+    parts.push(
+      `Done-for-you ${conciergeUsage.used}/${conciergeUsage.included} used`,
+    );
+  }
+
+  return parts;
+}
+
+function DistributionStatusStrip({
+  health,
+  automationSummary,
+  conciergeDeskEnabled,
+  conciergeUsage,
+  children,
+}: {
+  health: DistributionHealth;
+  automationSummary: AutomationStatusSummary;
+  conciergeDeskEnabled: boolean;
+  conciergeUsage: { used: number; included: number };
+  children: ReactNode;
+}) {
+  const summaryParts = distributionStatusSummaryParts({
+    health,
+    automationSummary,
+    conciergeDeskEnabled,
+    conciergeUsage,
+  });
+
+  return (
+    <details className="group mb-4">
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-sm hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <IconTile>
+          <Icons.list className="h-4 w-4" />
+        </IconTile>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-gray-900">
+            Distribution status
+          </p>
+          <p className="truncate text-xs text-gray-600">
+            {summaryParts.join(" · ")}
+          </p>
+        </div>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-4 w-4 shrink-0 text-gray-400 transition-transform group-open:rotate-90"
+          fill="none"
+        >
+          <path
+            d="m7 4 6 6-6 6"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
   );
 }
 
