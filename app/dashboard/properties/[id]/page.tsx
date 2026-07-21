@@ -31,11 +31,6 @@ import {
   relistLeasedProperty,
   duplicateProperty,
   blastPriceDrop,
-  uploadPropertyPhotos,
-  importPropertyPhotosFromUrls,
-  setCoverPhoto,
-  movePhoto,
-  deletePhoto,
 } from "../actions";
 import {
   buildAllListingCopy,
@@ -47,7 +42,7 @@ import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
 import { qrSvg } from "@/lib/qr-svg";
 import { buildAllFillSheets } from "@/lib/listing-fill-sheet";
 import { FillSheetCard } from "./fill-sheet-card";
-import { DropboxFolderImport } from "./dropbox-folder-import";
+import { PhotoManager } from "./photo-manager";
 import { buildShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
 import {
@@ -780,7 +775,6 @@ export default async function PropertyDetailPage({
   // The per-rental photo allowance is plan-scoped (Premium gets more); the
   // upsell note drives the soft "more room on a higher plan" badge.
   const photoCap = photoCapForPlan(org?.plan ?? null);
-  const atPhotoLimit = photoRows.length >= photoCap;
   const storageUpsell = storageUpsellNote(org?.plan ?? null, photoRows.length);
   const copyTabs = buildAllListingCopy({
     businessName: org?.name ?? null,
@@ -2707,209 +2701,12 @@ export default async function PropertyDetailPage({
         notLiveBody={promotionGuard?.body}
       />
 
-      {/* --- Photos for this rental --- */}
-      <div
-        id="property-photos"
-        className="mb-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-      >
-        <div className="mb-3 flex items-center gap-2.5">
-          <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
-          <h3 className="text-sm font-semibold text-gray-900">
-            Photos for this rental
-          </h3>
-        </div>
-        <p className="mb-4 text-xs text-gray-500">
-          Add photos renters will see on your listing page. The{" "}
-          <strong>cover photo</strong> shows first. Drag isn&apos;t needed, just
-          use the arrows to reorder. JPG, PNG, WebP, or GIF, up to 10&nbsp;MB each
-          ({photoRows.length}/{photoCap}).
-        </p>
-
-        {photoRows.length === 0 ? (
-          <div className="mb-4">
-            <EmptyState
-              icon={<Icons.page />}
-              title="No photos yet"
-              description="A listing with photos gets far more inquiries, so add a few below."
-            />
-          </div>
-        ) : (
-          <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {photoRows.map((photo, i) => (
-              <li
-                key={photo.id}
-                className="overflow-hidden rounded-xl border border-gray-200"
-              >
-                <div className="relative aspect-[4/3] bg-gray-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={photo.url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                  {photo.is_cover && (
-                    <span className="absolute left-1.5 top-1.5 rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">
-                      Cover
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-                  <div className="flex items-center gap-1">
-                    <form action={movePhoto}>
-                      <input type="hidden" name="property_id" value={p.id} />
-                      <input type="hidden" name="photo_id" value={photo.id} />
-                      <input type="hidden" name="direction" value="up" />
-                      <button
-                        type="submit"
-                        disabled={i === 0}
-                        aria-label="Move earlier"
-                        className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        ←
-                      </button>
-                    </form>
-                    <form action={movePhoto}>
-                      <input type="hidden" name="property_id" value={p.id} />
-                      <input type="hidden" name="photo_id" value={photo.id} />
-                      <input type="hidden" name="direction" value="down" />
-                      <button
-                        type="submit"
-                        disabled={i === photoRows.length - 1}
-                        aria-label="Move later"
-                        className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        →
-                      </button>
-                    </form>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {!photo.is_cover && (
-                      <form action={setCoverPhoto}>
-                        <input type="hidden" name="property_id" value={p.id} />
-                        <input type="hidden" name="photo_id" value={photo.id} />
-                        <button
-                          type="submit"
-                          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100"
-                        >
-                          Set cover
-                        </button>
-                      </form>
-                    )}
-                    <form action={deletePhoto}>
-                      <input type="hidden" name="property_id" value={p.id} />
-                      <input type="hidden" name="photo_id" value={photo.id} />
-                      <button
-                        type="submit"
-                        aria-label="Delete photo"
-                        className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Storage upsell (S248): a soft, non-blocking nudge once an operator is
-            at or near their plan's photo allowance. We never block photo
-            management here — we only point out that a higher plan has more room
-            (two-axis visibility: show, don't block). Hidden on the top tier. */}
-        {storageUpsell.showUpsell && (
-          <p className="mb-3 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-xs text-gray-600">
-            {storageUpsell.atCap
-              ? `You're at your plan's ${storageUpsell.cap}-photo limit for this rental.`
-              : `${storageUpsell.remaining} of ${storageUpsell.cap} photo slots left on this rental.`}{" "}
-            <Link
-              href="/dashboard/billing"
-              className="font-medium text-brand underline"
-            >
-              Higher plans add more photos per rental →
-            </Link>
-          </p>
-        )}
-
-        {atPhotoLimit ? (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            You&apos;ve reached the {photoCap}-photo limit. Delete
-            one to add another.
-          </p>
-        ) : (
-          <div className="border-t border-gray-100 pt-3">
-            <form
-              action={uploadPropertyPhotos}
-              className="flex flex-wrap items-center gap-3"
-            >
-              <input type="hidden" name="property_id" value={p.id} />
-              <input
-                id="photo-upload"
-                type="file"
-                name="photos"
-                aria-label="Add photos to this rental"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                multiple
-                required
-                className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
-              />
-              <button
-                type="submit"
-                className={PRIMARY_ACTION_CLASS}
-                style={{ backgroundColor: "var(--brand-color)" }}
-              >
-                Upload photos
-              </button>
-            </form>
-
-            {/* Import from direct image links (item Q). After an MLS/realtor.ca
-                paste, photos are the one step the text couldn't carry — so an
-                operator who already has the images hosted somewhere can paste
-                the links instead of saving + re-selecting files. We fetch each
-                server-side (SSRF-guarded) and store it like an upload. */}
-            <details className="mt-3">
-              <summary className="cursor-pointer text-xs font-medium text-brand">
-                Or import from image links
-              </summary>
-              <form action={importPropertyPhotosFromUrls} className="mt-2">
-                <input type="hidden" name="property_id" value={p.id} />
-                <p className="mb-2 text-xs text-gray-500">
-                  Paste one <strong>direct image link</strong> per line (each
-                  should open the image itself — ending in .jpg, .png, .webp, or
-                  .gif). Gallery pages and login-protected links won&apos;t work.
-                </p>
-                <textarea
-                  name="photo_urls"
-                  rows={4}
-                  required
-                  placeholder={
-                    "https://example.com/photos/living-room.jpg\nhttps://example.com/photos/kitchen.jpg"
-                  }
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-                />
-                <button
-                  type="submit"
-                  className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Import from links
-                </button>
-              </form>
-            </details>
-
-            {/* Import a whole gallery from a Dropbox shared folder (item Q,
-                Phase 2). Operators file every photo/tour-vendor delivery into
-                Dropbox, so a shared gallery/ folder link is the one source that
-                works across all listings. We enumerate it server-side and pull
-                each image — no Dropbox login needed on the operator's side. */}
-            <details className="mt-3">
-              <summary className="cursor-pointer text-xs font-medium text-brand">
-                Or import from a Dropbox folder
-              </summary>
-              <DropboxFolderImport propertyId={p.id} />
-            </details>
-          </div>
-        )}
-      </div>
+      <PhotoManager
+        propertyId={p.id}
+        initialPhotos={photoRows}
+        photoCap={photoCap}
+        storageUpsell={storageUpsell}
+      />
 
       {/* --- Posting reference (S412): the copy + fill sheet + gotchas live here
           as asset prep; WHERE the listing goes (channel cards + tracked posts)

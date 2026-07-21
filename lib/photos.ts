@@ -118,6 +118,144 @@ export function photoStoragePath(
   return `${orgId}/${propertyId}/${photoId}.${ext}`;
 }
 
+export type PhotoUploadMetadata = {
+  name?: string | null;
+  type?: unknown;
+  sizeBytes?: unknown;
+};
+
+export type PlannedPhotoUpload = {
+  id: string;
+  name: string;
+  type: AllowedPhotoType;
+  sizeBytes: number;
+  storagePath: string;
+  order: number;
+};
+
+export type PlanPhotoDirectUploadsResult =
+  | { ok: true; uploads: PlannedPhotoUpload[] }
+  | { ok: false; reason: "none" | "max" | "type" | "size" | "empty" };
+
+export function planPhotoDirectUploads({
+  orgId,
+  propertyId,
+  files,
+  existingRows,
+  photoCap,
+  createId,
+}: {
+  orgId: string;
+  propertyId: string;
+  files: readonly PhotoUploadMetadata[];
+  existingRows: readonly { sort_order: number }[];
+  photoCap: number;
+  createId: () => string;
+}): PlanPhotoDirectUploadsResult {
+  if (files.length === 0) return { ok: false, reason: "none" };
+  if (existingRows.length + files.length > photoCap) {
+    return { ok: false, reason: "max" };
+  }
+
+  const uploads: PlannedPhotoUpload[] = [];
+  let order = nextSortOrder([...existingRows]);
+  for (const file of files) {
+    const size = file.sizeBytes;
+    const v = validatePhotoUpload({ type: file.type, size });
+    if (!v.ok) return { ok: false, reason: v.reason };
+    const id = createId();
+    const type = file.type as AllowedPhotoType;
+    const sizeBytes = size as number;
+    uploads.push({
+      id,
+      name:
+        typeof file.name === "string" && file.name.trim()
+          ? file.name.trim()
+          : "photo",
+      type,
+      sizeBytes,
+      storagePath: photoStoragePath(orgId, propertyId, id, extForType(type)),
+      order,
+    });
+    order += 1;
+  }
+  return { ok: true, uploads };
+}
+
+const PHOTO_PATH_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const PHOTO_STORAGE_EXTS = ["jpg", "png", "webp", "gif"] as const;
+
+export type ConfirmedPhotoUploadInput = {
+  storagePath?: unknown;
+  order?: unknown;
+};
+
+export type NormalizedConfirmedPhotoUpload = {
+  photoId: string;
+  storagePath: string;
+  order: number;
+};
+
+export type NormalizeConfirmedPhotoUploadsResult =
+  | { ok: true; uploads: NormalizedConfirmedPhotoUpload[] }
+  | { ok: false; reason: "none" | "path" };
+
+export function parsePhotoStoragePath(
+  storagePath: string,
+  orgId: string,
+  propertyId: string,
+): { ok: true; photoId: string; ext: string } | { ok: false } {
+  const parts = storagePath.split("/");
+  if (parts.length !== 3) return { ok: false };
+  if (parts[0] !== orgId || parts[1] !== propertyId) return { ok: false };
+  const dot = parts[2].lastIndexOf(".");
+  if (dot <= 0 || dot === parts[2].length - 1) return { ok: false };
+  const photoId = parts[2].slice(0, dot);
+  const ext = parts[2].slice(dot + 1).toLowerCase();
+  if (!PHOTO_PATH_UUID_RE.test(photoId)) return { ok: false };
+  if (!(PHOTO_STORAGE_EXTS as readonly string[]).includes(ext)) {
+    return { ok: false };
+  }
+  return { ok: true, photoId, ext };
+}
+
+export function normalizeConfirmedPhotoUploads(
+  uploaded: readonly ConfirmedPhotoUploadInput[],
+  orgId: string,
+  propertyId: string,
+): NormalizeConfirmedPhotoUploadsResult {
+  if (uploaded.length === 0) return { ok: false, reason: "none" };
+
+  const seen = new Set<string>();
+  const uploads: NormalizedConfirmedPhotoUpload[] = [];
+  for (let i = 0; i < uploaded.length; i++) {
+    const item = uploaded[i];
+    if (typeof item.storagePath !== "string") {
+      return { ok: false, reason: "path" };
+    }
+    const parsed = parsePhotoStoragePath(item.storagePath, orgId, propertyId);
+    if (!parsed.ok) return { ok: false, reason: "path" };
+    if (seen.has(item.storagePath)) continue;
+    seen.add(item.storagePath);
+    uploads.push({
+      photoId: parsed.photoId,
+      storagePath: item.storagePath,
+      order:
+        typeof item.order === "number" && Number.isFinite(item.order)
+          ? item.order
+          : i,
+    });
+  }
+  if (uploads.length === 0) return { ok: false, reason: "none" };
+  uploads.sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return a.storagePath < b.storagePath ? -1 : a.storagePath > b.storagePath ? 1 : 0;
+  });
+  return { ok: true, uploads };
+}
+
 /**
  * The file extension encoded in a stored object path (e.g. ".../abc.jpg" -> "jpg").
  * Used when cloning a photo into a new property so the copied object keeps the

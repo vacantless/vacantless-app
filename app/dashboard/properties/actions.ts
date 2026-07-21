@@ -69,13 +69,18 @@ import {
   validatePhotoUpload,
   extForType,
   photoStoragePath,
+  planPhotoDirectUploads,
+  normalizeConfirmedPhotoUploads,
   nextSortOrder,
+  sortPhotos,
   reorder,
   coverAfterDelete,
   planPhotoClone,
   MAX_PHOTO_BYTES,
   type PhotoLike,
   type SourcePhoto,
+  type PhotoUploadMetadata,
+  type ConfirmedPhotoUploadInput,
 } from "@/lib/photos";
 import {
   parseImageUrls,
@@ -1916,6 +1921,72 @@ export async function upsertPartnerAccount(formData: FormData) {
 
 type PhotoRow = PhotoLike & { storage_path: string };
 
+export type PropertyPhotoView = PhotoLike & { url: string };
+
+export type PhotoUploadActionReason =
+  | "none"
+  | "max"
+  | "type"
+  | "size"
+  | "empty"
+  | "forbidden"
+  | "sign"
+  | "path"
+  | "failed";
+
+export type PhotoUploadTarget = {
+  id: string;
+  name: string;
+  type: string;
+  sizeBytes: number;
+  storagePath: string;
+  order: number;
+  signedUrl: string;
+  uploadToken: string;
+};
+
+export type CreatePhotoUploadTargetsResult =
+  | { ok: true; targets: PhotoUploadTarget[] }
+  | { ok: false; reason: PhotoUploadActionReason };
+
+export type ConfirmPropertyPhotosResult =
+  | { ok: true; added: number; photos: PropertyPhotoView[] }
+  | { ok: false; reason: PhotoUploadActionReason };
+
+type PropertyPhotoAuth = {
+  supabase: ReturnType<typeof createClient>;
+  org: NonNullable<Awaited<ReturnType<typeof getCurrentOrg>>>;
+};
+
+async function requirePropertyPhotoAccess(
+  propertyId: string,
+): Promise<PropertyPhotoAuth | null> {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  if (!propertyId) return null;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const { data: property } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!property) return null;
+  return { supabase, org };
+}
+
+async function loadPropertyPhotoViews(
+  supabase: ReturnType<typeof createClient>,
+  propertyId: string,
+): Promise<PropertyPhotoView[]> {
+  const { data } = await supabase
+    .from("property_photos")
+    .select("id, url, sort_order, is_cover")
+    .eq("property_id", propertyId);
+  return sortPhotos((data ?? []) as PropertyPhotoView[]);
+}
+
 /**
  * Pull the browser File objects out of a FormData "photos" field, dropping the
  * 0-byte entry an empty file input yields. Shared by the upload action and the
@@ -2020,22 +2091,148 @@ async function uploadPhotosForProperty(
   return { ok: true, uploaded };
 }
 
+export async function createPhotoUploadTargets(
+  propertyId: string,
+  files: PhotoUploadMetadata[],
+): Promise<CreatePhotoUploadTargetsResult> {
+  const auth = await requirePropertyPhotoAccess(propertyId);
+  if (!auth) return { ok: false, reason: "forbidden" };
+  const { supabase, org } = auth;
+
+  const { data: existing } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover")
+    .eq("property_id", propertyId);
+  const existingRows = (existing ?? []) as PhotoLike[];
+
+  const plan = planPhotoDirectUploads({
+    orgId: org.id,
+    propertyId,
+    files,
+    existingRows,
+    photoCap: photoCapForPlan(org.plan),
+    createId: () => crypto.randomUUID(),
+  });
+  if (!plan.ok) return { ok: false, reason: plan.reason };
+
+  const targets: PhotoUploadTarget[] = [];
+  for (const upload of plan.uploads) {
+    const { data, error } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .createSignedUploadUrl(upload.storagePath);
+    if (error || !data) return { ok: false, reason: "sign" };
+    targets.push({
+      ...upload,
+      signedUrl: data.signedUrl,
+      uploadToken: data.token,
+    });
+  }
+  return { ok: true, targets };
+}
+
+export async function confirmPropertyPhotos(
+  propertyId: string,
+  uploaded: ConfirmedPhotoUploadInput[],
+): Promise<ConfirmPropertyPhotosResult> {
+  const auth = await requirePropertyPhotoAccess(propertyId);
+  if (!auth) return { ok: false, reason: "forbidden" };
+  const { supabase, org } = auth;
+
+  const normalized = normalizeConfirmedPhotoUploads(
+    uploaded,
+    org.id,
+    propertyId,
+  );
+  if (!normalized.ok) return { ok: false, reason: normalized.reason };
+
+  const { data: existing } = await supabase
+    .from("property_photos")
+    .select("id, sort_order, is_cover, storage_path")
+    .eq("property_id", propertyId);
+  const existingRows = (existing ?? []) as PhotoRow[];
+  const existingPaths = new Set(existingRows.map((row) => row.storage_path));
+  const newUploads = normalized.uploads.filter(
+    (upload) => !existingPaths.has(upload.storagePath),
+  );
+
+  if (newUploads.length === 0) {
+    return {
+      ok: true,
+      added: 0,
+      photos: await loadPropertyPhotoViews(supabase, propertyId),
+    };
+  }
+
+  const remaining = photoCapForPlan(org.plan) - existingRows.length;
+  if (remaining <= 0) {
+    await supabase.storage
+      .from(PHOTO_BUCKET)
+      .remove(newUploads.map((upload) => upload.storagePath));
+    return { ok: false, reason: "max" };
+  }
+
+  const accepted = newUploads.slice(0, remaining);
+  const overflow = newUploads.slice(remaining);
+  if (overflow.length > 0) {
+    await supabase.storage
+      .from(PHOTO_BUCKET)
+      .remove(overflow.map((upload) => upload.storagePath));
+  }
+
+  let order = nextSortOrder(existingRows);
+  let firstEver = existingRows.length === 0;
+  let added = 0;
+
+  for (const upload of accepted) {
+    const { data: exists, error: existsErr } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .exists(upload.storagePath);
+    if (existsErr || !exists) continue;
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(upload.storagePath);
+
+    const { error: insErr } = await supabase.from("property_photos").insert({
+      id: upload.photoId,
+      organization_id: org.id,
+      property_id: propertyId,
+      storage_path: upload.storagePath,
+      url: publicUrl,
+      sort_order: order,
+      is_cover: firstEver,
+    });
+    if (insErr) continue;
+
+    order += 1;
+    firstEver = false;
+    added += 1;
+  }
+
+  if (added === 0) return { ok: false, reason: "failed" };
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  return {
+    ok: true,
+    added,
+    photos: await loadPropertyPhotoViews(supabase, propertyId),
+  };
+}
+
 export async function uploadPropertyPhotos(formData: FormData) {
-  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) return;
-
-  const org = await getCurrentOrg();
-  if (!org) redirect("/onboarding");
 
   const fail = (reason: string): never =>
     redirect(`/dashboard/properties/${propertyId}?photoerr=${reason}`);
 
+  const auth = await requirePropertyPhotoAccess(propertyId);
+  if (!auth) return fail("forbidden");
+  const { supabase, org } = auth;
+
   // Browser File objects arrive as FormData entries named "photos".
   const files = photoFilesFromForm(formData);
   if (files.length === 0) return fail("none");
-
-  const supabase = createClient();
 
   // Enforce the per-unit cap against what's already stored.
   const { data: existing } = await supabase
