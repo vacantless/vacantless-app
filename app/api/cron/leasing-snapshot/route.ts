@@ -4,6 +4,7 @@ import { sendOrgNotification } from "@/lib/notifications-server";
 import {
   getNotificationEvent,
   isEventEnabled,
+  isDripEnqueueEnabled,
   renderNotification,
   resolveNotificationRecipients,
   type NotificationSettingRow,
@@ -65,6 +66,7 @@ const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 const MAX_RECIPIENTS = 10;
 const EVENT_KEY = "leasing.daily_snapshot";
+const LISTING_HEALTH_EVENT_KEY = "leasing.listing_health";
 const DAY_MS = 24 * 3_600_000;
 const LEASING_HEALTH_WINDOW_DAYS = 7;
 
@@ -444,11 +446,22 @@ export async function GET(req: NextRequest) {
           bookedInstants: bookedByProperty.get(p.id) ?? [],
         })),
       });
-      const listingHealth = await loadListingHealthSummary({
-        admin,
-        orgId: org.id,
-        nowISO: now.toISOString(),
-      });
+      const { data: listingHealthSettingRow } = await admin
+        .from("notification_settings")
+        .select("event_key, enabled")
+        .eq("organization_id", org.id)
+        .eq("event_key", LISTING_HEALTH_EVENT_KEY)
+        .maybeSingle();
+      const listingHealthSetting =
+        (listingHealthSettingRow as NotificationSettingRow | null) ?? null;
+      const listingHealthEnabled = isDripEnqueueEnabled(listingHealthSetting);
+      const listingHealth = listingHealthEnabled
+        ? await loadListingHealthSummary({
+            admin,
+            orgId: org.id,
+            nowISO: now.toISOString(),
+          })
+        : null;
 
       const buckets: SnapshotBuckets = { newLeads, showingsToday, showingsWeek, noShowing };
       const counts = snapshotCounts(buckets);

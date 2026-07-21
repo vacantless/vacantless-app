@@ -1,5 +1,6 @@
 // Unit tests for the pure leasing.daily_snapshot digest logic.
 // Run: npx tsx scripts/test-leasing-snapshot.ts
+import { readFileSync } from "node:fs";
 import {
   snapshotWindow,
   shouldSendSnapshot,
@@ -113,7 +114,19 @@ const listingHealth: ListingHealthSnapshotSummary = {
   unitCount: 1,
   firstDistributeUrl: "https://app.vacantless.com/dashboard/properties/property-1?tab=distribute",
 };
-ok("content: listing health has content", snapshotHasContent(empty, null, listingHealth) === true);
+const preS548QuietBlock = buildSnapshotBlock(empty, TZ);
+const notOptedListingHealth: ListingHealthSnapshotSummary | null = null;
+ok("content: non-opted listing health stays empty", snapshotHasContent(empty, null, notOptedListingHealth) === false);
+ok("block: non-opted listing health is byte-unchanged", buildSnapshotBlock(empty, TZ, null, notOptedListingHealth) === preS548QuietBlock);
+ok("block: non-opted listing health omits line", !buildSnapshotBlock(empty, TZ, null, notOptedListingHealth).includes("LISTING HEALTH"));
+ok("content: opted listing health has content", snapshotHasContent(empty, null, listingHealth) === true);
+const zeroListingHealth: ListingHealthSnapshotSummary = {
+  adCount: 0,
+  unitCount: 0,
+  firstDistributeUrl: null,
+};
+ok("content: opted zero listing health stays empty", snapshotHasContent(empty, null, zeroListingHealth) === false);
+ok("block: opted zero listing health omits line", !buildSnapshotBlock(empty, TZ, null, zeroListingHealth).includes("LISTING HEALTH"));
 
 const counts = snapshotCounts({
   newLeads: [lead(), lead()],
@@ -165,6 +178,13 @@ ok("block: shows overflow count", capped.includes("…and 5 more not shown."));
 
 // --- snapshotDateLabel -------------------------------------------------------
 ok("date label: human readable", snapshotDateLabel(thuAfternoon, TZ) === "Thursday, June 25");
+
+// --- route guardrails --------------------------------------------------------
+const routeSource = readFileSync("app/api/cron/leasing-snapshot/route.ts", "utf8");
+ok("route uses listing-health event key", routeSource.includes('const LISTING_HEALTH_EVENT_KEY = "leasing.listing_health"'));
+ok("route uses drip opt-in helper", routeSource.includes("isDripEnqueueEnabled(listingHealthSetting)"));
+ok("route skips listing health summary when not opted in", routeSource.includes("listingHealthEnabled") && routeSource.includes(": null"));
+ok("route content gate reads the gated summary", routeSource.includes("snapshotHasContent(buckets, health, listingHealth)"));
 
 console.log(`\nleasing-snapshot: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
