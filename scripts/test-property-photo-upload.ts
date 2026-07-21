@@ -186,5 +186,27 @@ ok(
   actions.includes("photos: await loadPropertyPhotoViews(supabase, propertyId)"),
 );
 
+// --- client grid refresh contract -----------------------------------------
+const manager = readFileSync(
+  "app/dashboard/properties/[id]/photo-manager.tsx",
+  "utf8",
+);
+ok(
+  "photo manager: imports useEffect for server-action refresh sync",
+  manager.includes("useEffect, useRef, useState"),
+);
+ok(
+  "photo manager: syncs local grid from refreshed initialPhotos",
+  manager.includes("useEffect(() => {") &&
+    manager.includes("setPhotos(initialPhotos);") &&
+    manager.includes("}, [initialPhotos]);"),
+);
+ok(
+  "photo manager: keeps move and cover/delete actions on server forms",
+  manager.includes("action={movePhoto}") &&
+    manager.includes("action={setCoverPhoto}") &&
+    manager.includes("action={deletePhoto}"),
+);
+
 console.log(`\nproperty-photo-upload: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
