@@ -16,6 +16,7 @@ import {
   type SnapshotLead,
   type SnapshotShowing,
 } from "../lib/leasing-snapshot";
+import type { ListingHealthSnapshotSummary } from "../lib/listing-health";
 
 let passed = 0;
 let failed = 0;
@@ -107,6 +108,12 @@ const empty: SnapshotBuckets = { newLeads: [], showingsToday: [], showingsWeek: 
 ok("content: empty has no content", snapshotHasContent(empty) === false);
 ok("content: one new lead has content", snapshotHasContent({ ...empty, newLeads: [lead()] }) === true);
 ok("content: one showing has content", snapshotHasContent({ ...empty, showingsToday: [showing()] }) === true);
+const listingHealth: ListingHealthSnapshotSummary = {
+  adCount: 2,
+  unitCount: 1,
+  firstDistributeUrl: "https://app.vacantless.com/dashboard/properties/property-1?tab=distribute",
+};
+ok("content: listing health has content", snapshotHasContent(empty, null, listingHealth) === true);
 
 const counts = snapshotCounts({
   newLeads: [lead(), lead()],
@@ -136,6 +143,10 @@ ok("block: empty week section message", block.includes("No viewings booked for t
 ok("block: empty nudge section message", block.includes("Every inquiry from this week has a viewing booked. Nice."));
 // blocks separate with a blank line so the branded shell renders paragraphs
 ok("block: blank-line separated", block.includes("\n\n"));
+
+const listingHealthBlock = buildSnapshotBlock(empty, TZ, null, listingHealth);
+ok("block: listing health line appears", listingHealthBlock.includes("LISTING HEALTH: 2 ads need a refresh across 1 unit."));
+ok("block: listing health line links Distribute", listingHealthBlock.includes("?tab=distribute"));
 
 // missing fields degrade gracefully (no name/phone/unit)
 const sparse = buildSnapshotBlock(

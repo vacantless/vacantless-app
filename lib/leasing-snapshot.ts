@@ -16,6 +16,10 @@
 // "today" / "this week" / "start of shift" match the operator's day, not UTC.
 
 import type { LeasingHealth, LeasingHealthStatus } from "./leasing-health";
+import {
+  buildListingHealthSnapshotLine,
+  type ListingHealthSnapshotSummary,
+} from "./listing-health";
 
 // --- Row shapes the route passes in (already fetched + flattened) ------------
 export type SnapshotLead = {
@@ -205,8 +209,10 @@ export function snapshotCounts(b: SnapshotBuckets): SnapshotCounts {
 export function snapshotHasContent(
   b: SnapshotBuckets,
   health?: LeasingHealth | null,
+  listingHealth?: ListingHealthSnapshotSummary | null,
 ): boolean {
   return (
+    (listingHealth?.adCount ?? 0) > 0 ||
     health?.status === "black" ||
     health?.status === "red" ||
     b.newLeads.length > 0 ||
@@ -357,6 +363,7 @@ export function buildSnapshotBlock(
   b: SnapshotBuckets,
   tz: string,
   health?: LeasingHealth | null,
+  listingHealth?: ListingHealthSnapshotSummary | null,
 ): string {
   const sections = [
     section(
@@ -381,6 +388,8 @@ export function buildSnapshotBlock(
     ),
   ];
   if (health) sections.unshift(buildLeasingHealthBlock(health, tz));
+  const listingHealthLine = buildListingHealthSnapshotLine(listingHealth);
+  if (listingHealthLine) sections.unshift(listingHealthLine);
   return sections.join("\n\n");
 }
 

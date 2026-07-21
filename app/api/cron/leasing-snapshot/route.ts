@@ -31,6 +31,11 @@ import {
   type SnapshotShowing,
   type SnapshotBuckets,
 } from "@/lib/leasing-snapshot";
+import {
+  listingHealthChannels,
+  listingHealthSnapshotSummary,
+  type ListingHealthPost,
+} from "@/lib/listing-health";
 
 // Daily leasing-snapshot sweep — the scheduled digest that RETIRES Agile's old
 // daily Zap (365197456). One email per weekday, at the org's start-of-shift
@@ -106,6 +111,19 @@ type FutureShowingRow = {
   scheduled_at: string | null;
 };
 type OpenInquiryRow = { property_id: string | null };
+type ListingHealthPostRow = {
+  id: string;
+  property_id: string;
+  portal: string;
+  label: string | null;
+  url: string | null;
+  status: string;
+  posted_on: string | null;
+  properties:
+    | { id: string; address: string | null; status: string | null }
+    | { id: string; address: string | null; status: string | null }[]
+    | null;
+};
 
 function parseTimeMs(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -153,6 +171,46 @@ function groupBookedInstants(rows: FutureShowingRow[]): {
   all.sort();
   for (const list of byProperty.values()) list.sort();
   return { byProperty, all };
+}
+
+async function loadListingHealthSummary({
+  admin,
+  orgId,
+  nowISO,
+}: {
+  admin: NonNullable<ReturnType<typeof createAdminClient>>;
+  orgId: string;
+  nowISO: string;
+}) {
+  const { data, error } = await admin
+    .from("listing_posts")
+    .select(
+      "id, property_id, portal, label, url, status, posted_on, properties!inner(id, address, status)",
+    )
+    .eq("organization_id", orgId)
+    .eq("properties.status", "available");
+  if (error) return null;
+
+  const posts: ListingHealthPost[] = ((data ?? []) as ListingHealthPostRow[]).map((row) => {
+    const prop = one(row.properties);
+    return {
+      id: row.id,
+      propertyId: row.property_id,
+      address: prop?.address ?? null,
+      portal: row.portal,
+      label: row.label,
+      status: row.status,
+      url: row.url,
+      postedOn: row.posted_on,
+      lastHealthAlertedAt: null,
+    };
+  });
+  const channels = listingHealthChannels({
+    posts,
+    today: nowISO.slice(0, 10),
+    nowISO,
+  });
+  return listingHealthSnapshotSummary(channels, APP_URL);
 }
 
 export async function GET(req: NextRequest) {
@@ -386,6 +444,11 @@ export async function GET(req: NextRequest) {
           bookedInstants: bookedByProperty.get(p.id) ?? [],
         })),
       });
+      const listingHealth = await loadListingHealthSummary({
+        admin,
+        orgId: org.id,
+        nowISO: now.toISOString(),
+      });
 
       const buckets: SnapshotBuckets = { newLeads, showingsToday, showingsWeek, noShowing };
       const counts = snapshotCounts(buckets);
@@ -393,7 +456,7 @@ export async function GET(req: NextRequest) {
       // Fire-on-data: a quiet day sends nothing. In normal mode we still stamp
       // so we don't recompute every 15 min for the rest of the day. force/dry
       // bypass the empty gate so a test can always see the result.
-      if (!snapshotHasContent(buckets, health) && !force && !dry) {
+      if (!snapshotHasContent(buckets, health, listingHealth) && !force && !dry) {
         await admin
           .from("organizations")
           .update({ leasing_snapshot_last_sent_on: gate.localDate })
@@ -405,11 +468,12 @@ export async function GET(req: NextRequest) {
           stamped: gate.localDate,
           health_status: health.status,
           health_open_days: health.openDays,
+          listing_health_ads: listingHealth?.adCount ?? 0,
         });
         continue;
       }
 
-      const snapshotBlock = buildSnapshotBlock(buckets, tz, health);
+      const snapshotBlock = buildSnapshotBlock(buckets, tz, health, listingHealth);
       const vars: Record<string, string> = {
         org_name: org.name ?? "",
         property_address: "",
@@ -459,6 +523,7 @@ export async function GET(req: NextRequest) {
           health_status: health.status,
           health_open_days: health.openDays,
           health_alerts: health.alerts.map((a) => a.code),
+          listing_health_ads: listingHealth?.adCount ?? 0,
           recipients,
           subject: rendered.subject,
           body: rendered.body,
@@ -499,6 +564,7 @@ export async function GET(req: NextRequest) {
         health_status: health.status,
         health_open_days: health.openDays,
         health_alerts: health.alerts.map((a) => a.code),
+        listing_health_ads: listingHealth?.adCount ?? 0,
         stamped: gate.localDate,
       });
     } catch (err) {

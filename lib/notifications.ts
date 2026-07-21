@@ -272,6 +272,34 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
       "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nUse the buttons below to record how it went — or open {{outcome_url}}.\n\nMarking it Attended moves this renter forward automatically and keeps your renter list accurate.",
     active: true,
   },
+  // Proactive listing-health digest (S548). Audience operator; sent by the
+  // distribution freshness cron when listing_posts already compute to
+  // needs_refresh through lib/distribution-channels. SHIP DARK: this is
+  // opt-in per org via isDripEnqueueEnabled, so absent/disabled
+  // notification_settings rows never fire. One digest per org/run, email only,
+  // no SMS and no external portal writes.
+  {
+    key: "leasing.listing_health",
+    family: "leasing",
+    audience: "operator",
+    label: "Listing health refresh alert",
+    description:
+      "When tracked ads are stale, expired, or removed, your team gets one digest with the affected units and channels so someone can renew or repost them. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "affected_ads_count",
+      "affected_units_count",
+      "listing_health_summary",
+      "listing_health_details",
+      "dashboard_url",
+    ],
+    defaultSubject:
+      "{{affected_ads_count}} listing ad(s) need a refresh",
+    defaultBody:
+      "{{listing_health_summary}}\n\n{{listing_health_details}}\n\nVacantless has not posted, edited, removed, or submitted anything on an external portal. Review the affected channels in Distribute and refresh them manually when ready.\n\nOpen Distribute: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Renter-initiated cancellation (S418, KI632). Audience operator; the missing
   // half of the showing loop. A "Cancel this viewing" link in the renter booking
   // confirmation email flips the showing to cancelled and fires THIS event to the

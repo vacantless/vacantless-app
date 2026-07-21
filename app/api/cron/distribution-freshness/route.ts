@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import { sendOrgNotification } from "@/lib/notifications-server";
+import {
+  getNotificationEvent,
+  isDripEnqueueEnabled,
+  type NotificationSettingRow,
+} from "@/lib/notifications";
+import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
+import type { NotifyMember } from "@/lib/incident-reports";
 import { buildShareReadiness } from "@/lib/share-readiness";
 import { isPublicBookable } from "@/lib/listing-state";
 import {
@@ -25,6 +33,13 @@ import {
   isListingPostStatus,
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
+import {
+  LISTING_HEALTH_EVENT_KEY,
+  alertableListingHealthChannels,
+  buildListingHealthDigest,
+  listingHealthChannels,
+  type ListingHealthPost,
+} from "@/lib/listing-health";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +48,7 @@ const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"
 ).replace(/\/+$/, "");
 const MAX_ITEMS_PER_SWEEP = 200;
+const MAX_RECIPIENTS = 10;
 
 type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
 
@@ -42,6 +58,7 @@ type Summary = {
   scanned: number;
   verified: number;
   flagged: number;
+  alerts: number;
   skipped: number;
   errors: number;
   details: Array<Record<string, unknown>>;
@@ -81,6 +98,30 @@ type ListingPostRow = {
   posted_on: string | null;
 };
 
+type ListingHealthOrgRow = {
+  id: string;
+  name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  public_contact_email: string | null;
+};
+
+type ListingHealthPostRow = {
+  id: string;
+  property_id: string;
+  portal: string;
+  label: string | null;
+  url: string | null;
+  status: string;
+  posted_on: string | null;
+  last_health_alerted_at: string | null;
+  properties:
+    | { id: string; address: string | null; status: string | null }
+    | { id: string; address: string | null; status: string | null }[]
+    | null;
+};
+
 type VerifierOutcome = {
   verificationType: VerificationType;
   observedResult: VerificationResult;
@@ -108,6 +149,207 @@ function pushDetail(summary: Summary, detail: Record<string, unknown>): void {
 
 function textOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function one<T>(rel: T | T[] | null | undefined): T | null {
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  return (rel as T) ?? null;
+}
+
+async function operatorFallbackForOrg(
+  admin: AdminClient,
+  org: ListingHealthOrgRow,
+): Promise<string[]> {
+  const { data: memberRows } = await admin
+    .from("memberships")
+    .select("user_id, role")
+    .eq("organization_id", org.id);
+  const members: NotifyMember[] = [];
+  for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
+    const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+    members.push({ role: m.role, email: u?.user?.email ?? null });
+  }
+  return resolveLeadNotifyEmails(members, [
+    org.reply_to_email,
+    org.public_contact_email,
+  ]).slice(0, MAX_RECIPIENTS);
+}
+
+async function loadListingHealthPosts(
+  admin: AdminClient,
+  orgId: string,
+): Promise<{ posts: ListingHealthPost[]; missingColumn: boolean }> {
+  const { data, error } = await admin
+    .from("listing_posts")
+    .select(
+      "id, property_id, portal, label, url, status, posted_on, last_health_alerted_at, properties!inner(id, address, status)",
+    )
+    .eq("organization_id", orgId)
+    .eq("properties.status", "available");
+
+  if (error) {
+    const msg = error.message ?? "";
+    if (msg.includes("last_health_alerted_at")) {
+      return { posts: [], missingColumn: true };
+    }
+    throw new Error(`listing_health_posts:${msg}`);
+  }
+
+  const posts = ((data ?? []) as ListingHealthPostRow[]).map((row) => {
+    const prop = one(row.properties);
+    return {
+      id: row.id,
+      propertyId: row.property_id,
+      address: prop?.address ?? null,
+      portal: row.portal,
+      label: row.label,
+      status: row.status,
+      url: row.url,
+      postedOn: row.posted_on,
+      lastHealthAlertedAt: row.last_health_alerted_at,
+    };
+  });
+  return { posts, missingColumn: false };
+}
+
+async function sendListingHealthAlerts({
+  admin,
+  nowISO,
+  summary,
+}: {
+  admin: AdminClient;
+  nowISO: string;
+  summary: Summary;
+}): Promise<void> {
+  const event = getNotificationEvent(LISTING_HEALTH_EVENT_KEY);
+  if (!event) {
+    summary.errors++;
+    pushDetail(summary, { listing_health: "event_not_registered" });
+    return;
+  }
+
+  const { data: settingRows, error: settingErr } = await admin
+    .from("notification_settings")
+    .select("organization_id, event_key, enabled, subject_template, body_template, recipients, accent_color")
+    .eq("event_key", LISTING_HEALTH_EVENT_KEY);
+  if (settingErr) {
+    summary.errors++;
+    pushDetail(summary, { listing_health: `settings_query:${settingErr.message}` });
+    return;
+  }
+
+  const settingsByOrg = new Map<string, NotificationSettingRow>();
+  for (const raw of (settingRows ?? []) as Array<NotificationSettingRow & { organization_id?: string | null }>) {
+    if (!raw.organization_id) continue;
+    const setting: NotificationSettingRow = {
+      event_key: raw.event_key,
+      enabled: raw.enabled,
+      subject_template: raw.subject_template,
+      body_template: raw.body_template,
+      recipients: raw.recipients,
+      accent_color: raw.accent_color,
+    };
+    if (isDripEnqueueEnabled(setting)) settingsByOrg.set(raw.organization_id, setting);
+  }
+  if (settingsByOrg.size === 0) return;
+
+  const { data: orgRows, error: orgErr } = await admin
+    .from("organizations")
+    .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+    .in("id", Array.from(settingsByOrg.keys()));
+  if (orgErr) {
+    summary.errors++;
+    pushDetail(summary, { listing_health: `org_query:${orgErr.message}` });
+    return;
+  }
+
+  const today = nowISO.slice(0, 10);
+  for (const org of (orgRows ?? []) as ListingHealthOrgRow[]) {
+    try {
+      const { posts, missingColumn } = await loadListingHealthPosts(admin, org.id);
+      if (missingColumn) {
+        summary.skipped++;
+        pushDetail(summary, {
+          org: org.id,
+          listing_health: "missing_last_health_alerted_at",
+        });
+        continue;
+      }
+
+      const channels = alertableListingHealthChannels(
+        listingHealthChannels({ posts, today, nowISO }),
+      );
+      if (channels.length === 0) {
+        summary.skipped++;
+        continue;
+      }
+
+      const digest = buildListingHealthDigest(channels, APP_URL);
+      const fallback = await operatorFallbackForOrg(admin, org);
+      const result = await sendOrgNotification({
+        client: admin,
+        org: {
+          id: org.id,
+          name: org.name,
+          brand_color: org.brand_color,
+          logo_url: org.logo_url,
+          reply_to_email: org.reply_to_email,
+        },
+        eventKey: LISTING_HEALTH_EVENT_KEY,
+        vars: {
+          org_name: org.name ?? "",
+          property_address: "",
+          affected_ads_count: String(digest.adCount),
+          affected_units_count: String(digest.unitCount),
+          listing_health_summary: digest.summaryText,
+          listing_health_details: digest.detailsText,
+          dashboard_url: digest.firstDistributeUrl ?? `${APP_URL}/dashboard/leasing`,
+        },
+        operatorFallback: fallback,
+        action: {
+          label: "Review listing health",
+          url: digest.firstDistributeUrl ?? `${APP_URL}/dashboard/leasing`,
+        },
+      });
+
+      if (!result.delivered) {
+        summary.skipped++;
+        pushDetail(summary, {
+          org: org.id,
+          listing_health: "send_skipped",
+          reason: result.skipped ?? "send_failed",
+          attempted: result.attempted,
+        });
+        continue;
+      }
+
+      const postIds = Array.from(
+        new Set(channels.flatMap((channel) => channel.postIds)),
+      );
+      if (postIds.length > 0) {
+        const { error: stampErr } = await admin
+          .from("listing_posts")
+          .update({ last_health_alerted_at: nowISO })
+          .in("id", postIds);
+        if (stampErr) throw new Error(`listing_health_stamp:${stampErr.message}`);
+      }
+
+      summary.alerts++;
+      pushDetail(summary, {
+        org: org.id,
+        listing_health: "sent",
+        ads: digest.adCount,
+        units: digest.unitCount,
+        posts_stamped: postIds.length,
+      });
+    } catch (err) {
+      summary.errors++;
+      pushDetail(summary, {
+        org: org.id,
+        listing_health_error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 }
 
 async function loadRun(
@@ -600,6 +842,7 @@ export async function GET(req: NextRequest) {
     scanned: 0,
     verified: 0,
     flagged: 0,
+    alerts: 0,
     skipped: 0,
     errors: 0,
     details: [],
@@ -626,6 +869,7 @@ export async function GET(req: NextRequest) {
     scanned: 0,
     verified: 0,
     flagged: 0,
+    alerts: 0,
     skipped: 0,
     errors: 0,
     details: [],
@@ -677,6 +921,8 @@ export async function GET(req: NextRequest) {
       });
     }
   }
+
+  await sendListingHealthAlerts({ admin, nowISO, summary });
 
   console.log("[distribution-freshness]", JSON.stringify(summary));
   return NextResponse.json(summary, { status: 200 });
