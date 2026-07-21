@@ -62,6 +62,11 @@ export const SHOWING_OUTCOMES = [
   "attended",
   "no_show",
   "cancelled",
+  // S546: terminal state written by the auto-close default when a showing
+  // passed and no operator/renter ever recorded a real outcome. Distinct from
+  // attended/no_show — it never claims the renter did or did not show, so it
+  // stays out of the attendance-rate math.
+  "auto_closed",
 ] as const;
 
 export type ShowingOutcome = (typeof SHOWING_OUTCOMES)[number];
@@ -71,6 +76,7 @@ const OUTCOME_LABELS: Record<ShowingOutcome, string> = {
   attended: "Attended",
   no_show: "No-show",
   cancelled: "Cancelled",
+  auto_closed: "Auto-closed (no outcome recorded)",
 };
 
 export function showingOutcomeLabel(outcome: string): string {

@@ -257,6 +257,7 @@ export type ShowingReport = {
   cancelled: number;
   scheduled: number;
   upcoming: number; // scheduled and in the future
+  autoClosed: number; // S546: passed showings the system closed with no recorded outcome
   // attendance among shows that actually happened or were missed:
   attendanceRate: number; // attended / (attended + noShow), %
 };
@@ -270,6 +271,7 @@ export function buildShowingReport(
   let cancelled = 0;
   let scheduled = 0;
   let upcoming = 0;
+  let autoClosed = 0;
   for (const s of showings) {
     switch (s.outcome) {
       case "attended":
@@ -280,6 +282,9 @@ export function buildShowingReport(
         break;
       case "cancelled":
         cancelled++;
+        break;
+      case "auto_closed":
+        autoClosed++;
         break;
       case "scheduled":
         scheduled++;
@@ -297,6 +302,9 @@ export function buildShowingReport(
     cancelled,
     scheduled,
     upcoming,
+    autoClosed,
+    // Auto-closed showings are deliberately excluded: we never learned whether
+    // the renter attended, so counting them would distort the rate.
     attendanceRate: pct(attended, attended + noShow),
   };
 }

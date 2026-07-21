@@ -14,7 +14,7 @@
       "period": "the survey/quarter the figure is as-of",
       "note": "optional caveat shown or held internally"
     },
-    "fill_instructions": "To broaden coverage, add rows. CMHC by-bedroom by-CMA is at the source links below; TRREB by-bedroom by-region is in each quarterly rental report. Windsor currently has only the 2-bed figure confirmed — add bachelor/1-bed/3-bed from the CMHC Windsor table when convenient; until then the tool honestly says 'no benchmark yet' for those.",
+    "fill_instructions": "To broaden coverage, add rows. CMHC by-bedroom by-CMA is at the source links below; TRREB by-bedroom by-region is in each quarterly rental report. Windsor CMA now carries bachelor ($948), 1-bed ($1,193), and 2-bed ($1,454) from the CMHC Oct 2025 survey; the Windsor 3-bed+ average is CMHC-suppressed (**) so it stays honest-null until a reliable figure exists.",
     "sources": {
       "cmhc_rmr_2025": "https://www.cmhc-schl.gc.ca/professionals/housing-markets-data-and-research/market-reports/rental-market-reports-major-centres",
       "cmhc_data_tables": "https://www.cmhc-schl.gc.ca/professionals/housing-markets-data-and-research/housing-data/data-tables/rental-market/rental-market-report-data-tables",
@@ -22,6 +22,32 @@
     }
   },
   "benchmarks": [
+    {
+      "country": "CA",
+      "geography": "windsor_cma",
+      "geography_label": "Windsor CMA",
+      "match_cities": ["windsor", "tecumseh", "lasalle", "amherstburg", "kingsville", "leamington", "lakeshore"],
+      "beds": 0,
+      "avg_rent_cents": 94800,
+      "unit_class": "purpose_built",
+      "source": "CMHC",
+      "report": "Rental Market Report 2025",
+      "period": "2025 (Oct survey)",
+      "note": "Purpose-built bachelor average; CMHC reliability 'a' (excellent), ~1,332 units surveyed."
+    },
+    {
+      "country": "CA",
+      "geography": "windsor_cma",
+      "geography_label": "Windsor CMA",
+      "match_cities": ["windsor", "tecumseh", "lasalle", "amherstburg", "kingsville", "leamington", "lakeshore"],
+      "beds": 1,
+      "avg_rent_cents": 119300,
+      "unit_class": "purpose_built",
+      "source": "CMHC",
+      "report": "Rental Market Report 2025",
+      "period": "2025 (Oct survey)",
+      "note": "Purpose-built 1-bedroom average; up 4.4% YoY; CMHC reliability 'a' (excellent), ~9,027 units surveyed."
+    },
     {
       "country": "CA",
       "geography": "windsor_cma",

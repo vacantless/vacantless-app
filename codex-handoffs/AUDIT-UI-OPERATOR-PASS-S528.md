@@ -60,8 +60,21 @@ automations, billing, messages, maintenance/notices, captures, nav.
 - Viewings row control pile-up (assign + outcome + confirm + reschedule + suggest + contact in one
   flex stack) — needs an overflow menu on mobile.
 - Distribution "Live coverage" counts `needs_refresh` as live (`distribute-tab.tsx:236-240,284-286`).
+  **(FIXED in S533 `6290592` — posted-only counts.)**
 - Lifecycle-rail connector misrender on wrap; tab bars lack overflow cues; billing disabled-Subscribe
   soft dead-end when Stripe unconfigured.
+- **Concierge ("Ask Vacantless to post it") is undiscoverable outside a stuck run item**
+  (added 2026-07-20 s527; Noam himself could not re-find it). The button renders only inside the
+  launch-run panel when an item is `needs_operator`/`needs_login`/`needs_payment` AND the plan has
+  `listing_marketing` (`launch-run-panel.tsx:366-402`, `canRequestConcierge` in
+  `distribution-publish.ts:218`). With no active run, nothing anywhere says the service exists.
+  Fix per the one-click doctrine — do NOT add concierge buttons to every channel card. Instead:
+  (a) one quiet awareness line on the Distribute tab ("Stuck on a channel? Vacantless can post it
+  for you — available on any launch you start"), plan-gated, wording honest about the desk being
+  human; (b) stuck run items surface on the Leasing hub via the existing "single next-action
+  surface" item above, which carries the concierge button to where the operator already looks.
+  Positioning note: the desk is manually fulfilled — discoverability increases request volume
+  deliberately, so this ships with the next UI pass, not before Noam wants the demand.
 
 ## Explicitly good (do not regress)
 

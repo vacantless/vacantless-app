@@ -67,7 +67,7 @@ import {
 } from "@/lib/payments";
 import { channelLabel, commsErrorMessage } from "@/lib/tenant-comms";
 import { getCurrentOrg } from "@/lib/org";
-import { canUseSms } from "@/lib/billing";
+import { canUseSms, canUseMarketRent } from "@/lib/billing";
 import TenantMessageComposer, {
   type ComposerTenant,
   type ComposerTemplate,
@@ -99,6 +99,19 @@ import {
 } from "@/lib/renewal";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { RentIncreaseCard } from "@/components/rent-increase-card";
+import { RentIncreaseMarketNote } from "@/components/rent-increase-market-note";
+import { deriveRentIncreaseMarketContext } from "@/lib/rent-increase-market";
+import {
+  benchmarksFor,
+  cityFromBenchmarkAddress,
+} from "@/lib/rent-benchmarks";
+import {
+  ownComps,
+  suggestRentRange,
+  type ActiveListingComp,
+  type LeasedOutcomeComp,
+  type MarketRentSuggestion,
+} from "@/lib/market-rent";
 import {
   pickDefaultOpenSection,
   type LeaseDocStatusLabel,
@@ -186,6 +199,7 @@ type Tenancy = {
   property: {
     id: string;
     address: string;
+    beds: number | null;
     rent_control_exempt: boolean | null;
     first_occupancy_date: string | null;
   } | null;
@@ -368,7 +382,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -588,6 +602,68 @@ export default async function TenancyDetailPage({
         rentIncrease.effectiveDate,
       )
     : false;
+
+  // S545: join the S544 market-rent range into the rent-increase decision so the
+  // operator sees market vs the guideline-capped renewal rent. Same double gate
+  // as the property-page panel (market_rent entitlement AND MARKET_RENT_ENABLED)
+  // and the same resolution path (city from address, benchmark rows, own comps
+  // from leased_outcomes + active listings). Display-only; honest-null when off
+  // or when the unit has no benchmark. Only computed when a rent-increase card
+  // shows (active tenancy with rent + start date).
+  const marketRentEnabled =
+    canUseMarketRent(org?.plan ?? null) &&
+    process.env.MARKET_RENT_ENABLED === "true";
+  let marketRentSuggestion: MarketRentSuggestion | null = null;
+  if (rentIncrease && marketRentEnabled && t.property) {
+    const marketRentCity = cityFromBenchmarkAddress(t.property.address);
+    const beds = t.property.beds;
+    const benchmarkRows = benchmarksFor({
+      country: "CA",
+      city: marketRentCity,
+      beds,
+    });
+    let leasedRows: LeasedOutcomeComp[] = [];
+    let activeRows: ActiveListingComp[] = [];
+    if (marketRentCity && beds != null && org?.id) {
+      const { data: leasedData } = await supabase
+        .from("leased_outcomes")
+        .select(
+          "asking_rent_cents, beds, sqft, city, address, days_on_market, leased_at, available_since",
+        )
+        .eq("organization_id", org.id)
+        .order("leased_at", { ascending: false })
+        .limit(50);
+      leasedRows = (leasedData ?? []) as LeasedOutcomeComp[];
+
+      const { data: activeData } = await supabase
+        .from("properties")
+        .select("address, rent_cents, beds, sqft, status")
+        .eq("organization_id", org.id)
+        .eq("status", "available")
+        .neq("id", t.property.id)
+        .limit(100);
+      activeRows = (activeData ?? []) as ActiveListingComp[];
+    }
+    const own = ownComps(
+      { city: marketRentCity, beds },
+      leasedRows,
+      activeRows,
+    );
+    marketRentSuggestion = suggestRentRange({
+      subject: {
+        country: "CA",
+        city: marketRentCity,
+        beds,
+        unitClass: "purpose_built",
+      },
+      benchmarks: benchmarkRows,
+      own,
+    });
+  }
+  const marketContext = deriveRentIncreaseMarketContext({
+    rentIncrease,
+    suggestion: marketRentSuggestion,
+  });
 
   const renewalCheckin =
     t.status === "active" && t.start_date
@@ -1628,6 +1704,7 @@ export default async function TenancyDetailPage({
               n1Href={`/dashboard/tenancies/${t.id}/n1`}
             />
           </div>
+          <RentIncreaseMarketNote context={marketContext} />
           {/* Set/confirm the inputs the autopilot derives from. The card +
               cron read last_rent_increase_date + the property exemption; this
               links to the prefilled "Watch a lease" confirm flow to set them. */}

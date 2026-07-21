@@ -62,7 +62,7 @@ ok(
 ok("needsReply: junk -> false", needsReply("zzz") === false);
 
 // --- outcomes --------------------------------------------------------------
-ok("4 showing outcomes", SHOWING_OUTCOMES.length === 4);
+ok("5 showing outcomes", SHOWING_OUTCOMES.length === 5);
 ok("isShowingOutcome: attended", isShowingOutcome("attended"));
 ok("isShowingOutcome: rejects junk", !isShowingOutcome("done"));
 ok("outcome label: no_show -> No-show", showingOutcomeLabel("no_show") === "No-show");

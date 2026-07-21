@@ -91,7 +91,7 @@ ok(
   ok("multiple Toronto 2-bed benchmarks load", rows.length === 2);
   ok("benchmark rows return most-recent period first", rows[0]?.period === "2026-Q1");
 }
-ok("benchmark miss returns empty array", benchmarksFor({ city: "Windsor", beds: 1 }).length === 0);
+ok("benchmark miss returns empty array", benchmarksFor({ city: "Nowhere", beds: 1 }).length === 0);
 
 // --- own comps --------------------------------------------------------------
 {
@@ -160,13 +160,13 @@ const emptyOwn: OwnCompsResult = {
 }
 {
   const own = ownComps(
-    { city: "Windsor", beds: 1 },
-    [leased(160000, 9, "Windsor", 1), leased(165000, 11, "Windsor", 1), leased(170000, 13, "Windsor", 1)],
+    { city: "Nowhere", beds: 1 },
+    [leased(160000, 9, "Nowhere", 1), leased(165000, 11, "Nowhere", 1), leased(170000, 13, "Nowhere", 1)],
     [],
   );
   const ownOnly = suggestRentRange({
-    subject: { city: "Windsor", beds: 1 },
-    benchmarks: benchmarksFor({ city: "Windsor", beds: 1 }),
+    subject: { city: "Nowhere", beds: 1 },
+    benchmarks: benchmarksFor({ city: "Nowhere", beds: 1 }),
     own,
   });
   ok("benchmark miss considers own data only", ownOnly?.midCents === 165000);
