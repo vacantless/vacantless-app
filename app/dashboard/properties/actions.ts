@@ -2926,7 +2926,6 @@ export async function setCoverPhoto(formData: FormData) {
     .eq("property_id", propertyId);
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
-  redirect(`/dashboard/properties/${propertyId}?photos=cover`);
 }
 
 export async function movePhoto(formData: FormData) {
@@ -2957,7 +2956,6 @@ export async function movePhoto(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
-  redirect(`/dashboard/properties/${propertyId}?photos=order`);
 }
 
 export async function deletePhoto(formData: FormData) {
@@ -2975,7 +2973,8 @@ export async function deletePhoto(formData: FormData) {
 
   const target = rows.find((r) => r.id === id);
   if (!target) {
-    redirect(`/dashboard/properties/${propertyId}?photos=removed`);
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    return;
   }
 
   // If we're deleting the cover, decide who gets promoted (lowest order).
@@ -3012,7 +3011,6 @@ export async function deletePhoto(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
-  redirect(`/dashboard/properties/${propertyId}?photos=removed`);
 }
 
 // ---------------------------------------------------------------------------

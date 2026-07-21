@@ -12,7 +12,10 @@ import {
 } from "@/components/ui";
 import {
   ALLOWED_PHOTO_TYPES,
+  coverAfterDelete,
   formatBytes,
+  reorder,
+  sortPhotos,
   uploadErrorMessage,
   validatePhotoUpload,
 } from "@/lib/photos";
@@ -126,6 +129,7 @@ export function PhotoManager({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [photoAction, setPhotoAction] = useState<string | null>(null);
 
   useEffect(() => {
     setPhotos(initialPhotos);
@@ -278,6 +282,97 @@ export function PhotoManager({
     router.refresh();
   }
 
+  function formDataForPhoto(photoId: string, direction?: "up" | "down") {
+    const formData = new FormData();
+    formData.set("property_id", propertyId);
+    formData.set("photo_id", photoId);
+    if (direction) formData.set("direction", direction);
+    return formData;
+  }
+
+  async function handleMovePhoto(photoId: string, direction: "up" | "down") {
+    if (photoAction) return;
+    setError(null);
+    setSuccess(null);
+    setPhotoAction(`move:${photoId}`);
+    const before = photos;
+    setPhotos((current) => {
+      const nextOrder = reorder(current, photoId, direction);
+      const orderById = new Map(nextOrder.map((p) => [p.id, p.sort_order]));
+      return sortPhotos(
+        current.map((photo) => ({
+          ...photo,
+          sort_order: orderById.get(photo.id) ?? photo.sort_order,
+        })),
+      );
+    });
+    try {
+      await movePhoto(formDataForPhoto(photoId, direction));
+      router.refresh();
+      setSuccess("Photo order updated.");
+    } catch {
+      setPhotos(before);
+      setError("Photo order could not be saved. Please try again.");
+    } finally {
+      setPhotoAction(null);
+    }
+  }
+
+  async function handleSetCoverPhoto(photoId: string) {
+    if (photoAction) return;
+    setError(null);
+    setSuccess(null);
+    setPhotoAction(`cover:${photoId}`);
+    const before = photos;
+    setPhotos((current) =>
+      sortPhotos(
+        current.map((photo) => ({
+          ...photo,
+          is_cover: photo.id === photoId,
+        })),
+      ),
+    );
+    try {
+      await setCoverPhoto(formDataForPhoto(photoId));
+      router.refresh();
+      setSuccess("Cover photo updated.");
+    } catch {
+      setPhotos(before);
+      setError("Cover photo could not be saved. Please try again.");
+    } finally {
+      setPhotoAction(null);
+    }
+  }
+
+  async function handleDeletePhoto(photoId: string) {
+    if (photoAction) return;
+    setError(null);
+    setSuccess(null);
+    setPhotoAction(`delete:${photoId}`);
+    const before = photos;
+    setPhotos((current) => {
+      const promoteId = coverAfterDelete(current, photoId);
+      const next = current
+        .filter((photo) => photo.id !== photoId)
+        .map((photo) =>
+          promoteId && photo.id === promoteId
+            ? { ...photo, is_cover: true }
+            : photo,
+        );
+      return sortPhotos(next);
+    });
+    try {
+      await deletePhoto(formDataForPhoto(photoId));
+      router.refresh();
+      setSuccess("Photo removed.");
+    } catch {
+      setPhotos(before);
+      setError("Photo could not be deleted. Please try again.");
+    } finally {
+      setPhotoAction(null);
+    }
+  }
+
   return (
     <div
       id="property-photos"
@@ -339,57 +434,45 @@ export function PhotoManager({
               </div>
               <div className="flex items-center justify-between gap-1 px-2 py-1.5">
                 <div className="flex items-center gap-1">
-                  <form action={movePhoto}>
-                    <input type="hidden" name="property_id" value={propertyId} />
-                    <input type="hidden" name="photo_id" value={photo.id} />
-                    <input type="hidden" name="direction" value="up" />
-                    <button
-                      type="submit"
-                      disabled={i === 0}
-                      aria-label="Move earlier"
-                      className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                    >
-                      ←
-                    </button>
-                  </form>
-                  <form action={movePhoto}>
-                    <input type="hidden" name="property_id" value={propertyId} />
-                    <input type="hidden" name="photo_id" value={photo.id} />
-                    <input type="hidden" name="direction" value="down" />
-                    <button
-                      type="submit"
-                      disabled={i === photos.length - 1}
-                      aria-label="Move later"
-                      className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                    >
-                      →
-                    </button>
-                  </form>
+                  <button
+                    type="button"
+                    onClick={() => handleMovePhoto(photo.id, "up")}
+                    disabled={i === 0 || photoAction !== null}
+                    aria-label="Move earlier"
+                    className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMovePhoto(photo.id, "down")}
+                    disabled={i === photos.length - 1 || photoAction !== null}
+                    aria-label="Move later"
+                    className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    →
+                  </button>
                 </div>
                 <div className="flex items-center gap-1">
                   {!photo.is_cover && (
-                    <form action={setCoverPhoto}>
-                      <input type="hidden" name="property_id" value={propertyId} />
-                      <input type="hidden" name="photo_id" value={photo.id} />
-                      <button
-                        type="submit"
-                        className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100"
-                      >
-                        Set cover
-                      </button>
-                    </form>
-                  )}
-                  <form action={deletePhoto}>
-                    <input type="hidden" name="property_id" value={propertyId} />
-                    <input type="hidden" name="photo_id" value={photo.id} />
                     <button
-                      type="submit"
-                      aria-label="Delete photo"
-                      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50"
+                      type="button"
+                      onClick={() => handleSetCoverPhoto(photo.id)}
+                      disabled={photoAction !== null}
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      Delete
+                      Set cover
                     </button>
-                  </form>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePhoto(photo.id)}
+                    disabled={photoAction !== null}
+                    aria-label="Delete photo"
+                    className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             </li>

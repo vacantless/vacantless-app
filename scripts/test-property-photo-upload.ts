@@ -3,9 +3,13 @@
 import { readFileSync } from "node:fs";
 import {
   MAX_PHOTO_BYTES,
+  coverAfterDelete,
   normalizeConfirmedPhotoUploads,
   parsePhotoStoragePath,
   planPhotoDirectUploads,
+  reorder,
+  sortPhotos,
+  type PhotoLike,
 } from "../lib/photos";
 
 let passed = 0;
@@ -147,6 +151,45 @@ ok(
   ok("confirm: rejects uploaded path outside property", !normalized.ok && normalized.reason === "path");
 }
 
+// --- optimistic grid helpers ----------------------------------------------
+{
+  const photos: PhotoLike[] = [
+    { id: "a", sort_order: 0, is_cover: true },
+    { id: "b", sort_order: 1, is_cover: false },
+    { id: "c", sort_order: 2, is_cover: false },
+  ];
+
+  const nextOrder = reorder(photos, "c", "up");
+  const orderById = new Map(nextOrder.map((p) => [p.id, p.sort_order]));
+  const moved = sortPhotos(
+    photos.map((photo) => ({
+      ...photo,
+      sort_order: orderById.get(photo.id) ?? photo.sort_order,
+    })),
+  );
+  ok("optimistic move: updates display order immediately", moved.map((p) => p.id).join(",") === "a,c,b");
+
+  const covered = sortPhotos(
+    photos.map((photo) => ({
+      ...photo,
+      is_cover: photo.id === "c",
+    })),
+  );
+  ok("optimistic cover: selected photo becomes first", covered.map((p) => p.id).join(",") === "c,a,b");
+
+  const promoteId = coverAfterDelete(photos, "a");
+  const deleted = sortPhotos(
+    photos
+      .filter((photo) => photo.id !== "a")
+      .map((photo) =>
+        promoteId && photo.id === promoteId
+          ? { ...photo, is_cover: true }
+          : photo,
+      ),
+  );
+  ok("optimistic delete: removes and promotes cover", deleted.map((p) => p.id).join(",") === "b,c");
+}
+
 // --- server-action source contract ----------------------------------------
 const actions = readFileSync("app/dashboard/properties/actions.ts", "utf8");
 ok(
@@ -185,8 +228,21 @@ ok(
   "actions: confirm returns refreshed photo rows",
   actions.includes("photos: await loadPropertyPhotoViews(supabase, propertyId)"),
 );
+ok(
+  "actions: delete/move/cover no longer redirect to static photo URLs",
+  !actions.includes("photos=removed") &&
+    !actions.includes("photos=order") &&
+    !actions.includes("photos=cover"),
+);
+ok(
+  "actions: delete/move/cover still revalidate the property page",
+  actions.includes("export async function setCoverPhoto") &&
+    actions.includes("export async function movePhoto") &&
+    actions.includes("export async function deletePhoto") &&
+    actions.includes("revalidatePath(`/dashboard/properties/${propertyId}`);"),
+);
 
-// --- client grid refresh contract -----------------------------------------
+// --- client optimistic action contract -------------------------------------
 const manager = readFileSync(
   "app/dashboard/properties/[id]/photo-manager.tsx",
   "utf8",
@@ -202,10 +258,38 @@ ok(
     manager.includes("}, [initialPhotos]);"),
 );
 ok(
-  "photo manager: keeps move and cover/delete actions on server forms",
-  manager.includes("action={movePhoto}") &&
-    manager.includes("action={setCoverPhoto}") &&
-    manager.includes("action={deletePhoto}"),
+  "photo manager: imports optimistic photo helpers",
+  manager.includes("coverAfterDelete,") &&
+    manager.includes("reorder,") &&
+    manager.includes("sortPhotos,"),
+);
+ok(
+  "photo manager: has client handlers for the stale-grid actions",
+  manager.includes("async function handleMovePhoto") &&
+    manager.includes("async function handleSetCoverPhoto") &&
+    manager.includes("async function handleDeletePhoto"),
+);
+ok(
+  "photo manager: optimistically updates local photos",
+  manager.includes("setPhotos((current) => {") &&
+    manager.includes("setPhotos((current) =>") &&
+    manager.includes("setPhotos(before);"),
+);
+ok(
+  "photo manager: persists through the existing server actions",
+  manager.includes("await movePhoto(formDataForPhoto(photoId, direction));") &&
+    manager.includes("await setCoverPhoto(formDataForPhoto(photoId));") &&
+    manager.includes("await deletePhoto(formDataForPhoto(photoId));"),
+);
+ok(
+  "photo manager: refreshes after persisted photo actions",
+  (manager.match(/router\.refresh\(\);/g) ?? []).length >= 4,
+);
+ok(
+  "photo manager: no stale server-action forms for grid actions",
+  !manager.includes("action={movePhoto}") &&
+    !manager.includes("action={setCoverPhoto}") &&
+    !manager.includes("action={deletePhoto}"),
 );
 
 console.log(`\nproperty-photo-upload: ${passed} passed, ${failed} failed`);
