@@ -58,6 +58,7 @@ import {
   storageUpsellNote,
   canUseListingMarketing,
   canUseWaitlist,
+  canUseMarketRent,
   conciergeMonthlyCap,
   conciergeUsedLeaseUps,
 } from "@/lib/billing";
@@ -75,6 +76,17 @@ import {
   dollarsLostSoFar,
   vacancyStripModel,
 } from "@/lib/vacancy-cost";
+import {
+  benchmarksFor,
+  cityFromBenchmarkAddress,
+} from "@/lib/rent-benchmarks";
+import {
+  ownComps,
+  suggestRentRange,
+  type ActiveListingComp,
+  type LeasedOutcomeComp,
+  type MarketRentSuggestion,
+} from "@/lib/market-rent";
 import {
   LAUNDRY_OPTIONS,
   laundryLabel,
@@ -110,6 +122,7 @@ import { deriveNextAction } from "@/lib/rental-next-action";
 import { NextActionCard } from "./next-action-card";
 import { CollapsibleSection } from "./collapsible-section";
 import { TabbedSections, TabPanel } from "./tabbed-sections";
+import { MarketRentPanel } from "./market-rent-panel";
 import {
   DISTRIBUTION_CHANNELS,
   computeChannelStatus,
@@ -216,6 +229,7 @@ function petInheritWord(v: boolean | null | undefined): string {
 
 type Property = {
   id: string;
+  organization_id: string;
   address: string;
   rent_cents: number | null;
   beds: number | null;
@@ -349,7 +363,7 @@ export default async function PropertyDetailPage({
   const nowMs = Date.now();
   // S480: this page is scoped to ONE property = ONE org; every distribution
   // account/proof read is filtered to THIS property's org (KI744 / Codex fold).
-  const propertyOrgId = (p as unknown as { organization_id: string }).organization_id;
+  const propertyOrgId = p.organization_id;
 
   const { data: leads } = await supabase
     .from("leads")
@@ -803,6 +817,55 @@ export default async function PropertyDetailPage({
   // — the card renders a locked upsell for ungated plans, so we always build the
   // kit (cheap, pure) and let the entitlement decide what the card reveals.
   const marketingEnabled = canUseListingMarketing(org?.plan ?? null);
+  const marketRentEnabled =
+    canUseMarketRent(org?.plan ?? null) &&
+    process.env.MARKET_RENT_ENABLED === "true";
+  const marketRentCity = cityFromBenchmarkAddress(p.address);
+  let marketRentSuggestion: MarketRentSuggestion | null = null;
+  if (marketRentEnabled) {
+    const benchmarkRows = benchmarksFor({
+      country: "CA",
+      city: marketRentCity,
+      beds: p.beds,
+    });
+    let leasedRows: LeasedOutcomeComp[] = [];
+    let activeRows: ActiveListingComp[] = [];
+    if (marketRentCity && p.beds != null) {
+      const { data: leasedData } = await supabase
+        .from("leased_outcomes")
+        .select(
+          "asking_rent_cents, beds, sqft, city, address, days_on_market, leased_at, available_since",
+        )
+        .eq("organization_id", propertyOrgId)
+        .order("leased_at", { ascending: false })
+        .limit(50);
+      leasedRows = (leasedData ?? []) as LeasedOutcomeComp[];
+
+      const { data: activeData } = await supabase
+        .from("properties")
+        .select("address, rent_cents, beds, sqft, status")
+        .eq("organization_id", propertyOrgId)
+        .eq("status", "available")
+        .neq("id", p.id)
+        .limit(100);
+      activeRows = (activeData ?? []) as ActiveListingComp[];
+    }
+    const own = ownComps(
+      { city: marketRentCity, beds: p.beds },
+      leasedRows,
+      activeRows,
+    );
+    marketRentSuggestion = suggestRentRange({
+      subject: {
+        country: "CA",
+        city: marketRentCity,
+        beds: p.beds,
+        unitClass: "purpose_built",
+      },
+      benchmarks: benchmarkRows,
+      own,
+    });
+  }
 
   // --- Waiting list (S457): this property's + any org-wide entries. RLS scopes
   // the read to the org; the entitlement gates the operator surface (the public
@@ -2051,6 +2114,13 @@ export default async function PropertyDetailPage({
         </details>
         </section>
 
+        {marketRentEnabled && (
+          <MarketRentPanel
+            suggestion={marketRentSuggestion}
+            city={marketRentCity}
+          />
+        )}
+
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h3 className="mb-4 text-sm font-semibold text-gray-900">
             Showings
@@ -2676,6 +2746,14 @@ export default async function PropertyDetailPage({
           );
         })()}
       </div>
+
+      {marketRentEnabled && (
+        <MarketRentPanel
+          suggestion={marketRentSuggestion}
+          city={marketRentCity}
+          className="mb-6"
+        />
+      )}
 
       {/* --- Marketing kit (Tier A, Growth+) --- */}
       <MarketingKitCard

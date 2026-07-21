@@ -1,0 +1,104 @@
+{
+  "_meta": {
+    "purpose": "Seed rent benchmarks for the Vacantless market-rent tool (S544). Best-available PUBLIC benchmark per geography. Provenance is shown to the user verbatim, so every row must be a real reported figure with a source + year. Never invent a number; if a bedroom/geography isn't seeded, the tool honest-nulls it.",
+    "schema": {
+      "country": "ISO country code. 'CA' today; 'US' rows (source HUD_FMR / CENSUS_ACS / ZORI) slot in later with no code change.",
+      "geography": "canonical benchmark area key (a CMHC CMA, a board area, or a US metro)",
+      "geography_label": "human label shown in the provenance line",
+      "match_cities": "lowercased municipality names that map to this geography; the loader normalizes the property's city and matches against these",
+      "beds": "bedroom count the figure is for (0 = bachelor/studio)",
+      "avg_rent_cents": "reported average monthly rent, in cents",
+      "unit_class": "purpose_built (CMHC) | condo (board/MLS) | all — lets the tool prefer the class closest to the subject unit",
+      "source": "CMHC | TRREB | (future: HUD_FMR, CENSUS_ACS, ZORI, other board)",
+      "report": "name of the specific report",
+      "period": "the survey/quarter the figure is as-of",
+      "note": "optional caveat shown or held internally"
+    },
+    "fill_instructions": "To broaden coverage, add rows. CMHC by-bedroom by-CMA is at the source links below; TRREB by-bedroom by-region is in each quarterly rental report. Windsor currently has only the 2-bed figure confirmed — add bachelor/1-bed/3-bed from the CMHC Windsor table when convenient; until then the tool honestly says 'no benchmark yet' for those.",
+    "sources": {
+      "cmhc_rmr_2025": "https://www.cmhc-schl.gc.ca/professionals/housing-markets-data-and-research/market-reports/rental-market-reports-major-centres",
+      "cmhc_data_tables": "https://www.cmhc-schl.gc.ca/professionals/housing-markets-data-and-research/housing-data/data-tables/rental-market/rental-market-report-data-tables",
+      "trreb_rental_report": "https://trreb.ca/market-data/rental-market-report/"
+    }
+  },
+  "benchmarks": [
+    {
+      "country": "CA",
+      "geography": "windsor_cma",
+      "geography_label": "Windsor CMA",
+      "match_cities": ["windsor", "tecumseh", "lasalle", "amherstburg", "kingsville", "leamington", "lakeshore"],
+      "beds": 2,
+      "avg_rent_cents": 145400,
+      "unit_class": "purpose_built",
+      "source": "CMHC",
+      "report": "Rental Market Report 2025",
+      "period": "2025 (Oct survey)",
+      "note": "Purpose-built apartment average; up 3.6% YoY; Windsor CMA vacancy 3.7%."
+    },
+    {
+      "country": "CA",
+      "geography": "st_catharines_niagara_cma",
+      "geography_label": "St. Catharines–Niagara CMA",
+      "match_cities": ["st. catharines", "st catharines", "niagara falls", "welland", "thorold", "port colborne", "fort erie", "lincoln", "pelham", "grimsby"],
+      "beds": 2,
+      "avg_rent_cents": 152700,
+      "unit_class": "purpose_built",
+      "source": "CMHC",
+      "report": "Rental Market Report 2025",
+      "period": "2025 (Oct survey)",
+      "note": "Purpose-built apartment average; up 5.5% YoY."
+    },
+    {
+      "country": "CA",
+      "geography": "toronto_cma_gta",
+      "geography_label": "Greater Toronto Area",
+      "match_cities": ["toronto", "mississauga", "brampton", "markham", "vaughan", "richmond hill", "oakville", "burlington", "milton", "pickering", "ajax", "whitby", "oshawa", "aurora", "newmarket", "scarborough", "etobicoke", "north york"],
+      "beds": 2,
+      "avg_rent_cents": 203400,
+      "unit_class": "purpose_built",
+      "source": "CMHC",
+      "report": "Rental Market Report 2025",
+      "period": "2025 (Oct survey)",
+      "note": "Purpose-built apartment average; up 3.5% YoY. Condo rents (TRREB) run higher — see condo rows."
+    },
+    {
+      "country": "CA",
+      "geography": "toronto_cma_gta",
+      "geography_label": "Greater Toronto Area",
+      "match_cities": ["toronto", "mississauga", "brampton", "markham", "vaughan", "richmond hill", "oakville", "burlington", "milton", "pickering", "ajax", "whitby", "oshawa", "aurora", "newmarket", "scarborough", "etobicoke", "north york"],
+      "beds": 1,
+      "avg_rent_cents": 224600,
+      "unit_class": "condo",
+      "source": "TRREB",
+      "report": "Rental Market Report Q1 2026",
+      "period": "2026-Q1",
+      "note": "MLS condominium-apartment lease average; down 4.1% YoY."
+    },
+    {
+      "country": "CA",
+      "geography": "toronto_cma_gta",
+      "geography_label": "Greater Toronto Area",
+      "match_cities": ["toronto", "mississauga", "brampton", "markham", "vaughan", "richmond hill", "oakville", "burlington", "milton", "pickering", "ajax", "whitby", "oshawa", "aurora", "newmarket", "scarborough", "etobicoke", "north york"],
+      "beds": 2,
+      "avg_rent_cents": 293900,
+      "unit_class": "condo",
+      "source": "TRREB",
+      "report": "Rental Market Report Q1 2026",
+      "period": "2026-Q1",
+      "note": "MLS condominium-apartment lease average."
+    },
+    {
+      "country": "CA",
+      "geography": "toronto_cma_gta",
+      "geography_label": "Greater Toronto Area",
+      "match_cities": ["toronto", "mississauga", "brampton", "markham", "vaughan", "richmond hill", "oakville", "burlington", "milton", "pickering", "ajax", "whitby", "oshawa", "aurora", "newmarket", "scarborough", "etobicoke", "north york"],
+      "beds": 3,
+      "avg_rent_cents": 375700,
+      "unit_class": "condo",
+      "source": "TRREB",
+      "report": "Rental Market Report Q1 2026",
+      "period": "2026-Q1",
+      "note": "MLS condominium-apartment lease average."
+    }
+  ]
+}

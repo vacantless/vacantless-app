@@ -129,6 +129,10 @@ export type PlanFeature =
   // The public join form still captures for ungated plans (an upgrade hook); this
   // entitlement gates only the operator MANAGE + NOTIFY surface.
   | "waitlist"
+  // Market-rent guidance (S544): benchmark-anchored suggested rent range with
+  // org-owned comps blended in. Growth+ for the self-managed leasing workflow;
+  // richer Premium-only market intelligence can layer on later.
+  | "market_rent"
   // Serve-on-behalf of the N1 (S460): deliver the rent-increase notice to the
   // tenant + file it to the vault. Growth+ (the "do it for me" premium; the free
   // tier still gets the print-yourself N1). The serveN1 action enforces this.
@@ -151,6 +155,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   "listing_ai_import",
   "applications",
   "waitlist",
+  "market_rent",
   "serve_notice",
 ];
 
@@ -175,6 +180,7 @@ function noEntitlements(): PlanEntitlements {
     listing_ai_import: false,
     applications: false,
     waitlist: false,
+    market_rent: false,
     serve_notice: false,
   };
 }
@@ -205,14 +211,14 @@ export type AnyPlanKey = PlanKey | TierKey;
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
   trial: noEntitlements(),
-  pilot: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // founder pilot = full access
-  core: { serve_notice: false, applications: false, sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false },
-  plus: { serve_notice: false, applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false },
+  pilot: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // founder pilot = full access
+  core: { serve_notice: false, applications: false, sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false, market_rent: false },
+  plus: { serve_notice: false, applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false, market_rent: false },
   // Live ladder.
   free: noEntitlements(), // funnel tier: email only, no paid capabilities
-  growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import
-  premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import
-  managed: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true }, // Premium feature set plus the larger concierge allowance.
+  growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
+  premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
+  managed: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Premium feature set plus the larger concierge allowance.
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -308,6 +314,13 @@ export function canUseListingMarketing(plan: string | null | undefined): boolean
 // enforced by the waitlist actions and the property-page card.
 export function canUseWaitlist(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "waitlist");
+}
+
+// Whether this plan may use benchmark-anchored market-rent guidance (S544).
+// Growth+ gets the v1 suggestion panel; Premium can layer richer intelligence
+// later without changing the calling surface.
+export function canUseMarketRent(plan: string | null | undefined): boolean {
+  return hasEntitlement(plan, "market_rent");
 }
 
 // Serve-on-behalf of the N1 + vault filing (S460). Growth+; the free tier still

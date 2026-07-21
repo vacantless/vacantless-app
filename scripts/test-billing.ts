@@ -36,6 +36,7 @@ import {
   canUseLeaseOcr,
   canUseListingAiImport,
   canUseRentalApplications,
+  canUseMarketRent,
   canUseServeNotice,
   leaseOcrMonthlyCap,
   LEASE_OCR_CAP_GROWTH,
@@ -494,7 +495,7 @@ ok(
       JSON.stringify([...PLAN_FEATURES].sort()),
   ),
 );
-ok("PLAN_FEATURES has 17 features", PLAN_FEATURES.length === 17);
+ok("PLAN_FEATURES has 18 features", PLAN_FEATURES.length === 18);
 
 // --- Renter-facing SMS gate (S296: paid tiers Growth+; Free + trial = false) --
 // DEFINED now; not yet wired at the renter call sites (see NEXT-SESSION).
@@ -593,6 +594,18 @@ ok("applications: plus false", canUseRentalApplications("plus") === false);
 ok("applications: trial false", canUseRentalApplications("trial") === false);
 ok("applications: null false", canUseRentalApplications(null) === false);
 ok("applications mirrors hasEntitlement", canUseRentalApplications("growth") === hasEntitlement("growth", "applications"));
+
+// --- market_rent (Growth & up; S544 public-benchmark rent guidance) ---------
+ok("market_rent: free false", canUseMarketRent("free") === false);
+ok("market_rent: growth true", canUseMarketRent("growth") === true);
+ok("market_rent: premium true", canUseMarketRent("premium") === true);
+ok("market_rent: managed true", canUseMarketRent("managed") === true);
+ok("market_rent: pilot true (full access)", canUseMarketRent("pilot") === true);
+ok("market_rent: core false", canUseMarketRent("core") === false);
+ok("market_rent: plus false", canUseMarketRent("plus") === false);
+ok("market_rent: trial false", canUseMarketRent("trial") === false);
+ok("market_rent: null false", canUseMarketRent(null) === false);
+ok("market_rent mirrors hasEntitlement", canUseMarketRent("growth") === hasEntitlement("growth", "market_rent"));
 
 // --- serve_notice (Growth & up; S460 serve-on-behalf N1 + vault) --------------
 ok("serve_notice: free false", canUseServeNotice("free") === false);
