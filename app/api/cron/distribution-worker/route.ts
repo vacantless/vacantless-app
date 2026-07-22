@@ -85,7 +85,6 @@ type CandidateRow = {
   id: string;
   organization_id: string;
   run_id: string;
-  property_id: string;
   channel: string;
   publish_status: string;
   mode: string;
@@ -117,6 +116,26 @@ async function operatorFallbackForOrg(
     org.reply_to_email,
     org.public_contact_email,
   ]).slice(0, MAX_RECIPIENTS);
+}
+
+async function releaseWorkerClaim(
+  admin: AdminClient,
+  itemId: string,
+  auditMessage: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await admin
+    .from("distribution_run_items")
+    .update({
+      publish_status: "queued",
+      status: "in_progress",
+      concierge_claimed_by: null,
+      concierge_claimed_at: null,
+      audit_message: auditMessage,
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("concierge_claimed_by", WORKER_CLAIM_ID);
 }
 
 export async function GET(req: NextRequest) {
@@ -153,7 +172,7 @@ export async function GET(req: NextRequest) {
     const { data: candData, error: candErr } = await admin
       .from("distribution_run_items")
       .select(
-        "id, organization_id, run_id, property_id, channel, publish_status, mode, concierge_claimed_by, attempt_count",
+        "id, organization_id, run_id, channel, publish_status, mode, concierge_claimed_by, attempt_count",
       )
       .eq("mode", "concierge")
       .eq("publish_status", "queued")
@@ -197,6 +216,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ...summary, skippedReason: "no_authorized_job" }, { status: 200 });
     }
 
+    // Resolve the property via the run. distribution_run_items has no property_id
+    // column; it lives on distribution_runs (same pattern as the freshness cron).
+    // Done BEFORE the claim so a missing property never leaves a stuck claim.
+    const { data: runRow } = await admin
+      .from("distribution_runs")
+      .select("property_id")
+      .eq("id", job.run_id)
+      .maybeSingle();
+    const propertyId = (runRow?.property_id as string | null) ?? null;
+    if (!propertyId) {
+      return NextResponse.json({ ...summary, skippedReason: "run_property_missing" }, { status: 200 });
+    }
+
     // CLAIM via guarded CAS: flip queued -> submitting and take the transient
     // worker claim, only if still queued + unclaimed. A concurrent worker or a
     // human claimConciergeItem loses this race (0 rows) and we stop.
@@ -225,7 +257,7 @@ export async function GET(req: NextRequest) {
     const { data: prop } = await admin
       .from("properties")
       .select("id, address, beds, baths, rent_cents, description")
-      .eq("id", job.property_id)
+      .eq("id", propertyId)
       .maybeSingle();
     const address = (prop?.address as string | null) ?? null;
     const listing: WorkerListingFacts = {
@@ -277,20 +309,42 @@ export async function GET(req: NextRequest) {
         compose_skipped: compose.skipped,
       },
     });
-    await admin.from("distribution_publish_attempts").insert({
-      organization_id: attempt.organization_id,
-      run_id: attempt.run_id,
-      run_item_id: attempt.run_item_id,
-      channel: attempt.channel,
-      transport: attempt.transport,
-      attempt_no: attempt.attempt_no,
-      actor_type: attempt.actor_type,
-      actor_user_id: attempt.actor_user_id,
-      status_before: attempt.status_before,
-      status_after: attempt.status_after,
-      proof_id: attempt.proof_id,
-      metadata: attempt.metadata,
-    });
+    const { data: attemptRow, error: attemptErr } = await admin
+      .from("distribution_publish_attempts")
+      .insert({
+        organization_id: attempt.organization_id,
+        run_id: attempt.run_id,
+        run_item_id: attempt.run_item_id,
+        channel: attempt.channel,
+        transport: attempt.transport,
+        attempt_no: attempt.attempt_no,
+        actor_type: attempt.actor_type,
+        actor_user_id: attempt.actor_user_id,
+        status_before: attempt.status_before,
+        status_after: attempt.status_after,
+        proof_id: attempt.proof_id,
+        metadata: attempt.metadata,
+      })
+      .select("id")
+      .maybeSingle();
+    if (attemptErr || !attemptRow) {
+      await releaseWorkerClaim(
+        admin,
+        job.id,
+        "Posting worker could not record its audit attempt; the item is queued for retry.",
+      );
+      return NextResponse.json(
+        {
+          ...summary,
+          skippedReason: attemptErr?.message ?? "attempt_log_failed",
+          details: [
+            ...summary.details,
+            { reason: "attempt_log_failed", itemId: job.id },
+          ],
+        },
+        { status: 200 },
+      );
+    }
 
     // Move the item to the gate and RELEASE the transient claim so a human can
     // finish. Guarded on our own claim so we never clobber a concurrent actor.
@@ -303,6 +357,8 @@ export async function GET(req: NextRequest) {
         status: "in_progress",
         concierge_claimed_by: null,
         concierge_claimed_at: null,
+        last_attempt_id: attemptRow.id,
+        attempt_count: attempt.attempt_no,
         audit_message: `Prepared by the posting worker. Next: ${GATE_STEP[gate]}.`,
         updated_at: gateISO,
       })
@@ -321,7 +377,7 @@ export async function GET(req: NextRequest) {
       .eq("id", job.organization_id)
       .maybeSingle();
     if (org) {
-      const dashboardUrl = `${APP_URL}/dashboard/properties/${job.property_id}#distribute-header`;
+      const dashboardUrl = `${APP_URL}/dashboard/properties/${propertyId}#distribute-header`;
       const fallback = await operatorFallbackForOrg(admin, {
         id: org.id as string,
         reply_to_email: (org.reply_to_email as string | null) ?? null,
