@@ -39,6 +39,10 @@ name: Vacantless background sweeps
 #   * /api/cron/distribution-freshness — re-checks Vacantless-owned distribution
 #     proof and flags stale external portal rows for manual refresh; dark unless
 #     DISTRIBUTION_FRESHNESS_ENABLED=true
+#   * /api/cron/distribution-worker — done-for-you posting worker: prepares one
+#     authorized concierge job and stops at the human gate; dark unless
+#     DISTRIBUTION_WORKER_ENABLED=true AND the channel is automation_authorized
+#     (S553). Never logs in, pays, submits, or sets live.
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -183,4 +187,10 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/distribution-freshness" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger distribution-worker sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/distribution-worker" \
             -w "\nHTTP %{http_code}\n"

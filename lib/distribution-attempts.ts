@@ -14,6 +14,13 @@ export const ATTEMPT_ACTOR_TYPES = [
   "concierge",
   "browser_copilot",
   "broker",
+  // The done-for-you posting worker (S553). It PREPARES an authorized concierge
+  // job and hands off at a human gate; it never logs in, pays, submits, or sets
+  // live. Recorded distinctly so worker-prepared attempts are auditable apart
+  // from a human desk action. The DB check constraint on
+  // distribution_publish_attempts.actor_type is widened to allow this in
+  // migration 0177 (the TS list and the DB check must move together).
+  "agent",
 ] as const;
 export type AttemptActorType = (typeof ATTEMPT_ACTOR_TYPES)[number];
 

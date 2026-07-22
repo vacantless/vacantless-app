@@ -300,6 +300,37 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // Done-for-you posting worker gate (S553). Audience operator. When the worker
+  // has PREPARED an authorized concierge post and stopped at a human gate
+  // (needs login / needs payment / needs review + submit), this event pulls the
+  // right person in to finish it. Honest copy: Vacantless prepared a draft and a
+  // person must review, submit, and prove it — nothing was posted, and no login/
+  // payment/submit happened automatically. Deep-links to the property's Distribute
+  // surface. (When the S551 operator-lane field lands on NotificationEvent, tag
+  // this `lane: "listing"` — done-for-you posting is the listing operator's job.
+  // Until then it inherits the manage_leads default like the other leasing
+  // operator events.)
+  {
+    key: "leasing.distribution_job_needs_action",
+    family: "leasing",
+    audience: "operator",
+    label: "A prepared post needs you to finish it",
+    description:
+      "When the done-for-you posting worker has prepared an ad and needs a person to log in, pay, or review and submit it, your team gets a note with the unit, channel, and what is left to do. Vacantless never logs in, pays, or submits for you. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "channel_label",
+      "gate_label",
+      "next_step",
+      "dashboard_url",
+    ],
+    defaultSubject:
+      "A {{channel_label}} post for {{property_address}} is ready for you",
+    defaultBody:
+      "Vacantless has PREPARED a {{channel_label}} post for {{property_address}} and stopped so a person can finish it.\n\nWhat is left: {{next_step}}\n\nVacantless has not logged in, paid, submitted, or posted anything on an external portal. Open the post, do the remaining step, submit it yourself, and paste the live URL so it is marked Live.\n\nOpen Distribute: {{dashboard_url}}",
+    defaultAccent: "#2563eb",
+    active: true,
+  },
   // Renter-initiated cancellation (S418, KI632). Audience operator; the missing
   // half of the showing loop. A "Cancel this viewing" link in the renter booking
   // confirmation email flips the showing to cancelled and fires THIS event to the
