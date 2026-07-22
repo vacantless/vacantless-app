@@ -1256,6 +1256,7 @@ export default async function PropertyDetailPage({
     transport: string | null;
     verification_status: string | null;
     proof_url: string | null;
+    concierge_requested_at: string | null;
     stale_after: string | null;
   };
   let runItemRows: RunItemRow[] = [];
@@ -1263,7 +1264,7 @@ export default async function PropertyDetailPage({
     const { data: ri } = await supabase
       .from("distribution_run_items")
       .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, stale_after",
+        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, stale_after",
       )
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
@@ -1405,6 +1406,7 @@ export default async function PropertyDetailPage({
       transport: r.transport,
       verificationStatus: r.verification_status,
       proofUrl: r.proof_url,
+      conciergeRequestedAt: r.concierge_requested_at,
       steps: buildRunSteps(r.channel, {
         guardrailCount: guardrailsForPortal(r.channel).length,
       }),

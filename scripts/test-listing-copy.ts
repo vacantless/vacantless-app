@@ -33,7 +33,7 @@ function ok(name: string, cond: boolean) {
 const NOW = new Date("2026-06-15T12:00:00Z");
 
 // --- portal keys -----------------------------------------------------------
-ok("COPY_PORTAL_KEYS has 7", COPY_PORTAL_KEYS.length === 7);
+ok("COPY_PORTAL_KEYS has 12", COPY_PORTAL_KEYS.length === 12);
 ok("COPY_PORTALS mirrors keys", COPY_PORTALS.length === COPY_PORTAL_KEYS.length);
 ok("isCopyPortalKey: kijiji", isCopyPortalKey("kijiji"));
 ok("isCopyPortalKey: rejects junk", !isCopyPortalKey("craigslist"));
@@ -44,6 +44,8 @@ ok("normalizeCopyPortal: junk -> generic", normalizeCopyPortal("nope") === "gene
 ok("copyPortalLabel: kijiji", copyPortalLabel("kijiji") === "Kijiji");
 ok("copyPortalLabel: rentfaster", copyPortalLabel("rentfaster") === "RentFaster.ca");
 ok("copyPortalLabel: zumper names PadMapper", copyPortalLabel("zumper") === "Zumper + PadMapper");
+ok("copyPortalLabel: linkedin", copyPortalLabel("linkedin") === "LinkedIn");
+ok("copyPortalLabel: facebook_feed", copyPortalLabel("facebook_feed") === "Facebook feed");
 ok("copyPortalLabel: junk -> Master copy", copyPortalLabel("x") === "Master copy");
 
 // --- formatRent ------------------------------------------------------------
@@ -232,6 +234,13 @@ ok(
   "copy: facebook CTA mentions copying the link into a browser",
   /copy this link into your browser/i.test(fb.body),
 );
+
+const instagram = buildListingCopy(fullInput, "instagram");
+ok("copy: instagram link on own line", instagram.body.includes("link:\n\nhttps://"));
+ok("copy: instagram remains classified/self-contained", instagram.body.includes("850 sq ft"));
+
+const whatsapp = buildListingCopy(fullInput, "whatsapp");
+ok("copy: whatsapp CTA says reply or book", whatsapp.body.includes("Reply here or book a viewing:"));
 
 // Per-portal CTA differs (the "tuned for each site" claim is real): every
 // non-Facebook portal uses the default book-or-inquire CTA; Facebook does not.

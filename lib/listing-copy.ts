@@ -21,6 +21,11 @@ export const COPY_PORTAL_KEYS = [
   "generic",
   "kijiji",
   "facebook",
+  "linkedin",
+  "instagram",
+  "facebook_feed",
+  "whatsapp",
+  "snapchat",
   "rentals_ca",
   "rentfaster",
   "zumper",
@@ -57,6 +62,7 @@ const DEFAULT_CTA = "Book a viewing or send an inquiry:";
 // CTA is a short, direct nudge rather than a self-contained "send an inquiry".
 const STRUCTURED_CTA = "Book a viewing or ask us a question:";
 const DEFAULT_NO_URL_CTA = "Contact us to book a viewing.";
+const SOCIAL_CTA = "See details and book a viewing:";
 
 const PORTAL_PROFILES: Record<CopyPortalKey, PortalProfile> = {
   generic: { label: "Master copy", maxTitle: 120, plainText: true, linkOnOwnLine: true, cta: DEFAULT_CTA, classified: true },
@@ -71,6 +77,11 @@ const PORTAL_PROFILES: Record<CopyPortalKey, PortalProfile> = {
     cta: "Message us to book a viewing, or copy this link into your browser:",
     classified: true,
   },
+  linkedin: { label: "LinkedIn", maxTitle: 120, plainText: true, linkOnOwnLine: true, cta: SOCIAL_CTA, classified: true },
+  instagram: { label: "Instagram", maxTitle: 90, plainText: true, linkOnOwnLine: true, cta: "Details and viewing link:", classified: true },
+  facebook_feed: { label: "Facebook feed", maxTitle: 100, plainText: true, linkOnOwnLine: true, cta: SOCIAL_CTA, classified: true },
+  whatsapp: { label: "WhatsApp", maxTitle: 100, plainText: true, linkOnOwnLine: true, cta: "Reply here or book a viewing:", classified: true },
+  snapchat: { label: "Snapchat", maxTitle: 80, plainText: true, linkOnOwnLine: true, cta: "Details and viewing link:", classified: true },
   rentals_ca: { label: "Rentals.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
   rentfaster: { label: "RentFaster.ca", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },
   zumper: { label: "Zumper + PadMapper", maxTitle: 100, plainText: true, linkOnOwnLine: false, cta: STRUCTURED_CTA, classified: false },

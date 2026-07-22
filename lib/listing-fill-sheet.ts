@@ -135,6 +135,11 @@ const PORTAL_FIELD_PREFIX: Partial<Record<PortalKey, string>> = {
 export const FILL_SHEET_PORTALS: readonly PortalKey[] = [
   "kijiji",
   "facebook",
+  "linkedin",
+  "instagram",
+  "facebook_feed",
+  "whatsapp",
+  "snapchat",
   "rentals_ca",
   "rentfaster",
   "zumper",
@@ -1147,6 +1152,76 @@ function facebookFields(input: FillSheetInput, title: string, body: string): Fil
   ];
 }
 
+type SocialPortalKey =
+  | "linkedin"
+  | "instagram"
+  | "facebook_feed"
+  | "whatsapp"
+  | "snapchat";
+
+function socialFields(
+  portal: SocialPortalKey,
+  input: FillSheetInput,
+  title: string,
+  body: string,
+): FillField[] {
+  const idPrefix = portal.replace("_", "-");
+  const link = textOrNull(input.publicUrl);
+  const isMessageChannel = portal === "whatsapp";
+  const isStoryChannel = portal === "instagram" || portal === "snapchat";
+  return [
+    {
+      id: `${idPrefix}-title`,
+      label: isMessageChannel ? "Message headline" : "Post headline",
+      value: title,
+      source: "listing",
+    },
+    {
+      id: `${idPrefix}-caption`,
+      label: isMessageChannel ? "Message" : "Caption",
+      value: body,
+      source: "listing",
+      hint: isStoryChannel
+        ? "Use this as the caption or DM reply copy; put the tracked link where the channel allows links."
+        : "Keep the tracked link with the post so inquiries attribute back to this channel.",
+      guardrailId: isStoryChannel
+        ? portal === "instagram"
+          ? "instagram-link-placement"
+          : "snapchat-story-expiry"
+        : "social-tracked-link",
+    },
+    {
+      id: `${idPrefix}-photos`,
+      label: "Photos",
+      value: null,
+      source: "manual",
+      hint: "Use the strongest exterior and interior images, with the first photo clearly matching this rental.",
+      guardrailId: "universal-exterior-photo",
+    },
+    {
+      id: `${idPrefix}-tracked-link`,
+      label: isStoryChannel ? "Link placement" : "Tracked inquiry link",
+      value: link,
+      source: "listing",
+      hint: isStoryChannel
+        ? "Use the profile link, story link sticker, first comment, or DM template depending on what is available."
+        : "Paste this link into the post, comment, or message so Vacantless can attribute inquiries.",
+      guardrailId:
+        portal === "instagram"
+          ? "instagram-link-placement"
+          : "social-tracked-link",
+    },
+    {
+      id: `${idPrefix}-proof`,
+      label: "Proof",
+      value: null,
+      source: "manual",
+      hint: "After posting, save the public post URL, screenshot proof, or a clear posting note back in Vacantless.",
+      guardrailId: "social-proof-url",
+    },
+  ];
+}
+
 function viewitFields(input: FillSheetInput, _title: string, body: string): FillField[] {
   return [
     {
@@ -1211,6 +1286,12 @@ const FIELD_BUILDERS: Record<
 > = {
   kijiji: kijijiFields,
   facebook: facebookFields,
+  linkedin: (input, title, body) => socialFields("linkedin", input, title, body),
+  instagram: (input, title, body) => socialFields("instagram", input, title, body),
+  facebook_feed: (input, title, body) =>
+    socialFields("facebook_feed", input, title, body),
+  whatsapp: (input, title, body) => socialFields("whatsapp", input, title, body),
+  snapchat: (input, title, body) => socialFields("snapchat", input, title, body),
   rentals_ca: rentalsCaFields,
   rentfaster: rentFasterFields,
   zumper: zumperFields,

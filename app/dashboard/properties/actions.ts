@@ -4057,7 +4057,7 @@ export async function requestConciergePublish(formData: FormData) {
   }
 
   const now = new Date().toISOString();
-  await supabase
+  const { error: conciergeUpdateError } = await supabase
     .from("distribution_run_items")
     .update({
       mode: "concierge",
@@ -4073,6 +4073,17 @@ export async function requestConciergePublish(formData: FormData) {
       updated_at: now,
     })
     .eq("id", itemId);
+  if (conciergeUpdateError) {
+    console.error("requestConciergePublish: update failed", {
+      itemId,
+      runId: item.run_id,
+      propertyId,
+      error: conciergeUpdateError,
+    });
+    redirect(
+      `/dashboard/properties/${propertyId}?runerr=claimfailed#distribute-header`,
+    );
+  }
 
   // A pending concierge post reopens a completed run.
   await supabase

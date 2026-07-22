@@ -329,6 +329,63 @@ const FACEBOOK: Guardrail[] = [
   },
 ];
 
+const SOCIAL_FEED: Guardrail[] = [
+  {
+    id: "social-tracked-link",
+    severity: "warning",
+    title: "Keep the tracked inquiry link with the post.",
+    detail:
+      "Social engagement is easy to lose unless the post points renters back to the tracked Vacantless listing link. Put the link in the caption, first comment, profile link, story sticker, or message template depending on what the channel allows.",
+  },
+  {
+    id: "social-proof-url",
+    severity: "warning",
+    title: "Save proof after posting.",
+    detail:
+      "A social post or story only counts as live in Vacantless after a real public post URL, screenshot proof, or clear posting note is saved back to the channel.",
+  },
+  {
+    id: "social-one-unit",
+    severity: "tip",
+    title: "Make the post about one rental at a time.",
+    detail:
+      "Short social posts work best when the address, rent, bedroom count, and viewing link are unmistakable. Do not bundle several vacancies into one caption unless the channel is deliberately a broad availability update.",
+  },
+];
+
+const INSTAGRAM: Guardrail[] = [
+  {
+    id: "instagram-link-placement",
+    severity: "warning",
+    title: "Caption links are not reliably clickable.",
+    detail:
+      "Use a profile link, story link sticker, DM template, or first comment strategy for the tracked inquiry link. Do not assume a pasted caption URL will behave like a portal lead form.",
+  },
+  ...SOCIAL_FEED,
+];
+
+const SNAPCHAT: Guardrail[] = [
+  {
+    id: "snapchat-story-expiry",
+    severity: "warning",
+    title: "Stories expire quickly.",
+    detail:
+      "If you post as a story, capture proof immediately and plan a refresh. A story can support a launch push, but it should not be treated like a durable live listing.",
+  },
+  ...SOCIAL_FEED,
+];
+
+const WHATSAPP: Guardrail[] = [
+  {
+    id: "whatsapp-opt-in",
+    severity: "critical",
+    title: "Send only to appropriate contacts or groups.",
+    detail:
+      "Use WhatsApp for opted-in prospects, approved groups, or known distribution lists. Do not blast cold phone numbers or contacts who did not expect rental messages.",
+  },
+  ...SOCIAL_FEED,
+];
+
 const VIEWIT: Guardrail[] = [
   {
     id: "viewit-paid-not-free",
@@ -388,6 +445,11 @@ const UNIVERSAL: Guardrail[] = [
 const PORTAL_GUARDRAILS: Record<PortalKey, Guardrail[]> = {
   kijiji: KIJIJI,
   facebook: FACEBOOK,
+  linkedin: SOCIAL_FEED,
+  instagram: INSTAGRAM,
+  facebook_feed: SOCIAL_FEED,
+  whatsapp: WHATSAPP,
+  snapchat: SNAPCHAT,
   rentals_ca: RENTALS_CA,
   rentfaster: RENTFASTER,
   zumper: ZUMPER,

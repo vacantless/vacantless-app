@@ -194,6 +194,11 @@ export function interpretExternalUrlProof(f: ExternalUrlFacts): VerificationOutc
 // Default stale windows (days) before a live channel should be re-verified.
 export const STALE_DAYS: Partial<Record<string, number>> = {
   facebook: 14,
+  linkedin: 14,
+  instagram: 14,
+  facebook_feed: 14,
+  whatsapp: 14,
+  snapchat: 14,
   kijiji: 14,
   viewit: 30, // paid placement — longer term
   rentals_ca: 7,

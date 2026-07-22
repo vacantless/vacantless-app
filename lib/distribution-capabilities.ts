@@ -93,6 +93,36 @@ const CHANNEL_CAPABILITIES: Record<PublishChannelKey, ChannelCapability> = {
     requiresLogin: true,
     postingPolicy: "human_confirmed",
   }),
+  linkedin: CAP("linkedin", "browser_copilot", {
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    postingPolicy: "human_confirmed",
+  }),
+  instagram: CAP("instagram", "browser_copilot", {
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    postingPolicy: "human_confirmed",
+  }),
+  facebook_feed: CAP("facebook_feed", "browser_copilot", {
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    postingPolicy: "human_confirmed",
+  }),
+  whatsapp: CAP("whatsapp", "browser_copilot", {
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    postingPolicy: "human_confirmed",
+  }),
+  snapchat: CAP("snapchat", "browser_copilot", {
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    postingPolicy: "human_confirmed",
+  }),
   rentals_ca: CAP("rentals_ca", "feed_partner", {
     supportsFeed: true,
     supportsCopilot: true,

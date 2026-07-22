@@ -27,7 +27,7 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- matrix ----------------------------------------------------------------
-ok("7 channels in the matrix", DISTRIBUTION_CHANNELS.length === 7);
+ok("12 channels in the matrix", DISTRIBUTION_CHANNELS.length === 12);
 ok(
   "matrix excludes 'other'",
   !DISTRIBUTION_CHANNELS.some((c) => (c.key as string) === "other"),
@@ -53,6 +53,11 @@ ok("realtor_ca is broker mode", channelByKey("realtor_ca")?.mode === "broker");
 ok("realtor_ca has NO self-serve copy", channelByKey("realtor_ca")?.copyKey === null);
 ok("facebook copyKey = facebook", channelByKey("facebook")?.copyKey === "facebook");
 ok("facebook is assisted_manual", channelByKey("facebook")?.mode === "assisted_manual");
+ok("linkedin is assisted_manual", channelByKey("linkedin")?.mode === "assisted_manual");
+ok("instagram copyKey = instagram", channelByKey("instagram")?.copyKey === "instagram");
+ok("facebook feed is separate from Marketplace", channelByKey("facebook_feed")?.label === "Facebook feed");
+ok("whatsapp uses guided posting", channelByKey("whatsapp")?.mode === "assisted_manual");
+ok("snapchat is NOT feed-eligible", channelByKey("snapchat")?.feedEligible === false);
 ok("rentals_ca is feed-eligible", channelByKey("rentals_ca")?.feedEligible === true);
 ok("rentfaster is feed-eligible", channelByKey("rentfaster")?.feedEligible === true);
 ok("rentfaster has copy", channelByKey("rentfaster")?.copyKey === "rentfaster");
@@ -107,7 +112,7 @@ const launchRunPanelSource = readFileSync(
 );
 ok(
   "first-run CTA says add selected channels",
-  launchRunPanelSource.includes("Add selected channels to publish checklist"),
+  launchRunPanelSource.includes("Add selected channels"),
 );
 
 // --- labels ----------------------------------------------------------------

@@ -21,6 +21,7 @@ import {
   updateListingPost,
   removeListingPost,
   upsertPartnerAccount,
+  requestConciergePublish,
 } from "../actions";
 import { startConciergePackCheckout } from "../../billing/actions";
 import {
@@ -55,6 +56,7 @@ import {
   type PublishChannelChoiceView,
   type RunItemView,
 } from "./launch-run-panel";
+import { CONCIERGE_OPEN_STATUSES } from "@/lib/distribution-publish";
 import {
   activeRunChannelCount,
   automationStatusSummary,
@@ -352,6 +354,11 @@ export function DistributeTab({
       item.canConcierge &&
       (item.channel !== "realtor_ca" || launchRun.realtorReferralEnabled),
   );
+  const activeConciergeItem = launchRun.items.find(
+    (item) =>
+      item.mode === "concierge" &&
+      CONCIERGE_OPEN_STATUSES.includes(item.publishStatus),
+  );
   const health = distributionHealth({
     channelCards,
     otherPosts,
@@ -359,30 +366,41 @@ export function DistributeTab({
     analytics,
   });
   const automationSummary = automationStatusSummary(launchRun.items);
+  const proofPostCount =
+    channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
+    otherPosts.length;
+  const proofIssueCount = channelCards.filter(
+    (card) => card.status.value === "problem",
+  ).length;
+  const selectedChannelCount = launchRun.run
+    ? launchRun.items.length
+    : launchRun.startChannels.filter((channel) => channel.defaultSelected).length;
+  const accountReadyCount = launchRun.startChannels.filter(
+    (channel) => channel.readinessTone === "positive",
+  ).length;
 
   return (
     <div>
       {/* Header — what this tab is + a one-line readiness signal. */}
       <div
         id="distribute-header"
-        className="mb-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm"
       >
         <div className="mb-2 flex items-center gap-2.5">
           <IconTile><Icons.link className="h-4 w-4" /></IconTile>
-          <h3 className="text-sm font-semibold text-gray-900">
-            Market this property
+          <h3 className="text-sm font-semibold text-white">
+            Distribution
           </h3>
         </div>
-        <p className="mb-3 text-xs text-gray-500">
-          Choose where to publish, follow the steps for each site, and see which
-          channels bring renters back. Vacantless handles what it can, guides you
-          where a site needs login or payment, and saves proof before anything is
-          counted as Live.
+        <p className="mb-3 max-w-2xl text-sm text-slate-300">
+          Choose channels, connect accounts, post yourself, or let Vacantless run it.
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
             className={`rounded-full px-2.5 py-0.5 font-medium ${
-              readyToShare ? TONE_CHIP.positive : TONE_CHIP.warning
+              readyToShare
+                ? "bg-emerald-400 text-slate-950"
+                : "bg-amber-300 text-slate-950"
             }`}
           >
             {readyToShare
@@ -391,11 +409,11 @@ export function DistributeTab({
                   requiredOutstanding === 1 ? "thing" : "things"
                 } to finish first`}
           </span>
-          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 font-medium text-gray-600">
+          <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
             {liveChannels} {liveChannels === 1 ? "channel" : "channels"} posted
           </span>
           {!readyToShare && (
-            <a href="#rental-details" className="font-medium text-brand underline">
+            <a href="#rental-details" className="font-medium text-white underline">
               Finish setup in Unit details →
             </a>
           )}
@@ -432,6 +450,26 @@ export function DistributeTab({
           </div>
         )}
       </div>
+
+      <DistributionBasicsPanel
+        readyToShare={readyToShare}
+        requiredOutstanding={requiredOutstanding}
+        selectedChannelCount={selectedChannelCount}
+        liveChannels={liveChannels}
+        accountReadyCount={accountReadyCount}
+        accountTotalCount={launchRun.startChannels.length}
+        hasRun={Boolean(launchRun.run)}
+      />
+
+      {launchRun.conciergeDeskEnabled && (
+        <PostingModePanel
+          propertyId={propertyId}
+          target={conciergeTarget ?? null}
+          activeItem={activeConciergeItem ?? null}
+          usage={launchRun.conciergeUsage}
+          dailyLostLabel={launchRun.conciergeDailyLostLabel}
+        />
+      )}
 
       {/* Next-action banner (Slice 1): one prioritized step across all channels,
           so the command center leads with a single obvious action (Codex #1/#4). */}
@@ -476,18 +514,6 @@ export function DistributeTab({
           linkIsLive={linkIsLive}
         />
 
-        {launchRun.conciergeDeskEnabled && (
-          <ConciergeDeskEntry
-            href={
-              conciergeTarget
-                ? `#concierge-${conciergeTarget.id}`
-                : "#publish-checklist"
-            }
-            hasEligibleItem={Boolean(conciergeTarget)}
-            usage={launchRun.conciergeUsage}
-            dailyLostLabel={launchRun.conciergeDailyLostLabel}
-          />
-        )}
       </DistributionStatusStrip>
 
       {/* THE command center — one guided surface: pick channels, follow one next
@@ -503,21 +529,29 @@ export function DistributeTab({
         realtorReferralEnabled={launchRun.realtorReferralEnabled}
       />
 
-      {/* Posted links & tools (Slice 1): the old per-channel grid + the "other
-          channels" tracker, demoted to a collapsed drawer. These are tools
-          (tracked links, reply snippets, add-a-tracked-post), not a second action
-          surface — one command center, one place per channel (Codex #2). Feed
-          partner setup stays inside its channel card here. */}
+      {/* Proof links (Slice 1): keep source-of-truth live ad URLs easy to save;
+          tuck heavier posting tools behind per-channel disclosure rows. */}
       <details className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-gray-900">
-          Posted links &amp; tools
-          <span className="ml-2 text-xs font-normal text-gray-500">
-            Tracked links, reply snippets, and manually-tracked posts
-          </span>
+        <summary className="cursor-pointer list-none px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900">
+                Proof links
+              </p>
+              <p className="text-xs text-gray-500">
+                {proofPostCount} saved
+                {proofIssueCount > 0
+                  ? ` · ${proofIssueCount} missing an ad URL`
+                  : " · live ad URLs and tracked inquiry links"}
+              </p>
+            </div>
+            <span className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700">
+              Manage links
+            </span>
+          </div>
         </summary>
         <div className="border-t border-gray-100 px-5 py-4">
-          {/* Per-channel cards (tracked posts, copy, reply snippets, partner). */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {channelCards.map((card) => (
               <ChannelCard
                 key={card.channel.key}
@@ -535,50 +569,49 @@ export function DistributeTab({
             ))}
           </div>
 
-          {/* Other / manual channels — anything not in the matrix (PadMapper, a
-              local board, a custom post). Keeps the durable "this ad exists here"
-              record for attribution. */}
-          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
-            <div className="mb-2 flex items-center gap-2.5">
-              <IconTile><Icons.list className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold text-gray-900">
-                Other channels
-              </h3>
+          <details className="mt-3 rounded-xl border border-gray-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900">
+                  Other proof links
+                </p>
+                <p className="text-xs text-gray-500">
+                  {otherPosts.length} saved outside the main channel list
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-brand">Open</span>
+            </summary>
+            <div className="border-t border-gray-100 px-4 py-3">
+
+              {otherPosts.length > 0 && (
+                <ul className="mb-4 space-y-3">
+                  {otherPosts.map((post) => (
+                    <PostRow
+                      key={post.id}
+                      post={post}
+                      propertyId={propertyId}
+                      linkIsLive={linkIsLive}
+                      fixedPortal="other"
+                      showLabel
+                    />
+                  ))}
+                </ul>
+              )}
+
+              {linkIsLive ? (
+                <AddPostForm
+                  propertyId={propertyId}
+                  portal="other"
+                  addFormKey={addFormKey}
+                  showLabel
+                />
+              ) : (
+                <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                  Tracking turns on when this rental is Live.
+                </p>
+              )}
             </div>
-            <p className="mb-4 text-xs text-gray-500">
-              Track any other place you posted, like a local board, community
-              group, or niche site, so its inquiries are counted too.
-            </p>
-
-            {otherPosts.length > 0 && (
-              <ul className="mb-4 space-y-3">
-                {otherPosts.map((post) => (
-                  <PostRow
-                    key={post.id}
-                    post={post}
-                    propertyId={propertyId}
-                    linkIsLive={linkIsLive}
-                    fixedPortal="other"
-                    showLabel
-                  />
-                ))}
-              </ul>
-            )}
-
-            {linkIsLive ? (
-              <AddPostForm
-                propertyId={propertyId}
-                portal="other"
-                addFormKey={addFormKey}
-                showLabel
-              />
-            ) : (
-              <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                Tracking a post turns on when this rental is Live and accepting
-                inquiries.
-              </p>
-            )}
-          </div>
+          </details>
         </div>
       </details>
 
@@ -701,46 +734,200 @@ function DistributionStatusStrip({
   );
 }
 
-function ConciergeDeskEntry({
-  href,
-  hasEligibleItem,
+function conciergeRequestedDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return null;
+  return new Date(time).toISOString().slice(0, 10);
+}
+
+function DistributionBasicsPanel({
+  readyToShare,
+  requiredOutstanding,
+  selectedChannelCount,
+  liveChannels,
+  accountReadyCount,
+  accountTotalCount,
+  hasRun,
+}: {
+  readyToShare: boolean;
+  requiredOutstanding: number;
+  selectedChannelCount: number;
+  liveChannels: number;
+  accountReadyCount: number;
+  accountTotalCount: number;
+  hasRun: boolean;
+}) {
+  const cards = [
+    {
+      title: "Property",
+      value: readyToShare ? "Ready" : `${requiredOutstanding} left`,
+      detail: readyToShare ? "Ready to market" : "Needs setup",
+      href: readyToShare ? "#publish-checklist" : "#rental-details",
+      action: readyToShare ? "Use property" : "Finish setup",
+    },
+    {
+      title: "Channels",
+      value: `${selectedChannelCount} selected`,
+      detail: hasRun ? `${liveChannels} live` : "Pick reach",
+      href: "#publish-checklist",
+      action: hasRun ? "Open channels" : "Choose channels",
+    },
+    {
+      title: "Account access",
+      value: `${accountReadyCount}/${accountTotalCount} ready`,
+      detail: "Credentials",
+      href: "/dashboard/settings?tab=distribution",
+      action: "Connect accounts",
+    },
+    {
+      title: "Posting choice",
+      value: "You or us",
+      detail: "Self-serve or managed",
+      href: "#posting-mode",
+      action: "Pick mode",
+    },
+  ];
+
+  return (
+    <section className="mb-4 grid gap-3 md:grid-cols-4">
+      {cards.map((card) => (
+        <a
+          key={card.title}
+          href={card.href}
+          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            {card.title}
+          </p>
+          <p className="mt-1 text-xl font-semibold text-gray-950">
+            {card.value}
+          </p>
+          <p className="mt-1 text-xs text-gray-600">{card.detail}</p>
+          <p className="mt-3 text-xs font-semibold text-brand">{card.action}</p>
+        </a>
+      ))}
+    </section>
+  );
+}
+
+function PostingModePanel({
+  propertyId,
+  target,
+  activeItem,
   usage,
   dailyLostLabel,
 }: {
-  href: string;
-  hasEligibleItem: boolean;
+  propertyId: string;
+  target: RunItemView | null;
+  activeItem: RunItemView | null;
   usage: { used: number; included: number };
   dailyLostLabel: string | null;
 }) {
+  const referralTarget = target?.channel === "realtor_ca";
+  const activeReferral = activeItem?.channel === "realtor_ca";
+  const activeRequestedDate = conciergeRequestedDate(
+    activeItem?.conciergeRequestedAt,
+  );
+  const activeRequestedSentence = activeRequestedDate
+    ? ` Requested ${activeRequestedDate}.`
+    : "";
+  const doneForYouHeading = activeItem
+    ? activeReferral
+      ? `A network agent is already handling ${activeItem.channelLabel}.`
+      : `Vacantless is already posting ${activeItem.channelLabel}.`
+    : target
+      ? referralTarget
+        ? "Pay a licensed agent to handle Realtor.ca"
+        : `Pay Vacantless to post ${target.channelLabel}`
+      : "Pay Vacantless to post";
+  const doneForYouBody = activeItem
+    ? activeReferral
+      ? `The referral is in progress.${activeRequestedSentence} It still needs the real Realtor.ca listing URL before it counts as Live.`
+      : `The publishing desk has this channel in its queue.${activeRequestedSentence} No second click is needed; staff still has to post and save proof before it counts as Live.`
+    : target
+      ? referralTarget
+        ? "A licensed network agent handles the Realtor.ca path through their brokerage."
+        : "Vacantless takes over the channel and records the live proof here."
+      : "Choose channels first, then the done-for-you option appears here.";
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-5 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-900">
-          Done-for-you posting
+    <section
+      id="posting-mode"
+      className="mb-4 grid scroll-mt-6 gap-3 md:grid-cols-2"
+    >
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          Post it myself
         </p>
-        <p className="text-xs text-gray-600">
-          {hasEligibleItem
-            ? "The existing publishing desk can take over an eligible manual channel and still records live proof here."
-            : "Choose a manual channel in the checklist, then the existing publishing desk handoff appears on that channel."}
+        <p className="mt-1 text-lg font-semibold text-gray-950">
+          Compose. Post. Prove.
         </p>
-        <p className="mt-1 text-xs font-medium text-brand">
+        <p className="mt-1 text-xs text-gray-600">
+          Guided steps, your accounts, your approval.
+        </p>
+        <a
+          href="#publish-checklist"
+          className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          Open posting checklist
+        </a>
+      </div>
+
+      <div className="rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
+          Done-for-you
+        </p>
+        <p className="mt-1 text-lg font-semibold text-white">
+          {doneForYouHeading}
+        </p>
+        <p className="mt-1 text-xs text-slate-300">{doneForYouBody}</p>
+        <p className="mt-1 text-xs font-medium text-emerald-300">
           {conciergeUsageLabel(usage)}
         </p>
         {dailyLostLabel && (
-          <p className="mt-1 text-xs text-gray-600">
-            Every day vacant costs about {dailyLostLabel} - we post everywhere and
-            keep it live.
+          <p className="mt-1 text-xs text-slate-300">
+            Every day vacant costs about {dailyLostLabel}.
           </p>
         )}
+        <div className="mt-4">
+          {activeItem ? (
+            <a
+              href={`#run-item-${activeItem.id}`}
+              className="inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
+            >
+              {activeReferral ? "View referral status" : "View desk status"}
+            </a>
+          ) : target ? (
+            <form action={requestConciergePublish}>
+              <input type="hidden" name="property_id" value={propertyId} />
+              <input type="hidden" name="item_id" value={target.id} />
+              {referralTarget && (
+                <input
+                  type="hidden"
+                  name="referral"
+                  value="realtor_network_agent"
+                />
+              )}
+              <button
+                type="submit"
+                className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
+              >
+                {referralTarget
+                  ? "Dispatch a network agent"
+                  : "Ask Vacantless to post it"}
+              </button>
+            </form>
+          ) : (
+            <a
+              href="#publish-checklist"
+              className="inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
+            >
+              Choose channels
+            </a>
+          )}
+        </div>
       </div>
-      <a
-        href={href}
-        className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-white"
-        style={{ backgroundColor: "var(--brand-color)" }}
-      >
-        Ask Vacantless to post it
-      </a>
-    </div>
+    </section>
   );
 }
 
@@ -1133,164 +1320,62 @@ function ChannelCard({
     status.value === "needs_refresh" && status.lastPostedOn
       ? daysBetween(status.lastPostedOn, today)
       : null;
+  const proofSummary =
+    card.posts.length > 0
+      ? `${card.posts.length} ${card.posts.length === 1 ? "proof link" : "proof links"} saved`
+      : "No proof link saved";
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      {/* Header row: name + mode + status. */}
-      <div className="mb-1.5 flex flex-wrap items-center gap-2">
-        <h4 className="text-sm font-semibold text-gray-900">{channel.label}</h4>
-        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-          {channelModeLabel(channel.mode)}
-        </span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CHIP[tone]}`}
-        >
-          {channelStatusLabel(status.value)}
-        </span>
-        {status.inquiryCount > 0 && (
-          <span className="text-[11px] text-gray-500">
-            {status.inquiryCount}{" "}
-            {status.inquiryCount === 1 ? "inquiry" : "inquiries"}
-          </span>
-        )}
-      </div>
-
-      <p className="mb-3 text-xs text-gray-500">{channel.blurb}</p>
-
-      {/* Live-ad summary (posted / needs refresh). */}
-      {status.liveUrl && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <h4 className="text-sm font-semibold text-gray-900">
+              {channel.label}
+            </h4>
+            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
+              {channelModeLabel(channel.mode)}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CHIP[tone]}`}
+            >
+              {channelStatusLabel(status.value)}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500">
+            {proofSummary}
+            {status.inquiryCount > 0
+              ? ` · ${status.inquiryCount} ${status.inquiryCount === 1 ? "inquiry" : "inquiries"}`
+              : ""}
+          </p>
+        </div>
+        {status.liveUrl && (
           <a
             href={status.liveUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-brand underline"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
           >
-            Open live ad →
+            Open live ad
           </a>
-          {status.lastPostedOn && (
-            <span className="text-gray-500">
-              Posted {status.lastPostedOn}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Refresh reminder. */}
-      {status.value === "needs_refresh" && (
-        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {refreshAge != null
-            ? `This ad has been up about ${refreshAge} days. Refresh or repost it so it stays near the top.`
-            : "This ad may be stale. Refresh or repost it, then update its status below."}
-        </p>
-      )}
-
-      {/* Problem: a live post lost its link. */}
-      {status.value === "problem" && (
-        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          A post here is marked Live but has no ad link, so its inquiries
-          can&apos;t be tracked. Add the ad URL below.
-        </p>
-      )}
-
-      {/* Missing requirements (blockers). */}
-      {status.blockers.length > 0 && (
-        <div className="mb-3">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-            Before you post here
-          </p>
-          <ul className="space-y-1">
-            {status.blockers.map((b) => (
-              <li
-                key={b}
-                className="flex items-start gap-1.5 text-xs text-gray-600"
-              >
-                <span aria-hidden className="mt-px text-amber-500">
-                  ○
-                </span>
-                <span>{b}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Feed note (feed-eligible channels only). */}
-      {feed && (
-        <p className="mb-3 text-xs text-gray-500">
-          <span className="font-medium text-gray-700">Listing feed:</span>{" "}
-          {feed.inFeed
-            ? "This rental is in your Vacantless feed. A partner site still needs to accept and show it before it is live there."
-            : feed.hint}
-        </p>
-      )}
-
-      {/* Feed-partner onboarding (Slice 3) — org-level, edited from here. */}
-      {channel.feedEligible && (
-        <PartnerSection
-          channelKey={channel.key}
-          channelLabel={channel.label}
-          propertyId={propertyId}
-          partner={partner}
-        />
-      )}
-
-      {/* Actions: open portal + copy channel wording. */}
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <a
-          href={channel.portalUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={SECONDARY_BTN}
-        >
-          Open {channel.label} →
-        </a>
-        {combinedCopy && (
-          <CopyTextButton value={combinedCopy} label="Copy this channel's wording" />
         )}
-        <a href="#listing-copy-title" className="text-xs font-medium text-brand underline">
-          Full copy &amp; field sheet in Photos &amp; listing copy →
-        </a>
       </div>
 
-      {channel.key === "rentfaster" && (
-        <RentFasterPostingKit
-          copy={copy}
-          fillSheet={fillSheet}
-          reservedTrackedUrl={reservedTrackedUrl}
-        />
+      {status.value === "needs_refresh" && (
+        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {refreshAge != null
+            ? `Refresh due after about ${refreshAge} days live.`
+            : "Refresh due."}
+        </p>
       )}
 
-      {/* Reply snippets — ready-to-paste replies to a renter's message. */}
-      {replySnippets.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-medium text-brand">
-            Reply snippets
-          </summary>
-          <div className="mt-2 space-y-2">
-            {replySnippets.map((s) => (
-              <div
-                key={s.key}
-                className="rounded-lg border border-gray-200 bg-gray-50 p-2.5"
-              >
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                    {s.label}
-                  </span>
-                  <CopyTextButton value={s.text} label="Copy" />
-                </div>
-                <p className="text-xs text-gray-700">{s.text}</p>
-              </div>
-            ))}
-          </div>
-        </details>
+      {status.value === "problem" && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          Live status needs an ad URL.
+        </p>
       )}
 
-      {/* Post-publish QA checker (Slice 6). */}
-      <QaChecker channelKey={channel.key} expected={qaExpected} />
-
-      {/* Tracked posts + add form. */}
-      <div className="mt-3 border-t border-gray-100 pt-3">
+      <div className="mt-3">
         {card.posts.length > 0 && (
           <ul className="mb-3 space-y-3">
             {card.posts.map((post) => (
@@ -1313,10 +1398,115 @@ function ChannelCard({
           />
         ) : (
           <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Set this rental Live to get a tracked inquiry link for this channel.
+            Set this rental Live to create tracked links.
           </p>
         )}
       </div>
+
+      <details className="mt-3 border-t border-gray-100 pt-3">
+        <summary className="cursor-pointer text-xs font-semibold text-brand">
+          Posting tools
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-gray-500">{channel.blurb}</p>
+
+          {status.blockers.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Before posting
+              </p>
+              <ul className="space-y-1">
+                {status.blockers.map((b) => (
+                  <li
+                    key={b}
+                    className="flex items-start gap-1.5 text-xs text-gray-600"
+                  >
+                    <span aria-hidden className="mt-px text-amber-500">
+                      ○
+                    </span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {feed && (
+            <p className="text-xs text-gray-500">
+              <span className="font-medium text-gray-700">Listing feed:</span>{" "}
+              {feed.inFeed
+                ? "In the Vacantless feed; partner acceptance still decides live status."
+                : feed.hint}
+            </p>
+          )}
+
+          {channel.feedEligible && (
+            <PartnerSection
+              channelKey={channel.key}
+              channelLabel={channel.label}
+              propertyId={propertyId}
+              partner={partner}
+            />
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={channel.portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={SECONDARY_BTN}
+            >
+              Open {channel.label} →
+            </a>
+            {combinedCopy && (
+              <CopyTextButton
+                value={combinedCopy}
+                label="Copy this channel's wording"
+              />
+            )}
+            <a
+              href="#listing-copy-title"
+              className="text-xs font-medium text-brand underline"
+            >
+              Full copy &amp; field sheet →
+            </a>
+          </div>
+
+          {channel.key === "rentfaster" && (
+            <RentFasterPostingKit
+              copy={copy}
+              fillSheet={fillSheet}
+              reservedTrackedUrl={reservedTrackedUrl}
+            />
+          )}
+
+          {replySnippets.length > 0 && (
+            <details>
+              <summary className="cursor-pointer text-xs font-medium text-brand">
+                Reply snippets
+              </summary>
+              <div className="mt-2 space-y-2">
+                {replySnippets.map((s) => (
+                  <div
+                    key={s.key}
+                    className="rounded-lg border border-gray-200 bg-gray-50 p-2.5"
+                  >
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        {s.label}
+                      </span>
+                      <CopyTextButton value={s.text} label="Copy" />
+                    </div>
+                    <p className="text-xs text-gray-700">{s.text}</p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          <QaChecker channelKey={channel.key} expected={qaExpected} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -1437,7 +1627,7 @@ function AddPostForm({
   return (
     <details>
       <summary className="cursor-pointer text-sm font-medium text-brand">
-        + Track a live ad
+        Save live ad URL
       </summary>
       <form
         // Remount on a successful add to clear the uncontrolled inputs

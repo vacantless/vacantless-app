@@ -26,6 +26,11 @@ export const PUBLISH_CHANNEL_KEYS = [
   "network_feed",
   "facebook",
   "kijiji",
+  "linkedin",
+  "instagram",
+  "facebook_feed",
+  "whatsapp",
+  "snapchat",
   "rentals_ca",
   "rentfaster",
   "zumper",
@@ -487,7 +492,15 @@ export function preparePublishChannel(
     return feedPartnerPlan(meta, context);
   }
 
-  if (key === "facebook" || key === "kijiji") {
+  if (
+    key === "facebook" ||
+    key === "kijiji" ||
+    key === "linkedin" ||
+    key === "instagram" ||
+    key === "facebook_feed" ||
+    key === "whatsapp" ||
+    key === "snapchat"
+  ) {
     return plan(meta, {
       status: "needs_login",
       operatorActionUrl: meta.actionUrl,

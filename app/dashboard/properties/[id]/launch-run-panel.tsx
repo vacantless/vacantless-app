@@ -64,6 +64,7 @@ export type RunItemView = {
   transport: string | null;
   verificationStatus: string | null;
   proofUrl: string | null;
+  conciergeRequestedAt: string | null;
   // S482: the honest browser co-pilot guided-posting script (copilot channels).
   copilotScript: CopilotScript | null;
   // S488 Slice 1: merged from the retired where-posted grid so the command
@@ -285,107 +286,95 @@ export function LaunchRunPanel({
   // the "dispatch a network agent" referral.
   realtorReferralEnabled: boolean;
 }) {
+  const suggestedStartChannels = startChannels.filter(
+    (channel) => channel.defaultSelected,
+  );
+  const optionalStartChannels = startChannels.filter(
+    (channel) => !channel.defaultSelected,
+  );
+  const renderStartChannelRows = (channels: PublishChannelChoiceView[]) =>
+    channels.map((c) => (
+      <label
+        key={c.key}
+        className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-sm text-gray-700 last:border-b-0 hover:bg-slate-50"
+        title={c.description}
+      >
+        <input
+          type="checkbox"
+          name="channels"
+          value={c.key}
+          defaultChecked={c.defaultSelected}
+          className="shrink-0"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium text-gray-900">
+            {c.label}
+          </span>
+          {(c.blockers.length > 0 || c.setupBlockers.length > 0) && (
+            <span className="block truncate text-[11px] text-amber-700">
+              {c.blockers[0] ?? c.setupBlockers[0]}
+            </span>
+          )}
+        </span>
+        <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 sm:inline-flex">
+          {c.modeLabel}
+        </span>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[c.readinessTone]}`}
+        >
+          {c.readinessLabel}
+        </span>
+        {c.defaultSelected && (
+          <span className="hidden shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand sm:inline-flex">
+            Suggested
+          </span>
+        )}
+      </label>
+    ));
+
   // No active run: offer to start one.
   if (!run) {
     return (
       <div
         id="publish-checklist"
-        className="mb-4 scroll-mt-6 rounded-2xl border border-brand/30 bg-brand/5 p-5"
+        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
       >
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Publish to channels
+          <h3 className="text-sm font-semibold text-gray-950">
+            Channels
           </h3>
           <Link
             href="/dashboard/settings?tab=distribution"
-            className="text-xs font-medium text-brand underline"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Channel setup
+            Connect accounts
           </Link>
         </div>
-        <p className="mb-3 text-xs text-gray-600">
-          Choose the places once. Vacantless turns on what it can, guides you
-          where a site needs login or payment, and keeps proof and renter leads
-          in one checklist.
-        </p>
-        <div className="mb-4 grid gap-2 text-xs text-gray-700 md:grid-cols-3">
-          <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
-            <p className="font-semibold text-gray-900">1. Choose channels</p>
-            <p className="mt-0.5 text-gray-500">
-              Keep the defaults unless you know a site is not needed.
-            </p>
-          </div>
-          <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
-            <p className="font-semibold text-gray-900">2. Post or verify</p>
-            <p className="mt-0.5 text-gray-500">
-              Automatic channels are checked here; outside sites need your login.
-            </p>
-          </div>
-          <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
-            <p className="font-semibold text-gray-900">3. Save proof</p>
-            <p className="mt-0.5 text-gray-500">
-              A channel counts as Live only after a real ad URL or proof is saved.
-            </p>
-          </div>
-        </div>
+        <p className="mb-3 text-xs text-gray-500">Select reach. Keep it short.</p>
         <form action={startDistributionRun}>
           <input type="hidden" name="property_id" value={propertyId} />
-          <div className="mb-3 grid gap-2 md:grid-cols-2">
-            {startChannels.map((c) => (
-              <label
-                key={c.key}
-                className="cursor-pointer rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700"
-              >
-                <div className="flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    name="channels"
-                    value={c.key}
-                    defaultChecked={c.defaultSelected}
-                    className="mt-1"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-medium text-gray-900">{c.label}</span>
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                        {c.modeLabel}
-                      </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[c.statusTone]}`}
-                      >
-                        {c.statusLabel}
-                      </span>
-                      <span
-                        title="Channel setup readiness"
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[c.readinessTone]}`}
-                      >
-                        Setup: {c.readinessLabel}
-                      </span>
-                    </span>
-                    <span className="mt-1 block text-xs text-gray-500">
-                      {c.description}
-                    </span>
-                    {c.blockers.length > 0 && (
-                      <span className="mt-2 block rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                        {c.blockers[0]}
-                      </span>
-                    )}
-                    {c.setupBlockers.length > 0 && (
-                      <span className="mt-2 block rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600">
-                        Setup: {c.setupBlockers[0]}
-                      </span>
-                    )}
+          <div className="mb-3 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-inner">
+            {renderStartChannelRows(suggestedStartChannels)}
+            {optionalStartChannels.length > 0 && (
+              <details className="border-t border-slate-100">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                  <span>More channels</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                    {optionalStartChannels.length}
                   </span>
+                </summary>
+                <div className="border-t border-slate-100">
+                  {renderStartChannelRows(optionalStartChannels)}
                 </div>
-              </label>
-            ))}
+              </details>
+            )}
           </div>
           <button
             type="submit"
             className={PRIMARY_BTN}
             style={{ backgroundColor: "var(--brand-color)" }}
           >
-            Add selected channels to publish checklist
+            Add selected channels
           </button>
         </form>
       </div>
@@ -410,18 +399,18 @@ export function LaunchRunPanel({
   return (
     <div
       id="publish-checklist"
-      className="mb-4 scroll-mt-6 rounded-2xl border border-brand/30 bg-brand/5 p-5"
+      className="mb-4 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
     >
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">
-          Publish checklist
+        <h3 className="text-sm font-semibold text-gray-950">
+          Channels
         </h3>
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/dashboard/settings?tab=distribution"
-            className="text-xs font-medium text-brand underline"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Channel setup
+            Connect accounts
           </Link>
           <span className="text-xs font-medium text-gray-600">
             {progress.resolved} of {progress.total} channels done
@@ -434,7 +423,7 @@ export function LaunchRunPanel({
           style={{ width: `${progress.pct}%` }}
         />
       </div>
-      <div className="mb-4 rounded-xl border border-brand/25 bg-white p-4">
+      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">
@@ -467,12 +456,12 @@ export function LaunchRunPanel({
         </div>
       </div>
 
-      <ul className="space-y-3">
+      <ul className="max-h-[42rem] space-y-2 overflow-y-auto pr-1">
         {items.map((item) => (
           <li
             key={item.id}
             id={`run-item-${item.id}`}
-            className="rounded-xl border border-gray-200 bg-white p-4"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-3"
           >
             {item.canConcierge &&
               (item.channel !== "realtor_ca" || realtorReferralEnabled) && (
@@ -485,9 +474,9 @@ export function LaunchRunPanel({
               }
               className="group"
             >
-              <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900">
                       {item.channelLabel}
                     </span>
@@ -504,9 +493,6 @@ export function LaunchRunPanel({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-600">
-                    {operatorActionSummary(item)}
-                  </p>
                 </div>
                 <span className="mt-0.5 text-xs font-medium text-brand group-open:hidden">
                   Details
@@ -517,6 +503,14 @@ export function LaunchRunPanel({
               </summary>
 
               <div className="mt-3 border-t border-gray-100 pt-3">
+                <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                  <p className="text-xs font-medium text-gray-800">
+                    {operatorActionSummary(item)}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {operatorOwnerLine(item)}
+                  </p>
+                </div>
 
             {(item.auditMessage || item.errorMessage || item.blockers.length > 0) && (
               <div className="mb-3 space-y-2">

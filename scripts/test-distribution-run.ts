@@ -190,7 +190,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 // --- selectable channels ---------------------------------------------------
 {
   const sel = selectableRunChannels(DISTRIBUTION_CHANNELS, new Set());
-  ok("selectable includes all 7 matrix + other = 8", sel.length === 8);
+  ok("selectable includes all 12 matrix + other = 13", sel.length === 13);
   ok("selectable includes other", sel.some((c) => c.key === "other"));
 }
 {
@@ -200,7 +200,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok("excludes already-in-run facebook", !sel.some((c) => c.key === "facebook"));
   ok("excludes already-in-run other", !sel.some((c) => c.key === "other"));
-  ok("selectable now 6", sel.length === 6);
+  ok("selectable now 11", sel.length === 11);
 }
 
 // --- operator UI source checks ---------------------------------------------
@@ -228,6 +228,13 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "browser co-pilot summary explains front-screen helper",
     panelSource.includes("The helper opens in front of you"),
   );
+  ok(
+    "channel picker and active run list stay compact when channels grow",
+    panelSource.includes("max-h-80 overflow-y-auto") &&
+      panelSource.includes("max-h-[42rem]") &&
+      panelSource.includes("More channels") &&
+      panelSource.includes("Connect accounts"),
+  );
 }
 {
   const distributeSource = readFileSync(
@@ -238,6 +245,78 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "next banner explains outside-site approval",
     distributeSource.includes("You still approve") &&
       distributeSource.includes("only after real proof is saved"),
+  );
+  ok(
+    "done-for-you posting is front of the collapsed status strip",
+    distributeSource.indexOf("<PostingModePanel") > -1 &&
+      distributeSource.indexOf("<DistributionStatusStrip") > -1 &&
+      distributeSource.indexOf("<PostingModePanel") <
+        distributeSource.indexOf("<DistributionStatusStrip"),
+  );
+  ok(
+    "front done-for-you CTA submits instead of only jumping",
+    distributeSource.includes("form action={requestConciergePublish}") &&
+      distributeSource.includes("target={conciergeTarget ?? null}") &&
+      distributeSource.includes("Ask Vacantless to post it"),
+  );
+  ok(
+    "already-queued desk work is labeled as in progress",
+    distributeSource.includes("Vacantless is already posting") &&
+      distributeSource.includes("View desk status") &&
+      distributeSource.includes("No second click is needed"),
+  );
+  ok(
+    "distribution dashboard uses plain four-part model",
+    distributeSource.includes("Distribution") &&
+      distributeSource.includes("Property") &&
+      distributeSource.includes("Channels") &&
+      distributeSource.includes("Account access") &&
+      distributeSource.includes("Posting choice"),
+  );
+  ok(
+    "posting choice offers self-serve and done-for-you",
+    distributeSource.includes("Post it myself") &&
+      distributeSource.includes("Pay Vacantless to post") &&
+      distributeSource.includes("Open posting checklist"),
+  );
+  ok(
+    "already-queued desk work shows request date when available",
+    distributeSource.includes("conciergeRequestedDate") &&
+      distributeSource.includes("activeItem?.conciergeRequestedAt"),
+  );
+  ok(
+    "posted links drawer is now a proof-link manager",
+    distributeSource.includes("Proof links") &&
+      distributeSource.includes("Manage links") &&
+      distributeSource.includes("Save live ad URL"),
+  );
+  ok(
+    "heavier channel tools sit behind per-channel disclosure",
+    distributeSource.includes("Posting tools") &&
+      distributeSource.includes("Full copy &amp; field sheet"),
+  );
+}
+{
+  const actionsSource = readFileSync(
+    "app/dashboard/properties/actions.ts",
+    "utf8",
+  );
+  ok(
+    "concierge request fails visibly when queue update fails",
+    actionsSource.includes("requestConciergePublish: update failed") &&
+      actionsSource.includes("runerr=claimfailed"),
+  );
+}
+{
+  const adminConciergeSource = readFileSync(
+    "app/dashboard/admin/concierge/page.tsx",
+    "utf8",
+  );
+  ok(
+    "admin concierge desk highlights stale unclaimed work",
+    adminConciergeSource.includes("STALE_CONCIERGE_QUEUE_MS") &&
+      adminConciergeSource.includes("unclaimed for more than 24 hours") &&
+      adminConciergeSource.includes("Unclaimed, requested"),
   );
 }
 {

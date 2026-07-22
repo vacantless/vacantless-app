@@ -37,6 +37,11 @@ eq(channelCapability("facebook").transport, "browser_copilot", "facebook is co-p
 eq(channelCapability("facebook").requiresLogin, true, "facebook needs login");
 eq(channelCapability("facebook").postingPolicy, "human_confirmed", "facebook human_confirmed (no silent post)");
 eq(channelCapability("kijiji").transport, "browser_copilot", "kijiji is co-pilot");
+eq(channelCapability("linkedin").transport, "browser_copilot", "linkedin is co-pilot");
+eq(channelCapability("instagram").requiresLogin, true, "instagram needs login");
+eq(channelCapability("facebook_feed").postingPolicy, "human_confirmed", "facebook feed human confirmed");
+eq(channelCapability("whatsapp").supportsConcierge, true, "whatsapp supports concierge");
+eq(channelCapability("snapchat").supportsCopilot, true, "snapchat supports co-pilot");
 eq(channelCapability("viewit").requiresPayment, true, "viewit needs payment");
 eq(channelCapability("rentals_ca").transport, "feed_partner", "rentals_ca feed_partner");
 eq(channelCapability("rentals_ca").needsOrgAccount, false, "rentals_ca is guided unless partner acceptance exists");
@@ -46,7 +51,7 @@ eq(channelCapability("rentfaster").postingPolicy, "human_confirmed", "rentfaster
 eq(channelCapability("realtor_ca").transport, "broker", "realtor_ca broker");
 eq(channelCapability("realtor_ca").postingPolicy, "broker_only", "realtor_ca broker_only");
 eq(channelCapability("other").transport, "custom", "other custom");
-eq(allChannelCapabilities().length, 11, "11 channel capabilities");
+eq(allChannelCapabilities().length, 16, "16 channel capabilities");
 
 // --- account readiness ------------------------------------------------------
 {
@@ -91,6 +96,11 @@ eq(allChannelCapabilities().length, 11, "11 channel capabilities");
   const r = channelAccountReadiness({ capability: channelCapability("facebook") });
   eq(r.status, "ready", "facebook ready to co-pilot");
   eq(r.nextActionKind, "open_copilot", "facebook open_copilot");
+}
+{
+  const r = channelAccountReadiness({ capability: channelCapability("instagram") });
+  eq(r.status, "ready", "instagram ready to co-pilot");
+  eq(r.nextActionKind, "open_copilot", "instagram open_copilot");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("viewit"), accountStatus: "needs_payment" });

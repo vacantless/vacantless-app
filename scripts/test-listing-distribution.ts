@@ -37,7 +37,7 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- portals ---------------------------------------------------------------
-ok("PORTAL_KEYS has 8", PORTAL_KEYS.length === 8);
+ok("PORTAL_KEYS has 13", PORTAL_KEYS.length === 13);
 ok("PORTALS mirrors keys", PORTALS.length === PORTAL_KEYS.length);
 ok("PORTALS carries labels", PORTALS[0].label === "Kijiji");
 ok("isPortalKey: kijiji", isPortalKey("kijiji"));
@@ -51,6 +51,11 @@ ok("portalLabel: rentals_ca", portalLabel("rentals_ca") === "Rentals.ca");
 ok("portalLabel: rentfaster", portalLabel("rentfaster") === "RentFaster.ca");
 ok("portalLabel: zumper names PadMapper reach", portalLabel("zumper") === "Zumper + PadMapper");
 ok("portalLabel: facebook", portalLabel("facebook") === "Facebook Marketplace");
+ok("portalLabel: linkedin", portalLabel("linkedin") === "LinkedIn");
+ok("portalLabel: instagram", portalLabel("instagram") === "Instagram");
+ok("portalLabel: facebook_feed", portalLabel("facebook_feed") === "Facebook feed");
+ok("portalLabel: whatsapp", portalLabel("whatsapp") === "WhatsApp");
+ok("portalLabel: snapchat", portalLabel("snapchat") === "Snapchat");
 ok("portalLabel: junk -> Other", portalLabel("xyz") === "Other");
 
 // --- statuses --------------------------------------------------------------
@@ -110,6 +115,10 @@ ok(
 ok(
   "sourceLabelForPost: rentfaster",
   sourceLabelForPost({ portal: "rentfaster" }) === "RentFaster.ca",
+);
+ok(
+  "sourceLabelForPost: instagram",
+  sourceLabelForPost({ portal: "instagram" }) === "Instagram",
 );
 ok(
   "sourceLabelForPost: other uses label",

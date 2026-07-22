@@ -25,6 +25,7 @@ const APP_URL =
 
 const FIELD =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm";
+const STALE_CONCIERGE_QUEUE_MS = 24 * 60 * 60 * 1000;
 
 function money(cents: number | null | undefined): string {
   if (cents == null) return "—";
@@ -37,6 +38,25 @@ function money(cents: number | null | undefined): string {
 function channelLabel(channel: string): string {
   const key = normalizePublishChannel(channel);
   return key ? publishChannelMeta(key).label : channel;
+}
+
+function conciergeQueueAge(
+  requestedAt: string | null,
+  nowMs: number,
+): { label: string; stale: boolean } | null {
+  if (!requestedAt) return null;
+  const requestedMs = Date.parse(requestedAt);
+  if (!Number.isFinite(requestedMs)) return null;
+  const elapsedMs = Math.max(0, nowMs - requestedMs);
+  const elapsedHours = Math.floor(elapsedMs / (60 * 60 * 1000));
+  const elapsedDays = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
+  const label =
+    elapsedHours < 1
+      ? "less than 1 hour ago"
+      : elapsedHours < 48
+        ? `${elapsedHours} ${elapsedHours === 1 ? "hour" : "hours"} ago`
+        : `${elapsedDays} ${elapsedDays === 1 ? "day" : "days"} ago`;
+  return { label, stale: elapsedMs >= STALE_CONCIERGE_QUEUE_MS };
 }
 
 // The Vacantless "Publish for me" desk (S474b). Superadmin-only: it 404s for
@@ -142,6 +162,11 @@ export default async function ConciergeDeskPage() {
     Array.isArray(value)
       ? value.filter((x): x is string => typeof x === "string")
       : [];
+  const nowMs = Date.now();
+  const staleUnclaimedCount = items.filter((item) => {
+    if (item.concierge_claimed_by) return false;
+    return conciergeQueueAge(item.concierge_requested_at, nowMs)?.stale === true;
+  }).length;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-6">
@@ -157,6 +182,11 @@ export default async function ConciergeDeskPage() {
         <p className="text-xs text-slate-400">
           {items.length} {items.length === 1 ? "item" : "items"} in the queue
         </p>
+        {staleUnclaimedCount > 0 && (
+          <p className="text-xs font-medium text-amber-700">
+            {staleUnclaimedCount} unclaimed for more than 24 hours
+          </p>
+        )}
       </header>
 
       {items.length === 0 ? (
@@ -175,6 +205,10 @@ export default async function ConciergeDeskPage() {
               : null;
             const status = normalizePublishStatus(item.publish_status);
             const blockers = blockersOf(item.blockers);
+            const requestAge = conciergeQueueAge(
+              item.concierge_requested_at,
+              nowMs,
+            );
             return (
               <li
                 key={item.id}
@@ -238,11 +272,25 @@ export default async function ConciergeDeskPage() {
                     ))}
                   </ul>
                 )}
-                <p className="text-[11px] text-slate-400">
+                <p
+                  className={
+                    requestAge?.stale && !item.concierge_claimed_by
+                      ? "text-[11px] font-medium text-amber-700"
+                      : "text-[11px] text-slate-400"
+                  }
+                >
                   {item.concierge_claimed_by
                     ? `Claimed${item.concierge_claimed_at ? " " + new Date(item.concierge_claimed_at).toLocaleString() : ""}`
-                    : "Unclaimed"}
+                    : requestAge
+                      ? `Unclaimed, requested ${requestAge.label}`
+                      : "Unclaimed, requested time missing"}
                 </p>
+                {requestAge?.stale && !item.concierge_claimed_by && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Unclaimed for more than 24 hours. Claim, post, or reject it
+                    so the operator is not left waiting.
+                  </p>
+                )}
 
                 <div className="flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
                   {!item.concierge_claimed_by && (

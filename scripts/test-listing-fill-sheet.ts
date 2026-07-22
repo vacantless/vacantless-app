@@ -91,7 +91,7 @@ const FULL: FillSheetInput = {
 };
 
 // --- every postable portal yields a usable sheet ---------------------------
-ok("7 postable portals", FILL_SHEET_PORTALS.length === 7);
+ok("12 postable portals", FILL_SHEET_PORTALS.length === 12);
 ok("3 field sources", FILL_FIELD_SOURCES.length === 3);
 
 for (const portal of FILL_SHEET_PORTALS) {

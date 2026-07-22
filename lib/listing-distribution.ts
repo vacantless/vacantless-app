@@ -9,6 +9,11 @@
 export const PORTAL_KEYS = [
   "kijiji",
   "facebook",
+  "linkedin",
+  "instagram",
+  "facebook_feed",
+  "whatsapp",
+  "snapchat",
   "rentals_ca",
   "rentfaster",
   "zumper",
@@ -22,6 +27,11 @@ export type PortalKey = (typeof PORTAL_KEYS)[number];
 const PORTAL_LABELS: Record<PortalKey, string> = {
   kijiji: "Kijiji",
   facebook: "Facebook Marketplace",
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+  facebook_feed: "Facebook feed",
+  whatsapp: "WhatsApp",
+  snapchat: "Snapchat",
   rentals_ca: "Rentals.ca",
   rentfaster: "RentFaster.ca",
   zumper: "Zumper + PadMapper",

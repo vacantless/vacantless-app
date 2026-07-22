@@ -55,6 +55,12 @@ const base: PublishChannelContext = {
 ok("publish keys include internal public page", PUBLISH_CHANNEL_KEYS.includes("vacantless"));
 ok("publish keys include per-org feed", PUBLISH_CHANNEL_KEYS.includes("org_feed"));
 ok("publish keys include rentfaster", PUBLISH_CHANNEL_KEYS.includes("rentfaster"));
+ok(
+  "publish keys include social vehicles",
+  ["linkedin", "instagram", "facebook_feed", "whatsapp", "snapchat"].every((key) =>
+    (PUBLISH_CHANNEL_KEYS as readonly string[]).includes(key),
+  ),
+);
 ok("normalize accepts facebook", normalizePublishChannel(" facebook ") === "facebook");
 ok("normalize rejects junk", normalizePublishChannel("craigslist") === null);
 ok("network feed hidden by default", !publishChannelChoices().some((c) => c.key === "network_feed"));
@@ -117,6 +123,11 @@ ok("mode label feed partner is candidate", publishModeLabel("feed_partner") === 
   const plan = preparePublishChannel("facebook", base);
   ok("facebook needs login", plan.status === "needs_login");
   ok("facebook mode browser co-pilot", plan.mode === "browser_copilot");
+}
+{
+  const plan = preparePublishChannel("instagram", base);
+  ok("instagram needs login", plan.status === "needs_login");
+  ok("instagram mode browser co-pilot", plan.mode === "browser_copilot");
 }
 {
   const plan = preparePublishChannel("kijiji", {
