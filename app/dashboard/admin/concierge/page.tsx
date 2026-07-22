@@ -11,6 +11,7 @@ import {
   normalizePublishStatus,
 } from "@/lib/distribution-publish";
 import {
+  approveConciergeSubmit,
   claimConciergeItem,
   completeConciergeItem,
   rejectConciergeItem,
@@ -84,7 +85,7 @@ export default async function ConciergeDeskPage() {
   const { data: itemRows } = await admin
     .from("distribution_run_items")
     .select(
-      "id, run_id, organization_id, channel, publish_status, mode, external_url, blockers, audit_message, error_message, concierge_requested_at, concierge_requested_by, concierge_claimed_by, concierge_claimed_at",
+      "id, run_id, organization_id, channel, publish_status, mode, external_url, blockers, audit_message, error_message, concierge_requested_at, concierge_requested_by, concierge_claimed_by, concierge_claimed_at, operator_submit_approved_at, operator_submit_approved_by",
     )
     .eq("mode", "concierge")
     .in("publish_status", CONCIERGE_OPEN_STATUSES as unknown as string[])
@@ -103,6 +104,8 @@ export default async function ConciergeDeskPage() {
     concierge_requested_at: string | null;
     concierge_claimed_by: string | null;
     concierge_claimed_at: string | null;
+    operator_submit_approved_at: string | null;
+    operator_submit_approved_by: string | null;
   }>;
 
   // Resolve run -> property + org for the prepared-listing context.
@@ -158,6 +161,53 @@ export default async function ConciergeDeskPage() {
     }
   }
 
+  // S555 Slice 2 (Phase B): the LATEST agent-prepared attempt per item, so the
+  // desk can show what the done-for-you worker filled before an operator approves
+  // the submit. Only phase_b_proof attempts (the fill+screenshot pass) carry a
+  // prepared post; earlier phase_a_proof / Slice-1 prepares are ignored here.
+  type AgentPrep = {
+    reachedForm: boolean;
+    challenge: string | null;
+    filledCount: number | null;
+    fillResults: Array<{ id: string; status: string }>;
+    missing: string[];
+    composedValues: Record<string, string> | null;
+    preparedAt: string;
+  };
+  const agentPrepByItem = new Map<string, AgentPrep>();
+  const itemIdList = items.map((i) => i.id);
+  if (itemIdList.length > 0) {
+    const { data: attempts } = await admin
+      .from("distribution_publish_attempts")
+      .select("run_item_id, created_at, metadata")
+      .in("run_item_id", itemIdList)
+      .eq("actor_type", "agent")
+      .order("created_at", { ascending: false });
+    for (const a of (attempts ?? []) as Array<{
+      run_item_id: string;
+      created_at: string;
+      metadata: Record<string, unknown> | null;
+    }>) {
+      const m = (a.metadata ?? {}) as Record<string, unknown>;
+      if (m.source !== "phase_b_proof") continue; // only a prepared-post attempt
+      if (agentPrepByItem.has(a.run_item_id)) continue; // keep the latest only
+      agentPrepByItem.set(a.run_item_id, {
+        reachedForm: m.reached_form === true,
+        challenge: typeof m.challenge === "string" ? m.challenge : null,
+        filledCount: typeof m.filled_count === "number" ? m.filled_count : null,
+        fillResults: Array.isArray(m.fill_results)
+          ? (m.fill_results as Array<{ id: string; status: string }>)
+          : [],
+        missing: Array.isArray(m.missing) ? (m.missing as string[]) : [],
+        composedValues:
+          m.composed_values && typeof m.composed_values === "object"
+            ? (m.composed_values as Record<string, string>)
+            : null,
+        preparedAt: a.created_at,
+      });
+    }
+  }
+
   const blockersOf = (value: unknown): string[] =>
     Array.isArray(value)
       ? value.filter((x): x is string => typeof x === "string")
@@ -205,6 +255,7 @@ export default async function ConciergeDeskPage() {
               : null;
             const status = normalizePublishStatus(item.publish_status);
             const blockers = blockersOf(item.blockers);
+            const prep = agentPrepByItem.get(item.id);
             const requestAge = conciergeQueueAge(
               item.concierge_requested_at,
               nowMs,
@@ -271,6 +322,72 @@ export default async function ConciergeDeskPage() {
                       <li key={b}>{b}</li>
                     ))}
                   </ul>
+                )}
+
+                {/* S555 Slice 2 (Phase B): the done-for-you worker prepared this
+                    post (filled the form, screenshotted, stopped at the gate).
+                    The operator reviews what it filled and approves the submit;
+                    the worker then completes it. Payment/login/CAPTCHA walls stop
+                    the worker for a human — never auto-solved. */}
+                {prep && (
+                  <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
+                    <p className="text-xs font-semibold text-violet-800">
+                      Agent-prepared
+                      {prep.reachedForm ? " · reached form" : " · did not reach form"}
+                      {prep.challenge && prep.challenge !== "none"
+                        ? ` · ${prep.challenge}`
+                        : ""}
+                      {typeof prep.filledCount === "number"
+                        ? ` · ${prep.filledCount} field${prep.filledCount === 1 ? "" : "s"} filled`
+                        : ""}
+                    </p>
+                    {prep.composedValues ? (
+                      <dl className="space-y-0.5 text-[11px] text-violet-900">
+                        {Object.entries(prep.composedValues).map(([k, v]) => (
+                          <div key={k} className="flex gap-1">
+                            <dt className="shrink-0 font-medium">
+                              {k.replace(/^kijiji-/, "")}:
+                            </dt>
+                            <dd className="truncate">{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : prep.fillResults.length > 0 ? (
+                      <p className="text-[11px] text-violet-700">
+                        Filled:{" "}
+                        {prep.fillResults
+                          .filter((f) => f.status === "filled")
+                          .map((f) => f.id.replace(/^kijiji-/, ""))
+                          .join(", ") || "none"}
+                      </p>
+                    ) : null}
+                    {prep.missing.length > 0 && (
+                      <p className="text-[11px] text-amber-700">
+                        Missing: {prep.missing.join(", ")}
+                      </p>
+                    )}
+                    {item.operator_submit_approved_at ? (
+                      <p className="text-[11px] font-medium text-emerald-700">
+                        Approved for submit{" "}
+                        {new Date(item.operator_submit_approved_at).toLocaleString()}
+                      </p>
+                    ) : prep.reachedForm && (prep.filledCount ?? 0) > 0 ? (
+                      <form action={approveConciergeSubmit}>
+                        <input type="hidden" name="item_id" value={item.id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-700"
+                        >
+                          Approve &amp; submit
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="text-[11px] text-violet-600">
+                        Not ready to submit — the worker did not reach a filled
+                        form. Post this one by hand, or re-run the worker.
+                      </p>
+                    )}
+                  </div>
                 )}
                 <p
                   className={

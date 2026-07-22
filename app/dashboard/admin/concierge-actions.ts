@@ -331,6 +331,77 @@ export async function completeConciergeItem(formData: FormData) {
   redirect(`${DESK}?done=live`);
 }
 
+// S555 Slice 2 (Phase B): the operator reviews the agent-prepared post at the
+// needs_operator gate and approves the FINAL submit. This sets ONLY the approval
+// signal — it does not submit anything. The done-for-you worker's approval-read
+// pass (a separate deployable) is what actually completes the submit, captures
+// the live URL, and marks the item live via the same proof-before-Live path;
+// payment is never automated. Dark until that worker pass is deployed + enabled:
+// on its own, setting the signal is inert. The item stays at needs_operator.
+export async function approveConciergeSubmit(formData: FormData) {
+  const itemId = String(formData.get("item_id") ?? "");
+  const ctx = await requireConciergeAdmin();
+  if (!ctx) redirect("/dashboard");
+  if (!itemId) redirect(DESK);
+  const admin = ctx.admin;
+  const now = new Date().toISOString();
+
+  // Approve exactly once, and only an item still waiting at the needs_operator
+  // gate. A stale form (already approved, or the item moved on) matches 0 rows ->
+  // stale. publish_status is deliberately UNCHANGED: the item stays needs_operator
+  // until the worker actually completes the submit, so the desk still shows it.
+  const { data: approved } = await admin
+    .from("distribution_run_items")
+    .update({
+      operator_submit_approved_at: now,
+      operator_submit_approved_by: ctx.userId,
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("mode", "concierge")
+    .eq("publish_status", "needs_operator")
+    .is("operator_submit_approved_at", null)
+    .select("id, run_id, organization_id, channel, attempt_count")
+    .maybeSingle();
+  if (!approved) redirect(`${DESK}?err=stale`);
+
+  // Append-only audit of the human approval (actor = the operator). Status is
+  // unchanged (needs_operator -> needs_operator); the metadata records the
+  // decision so the run timeline shows who approved the submit and when.
+  const priorAttempts = (approved.attempt_count as number | undefined) ?? 0;
+  const attempt = buildAttemptRecord({
+    organizationId: approved.organization_id as string,
+    runId: approved.run_id as string,
+    runItemId: itemId,
+    channel: approved.channel as string,
+    transport: "concierge",
+    currentAttemptCount: priorAttempts,
+    actorType: "concierge",
+    actorUserId: ctx.userId,
+    statusBefore: "needs_operator",
+    statusAfter: "needs_operator",
+    proofId: null,
+    metadata: { source: "operator_approved_submit" },
+  });
+  await admin.from("distribution_publish_attempts").insert({
+    organization_id: attempt.organization_id,
+    run_id: attempt.run_id,
+    run_item_id: attempt.run_item_id,
+    channel: attempt.channel,
+    transport: attempt.transport,
+    attempt_no: attempt.attempt_no,
+    actor_type: attempt.actor_type,
+    actor_user_id: attempt.actor_user_id,
+    status_before: attempt.status_before,
+    status_after: attempt.status_after,
+    proof_id: attempt.proof_id,
+    metadata: attempt.metadata,
+  });
+
+  revalidatePath(DESK);
+  redirect(`${DESK}?done=approved`);
+}
+
 // Staff couldn't post it (channel blocked, listing pulled, etc.). Records the
 // reason and flips to rejected so the operator sees it on their run timeline.
 export async function rejectConciergeItem(formData: FormData) {
