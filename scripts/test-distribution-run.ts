@@ -375,6 +375,11 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     propertyDetailSource.includes("Live ad URL needed.") &&
       propertyDetailSource.includes("Vacantless did not mark this channel Live"),
   );
+  ok(
+    "concierge rows do not render a broken guided-posting sidecar",
+    propertyDetailSource.includes('mode === "browser_copilot" &&') &&
+      propertyDetailSource.includes("isCopilotChannel(publishKey)"),
+  );
 }
 {
   const propertiesSource = readFileSync("app/dashboard/properties/page.tsx", "utf8");

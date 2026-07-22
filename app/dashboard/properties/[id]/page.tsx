@@ -1362,7 +1362,7 @@ export default async function PropertyDetailPage({
     );
     const mode = normalizePublishMode(r.mode ?? meta?.mode);
     const copilotScript =
-      publishKey && isCopilotChannel(publishKey)
+      mode === "browser_copilot" && publishKey && isCopilotChannel(publishKey)
         ? buildCopilotScript({
             channel: publishKey,
             copy: {
