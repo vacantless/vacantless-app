@@ -179,13 +179,13 @@ export default async function ConciergeDeskPage() {
   if (itemIdList.length > 0) {
     const { data: attempts } = await admin
       .from("distribution_publish_attempts")
-      .select("run_item_id, created_at, metadata")
+      .select("run_item_id, started_at, metadata")
       .in("run_item_id", itemIdList)
       .eq("actor_type", "agent")
-      .order("created_at", { ascending: false });
+      .order("started_at", { ascending: false });
     for (const a of (attempts ?? []) as Array<{
       run_item_id: string;
-      created_at: string;
+      started_at: string;
       metadata: Record<string, unknown> | null;
     }>) {
       const m = (a.metadata ?? {}) as Record<string, unknown>;
@@ -203,7 +203,7 @@ export default async function ConciergeDeskPage() {
           m.composed_values && typeof m.composed_values === "object"
             ? (m.composed_values as Record<string, string>)
             : null,
-        preparedAt: a.created_at,
+        preparedAt: a.started_at,
       });
     }
   }
