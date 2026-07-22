@@ -1,0 +1,11 @@
+Vacantless-app — build ticket S520. App HEAD a3662f6 on main.
+
+Read these two files already in the working tree (do NOT ask me to attach anything):
+- claude/CODEX-BUILD-SAMEDAY-REMINDER-S520.md  — the authoritative build ticket (review steps, build spec, migration, invariants, verification).
+- claude/STRATEGY-SHOWING-REMINDER-CADENCE-2026-07-19.md  — the why (RCT + ShowMojo/Calendly/BrokerBay research).
+
+One-line task: make the day-of showing reminder reliable + channel-coordinated, and embed a one-tap renter Confirm inside the reminder. Concretely — add a wide "sameday" reminder tier (~T-4h, band 2h–4h) in lib/reminders.ts; add a pure channelPlan(kind,{smsDeliverable}) so email carries the 24h touch, SMS carries the day-of touch, email is the fallback, and the two channels never both fire at one tier; wire it into app/api/cron/reminders/route.ts; add a "sameday" copy variant in lib/sms.ts; embed a link-based one-tap Confirm (+ reschedule/cancel) in the email and SMS reminder, backed by a public confirm route that stamps showings.confirmed_at / confirmed_by='renter' (mirror the existing cancel_token route — reuse a token if one exists, else add confirm_token); additive migration 0164 for the two sameday stamp columns (+ confirm_token if added).
+
+Follow the ticket exactly. Constraints: additive only; NO new Premium gate — renter reminders/confirmation stay Growth+ (do not take anything away from the live customer); keep decideReminderKind and channelPlan pure (no network/DB); do NOT promise auto-release (that's a later ticket); do NOT touch appointment-reminder, showing-confirmation-nudge, showing-outcome-nudge, feedback/nurture crons, vercel.json, or .github/workflows/reminders.yml.
+
+Process: (1) Deliver the short REVIEW note the ticket asks for (current 24h/2h windows; that the cron currently fires email+SMS at every tier; how the cancel_token public route works; whether showings service_role grants are column-scoped), then build. (2) Add/extend scripts/test-reminders.ts and run npx tsx on it; run npx tsc --noEmit, npm run lint, npm run build; git diff --check — all green. (3) Write migration 0164 as a file but DO NOT apply it to any database — I apply migrations to prod separately. (4) Commit and push to main; reply with the commit SHA, a file-by-file diffstat, and your review note.

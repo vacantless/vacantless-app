@@ -10,6 +10,7 @@ import {
   activeNotificationEvents,
   notificationFamilyLabel,
   type NotificationEvent,
+  type NotificationLane,
   type NotificationSettingRow,
 } from "@/lib/notifications";
 import {
@@ -18,7 +19,32 @@ import {
   type ReminderLogSummary,
 } from "@/lib/compliance-calendar";
 import { AccentColorField } from "@/components/accent-color-field";
-import { saveNotificationSetting } from "./actions";
+import { saveNotificationSetting, saveNotificationLane } from "./actions";
+
+// The operator lanes (S554), in display order. Each label names WHO handles that
+// kind of alert; the helper copy on the card explains how the fallback works.
+const LANES: { lane: NotificationLane; label: string; hint: string }[] = [
+  {
+    lane: "showing",
+    label: "Showing operator",
+    hint: "Handles the inquiry-to-lease funnel: new leads, viewings, showings, availability, and the daily leasing summary.",
+  },
+  {
+    lane: "listing",
+    label: "Listing operator",
+    hint: "Handles getting units advertised: listing health, syndication, and done-for-you posting.",
+  },
+  {
+    lane: "owner",
+    label: "Owner / landlord",
+    hint: "Handles landlord reminders: rent increases, insurance, detector and equipment end-of-life, inspections, and other compliance.",
+  },
+];
+const LANE_LABEL: Record<NotificationLane, string> = {
+  showing: "Showing operator",
+  listing: "Listing operator",
+  owner: "Owner / landlord",
+};
 
 // Global fallback when an event has no code default accent and the org has no
 // brand color set — keeps the color picker seeded with a valid hex.
@@ -58,6 +84,14 @@ function audienceHint(event: NotificationEvent): string {
     case "operator":
       if (event.family === "dispatch") {
         return "Goes to your team. If you leave recipients empty, it goes to members who manage maintenance.";
+      }
+      // S554: a leasing operator event with a lane falls back to that lane's
+      // recipients (set once at the top) before the capability-member default.
+      if (event.lane) {
+        const memberHint = INQUIRY_OPERATOR_EVENTS.has(event.key)
+          ? "members who manage inquiries"
+          : "members who manage this account";
+        return `Goes to your team. If you leave recipients empty, it uses your ${LANE_LABEL[event.lane]} lane (set at the top), then falls back to ${memberHint}.`;
       }
       return INQUIRY_OPERATOR_EVENTS.has(event.key)
         ? "Goes to your team. If you leave recipients empty, it goes to members who manage inquiries."
@@ -108,7 +142,7 @@ function errorBanner(code: string | undefined): string | null {
 export default async function AutomationsPage({
   searchParams,
 }: {
-  searchParams: { saved?: string; error?: string; ev?: string };
+  searchParams: { saved?: string; saved_lane?: string; error?: string; ev?: string; lane?: string };
 }) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
@@ -123,6 +157,18 @@ export default async function AutomationsPage({
     .eq("organization_id", org.id);
   const byKey = new Map<string, NotificationSettingRow>();
   for (const r of (rows ?? []) as NotificationSettingRow[]) byKey.set(r.event_key, r);
+
+  // The org's operator-lane recipient lists (S554). Absent lane == empty box ==
+  // fall back to the capability default. Defensive: a null/errored read (e.g. a
+  // deploy that landed before migration 0179) just yields empty lanes.
+  const { data: laneRows } = await supabase
+    .from("org_notification_lanes")
+    .select("lane, recipients")
+    .eq("organization_id", org.id);
+  const laneByKey = new Map<string, string[]>();
+  for (const r of (laneRows ?? []) as { lane: string; recipients: string[] }[]) {
+    laneByKey.set(r.lane, r.recipients ?? []);
+  }
 
   // "Last reminded" view over the landlord-notify compliance log (0079). RLS
   // scopes the rows to this org; summarizeReminderLog seeds every landlord-notify
@@ -168,6 +214,7 @@ export default async function AutomationsPage({
   const families = [...new Set(events.map((e) => e.family))];
 
   const savedKey = searchParams.saved;
+  const savedLane = searchParams.saved_lane;
   const errMsg = errorBanner(searchParams.error);
 
   return (
@@ -184,9 +231,9 @@ export default async function AutomationsPage({
             {errMsg}
           </div>
         )}
-        {savedKey && !errMsg && (
+        {(savedKey || savedLane) && !errMsg && (
           <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-            Notification saved.
+            {savedLane ? "Operator lane saved." : "Notification saved."}
           </div>
         )}
 
@@ -196,6 +243,68 @@ export default async function AutomationsPage({
           Use <code className="rounded bg-white px-1 py-0.5 text-gray-800">{"{{token}}"}</code>{" "}
           placeholders — they&apos;re filled in automatically when the email is sent.
         </div>
+
+        {/* Operator lanes (S554): set who handles each KIND of alert once. Any
+            event below with its own recipients still overrides its lane. */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Who handles each alert
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Set who handles each kind of alert once here. Any event below with
+              its own recipients still overrides its lane. Leave a lane empty to
+              fall back to your team members.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {LANES.map(({ lane, label, hint }) => {
+              const current = (laneByKey.get(lane) ?? []).join("\n");
+              const laneFieldId = `lane-${lane}-recipients`;
+              const highlight = savedLane === lane;
+              return (
+                <form
+                  key={lane}
+                  action={saveNotificationLane}
+                  className={[
+                    "flex flex-col rounded-xl border bg-white p-5 shadow-sm",
+                    highlight ? "border-brand" : "border-gray-200",
+                  ].join(" ")}
+                >
+                  <input type="hidden" name="lane" value={lane} />
+                  <label
+                    htmlFor={laneFieldId}
+                    className="block text-base font-semibold text-gray-900"
+                  >
+                    {label}
+                  </label>
+                  <p className="mt-1 text-xs text-gray-500">{hint}</p>
+                  <textarea
+                    id={laneFieldId}
+                    name="recipients"
+                    defaultValue={current}
+                    placeholder={"name@example.com\nanother@example.com"}
+                    rows={3}
+                    className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:ring-brand"
+                  />
+                  <p className="mt-1.5 text-xs text-gray-500">
+                    One address per line (or comma-separated). Empty falls back to
+                    your team members.
+                  </p>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </form>
+              );
+            })}
+          </div>
+        </section>
 
         {families.map((family) => (
           <section key={family} className="space-y-4">
@@ -234,6 +343,11 @@ export default async function AutomationsPage({
                         <h3 className="text-base font-semibold text-gray-900">
                           {event.label}
                         </h3>
+                        {event.lane && (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                            Lane: {LANE_LABEL[event.lane]}
+                          </span>
+                        )}
                         <p className="mt-1 text-sm text-gray-600">{event.description}</p>
                         {reminderByKey.has(event.key) && (
                           <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">

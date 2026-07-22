@@ -1,0 +1,506 @@
+diff --git a/app/dashboard/tenancies/[id]/page.tsx b/app/dashboard/tenancies/[id]/page.tsx
+index a14a52b..1fc7aef 100644
+--- a/app/dashboard/tenancies/[id]/page.tsx
++++ b/app/dashboard/tenancies/[id]/page.tsx
+@@ -67,7 +67,7 @@ import {
+ } from "@/lib/payments";
+ import { channelLabel, commsErrorMessage } from "@/lib/tenant-comms";
+ import { getCurrentOrg } from "@/lib/org";
+-import { canUseSms } from "@/lib/billing";
++import { canUseSms, canUseMarketRent } from "@/lib/billing";
+ import TenantMessageComposer, {
+   type ComposerTenant,
+   type ComposerTemplate,
+@@ -99,6 +99,19 @@ import {
+ } from "@/lib/renewal";
+ import type { N1Snapshot } from "@/lib/n1-render";
+ import { RentIncreaseCard } from "@/components/rent-increase-card";
++import { RentIncreaseMarketNote } from "@/components/rent-increase-market-note";
++import { deriveRentIncreaseMarketContext } from "@/lib/rent-increase-market";
++import {
++  benchmarksFor,
++  cityFromBenchmarkAddress,
++} from "@/lib/rent-benchmarks";
++import {
++  ownComps,
++  suggestRentRange,
++  type ActiveListingComp,
++  type LeasedOutcomeComp,
++  type MarketRentSuggestion,
++} from "@/lib/market-rent";
+ import {
+   pickDefaultOpenSection,
+   type LeaseDocStatusLabel,
+@@ -186,6 +199,7 @@ type Tenancy = {
+   property: {
+     id: string;
+     address: string;
++    beds: number | null;
+     rent_control_exempt: boolean | null;
+     first_occupancy_date: string | null;
+   } | null;
+@@ -368,7 +382,7 @@ export default async function TenancyDetailPage({
+   const { data } = await supabase
+     .from("tenancies")
+     .select(
+-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
++      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+     )
+     .eq("id", params.id)
+     .maybeSingle();
+@@ -589,6 +603,68 @@ export default async function TenancyDetailPage({
+       )
+     : false;
+ 
++  // S545: join the S544 market-rent range into the rent-increase decision so the
++  // operator sees market vs the guideline-capped renewal rent. Same double gate
++  // as the property-page panel (market_rent entitlement AND MARKET_RENT_ENABLED)
++  // and the same resolution path (city from address, benchmark rows, own comps
++  // from leased_outcomes + active listings). Display-only; honest-null when off
++  // or when the unit has no benchmark. Only computed when a rent-increase card
++  // shows (active tenancy with rent + start date).
++  const marketRentEnabled =
++    canUseMarketRent(org?.plan ?? null) &&
++    process.env.MARKET_RENT_ENABLED === "true";
++  let marketRentSuggestion: MarketRentSuggestion | null = null;
++  if (rentIncrease && marketRentEnabled && t.property) {
++    const marketRentCity = cityFromBenchmarkAddress(t.property.address);
++    const beds = t.property.beds;
++    const benchmarkRows = benchmarksFor({
++      country: "CA",
++      city: marketRentCity,
++      beds,
++    });
++    let leasedRows: LeasedOutcomeComp[] = [];
++    let activeRows: ActiveListingComp[] = [];
++    if (marketRentCity && beds != null && org?.id) {
++      const { data: leasedData } = await supabase
++        .from("leased_outcomes")
++        .select(
++          "asking_rent_cents, beds, sqft, city, address, days_on_market, leased_at, available_since",
++        )
++        .eq("organization_id", org.id)
++        .order("leased_at", { ascending: false })
++        .limit(50);
++      leasedRows = (leasedData ?? []) as LeasedOutcomeComp[];
++
++      const { data: activeData } = await supabase
++        .from("properties")
++        .select("address, rent_cents, beds, sqft, status")
++        .eq("organization_id", org.id)
++        .eq("status", "available")
++        .neq("id", t.property.id)
++        .limit(100);
++      activeRows = (activeData ?? []) as ActiveListingComp[];
++    }
++    const own = ownComps(
++      { city: marketRentCity, beds },
++      leasedRows,
++      activeRows,
++    );
++    marketRentSuggestion = suggestRentRange({
++      subject: {
++        country: "CA",
++        city: marketRentCity,
++        beds,
++        unitClass: "purpose_built",
++      },
++      benchmarks: benchmarkRows,
++      own,
++    });
++  }
++  const marketContext = deriveRentIncreaseMarketContext({
++    rentIncrease,
++    suggestion: marketRentSuggestion,
++  });
++
+   const renewalCheckin =
+     t.status === "active" && t.start_date
+       ? deriveRenewalCheckin(
+@@ -1628,6 +1704,7 @@ export default async function TenancyDetailPage({
+               n1Href={`/dashboard/tenancies/${t.id}/n1`}
+             />
+           </div>
++          <RentIncreaseMarketNote context={marketContext} />
+           {/* Set/confirm the inputs the autopilot derives from. The card +
+               cron read last_rent_increase_date + the property exemption; this
+               links to the prefilled "Watch a lease" confirm flow to set them. */}
+diff --git a/components/rent-increase-market-note.tsx b/components/rent-increase-market-note.tsx
+new file mode 100644
+index 0000000..85d6ccf
+--- /dev/null
++++ b/components/rent-increase-market-note.tsx
+@@ -0,0 +1,88 @@
++import React from "react";
++import { formatMoney } from "@/lib/price-drop";
++import type { RentIncreaseMarketContext } from "@/lib/rent-increase-market";
++
++// Display-only market context for the tenancy Rent-increase section (S545).
++// Shows the market range for this unit next to the guideline-capped renewal
++// rent, plus a plain-language read of where the capped rent sits vs market.
++// Renders nothing when there is no context (gated off, or no benchmark for the
++// unit) so the section degrades to exactly today's guideline-only view.
++export function RentIncreaseMarketNote({
++  context,
++}: {
++  context: RentIncreaseMarketContext | null;
++}) {
++  if (!context) return null;
++
++  const { confidence, position } = context;
++  const confidenceClass =
++    confidence === "high"
++      ? "bg-green-50 text-green-700"
++      : confidence === "medium"
++        ? "bg-amber-50 text-amber-700"
++        : "bg-gray-100 text-gray-600";
++
++  // Tone the position line: a below-market cap is the actionable insight
++  // (money on the table at turnover), at/above is reassurance.
++  const positionClass =
++    position === "below"
++      ? "text-amber-800"
++      : position === "above"
++        ? "text-gray-600"
++        : "text-emerald-700";
++
++  return (
++    <section className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
++      <div className="mb-3 flex items-start justify-between gap-3">
++        <div>
++          <h4 className="text-sm font-semibold text-gray-900">
++            Market rent for this unit
++          </h4>
++          <p className="text-xs text-gray-500">
++            How the guideline-capped renewal rent compares to the open market.
++          </p>
++        </div>
++        <span
++          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${confidenceClass}`}
++        >
++          {confidence} confidence
++        </span>
++      </div>
++
++      <div className="grid gap-3 sm:grid-cols-3">
++        <div>
++          <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
++            Market range
++          </p>
++          <p className="mt-1 text-base font-semibold text-gray-900">
++            {formatMoney(context.marketLowCents)} - {formatMoney(context.marketHighCents)}
++          </p>
++        </div>
++        <div>
++          <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
++            Market midpoint
++          </p>
++          <p className="mt-1 text-base font-semibold text-gray-900">
++            {formatMoney(context.marketMidCents)}
++          </p>
++        </div>
++        <div>
++          <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
++            {context.comparedIsNewRent ? "Capped renewal rent" : "Current rent"}
++          </p>
++          <p className="mt-1 text-base font-semibold text-gray-900">
++            {formatMoney(context.comparedRentCents)}
++          </p>
++        </div>
++      </div>
++
++      <p className={`mt-3 text-xs leading-relaxed ${positionClass}`}>
++        {context.note}
++      </p>
++      <p className="mt-2 text-xs text-gray-400">
++        Guidance only. It does not change the N1 amount you serve, which stays the
++        guideline-capped figure.
++      </p>
++    </section>
++  );
++}
+diff --git a/lib/rent-increase-market.ts b/lib/rent-increase-market.ts
+new file mode 100644
+index 0000000..ebb840d
+--- /dev/null
++++ b/lib/rent-increase-market.ts
+@@ -0,0 +1,147 @@
++// ============================================================================
++// lib/rent-increase-market.ts — join the S544 market-rent range into the annual
++// rent-increase / N1 decision (S545).
++//
++// At renewal the operator already sees the legal guideline cap (deriveRentIncrease:
++// current -> capped new rent at the year's guideline %). What they do NOT see is
++// what the unit would fetch on the open market. This pure helper compares the
++// capped new rent against the market midpoint (from suggestRentRange) so the
++// operator can answer the real question: "does this guideline increase keep me
++// near market, or am I capped well below market (a gap only recoverable on
++// turnover or an approved AGI)?".
++//
++// PURE: same inputs -> same output, no DB/DOM/clock. Display-only: this never
++// writes rent and never changes what N1 amount is served — the served amount is
++// still the guideline-capped figure. Honest-null: when there is no market
++// suggestion for the unit (e.g. a bedroom/geography with no benchmark), it
++// returns null and the surface shows nothing rather than a guess.
++// ============================================================================
++
++import type { RentIncrease } from "./rent-increase";
++import type { MarketRentSuggestion } from "./market-rent";
++
++export type MarketPosition = "below" | "at" | "above";
++
++export type RentIncreaseMarketContext = {
++  marketLowCents: number;
++  marketMidCents: number;
++  marketHighCents: number;
++  confidence: MarketRentSuggestion["confidence"];
++  /**
++   * The rent compared against market: the guideline-capped NEW rent when an
++   * amount is computable, else the current rent (exempt units, or a guideline
++   * year not yet published — nothing to cap to, so we compare today's rent).
++   */
++  comparedRentCents: number;
++  /** True when comparedRentCents is the capped new rent (guideline applied). */
++  comparedIsNewRent: boolean;
++  /** market mid − comparedRent (positive = the unit sits under market). */
++  gapToMidCents: number;
++  /** gapToMidCents as a percent of the market mid, rounded to 0.1. */
++  gapToMidPercent: number;
++  position: MarketPosition;
++  exempt: boolean;
++  /** Plain-language read of the comparison (no em dashes). */
++  note: string;
++};
++
++// A unit within this band of the market midpoint reads as "at market" — small
++// gaps are noise given the benchmark is an area average, not this exact unit.
++export const AT_MARKET_BAND = 0.03; // ±3%
++
++function dollars(cents: number): string {
++  return "$" + Math.round(cents / 100).toLocaleString("en-CA");
++}
++
++/**
++ * Derive the market context for a tenancy's rent-increase decision as of the
++ * already-derived rentIncrease + market suggestion. Returns null (show nothing)
++ * whenever either input is missing or the market mid is not a positive amount.
++ */
++export function deriveRentIncreaseMarketContext(args: {
++  rentIncrease: RentIncrease | null;
++  suggestion: MarketRentSuggestion | null;
++}): RentIncreaseMarketContext | null {
++  const ri = args.rentIncrease;
++  const s = args.suggestion;
++  if (!ri || !s) return null;
++  if (!(s.midCents > 0)) return null;
++
++  const comparedIsNewRent = ri.newRentCents != null && ri.newRentCents > 0;
++  const comparedRentCents = comparedIsNewRent
++    ? (ri.newRentCents as number)
++    : ri.currentRentCents;
++  if (!(comparedRentCents > 0)) return null;
++
++  const gapToMidCents = s.midCents - comparedRentCents;
++  const gapToMidPercent = Math.round((gapToMidCents / s.midCents) * 1000) / 10;
++
++  let position: MarketPosition;
++  if (Math.abs(gapToMidCents) <= s.midCents * AT_MARKET_BAND) {
++    position = "at";
++  } else {
++    position = gapToMidCents > 0 ? "below" : "above";
++  }
++
++  const note = buildNote({
++    position,
++    exempt: ri.exempt,
++    comparedIsNewRent,
++    gapToMidCents,
++    gapToMidPercent,
++    guidelinePercent: ri.guidelinePercent,
++    confidence: s.confidence,
++  });
++
++  return {
++    marketLowCents: s.lowCents,
++    marketMidCents: s.midCents,
++    marketHighCents: s.highCents,
++    confidence: s.confidence,
++    comparedRentCents,
++    comparedIsNewRent,
++    gapToMidCents,
++    gapToMidPercent,
++    position,
++    exempt: ri.exempt,
++    note,
++  };
++}
++
++function buildNote(d: {
++  position: MarketPosition;
++  exempt: boolean;
++  comparedIsNewRent: boolean;
++  gapToMidCents: number;
++  gapToMidPercent: number;
++  guidelinePercent: number | null;
++  confidence: MarketRentSuggestion["confidence"];
++}): string {
++  const gapAbs = Math.abs(gapRound(d.gapToMidCents));
++  const pctAbs = Math.abs(d.gapToMidPercent);
++  const rentLabel = d.comparedIsNewRent
++    ? "capped renewal rent"
++    : "current rent";
++  const caveat =
++    d.confidence === "low"
++      ? " This benchmark is a broad average, so treat it as a rough floor."
++      : "";
++
++  if (d.position === "at") {
++    return `Your ${rentLabel} is about at market for this unit. The guideline increase keeps a good tenant close to market.${caveat}`;
++  }
++
++  if (d.position === "above") {
++    return `Your ${rentLabel} is already above the market midpoint for this unit (about ${pctAbs}%, ${dollars(gapAbs)}/mo over). The guideline increase keeps you there.${caveat}`;
++  }
++
++  // below
++  if (d.exempt) {
++    return `This unit is exempt from the guideline cap, so market is your reference. Your ${rentLabel} is about ${pctAbs}% (${dollars(gapAbs)}/mo) below the market midpoint, so you can set the renewal rent toward it.${caveat}`;
++  }
++  return `At the guideline, your ${rentLabel} is about ${pctAbs}% (${dollars(gapAbs)}/mo) below market for this unit. The guideline limits this tenant's increase, so that gap is only recoverable on turnover or an approved AGI, not this renewal.${caveat}`;
++}
++
++function gapRound(cents: number): number {
++  return Math.round(cents);
++}
+diff --git a/scripts/test-rent-increase-market.ts b/scripts/test-rent-increase-market.ts
+new file mode 100644
+index 0000000..d1eff64
+--- /dev/null
++++ b/scripts/test-rent-increase-market.ts
+@@ -0,0 +1,126 @@
++// Unit tests for S545 rent-increase <-> market-rent join helper.
++// Run: npx tsx scripts/test-rent-increase-market.ts
++import { deriveRentIncreaseMarketContext } from "../lib/rent-increase-market";
++import type { RentIncrease } from "../lib/rent-increase";
++import type { MarketRentSuggestion } from "../lib/market-rent";
++
++let passed = 0;
++let failed = 0;
++function ok(name: string, cond: boolean) {
++  if (cond) passed++;
++  else {
++    failed++;
++    console.error(`  x ${name}`);
++  }
++}
++function eq(name: string, got: unknown, want: unknown) {
++  ok(name, JSON.stringify(got) === JSON.stringify(want));
++  if (JSON.stringify(got) !== JSON.stringify(want)) {
++    console.error(`    got:  ${JSON.stringify(got)}`);
++    console.error(`    want: ${JSON.stringify(want)}`);
++  }
++}
++
++function ri(overrides: Partial<RentIncrease> = {}): RentIncrease {
++  return {
++    status: "serve_window",
++    exempt: false,
++    earliestEffectiveDate: "2026-12-01",
++    effectiveDate: "2026-12-01",
++    serveByDate: "2026-09-02",
++    daysUntilEligible: 100,
++    guidelinePercent: 2.1,
++    currentRentCents: 150000,
++    newRentCents: 153150,
++    increaseCents: 3150,
++    note: "x",
++    ...overrides,
++  };
++}
++function sug(overrides: Partial<MarketRentSuggestion> = {}): MarketRentSuggestion {
++  return {
++    lowCents: 170000,
++    midCents: 185000,
++    highCents: 200000,
++    confidence: "medium",
++    anchor: null,
++    basis: ["CMHC 2025 (Oct survey), purpose-built 2-bed, Windsor CMA: $1,850"],
++    ...overrides,
++  };
++}
++
++// --- honest-null --------------------------------------------------------------
++ok("null when no rent increase", deriveRentIncreaseMarketContext({ rentIncrease: null, suggestion: sug() }) === null);
++ok("null when no suggestion", deriveRentIncreaseMarketContext({ rentIncrease: ri(), suggestion: null }) === null);
++ok(
++  "null when suggestion mid is not positive",
++  deriveRentIncreaseMarketContext({ rentIncrease: ri(), suggestion: sug({ midCents: 0 }) }) === null,
++);
++
++// --- below market (the headline insight) -------------------------------------
++{
++  const ctx = deriveRentIncreaseMarketContext({ rentIncrease: ri(), suggestion: sug() });
++  ok("below: context present", ctx !== null);
++  eq("below: compares the capped new rent", ctx?.comparedRentCents, 153150);
++  ok("below: comparedIsNewRent true", ctx?.comparedIsNewRent === true);
++  eq("below: gap to mid in cents", ctx?.gapToMidCents, 185000 - 153150);
++  eq("below: gap percent rounded to 0.1", ctx?.gapToMidPercent, 17.2);
++  ok("below: position is below", ctx?.position === "below");
++  ok("below: note mentions turnover or AGI", /turnover|AGI/.test(ctx?.note ?? ""));
++  ok("below: note has no em dash", !(ctx?.note ?? "").includes("—"));
++}
++
++// --- at market (within +/-3% band) -------------------------------------------
++{
++  // capped new rent 153150 vs mid 155000 -> ~1.2% under -> "at"
++  const ctx = deriveRentIncreaseMarketContext({ rentIncrease: ri(), suggestion: sug({ midCents: 155000, lowCents: 148000, highCents: 162000 }) });
++  ok("at: position is at", ctx?.position === "at");
++  ok("at: note reads as near market", /about at market/.test(ctx?.note ?? ""));
++}
++
++// --- above market ------------------------------------------------------------
++{
++  const ctx = deriveRentIncreaseMarketContext({ rentIncrease: ri({ currentRentCents: 210000, newRentCents: 214410 }), suggestion: sug() });
++  ok("above: position is above", ctx?.position === "above");
++  ok("above: gap is negative", (ctx?.gapToMidCents ?? 0) < 0);
++  ok("above: note says already above", /above the market midpoint/.test(ctx?.note ?? ""));
++}
++
++// --- exempt: compares current rent, market-as-reference framing --------------
++{
++  const ctx = deriveRentIncreaseMarketContext({
++    rentIncrease: ri({ exempt: true, status: "exempt", guidelinePercent: null, newRentCents: null, increaseCents: null }),
++    suggestion: sug(),
++  });
++  ok("exempt: context present", ctx !== null);
++  ok("exempt: comparedIsNewRent false", ctx?.comparedIsNewRent === false);
++  eq("exempt: compares current rent", ctx?.comparedRentCents, 150000);
++  ok("exempt: flagged exempt", ctx?.exempt === true);
++  ok("exempt: note mentions no cap / exempt", /exempt from the guideline cap/.test(ctx?.note ?? ""));
++}
++
++// --- guideline not published yet: newRentCents null -> compares current rent --
++{
++  const ctx = deriveRentIncreaseMarketContext({
++    rentIncrease: ri({ guidelinePercent: null, newRentCents: null, increaseCents: null }),
++    suggestion: sug(),
++  });
++  ok("no-guideline: comparedIsNewRent false", ctx?.comparedIsNewRent === false);
++  eq("no-guideline: compares current rent", ctx?.comparedRentCents, 150000);
++}
++
++// --- low confidence caveat ----------------------------------------------------
++{
++  const ctx = deriveRentIncreaseMarketContext({ rentIncrease: ri(), suggestion: sug({ confidence: "low" }) });
++  ok("low confidence surfaces a rough-floor caveat", /rough floor/.test(ctx?.note ?? ""));
++}
++
++// --- determinism --------------------------------------------------------------
++{
++  const a = deriveRentIncreaseMarketContext({ rentIncrease: ri(), suggestion: sug() });
++  const b = deriveRentIncreaseMarketContext({ rentIncrease: ri(), suggestion: sug() });
++  eq("deterministic", a, b);
++}
++
++console.log(`rent-increase-market: ${passed} passed, ${failed} failed`);
++if (failed > 0) process.exit(1);

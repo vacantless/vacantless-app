@@ -1,0 +1,753 @@
+From f2b8d3c58cb48926c0179edf41f553f123ac3f11 Mon Sep 17 00:00:00 2001
+From: Noam Muscovitch <admin@vacantless.com>
+Date: Mon, 20 Jul 2026 00:47:14 +0000
+Subject: [PATCH] =?UTF-8?q?S528:=20operator-clarity=20UI=20pass=20?=
+ =?UTF-8?q?=E2=80=94=20send-clarity=20on=20viewing=20controls,=20honest=20?=
+ =?UTF-8?q?SMS=20settings=20copy,=20live=20leasing-hub=20triage=20counts,?=
+ =?UTF-8?q?=20money-hub=20gate=20chip=20+=20report=20cross-links,=20human?=
+ =?UTF-8?q?=20status=20labels,=20empty-state=20next=20actions=20(UI-only,?=
+ =?UTF-8?q?=20no=20migration)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ app/dashboard/leads/[id]/page.tsx             |  22 ++-
+ app/dashboard/leasing/page.tsx                | 174 +++++++++++++-----
+ app/dashboard/money/import-history/page.tsx   |  28 ++-
+ app/dashboard/money/income-statement/page.tsx |  22 +++
+ app/dashboard/money/page.tsx                  |   4 +
+ app/dashboard/money/reconcile/page.tsx        |   7 +-
+ app/dashboard/money/tax-package/page.tsx      |  11 +-
+ app/dashboard/settings/page.tsx               |  46 ++++-
+ app/dashboard/showings/assign-select.tsx      |   3 +
+ app/dashboard/showings/confirm-control.tsx    |   2 +
+ app/dashboard/showings/page.tsx               |  15 +-
+ app/dashboard/showings/reschedule-control.tsx |  40 ++--
+ codex-handoffs/AUDIT-UI-OPERATOR-PASS-S528.md |  71 +++++++
+ 13 files changed, 361 insertions(+), 84 deletions(-)
+ create mode 100644 codex-handoffs/AUDIT-UI-OPERATOR-PASS-S528.md
+
+diff --git a/app/dashboard/leads/[id]/page.tsx b/app/dashboard/leads/[id]/page.tsx
+index 3a5dc38..dc571e2 100644
+--- a/app/dashboard/leads/[id]/page.tsx
++++ b/app/dashboard/leads/[id]/page.tsx
+@@ -506,11 +506,25 @@ export default async function LeadDetailPage({
+         </div>
+       )}
+ 
+-      {showings.length > 0 && (
++      {/* S528: always render the Viewings section — hiding it entirely when
++          empty left the pipeline's next step invisible from the lead. */}
++      <div className="mt-8">
++        <SectionHeading>Viewings</SectionHeading>
++      </div>
++      {showings.length === 0 ? (
++        <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
++          No viewings booked yet. Renters book from your listing page — if
++          nothing is bookable, check{" "}
++          <Link
++            href="/dashboard/availability"
++            className="font-medium text-brand hover:underline"
++          >
++            Viewing Times
++          </Link>
++          .
++        </div>
++      ) : (
+         <>
+-          <div className="mt-8">
+-            <SectionHeading>Viewings</SectionHeading>
+-          </div>
+           <ul className="space-y-2">
+             {showings.map((s) => (
+               <li
+diff --git a/app/dashboard/leasing/page.tsx b/app/dashboard/leasing/page.tsx
+index 198527e..f58e6b1 100644
+--- a/app/dashboard/leasing/page.tsx
++++ b/app/dashboard/leasing/page.tsx
+@@ -1,18 +1,23 @@
+ import Link from "next/link";
+ import { BrandBanner, Card, IconTile } from "@/components/ui";
+ import { Icons } from "@/components/icons";
++import { createClient } from "@/lib/supabase/server";
++import { getCurrentOrg } from "@/lib/org";
++import { isAtRisk } from "@/lib/reminders";
+ 
+ export const dynamic = "force-dynamic";
+ 
+ // ============================================================================
+-// Leasing hub (IA Step 1, S274) — the cross-unit "front door" for everything
+-// about converting an interested renter. A thin landing that routes into the
+-// existing pages (Inquiries / Viewings / Availability); it does NOT duplicate
+-// their lists. The richer cross-unit queue view comes in a later step.
++// Leasing hub (IA Step 1, S274; live counts S528) — the cross-unit "front door"
++// for everything about converting an interested renter. It routes into the
++// existing pages (Inquiries / Viewings / Availability) and does NOT duplicate
++// their lists — but it DOES answer "what needs me right now" with live counts,
++// so the page the nav calls "Leasing" is a triage surface, not a launcher.
+ //
+-// Per the IA rule: these are cross-unit queues that link INTO a unit's work —
+-// not parallel editors. The nav highlights "Leasing" while you're on any child
+-// route (see dashboard-nav `match`).
++// Counts are read-only (RLS-scoped, id-only selects) and mirror the exact
++// definitions the child pages use: "new" inquiries = the Inquiries reply queue;
++// unconfirmed = the Viewings at-risk board (agent confirm mode only, via the
++// same isAtRisk helper). No writes, no messages, nothing automated here.
+ // ============================================================================
+ 
+ type Section = {
+@@ -20,57 +25,122 @@ type Section = {
+   title: string;
+   desc: string;
+   icon: keyof typeof Icons;
++  /** Live "needs you" badge (amber when > 0) + quiet context line. */
++  badge?: { count: number; label: string } | null;
++  context?: string | null;
+ };
+ 
+-const SECTIONS: Section[] = [
+-  {
+-    href: "/dashboard/leads",
+-    title: "Inquiries",
+-    desc: "Every renter inquiry across all your rentals — reply, qualify, and move them through your follow-up list.",
+-    icon: "chat",
+-  },
+-  {
+-    href: "/dashboard/showings",
+-    title: "Viewings",
+-    desc: "Booked viewings and their outcomes, across all units.",
+-    icon: "calendar",
+-  },
+-  {
+-    href: "/dashboard/availability",
+-    title: "Viewing Times",
+-    desc: "Set the viewing times renters can book — this is the setup behind Viewings.",
+-    icon: "clock",
+-  },
+-  {
+-    // S275 IA Step 3: pre-screening relocated here from Settings — it's a
+-    // pipeline rule, so it lives where you work inquiries.
+-    href: "/dashboard/leasing/screening",
+-    title: "Pre-screening",
+-    desc: "Add qualifying questions to your inquiry form and auto-flag renters who likely don't fit. You always decide.",
+-    icon: "users",
+-  },
+-  {
+-    // The leasing FUNNEL report (inquiries -> viewings -> leases, by channel).
+-    // Money reports (owner statement / rent roll) live under the Money hub.
+-    href: "/dashboard/reports",
+-    title: "Reports",
+-    desc: "Your leasing funnel across all rentals - inquiries, viewings, channels, and how long units take to lease.",
+-    icon: "chart",
+-  },
+-];
++export default async function LeasingHubPage() {
++  const supabase = createClient();
++  const org = await getCurrentOrg();
++  const nowIso = new Date().toISOString();
++  const nowMs = Date.now();
++
++  // Reply queue: same definition as the Inquiries page's "new" stage.
++  const { count: newLeadCount } = await supabase
++    .from("leads")
++    .select("id", { count: "exact", head: true })
++    .eq("status", "new");
++
++  // Upcoming scheduled viewings; unconfirmed mirrors the Viewings at-risk board.
++  const { data: upcomingRows } = await supabase
++    .from("showings")
++    .select("id, scheduled_at, confirmed_at, outcome")
++    .eq("outcome", "scheduled")
++    .gte("scheduled_at", nowIso)
++    .order("scheduled_at", { ascending: true })
++    .limit(200);
++  const upcoming = (upcomingRows ?? []) as {
++    id: string;
++    scheduled_at: string | null;
++    confirmed_at: string | null;
++    outcome: string | null;
++  }[];
++  const confirmMode = org?.showing_confirm_mode === "agent" ? "agent" : "auto";
++  const unconfirmedCount =
++    confirmMode === "agent"
++      ? upcoming.filter((s) =>
++          isAtRisk({
++            scheduledAtMs: new Date(s.scheduled_at ?? "").getTime(),
++            nowMs,
++            mode: confirmMode,
++            confirmed: s.confirmed_at != null,
++            outcome: s.outcome,
++          }),
++        ).length
++      : 0;
++
++  const newCount = newLeadCount ?? 0;
++  const sections: Section[] = [
++    {
++      href: "/dashboard/leads",
++      title: "Inquiries",
++      desc: "Every renter inquiry across all your rentals — reply, qualify, and move them through your follow-up list.",
++      icon: "chat",
++      badge: newCount > 0 ? { count: newCount, label: "to reply to" } : null,
++      context: newCount === 0 ? "Nothing waiting for a reply" : null,
++    },
++    {
++      href: "/dashboard/showings",
++      title: "Viewings",
++      desc: "Booked viewings and their outcomes, across all units.",
++      icon: "calendar",
++      badge:
++        unconfirmedCount > 0
++          ? { count: unconfirmedCount, label: "unconfirmed in the next 48h" }
++          : null,
++      context:
++        upcoming.length > 0
++          ? `${upcoming.length} upcoming${
++              unconfirmedCount === 0 && confirmMode === "agent"
++                ? " · all confirmed"
++                : ""
++            }`
++          : "No upcoming viewings",
++    },
++    {
++      href: "/dashboard/availability",
++      title: "Viewing Times",
++      desc: "Set the viewing times renters can book — this is the setup behind Viewings.",
++      icon: "clock",
++    },
++    {
++      // S275 IA Step 3: pre-screening relocated here from Settings — it's a
++      // pipeline rule, so it lives where you work inquiries.
++      href: "/dashboard/leasing/screening",
++      title: "Pre-screening",
++      desc: "Add qualifying questions to your inquiry form and auto-flag renters who likely don't fit. You always decide.",
++      icon: "users",
++    },
++    {
++      // The leasing FUNNEL report (inquiries -> viewings -> leases, by channel).
++      // Money reports (owner statement / rent roll) live under the Money hub.
++      href: "/dashboard/reports",
++      title: "Reports",
++      desc: "Your leasing funnel across all rentals - inquiries, viewings, channels, and how long units take to lease.",
++      icon: "chart",
++    },
++  ];
++
++  const needsYou = newCount + unconfirmedCount;
+ 
+-export default function LeasingHubPage() {
+   return (
+     <div>
+       <BrandBanner
+         eyebrow="Leasing"
+         title="Convert your inquiries"
+-        subtitle="Everything that needs you across all your rentals — inquiries, viewings, and the times renters can book. Open any rental to work a single unit end-to-end."
++        subtitle={
++          needsYou > 0
++            ? `${needsYou} item${needsYou === 1 ? "" : "s"} need${
++                needsYou === 1 ? "s" : ""
++              } you right now — new inquiries to answer and viewings to confirm are counted below.`
++            : "Nothing needs you right now. Inquiries, viewings, and the times renters can book all live here — open any rental to work a single unit end-to-end."
++        }
+         icon={<Icons.key className="h-6 w-6" />}
+       />
+ 
+       <div className="mt-6 grid gap-4 sm:grid-cols-2">
+-        {SECTIONS.map((s) => {
++        {sections.map((s) => {
+           const Icon = Icons[s.icon];
+           return (
+             <Link key={s.href} href={s.href} className="block">
+@@ -80,10 +150,20 @@ export default function LeasingHubPage() {
+                     <Icon className="h-5 w-5" />
+                   </IconTile>
+                   <div className="min-w-0">
+-                    <h2 className="font-semibold text-gray-900">{s.title}</h2>
++                    <div className="flex flex-wrap items-center gap-2">
++                      <h2 className="font-semibold text-gray-900">{s.title}</h2>
++                      {s.badge && (
++                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
++                          {s.badge.count} {s.badge.label}
++                        </span>
++                      )}
++                    </div>
+                     <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                       {s.desc}
+                     </p>
++                    {s.context && (
++                      <p className="mt-1 text-xs text-gray-400">{s.context}</p>
++                    )}
+                   </div>
+                 </div>
+               </Card>
+diff --git a/app/dashboard/money/import-history/page.tsx b/app/dashboard/money/import-history/page.tsx
+index 5378f15..efb2f04 100644
+--- a/app/dashboard/money/import-history/page.tsx
++++ b/app/dashboard/money/import-history/page.tsx
+@@ -129,6 +129,26 @@ function statusTone(status: string): ChipTone {
+   return "neutral";
+ }
+ 
++// S528: raw DB enums ("staged", "committed", "pending") tell the operator a
++// database fact, not what to do — map every chip to plain English.
++const BATCH_STATUS_LABELS: Record<string, string> = {
++  staged: "Awaiting your review",
++  committed: "Applied",
++  discarded: "Discarded",
++};
++
++const ROW_STATUS_LABELS: Record<string, string> = {
++  pending: "Awaiting review",
++  applied: "Applied",
++  skipped: "Skipped",
++};
++
++const TRIAGE_STATUS_LABELS: Record<string, string> = {
++  pending: "Free to match",
++  categorized: "Already categorized",
++  excluded: "Excluded",
++};
++
+ function rowReason(row: ImportRow, matched: BankTxnRow | undefined): string | null {
+   if (row.status !== "pending") return row.applied_ref ?? null;
+   if (row.planned_action !== "needs_review") return null;
+@@ -356,7 +376,7 @@ export default async function ImportHistoryPage({
+                     {selectedBatch.filename ?? "FreshBooks import"}
+                   </h2>
+                   <StatusChip tone={selectedBatch.status === "staged" ? "brand" : statusTone(selectedBatch.status)}>
+-                    {selectedBatch.status}
++                    {BATCH_STATUS_LABELS[selectedBatch.status] ?? selectedBatch.status}
+                   </StatusChip>
+                 </div>
+                 <p className="mt-1 text-sm text-gray-600">
+@@ -439,7 +459,7 @@ export default async function ImportHistoryPage({
+                                 {fmtDate(matched.posted_on)} · {matched.direction} · {formatMoneyCents(matched.amount_cents)}
+                               </p>
+                               <StatusChip tone={matched.triage_status === "pending" ? "success" : "neutral"}>
+-                                {matched.triage_status}
++                                {TRIAGE_STATUS_LABELS[matched.triage_status] ?? matched.triage_status}
+                               </StatusChip>
+                             </>
+                           ) : (
+@@ -462,7 +482,9 @@ export default async function ImportHistoryPage({
+                               </p>
+                             )}
+                             {row.status !== "pending" && (
+-                              <StatusChip tone={statusTone(row.status)}>{row.status}</StatusChip>
++                              <StatusChip tone={statusTone(row.status)}>
++                                {ROW_STATUS_LABELS[row.status] ?? row.status}
++                              </StatusChip>
+                             )}
+                             {reason && <p className="max-w-xs text-xs leading-relaxed text-amber-700">{reason}</p>}
+                           </div>
+diff --git a/app/dashboard/money/income-statement/page.tsx b/app/dashboard/money/income-statement/page.tsx
+index f2c0892..563d778 100644
+--- a/app/dashboard/money/income-statement/page.tsx
++++ b/app/dashboard/money/income-statement/page.tsx
+@@ -252,6 +252,11 @@ export default async function IncomeStatementPage({
+         icon={<Icons.chart className="h-6 w-6" />}
+         action={
+           <div className="flex flex-wrap items-center gap-2">
++            {/* S528: the statement trio should reciprocally link — the T776
++                package reconciles to this P&L. */}
++            <Link href="/dashboard/money/tax-package" className={SECONDARY_ACTION_CLASS}>
++              Tax package
++            </Link>
+             <Link href="/dashboard/rent/statement" className={SECONDARY_ACTION_CLASS}>
+               Owner statement
+             </Link>
+@@ -313,6 +318,23 @@ export default async function IncomeStatementPage({
+         counted by paid date; expenses by incurred/completed date.
+       </p>
+ 
++      {/* S528: with no activity in the range, an all-zeros table tells the
++          operator nothing — say so and point at the next action instead. */}
++      {statement.totals.rentCount === 0 &&
++        statement.totals.revenueCents === 0 &&
++        statement.totals.operatingExpensesCents === 0 &&
++        statement.totals.interestCents === 0 &&
++        statement.totals.principalCents === 0 && (
++          <div className="mb-5">
++            <EmptyState
++              icon={<Icons.chart className="h-5 w-5" />}
++              title="Nothing to report for this period"
++              description="No rent was collected and no expenses were logged in this range. Pick another period above, or log rent and expenses first — the statement fills in from what you record."
++              cta={{ href: "/dashboard/expenses", label: "Log expenses" }}
++            />
++          </div>
++        )}
++
+       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+         <StatCard
+           label="Revenue"
+diff --git a/app/dashboard/money/page.tsx b/app/dashboard/money/page.tsx
+index 22a1845..6497eb9 100644
+--- a/app/dashboard/money/page.tsx
++++ b/app/dashboard/money/page.tsx
+@@ -124,8 +124,12 @@ export default async function MoneyHubPage() {
+ 
+         {SECTIONS.map((s) => {
+           const Icon = Icons[s.icon];
++          // Every accounting-gated child gets the Premium chip so no card is
++          // an unmarked door into a lock screen (S528: import-history was
++          // gated on the page but unmarked here — a dead-end for Free/Growth).
+           const locked =
+             (s.href === "/dashboard/money/reconcile" ||
++              s.href === "/dashboard/money/import-history" ||
+               s.href === "/dashboard/money/income-statement" ||
+               s.href === "/dashboard/money/tax-package") &&
+             !accounting;
+diff --git a/app/dashboard/money/reconcile/page.tsx b/app/dashboard/money/reconcile/page.tsx
+index a6a5021..fbc2be7 100644
+--- a/app/dashboard/money/reconcile/page.tsx
++++ b/app/dashboard/money/reconcile/page.tsx
+@@ -112,7 +112,7 @@ function transactionLabel(txn: ReconciledTransaction): string {
+ 
+ function accountHint(count: number, cents: number): string {
+   if (count === 0) return "All transactions accounted for";
+-  return `${count} transaction${count === 1 ? "" : "s"} - ${formatMoneyCents(cents)} unreconciled`;
++  return `${count} transaction${count === 1 ? "" : "s"} - ${formatMoneyCents(cents)} waiting for a decision`;
+ }
+ 
+ function tenancyLabel(row: TenancyRow): string {
+@@ -317,9 +317,9 @@ export default async function ReconcilePage({
+           icon={<Icons.chart />}
+         />
+         <StatCard
+-          label="Unreconciled"
++          label="Waiting on you"
+           value={summary.unreconciledCount}
+-          hint={`${formatMoneyCents(summary.unreconciledCents)} to clear`}
++          hint={`${formatMoneyCents(summary.unreconciledCents)} to match, log, or exclude`}
+           icon={<Icons.list />}
+         />
+         <StatCard
+@@ -336,6 +336,7 @@ export default async function ReconcilePage({
+             icon={<Icons.card />}
+             title="No bank transactions yet"
+             description="Connect or import a bank account from Expenses, then reconcile the staged transactions here."
++            cta={{ href: "/dashboard/expenses", label: "Go to Expenses" }}
+           />
+         ) : (
+           summary.accounts.map((account) => (
+diff --git a/app/dashboard/money/tax-package/page.tsx b/app/dashboard/money/tax-package/page.tsx
+index a08b210..863afea 100644
+--- a/app/dashboard/money/tax-package/page.tsx
++++ b/app/dashboard/money/tax-package/page.tsx
+@@ -246,6 +246,14 @@ export default async function TaxPackagePage({
+         icon={<Icons.chart className="h-6 w-6" />}
+         action={
+           <div className="print:hidden flex flex-wrap items-center gap-2">
++            {/* S528: the statement trio (P&L / owner statement / T776) should
++                reciprocally link — this package reconciles to the P&L. */}
++            <Link
++              href="/dashboard/money/income-statement"
++              className={SECONDARY_ACTION_CLASS}
++            >
++              Income statement
++            </Link>
+             <PrintButton />
+             <a href={exportHref(year)} className={SECONDARY_ACTION_CLASS}>
+               Download CSV
+@@ -283,7 +291,8 @@ export default async function TaxPackagePage({
+         <EmptyState
+           icon={<Icons.chart className="h-5 w-5" />}
+           title="Nothing in this tax year"
+-          description="No rent payments, expenses, or completed maintenance fall in this calendar year."
++          description="No rent payments, expenses, or completed maintenance fall in this calendar year. Pick another year above, or log the year's rent and expenses first."
++          cta={{ href: "/dashboard/expenses", label: "Log expenses" }}
+         />
+       ) : (
+         <div className="space-y-6">
+diff --git a/app/dashboard/settings/page.tsx b/app/dashboard/settings/page.tsx
+index 2bd8fb7..2888e85 100644
+--- a/app/dashboard/settings/page.tsx
++++ b/app/dashboard/settings/page.tsx
+@@ -2,6 +2,7 @@ import Link from "next/link";
+ import { headers } from "next/headers";
+ import { getCurrentOrg } from "@/lib/org";
+ import { canUseRenterSms } from "@/lib/billing";
++import { isSmsConfigured } from "@/lib/sms";
+ import { createClient } from "@/lib/supabase/server";
+ import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
+ import {
+@@ -355,13 +356,17 @@ export default async function SettingsPage({
+   const smsFlash = searchParams.sms;
+   const confirmFlash = searchParams.confirm;
+   const canRenterSms = canUseRenterSms(org.plan);
++  // S528 honesty: the toggle is a PLAN feature, but whether texts actually go
++  // out is a TRANSPORT fact (SMS_LIVE + provider creds). Read it so the UI
++  // never implies texting while the account's SMS is not connected.
++  const smsTransportReady = isSmsConfigured();
+ 
+   return (
+     <div>
+       <PageHeader
+         icon={<Icons.settings />}
+         title="Settings"
+-        subtitle="Control how your brand appears to renters and how automated emails and texts behave."
++        subtitle="Control how your brand appears to renters and how automated messages behave."
+       />
+ 
+       <SettingsTabs active={tab} />
+@@ -1510,7 +1515,9 @@ export default async function SettingsPage({
+ 
+             {smsFlash === "saved" && (
+               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+-                Text message setting saved.
++                {smsTransportReady
++                  ? "Text message setting saved."
++                  : "Saved. Texts start once your account's SMS is connected — nothing is sending yet."}
+               </div>
+             )}
+             {smsFlash === "error" && (
+@@ -1534,6 +1541,19 @@ export default async function SettingsPage({
+               </div>
+             )}
+ 
++            {/* S528 honesty: when the transport isn't connected, lead with
++                "not sending yet" and keep every verb conditional, so an
++                operator can never read this toggle as live texting. */}
++            {canRenterSms && !smsTransportReady && (
++              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
++                <span className="font-medium">Not sending yet.</span> Your
++                account&apos;s SMS isn&apos;t connected, so no texts go out
++                regardless of this setting. Your choice here is saved and takes
++                effect when SMS is connected. Renters get email confirmations
++                and reminders either way.
++              </div>
++            )}
++
+             <label className="mt-4 flex items-start gap-3">
+               <input
+                 name="sms_enabled"
+@@ -1548,12 +1568,22 @@ export default async function SettingsPage({
+                   reminders
+                 </span>
+                 <span className="block text-xs text-gray-400">
+-                  When a renter leaves a phone number, we send a short text
+-                  confirming their booking and reminders about 24 hours and 2
+-                  hours before the viewing, alongside the emails. Every text
+-                  includes &quot;Reply STOP to opt out,&quot; and a renter who
+-                  replies STOP is never texted again. Texting starts once your
+-                  account&apos;s SMS is connected.
++                  {smsTransportReady ? (
++                    <>
++                      When a renter leaves a phone number, we send a short text
++                      confirming their booking and reminders about 24 hours and
++                      2 hours before the viewing, alongside the emails.
++                    </>
++                  ) : (
++                    <>
++                      Once your account&apos;s SMS is connected: when a renter
++                      leaves a phone number, we&apos;ll send a short text
++                      confirming their booking and reminders about 24 hours and
++                      2 hours before the viewing, alongside the emails.
++                    </>
++                  )}{" "}
++                  Every text includes &quot;Reply STOP to opt out,&quot; and a
++                  renter who replies STOP is never texted again.
+                 </span>
+               </span>
+             </label>
+diff --git a/app/dashboard/showings/assign-select.tsx b/app/dashboard/showings/assign-select.tsx
+index d1eafd6..d065142 100644
+--- a/app/dashboard/showings/assign-select.tsx
++++ b/app/dashboard/showings/assign-select.tsx
+@@ -70,6 +70,9 @@ export function AssignSelect({
+           name="agent_id"
+           defaultValue={assignedAgentId ?? ""}
+           onChange={() => formRef.current?.requestSubmit()}
++          // Point-of-action send clarity (S528): assigning emails the agent.
++          // The same note lives on the Showing agents page; surface it here too.
++          title="Assigning emails the agent the renter, property, and time"
+           className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+         >
+           <option value="">Unassigned</option>
+diff --git a/app/dashboard/showings/confirm-control.tsx b/app/dashboard/showings/confirm-control.tsx
+index 93ff877..a6d2f29 100644
+--- a/app/dashboard/showings/confirm-control.tsx
++++ b/app/dashboard/showings/confirm-control.tsx
+@@ -20,6 +20,8 @@ export function ConfirmControl({
+         <input type="hidden" name="id" value={showingId} />
+         <button
+           type="submit"
++          // S528: records the confirmation only — reassure that nothing sends.
++          title="Records the confirmation. No message is sent."
+           className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100"
+         >
+           Mark confirmed
+diff --git a/app/dashboard/showings/page.tsx b/app/dashboard/showings/page.tsx
+index ee6d9f0..7a1ad09 100644
+--- a/app/dashboard/showings/page.tsx
++++ b/app/dashboard/showings/page.tsx
+@@ -471,6 +471,15 @@ function AtRiskBoard({
+   return (
+     <div className="mb-8">
+       <SectionHeading>Unconfirmed viewings (next 48h)</SectionHeading>
++      {/* S528 send-clarity legend: say up front which buttons email people, so
++          the operator never has to guess what a click sends. */}
++      {rows.length > 0 && (
++        <p className="mb-2 text-xs text-gray-500">
++          &ldquo;Mark confirmed&rdquo; only records it — no message.
++          &ldquo;Nudge renter&rdquo; emails the renter a confirm link now.
++          &ldquo;Release&rdquo; cancels the booking and reopens the slot.
++        </p>
++      )}
+       {rows.length === 0 ? (
+         <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
+           No unconfirmed viewings in the next 48 hours.
+@@ -505,16 +514,20 @@ function AtRiskBoard({
+                   <input type="hidden" name="id" value={s.id} />
+                   <button
+                     type="submit"
++                    // S528: same verb as the per-row ConfirmControl; records
++                    // only, sends nothing.
++                    title="Records the confirmation. No message is sent."
+                     className="inline-flex items-center gap-1 rounded-lg border border-green-300 bg-white px-2.5 py-1.5 text-xs font-medium text-green-700 transition hover:bg-green-50"
+                   >
+                     <Icons.check className="h-3.5 w-3.5" />
+-                    Confirm
++                    Mark confirmed
+                   </button>
+                 </form>
+                 <form action={nudgeRenterForConfirmation}>
+                   <input type="hidden" name="id" value={s.id} />
+                   <button
+                     type="submit"
++                    title="Emails the renter a confirm-your-viewing link now"
+                     className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-medium text-amber-800 transition hover:bg-amber-100"
+                   >
+                     <Icons.mail className="h-3.5 w-3.5" />
+diff --git a/app/dashboard/showings/reschedule-control.tsx b/app/dashboard/showings/reschedule-control.tsx
+index 96a7891..6dd3322 100644
+--- a/app/dashboard/showings/reschedule-control.tsx
++++ b/app/dashboard/showings/reschedule-control.tsx
+@@ -22,23 +22,29 @@ export function RescheduleControl({
+       <summary className="cursor-pointer list-none text-gray-500 hover:text-brand hover:underline">
+         Reschedule
+       </summary>
+-      <form action={rescheduleShowing} className="mt-1.5 flex items-center gap-1.5">
+-        <input type="hidden" name="id" value={showingId} />
+-        <input
+-          type="datetime-local"
+-          name="scheduled_at"
+-          defaultValue={defaultLocalValue}
+-          min={minLocalValue}
+-          required
+-          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900"
+-          aria-label="New viewing time"
+-        />
+-        <button
+-          type="submit"
+-          className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50"
+-        >
+-          Save
+-        </button>
++      <form action={rescheduleShowing} className="mt-1.5">
++        <div className="flex items-center gap-1.5">
++          <input type="hidden" name="id" value={showingId} />
++          <input
++            type="datetime-local"
++            name="scheduled_at"
++            defaultValue={defaultLocalValue}
++            min={minLocalValue}
++            required
++            className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900"
++            aria-label="New viewing time"
++          />
++          <button
++            type="submit"
++            className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50"
++          >
++            Save &amp; notify
++          </button>
++        </div>
++        {/* Point-of-action send clarity (S528): this action emails people. */}
++        <p className="mt-1 text-[11px] leading-snug text-gray-400">
++          Emails the renter and the assigned agent the new time.
++        </p>
+       </form>
+     </details>
+   );
+diff --git a/codex-handoffs/AUDIT-UI-OPERATOR-PASS-S528.md b/codex-handoffs/AUDIT-UI-OPERATOR-PASS-S528.md
+new file mode 100644
+index 0000000..5ea9f1c
+--- /dev/null
++++ b/codex-handoffs/AUDIT-UI-OPERATOR-PASS-S528.md
+@@ -0,0 +1,71 @@
++# S528 — Whole-product operator-UX audit (ranked)
++
++Audited 2026-07-19/20 at app HEAD `a9f4dfec` against the six-question operator standard
++(what needs attention / whose is it / safe to share / next action / what happened / auto vs prepared).
++Method: full read of dashboard, leasing (leads/showings/screening), money (hub, reconcile,
++import-history, P&L, T776, rent, expenses), properties (list + detail + distribute), settings,
++automations, billing, messages, maintenance/notices, captures, nav.
++
++## P1 — high leverage, fixed this pass
++
++1. **Emails fire silently from viewing controls** — Reschedule's button is just "Save"
++   (`showings/reschedule-control.tsx:40`) but the action re-notifies the renter AND the agent
++   (`showings/actions.ts:909,929`). Assign emails the agent, documented only on a different page
++   (`showing-agents/page.tsx:79`). "Nudge renter" emails immediately with no signal
++   (`showings/page.tsx:514-523`). Meanwhile "Confirm"/"Mark confirmed" sends nothing — the operator
++   cannot tell which buttons message people. Fails standard #3/#6. The tenant-messages page has the
++   right pattern ("Nothing here has been sent…", `messages/page.tsx:79`).
++2. **SMS settings copy implies live texting while SMS is dark** — toggle copy is present-tense
++   ("we send a short text…", `settings/page.tsx:1546-1557`), gated on plan not transport; flash says
++   "Text message setting saved." (`:1513`); page subtitle promises "automated emails and texts"
++   (`:364`). Production SMS is OFF (SMS_LIVE unset). Unsafe wording.
++3. **Leasing hub is a static launcher** — the designated funnel front door (`leasing/page.tsx`)
++   renders 5 static cards, zero counts/queues; its banner claims "Everything that needs you."
++   Answers none of the six questions. Weakest page in the leasing flow.
++4. **Money hub dead-end** — Import history is `accounting`-gated
++   (`import-history/page.tsx:188-205`) but the hub's Premium-chip predicate omits it
++   (`money/page.tsx:127-131`): Free/Growth operators click an unmarked card into a lock screen.
++
++## P2 — fixed this pass
++
++5. **Raw DB enums shown as statuses** — Import history prints `staged`/`committed`/`pending`
++   verbatim, including a green "pending" chip (`import-history/page.tsx:358-360,441-443,464-466`).
++6. **Report empty states dead-end** — income statement has NO zero-data state (renders a zeros
++   table); tax package's "Nothing in this tax year" has no next action (`tax-package/page.tsx:283-287`);
++   reconcile's empty state names Expenses but doesn't link it (`reconcile/page.tsx:334-339`).
++7. **Premium reports don't cross-link** — T776 action bar has no link to P&L or the statement trio
++   (`tax-package/page.tsx:247-255`); P&L links statement + rent-roll but not its sibling T776
++   (`income-statement/page.tsx:253-264`). "Reconciles to the P&L" is claimed but not navigable.
++8. **Lead detail hides the viewings section entirely when empty** (`leads/[id]/page.tsx:509`) —
++   no "book one" affordance; the pipeline's next action lives on another page (context-carry failure).
++9. **Confirm verb inconsistency** — At-risk board says "Confirm" (`showings/page.tsx:511`), the row
++   control says "Mark confirmed" (`confirm-control.tsx:24`) for the same server action.
++10. **"Unreconciled" jargon** — StatCard label + hint (`reconcile/page.tsx:319-324,113-116`) tell
++    the operator a fact, not what to do.
++
++## P3 — documented, NOT changed this pass (design decisions, next pass)
++
++- Two overlapping "Money" hubs (`/dashboard/money` vs `/dashboard/rent`, both eyebrowed Money,
++  both surfacing Owner statement; stale header comment in `rent/page.tsx:18-20`). Fold exports
++  into one front door.
++- Rental detail stacks 3–4 competing next-action/publish affordances (header Publish +
++  lifecycle-rail "Next:" + NextActionCard + Distribute banner). Make NextActionCard the single
++  guided step.
++- Two lock-state visual languages (`FeatureLockedNotice` vs `EmptyState` + "See plans").
++  Standardize.
++- "Record as rent" exists twice with different gates/mental models (expenses money-in split vs
++  reconcile one-tap match); "Ignore" vs "Exclude" vocabulary split.
++- Automation controls split across `/automations` and Settings→Comms; automations page doesn't
++  distinguish auto-send vs prepared-only.
++- Viewings row control pile-up (assign + outcome + confirm + reschedule + suggest + contact in one
++  flex stack) — needs an overflow menu on mobile.
++- Distribution "Live coverage" counts `needs_refresh` as live (`distribute-tab.tsx:236-240,284-286`).
++- Lifecycle-rail connector misrender on wrap; tab bars lack overflow cues; billing disabled-Subscribe
++  soft dead-end when Stripe unconfigured.
++
++## Explicitly good (do not regress)
++
++- Accounting/tax disclaimers ("not a filed return", "never moves money") — keep as model.
++- Distribution honesty ("Submitted to feed - not live yet", proof-before-Live).
++- Triage-queue's table-free responsive pattern; most empty states elsewhere.
++- SMS transport is genuinely default-closed in code (`lib/sms.ts:548`); the problem is wording only.
+-- 
+2.43.0
+

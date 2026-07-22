@@ -105,12 +105,35 @@ export async function sendOrgNotification(
     if (!isEventEnabled(setting))
       return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_disabled" };
 
+    // S554: the operator lane tier. Only operator `leasing` events carry a lane;
+    // for everything else this stays empty and resolution is unchanged. Guarded
+    // in ITS OWN try/catch (KI844): if the table is missing (deploy landed before
+    // migration 0179), or RLS/permission trips, treat lane recipients as [] and
+    // send via the capability default — never let a lane read suppress the whole
+    // notification. Because this read lives here, every caller (all crons + token
+    // actions) inherits lane routing with no per-caller change.
+    let laneRecipients: string[] = [];
+    if (event.lane) {
+      try {
+        const { data: laneRow } = await args.client
+          .from("org_notification_lanes")
+          .select("recipients")
+          .eq("organization_id", args.org.id)
+          .eq("lane", event.lane)
+          .maybeSingle();
+        laneRecipients = (laneRow?.recipients as string[] | null) ?? [];
+      } catch {
+        laneRecipients = [];
+      }
+    }
+
     const recipients = resolveNotificationRecipients({
       audience: event.audience,
       configured: setting?.recipients ?? [],
       audienceEmail: args.audienceEmail,
       operatorFallback: args.operatorFallback,
       alwaysInclude: args.alwaysInclude,
+      laneRecipients,
     });
     if (recipients.length === 0)
       return { delivered: false, sentCount: 0, attempted: 0, skipped: "no_recipients" };

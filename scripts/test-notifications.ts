@@ -206,6 +206,135 @@ ok(
   }).length === MAX_NOTIFICATION_RECIPIENTS,
 );
 
+// --- operator lane routing (S554) -------------------------------------------
+// laneRecipients is the NEW middle tier for operator events: used when the
+// per-event override (configured) is empty, and it wins over operatorFallback.
+ok(
+  "lane: used when configured empty",
+  JSON.stringify(
+    resolveNotificationRecipients({
+      audience: "operator",
+      configured: [],
+      laneRecipients: ["lane@x.com"],
+      operatorFallback: ["fb@x.com"],
+    }),
+  ) === JSON.stringify(["lane@x.com"]),
+);
+// per-event override still WINS over the lane
+ok(
+  "lane: configured wins over lane",
+  JSON.stringify(
+    resolveNotificationRecipients({
+      audience: "operator",
+      configured: ["cfg@x.com"],
+      laneRecipients: ["lane@x.com"],
+      operatorFallback: ["fb@x.com"],
+    }),
+  ) === JSON.stringify(["cfg@x.com"]),
+);
+// lane wins over the capability-member default
+ok(
+  "lane: lane wins over operatorFallback",
+  JSON.stringify(
+    resolveNotificationRecipients({
+      audience: "operator",
+      configured: [],
+      laneRecipients: ["lane@x.com"],
+      operatorFallback: ["fb@x.com"],
+    }),
+  ) === JSON.stringify(["lane@x.com"]),
+);
+// empty lane -> straight through to the fallback (byte-identical to pre-lane)
+ok(
+  "lane: empty lane falls through to fallback",
+  JSON.stringify(
+    resolveNotificationRecipients({
+      audience: "operator",
+      configured: [],
+      laneRecipients: [],
+      operatorFallback: ["fb@x.com"],
+    }),
+  ) === JSON.stringify(["fb@x.com"]),
+);
+// audienceEmail + alwaysInclude are still forced in FIRST, ahead of lane
+// recipients, and dedupe holds.
+ok(
+  "lane: audienceEmail + alwaysInclude precede lane, dedupe holds",
+  JSON.stringify(
+    resolveNotificationRecipients({
+      audience: "operator",
+      configured: [],
+      audienceEmail: "Agent@x.com",
+      alwaysInclude: ["safety@x.com", "agent@x.com"],
+      laneRecipients: ["lane@x.com", "safety@x.com"],
+      operatorFallback: ["fb@x.com"],
+    }),
+  ) === JSON.stringify(["agent@x.com", "safety@x.com", "lane@x.com"]),
+);
+// tenant/trade audience ignores laneRecipients entirely
+ok(
+  "lane: tenant ignores laneRecipients",
+  resolveNotificationRecipients({
+    audience: "tenant",
+    configured: [],
+    audienceEmail: null,
+    laneRecipients: ["lane@x.com"],
+  }).length === 0,
+);
+ok(
+  "lane: trade ignores laneRecipients",
+  JSON.stringify(
+    resolveNotificationRecipients({
+      audience: "trade",
+      configured: ["cc@x.com"],
+      audienceEmail: "Trade@x.com",
+      laneRecipients: ["lane@x.com"],
+    }),
+  ) === JSON.stringify(["trade@x.com", "cc@x.com"]),
+);
+
+// --- lane registry invariants (the guard that kills the S548b class of bug) --
+// EVERY operator `leasing` event MUST declare a lane, so a new event can never
+// silently default into the showing lane again. Fails loudly, naming offenders.
+{
+  const offenders = NOTIFICATION_EVENTS.filter(
+    (e) => e.audience === "operator" && e.family === "leasing" && !e.lane,
+  ).map((e) => e.key);
+  if (offenders.length > 0) {
+    console.error(`  ✗ lane invariant: operator leasing events missing a lane: ${offenders.join(", ")}`);
+  }
+  ok("lane: every operator leasing event declares a lane", offenders.length === 0);
+}
+// Lanes only ever appear on operator leasing events, and only with valid values.
+ok(
+  "lane: only operator leasing events carry a lane",
+  NOTIFICATION_EVENTS.filter((e) => e.lane).every(
+    (e) => e.audience === "operator" && e.family === "leasing",
+  ),
+);
+ok(
+  "lane: all lane values are valid",
+  NOTIFICATION_EVENTS.filter((e) => e.lane).every((e) =>
+    ["listing", "showing", "owner"].includes(e.lane as string),
+  ),
+);
+// Spot-check the classification on one event per lane.
+ok("lane: new_lead is showing", getNotificationEvent("leasing.new_lead")?.lane === "showing");
+ok(
+  "lane: distribution_job_needs_action is listing",
+  getNotificationEvent("leasing.distribution_job_needs_action")?.lane === "listing",
+);
+ok("lane: rent_increase is owner", getNotificationEvent("leasing.rent_increase")?.lane === "owner");
+// Tenant/dispatch events never get a lane.
+ok(
+  "lane: tenant compliance event has no lane",
+  getNotificationEvent("leasing.rent_increase_tenant_notice")?.lane === undefined,
+);
+ok(
+  "lane: dispatch event has no lane",
+  getNotificationEvent("dispatch.trade_update")?.lane === undefined,
+);
+
 // --- quote token + helpers --------------------------------------------------
 ok("quote token: cents", formatQuoteToken(25000) === "$250.00");
 ok("quote token: null empty", formatQuoteToken(null) === "");

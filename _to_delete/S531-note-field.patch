@@ -1,0 +1,95 @@
+From 2abfccab87a3211e0ff04afa76e7ae89539079fe Mon Sep 17 00:00:00 2001
+From: Noam Muscovitch <admin@vacantless.com>
+Date: Mon, 20 Jul 2026 02:16:33 +0000
+Subject: [PATCH] S531: optional operator note on e-transfer capture confirm
+ (leads the expense/rent memo, provenance suffix kept)
+
+---
+ app/dashboard/expenses/actions.ts | 18 ++++++++++++++++--
+ app/dashboard/expenses/page.tsx   | 20 ++++++++++++++++++++
+ 2 files changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/app/dashboard/expenses/actions.ts b/app/dashboard/expenses/actions.ts
+index 654f31e..21fe651 100644
+--- a/app/dashboard/expenses/actions.ts
++++ b/app/dashboard/expenses/actions.ts
+@@ -517,7 +517,16 @@ export async function confirmEtransferRent(formData: FormData) {
+       paid_on: check.value.paidOn,
+       period_month: normalizePeriodMonth(check.value.paidOn),
+       reference: null,
+-      note: `Recorded from forwarded e-Transfer from ${capture.counterparty_name}`,
++      // S531: optional operator note leads; provenance kept as a suffix.
++      note: (() => {
++        const operatorNote = (s(formData, "note") ?? "")
++          .replace(/\s+/g, " ")
++          .trim()
++          .slice(0, 200);
++        return operatorNote
++          ? `${operatorNote} (recorded from forwarded e-Transfer)`
++          : `Recorded from forwarded e-Transfer from ${capture.counterparty_name}`;
++      })(),
+     })
+     .select("id")
+     .single();
+@@ -555,6 +564,9 @@ export async function confirmEtransferExpense(formData: FormData) {
+ 
+   const propertyId = orNull(formData, "property_id");
+   const buildingKey = orNull(formData, "building_key");
++  // S531: optional operator note ("506 Manning toilet unit 2") leads the memo;
++  // the e-Transfer provenance is kept as a suffix either way.
++  const operatorNote = (s(formData, "note") ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+   const check = validateExpenseInput({
+     category: s(formData, "category"),
+     amountCents: capture.amount_cents,
+@@ -562,7 +574,9 @@ export async function confirmEtransferExpense(formData: FormData) {
+     propertyId,
+     buildingKey,
+     merchant: capture.counterparty_name,
+-    note: `Recorded from forwarded e-Transfer to ${capture.counterparty_name}`,
++    note: operatorNote
++      ? `${operatorNote} (recorded from forwarded e-Transfer)`
++      : `Recorded from forwarded e-Transfer to ${capture.counterparty_name}`,
+     source: "manual",
+     bankTransactionId: null,
+   });
+diff --git a/app/dashboard/expenses/page.tsx b/app/dashboard/expenses/page.tsx
+index 9fab868..28ae2fa 100644
+--- a/app/dashboard/expenses/page.tsx
++++ b/app/dashboard/expenses/page.tsx
+@@ -799,6 +799,16 @@ export default async function ExpensesPage({
+                               ))}
+                             </select>
+                           </label>
++                          <label className="text-sm">
++                            <span className="mb-1 block text-gray-600">Note (optional)</span>
++                            <input
++                              type="text"
++                              name="note"
++                              maxLength={200}
++                              placeholder="e.g. July rent, paid by e-transfer"
++                              className="min-w-56 rounded-lg border border-gray-300 px-3 py-2"
++                            />
++                          </label>
+                           <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Recording...">
+                             Record as rent
+                           </SubmitButton>
+@@ -855,6 +865,16 @@ export default async function ExpensesPage({
+                             ))}
+                           </select>
+                         </label>
++                        <label className="text-sm sm:col-span-3">
++                          <span className="mb-1 block text-gray-600">Note (optional)</span>
++                          <input
++                            type="text"
++                            name="note"
++                            maxLength={200}
++                            placeholder="e.g. 506 Manning toilet unit 2"
++                            className="w-full rounded-lg border border-gray-300 px-3 py-2"
++                          />
++                        </label>
+                         <div className="flex items-end">
+                           <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Logging...">
+                             Log expense
+-- 
+2.43.0
+

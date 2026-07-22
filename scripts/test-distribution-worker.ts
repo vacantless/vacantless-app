@@ -195,6 +195,8 @@ ok("prompt omits unsupplied facts (no unit type line)", !/Unit type:/i.test(prom
   ok("route gates on automation_authorized", routeSrc.includes("automation_authorized"));
   ok("route records actorType agent", routeSrc.includes('actorType: "agent"'));
   ok("route calls assertWorkerNeverTerminal before the gate write", routeSrc.includes("assertWorkerNeverTerminal"));
+  ok("route treats attempt insert failure as a safe skip", routeSrc.includes("attempt_log_failed"));
+  ok("route links prepared item to the agent attempt", routeSrc.includes("last_attempt_id: attemptRow.id"));
 }
 {
   const aiSrc = readFileSync("lib/distribution-worker-ai.ts", "utf8");

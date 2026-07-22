@@ -1,0 +1,1316 @@
+From 5dcb67eb3ee05096df467dde7cb2848da7950daf Mon Sep 17 00:00:00 2001
+From: Claude Fable 5 <noreply@anthropic.com>
+Date: Mon, 20 Jul 2026 03:01:10 +0000
+Subject: [PATCH 1/2] S532: accountant hand-off package - one-zip year-end
+ export (general ledger + T776 + P&L + owner statement + rent roll +
+ QuickBooks/Xero import CSVs + README), dependency-free zip writer
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AQkWWHtFrdXtXvcbPV8fn7
+---
+ .../money/accountant-package/export/route.ts  | 242 +++++++++++++
+ .../money/accountant-package/page.tsx         | 197 +++++++++++
+ app/dashboard/money/page.tsx                  |   9 +-
+ lib/accountant-package.ts                     | 307 +++++++++++++++++
+ lib/zip.ts                                    | 163 +++++++++
+ scripts/test-accountant-package.ts            | 324 ++++++++++++++++++
+ 6 files changed, 1241 insertions(+), 1 deletion(-)
+ create mode 100644 app/dashboard/money/accountant-package/export/route.ts
+ create mode 100644 app/dashboard/money/accountant-package/page.tsx
+ create mode 100644 lib/accountant-package.ts
+ create mode 100644 lib/zip.ts
+ create mode 100644 scripts/test-accountant-package.ts
+
+diff --git a/app/dashboard/money/accountant-package/export/route.ts b/app/dashboard/money/accountant-package/export/route.ts
+new file mode 100644
+index 0000000..75e4c04
+--- /dev/null
++++ b/app/dashboard/money/accountant-package/export/route.ts
+@@ -0,0 +1,242 @@
++import { NextRequest, NextResponse } from "next/server";
++import { createClient } from "@/lib/supabase/server";
++import { getCurrentOrg } from "@/lib/org";
++import { currentUserCan } from "@/lib/membership";
++import { planEntitlements } from "@/lib/billing";
++import { expenseToCostRow, isOperatingCategory, type ExpenseRow } from "@/lib/expenses";
++import { parseMoneyToCents } from "@/lib/tenancy";
++import {
++  buildMonthlyStatement,
++  buildOwnerStatement,
++  describeRange,
++  statementToCsv,
++  type DateRange,
++  type PropertyRef,
++  type RentRow,
++} from "@/lib/statements";
++import type { WorkOrderCostRow } from "@/lib/work-orders";
++import { buildIncomeStatement, incomeStatementToCsv } from "@/lib/income-statement";
++import { buildT776Statement, t776ToCsv } from "@/lib/t776";
++import {
++  buildRentRoll,
++  computeCapRate,
++  rangeDays,
++  rentRollToCsv,
++  type RentRollPropertyRef,
++  type RentRollTenancyInput,
++} from "@/lib/rent-roll";
++import {
++  accountantPackageReadme,
++  buildGeneralLedger,
++  generalLedgerToCsv,
++  ledgerToQuickBooksCsv,
++  ledgerToXeroCsv,
++  type LedgerExpenseRow,
++  type LedgerWorkOrderRow,
++} from "@/lib/accountant-package";
++import { buildZip, type ZipEntry } from "@/lib/zip";
++
++export const dynamic = "force-dynamic";
++
++// S532 accountant hand-off package (Premium accounting + view_reports): ONE
++// zip with every year-end artifact — general ledger, T776, P&L, owner
++// statement, rent roll, QuickBooks/Xero import CSVs, and a README explaining
++// the basis rules. Reads RLS-scoped rows once and feeds the existing PURE
++// report builders; the only new math (the general ledger) reconciles to them
++// by construction. Nothing is written anywhere.
++
++type RentQueryRow = {
++  amount_cents: number;
++  paid_on: string | null;
++  tenancy: { property_id: string | null } | null;
++};
++
++type WoQueryRow = {
++  property_id: string | null;
++  building_key: string | null;
++  category: string;
++  status: string;
++  cost_cents: number | null;
++  completed_on: string | null;
++  title: string | null;
++  tenancy: { property_id: string | null } | null;
++};
++
++type ExpenseQueryRow = ExpenseRow & { merchant: string | null; note: string | null };
++
++type TenantRow = { name: string | null; is_primary: boolean };
++type TenancyQueryRow = {
++  status: string;
++  rent_cents: number | null;
++  start_date: string | null;
++  end_date: string | null;
++  property_id: string | null;
++  tenants: TenantRow[];
++};
++
++function parseYear(raw: string | null): number | null {
++  if (!raw || !/^\d{4}$/.test(raw)) return null;
++  const year = Number(raw);
++  return year >= 1900 && year <= 9999 ? year : null;
++}
++
++export async function GET(req: NextRequest) {
++  const org = await getCurrentOrg();
++  if (!org) return NextResponse.redirect(new URL("/login", req.url));
++
++  if (!planEntitlements(org.plan).accounting) {
++    return new NextResponse("Upgrade to Premium to export the accountant package.", { status: 403 });
++  }
++  if (!(await currentUserCan("view_reports"))) {
++    return new NextResponse("Forbidden", { status: 403 });
++  }
++
++  const todayIso = new Date().toISOString().slice(0, 10);
++  const year = parseYear(req.nextUrl.searchParams.get("year")) ?? Number(todayIso.slice(0, 4));
++  const range: DateRange = { from: `${year}-01-01`, to: `${year}-12-31` };
++  const valueDollars = (req.nextUrl.searchParams.get("value") ?? "").trim();
++  const propertyValueCents = parseMoneyToCents(valueDollars);
++
++  const supabase = createClient();
++  const [{ data: rentData }, { data: woData }, { data: expData }, { data: propData }, { data: tenData }] =
++    await Promise.all([
++      supabase
++        .from("rent_payments")
++        .select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
++      supabase
++        .from("work_orders")
++        .select(
++          "property_id, building_key, category, status, cost_cents, completed_on, title, tenancy:tenancies(property_id)",
++        ),
++      supabase
++        .from("expenses")
++        .select("property_id, building_key, category, amount_cents, incurred_on, merchant, note"),
++      supabase
++        .from("properties")
++        .select("id, address, building_key, rent_cents")
++        .order("address", { ascending: true }),
++      supabase
++        .from("tenancies")
++        .select("status, rent_cents, start_date, end_date, property_id, tenants(name, is_primary)"),
++    ]);
++
++  const propRows = (propData ?? []) as {
++    id: string;
++    address: string;
++    building_key: string | null;
++    rent_cents: number | null;
++  }[];
++  const properties: PropertyRef[] = propRows.map((p) => ({
++    id: p.id,
++    address: p.address,
++    buildingKey: p.building_key,
++  })) as PropertyRef[];
++
++  const rentRows: RentRow[] = ((rentData ?? []) as unknown as RentQueryRow[]).map((r) => ({
++    amount_cents: r.amount_cents,
++    paid_on: r.paid_on,
++    property_id: r.tenancy?.property_id ?? null,
++  }));
++
++  const rawWoRows = (woData ?? []) as unknown as WoQueryRow[];
++  const woRows: LedgerWorkOrderRow[] = rawWoRows.map((w) => ({
++    property_id: w.property_id ?? w.tenancy?.property_id ?? null,
++    building_key: w.building_key,
++    category: w.category,
++    status: w.status,
++    cost_cents: w.cost_cents,
++    completed_on: w.completed_on,
++    title: w.title,
++  }));
++
++  const rawExpenseRows = (expData ?? []) as unknown as ExpenseQueryRow[];
++  const expenseCostRows: WorkOrderCostRow[] = rawExpenseRows.map((e) => expenseToCostRow(e));
++  const ledgerExpenseRows: LedgerExpenseRow[] = rawExpenseRows.map((e) => ({
++    property_id: e.property_id,
++    building_key: e.building_key ?? null,
++    category: e.category,
++    amount_cents: e.amount_cents,
++    incurred_on: e.incurred_on,
++    merchant: e.merchant,
++    note: e.note,
++  }));
++
++  const allCostRows = [...woRows, ...expenseCostRows];
++
++  // Summaries — all existing pure builders, same inputs the standalone
++  // report routes feed them.
++  const ownerStatement = buildOwnerStatement(rentRows, allCostRows, properties, range);
++  const monthly = buildMonthlyStatement(rentRows, allCostRows, properties, range);
++  const incomeStatement = buildIncomeStatement(rentRows, allCostRows, properties, range);
++  const t776 = buildT776Statement(rentRows, allCostRows, properties, year);
++
++  const rollProperties: RentRollPropertyRef[] = propRows.map((p) => ({
++    id: p.id,
++    address: p.address,
++    buildingKey: p.building_key,
++    askingRentCents: p.rent_cents,
++  })) as RentRollPropertyRef[];
++  const tenancies: RentRollTenancyInput[] = ((tenData ?? []) as unknown as TenancyQueryRow[]).map((t) => {
++    const tenants = t.tenants ?? [];
++    const primary = tenants.find((x) => x.is_primary) ?? tenants[0] ?? null;
++    return {
++      propertyId: t.property_id,
++      status: t.status,
++      rentCents: t.rent_cents,
++      startDate: t.start_date,
++      endDate: t.end_date,
++      primaryTenantName: primary?.name ?? null,
++      coTenantCount: Math.max(0, tenants.length - 1),
++    };
++  });
++  const roll = buildRentRoll(rollProperties, tenancies);
++  const operatingCostRows = allCostRows.filter((r) => isOperatingCategory(r.category));
++  const opStatement = buildOwnerStatement([], operatingCostRows, properties, range);
++  const cap = computeCapRate({
++    annualOperatingIncomeCents: roll.inPlaceAnnualRentCents,
++    operatingExpensesCents: opStatement.totals.maintenanceOutCents,
++    windowDays: rangeDays(range.from, range.to),
++    propertyValueCents,
++  });
++
++  // The transaction detail underneath those summaries.
++  const ledger = buildGeneralLedger(rentRows, ledgerExpenseRows, woRows, propRows, range);
++
++  const entries: ZipEntry[] = [
++    {
++      name: "README.txt",
++      data: accountantPackageReadme({
++        orgName: org.name,
++        range,
++        generatedOn: todayIso,
++        entryCount: ledger.length,
++      }),
++    },
++    { name: "general-ledger.csv", data: generalLedgerToCsv(ledger, range) },
++    { name: "t776-tax-package.csv", data: t776ToCsv(t776) },
++    { name: "income-statement.csv", data: incomeStatementToCsv(incomeStatement) },
++    { name: "owner-statement.csv", data: statementToCsv(ownerStatement, monthly) },
++    {
++      name: "rent-roll.csv",
++      data: rentRollToCsv(roll, {
++        expensePeriod: describeRange(range),
++        propertyValueCents,
++        operatingExpensesCents: opStatement.totals.maintenanceOutCents,
++        cap,
++      }),
++    },
++    { name: "quickbooks-transactions.csv", data: ledgerToQuickBooksCsv(ledger) },
++    { name: "xero-transactions.csv", data: ledgerToXeroCsv(ledger) },
++  ];
++
++  const zip = buildZip(entries, todayIso);
++
++  return new NextResponse(Buffer.from(zip), {
++    status: 200,
++    headers: {
++      "Content-Type": "application/zip",
++      "Content-Disposition": `attachment; filename="accountant-package-${year}.zip"`,
++      "Cache-Control": "no-store",
++    },
++  });
++}
+diff --git a/app/dashboard/money/accountant-package/page.tsx b/app/dashboard/money/accountant-package/page.tsx
+new file mode 100644
+index 0000000..a9bba67
+--- /dev/null
++++ b/app/dashboard/money/accountant-package/page.tsx
+@@ -0,0 +1,197 @@
++import Link from "next/link";
++import { redirect } from "next/navigation";
++import { createClient } from "@/lib/supabase/server";
++import { getCurrentOrg } from "@/lib/org";
++import { planEntitlements } from "@/lib/billing";
++import {
++  BrandBanner,
++  Card,
++  EmptyState,
++  SectionHeading,
++  SECONDARY_ACTION_CLASS,
++} from "@/components/ui";
++import { Icons } from "@/components/icons";
++
++export const dynamic = "force-dynamic";
++
++// S532 accountant hand-off package (Premium accounting). One page, one
++// download: the whole year — general ledger, T776, P&L, owner statement, rent
++// roll, and QuickBooks/Xero import files — as a single zip to hand to whoever
++// does the taxes. The heavy lifting lives in the export route + pure builders;
++// this page only picks the year and explains what's in the pack.
++
++type DatedRow = { paid_on?: string | null; completed_on?: string | null; incurred_on?: string | null };
++
++function yearFromDate(date: string | null | undefined): number | null {
++  const match = /^(\d{4})-\d{2}-\d{2}$/.exec((date ?? "").trim());
++  if (!match) return null;
++  const year = Number(match[1]);
++  return Number.isInteger(year) && year >= 1900 && year <= 9999 ? year : null;
++}
++
++function parseYearParam(raw: string | undefined): number | null {
++  if (!raw || !/^\d{4}$/.test(raw)) return null;
++  const year = Number(raw);
++  return year >= 1900 && year <= 9999 ? year : null;
++}
++
++function pageHref(year: number): string {
++  return `/dashboard/money/accountant-package?year=${year}`;
++}
++
++function exportHref(year: number): string {
++  return `/dashboard/money/accountant-package/export?year=${year}`;
++}
++
++const PACKAGE_CONTENTS: { file: string; desc: string }[] = [
++  {
++    file: "general-ledger.csv",
++    desc: "Every transaction in the year - rent received, expenses, and completed work-order costs - each with its category and T776 line.",
++  },
++  {
++    file: "t776-tax-package.csv",
++    desc: "The year mapped to T776 rental tax lines, per property and for the portfolio.",
++  },
++  {
++    file: "income-statement.csv",
++    desc: "Actual-basis P&L: revenue, operating expenses, NOI, interest, and net income.",
++  },
++  {
++    file: "owner-statement.csv",
++    desc: "The cash summary per property, with month-by-month detail.",
++  },
++  {
++    file: "rent-roll.csv",
++    desc: "Current tenancies, rents, and occupancy across the portfolio.",
++  },
++  {
++    file: "quickbooks-transactions.csv",
++    desc: "The ledger in QuickBooks Online's 3-column bank format, ready for Banking → Upload transactions.",
++  },
++  {
++    file: "xero-transactions.csv",
++    desc: "The ledger in Xero's bank-statement format, ready for Import a statement.",
++  },
++  {
++    file: "README.txt",
++    desc: "How the numbers are kept: cash-basis rent, actual-basis costs, principal as memo, CCA left for your accountant.",
++  },
++];
++
++export default async function AccountantPackagePage({
++  searchParams,
++}: {
++  searchParams: { year?: string };
++}) {
++  const org = await getCurrentOrg();
++  if (!org) redirect("/onboarding");
++
++  if (!planEntitlements(org.plan).accounting) {
++    return (
++      <div className="mx-auto max-w-3xl">
++        <BrandBanner
++          eyebrow="Money"
++          title="Accountant package"
++          subtitle="Your whole year - ledger, tax lines, statements, and import files - in one download for whoever does the taxes."
++          icon={<Icons.page className="h-6 w-6" />}
++        />
++        <EmptyState
++          icon={<Icons.page className="h-5 w-5" />}
++          title="Accountant package is a Premium feature"
++          description="Premium bundles the general ledger, T776 tax package, income statement, owner statement, rent roll, and QuickBooks/Xero import files into a single zip your accountant can work from directly."
++          cta={{ href: "/dashboard/billing", label: "See plans" }}
++        />
++      </div>
++    );
++  }
++
++  // Only the date columns — enough to offer the years that actually have
++  // activity. RLS scopes every read to the current org.
++  const supabase = createClient();
++  const [{ data: rentData }, { data: woData }, { data: expData }] = await Promise.all([
++    supabase.from("rent_payments").select("paid_on"),
++    supabase.from("work_orders").select("completed_on"),
++    supabase.from("expenses").select("incurred_on"),
++  ]);
++
++  const currentYear = new Date().getFullYear();
++  const years = new Set<number>([currentYear]);
++  for (const row of [
++    ...((rentData ?? []) as DatedRow[]),
++    ...((woData ?? []) as DatedRow[]),
++    ...((expData ?? []) as DatedRow[]),
++  ]) {
++    const year = yearFromDate(row.paid_on ?? row.completed_on ?? row.incurred_on);
++    if (year) years.add(year);
++  }
++  const sortedYears = [...years].sort((a, b) => b - a);
++  const requestedYear = parseYearParam(searchParams.year);
++  // Default to the most recent COMPLETE year when one has activity — that is
++  // the year an accountant is actually filing.
++  const year =
++    requestedYear ?? sortedYears.find((y) => y !== currentYear) ?? currentYear;
++
++  return (
++    <div className="mx-auto max-w-3xl">
++      <BrandBanner
++        eyebrow={`Money · ${org.name}`}
++        title={`Accountant package (${year})`}
++        subtitle="Your whole year - ledger, tax lines, statements, and import files - in one download for whoever does the taxes."
++        icon={<Icons.page className="h-6 w-6" />}
++        action={
++          <a href={exportHref(year)} className={SECONDARY_ACTION_CLASS}>
++            Download zip
++          </a>
++        }
++      />
++
++      <div className="mb-5 mt-6 flex flex-wrap items-center gap-1.5">
++        <span className="mr-1 text-sm font-medium text-gray-600">Tax year</span>
++        {sortedYears.map((y) => (
++          <Link
++            key={y}
++            href={pageHref(y)}
++            className={`rounded-full px-3 py-1 text-sm font-medium ${
++              y === year
++                ? "bg-brand text-white"
++                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
++            }`}
++          >
++            {y}
++          </Link>
++        ))}
++      </div>
++
++      <div className="mt-6">
++        <SectionHeading>What&apos;s in the {year} package</SectionHeading>
++        <Card padded={false}>
++          <ul className="divide-y divide-gray-50">
++            {PACKAGE_CONTENTS.map((item) => (
++              <li key={item.file} className="flex items-start gap-3 px-4 py-3">
++                <Icons.page className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
++                <div className="min-w-0">
++                  <div className="font-mono text-sm text-gray-900">{item.file}</div>
++                  <p className="mt-0.5 text-sm leading-relaxed text-gray-600">{item.desc}</p>
++                </div>
++              </li>
++            ))}
++          </ul>
++        </Card>
++      </div>
++
++      <p className="mt-4 text-xs leading-relaxed text-gray-500">
++        The package summarizes your records in Vacantless - it is not a filed return, and
++        Vacantless never moves money. CCA (line 9936) is left blank on purpose: it is a claim
++        decision to make with your accountant. See the full figures on the{" "}
++        <Link href={`/dashboard/money/tax-package?year=${year}`} className="font-medium text-brand underline">
++          tax package
++        </Link>{" "}
++        and{" "}
++        <Link href="/dashboard/money/income-statement" className="font-medium text-brand underline">
++          income statement
++        </Link>
++        .
++      </p>
++    </div>
++  );
++}
+diff --git a/app/dashboard/money/page.tsx b/app/dashboard/money/page.tsx
+index 6497eb9..61607b4 100644
+--- a/app/dashboard/money/page.tsx
++++ b/app/dashboard/money/page.tsx
+@@ -54,6 +54,12 @@ const SECTIONS: Section[] = [
+     desc: "Your year of rent and expenses mapped to the T776 tax lines, ready for your accountant. Premium.",
+     icon: "chart",
+   },
++  {
++    href: "/dashboard/money/accountant-package",
++    title: "Accountant package",
++    desc: "The whole year - ledger, T776, statements, and QuickBooks/Xero import files - as one zip to hand to whoever does the taxes. Premium.",
++    icon: "page",
++  },
+   {
+     href: "/dashboard/expenses",
+     title: "Expenses",
+@@ -131,7 +137,8 @@ export default async function MoneyHubPage() {
+             (s.href === "/dashboard/money/reconcile" ||
+               s.href === "/dashboard/money/import-history" ||
+               s.href === "/dashboard/money/income-statement" ||
+-              s.href === "/dashboard/money/tax-package") &&
++              s.href === "/dashboard/money/tax-package" ||
++              s.href === "/dashboard/money/accountant-package") &&
+             !accounting;
+           return (
+             <Link key={s.href} href={s.href} className="block">
+diff --git a/lib/accountant-package.ts b/lib/accountant-package.ts
+new file mode 100644
+index 0000000..d46f5ec
+--- /dev/null
++++ b/lib/accountant-package.ts
+@@ -0,0 +1,307 @@
++// Pure accountant hand-off package model (no I/O). The S525 P&L, S526 T776,
++// owner statement, and rent roll are SUMMARIES; what an accountant re-keys from
++// (or imports into Xero/QuickBooks) is the TRANSACTION LIST underneath them.
++// This module turns the same raw rows those reports already consume into a
++// general ledger — one dated line per rent payment / expense / work-order cost —
++// plus bank-style CSVs in the shapes QuickBooks Online and Xero import, and the
++// README that explains the package. All summary math stays in the existing
++// builders; this file must RECONCILE to them, never recompute differently:
++// entries are included by exactly the same rules (rent by paid_on; costs by
++// completed_on/incurred_on; undated or costless rows excluded — mirroring
++// lib/t776 costInRange and lib/statements rentInRange).
++//
++// No rows are inserted, updated, or deleted anywhere in this module.
++
++import type { DateRange, RentRow } from "./statements";
++import { describeRange } from "./statements";
++import { expenseCategoryLabel, isExpenseCategory } from "./expenses";
++import type { WorkOrderCostRow } from "./work-orders";
++import { workOrderCategoryLabel } from "./work-orders";
++import { t776LineForCategory } from "./t776";
++
++export type LedgerSource = "rent" | "expense" | "work_order";
++
++export type LedgerEntry = {
++  /** ISO date the money moved (paid_on / incurred_on / completed_on). */
++  date: string;
++  source: LedgerSource;
++  /** Raw category key ("plumbing", "insurance", …); null for rent income. */
++  category: string | null;
++  /** Human category label ("Plumbing", "Insurance"); "Rent" for income. */
++  categoryLabel: string;
++  /** T776 line the category maps to ("8960"); "8299" for rent; null if unmapped. */
++  t776Line: string | null;
++  /** Human description: merchant/title/note where present, else the label. */
++  description: string;
++  /** Property address, or "Building: <key>" for building-scoped, or "Unassigned". */
++  property: string;
++  /** SIGNED cents: income positive, costs negative. */
++  amountCents: number;
++};
++
++export type LedgerExpenseRow = {
++  property_id: string | null;
++  building_key?: string | null;
++  category: string;
++  amount_cents: number;
++  incurred_on: string;
++  merchant?: string | null;
++  note?: string | null;
++};
++
++export type LedgerWorkOrderRow = WorkOrderCostRow & { title?: string | null };
++
++export type PropertyLookup = { id: string; address: string };
++
++const UNASSIGNED = "Unassigned";
++
++function inRange(date: string | null, range: DateRange): boolean {
++  if (!date) return false;
++  if (range.from && date < range.from) return false;
++  if (range.to && date > range.to) return false;
++  return true;
++}
++
++function propertyLabel(
++  propertyId: string | null | undefined,
++  buildingKey: string | null | undefined,
++  addressOf: Map<string, string>,
++): string {
++  if (propertyId) return addressOf.get(propertyId) ?? UNASSIGNED;
++  if (buildingKey) return `Building: ${buildingKey}`;
++  return UNASSIGNED;
++}
++
++function categoryBits(category: string): { label: string; line: string | null } {
++  const label = isExpenseCategory(category)
++    ? expenseCategoryLabel(category)
++    : workOrderCategoryLabel(category);
++  return { label, line: t776LineForCategory(category) };
++}
++
++/**
++ * Build the general ledger for a window: every rent payment (income, positive)
++ * and every dated, costed expense / work-order line (cost, negative), sorted by
++ * date then income-before-cost then description, so the CSV reads like a bank
++ * statement. Inclusion mirrors the report builders exactly — the GL total must
++ * equal the income statement's netCash for the same window.
++ */
++export function buildGeneralLedger(
++  rentRows: RentRow[],
++  expenseRows: LedgerExpenseRow[],
++  workOrderRows: LedgerWorkOrderRow[],
++  properties: PropertyLookup[],
++  range: DateRange,
++): LedgerEntry[] {
++  const addressOf = new Map(properties.map((p) => [p.id, p.address]));
++  const entries: LedgerEntry[] = [];
++
++  for (const r of rentRows) {
++    if (!inRange(r.paid_on, range)) continue;
++    entries.push({
++      date: r.paid_on as string,
++      source: "rent",
++      category: null,
++      categoryLabel: "Rent",
++      t776Line: "8299",
++      description: "Rent received",
++      property: propertyLabel(r.property_id, null, addressOf),
++      amountCents: r.amount_cents,
++    });
++  }
++
++  for (const e of expenseRows) {
++    if (!inRange(e.incurred_on, range)) continue;
++    const { label, line } = categoryBits(e.category);
++    const merchant = (e.merchant ?? "").trim();
++    const note = (e.note ?? "").trim();
++    const description =
++      merchant && note ? `${merchant} — ${note}` : merchant || note || label;
++    entries.push({
++      date: e.incurred_on,
++      source: "expense",
++      category: e.category,
++      categoryLabel: label,
++      t776Line: line,
++      description,
++      property: propertyLabel(e.property_id, e.building_key, addressOf),
++      amountCents: -e.amount_cents,
++    });
++  }
++
++  for (const w of workOrderRows) {
++    if (w.cost_cents == null) continue; // costless work orders never count
++    if (!inRange(w.completed_on, range)) continue; // undated = not completed yet
++    const { label, line } = categoryBits(w.category);
++    const title = (w.title ?? "").trim();
++    entries.push({
++      date: w.completed_on as string,
++      source: "work_order",
++      category: w.category,
++      categoryLabel: label,
++      t776Line: line,
++      description: title || label,
++      property: propertyLabel(w.property_id, w.building_key, addressOf),
++      amountCents: -w.cost_cents,
++    });
++  }
++
++  entries.sort(
++    (a, b) =>
++      a.date.localeCompare(b.date) ||
++      (a.amountCents >= 0 === b.amountCents >= 0 ? 0 : a.amountCents >= 0 ? -1 : 1) ||
++      a.description.localeCompare(b.description),
++  );
++  return entries;
++}
++
++/** Signed GL total — reconciles to the income statement's netCash. */
++export function ledgerTotalCents(entries: LedgerEntry[]): number {
++  return entries.reduce((sum, e) => sum + e.amountCents, 0);
++}
++
++function csvField(value: string | number): string {
++  const s = String(value);
++  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
++}
++
++/** Plain dollars with two decimals, no symbol/grouping — clean for imports. */
++function dollars(cents: number): string {
++  return (cents / 100).toFixed(2);
++}
++
++const SOURCE_LABELS: Record<LedgerSource, string> = {
++  rent: "Rent income",
++  expense: "Expense",
++  work_order: "Work order",
++};
++
++/**
++ * The full general-ledger CSV: header block (period), then one row per entry
++ * with the T776 line beside the category so an accountant can verify the
++ * summary package line-by-line, then a signed TOTAL row.
++ */
++export function generalLedgerToCsv(entries: LedgerEntry[], range: DateRange): string {
++  const lines: string[] = [];
++  const row = (cells: (string | number)[]) => lines.push(cells.map(csvField).join(","));
++
++  row(["General ledger"]);
++  row(["Period", describeRange(range)]);
++  lines.push("");
++  row(["Date", "Type", "Description", "Property", "Category", "T776 line", "Amount"]);
++  for (const e of entries) {
++    row([
++      e.date,
++      SOURCE_LABELS[e.source],
++      e.description,
++      e.property,
++      e.categoryLabel,
++      e.t776Line ?? "",
++      dollars(e.amountCents),
++    ]);
++  }
++  lines.push("");
++  row(["TOTAL", "", "", "", "", "", dollars(ledgerTotalCents(entries))]);
++  return lines.join("\n") + "\n";
++}
++
++/**
++ * QuickBooks Online 3-column bank CSV (Date, Description, Amount — deposits
++ * positive, payments negative), importable via Banking → Upload transactions.
++ * Property and category ride inside the description because the 3-column
++ * format has nowhere else to carry them.
++ */
++export function ledgerToQuickBooksCsv(entries: LedgerEntry[]): string {
++  const lines: string[] = ["Date,Description,Amount"];
++  const row = (cells: (string | number)[]) => lines.push(cells.map(csvField).join(","));
++  for (const e of entries) {
++    row([e.date, `${e.description} (${e.property} · ${e.categoryLabel})`, dollars(e.amountCents)]);
++  }
++  return lines.join("\n") + "\n";
++}
++
++/**
++ * Xero bank-statement CSV (Date, Amount, Payee, Description, Reference),
++ * importable via a bank account → Import a statement. Reference carries the
++ * T776 line for the accountant's mapping pass.
++ */
++export function ledgerToXeroCsv(entries: LedgerEntry[]): string {
++  const lines: string[] = ["Date,Amount,Payee,Description,Reference"];
++  const row = (cells: (string | number)[]) => lines.push(cells.map(csvField).join(","));
++  for (const e of entries) {
++    row([
++      e.date,
++      dollars(e.amountCents),
++      e.property,
++      `${e.description} (${e.categoryLabel})`,
++      e.t776Line ? `T776 ${e.t776Line}` : "",
++    ]);
++  }
++  return lines.join("\n") + "\n";
++}
++
++/** Canonical file names inside the package ZIP, in README order. */
++export const PACKAGE_FILES = [
++  "README.txt",
++  "general-ledger.csv",
++  "t776-tax-package.csv",
++  "income-statement.csv",
++  "owner-statement.csv",
++  "rent-roll.csv",
++  "quickbooks-transactions.csv",
++  "xero-transactions.csv",
++] as const;
++
++/**
++ * The plain-text README that fronts the package: what each file is, the basis
++ * rules an accountant needs (cash-basis rent, actual-basis costs, mortgage
++ * principal as memo only, CCA left blank on purpose), and the standing
++ * disclaimer that this summarizes the operator's records — it is not a filed
++ * return and Vacantless never moves money.
++ */
++export function accountantPackageReadme(input: {
++  orgName: string;
++  range: DateRange;
++  generatedOn: string; // ISO date
++  entryCount: number;
++}): string {
++  const period = describeRange(input.range);
++  return [
++    `Accountant package — ${input.orgName}`,
++    `Period: ${period}`,
++    `Generated: ${input.generatedOn} by Vacantless`,
++    ``,
++    `What's inside`,
++    `-------------`,
++    `general-ledger.csv          Every transaction in the period (${input.entryCount} entries):`,
++    `                            rent received, expenses, and completed work-order`,
++    `                            costs, each with its category and T776 line.`,
++    `t776-tax-package.csv        Year-end summary mapped to T776 rental tax lines,`,
++    `                            per property and for the portfolio.`,
++    `income-statement.csv        Actual-basis P&L: revenue, operating expenses,`,
++    `                            NOI, interest, net income.`,
++    `owner-statement.csv         Cash summary per property with monthly detail.`,
++    `rent-roll.csv               Current tenancies, rents, and occupancy.`,
++    `quickbooks-transactions.csv The ledger in QuickBooks Online's 3-column bank`,
++    `                            format (Banking -> Upload transactions).`,
++    `xero-transactions.csv       The ledger in Xero's bank-statement format`,
++    `                            (bank account -> Import a statement).`,
++    ``,
++    `How the numbers are kept`,
++    `------------------------`,
++    `- Rent income is CASH basis: counted on the date it was received (paid_on).`,
++    `- Expenses and work-order costs are ACTUAL basis: counted on the date`,
++    `  incurred / completed. Work orders with no recorded cost are excluded.`,
++    `- Mortgage PRINCIPAL is capital repayment, not an expense: it appears as a`,
++    `  memo line only and never reduces net income. Mortgage INTEREST does.`,
++    `- T776 line 9936 (capital cost allowance) is intentionally blank - CCA is a`,
++    `  claim decision to make with your accountant.`,
++    `- Amounts are plain dollars with two decimals; income positive, costs`,
++    `  negative. The general-ledger TOTAL reconciles to the income statement's`,
++    `  net cash for the same period.`,
++    ``,
++    `This package summarizes the operator's records in Vacantless. It is not a`,
++    `filed return, and Vacantless never moves money.`,
++    ``,
++  ].join("\n");
++}
+diff --git a/lib/zip.ts b/lib/zip.ts
+new file mode 100644
+index 0000000..1e1709b
+--- /dev/null
++++ b/lib/zip.ts
+@@ -0,0 +1,163 @@
++// Minimal ZIP writer (STORE method — no compression) so multi-file exports can
++// ship as ONE download with zero new dependencies. CSVs are small and mostly
++// travel over an already-compressed HTTP response, so store-only is a feature:
++// the writer stays ~150 auditable lines with no inflate/deflate surface at all.
++//
++// Pure byte assembly: the caller passes the entry date (no `new Date()` here),
++// so output is deterministic and unit-testable byte-for-byte. Names and string
++// contents are UTF-8 encoded and flagged as such (general-purpose bit 11), per
++// APPNOTE.TXT 4.4.4 / Appendix D.
++
++export type ZipEntry = {
++  /** Forward-slash path inside the archive, e.g. "reports/t776.csv". */
++  name: string;
++  /** File body; strings are UTF-8 encoded. */
++  data: string | Uint8Array;
++};
++
++/** CRC-32 (IEEE 802.3, the ZIP polynomial), table-driven. */
++const CRC_TABLE: Uint32Array = (() => {
++  const table = new Uint32Array(256);
++  for (let n = 0; n < 256; n++) {
++    let c = n;
++    for (let k = 0; k < 8; k++) {
++      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
++    }
++    table[n] = c >>> 0;
++  }
++  return table;
++})();
++
++export function crc32(bytes: Uint8Array): number {
++  let c = 0xffffffff;
++  for (let i = 0; i < bytes.length; i++) {
++    c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
++  }
++  return (c ^ 0xffffffff) >>> 0;
++}
++
++/**
++ * MS-DOS date/time pair from an ISO "YYYY-MM-DD" (midnight). DOS years are
++ * offset from 1980 and clamp there — the format cannot represent earlier.
++ */
++export function dosDateTime(dateIso: string): { date: number; time: number } {
++  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateIso.trim());
++  const year = m ? Number(m[1]) : 1980;
++  const month = m ? Number(m[2]) : 1;
++  const day = m ? Number(m[3]) : 1;
++  const y = Math.min(Math.max(year, 1980), 2107) - 1980;
++  return { date: (y << 9) | (Math.min(Math.max(month, 1), 12) << 5) | Math.min(Math.max(day, 1), 31), time: 0 };
++}
++
++const encoder = new TextEncoder();
++
++function toBytes(data: string | Uint8Array): Uint8Array {
++  return typeof data === "string" ? encoder.encode(data) : data;
++}
++
++class ByteWriter {
++  private chunks: Uint8Array[] = [];
++  length = 0;
++
++  bytes(b: Uint8Array): void {
++    this.chunks.push(b);
++    this.length += b.length;
++  }
++
++  u16(v: number): void {
++    this.bytes(new Uint8Array([v & 0xff, (v >>> 8) & 0xff]));
++  }
++
++  u32(v: number): void {
++    this.bytes(new Uint8Array([v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff]));
++  }
++
++  concat(): Uint8Array {
++    const out = new Uint8Array(this.length);
++    let off = 0;
++    for (const c of this.chunks) {
++      out.set(c, off);
++      off += c.length;
++    }
++    return out;
++  }
++}
++
++const FLAG_UTF8 = 0x0800;
++const METHOD_STORE = 0;
++const VERSION = 20; // 2.0 — plain store, no features beyond that
++
++/**
++ * Build a complete ZIP archive from entries. `dateIso` stamps every entry with
++ * the same (caller-supplied) date so the bytes are reproducible. Entry names
++ * must be unique and non-empty; duplicates would produce a confusing archive,
++ * so they throw rather than silently shadow.
++ */
++export function buildZip(entries: ZipEntry[], dateIso: string): Uint8Array {
++  const { date, time } = dosDateTime(dateIso);
++  const seen = new Set<string>();
++  const w = new ByteWriter();
++  const central: { name: Uint8Array; crc: number; size: number; offset: number }[] = [];
++
++  for (const entry of entries) {
++    const name = entry.name.trim();
++    if (name === "" || seen.has(name)) {
++      throw new Error(`zip: duplicate or empty entry name "${name}"`);
++    }
++    seen.add(name);
++    const nameBytes = encoder.encode(name);
++    const body = toBytes(entry.data);
++    const crc = crc32(body);
++    const offset = w.length;
++
++    w.u32(0x04034b50); // local file header
++    w.u16(VERSION);
++    w.u16(FLAG_UTF8);
++    w.u16(METHOD_STORE);
++    w.u16(time);
++    w.u16(date);
++    w.u32(crc);
++    w.u32(body.length); // compressed size == raw size under STORE
++    w.u32(body.length);
++    w.u16(nameBytes.length);
++    w.u16(0); // extra length
++    w.bytes(nameBytes);
++    w.bytes(body);
++
++    central.push({ name: nameBytes, crc, size: body.length, offset });
++  }
++
++  const centralStart = w.length;
++  for (const c of central) {
++    w.u32(0x02014b50); // central directory header
++    w.u16(VERSION); // version made by
++    w.u16(VERSION); // version needed
++    w.u16(FLAG_UTF8);
++    w.u16(METHOD_STORE);
++    w.u16(time);
++    w.u16(date);
++    w.u32(c.crc);
++    w.u32(c.size);
++    w.u32(c.size);
++    w.u16(c.name.length);
++    w.u16(0); // extra
++    w.u16(0); // comment
++    w.u16(0); // disk number start
++    w.u16(0); // internal attrs
++    w.u32(0); // external attrs
++    w.u32(c.offset);
++    w.bytes(c.name);
++  }
++  const centralSize = w.length - centralStart;
++
++  w.u32(0x06054b50); // end of central directory
++  w.u16(0); // this disk
++  w.u16(0); // central dir disk
++  w.u16(central.length);
++  w.u16(central.length);
++  w.u32(centralSize);
++  w.u32(centralStart);
++  w.u16(0); // comment length
++
++  return w.concat();
++}
+diff --git a/scripts/test-accountant-package.ts b/scripts/test-accountant-package.ts
+new file mode 100644
+index 0000000..d045675
+--- /dev/null
++++ b/scripts/test-accountant-package.ts
+@@ -0,0 +1,324 @@
++// Unit tests for the pure accountant-package model (general ledger + import
++// CSVs + README) and the dependency-free ZIP writer underneath the S532
++// accountant hand-off download.
++// Run: npx tsx scripts/test-accountant-package.ts
++import {
++  PACKAGE_FILES,
++  accountantPackageReadme,
++  buildGeneralLedger,
++  generalLedgerToCsv,
++  ledgerToQuickBooksCsv,
++  ledgerToXeroCsv,
++  ledgerTotalCents,
++  type LedgerExpenseRow,
++  type LedgerWorkOrderRow,
++} from "@/lib/accountant-package";
++import { buildZip, crc32, dosDateTime } from "@/lib/zip";
++import { buildIncomeStatement } from "@/lib/income-statement";
++import { buildT776Statement } from "@/lib/t776";
++import type { PropertyRef, RentRow } from "@/lib/statements";
++
++let passed = 0;
++let failed = 0;
++
++function ok(name: string, cond: boolean) {
++  if (cond) {
++    passed++;
++  } else {
++    failed++;
++    console.error(`  x ${name}`);
++  }
++}
++
++const PROP_A = "aaaaaaaa-0000-0000-0000-000000000001";
++const PROP_B = "aaaaaaaa-0000-0000-0000-000000000002";
++const PROPERTIES = [
++  { id: PROP_A, address: "1 Main St", buildingKey: null },
++  { id: PROP_B, address: "2 Oak Ave", buildingKey: "oak" },
++] as PropertyRef[];
++const LOOKUP = [
++  { id: PROP_A, address: "1 Main St" },
++  { id: PROP_B, address: "2 Oak Ave" },
++];
++const RANGE = { from: "2025-01-01", to: "2025-12-31" };
++
++const rentRows: RentRow[] = [
++  { amount_cents: 200_000, paid_on: "2025-02-01", property_id: PROP_A },
++  { amount_cents: 180_000, paid_on: "2025-03-01", property_id: PROP_B },
++  { amount_cents: 100_000, paid_on: "2024-12-01", property_id: PROP_A }, // out of range
++  { amount_cents: 50_000, paid_on: null, property_id: PROP_A }, // undated — excluded
++];
++
++const expenseRows: LedgerExpenseRow[] = [
++  {
++    property_id: PROP_A,
++    building_key: null,
++    category: "insurance",
++    amount_cents: 30_000,
++    incurred_on: "2025-04-10",
++    merchant: "Intact",
++    note: "annual premium",
++  },
++  {
++    property_id: null,
++    building_key: "oak",
++    category: "maintenance",
++    amount_cents: 12_345,
++    incurred_on: "2025-05-05",
++    merchant: "Aviv Plumbing",
++    note: null,
++  },
++  {
++    property_id: null,
++    building_key: null,
++    category: "interest",
++    amount_cents: 40_000,
++    incurred_on: "2025-06-30",
++    merchant: null,
++    note: null,
++  },
++  {
++    property_id: PROP_A,
++    building_key: null,
++    category: "supplies",
++    amount_cents: 999,
++    incurred_on: "2026-01-15", // out of range
++    merchant: null,
++    note: null,
++  },
++];
++
++const workOrderRows: LedgerWorkOrderRow[] = [
++  {
++    property_id: PROP_B,
++    building_key: null,
++    category: "plumbing",
++    status: "completed",
++    cost_cents: 15_000,
++    completed_on: "2025-07-20",
++    title: "Toilet repair unit 2",
++  },
++  {
++    property_id: PROP_A,
++    building_key: null,
++    category: "electrical",
++    status: "in_progress",
++    cost_cents: null, // costless — excluded
++    completed_on: "2025-08-01",
++    title: "Panel check",
++  },
++  {
++    property_id: PROP_A,
++    building_key: null,
++    category: "hvac",
++    status: "completed",
++    cost_cents: 20_000,
++    completed_on: null, // undated — excluded
++    title: "Furnace",
++  },
++];
++
++// --- General ledger ---------------------------------------------------------
++
++const ledger = buildGeneralLedger(rentRows, expenseRows, workOrderRows, LOOKUP, RANGE);
++
++ok("ledger: entry count (2 rent + 3 expenses + 1 wo)", ledger.length === 6);
++ok("ledger: sorted by date", ledger.every((e, i) => i === 0 || ledger[i - 1].date <= e.date));
++ok(
++  "ledger: out-of-range and undated rows excluded",
++  ledger.every((e) => e.date >= "2025-01-01" && e.date <= "2025-12-31"),
++);
++
++const rentEntries = ledger.filter((e) => e.source === "rent");
++ok("ledger: rent entries positive", rentEntries.every((e) => e.amountCents > 0));
++ok("ledger: rent maps to 8299", rentEntries.every((e) => e.t776Line === "8299"));
++ok(
++  "ledger: rent resolves property address",
++  rentEntries.some((e) => e.property === "1 Main St") &&
++    rentEntries.some((e) => e.property === "2 Oak Ave"),
++);
++
++const costEntries = ledger.filter((e) => e.source !== "rent");
++ok("ledger: cost entries negative", costEntries.every((e) => e.amountCents < 0));
++ok(
++  "ledger: merchant + note joined",
++  ledger.some((e) => e.description === "Intact — annual premium"),
++);
++ok(
++  "ledger: merchant only",
++  ledger.some((e) => e.description === "Aviv Plumbing"),
++);
++ok(
++  "ledger: work-order title as description",
++  ledger.some((e) => e.description === "Toilet repair unit 2"),
++);
++ok(
++  "ledger: building-scoped expense labelled",
++  ledger.some((e) => e.property === "Building: oak"),
++);
++ok(
++  "ledger: unscoped expense is Unassigned",
++  ledger.some((e) => e.property === "Unassigned" && e.categoryLabel === "Interest"),
++);
++ok(
++  "ledger: repair categories map to 8960",
++  ledger.some((e) => e.description === "Toilet repair unit 2" && e.t776Line === "8960"),
++);
++
++// Reconciliation: the GL total must equal the income statement's netCash for
++// the same inputs and window.
++const statement = buildIncomeStatement(
++  rentRows,
++  [
++    ...expenseRows.map((e) => ({
++      property_id: e.property_id,
++      building_key: e.building_key ?? null,
++      category: e.category,
++      status: "confirmed",
++      cost_cents: e.amount_cents,
++      completed_on: e.incurred_on,
++    })),
++    ...workOrderRows,
++  ],
++  PROPERTIES,
++  RANGE,
++);
++ok(
++  "ledger: total reconciles to income-statement netCash",
++  ledgerTotalCents(ledger) === statement.totals.netCashCents,
++);
++
++// And the rent side reconciles to the T776 gross rents.
++const t776 = buildT776Statement(rentRows, [], PROPERTIES, 2025);
++ok(
++  "ledger: rent total reconciles to T776 gross rents",
++  rentEntries.reduce((s, e) => s + e.amountCents, 0) === t776.totals.grossRentCents,
++);
++
++// --- CSVs -------------------------------------------------------------------
++
++const glCsv = generalLedgerToCsv(ledger, RANGE);
++ok("gl csv: title", glCsv.startsWith("General ledger"));
++ok("gl csv: period", glCsv.includes("Period,2025-01-01 to 2025-12-31"));
++ok(
++  "gl csv: header row",
++  glCsv.includes("Date,Type,Description,Property,Category,T776 line,Amount"),
++);
++ok("gl csv: signed income", glCsv.includes("2025-02-01,Rent income,Rent received,1 Main St,Rent,8299,2000.00"));
++ok("gl csv: signed cost", glCsv.includes("-123.45"));
++ok(
++  "gl csv: quoted em-dash description survives",
++  glCsv.includes("Intact — annual premium"),
++);
++ok("gl csv: TOTAL row", glCsv.includes(`TOTAL,,,,,,${(ledgerTotalCents(ledger) / 100).toFixed(2)}`));
++ok("gl csv: newline end", glCsv.endsWith("\n"));
++
++const qboCsv = ledgerToQuickBooksCsv(ledger);
++ok("qbo csv: 3-column header", qboCsv.startsWith("Date,Description,Amount"));
++ok("qbo csv: row count = entries + header", qboCsv.trim().split("\n").length === ledger.length + 1);
++ok("qbo csv: context in description", qboCsv.includes("(1 Main St · Rent)"));
++ok(
++  "qbo csv: comma-safe quoting",
++  qboCsv
++    .trim()
++    .split("\n")
++    .slice(1)
++    .every((line) => {
++      // every data row parses back to exactly 3 fields under CSV quoting
++      const fields = line.match(/("([^"]|"")*"|[^,]*)(,|$)/g) ?? [];
++      return fields.length >= 3;
++    }),
++);
++
++const xeroCsv = ledgerToXeroCsv(ledger);
++ok("xero csv: header", xeroCsv.startsWith("Date,Amount,Payee,Description,Reference"));
++ok("xero csv: row count", xeroCsv.trim().split("\n").length === ledger.length + 1);
++ok("xero csv: T776 reference", xeroCsv.includes("T776 8299"));
++
++// --- README -----------------------------------------------------------------
++
++const readme = accountantPackageReadme({
++  orgName: "North Star QA",
++  range: RANGE,
++  generatedOn: "2026-07-20",
++  entryCount: ledger.length,
++});
++ok("readme: org name", readme.includes("North Star QA"));
++ok("readme: period", readme.includes("2025-01-01 to 2025-12-31"));
++ok("readme: entry count", readme.includes("(6 entries)"));
++ok("readme: lists every package file", PACKAGE_FILES.every((f) => f === "README.txt" || readme.includes(f)));
++ok("readme: principal memo rule", readme.includes("memo line only and never reduces net income"));
++ok("readme: CCA left blank", readme.includes("9936"));
++ok("readme: not a filed return", readme.includes("not a") && readme.includes("filed return"));
++ok("readme: never moves money", readme.includes("never moves money"));
++
++// --- ZIP writer -------------------------------------------------------------
++
++// CRC-32 known vector: "123456789" -> 0xCBF43926.
++ok("zip: crc32 known vector", crc32(new TextEncoder().encode("123456789")) === 0xcbf43926);
++
++const dos = dosDateTime("2026-07-20");
++ok("zip: dos year offset", dos.date >> 9 === 2026 - 1980);
++ok("zip: dos month", ((dos.date >> 5) & 0xf) === 7);
++ok("zip: dos day", (dos.date & 0x1f) === 20);
++ok("zip: pre-1980 clamps", dosDateTime("1975-01-01").date >> 9 === 0);
++
++const zipped = buildZip(
++  [
++    { name: "a.txt", data: "hello" },
++    { name: "dir/b.csv", data: "x,y\n1,2\n" },
++  ],
++  "2026-07-20",
++);
++
++function u32At(bytes: Uint8Array, off: number): number {
++  return (bytes[off] | (bytes[off + 1] << 8) | (bytes[off + 2] << 16) | (bytes[off + 3] << 24)) >>> 0;
++}
++function u16At(bytes: Uint8Array, off: number): number {
++  return bytes[off] | (bytes[off + 1] << 8);
++}
++
++ok("zip: local header signature", u32At(zipped, 0) === 0x04034b50);
++ok("zip: store method", u16At(zipped, 8) === 0);
++ok("zip: first entry crc", u32At(zipped, 14) === crc32(new TextEncoder().encode("hello")));
++ok("zip: first entry size", u32At(zipped, 18) === 5 && u32At(zipped, 22) === 5);
++ok("zip: first name length", u16At(zipped, 26) === "a.txt".length);
++ok(
++  "zip: first body stored verbatim",
++  new TextDecoder().decode(zipped.slice(30 + 5, 30 + 5 + 5)) === "hello",
++);
++
++// End-of-central-directory: last 22 bytes (no comment).
++const eocd = zipped.length - 22;
++ok("zip: eocd signature", u32At(zipped, eocd) === 0x06054b50);
++ok("zip: eocd entry count", u16At(zipped, eocd + 10) === 2);
++const cdOffset = u32At(zipped, eocd + 16);
++ok("zip: central directory signature at offset", u32At(zipped, cdOffset) === 0x02014b50);
++const cdSize = u32At(zipped, eocd + 12);
++ok("zip: central directory size + offset + eocd == file length", cdOffset + cdSize + 22 === zipped.length);
++ok("zip: utf8 flag set", (u16At(zipped, 6) & 0x0800) !== 0);
++
++let dupThrew = false;
++try {
++  buildZip([{ name: "a", data: "1" }, { name: "a", data: "2" }], "2026-07-20");
++} catch {
++  dupThrew = true;
++}
++ok("zip: duplicate names throw", dupThrew);
++
++let emptyThrew = false;
++try {
++  buildZip([{ name: "  ", data: "1" }], "2026-07-20");
++} catch {
++  emptyThrew = true;
++}
++ok("zip: empty name throws", emptyThrew);
++
++ok("zip: empty archive is a valid empty zip", (() => {
++  const empty = buildZip([], "2026-07-20");
++  return empty.length === 22 && u32At(empty, 0) === 0x06054b50;
++})());
++
++const total = passed + failed;
++console.log(`PASS ${passed}/${total}`);
++if (failed > 0) process.exit(1);
+-- 
+2.43.0
+

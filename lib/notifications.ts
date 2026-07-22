@@ -27,6 +27,16 @@ import { formatMoneyCents } from "./payments";
 // natural party and treat the editable list as additive cc).
 export type NotificationAudience = "operator" | "trade" | "tenant";
 
+// The operator-role "lane" an operator leasing event routes to (S554). Only
+// OPERATOR-audience `leasing` events carry a lane; trade / tenant / dispatch
+// events are untagged (no lane => today's capability default, unchanged).
+//   listing = ad / syndication / distribution health / done-for-you posting
+//   showing = the inquiry-to-lease funnel (leads, viewings, showings,
+//             availability, the daily leasing snapshot)
+//   owner   = landlord / property-owner compliance, assets, rent increases
+//             (the N1-serving side)
+export type NotificationLane = "listing" | "showing" | "owner";
+
 // --- Send mode ---------------------------------------------------------------
 // HOW a registered event reaches its audience — the second tier of the locked
 // send-mode decision (S340). Three values on ONE axis so the compliance-comms
@@ -56,6 +66,13 @@ export type NotificationEvent = {
   key: string;
   family: "dispatch" | "leasing";
   audience: NotificationAudience;
+  // The operator-role lane this event routes to (S554). Populated from
+  // LEASING_OPERATOR_LANE below for every operator `leasing` event; absent for
+  // trade / tenant / dispatch events (which keep today's capability default).
+  // A CI invariant (scripts/test-notifications.ts) fails the build if any
+  // active operator leasing event is missing a lane, so a new event can never
+  // silently default into the showing lane again.
+  lane?: NotificationLane;
   label: string;
   description: string;
   tokens: readonly string[];
@@ -79,7 +96,7 @@ export type NotificationEvent = {
 // to act in the portal). Event-specific tokens are listed per event below.
 const COMMON_TOKENS = ["org_name", "property_address"] as const;
 
-export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
+const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
   // ---- Maintenance dispatch (Slice 6 — wired this release) ----------------
   {
     key: "dispatch.trade_update",
@@ -996,6 +1013,59 @@ export const NOTIFICATION_EVENTS: readonly NotificationEvent[] = [
   },
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Operator-lane assignment (S554). SINGLE SOURCE OF TRUTH for which lane each
+// operator `leasing` event routes to. Kept as one table (rather than a field on
+// each event object) so the whole routing map reads in one place and reviews
+// against the design in one glance. The CI invariant in
+// scripts/test-notifications.ts fails the build if any operator leasing event
+// is absent here, so a new event cannot silently fall back into the showing
+// lane. Classification RULE for any future event: showing = the inquiry-to-lease
+// funnel; listing = ad / syndication / distribution / done-for-you posting;
+// owner = landlord / property-owner compliance, assets, rent increases.
+const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
+  // showing — the inquiry-to-lease funnel
+  "leasing.new_lead": "showing",
+  "leasing.viewing_booked": "showing",
+  "leasing.showing_outcome_nudge": "showing",
+  "leasing.showing_cancelled": "showing",
+  "leasing.showing_assigned": "showing",
+  "leasing.showing_rescheduled": "showing",
+  "leasing.reschedule_accepted": "showing",
+  "leasing.showing_unconfirmed_nudge": "showing",
+  "leasing.showing_auto_released": "showing",
+  "leasing.daily_snapshot": "showing",
+  "leasing.viewing_availability_reminder": "showing",
+  "leasing.viewing_availability_dropped": "showing",
+  // listing — ad / syndication / distribution / done-for-you posting
+  "leasing.listing_health": "listing",
+  "leasing.distribution_job_needs_action": "listing",
+  // owner — landlord / property-owner compliance, assets, rent increases
+  "leasing.rent_increase": "owner",
+  "leasing.landlord_insurance_review": "owner",
+  "leasing.landlord_furnace_service": "owner",
+  "leasing.landlord_fire_safety": "owner",
+  "leasing.landlord_vacant_home_tax_60d": "owner",
+  "leasing.landlord_vacant_home_tax_30d": "owner",
+  "leasing.landlord_winter_water_shutoff": "owner",
+  "leasing.landlord_detector_eol": "owner",
+  "leasing.landlord_equipment_eol": "owner",
+  "leasing.landlord_appliance_warranty": "owner",
+  "leasing.landlord_appliance_consumable": "owner",
+  "leasing.landlord_insurance_lapse": "owner",
+  "leasing.landlord_violation_followup": "owner",
+  "leasing.landlord_inspection_due": "owner",
+};
+
+// The public registry: the base events with their lane stamped on. Mapping keeps
+// the lane as one edit-in-one-place table while still exposing event.lane to
+// every reader (the server dispatch, the Settings UI, the invariant test).
+export const NOTIFICATION_EVENTS: readonly NotificationEvent[] =
+  NOTIFICATION_EVENTS_BASE.map((e) => {
+    const lane = LEASING_OPERATOR_LANE[e.key];
+    return lane ? { ...e, lane } : e;
+  });
+
 export function isNotificationEventKey(key: string): boolean {
   return NOTIFICATION_EVENTS.some((e) => e.key === key);
 }
@@ -1212,6 +1282,7 @@ export function resolveNotificationRecipients(args: {
   audienceEmail?: string | null; // the trade / tenant address for this send
   operatorFallback?: string[]; // member/contact emails for operator events
   alwaysInclude?: string[]; // unconditional CCs, before configured/fallback
+  laneRecipients?: string[]; // S554: the event lane's recipients (operator only)
 }): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -1231,7 +1302,17 @@ export function resolveNotificationRecipients(args: {
     // additive CC list; operatorFallback covers the "nobody configured" case.
     push(args.audienceEmail);
     args.alwaysInclude?.forEach(push);
-    const list = args.configured.length > 0 ? args.configured : args.operatorFallback ?? [];
+    // Resolution order for operator events (S554): a per-event recipient
+    // override (configured) still WINS; otherwise the event lane's recipients;
+    // otherwise the capability-member default (operatorFallback). Each tier is
+    // only used when the one above it is empty, so an org with no lane rows
+    // resolves byte-identically to before lanes existed.
+    const list =
+      args.configured.length > 0
+        ? args.configured
+        : args.laneRecipients && args.laneRecipients.length > 0
+          ? args.laneRecipients
+          : args.operatorFallback ?? [];
     list.forEach(push);
   } else {
     push(args.audienceEmail);

@@ -84,3 +84,46 @@ export async function saveNotificationSetting(formData: FormData) {
   revalidatePath(BASE);
   redirect(`${BASE}?saved=${encodeURIComponent(eventKey)}`);
 }
+
+const LANES = ["listing", "showing", "owner"] as const;
+type Lane = (typeof LANES)[number];
+function isLane(v: string): v is Lane {
+  return (LANES as readonly string[]).includes(v);
+}
+
+// Save one operator LANE's recipient list (S554). The middle tier between a
+// per-event recipient override and the capability-member default: set who
+// handles each KIND of alert (listing / showing / owner) once. Blank recipients
+// is valid and means "fall back to the lane's capability default", so clearing
+// the box reverts to today's behavior. Capability-gated + validated exactly like
+// saveNotificationSetting, and reuses its error-code redirect shape so the same
+// recipients banners render.
+export async function saveNotificationLane(formData: FormData) {
+  await requireCapability("manage_settings", `${BASE}?error=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+
+  const lane = s(formData, "lane");
+  if (!isLane(lane)) redirect(`${BASE}?error=unknown`);
+
+  const rc = validateRecipientsInput(s(formData, "recipients"));
+  if (!rc.ok) {
+    redirect(`${BASE}?error=${rc.code}&lane=${encodeURIComponent(lane)}`);
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.from("org_notification_lanes").upsert(
+    {
+      organization_id: org.id,
+      lane,
+      recipients: rc.value,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "organization_id,lane" },
+  );
+
+  if (error) redirect(`${BASE}?error=save&lane=${encodeURIComponent(lane)}`);
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?saved_lane=${encodeURIComponent(lane)}`);
+}

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vacantless — Operator IA / Nav Wireframe (2026-07-16)</title>
+<style>
+  :root{
+    --ink:#0f172a; --slate:#475569; --muted:#7b8698; --line:#e2e8f0; --bg:#eef1f6; --card:#fff;
+    --indigo:#4f46e5; --teal:#0d9488;
+    --amber:#b45309; --amberbg:#fffbeb; --amberline:#fde68a;
+    --good:#047857; --goodbg:#ecfdf5; --goodline:#a7f3d0;
+    --note:#7c3aed; --notebg:#f5f3ff; --noteline:#ddd6fe;
+    --red:#b91c1c; --redbg:#fef2f2;
+    --sb:#0f1623; --sbtx:#aeb8c7; --sbact:#1d2940;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14.5px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header.page{background:linear-gradient(95deg,var(--indigo),var(--teal));color:#fff;padding:22px 26px}
+  header.page h1{margin:0 0 4px;font-size:20px;letter-spacing:.2px}
+  header.page p{margin:0;opacity:.93;font-size:13px;max-width:900px}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 18px 90px}
+
+  /* control bar */
+  .controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 18px}
+  .seg{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px;box-shadow:0 1px 3px rgba(15,23,42,.05)}
+  .seg button{border:0;background:none;font:inherit;font-weight:700;font-size:13px;cursor:pointer;padding:7px 16px;border-radius:999px;color:var(--slate)}
+  .seg button.on{background:var(--ink);color:#fff}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+  .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+  .sw.new{background:var(--good)} .sw.moved{background:var(--amber)} .sw.note{background:var(--note)}
+
+  .modehint{font-size:12.5px;color:var(--slate);margin:-6px 0 16px}
+  .modehint b.b{color:var(--red)} .modehint b.a{color:var(--good)}
+
+  /* browser frame + app shell */
+  .frame{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 12px 34px rgba(20,30,50,.10)}
+  .bar{display:flex;align-items:center;gap:8px;padding:9px 14px;background:#e7ebf1;border-bottom:1px solid var(--line)}
+  .bar i{width:11px;height:11px;border-radius:50%;background:#cfd5dd;display:inline-block}
+  .url{flex:1;margin-left:8px;background:#fff;border:1px solid var(--line);border-radius:7px;padding:5px 11px;font-size:12px;color:var(--muted)}
+
+  .shell{display:flex;min-height:600px}
+  .side{width:210px;background:var(--sb);color:var(--sbtx);padding:14px 12px;flex-shrink:0;font-size:13px}
+  .brandrow{display:flex;align-items:center;gap:9px;font-weight:800;color:#fff;margin:2px 4px 16px;font-size:15px}
+  .brandrow .lg{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#6366f1,#06b6d4)}
+  .navcap{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#65718a;margin:14px 8px 5px}
+  .side a{display:flex;align-items:center;gap:9px;color:var(--sbtx);text-decoration:none;padding:8px 9px;border-radius:8px;margin-bottom:1px;cursor:pointer}
+  .side a:hover{background:#172033;color:#fff}
+  .side a.active{background:var(--sbact);color:#fff;font-weight:700}
+  .side a .ic{width:16px;text-align:center;opacity:.9;font-size:13px}
+  .side a .nb{margin-left:auto;font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:2px 6px;border-radius:999px;background:var(--good);color:#fff}
+  .side a .nb.moved{background:var(--amber)}
+  .only-after{display:none}
+  body.mode-after .only-after{display:flex}
+  body.mode-before .only-before{display:flex}
+  body.mode-after .only-before{display:none}
+
+  /* topbar with account menu */
+  .top{display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid var(--line);background:#fbfcfe}
+  .top .crumb{font-size:12.5px;color:var(--muted)}
+  .acct{margin-left:auto;position:relative}
+  .acctbtn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 10px 5px 6px;cursor:pointer;font:inherit;font-size:12.5px;font-weight:600}
+  .acctbtn .av{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#0d9488);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800}
+  .menu{position:absolute;right:0;top:42px;width:250px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 40px rgba(15,23,42,.16);padding:6px;display:none;z-index:40}
+  .menu.open{display:block}
+  .menu a{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:13px;cursor:pointer}
+  .menu a:hover{background:#f2f4f8}
+  .menu a .ic{width:16px;text-align:center;opacity:.8}
+  .menu a .nb{margin-left:auto;font-size:9px;font-weight:800;padding:2px 6px;border-radius:999px;background:var(--good);color:#fff}
+  .menu .sep{height:1px;background:var(--line);margin:5px 6px}
+
+  .main{flex:1;padding:20px 24px;min-width:0;background:#fff}
+  .ph{font-size:18px;font-weight:800;margin:0 0 2px;display:flex;align-items:center;gap:9px}
+  .phs{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+  .tag{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;vertical-align:middle;letter-spacing:.03em}
+  .tag.new{background:var(--goodbg);color:var(--good);border:1px solid var(--goodline)}
+  .tag.slice1{background:#eef2ff;color:var(--indigo);border:1px solid #c7d2fe}
+  .tag.moved{background:var(--amberbg);color:var(--amber);border:1px solid var(--amberline)}
+
+  .view{display:none}
+  .view.on{display:block;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* annotation callouts */
+  .anno{border-radius:11px;padding:11px 13px;margin:14px 0;font-size:13px}
+  .anno b{font-weight:800}
+  .anno.note{background:var(--notebg);border:1px solid var(--noteline);border-left:4px solid var(--note)}
+  .anno.note b{color:var(--note)}
+  .anno.moved{background:var(--amberbg);border:1px solid var(--amberline);border-left:4px solid var(--amber)}
+  .anno.moved b{color:var(--amber)}
+  .anno.good{background:var(--goodbg);border:1px solid var(--goodline);border-left:4px solid var(--good)}
+  .anno.good b{color:var(--good)}
+
+  /* wireframe primitives */
+  .grp{border:1px solid var(--line);border-radius:12px;padding:14px 15px;margin-bottom:13px;background:#fff;position:relative}
+  .grp h4{margin:0 0 3px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .grp .hint{font-size:12px;color:var(--muted);margin:0 0 11px}
+  .field{margin:0 0 10px}
+  .field label{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+  .inp{height:32px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe;display:flex;align-items:center;padding:0 10px;font-size:12px;color:#9aa3af}
+  .row{display:flex;gap:11px;flex-wrap:wrap}
+  .row .field{flex:1;min-width:150px}
+  .toggle{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid #f0f2f5}
+  .toggle:first-of-type{border-top:0}
+  .tg{width:32px;height:19px;border-radius:999px;background:#cdd4dd;position:relative;flex-shrink:0;margin-top:2px}
+  .tg.on{background:var(--indigo)}
+  .tg::after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:2px;left:2px;transition:.2s}
+  .tg.on::after{left:15px}
+  .toggle .tl{font-size:12.5px}
+  .toggle .tl small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+  .stub{display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px dashed #c7cede;border-radius:9px;padding:10px 12px;background:#fafbfd;font-size:12.5px;margin-bottom:9px}
+  .stub .go{font-size:11.5px;font-weight:700;color:var(--indigo);white-space:nowrap}
+
+  /* command-center queue cards */
+  .queues{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  @media(max-width:760px){.queues{grid-template-columns:1fr 1fr}}
+  .q{border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:#fff;position:relative}
+  .q .qn{font-size:22px;font-weight:800;line-height:1}
+  .q .ql{font-size:12px;color:var(--slate);margin-top:3px}
+  .q .qa{font-size:11.5px;font-weight:700;color:var(--indigo);margin-top:8px}
+  .q.hot{border-color:var(--amberline);background:var(--amberbg)}
+  .q.hot .qn{color:var(--amber)}
+  .q.newq{border-color:var(--goodline);background:var(--goodbg)}
+  .q .badge{position:absolute;top:9px;right:9px;font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:999px;background:var(--good);color:#fff}
+  .seg2{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-size:11.5px;font-weight:700;margin-bottom:12px}
+  .seg2 span{padding:5px 12px;cursor:default}
+  .seg2 span.on{background:var(--ink);color:#fff}
+
+  /* before/after move map table */
+  .map{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  .map th{text-align:left;padding:8px 10px;background:#f6f8fb;border-bottom:2px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate)}
+  .map td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  .map tr:last-child td{border-bottom:0}
+  .map .arw{color:var(--muted)}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px}
+  .chip.keep{background:#eef2ff;color:var(--indigo)}
+  .chip.move{background:var(--amberbg);color:var(--amber)}
+  .chip.newc{background:var(--goodbg);color:var(--good)}
+
+  .foot{font-size:12px;color:var(--muted);margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f1f5f9;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11.5px}
+  a.txt{color:var(--indigo);cursor:pointer;text-decoration:none;font-weight:600}
+</style>
+</head>
+<body class="mode-after">
+<header class="page">
+  <h1>Vacantless — Operator IA / Navigation Wireframe</h1>
+  <p>Target information-architecture for the Settings / Dashboard / Operator surfaces. Design-first mock for fresh-eyes review <b>before</b> any code. Click the left nav and the account menu to walk the structure; flip Before ⇄ After to compare. Source: IA-AUDIT-SETTINGS-DASHBOARD-OPERATOR-2026-07-16. <b>Current-state facts corrected 2026-07-16 per Codex review.</b></p>
+</header>
+
+<div class="wrap">
+  <div class="controls">
+    <div class="seg" role="tablist">
+      <button id="mBefore" onclick="setMode('before')">Before (today)</button>
+      <button id="mAfter" class="on" onclick="setMode('after')">After (proposed)</button>
+    </div>
+    <div class="legend">
+      <span><i class="sw new"></i> New surface</span>
+      <span><i class="sw moved"></i> Moved / re-homed</span>
+      <span><i class="sw note"></i> Annotation</span>
+    </div>
+  </div>
+  <p class="modehint" id="modehint"></p>
+
+  <div class="frame">
+    <div class="bar"><i></i><i></i><i></i><span class="url" id="url">app.vacantless.com/dashboard</span></div>
+    <div class="shell">
+      <!-- SIDEBAR -->
+      <nav class="side" id="sidebar"></nav>
+
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <!-- TOPBAR + ACCOUNT MENU -->
+        <div class="top">
+          <span class="crumb" id="crumb">Dashboard</span>
+          <div class="acct">
+            <button class="acctbtn" onclick="toggleMenu(event)"><span class="av">A</span> Aaliyah ▾</button>
+            <div class="menu" id="acctmenu"></div>
+          </div>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="main" id="main"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    Wireframe only — no live data, nothing here is wired. Build sequence lives in the IA audit: <b>Slice 1 = Notifications extraction</b> (self-contained, highest value), then Banking/Rent split, then Dashboard command-center cards, then the Operator settings surface. Principle throughout: <a class="txt" onclick="go('map')">organize by intent, not by the form/table that saves the control</a>.
+  </div>
+</div>
+
+<script>
+/* ---------- data: nav + account menu ---------- */
+const SIDE_BEFORE = [
+  {cap:'Leasing'},
+  {ic:'▤', l:'Dashboard', v:'dashboard'},
+  {ic:'✉', l:'Inquiries', v:null},
+  {ic:'⌂', l:'Properties', v:null},
+  {ic:'⇱', l:'Distribution', v:null},
+  {cap:'Manage'},
+  {ic:'⚑', l:'Tenancies', v:null},
+  {ic:'☰', l:'Tenants', v:null},
+  {ic:'$', l:'Banking & Rent', v:null},
+  {cap:'System'},
+  {ic:'⚙', l:'Settings', v:'settings'},
+];
+const SIDE_AFTER = [
+  {cap:'Leasing'},
+  {ic:'▤', l:'Dashboard', v:'dashboard', nb:'CMD'},
+  {ic:'✉', l:'Inquiries', v:null},
+  {ic:'⌂', l:'Properties', v:null},
+  {ic:'⇱', l:'Distribution', v:null},
+  {cap:'Manage'},
+  {ic:'⚑', l:'Tenancies', v:null},
+  {ic:'☰', l:'Tenants', v:null},
+  {ic:'$', l:'Money & Rent', v:'money', nb:'MOVED', nbm:true},
+  {cap:'Admin'},
+  {ic:'⚡', l:'Automations & Templates', v:'automations', nb:'NEW'},
+  {ic:'⚙', l:'Org Settings', v:'settings'},
+];
+const MENU_BEFORE = [
+  {ic:'⚙', l:'Settings', v:'settings'},
+  {ic:'◆', l:'Your plan', v:null},
+  {ic:'♥', l:'Refer a landlord', v:null},
+  {ic:'⤓', l:'Captures', v:null},
+  {sep:true},
+  {ic:'⏻', l:'Sign out', v:null},
+];
+const MENU_AFTER = [
+  {ic:'●', l:'My settings', v:'mysettings', nb:'NEW'},
+  {ic:'⚙', l:'Org settings', v:'settings'},
+  {ic:'⚡', l:'Automations & templates', v:'automations', nb:'NEW'},
+  {ic:'◆', l:'Your plan', v:null},
+  {ic:'♥', l:'Refer a landlord', v:null},
+  {ic:'⤓', l:'Captures', v:null},
+  {sep:true},
+  {ic:'⏻', l:'Sign out', v:null},
+];
+
+/* ---------- views (main content) ---------- */
+const VIEWS = {
+  dashboard: {crumb:'Dashboard', url:'app.vacantless.com/dashboard', render:renderDashboard},
+  settings:  {crumb:'Settings', url:'app.vacantless.com/dashboard/settings', render:renderSettings},
+  automations:{crumb:'Automations & Templates', url:'app.vacantless.com/dashboard/automations', render:renderAutomations},
+  mysettings:{crumb:'My settings', url:'app.vacantless.com/dashboard/me', render:renderMySettings},
+  money:     {crumb:'Money & Rent', url:'app.vacantless.com/dashboard/money', render:renderMoney},
+  map:       {crumb:'IA move map', url:'app.vacantless.com/— IA move map —', render:renderMap},
+};
+
+let mode = 'after', current = 'dashboard';
+
+function setMode(m){
+  mode = m;
+  document.body.classList.toggle('mode-after', m==='after');
+  document.body.classList.toggle('mode-before', m==='before');
+  document.getElementById('mBefore').classList.toggle('on', m==='before');
+  document.getElementById('mAfter').classList.toggle('on', m==='after');
+  document.getElementById('modehint').innerHTML = m==='before'
+    ? 'Showing <b class="b">today’s</b> structure: the notification studio is reached as a <b>Settings tab</b> that opens its own ~405-line route (41 events / ~329 controls), Banking&nbsp;&amp;&nbsp;Rent mixes setup with operations, and there is no personal/operator surface.'
+    : 'Showing the <b class="a">proposed</b> structure: Global (org) Settings trimmed to defaults + integrations + billing; the Notifications studio extracted to <b>Automations &amp; Templates</b>; a new personal <b>My&nbsp;settings</b> surface; the Dashboard becomes a <b>“Needs me now” command center</b>; operational Money/Rent leaves Settings.';
+  // if a view only exists in after-mode and we're in before, bounce to dashboard/settings
+  if(m==='before' && (current==='automations'||current==='mysettings'||current==='money')) go('settings');
+  else { buildSide(); buildMenu(); render(); }
+}
+
+function buildSide(){
+  const items = mode==='after' ? SIDE_AFTER : SIDE_BEFORE;
+  document.getElementById('sidebar').innerHTML =
+    '<div class="brandrow"><span class="lg"></span> Vacantless</div>' +
+    items.map(it=>{
+      if(it.cap) return `<div class="navcap">${it.cap}</div>`;
+      const act = it.v===current ? ' active' : '';
+      const nb = it.nb ? `<span class="nb${it.nbm?' moved':''}">${it.nb}</span>` : '';
+      const click = it.v ? `onclick="go('${it.v}')"` : 'onclick="noop()"';
+      return `<a class="${act.trim()}" ${click}><span class="ic">${it.ic}</span>${it.l}${nb}</a>`;
+    }).join('');
+}
+function buildMenu(){
+  const items = mode==='after' ? MENU_AFTER : MENU_BEFORE;
+  document.getElementById('acctmenu').innerHTML = items.map(it=>{
+    if(it.sep) return '<div class="sep"></div>';
+    const nb = it.nb ? `<span class="nb">${it.nb}</span>` : '';
+    const click = it.v ? `onclick="go('${it.v}');closeMenu()"` : 'onclick="closeMenu()"';
+    return `<a ${click}><span class="ic">${it.ic}</span>${it.l}${nb}</a>`;
+  }).join('');
+}
+function go(v){ current=v; buildSide(); render(); closeMenu(); }
+function noop(){}
+function render(){
+  const view = VIEWS[current] || VIEWS.dashboard;
+  document.getElementById('crumb').textContent = view.crumb;
+  document.getElementById('url').textContent = view.url;
+  document.getElementById('main').innerHTML = view.render();
+}
+function toggleMenu(e){ e.stopPropagation(); document.getElementById('acctmenu').classList.toggle('open'); }
+function closeMenu(){ document.getElementById('acctmenu').classList.remove('open'); }
+document.addEventListener('click', closeMenu);
+
+/* ---------- renderers ---------- */
+function renderDashboard(){
+  if(mode==='before'){
+    return `
+      <div class="ph">Dashboard</div>
+      <div class="phs">Already more than leasing — a cross-workstream Today lane exists today.</div>
+      <div class="queues">
+        <div class="q"><div class="qn">3</div><div class="ql">Inquiries need a reply</div><div class="qa">Open inquiries →</div></div>
+        <div class="q"><div class="qn">4</div><div class="ql">Viewings today</div><div class="qa">Today's schedule →</div></div>
+        <div class="q"><div class="qn">5</div><div class="ql">Assigned viewings awaiting confirmation</div><div class="qa">Confirm →</div></div>
+        <div class="q"><div class="qn">2</div><div class="ql">Tenant messages awaiting approval</div><div class="qa" style="color:var(--good)">already in Today lane</div></div>
+        <div class="q"><div class="qn">1</div><div class="ql">Rent-increase alerts</div><div class="qa" style="color:var(--good)">already in Today lane</div></div>
+        <div class="q"><div class="qn">3</div><div class="ql">Urgent maintenance / work orders</div><div class="qa" style="color:var(--good)">already in Today lane</div></div>
+      </div>
+      <div class="anno note"><b>Corrected (Codex):</b> the dashboard already reads tenant-message approvals, rent-increase alerts and urgent work orders (<span class="kbd">app/dashboard/page.tsx:54</span>) — it is <b>not</b> leasing-only. The real gap is narrower: <b>distribution readiness</b>, <b>expense/money review</b>, and a <b>&ldquo;my assigned ⇄ team&rdquo;</b> model.</div>`;
+  }
+  return `
+    <div class="ph">Dashboard <span class="tag new">COMMAND CENTER</span></div>
+    <div class="phs">One &ldquo;Needs me now&rdquo; surface across every workstream — not just leasing.</div>
+    <div class="seg2"><span class="on">My assigned today</span><span>Whole team</span></div>
+    <div class="queues">
+      <div class="q hot"><div class="qn">3</div><div class="ql">Inquiries need a reply</div><div class="qa">Open inquiries →</div></div>
+      <div class="q hot"><div class="qn">5</div><div class="ql">Viewings awaiting confirmation</div><div class="qa">Confirm →</div></div>
+      <div class="q"><div class="qn">4</div><div class="ql">Viewings today</div><div class="qa">Schedule →</div></div>
+      <div class="q"><div class="qn">2</div><div class="ql">Tenant messages awaiting approval</div><div class="qa" style="color:var(--good)">already here</div></div>
+      <div class="q"><div class="qn">1</div><div class="ql">Rent-increase alerts</div><div class="qa" style="color:var(--good)">already here</div></div>
+      <div class="q"><div class="qn">3</div><div class="ql">Urgent maintenance / work orders</div><div class="qa" style="color:var(--good)">already here</div></div>
+      <div class="q newq"><span class="badge">NEW</span><div class="qn">6</div><div class="ql">Expenses / money to review</div><div class="qa">Money &amp; Rent →</div></div>
+      <div class="q newq"><span class="badge">NEW</span><div class="qn">1</div><div class="ql">Listing / distribution readiness</div><div class="qa">Fix listing →</div></div>
+    </div>
+    <div class="anno good"><b>What changes (narrower than first drafted):</b> the Today lane already covers approvals, rent-increase alerts and urgent work orders. The true adds are <b>expense/money review</b>, <b>distribution readiness</b>, and the <b>My assigned today ⇄ Whole team</b> model — shown as <span class="tag new">NEW</span>.</div>
+    <div class="anno note"><b>Design-first (slice 3):</b> smaller than it looks — <b>extend</b> the existing Today lane, don&rsquo;t rebuild it. The one real dependency is the operator-vs-org data model behind the &ldquo;my assigned&rdquo; toggle, so it&rsquo;s sequenced after the two relocations. Stays an <b>action-queue</b> surface — setup/reference never lands here (why message templates moved to Tenancies, not the dashboard).</div>`;
+}
+
+function renderSettings(){
+  if(mode==='before'){
+    return `
+      <div class="ph">Settings</div>
+      <div class="phs">One long page — grouped by the form that saves each control, not by intent.</div>
+      <div class="grp"><h4>Brand &amp; Portal</h4><div class="hint">Logo, colors, public identity.</div>
+        <div class="row"><div class="field"><label>Brand name</label><div class="inp"></div></div><div class="field"><label>Portal color</label><div class="inp"></div></div></div>
+      </div>
+      <div class="grp"><h4>Communications</h4><div class="hint">Email sender, test email, renter messages, arrival phone, SMS.</div>
+        <div class="field"><label>From address</label><div class="inp"></div></div>
+        <div class="stub">Tenant message templates editor <span class="go">now lives here (S499b) →</span></div>
+      </div>
+      <div class="grp"><h4>Banking &amp; Rent <span class="tag moved">mixes setup + operations</span></h4><div class="hint">API keys / connect-disconnect … <b>and</b> CSV exports + rent records.</div>
+        <div class="field"><label>Bank connection (API key)</label><div class="inp"></div></div>
+        <div class="stub" style="border-color:var(--amberline);background:var(--amberbg)">CSV exports + rent records <span class="go">operational — doesn't belong in Settings</span></div>
+      </div>
+      <div class="grp" style="border-color:var(--amberline)"><h4 style="color:var(--amber)">Notifications <span class="tag moved">41 events · ~329 controls · own route</span></h4>
+        <div class="hint">A full automation/template <b>studio</b> — reached as a <b>Settings tab</b> that opens its own ~405-line route (<span class="kbd">/dashboard/settings/notifications</span>). It's admin automation, not org setup, so it doesn't belong under Settings.</div>
+        <div class="stub" style="border-color:var(--amberline);background:var(--amberbg)">Open the Notifications editor <span class="go">separate route — belongs at top level →</span></div>
+      </div>
+      <div class="grp"><h4>Distribution</h4><div class="hint">Channel-account setup <b>+</b> daily publish/where-posted (mixed).</div></div>
+      <div class="anno note"><b>The core problem:</b> the page grew by appending each control next to the form that writes it, so the IA mirrors the database, not the operator&rsquo;s mental model. Flip to <a class="txt" onclick="setMode('after')">After</a> to see the target split.</div>`;
+  }
+  return `
+    <div class="ph">Org Settings</div>
+    <div class="phs">Only org-wide setup &amp; defaults. Everything operational or point-of-use has left.</div>
+    <div class="grp"><h4>Brand &amp; public identity</h4><div class="hint">Logo, colors, portal identity.</div>
+      <div class="row"><div class="field"><label>Brand name</label><div class="inp"></div></div><div class="field"><label>Portal color</label><div class="inp"></div></div></div>
+    </div>
+    <div class="grp"><h4>Email &amp; SMS defaults</h4><div class="hint">Org-level sender, test email, renter/arrival defaults, SMS on/off. Defaults stay; the template editor is point-of-use.</div>
+      <div class="field"><label>From address</label><div class="inp"></div></div>
+      <div class="stub">Tenant message templates → <span class="go">Tenancies (S499b, shipped)</span></div>
+    </div>
+    <div class="grp"><h4>Integrations &amp; API keys</h4><div class="hint">Bank connection, channel accounts, connect / disconnect. Keys stay; operations leave.</div>
+      <div class="field"><label>Bank connection (API key)</label><div class="inp"></div></div>
+      <div class="stub" style="border-color:var(--amberline);background:var(--amberbg)">CSV exports &amp; rent records → <span class="go" onclick="go('money')">Money &amp; Rent →</span></div>
+    </div>
+    <div class="grp"><h4>Billing &amp; plan</h4><div class="hint">Subscription, invoices, payment method.</div></div>
+    <div class="grp"><h4>Account-level notification <i>defaults</i></h4><div class="hint">Org fallbacks only.</div>
+      <div class="stub" style="border-color:var(--noteline);background:var(--notebg)">The full Notifications editor → <span class="go" onclick="go('automations')">Automations &amp; Templates →</span></div>
+    </div>
+    <div class="anno good"><b>Result:</b> Settings shrinks to brand, comms defaults, integrations/keys, billing, and org notification <i>defaults</i> — a page you set up once and rarely revisit. Links (not embeds) point to the surfaces where the real editors now live.</div>`;
+}
+
+function renderAutomations(){
+  return `
+    <div class="ph">Automations &amp; Templates <span class="tag new">NEW HOME</span> <span class="tag slice1">BUILD SLICE 1</span></div>
+    <div class="phs">The existing notification editor (41 events / ~329 controls), moved up from a Settings tab to its own top-level route. Same editor, new home — a link-only stub stays in Settings.</div>
+    <div class="grp"><h4>Renter automations</h4><div class="hint">Booking confirmations, viewing reminders (24h / 2h), &ldquo;confirm you&rsquo;re coming,&rdquo; waitlist.</div>
+      <div class="toggle"><span class="tg on"></span><span class="tl">Viewing reminder — 24h before<small>Email · edit copy &amp; timing</small></span></div>
+      <div class="toggle"><span class="tg on"></span><span class="tl">Viewing reminder — 2h before<small>Email</small></span></div>
+      <div class="toggle"><span class="tg on"></span><span class="tl">&ldquo;Confirm you&rsquo;re coming&rdquo; button<small>Live — a renter tapped it today</small></span></div>
+    </div>
+    <div class="grp"><h4>Operator &amp; team alerts</h4><div class="hint">Viewing-booked alert, reschedule-accepted, weekly &ldquo;set your viewing times&rdquo; reminder (S500).</div>
+      <div class="toggle"><span class="tg on"></span><span class="tl">Viewing-booked alert<small>Operator SMS/email</small></span></div>
+      <div class="toggle"><span class="tg"></span><span class="tl">Weekly &ldquo;set your viewing times&rdquo; reminder<small>Opt-in per org · S500</small></span></div>
+    </div>
+    <div class="grp"><h4>Tenancy &amp; money automations</h4><div class="hint">Rent-increase loop, asset/tenancy reminders, approval-queue notices.</div>
+      <div class="field" style="opacity:.6"><label>…the remaining editor, moved intact…</label><div class="inp"></div></div>
+    </div>
+    <div class="anno note"><b>Why this is Slice 1:</b> it&rsquo;s a <b>re-home/rename</b>, not a rewrite — move the existing ~405-line editor + its actions to <span class="kbd">/dashboard/automations</span>, repoint one <span class="kbd">BASE</span> constant, leave a <span class="kbd">301</span> redirect + a Settings stub (exactly the S499b pattern). No migration, no data-model decision, so it ships ahead of the dashboard/operator work. Codex has the file-level move list.</div>`;
+}
+
+function renderMySettings(){
+  return `
+    <div class="ph">My settings <span class="tag new">NEW SURFACE</span></div>
+    <div class="phs">Personal / operator preferences — &ldquo;my work, my notifications, my coverage&rdquo; — separate from org-wide Settings.</div>
+    <div class="grp"><h4>My notifications</h4><div class="hint">How <i>I</i> get pinged — distinct from the org-level defaults.</div>
+      <div class="toggle"><span class="tg on"></span><span class="tl">New inquiry assigned to me<small>Email + SMS</small></span></div>
+      <div class="toggle"><span class="tg on"></span><span class="tl">A renter confirms / cancels my viewing<small>SMS</small></span></div>
+      <div class="toggle"><span class="tg"></span><span class="tl">Daily &ldquo;my day&rdquo; digest<small>Email, 8:00am</small></span></div>
+    </div>
+    <div class="grp"><h4>My viewing coverage</h4><div class="hint">The per-week coverage entry Aaliyah owns today — a personal surface, not team/global assignment.</div>
+      <div class="stub">This week&rsquo;s custom hours <span class="go">Viewing Times →</span></div>
+    </div>
+    <div class="grp"><h4>My defaults</h4><div class="hint">Default dashboard filter (my assigned vs team), calendar &amp; contact prefs.</div>
+      <div class="toggle"><span class="tg on"></span><span class="tl">Open the dashboard on &ldquo;My assigned today&rdquo;<small>vs whole team</small></span></div>
+    </div>
+    <div class="anno note"><b>Design-first (slice 4):</b> this needs the operator-vs-org data model decided first (which prefs are per-user vs per-org). Lower urgency than the two relocations, but it&rsquo;s what closes the audit&rsquo;s &ldquo;no personal settings area&rdquo; gap and matters as customers&nbsp;2–5 onboard with real teams.</div>`;
+}
+
+function renderMoney(){
+  return `
+    <div class="ph">Money &amp; Rent <span class="tag moved">RE-HOMED</span></div>
+    <div class="phs">The operational half of the old &ldquo;Banking &amp; Rent&rdquo; settings tab — where it belongs, next to the work.</div>
+    <div class="grp"><h4>Rent records</h4><div class="hint">Payments, status, overdue — an operations view, not setup.</div>
+      <div class="field" style="opacity:.6"><label>Rent ledger table…</label><div class="inp"></div></div>
+    </div>
+    <div class="grp"><h4>Exports</h4><div class="hint">CSV exports for the owner statement / accountant.</div>
+      <div class="stub">Download CSV <span class="go">export →</span></div>
+    </div>
+    <div class="anno moved"><b>Corrected (Codex):</b> <span class="kbd">/dashboard/money</span> and <span class="kbd">/dashboard/rent</span> already exist — Slice 2 <b>consolidates/re-homes</b> them, then pulls CSV export + rent records out of the Settings bank cards (<span class="kbd">rotessa-settings-card</span>, <span class="kbd">stripe-connect-settings-card</span>). The <b>setup</b> half (bank connection / API keys) stays in <a class="txt" onclick="go('settings')">Org Settings → Integrations</a>. Not building a new surface from zero.</div>`;
+}
+
+function renderMap(){
+  return `
+    <div class="ph">IA move map — before → after</div>
+    <div class="phs">Every control, and where it lands. <span class="chip keep">keep</span> stays put · <span class="chip move">move</span> re-homed · <span class="chip newc">new</span> new surface.</div>
+    <table class="map">
+      <thead><tr><th>Control / area</th><th>Today</th><th></th><th>Proposed home</th><th>Slice</th></tr></thead>
+      <tbody>
+        <tr><td><b>Notifications editor</b> (41 events / ~329 controls)</td><td>Settings → Notifications <i>tab</i> (own route)</td><td class="arw">→</td><td><span class="chip move">re-home</span> Automations &amp; Templates (top level)</td><td>1</td></tr>
+        <tr><td>Tenant message templates</td><td>Settings → Communications</td><td class="arw">→</td><td><span class="chip move">move</span> Tenancies (done · S499b)</td><td>✓</td></tr>
+        <tr><td>CSV exports + rent records</td><td>Settings → Banking &amp; Rent</td><td class="arw">→</td><td><span class="chip move">move</span> Money &amp; Rent <small>(route exists)</small></td><td>2</td></tr>
+        <tr><td>Bank connection / API keys</td><td>Settings → Banking &amp; Rent</td><td class="arw">→</td><td><span class="chip keep">keep</span> Org Settings → Integrations</td><td>2</td></tr>
+        <tr><td>Money-review &amp; distribution-readiness queues</td><td>— <small>(approvals/rent/maintenance already in the Today lane)</small></td><td class="arw">→</td><td><span class="chip newc">new</span> Dashboard — extend Today lane</td><td>3</td></tr>
+        <tr><td>My assigned ⇄ team toggle</td><td>—</td><td class="arw">→</td><td><span class="chip newc">new</span> Dashboard</td><td>3</td></tr>
+        <tr><td>Personal notif prefs · my coverage · my defaults</td><td>— (no surface)</td><td class="arw">→</td><td><span class="chip newc">new</span> My settings (operator)</td><td>4</td></tr>
+        <tr><td>Brand · email/SMS defaults · billing · org notif defaults</td><td>Settings</td><td class="arw">→</td><td><span class="chip keep">keep</span> Org Settings</td><td>—</td></tr>
+        <tr><td>Channel-account setup</td><td>Settings → Distribution</td><td class="arw">→</td><td><span class="chip keep">keep</span> Org Settings</td><td>5</td></tr>
+        <tr><td>Daily publish / where-posted</td><td>Settings → Distribution</td><td class="arw">→</td><td><span class="chip keep">keep</span> per-property Distribute</td><td>5</td></tr>
+      </tbody>
+    </table>
+    <div class="anno good"><b>Build order (highest value first, one slice at a time, wireframe reviewed before code):</b> 1 Notifications extraction → 2 Banking/Rent split → 3 Dashboard command-center cards → 4 Operator settings surface → 5 Distribution (already mostly right). Nothing is broken today — only mis-placed — so this is operator-experience polish; weigh each slice against cutover / customer-acquisition priorities.</div>`;
+}
+
+/* ---------- init ---------- */
+setMode('after');
+render();
+</script>
+</body>
+</html>
