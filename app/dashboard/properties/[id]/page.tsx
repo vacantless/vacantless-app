@@ -98,6 +98,10 @@ import {
   smokingLabel,
   LEASE_TERM_OPTIONS,
   leaseTermLabel,
+  UNIT_TYPE_OPTIONS,
+  unitTypeLabel,
+  FOR_RENT_BY_OPTIONS,
+  forRentByLabel,
 } from "@/lib/property-features";
 import {
   resolveEffectiveFeatures,
@@ -245,6 +249,10 @@ type Property = {
   virtual_tour_url: string | null;
   sqft: number | null;
   floor: string | null;
+  // Kijiji autopilot field map (S550): unit_type is nullable (falls back to
+  // apartment downstream); for_rent_by is NOT NULL default 'owner'.
+  unit_type: string | null;
+  for_rent_by: string | null;
   laundry: string | null;
   air_conditioning: boolean;
   balcony: boolean;
@@ -354,7 +362,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -2305,6 +2313,53 @@ export default async function PropertyDetailPage({
             Unit details
           </legend>
           <div className="flex flex-wrap gap-4">
+            <div className="w-44">
+              <label
+                htmlFor="property-unit-type"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Unit type
+              </label>
+              <select
+                id="property-unit-type"
+                name="unit_type"
+                defaultValue={p.unit_type ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Not specified</option>
+                {UNIT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {unitTypeLabel(opt)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                Rides along to the portals (e.g. Kijiji posts it as this type).
+              </p>
+            </div>
+            <div className="w-44">
+              <label
+                htmlFor="property-for-rent-by"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Listed by
+              </label>
+              <select
+                id="property-for-rent-by"
+                name="for_rent_by"
+                defaultValue={p.for_rent_by ?? "owner"}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                {FOR_RENT_BY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {forRentByLabel(opt)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                Who the listing is posted by. Defaults to owner.
+              </p>
+            </div>
             <div className="w-40">
               <label
                 htmlFor="property-available-date"

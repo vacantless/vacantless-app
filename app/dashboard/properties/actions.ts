@@ -15,6 +15,8 @@ import {
   normalizeLeaseTerm,
   normalizeSmoking,
   normalizeAcType,
+  normalizeUnitType,
+  normalizeForRentBy,
 } from "@/lib/property-features";
 import { parseMlsListing, emptyParsedListing, type ParsedListing } from "@/lib/mls-import";
 import { applyAiListing } from "@/lib/listing-extract";
@@ -524,6 +526,11 @@ export async function updateProperty(formData: FormData) {
       virtual_tour_url: virtualTourUrl,
       sqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
       floor: String(formData.get("floor") ?? "").trim() || null,
+      // Kijiji autopilot field map (S550): unit_type is nullable (unset -> the
+      // worker falls back to apartment); for_rent_by is NOT NULL, so the
+      // normalizer never returns null (missing/invalid -> 'owner').
+      unit_type: normalizeUnitType(formData.get("unit_type")),
+      for_rent_by: normalizeForRentBy(formData.get("for_rent_by")),
       laundry: normalizeLaundry(formData.get("laundry")),
       air_conditioning: parseCheckbox(formData, "air_conditioning"),
       balcony: parseCheckbox(formData, "balcony"),

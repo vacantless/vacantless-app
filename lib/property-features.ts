@@ -170,6 +170,80 @@ export function leaseTermLabel(value: unknown): string | null {
   return isLeaseTerm(value) ? LEASE_TERM_LABELS[value] : null;
 }
 
+// --- Unit type + "for rent by" (Kijiji autopilot field map, S550) -----------
+// unit_type feeds the Kijiji unittype_s radio directly (the values ARE Kijiji's
+// vocab, hyphens and all) so the done-for-you worker posts a condo as a condo,
+// not the old apartment default. Nullable: an unset unit falls back to apartment
+// downstream. for_rent_by feeds Kijiji's forrentbyhousing_s (owner -> ownr,
+// professional -> reprofessional); the column is NOT NULL default 'owner'.
+
+export const UNIT_TYPE_OPTIONS = [
+  "apartment",
+  "condo",
+  "basement-apartment",
+  "house",
+  "townhouse",
+  "duplex-triplex",
+] as const;
+export type UnitType = (typeof UNIT_TYPE_OPTIONS)[number];
+
+export function isUnitType(value: unknown): value is UnitType {
+  return (
+    typeof value === "string" &&
+    (UNIT_TYPE_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+/** Normalize a raw form value to a valid unit type or null (= unspecified). */
+export function normalizeUnitType(raw: unknown): UnitType | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return isUnitType(v) ? v : null;
+}
+
+const UNIT_TYPE_LABELS: Record<UnitType, string> = {
+  apartment: "Apartment",
+  condo: "Condo",
+  "basement-apartment": "Basement apartment",
+  house: "House",
+  townhouse: "Townhouse",
+  "duplex-triplex": "Duplex / triplex",
+};
+
+export function unitTypeLabel(value: unknown): string | null {
+  return isUnitType(value) ? UNIT_TYPE_LABELS[value] : null;
+}
+
+export const FOR_RENT_BY_OPTIONS = ["owner", "professional"] as const;
+export type ForRentBy = (typeof FOR_RENT_BY_OPTIONS)[number];
+
+export function isForRentBy(value: unknown): value is ForRentBy {
+  return (
+    typeof value === "string" &&
+    (FOR_RENT_BY_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Normalize a raw form value to a valid "for rent by" option. The DB column is
+ * NOT NULL DEFAULT 'owner', so this NEVER returns null: a missing/invalid value
+ * falls back to 'owner' (the safe default a self-listing landlord expects).
+ */
+export function normalizeForRentBy(raw: unknown): ForRentBy {
+  if (typeof raw !== "string") return "owner";
+  const v = raw.trim();
+  return isForRentBy(v) ? v : "owner";
+}
+
+const FOR_RENT_BY_LABELS: Record<ForRentBy, string> = {
+  owner: "Owner",
+  professional: "Real estate professional",
+};
+
+export function forRentByLabel(value: unknown): string | null {
+  return isForRentBy(value) ? FOR_RENT_BY_LABELS[value] : null;
+}
+
 /**
  * The renter-facing unit fields. All optional/nullable so a partially-filled
  * property still renders cleanly.
@@ -179,6 +253,9 @@ export type UnitFeatures = {
   sqft?: number | null;
   floor?: string | null;
   parking?: string | null;
+  // Kijiji autopilot field map (S550): structural type + who is listing.
+  unit_type?: UnitType | string | null;
+  for_rent_by?: ForRentBy | string | null;
   laundry?: Laundry | string | null;
   air_conditioning?: boolean | null;
   balcony?: boolean | null;

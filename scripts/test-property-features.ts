@@ -31,6 +31,14 @@ import {
   isLeaseTerm,
   normalizeLeaseTerm,
   leaseTermLabel,
+  UNIT_TYPE_OPTIONS,
+  isUnitType,
+  normalizeUnitType,
+  unitTypeLabel,
+  FOR_RENT_BY_OPTIONS,
+  isForRentBy,
+  normalizeForRentBy,
+  forRentByLabel,
 } from "../lib/property-features";
 
 let passed = 0;
@@ -323,6 +331,52 @@ ok(
   "spec line: '2nd floor' not doubled",
   !buildSpecLine({ floor: "2nd floor" }).includes("2nd floor floor"),
 );
+
+// --- unit_type (Kijiji autopilot field map, S550) --------------------------
+ok("UNIT_TYPE_OPTIONS has 6", UNIT_TYPE_OPTIONS.length === 6);
+ok("isUnitType: condo", isUnitType("condo"));
+ok("isUnitType: hyphenated basement", isUnitType("basement-apartment"));
+ok("isUnitType: rejects junk", !isUnitType("loft"));
+ok("isUnitType: rejects non-string", !isUnitType(2));
+ok("normalizeUnitType: trims + accepts", normalizeUnitType(" condo ") === "condo");
+ok("normalizeUnitType: blank -> null", normalizeUnitType("") === null);
+ok("normalizeUnitType: junk -> null", normalizeUnitType("mansion") === null);
+ok("normalizeUnitType: non-string -> null", normalizeUnitType(null) === null);
+ok("unitTypeLabel: apartment", unitTypeLabel("apartment") === "Apartment");
+ok(
+  "unitTypeLabel: basement-apartment",
+  unitTypeLabel("basement-apartment") === "Basement apartment",
+);
+ok(
+  "unitTypeLabel: duplex-triplex",
+  unitTypeLabel("duplex-triplex") === "Duplex / triplex",
+);
+ok("unitTypeLabel: junk -> null", unitTypeLabel("x") === null);
+
+// --- for_rent_by (NOT NULL default 'owner') --------------------------------
+ok("FOR_RENT_BY_OPTIONS has 2", FOR_RENT_BY_OPTIONS.length === 2);
+ok("isForRentBy: owner", isForRentBy("owner"));
+ok("isForRentBy: professional", isForRentBy("professional"));
+ok("isForRentBy: rejects junk", !isForRentBy("agent"));
+ok(
+  "normalizeForRentBy: trims + accepts professional",
+  normalizeForRentBy(" professional ") === "professional",
+);
+ok(
+  "normalizeForRentBy: blank -> owner (never null)",
+  normalizeForRentBy("") === "owner",
+);
+ok("normalizeForRentBy: junk -> owner", normalizeForRentBy("agent") === "owner");
+ok(
+  "normalizeForRentBy: non-string -> owner",
+  normalizeForRentBy(null) === "owner",
+);
+ok("forRentByLabel: owner", forRentByLabel("owner") === "Owner");
+ok(
+  "forRentByLabel: professional",
+  forRentByLabel("professional") === "Real estate professional",
+);
+ok("forRentByLabel: junk -> null", forRentByLabel("x") === null);
 
 console.log(`\nproperty-features: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
