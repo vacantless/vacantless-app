@@ -487,11 +487,11 @@ export default async function PropertyDetailPage({
         : {
             title: "This rental isn't live yet.",
             intro:
-              "Prepare it now; use Publish at the top of the page before you post it.",
+              "Prepare it now; use Set Live at the top of the page before you post it.",
             body:
-              "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - use Publish at the top of the page before you post it anywhere.",
+              "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - use Set Live at the top of the page before you post it anywhere.",
             kitBody:
-              "Use Publish at the top of the page to get your public link and QR code; the channel wording below is ready to prepare now.",
+              "Use Set Live at the top of the page to get your public link and QR code; the channel wording below is ready to prepare now.",
             missingLinkText:
               "Set this rental Live to include your public listing link.",
             copyFallbackCta: "Contact us for availability details.",
@@ -994,7 +994,7 @@ export default async function PropertyDetailPage({
       .filter((check) => check.required && !check.ok)
       .filter((check) => opts?.includeLive || check.key !== "live")
       .map((check) => {
-        if (check.key === "live") return "Publish the Vacantless public page.";
+        if (check.key === "live") return "Set the Vacantless public page Live.";
         if (check.key === "address") return "Add the rental address.";
         if (check.key === "rent") return "Set the monthly rent.";
         if (check.key === "beds_baths") return "Add beds and baths.";
@@ -1642,7 +1642,7 @@ export default async function PropertyDetailPage({
           tone: "warning" as const,
           text: `This rental is a ${propertyStatusLabel(
             p.status,
-          )}. Its public page isn't live yet — anyone you share the link with will hit a "not found" page. Use Publish at the top of the page before sharing.`,
+          )}. Its public page isn't live yet — anyone you share the link with will hit a "not found" page. Use Set Live at the top of the page before sharing.`,
         };
 
   // Lifecycle rail (IA Step 4 slice 1): derive where this unit sits, empty ->
@@ -1794,7 +1794,7 @@ export default async function PropertyDetailPage({
       {searchParams.publish === "needs" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <strong>Almost there.</strong> Add the rent and the bed and bath count
-          on the Unit details tab, then use Publish again to make this rental Live.
+          on the Unit details tab, then use Set Live again.
         </p>
       )}
 
@@ -1855,7 +1855,7 @@ export default async function PropertyDetailPage({
           <p className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
             <strong>This rental is a private draft.</strong> Renters can&apos;t
             see it yet. Add the rent, bed and bath count, and a few photos, then
-            use <strong>Publish</strong> (top of this page) to make its public
+            use <strong>Set Live</strong> (top of this page) to make its public
             listing page live.
           </p>
         )}

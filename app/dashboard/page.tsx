@@ -322,7 +322,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         subtitle="Everything that needs your attention, at a glance."
       />
 
-      <TodayLane items={todayItems} />
+      <TodayLane items={todayItems} firstRun={showFullChecklistOnTop} />
 
       {setupStarted && (
         <LaunchChecklist checklist={checklist} variant="compact" />
@@ -447,25 +447,33 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         </>
       )}
 
-      <SectionHeading>Renters by stage</SectionHeading>
-      <div className="mb-8 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
-        {PIPELINE_STAGES.map((stage) => (
-          <div
-            key={stage}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-center shadow-sm sm:min-w-[5rem]"
-          >
-            <div
-              className="text-xl font-bold tracking-tight"
-              style={{ color: "var(--brand-color)" }}
-            >
-              {counts[stage]}
-            </div>
-            <div className="mt-0.5 text-xs text-gray-500">
-              {statusLabel(stage)}
-            </div>
+      {/* Renters by stage: suppress the whole strip until there's at least one
+          lead. On a zero-data org it was 8 identical "0" tiles - a wall of
+          zeros that says nothing (fresh-org audit P3). It reappears the moment
+          the first inquiry lands. */}
+      {allLeads.length > 0 && (
+        <>
+          <SectionHeading>Renters by stage</SectionHeading>
+          <div className="mb-8 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+            {PIPELINE_STAGES.map((stage) => (
+              <div
+                key={stage}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-center shadow-sm sm:min-w-[5rem]"
+              >
+                <div
+                  className="text-xl font-bold tracking-tight"
+                  style={{ color: "var(--brand-color)" }}
+                >
+                  {counts[stage]}
+                </div>
+                <div className="mt-0.5 text-xs text-gray-500">
+                  {statusLabel(stage)}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       <SectionHeading action={{ href: "/dashboard/showings", label: "View all" }}>
         Upcoming viewings

@@ -100,7 +100,7 @@ export default async function PropertiesPage({
         icon={<Icons.building />}
         eyebrow="Portfolio"
         title="Properties"
-        subtitle="Your landlord clients' properties and their marketing status."
+        subtitle="Your rentals and their marketing status."
       />
 
       {searchParams.added && (
@@ -114,7 +114,7 @@ export default async function PropertiesPage({
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           Couldn&apos;t read any listing details from that text. Paste the
           listing from MLS or realtor.ca (address, rent, beds, baths, remarks),
-          or use &ldquo;Start fresh&rdquo; below.
+          or add it manually with &ldquo;Start fresh.&rdquo;
         </p>
       )}
       {searchParams.import === "failed" && (
@@ -131,41 +131,46 @@ export default async function PropertiesPage({
       {searchParams.import === "aiempty" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           Couldn&apos;t read any listing details from those images. Try a clearer
-          shot, or use &ldquo;Start fresh&rdquo; below.
+          shot, or add it manually with &ldquo;Start fresh.&rdquo;
         </p>
       )}
       {searchParams.import === "aifailed" && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           Reading the images didn&apos;t work just now. Please try again in a
-          moment, or paste the listing text above.
+          moment, or add it manually with &ldquo;Start fresh.&rdquo;
         </p>
       )}
       {searchParams.import === "unavailable" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Image import isn&apos;t available on your plan right now. Paste the
-          listing text above, or use &ldquo;Start fresh&rdquo; below.
+          Image import isn&apos;t available on your plan right now. Add it
+          manually with &ldquo;Start fresh,&rdquo; or import it from MLS or
+          realtor.ca.
         </p>
       )}
 
       {/* Building standard policy entry point (S275 IA Step 3): the org-level
           defaults every unit inherits live here, with the portfolio they
-          govern — relocated from Settings (G6/G7). */}
-      <Link
-        href="/dashboard/properties/standard-policy"
-        className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
-      >
-        <span className="flex items-center gap-2.5 text-gray-700">
-          <Icons.building className="h-4 w-4 text-gray-400" />
-          <span>
-            <span className="font-medium text-gray-900">
-              Building standard policy
-            </span>{" "}
-            — set lease term, A/C, smoking, and on-site management once; every
-            unit inherits it.
+          govern — relocated from Settings (G6/G7). Fresh-org audit P3: only
+          surface it once there's at least one unit to govern; a zero-property
+          org shouldn't be fronted with org-wide config before its first add. */}
+      {rows.length > 0 && (
+        <Link
+          href="/dashboard/properties/standard-policy"
+          className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
+        >
+          <span className="flex items-center gap-2.5 text-gray-700">
+            <Icons.building className="h-4 w-4 text-gray-400" />
+            <span>
+              <span className="font-medium text-gray-900">
+                Building standard policy
+              </span>{" "}
+              — set lease term, A/C, smoking, and on-site management once; every
+              unit inherits it.
+            </span>
           </span>
-        </span>
-        <span className="shrink-0 font-medium text-brand">Manage →</span>
-      </Link>
+          <span className="shrink-0 font-medium text-brand">Manage →</span>
+        </Link>
+      )}
 
       {rows.length > 0 ? (
         <ul className="mb-8 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -282,62 +287,16 @@ export default async function PropertiesPage({
       <div id="add-rental" className="scroll-mt-4" />
       <SectionHeading>Add a property</SectionHeading>
 
-      {/* Realtor onboarding wedge (item M): paste an existing MLS / realtor.ca
-          listing to prefill a draft, so a realtor who already has the unit on
-          MLS doesn't re-key it. The "Start fresh" form below stays a first-class
-          path — MLS is never the only way in. */}
-      <form
-        key={`mls-import-${searchParams.import ?? "new"}`}
-        action={importPropertyFromMls}
-        className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-      >
-        <label
-          htmlFor="mls_text"
-          className="mb-1 block text-sm font-medium text-gray-800"
-        >
-          Have it on MLS or realtor.ca? Drop the data sheet or paste it to prefill
-        </label>
-        <p className="mb-3 text-xs text-gray-500">
-          Drop the realtor data-sheet PDF you downloaded or emailed yourself, or
-          paste the listing text (address, rent, beds/baths, square footage,
-          remarks) — the whole realtor.ca page or a full MLS agent data sheet
-          both work. We&apos;ll create a Draft with the details filled in for you
-          to review; nothing goes public until you set it Live. Photos don&apos;t
-          come across, so you&apos;ll add those after. Your own listing only; we
-          don&apos;t pull from MLS.
-        </p>
-        <MlsPdfImport
-          placeholder={
-            "Paste your MLS or realtor.ca listing here, e.g.\nAddress: 123 Main St, Unit 4\nList Price: $1,950/Monthly\nBedrooms: 2\nBathrooms: 1\nRemarks: Bright two-bedroom with in-suite laundry..."
-          }
-        />
-      </form>
-
-      {/* AI image import (Feature B Slice 2) - only for a listing that exists as
-          a picture. Rendered only when the flag + entitlement are on (DARK by
-          default); the action re-checks the gate. */}
-      {aiImageImportEnabled && (
-        <form
-          key={`img-import-${searchParams.import ?? "new"}`}
-          action={importListingFromImages}
-          encType="multipart/form-data"
-          className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-        >
-          <p className="mb-1 block text-sm font-medium text-gray-800">
-            Only have a picture of the listing? Upload it to prefill
-          </p>
-          <p className="mb-3 text-xs text-gray-500">
-            A screenshot of a Facebook or Kijiji post, a photo of a flyer, or a
-            saved listing image, and we read the details into a Draft for you to
-            review. Photos don&apos;t come across, so you&apos;ll add those after.
-            Your own listing only.
-          </p>
-          <ListingImageImport />
-        </form>
-      )}
-
-      <p className="mb-4 text-center text-xs font-medium uppercase tracking-wide text-gray-400">
-        or start fresh
+      {/* Fresh-org audit #3: lead with the simple, persona-neutral path. A small
+          landlord with no MLS sheet enters an address and goes; the realtor
+          MLS / realtor.ca import is demoted to the collapsible below, one click
+          away, never the only or the first way in. */}
+      <p className="mb-1 text-sm font-medium text-gray-800">
+        Start fresh: enter the details yourself
+      </p>
+      <p className="mb-3 text-xs text-gray-500">
+        Just an address creates a Draft; add rent, beds, baths, and photos now or
+        later. Nothing goes public until you set it Live.
       </p>
 
       <form
@@ -346,7 +305,7 @@ export default async function PropertiesPage({
         // the typed values — S226 QA-audit form-reset fix).
         key={`add-rental-${searchParams.added ?? "new"}`}
         action={addProperty}
-        className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
       >
         <div className="min-w-[16rem] flex-1">
           <label htmlFor="add_address" className="mb-1 block text-xs font-medium text-gray-600">
@@ -424,6 +383,71 @@ export default async function PropertiesPage({
           Add property
         </button>
       </form>
+
+      {/* Realtor import wedge (item M), demoted to a secondary collapsible
+          (fresh-org audit #3): a realtor who already has the unit on MLS or
+          realtor.ca prefills a Draft here instead of re-keying it, without the
+          import box fronting the page for a landlord who has no data sheet.
+          Opens automatically right after an import attempt so the banner above
+          lines up with the box the operator just used. */}
+      <details
+        open={typeof searchParams.import === "string"}
+        className="mb-4 rounded-2xl border border-gray-200 bg-white shadow-sm"
+      >
+        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-gray-800 [&::-webkit-details-marker]:hidden">
+          Already have it on MLS or realtor.ca? Import it to prefill
+        </summary>
+        <div className="border-t border-gray-100 p-5 pt-4">
+          <form
+            key={`mls-import-${searchParams.import ?? "new"}`}
+            action={importPropertyFromMls}
+          >
+            <label
+              htmlFor="mls_text"
+              className="mb-1 block text-sm font-medium text-gray-800"
+            >
+              Drop the data sheet or paste the listing to prefill
+            </label>
+            <p className="mb-3 text-xs text-gray-500">
+              Drop the realtor data-sheet PDF you downloaded or emailed yourself,
+              or paste the listing text (address, rent, beds/baths, square
+              footage, remarks) — the whole realtor.ca page or a full MLS agent
+              data sheet both work. We&apos;ll create a Draft with the details
+              filled in for you to review; nothing goes public until you set it
+              Live. Photos don&apos;t come across, so you&apos;ll add those after.
+              Your own listing only; we don&apos;t pull from MLS.
+            </p>
+            <MlsPdfImport
+              placeholder={
+                "Paste your MLS or realtor.ca listing here, e.g.\nAddress: 123 Main St, Unit 4\nList Price: $1,950/Monthly\nBedrooms: 2\nBathrooms: 1\nRemarks: Bright two-bedroom with in-suite laundry..."
+              }
+            />
+          </form>
+
+          {/* AI image import (Feature B Slice 2) — only for a listing that
+              exists as a picture. Rendered only when the flag + entitlement are
+              on (DARK by default); the action re-checks the gate. */}
+          {aiImageImportEnabled && (
+            <form
+              key={`img-import-${searchParams.import ?? "new"}`}
+              action={importListingFromImages}
+              encType="multipart/form-data"
+              className="mt-5 border-t border-gray-100 pt-5"
+            >
+              <p className="mb-1 block text-sm font-medium text-gray-800">
+                Only have a picture of the listing? Upload it to prefill
+              </p>
+              <p className="mb-3 text-xs text-gray-500">
+                A screenshot of a Facebook or Kijiji post, a photo of a flyer, or
+                a saved listing image, and we read the details into a Draft for
+                you to review. Photos don&apos;t come across, so you&apos;ll add
+                those after. Your own listing only.
+              </p>
+              <ListingImageImport />
+            </form>
+          )}
+        </div>
+      </details>
     </div>
   );
 }

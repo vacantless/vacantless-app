@@ -165,6 +165,15 @@ export default async function LeasingHubPage() {
 
   const needsYou = newCount + unconfirmedCount;
 
+  // Day-one Leasing hub: the amber Vacancy-ROI panel is the loudest element on
+  // the page, but with no available unit and no leased outcome it's a wall of
+  // zeros ("0 / Unknown / Not enough history yet"). Show the full panel only
+  // once there's real signal; otherwise a slim, quiet hint that keeps it
+  // discoverable (fresh-org audit P3).
+  const hasVacancyData =
+    vacancyPortfolio.vacantUnits > 0 ||
+    vacancyPortfolio.timeToLease.sampleSize > 0;
+
   return (
     <div>
       <BrandBanner
@@ -180,7 +189,21 @@ export default async function LeasingHubPage() {
         icon={<Icons.key className="h-6 w-6" />}
       />
 
-      <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+      {!hasVacancyData && (
+        <div className="mt-6 flex items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-100">
+            <Icons.chart className="h-4 w-4" />
+          </span>
+          <p className="text-sm text-gray-600">
+            <span className="font-medium text-gray-900">Vacancy ROI</span> tracks
+            the rent lost while a unit sits empty. It fills in once you mark a
+            rental available.
+          </p>
+        </div>
+      )}
+
+      {hasVacancyData && (
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
         <div className="mb-3 flex items-center gap-2.5">
           <IconTile>
             <Icons.chart className="h-5 w-5" />
@@ -243,6 +266,7 @@ export default async function LeasingHubPage() {
           </div>
         </div>
       </div>
+      )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {sections.map((s) => {

@@ -625,7 +625,7 @@ function externalBlockers(context: PublishChannelContext): string[] {
   const blockers = [...context.shareBlockers];
   if (!context.linkIsLive) {
     blockers.unshift(
-      "Publish the Vacantless public page first so the tracked inquiry link works.",
+      "Set the Vacantless public page Live first so the tracked inquiry link works.",
     );
   }
   return uniqueStrings(blockers);

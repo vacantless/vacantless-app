@@ -17,7 +17,16 @@ const ICON: Record<string, React.ReactNode> = {
   "work-orders": <Icons.bolt className="h-5 w-5" />,
 };
 
-export function TodayLane({ items }: { items: TodayItem[] }) {
+export function TodayLane({
+  items,
+  firstRun = false,
+}: {
+  items: TodayItem[];
+  // Brand-new org (nothing set up yet): the "Get set up" card above already
+  // owns the day-one job, so a cheerful green "all caught up" here reads as
+  // dissonant. Point back to setup instead until they have something live.
+  firstRun?: boolean;
+}) {
   return (
     <section className="mb-8">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
@@ -25,18 +34,33 @@ export function TodayLane({ items }: { items: TodayItem[] }) {
       </h2>
 
       {items.length === 0 ? (
-        <div className="flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600 ring-1 ring-inset ring-green-100">
-            <Icons.check className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <p className="font-semibold text-gray-900">You&apos;re all caught up</p>
-            <p className="mt-0.5 text-sm text-gray-500">
-              Nothing needs you right now. New inquiries and today&apos;s viewings
-              will show up here.
-            </p>
+        firstRun ? (
+          <div className="flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/[0.06] text-brand ring-1 ring-inset ring-brand/10">
+              <Icons.bolt className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-900">Nothing here yet</p>
+              <p className="mt-0.5 text-sm text-gray-500">
+                Finish the setup steps above to go live. New inquiries and
+                today&apos;s viewings will show up here once renters land.
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600 ring-1 ring-inset ring-green-100">
+              <Icons.check className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-900">You&apos;re all caught up</p>
+              <p className="mt-0.5 text-sm text-gray-500">
+                Nothing needs you right now. New inquiries and today&apos;s viewings
+                will show up here.
+              </p>
+            </div>
+          </div>
+        )
       ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {items.map((item) => {

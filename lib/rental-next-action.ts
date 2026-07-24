@@ -222,7 +222,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         });
       return {
         step,
-        title: "Publish this property",
+        title: "Set this property Live",
         blurb:
           "Your listing is written from these details and your building defaults. Finish the steps below to take it live.",
         derived,

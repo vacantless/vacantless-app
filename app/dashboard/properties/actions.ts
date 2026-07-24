@@ -1134,7 +1134,7 @@ type AutoCopyPropertyRow = PublishPropertyRow & {
 };
 
 const REQUIRED_SHARE_BLOCKER_LABELS: Record<string, string> = {
-  live: "Publish the Vacantless public page.",
+  live: "Set the Vacantless public page Live.",
   address: "Add the rental address.",
   rent: "Set the monthly rent.",
   beds_baths: "Add beds and baths.",

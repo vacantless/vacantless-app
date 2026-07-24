@@ -39,7 +39,7 @@ export default function LoginPage() {
     <AuthShell
       eyebrow="Welcome back"
       title="Log in to Vacantless"
-      subtitle="Pick up right where you left off with your renters and viewings."
+      subtitle="Log back in to manage your rentals, inquiries, and viewings."
       footer={
         <>
           No account?{" "}

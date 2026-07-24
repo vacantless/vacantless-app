@@ -270,7 +270,7 @@ export function buildCopilotScript(
   const blockers: string[] = [];
   if (!input.publicPageLive || !input.trackedUrl) {
     blockers.push(
-      "Publish the Vacantless public page first so the tracked inquiry link works.",
+      "Set the Vacantless public page Live first so the tracked inquiry link works.",
     );
   }
 
