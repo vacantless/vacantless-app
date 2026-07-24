@@ -304,9 +304,11 @@ export function InquiryForm({
             <legend className="text-sm font-semibold text-gray-800">
               Choose a viewing time
             </legend>
-            <p className="mb-1 mt-0.5 text-xs text-gray-400">
-              Times shown in {timezone?.replace(/_/g, " ")}.
-            </p>
+            {timezone && (
+              <p className="mb-1 mt-0.5 text-xs text-gray-400">
+                Times shown in {timezone.replace(/_/g, " ")}.
+              </p>
+            )}
             {hasClustered && (
               <p className="mb-2 text-xs text-gray-500">
                 These times group your visit with other viewings at this

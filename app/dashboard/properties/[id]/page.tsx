@@ -1987,11 +1987,11 @@ export default async function PropertyDetailPage({
                 hunt for the Status dropdown. Shown only when the rental isn't
                 already public and isn't leased. */}
             {!publicPageIsBookable && normalizedStatus !== "leased" && (
-              <form action={publishProperty}>
+              <form action={publishProperty} id="publish-action">
                 <input type="hidden" name="id" value={p.id} />
                 <button
                   type="submit"
-                  className={SECONDARY_ACTION_CLASS}
+                  className={PRIMARY_ACTION_CLASS}
                 >
                   {normalizedStatus === "paused"
                     ? "Set Live again"

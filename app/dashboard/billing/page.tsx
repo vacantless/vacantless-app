@@ -27,6 +27,7 @@ export default async function BillingPage({
     error?: string;
     pilot?: string;
     deposit?: string;
+    plan?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -59,6 +60,17 @@ export default async function BillingPage({
   const visibleTierKeys = TIER_KEYS.filter(
     (key) => key !== "managed" || conciergeDeskEnabled,
   );
+  // Honor the plan the visitor picked on the pricing page (?plan=growth|premium|
+  // managed, carried through signup -> onboarding -> here). We never silently
+  // drop that intent: acknowledge it and highlight the tier, while keeping the
+  // free pilot as the on-ramp. Only a visible paid tier counts (ignore
+  // free/unknown so a bad param can't produce an empty acknowledgment).
+  const planIntent =
+    searchParams.plan &&
+    searchParams.plan !== "free" &&
+    visibleTierKeys.includes(searchParams.plan as (typeof TIER_KEYS)[number])
+      ? (searchParams.plan as (typeof TIER_KEYS)[number])
+      : null;
 
   const errorCopy: Record<string, string> = {
     not_configured:
@@ -177,6 +189,41 @@ export default async function BillingPage({
           </div>
         )}
       </div>
+
+      {/* Plan-intent acknowledgment (S555): the visitor clicked "Choose {tier}"
+          on pricing; honor it instead of dropping it. Free-first framing keeps
+          the guided pilot as the on-ramp. Only shown for a fresh org still
+          deciding (showPilotOffer). */}
+      {planIntent && showPilotOffer && (
+        <div className="mt-4 rounded-lg border border-brand/30 bg-brand/[0.04] px-4 py-3 text-sm text-gray-700">
+          <p>
+            <strong className="text-gray-900">
+              You picked {TIERS[planIntent].name} (
+              {formatPlanPrice(TIERS[planIntent].priceCents)}).
+            </strong>{" "}
+            {configured ? (
+              <>
+                Start with the guided 30-day pilot below to set up your first
+                rental at no cost, or{" "}
+                <a
+                  href={`#plan-${planIntent}`}
+                  className="font-medium text-brand underline"
+                >
+                  subscribe to {TIERS[planIntent].name} now
+                </a>{" "}
+                to go live right away.
+              </>
+            ) : (
+              <>
+                Card subscriptions aren&apos;t switched on yet, so start with the
+                guided 30-day pilot below - you get full access to every{" "}
+                {TIERS[planIntent].name} feature, and can subscribe to{" "}
+                {TIERS[planIntent].name} once billing is live.
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       {!configured && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -346,6 +393,7 @@ export default async function BillingPage({
         {visibleTierKeys.map((key) => {
           const tier = TIERS[key];
           const isFree = tier.priceCents === 0;
+          const isPicked = key === planIntent;
           const tierConfigured =
             configured &&
             (key !== "managed" || Boolean(process.env.STRIPE_PRICE_MANAGED));
@@ -359,15 +407,20 @@ export default async function BillingPage({
           return (
             <div
               key={key}
+              id={`plan-${key}`}
               className={`flex flex-col rounded-2xl border bg-white p-6 shadow-sm ${
-                tier.highlight ? "border-brand ring-1 ring-brand" : "border-gray-200"
+                isPicked
+                  ? "border-brand ring-2 ring-brand"
+                  : tier.highlight
+                    ? "border-brand ring-1 ring-brand"
+                    : "border-gray-200"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-lg font-bold text-gray-900">{tier.name}</h3>
-                {tier.highlight && (
+                {(isPicked || tier.highlight) && (
                   <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand">
-                    Most popular
+                    {isPicked ? "Your pick" : "Most popular"}
                   </span>
                 )}
               </div>

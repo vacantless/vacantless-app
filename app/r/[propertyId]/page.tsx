@@ -109,7 +109,7 @@ export async function generateMetadata({
   const title = buildListingMetaTitle(listing);
   const description = buildListingMetaDescription(listing);
   const coverPhoto = Array.isArray(listing.photos)
-    ? listing.photos.find((photo) => photo.trim())
+    ? listing.photos.find((photo) => photo && photo.trim())
     : null;
   const metadata: Metadata = {
     title,
@@ -513,9 +513,11 @@ export default async function PublicListingPage({
                     <legend className="px-1 text-sm font-medium text-gray-700">
                       Choose another viewing time
                     </legend>
-                    <p className="mb-3 mt-1 text-xs text-gray-400">
-                      Times shown in {av?.timezone?.replace(/_/g, " ")}.
-                    </p>
+                    {av?.timezone && (
+                      <p className="mb-3 mt-1 text-xs text-gray-400">
+                        Times shown in {av.timezone.replace(/_/g, " ")}.
+                      </p>
+                    )}
                     <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
                       {days.map((day) => (
                         <div key={day.dayKey}>

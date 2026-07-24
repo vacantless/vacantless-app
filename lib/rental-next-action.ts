@@ -230,7 +230,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         cta:
           input.photoCount === 0
             ? { label: "Add photos", href: `${self}#property-photos` }
-            : { label: "Set it Live", href: `${self}#rental-details` },
+            : { label: "Set it Live", href: `${self}#publish-action` },
       };
     }
 
