@@ -15,6 +15,12 @@ import {
   type ParsedPortalLead,
 } from "@/lib/portal-lead-email";
 import { sourceLabelForPost } from "@/lib/listing-distribution";
+import { notifyOperatorsOfNewLeadById } from "@/lib/notify-new-lead-server";
+import {
+  isTrustedPortalSender,
+  isKnownPortalSender,
+  parseInboundAuthResults,
+} from "@/lib/portal-senders";
 
 // ============================================================================
 // Inbound PORTAL LEAD webhook (S567). The last link in the syndication chain.
@@ -271,7 +277,41 @@ export async function POST(req: NextRequest) {
   if (isAutoReplyOrLoop(loopHeaders)) {
     return NextResponse.json({ ok: true, handled: "auto_reply" });
   }
-  if (!isAllowedSenderEmail(from, allowlist)) {
+  // Sender trust, two independent grants (S568 lane B). Either the org verified
+  // this sender itself (the "forward from your own email" confirm flow), OR it is
+  // a globally-trusted portal system address (contact@rentals.ca, …) whose
+  // inbound auth verdict is not a definitive failure. The portal grant is what
+  // lets a brand-new org receive portal leads with no per-org sender rows and no
+  // hand SQL. The org's ingest token is still the boundary; the cross-org ad
+  // guard below is untouched.
+  // Sender trust (S568 lane B). A KNOWN portal system address is governed ONLY by
+  // the aligned auth guard — never by a legacy per-org allow-list row — so a
+  // hand-added contact@rentals.ca can never bypass authentication (Codex P1a).
+  // Any other sender uses the org's own verified-sender allow-list (confirm flow).
+  const knownPortal = isKnownPortalSender(from);
+  if (knownPortal) {
+    if (!isTrustedPortalSender(from, headers)) {
+      // Enforcement is gated. Until a first real delivery confirms Postmark's auth
+      // header shape, run in OBSERVE mode (accept, but log the parsed verdict — not
+      // the renter's details) so the first real portal lead is never dropped blind.
+      // Flip PORTAL_AUTH_ENFORCE=true to fail-closed once the header is confirmed.
+      const enforce = process.env.PORTAL_AUTH_ENFORCE === "true";
+      const v = parseInboundAuthResults(headers);
+      console.warn("inbound/lead: portal sender failed aligned auth guard", {
+        orgResolved: true,
+        enforce,
+        dkim: v.dkim,
+        dkimDomain: v.dkimDomain,
+        spf: v.spf,
+        spfDomain: v.spfDomain,
+        dmarc: v.dmarc,
+      });
+      if (enforce) {
+        return NextResponse.json({ ok: true, handled: "portal_sender_auth_unverified" });
+      }
+      // observe mode: fall through and file the lead.
+    }
+  } else if (!isAllowedSenderEmail(from, allowlist)) {
     console.warn("inbound/lead: sender not allowed", { orgResolved: true });
     return NextResponse.json({ ok: true, handled: "sender_not_allowed" });
   }
@@ -351,6 +391,15 @@ export async function POST(req: NextRequest) {
         rpcData && typeof rpcData === "object"
           ? ((rpcData as Record<string, unknown>).lead_id as string | undefined)
           : undefined;
+      // Tell the leasing team — the SAME alert a public /r lead fires, routed
+      // through the same per-org recipients (S568). Best-effort, never throws.
+      if (leadId) {
+        await notifyOperatorsOfNewLeadById(admin, {
+          orgId,
+          leadId,
+          propertyAddressFallback: lead.subjectAddress,
+        });
+      }
       return NextResponse.json({
         ok: true,
         handled: "lead_created",
@@ -396,6 +445,16 @@ export async function POST(req: NextRequest) {
     console.error("inbound/lead: insert failed", { message: insertError?.message });
     return new NextResponse("Storage error", { status: 503 });
   }
+
+  // Filed via direct insert — either the RPC refused (unit leased since the ad
+  // went up) or the lead matched no unit and was filed unattributed. Notify
+  // anyway: an unattributed lead most needs a human to claim and assign it.
+  // Best-effort, never throws.
+  await notifyOperatorsOfNewLeadById(admin, {
+    orgId,
+    leadId: inserted.id,
+    propertyAddressFallback: lead.subjectAddress,
+  });
 
   return NextResponse.json({
     ok: true,
