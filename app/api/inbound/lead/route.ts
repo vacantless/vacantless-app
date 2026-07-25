@@ -69,7 +69,7 @@ function normalizeForCompare(value: string | null | undefined): string {
 type ResolvedTarget = {
   propertyId: string | null;
   listingPostId: string | null;
-  how: "ad_url" | "ad_id" | "subject_address" | "unresolved";
+  how: "ad_url" | "ad_id" | "subject_address" | "unresolved" | "other_org";
 };
 
 /**
@@ -139,6 +139,26 @@ async function resolveTarget(
       if (rows.length === 1) {
         return { propertyId: rows[0].id, listingPostId: null, how: "subject_address" };
       }
+    }
+  }
+
+  // CROSS-ORG GUARD. One portal account can hold ads for several orgs — Noam's
+  // single Verified rentals.ca account carries Agile's Windsor listings AND 50
+  // Glenrose, which is Abbas's building. So one operator inbox receives lead mail
+  // for MORE THAN ONE org, and a blanket forward from it would file another org's
+  // renter under the forwarding org. That is the s566 contact leak running in the
+  // opposite direction, and it would be just as invisible.
+  //
+  // So before falling back to "file it unattributed", ask whether this ad is
+  // positively someone else's. If it is, refuse: a lead filed under the wrong
+  // company is worse than one that bounced, because nobody goes looking for it.
+  if (lead.adUrl || lead.adId) {
+    let q = admin.from("listing_posts").select("organization_id").neq("status", "removed").limit(1);
+    q = lead.adUrl ? q.eq("url", lead.adUrl) : q.ilike("notes", `%listing ${lead.adId}%`);
+    const { data: elsewhere } = await q.maybeSingle();
+    const ownerOrg = (elsewhere?.organization_id as string | undefined) ?? null;
+    if (ownerOrg && ownerOrg !== orgId) {
+      return { propertyId: null, listingPostId: null, how: "other_org" };
     }
   }
 
@@ -273,6 +293,14 @@ export async function POST(req: NextRequest) {
 
   // ---- Resolve the unit -----------------------------------------------------
   const target = await resolveTarget(admin, orgId, lead);
+  if (target.how === "other_org") {
+    // Logged, not filed. Nothing about the other org goes in the response.
+    console.warn("inbound/lead: ad belongs to a different org, refusing", {
+      forwardedToOrg: orgId,
+      adId: lead.adId,
+    });
+    return NextResponse.json({ ok: true, handled: "cross_org_refused" });
+  }
   const notes = portalLeadNote(lead);
 
   // ---- Dedupe ---------------------------------------------------------------
