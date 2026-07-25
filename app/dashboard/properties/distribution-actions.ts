@@ -224,6 +224,78 @@ async function userId(supabase: SupabaseClient): Promise<string | null> {
   return user?.id ?? null;
 }
 
+// S570: the operator authorizes autopilot to post a prepared concierge item
+// from their own Distribute tab. This sets only the approval signal; the
+// standalone worker's own gates still decide whether anything posts.
+export async function authorizeAutopilotSubmit(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  if (!itemId) {
+    redirect(
+      propertyId ? `/dashboard/properties/${propertyId}` : "/dashboard/properties",
+    );
+  }
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const uid = await userId(supabase);
+  const now = new Date().toISOString();
+
+  // Approve exactly once, only while the item is still waiting for the operator.
+  const { data: approved } = await supabase
+    .from("distribution_run_items")
+    .update({
+      operator_submit_approved_at: now,
+      operator_submit_approved_by: uid,
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("mode", "concierge")
+    .eq("publish_status", "needs_operator")
+    .is("operator_submit_approved_at", null)
+    .select("id, run_id, organization_id, channel, attempt_count")
+    .maybeSingle();
+  if (!approved) {
+    if (propertyId) backTo(propertyId, "autopilot_stale");
+    redirect("/dashboard/properties");
+  }
+
+  const priorAttempts = (approved.attempt_count as number | undefined) ?? 0;
+  const attempt = buildAttemptRecord({
+    organizationId: approved.organization_id as string,
+    runId: approved.run_id as string,
+    runItemId: itemId,
+    channel: approved.channel as string,
+    transport: "concierge",
+    currentAttemptCount: priorAttempts,
+    actorType: "operator",
+    actorUserId: uid,
+    statusBefore: "needs_operator",
+    statusAfter: "needs_operator",
+    proofId: null,
+    metadata: { source: "operator_authorized_autopilot" },
+  });
+  await supabase.from("distribution_publish_attempts").insert({
+    organization_id: attempt.organization_id,
+    run_id: attempt.run_id,
+    run_item_id: attempt.run_item_id,
+    channel: attempt.channel,
+    transport: attempt.transport,
+    attempt_no: attempt.attempt_no,
+    actor_type: attempt.actor_type,
+    actor_user_id: attempt.actor_user_id,
+    status_before: attempt.status_before,
+    status_after: attempt.status_after,
+    proof_id: attempt.proof_id,
+    metadata: attempt.metadata,
+  });
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?autopilot=authorized#distribute-header`);
+}
+
 // ---------------------------------------------------------------------------
 // verifyPublicPage — durable proof that /r/[propertyId] is live + carries the
 // core rent/address/booking signals. Reuses buildShareReadiness (the same gate

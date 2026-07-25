@@ -1265,6 +1265,7 @@ export default async function PropertyDetailPage({
     verification_status: string | null;
     proof_url: string | null;
     concierge_requested_at: string | null;
+    operator_submit_approved_at: string | null;
     stale_after: string | null;
   };
   let runItemRows: RunItemRow[] = [];
@@ -1272,12 +1273,20 @@ export default async function PropertyDetailPage({
     const { data: ri } = await supabase
       .from("distribution_run_items")
       .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, stale_after",
+        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after",
       )
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
     runItemRows = (ri ?? []) as RunItemRow[];
   }
+  const { data: autoAcctRows } = await supabase
+    .from("distribution_channel_accounts")
+    .select("channel")
+    .eq("organization_id", propertyOrgId)
+    .eq("automation_authorized", true);
+  const autopilotChannels = new Set(
+    ((autoAcctRows ?? []) as { channel: string }[]).map((r) => r.channel),
+  );
   const channelLabelByKey = new Map<string, string>(
     DISTRIBUTION_CHANNELS.map((c) => [c.key, c.label]),
   );
@@ -1419,6 +1428,9 @@ export default async function PropertyDetailPage({
         guardrailCount: guardrailsForPortal(r.channel).length,
       }),
       canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
+      canAutopilot:
+        autopilotChannels.has(r.channel) && publishStatus === "needs_operator",
+      autopilotApproved: r.operator_submit_approved_at != null,
       copilotScript,
       // S543: explicit item freshness state wins; only older rows without it
       // fall back to the where-posted tracker's coarse posted_on age.

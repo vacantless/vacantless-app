@@ -17,6 +17,7 @@ import {
   verifyPublicPage,
   verifyOrgFeedInclusion,
   recordItemProof,
+  authorizeAutopilotSubmit,
 } from "../distribution-actions";
 import {
   verificationResultLabel,
@@ -60,6 +61,10 @@ export type RunItemView = {
   // S474b: this human-action item can be handed to the Vacantless publishing
   // desk ("Publish for me"). Computed with the operator's plan entitlement.
   canConcierge: boolean;
+  // S570: org-owner approval for a prepared autopilot item; independent from
+  // canConcierge because concierge-mode items cannot request concierge again.
+  canAutopilot?: boolean;
+  autopilotApproved?: boolean;
   // S480: honest transport + durable verification state + latest proof link.
   transport: string | null;
   verificationStatus: string | null;
@@ -620,6 +625,29 @@ export function LaunchRunPanel({
                   real live-ad proof before it is marked Live.
                 </span>
               </form>
+            )}
+            {item.canAutopilot && !item.autopilotApproved && (
+              <form action={authorizeAutopilotSubmit} className="mb-3">
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="item_id" value={item.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
+                >
+                  Authorize autopilot to post
+                </button>
+                <span className="ml-2 text-[11px] text-gray-500">
+                  Vacantless posts this prepared ad to {item.channelLabel}{" "}
+                  automatically and reports back. You approve once; a card is
+                  never entered and only the free plan is used.
+                </span>
+              </form>
+            )}
+            {item.canAutopilot && item.autopilotApproved && (
+              <p className="mb-3 text-xs font-medium text-brand">
+                Autopilot authorized — the worker will post {item.channelLabel}{" "}
+                and report back.
+              </p>
             )}
 
             {(item.channel === "vacantless" || item.channel === "org_feed") && (
