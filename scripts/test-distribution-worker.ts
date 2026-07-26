@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 import {
   WORKER_ELIGIBLE_STATUSES,
   WORKER_GATE_STATUSES,
+  TAKEDOWN_TRANSPORT,
   isWorkerGate,
   workerJobEligible,
   selectGate,
@@ -26,6 +27,7 @@ function ok(name: string, cond: boolean) {
 // --- eligibility -----------------------------------------------------------
 const base = {
   mode: "concierge" as const,
+  transport: "concierge",
   publishStatus: "queued" as const,
   automationAuthorized: true,
   claimedBy: null as string | null,
@@ -51,6 +53,10 @@ ok(
 ok(
   "non-concierge mode is NOT eligible",
   !workerJobEligible({ ...base, mode: "browser_copilot" as never }),
+);
+ok(
+  "take-down transport is NOT eligible for the publish worker",
+  !workerJobEligible({ ...base, transport: TAKEDOWN_TRANSPORT }),
 );
 for (const s of ["needs_operator", "needs_login", "needs_payment", "submitting", "live", "blocked"]) {
   ok(
@@ -193,6 +199,14 @@ ok("prompt omits unsupplied facts (no unit type line)", !/Unit type:/i.test(prom
   ok("route never writes external_url", !/external_url:/.test(routeSrc));
   ok("route is dark-gated by DISTRIBUTION_WORKER_ENABLED", routeSrc.includes("DISTRIBUTION_WORKER_ENABLED"));
   ok("route gates on automation_authorized", routeSrc.includes("automation_authorized"));
+  ok(
+    "route excludes take-down transport in the candidate query",
+    routeSrc.includes("transport.is.null,transport.neq.takedown"),
+  );
+  ok(
+    "route threads candidate transport into workerJobEligible",
+    routeSrc.includes("transport: c.transport"),
+  );
   ok("route records actorType agent", routeSrc.includes('actorType: "agent"'));
   ok("route calls assertWorkerNeverTerminal before the gate write", routeSrc.includes("assertWorkerNeverTerminal"));
   ok("route treats attempt insert failure as a safe skip", routeSrc.includes("attempt_log_failed"));

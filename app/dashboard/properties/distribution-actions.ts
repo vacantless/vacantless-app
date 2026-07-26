@@ -654,6 +654,13 @@ export async function disconnectFacebookPage(formData: FormData) {
     channel: "facebook_feed",
     admin,
   });
+  if (process.env.IG_CHANNEL_ENABLED === "true") {
+    await deleteChannelSession({
+      organizationId: orgId,
+      channel: "instagram",
+      admin,
+    });
+  }
 
   const nowISO = new Date().toISOString();
   await admin.from("distribution_channel_accounts").upsert(
@@ -678,6 +685,30 @@ export async function disconnectFacebookPage(formData: FormData) {
     },
     { onConflict: "organization_id,channel" },
   );
+  if (process.env.IG_CHANNEL_ENABLED === "true") {
+    await admin.from("distribution_channel_accounts").upsert(
+      {
+        organization_id: orgId,
+        channel: "instagram",
+        transport: "automatic",
+        account_status: "paused",
+        external_account_label: null,
+        requires_login: false,
+        requires_payment: false,
+        supports_feed: false,
+        supports_copilot: false,
+        supports_concierge: true,
+        supports_live_verification: true,
+        posting_policy: "human_confirmed",
+        automation_authorized: false,
+        automation_authorized_at: null,
+        automation_authorized_by: null,
+        last_setup_checked_at: nowISO,
+        updated_at: nowISO,
+      },
+      { onConflict: "organization_id,channel" },
+    );
+  }
 
   if (propertyId) {
     revalidatePath(`/dashboard/properties/${propertyId}`);

@@ -5,7 +5,10 @@ import { Buffer } from "node:buffer";
 import { encryptSessionState } from "../lib/distribution-session-crypto";
 import {
   createOAuthState,
+  facebookPageScopes,
   facebookReturnPath,
+  instagramAccountLabel,
+  normalizeInstagramBusinessAccount,
   signCookiePayload,
   verifyCookiePayload,
   verifyOAuthState,
@@ -59,6 +62,26 @@ ok(
 ok(
   "error return path carries reason",
   facebookReturnPath(null, "error", "state") === "/dashboard/properties?fb=error&reason=state",
+);
+ok(
+  "facebook scopes stay FB-only by default",
+  !facebookPageScopes({ instagramEnabled: false }).includes("instagram_basic"),
+);
+ok(
+  "instagram scopes are opt-in",
+  facebookPageScopes({ instagramEnabled: true }).includes("instagram_content_publish"),
+);
+ok(
+  "normalizes linked Instagram account",
+  normalizeInstagramBusinessAccount({ id: " ig1 ", username: "@vacantless" })?.username === "vacantless",
+);
+ok(
+  "invalid Instagram account is null",
+  normalizeInstagramBusinessAccount({ username: "vacantless" }) === null,
+);
+ok(
+  "instagram account label prefers username",
+  instagramAccountLabel({ id: "ig1", username: "vacantless" }) === "@vacantless",
 );
 
 console.log(`facebook-page-oauth: ${passed} passed, ${failed} failed`);

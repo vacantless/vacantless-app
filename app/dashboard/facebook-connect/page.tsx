@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { requireCapability } from "@/lib/membership";
 import {
   FB_PAGES_COOKIE,
-  FACEBOOK_PAGE_SCOPES,
+  facebookPageScopes,
   facebookReturnPath,
   finalizeFacebookPageConnection,
+  igChannelEnabled,
+  instagramAccountLabel,
   verifyPagesCookie,
 } from "@/lib/facebook-page-oauth";
 
@@ -27,7 +29,7 @@ async function selectFacebookPage(formData: FormData) {
       propertyId: payload.propertyId,
       page,
       connectedBy: payload.connectedBy,
-      scopes: FACEBOOK_PAGE_SCOPES,
+      scopes: facebookPageScopes(),
     });
   } catch {
     redirect(facebookReturnPath(payload.propertyId, "error", "store"));
@@ -40,6 +42,7 @@ export default async function FacebookConnectPage() {
   await requireCapability("manage_properties", FORBIDDEN);
   const payload = verifyPagesCookie(cookies().get(FB_PAGES_COOKIE)?.value);
   if (!payload) redirect("/dashboard/properties?fb=error&reason=state");
+  const instagramEnabled = igChannelEnabled();
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -67,6 +70,13 @@ export default async function FacebookConnectPage() {
                 {page.name}
               </p>
               <p className="truncate text-xs text-gray-500">Page ID {page.id}</p>
+              {instagramEnabled && (
+                <p className="truncate text-xs text-gray-500">
+                  {page.instagram_business_account
+                    ? `Instagram ${instagramAccountLabel(page.instagram_business_account)} linked`
+                    : "No linked Instagram Business account"}
+                </p>
+              )}
             </div>
             <button
               type="submit"

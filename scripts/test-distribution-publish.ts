@@ -126,8 +126,16 @@ ok("mode label feed partner is candidate", publishModeLabel("feed_partner") === 
 }
 {
   const plan = preparePublishChannel("instagram", base);
-  ok("instagram needs login", plan.status === "needs_login");
-  ok("instagram mode browser co-pilot", plan.mode === "browser_copilot");
+  ok("instagram needs linked account before Graph posting", plan.status === "needs_login");
+  ok("instagram mode automatic", plan.mode === "automatic");
+}
+{
+  const plan = preparePublishChannel("instagram", {
+    ...base,
+    channelAccountStatus: "connected",
+  });
+  ok("connected instagram waits for operator approval", plan.status === "needs_operator");
+  ok("connected instagram names media-id proof", plan.auditMessage.includes("media id"));
 }
 {
   const plan = preparePublishChannel("facebook_feed", base);

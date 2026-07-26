@@ -23,6 +23,7 @@ import type { RunStep } from "./distribution-run";
 // worker has moved a job to a gate it is waiting on a human, and re-preparing it
 // would loop and re-notify. So the entry point is queued and only queued.
 export const WORKER_ELIGIBLE_STATUSES: readonly PublishStatus[] = ["queued"];
+export const TAKEDOWN_TRANSPORT = "takedown";
 
 // The only publish_status values the worker may WRITE. Never live/submitted/
 // skipped/rejected — those are reached by a human (completeConciergeItem etc.).
@@ -49,12 +50,14 @@ export function isWorkerGate(value: unknown): value is WorkerGate {
  */
 export function workerJobEligible(input: {
   mode: PublishMode;
+  transport?: string | null;
   publishStatus: PublishStatus;
   automationAuthorized: boolean;
   claimedBy: string | null;
 }): boolean {
   return (
     input.mode === "concierge" &&
+    input.transport !== TAKEDOWN_TRANSPORT &&
     input.automationAuthorized === true &&
     input.claimedBy == null &&
     WORKER_ELIGIBLE_STATUSES.includes(input.publishStatus)

@@ -99,10 +99,11 @@ const CHANNEL_CAPABILITIES: Record<PublishChannelKey, ChannelCapability> = {
     requiresLogin: true,
     postingPolicy: "human_confirmed",
   }),
-  instagram: CAP("instagram", "browser_copilot", {
-    supportsCopilot: true,
+  instagram: CAP("instagram", "automatic", {
+    supportsCopilot: false,
     supportsConcierge: true,
-    requiresLogin: true,
+    requiresLogin: false,
+    needsOrgAccount: true,
     postingPolicy: "human_confirmed",
   }),
   facebook_feed: CAP("facebook_feed", "automatic", {

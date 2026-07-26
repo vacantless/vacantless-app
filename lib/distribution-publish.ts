@@ -494,20 +494,24 @@ export function preparePublishChannel(
     return feedPartnerPlan(meta, context);
   }
 
-  if (key === "facebook_feed") {
+  if (key === "facebook_feed" || key === "instagram") {
     if (context.channelAccountStatus !== "connected") {
       return plan(meta, {
         status: "needs_login",
         operatorActionUrl: null,
         auditMessage:
-          "Connect a Facebook Business Page before Vacantless can post to the Page feed.",
+          key === "instagram"
+            ? "Connect a Facebook Page with a linked Instagram Business account before Vacantless can publish Instagram posts."
+            : "Connect a Facebook Business Page before Vacantless can post to the Page feed.",
       });
     }
     return plan(meta, {
       status: "needs_operator",
       operatorActionUrl: null,
       auditMessage:
-        "Facebook Page is connected. Authorize autopilot only after reviewing the prepared post; Live still requires Graph API proof.",
+        key === "instagram"
+          ? "Instagram Business account is connected. Authorize autopilot only after reviewing the prepared single-image post; Live still requires the returned Instagram media id."
+          : "Facebook Page is connected. Authorize autopilot only after reviewing the prepared post; Live still requires Graph API proof.",
     });
   }
 
@@ -515,7 +519,6 @@ export function preparePublishChannel(
     key === "facebook" ||
     key === "kijiji" ||
     key === "linkedin" ||
-    key === "instagram" ||
     key === "whatsapp" ||
     key === "snapchat"
   ) {

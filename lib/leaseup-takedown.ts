@@ -1,11 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { canUseWaitlist } from "@/lib/billing";
 import { channelByKey } from "@/lib/distribution-channels";
+import { TAKEDOWN_TRANSPORT } from "@/lib/distribution-worker";
 import { decideLeaseupAdLifecycle } from "@/lib/leaseup-decision";
+import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
+import { sendOrgNotification } from "@/lib/notifications-server";
 import type { Org } from "@/lib/org";
 
+// S575b dispatch choice: v1 automated Graph deletion remains the standalone
+// worker command (`npm run takedown:leaseup`) keyed by TAKEDOWN_ITEM_ID. App
+// enqueue marks these rows transport='takedown' so the publish-prep cron never
+// claims them as new-post jobs.
 const FEATURE_FLAG = "LEASEUP_TAKEDOWN_ENABLED";
 const FB_PAGE_FEED = "facebook_feed";
+const APP_URL = (
+  process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"
+).replace(/\/+$/, "");
 
 type PropertyRow = {
   id: string;
@@ -71,6 +81,63 @@ function listingPostIsPaid(post: ListingPostRow): boolean {
 
 function channelLabel(channel: string): string {
   return channelByKey(channel)?.label ?? channel.replace(/_/g, " ");
+}
+
+export function shouldNotifyLeaseupTakedown(args: {
+  featureEnabled: boolean;
+  automatedDelete: boolean;
+  decisionAction: string;
+}): boolean {
+  return (
+    args.featureEnabled &&
+    args.decisionAction === "takedown" &&
+    !args.automatedDelete
+  );
+}
+
+export function leaseupTakedownDashboardUrl(propertyId: string): string {
+  return `${APP_URL}/dashboard/properties/${encodeURIComponent(propertyId)}#distribute-header`;
+}
+
+async function sendLeaseupTakedownNeededNotification(
+  supabase: SupabaseClient,
+  args: {
+    org: Org;
+    property: PropertyRow;
+    post: ListingPostRow;
+    reason: string;
+  },
+): Promise<void> {
+  try {
+    const dashboardUrl = leaseupTakedownDashboardUrl(args.property.id);
+    await sendOrgNotification({
+      client: supabase,
+      org: {
+        id: args.org.id,
+        name: args.org.name,
+        brand_color: args.org.brand_color,
+        logo_url: args.org.logo_url,
+        reply_to_email: args.org.reply_to_email,
+      },
+      eventKey: "leasing.distribution_takedown_needed",
+      vars: {
+        org_name: args.org.name ?? "",
+        property_address: args.property.address ?? "",
+        channel_label: channelLabel(args.post.portal),
+        external_url: args.post.url ?? "",
+        reason: args.reason,
+        dashboard_url: dashboardUrl,
+      },
+      operatorFallback: resolveLeadNotifyEmailsPreferMemberFallback([], [
+        args.org.reply_to_email,
+        args.org.public_contact_email,
+      ]),
+      action: { label: "Open Distribute", url: dashboardUrl },
+    });
+  } catch {
+    // The leased transition and take-down task are already recorded. Operator
+    // notification is best-effort and must never roll back the lifecycle change.
+  }
 }
 
 async function logLeaseupDecision(
@@ -169,7 +236,7 @@ async function enqueueLeaseupTakedownItem(
         status: args.automatedDelete ? "pending" : "in_progress",
         publish_status: publishStatus,
         mode: "concierge",
-        transport: "concierge",
+        transport: TAKEDOWN_TRANSPORT,
         blockers,
         external_url: args.post.url,
         listing_post_id: args.post.id,
@@ -279,6 +346,20 @@ export async function handleLeaseupAdLifecycle(args: {
       automatedDelete,
       reason: decision.reason,
     });
+    if (
+      shouldNotifyLeaseupTakedown({
+        featureEnabled: leaseupTakedownEnabled(),
+        automatedDelete,
+        decisionAction: decision.action,
+      })
+    ) {
+      await sendLeaseupTakedownNeededNotification(supabase, {
+        org,
+        property,
+        post,
+        reason: decision.reason,
+      });
+    }
     await logLeaseupDecision(supabase, {
       organizationId: org.id,
       propertyId,

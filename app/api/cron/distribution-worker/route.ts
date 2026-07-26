@@ -88,6 +88,7 @@ type CandidateRow = {
   channel: string;
   publish_status: string;
   mode: string;
+  transport: string | null;
   concierge_claimed_by: string | null;
   attempt_count: number | null;
 };
@@ -172,11 +173,12 @@ export async function GET(req: NextRequest) {
     const { data: candData, error: candErr } = await admin
       .from("distribution_run_items")
       .select(
-        "id, organization_id, run_id, channel, publish_status, mode, concierge_claimed_by, attempt_count",
+        "id, organization_id, run_id, channel, publish_status, mode, transport, concierge_claimed_by, attempt_count",
       )
       .eq("mode", "concierge")
       .eq("publish_status", "queued")
       .is("concierge_claimed_by", null)
+      .or("transport.is.null,transport.neq.takedown")
       .order("created_at", { ascending: true })
       .limit(CANDIDATE_LIMIT);
     if (candErr) {
@@ -201,6 +203,7 @@ export async function GET(req: NextRequest) {
       const a = (acct as ChannelAccountRow | null) ?? null;
       const eligible = workerJobEligible({
         mode: c.mode as CandidateRow["mode"] as never,
+        transport: c.transport,
         publishStatus: c.publish_status as never,
         automationAuthorized: a?.automation_authorized === true,
         claimedBy: c.concierge_claimed_by,

@@ -4,7 +4,6 @@ import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import {
   FB_STATE_COOKIE,
-  FACEBOOK_PAGE_SCOPES,
   appBaseUrl,
   createOAuthState,
   facebookOAuthConfigured,
@@ -12,6 +11,7 @@ import {
   fbAppId,
   fbGraphVersion,
   fbPageChannelEnabled,
+  facebookPageScopes,
 } from "@/lib/facebook-page-oauth";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   fb.searchParams.set("client_id", fbAppId());
   fb.searchParams.set("redirect_uri", redirectUri);
   fb.searchParams.set("state", token);
-  fb.searchParams.set("scope", FACEBOOK_PAGE_SCOPES.join(","));
+  fb.searchParams.set("scope", facebookPageScopes().join(","));
   fb.searchParams.set("response_type", "code");
 
   const res = NextResponse.redirect(fb);

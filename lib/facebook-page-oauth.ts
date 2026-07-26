@@ -1,12 +1,16 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { writeChannelSession } from "@/lib/distribution-session-crypto";
+import {
+  deleteChannelSession,
+  writeChannelSession,
+} from "@/lib/distribution-session-crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const FACEBOOK_FEED_CHANNEL = "facebook_feed";
+export const INSTAGRAM_CHANNEL = "instagram";
 export const FB_STATE_COOKIE = "fb_oauth_state";
 export const FB_PAGES_COOKIE = "fb_oauth_pages";
-export const FACEBOOK_PAGE_SCOPES = [
+export const FACEBOOK_PAGE_BASE_SCOPES = [
   "pages_show_list",
   "pages_read_engagement",
   "pages_manage_posts",
@@ -16,6 +20,11 @@ export const FACEBOOK_PAGE_SCOPES = [
   // testing" in DEV mode) or OAuth rejects the whole login as Invalid Scopes.
   "business_management",
 ] as const;
+export const INSTAGRAM_GRAPH_SCOPES = [
+  "instagram_basic",
+  "instagram_content_publish",
+] as const;
+export const FACEBOOK_PAGE_SCOPES = FACEBOOK_PAGE_BASE_SCOPES;
 
 export type FacebookOAuthState = {
   orgId: string;
@@ -28,6 +37,12 @@ export type FacebookPageCandidate = {
   id: string;
   name: string;
   access_token: string;
+  instagram_business_account?: InstagramBusinessAccount | null;
+};
+
+export type InstagramBusinessAccount = {
+  id: string;
+  username: string | null;
 };
 
 export type FacebookPagesCookie = {
@@ -41,6 +56,19 @@ export type FacebookPagesCookie = {
 
 export function fbPageChannelEnabled(): boolean {
   return process.env.FB_PAGE_CHANNEL_ENABLED === "true";
+}
+
+export function igChannelEnabled(): boolean {
+  return process.env.IG_CHANNEL_ENABLED === "true";
+}
+
+export function facebookPageScopes(opts?: {
+  instagramEnabled?: boolean;
+}): string[] {
+  const instagramEnabled = opts?.instagramEnabled ?? igChannelEnabled();
+  return instagramEnabled
+    ? [...FACEBOOK_PAGE_BASE_SCOPES, ...INSTAGRAM_GRAPH_SCOPES]
+    : [...FACEBOOK_PAGE_BASE_SCOPES];
 }
 
 export function fbGraphVersion(): string {
@@ -140,6 +168,27 @@ export function verifyPagesCookie(
   return payload;
 }
 
+export function normalizeInstagramBusinessAccount(
+  raw: unknown,
+): InstagramBusinessAccount | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const id = typeof obj.id === "string" ? obj.id.trim() : "";
+  if (!id) return null;
+  const username =
+    typeof obj.username === "string" && obj.username.trim()
+      ? obj.username.trim().replace(/^@+/, "")
+      : null;
+  return { id, username };
+}
+
+export function instagramAccountLabel(
+  account: InstagramBusinessAccount | null | undefined,
+): string | null {
+  if (!account) return null;
+  return account.username ? `@${account.username}` : `Instagram user ${account.id}`;
+}
+
 export function facebookReturnPath(
   propertyId: string | null | undefined,
   status: "connected" | "disconnected" | "cancelled" | "error",
@@ -163,11 +212,12 @@ export async function finalizeFacebookPageConnection(args: {
   const admin = args.admin ?? createAdminClient();
   if (!admin) throw new Error("Supabase service role client is not configured");
   const nowISO = new Date().toISOString();
+  const scopes = args.scopes ?? facebookPageScopes();
   const tokenBlob = {
     page_id: args.page.id,
     page_name: args.page.name,
     page_access_token: args.page.access_token,
-    scopes: args.scopes ?? FACEBOOK_PAGE_SCOPES,
+    scopes,
     connected_at: nowISO,
     connected_by: args.connectedBy,
   };
@@ -203,4 +253,99 @@ export async function finalizeFacebookPageConnection(args: {
     { onConflict: "organization_id,channel" },
   );
   if (error) throw new Error(`facebook account upsert failed: ${error.message}`);
+
+  if (!igChannelEnabled()) return;
+
+  const igAccount = args.page.instagram_business_account ?? null;
+  if (!igAccount) {
+    await deleteChannelSession({
+      organizationId: args.organizationId,
+      channel: INSTAGRAM_CHANNEL,
+      admin,
+    });
+    const { error: igMissingErr } = await admin
+      .from("distribution_channel_accounts")
+      .upsert(
+        {
+          organization_id: args.organizationId,
+          channel: INSTAGRAM_CHANNEL,
+          transport: "automatic",
+          account_status: "needs_setup",
+          external_account_label: null,
+          requires_login: false,
+          requires_payment: false,
+          supports_feed: false,
+          supports_copilot: false,
+          supports_concierge: true,
+          supports_live_verification: true,
+          posting_policy: "human_confirmed",
+          automation_authorized: false,
+          automation_authorized_at: null,
+          automation_authorized_by: null,
+          capabilities: {
+            graph_api_instagram: true,
+            graph_version: fbGraphVersion(),
+            page_id: args.page.id,
+            page_name: args.page.name,
+            linked_ig_business_account: false,
+            setup_reason: "no_linked_instagram_business_account",
+          },
+          last_setup_checked_at: nowISO,
+          updated_at: nowISO,
+        },
+        { onConflict: "organization_id,channel" },
+      );
+    if (igMissingErr) {
+      throw new Error(`instagram account upsert failed: ${igMissingErr.message}`);
+    }
+    return;
+  }
+
+  const igLabel = instagramAccountLabel(igAccount);
+  const igTokenBlob = {
+    page_id: args.page.id,
+    page_name: args.page.name,
+    page_access_token: args.page.access_token,
+    ig_user_id: igAccount.id,
+    ig_username: igAccount.username,
+    scopes,
+    connected_at: nowISO,
+    connected_by: args.connectedBy,
+  };
+  await writeChannelSession({
+    organizationId: args.organizationId,
+    channel: INSTAGRAM_CHANNEL,
+    storageStateJson: JSON.stringify(igTokenBlob),
+    warmedBy: args.connectedBy,
+    admin,
+  });
+  const { error: igErr } = await admin.from("distribution_channel_accounts").upsert(
+    {
+      organization_id: args.organizationId,
+      channel: INSTAGRAM_CHANNEL,
+      transport: "automatic",
+      account_status: "connected",
+      external_account_label: igLabel,
+      requires_login: false,
+      requires_payment: false,
+      supports_feed: false,
+      supports_copilot: false,
+      supports_concierge: true,
+      supports_live_verification: true,
+      posting_policy: "human_confirmed",
+      capabilities: {
+        graph_api_instagram: true,
+        graph_version: fbGraphVersion(),
+        page_id: args.page.id,
+        page_name: args.page.name,
+        ig_user_id: igAccount.id,
+        ig_username: igAccount.username,
+        shared_page_session: true,
+      },
+      last_setup_checked_at: nowISO,
+      updated_at: nowISO,
+    },
+    { onConflict: "organization_id,channel" },
+  );
+  if (igErr) throw new Error(`instagram account upsert failed: ${igErr.message}`);
 }

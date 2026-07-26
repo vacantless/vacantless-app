@@ -1109,7 +1109,7 @@ export default async function PropertyDetailPage({
   // account is recorded.
   const { data: channelAccountRows } = await supabase
     .from("distribution_channel_accounts")
-    .select("channel, account_status, feed_url, external_account_label, transport")
+    .select("channel, account_status, feed_url, external_account_label, transport, capabilities")
     .eq("organization_id", propertyOrgId);
   const channelAccountByKey = new Map<
     string,
@@ -1118,6 +1118,7 @@ export default async function PropertyDetailPage({
       feedUrl: string | null;
       externalAccountLabel: string | null;
       transport: string | null;
+      capabilities: Record<string, unknown>;
     }
   >();
   for (const row of (channelAccountRows ?? []) as Array<{
@@ -1126,12 +1127,14 @@ export default async function PropertyDetailPage({
     feed_url: string | null;
     external_account_label: string | null;
     transport: string | null;
+    capabilities: Record<string, unknown> | null;
   }>) {
     channelAccountByKey.set(row.channel, {
       status: row.account_status,
       feedUrl: row.feed_url,
       externalAccountLabel: row.external_account_label,
       transport: row.transport,
+      capabilities: row.capabilities ?? {},
     });
   }
   const readinessToneFor = (
@@ -1187,6 +1190,25 @@ export default async function PropertyDetailPage({
                   (channelAccountByKey.get(channel.key)?.status as ChannelAccountStatus | undefined) ??
                   null,
                 pageName: channelAccountByKey.get(channel.key)?.externalAccountLabel ?? null,
+              }
+            : null,
+        instagramAccount:
+          channel.key === "instagram"
+            ? {
+                enabled:
+                  process.env.FB_PAGE_CHANNEL_ENABLED === "true" &&
+                  process.env.IG_CHANNEL_ENABLED === "true",
+                accountStatus:
+                  (channelAccountByKey.get(channel.key)?.status as ChannelAccountStatus | undefined) ??
+                  null,
+                label: channelAccountByKey.get(channel.key)?.externalAccountLabel ?? null,
+                pageName:
+                  typeof channelAccountByKey.get(channel.key)?.capabilities.page_name === "string"
+                    ? (channelAccountByKey.get(channel.key)?.capabilities.page_name as string)
+                    : null,
+                hasLinkedBusinessAccount:
+                  channelAccountByKey.get(channel.key)?.capabilities.linked_ig_business_account !==
+                  false,
               }
             : null,
         posts,

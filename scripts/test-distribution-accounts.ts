@@ -38,7 +38,9 @@ eq(channelCapability("facebook").requiresLogin, true, "facebook needs login");
 eq(channelCapability("facebook").postingPolicy, "human_confirmed", "facebook human_confirmed (no silent post)");
 eq(channelCapability("kijiji").transport, "browser_copilot", "kijiji is co-pilot");
 eq(channelCapability("linkedin").transport, "browser_copilot", "linkedin is co-pilot");
-eq(channelCapability("instagram").requiresLogin, true, "instagram needs login");
+eq(channelCapability("instagram").transport, "automatic", "instagram is Graph automatic");
+eq(channelCapability("instagram").requiresLogin, false, "instagram uses stored Page token");
+eq(channelCapability("instagram").needsOrgAccount, true, "instagram needs linked IG account");
 eq(channelCapability("facebook_feed").transport, "automatic", "facebook feed is Graph automatic");
 eq(channelCapability("facebook_feed").postingPolicy, "human_confirmed", "facebook feed human confirmed");
 eq(channelCapability("facebook_feed").requiresLogin, false, "facebook feed uses stored Page token");
@@ -113,8 +115,15 @@ eq(allChannelCapabilities().length, 16, "16 channel capabilities");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("instagram") });
-  eq(r.status, "ready", "instagram ready to co-pilot");
-  eq(r.nextActionKind, "open_copilot", "instagram open_copilot");
+  eq(r.status, "needs_setup", "instagram needs linked IG setup");
+}
+{
+  const r = channelAccountReadiness({
+    capability: channelCapability("instagram"),
+    accountStatus: "connected",
+  });
+  eq(r.status, "ready", "instagram connected => ready");
+  eq(r.nextActionKind, "publish_now", "instagram uses automatic runner");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("viewit"), accountStatus: "needs_payment" });

@@ -118,9 +118,9 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "instagram",
     label: "Instagram",
-    mode: "assisted_manual",
+    mode: "api_automatic",
     blurb:
-      "Vacantless prepares short caption copy, photo order, and the tracked inquiry link. Post from the connected Instagram account, then save the post URL as proof.",
+      "Vacantless can publish a single-image post to a linked Instagram Business account after you approve that item. Captions include the tracked inquiry link; Stories, Reels, and carousels stay separate.",
     copyKey: "instagram",
     hasFillSheet: true,
     hasGuardrails: true,

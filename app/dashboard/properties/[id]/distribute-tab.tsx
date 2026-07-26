@@ -137,6 +137,14 @@ export type FacebookPageAccountView = {
   pageName: string | null;
 };
 
+export type InstagramAccountView = {
+  enabled: boolean;
+  accountStatus: string | null;
+  label: string | null;
+  pageName: string | null;
+  hasLinkedBusinessAccount: boolean;
+};
+
 // A fully-resolved channel card: the matrix row + computed status + the
 // matching channel copy + feed note + partner account + this channel's posts.
 export type DistributeChannelCard = {
@@ -147,6 +155,7 @@ export type DistributeChannelCard = {
   feed: { inFeed: boolean; hint: string } | null;
   partner: PartnerAccountView | null;
   facebookPage?: FacebookPageAccountView | null;
+  instagramAccount?: InstagramAccountView | null;
   posts: DistributePostRow[];
 };
 
@@ -1311,6 +1320,7 @@ function ChannelCard({
 }) {
   const { channel, status, copy, fillSheet, feed, partner } = card;
   const facebookPage = card.facebookPage;
+  const instagramAccount = card.instagramAccount;
   const tone = channelStatusTone(status.value);
   const combinedCopy = copy ? `${copy.title}\n\n${copy.body}` : null;
   // Reply snippets for the assisted-manual + feed channels (a renter messages
@@ -1441,6 +1451,45 @@ function ChannelCard({
                     </button>
                   </form>
                 </div>
+              ) : (
+                <a
+                  href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
+                  className={SECONDARY_BTN}
+                >
+                  Connect Facebook Page
+                </a>
+              )}
+            </div>
+          )}
+
+          {channel.key === "instagram" && instagramAccount?.enabled && (
+            <div className="space-y-2 border-l-2 border-gray-200 pl-3 text-xs text-gray-600">
+              <p>
+                Instagram v1 publishes one image with a caption through the
+                linked Business or Creator account on the connected Facebook
+                Page. Captions include the tracked inquiry link.
+              </p>
+              {instagramAccount.accountStatus === "connected" && instagramAccount.label ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-gray-800">
+                    Connected: {instagramAccount.label}
+                    {instagramAccount.pageName ? ` via ${instagramAccount.pageName}` : ""}
+                  </span>
+                  <form action={disconnectFacebookPage}>
+                    <input type="hidden" name="property_id" value={propertyId} />
+                    <button
+                      type="submit"
+                      className="text-xs font-medium text-red-600 underline"
+                    >
+                      Disconnect
+                    </button>
+                  </form>
+                </div>
+              ) : instagramAccount.hasLinkedBusinessAccount === false ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  The connected Facebook Page does not have a linked Instagram
+                  Business account.
+                </p>
               ) : (
                 <a
                   href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}

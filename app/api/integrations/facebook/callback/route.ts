@@ -4,14 +4,17 @@ import { requireCapability } from "@/lib/membership";
 import {
   FB_PAGES_COOKIE,
   FB_STATE_COOKIE,
-  FACEBOOK_PAGE_SCOPES,
   type FacebookPageCandidate,
+  type InstagramBusinessAccount,
   appBaseUrl,
   facebookReturnPath,
   fbAppId,
   fbGraphVersion,
   fbPageChannelEnabled,
+  facebookPageScopes,
   finalizeFacebookPageConnection,
+  igChannelEnabled,
+  normalizeInstagramBusinessAccount,
   signCookiePayload,
   verifyOAuthState,
 } from "@/lib/facebook-page-oauth";
@@ -53,6 +56,7 @@ type PageNodeResponse = {
   id?: string;
   name?: string;
   access_token?: string;
+  instagram_business_account?: InstagramBusinessAccount | null;
 };
 
 function clearCookie(res: NextResponse, name: string): void {
@@ -146,6 +150,26 @@ async function collectBusinessPageCandidates(
   return candidates;
 }
 
+async function attachInstagramBusinessAccounts(
+  pages: FacebookPageCandidate[],
+): Promise<FacebookPageCandidate[]> {
+  if (!igChannelEnabled()) return pages;
+  const enriched: FacebookPageCandidate[] = [];
+  for (const page of pages) {
+    const node = await graphGet<PageNodeResponse>(`/${page.id}`, {
+      fields: "instagram_business_account{id,username}",
+      access_token: page.access_token,
+    });
+    enriched.push({
+      ...page,
+      instagram_business_account: graphTokenError(node)
+        ? null
+        : normalizeInstagramBusinessAccount(node.instagram_business_account),
+    });
+  }
+  return enriched;
+}
+
 export async function GET(req: NextRequest) {
   if (!fbPageChannelEnabled()) return new NextResponse("Not found", { status: 404 });
 
@@ -205,6 +229,7 @@ export async function GET(req: NextRequest) {
   if (candidates.length === 0) {
     return redirectBack(req, state.propertyId, "error", "nopages");
   }
+  candidates = await attachInstagramBusinessAccounts(candidates);
 
   const supabase = createClient();
   const {
@@ -219,7 +244,7 @@ export async function GET(req: NextRequest) {
         propertyId: state.propertyId,
         page: candidates[0],
         connectedBy,
-        scopes: FACEBOOK_PAGE_SCOPES,
+        scopes: facebookPageScopes(),
       });
     } catch {
       return redirectBack(req, state.propertyId, "error", "store");
