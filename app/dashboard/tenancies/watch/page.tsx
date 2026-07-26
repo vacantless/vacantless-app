@@ -4,6 +4,8 @@ import { Icons } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { watchLeaseErrorMessage } from "@/lib/watch-lease";
 import { watchLease } from "../actions";
+import { RentReconciliationFields } from "@/components/rent-reconciliation-fields";
+import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,7 @@ export default async function WatchLeasePage({
 }) {
   const errMsg = watchLeaseErrorMessage(searchParams.err);
   const supabase = createClient();
+  const leaseTermShiftOn = leaseTermShiftEnabled();
 
   // --- Confirm-an-existing-tenancy (prefill) mode ----------------------------
   // Landing here with ?tenancy=<id> means the landlord is enrolling a lease the
@@ -117,8 +120,11 @@ export default async function WatchLeasePage({
                 />
               </div>
               <div>
-                <label className={labelCls}>Monthly rent ($)</label>
+                <label className={labelCls}>
+                  {leaseTermShiftOn ? "Lease rent ($)" : "Monthly rent ($)"}
+                </label>
                 <input
+                  id={leaseTermShiftOn ? "watch-existing-rent" : undefined}
                   type="number"
                   name="rent"
                   step="0.01"
@@ -127,20 +133,30 @@ export default async function WatchLeasePage({
                   className={inputCls}
                 />
               </div>
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Last rent increase (optional)</label>
-                <input
-                  type="date"
-                  name="last_rent_increase_date"
-                  defaultValue={t.last_rent_increase_date ?? ""}
-                  className={`${inputCls} max-w-xs`}
-                />
-                <p className="mt-1 text-xs text-gray-400">
-                  Leave blank if rent hasn&apos;t been raised since move-in — the
-                  clock runs from the lease start.
-                </p>
-              </div>
+              {!leaseTermShiftOn && (
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Last rent increase (optional)</label>
+                  <input
+                    type="date"
+                    name="last_rent_increase_date"
+                    defaultValue={t.last_rent_increase_date ?? ""}
+                    className={`${inputCls} max-w-xs`}
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Leave blank if rent hasn&apos;t been raised since move-in — the
+                    clock runs from the lease start.
+                  </p>
+                </div>
+              )}
             </div>
+
+            {leaseTermShiftOn && (
+              <RentReconciliationFields
+                rentInputId="watch-existing-rent"
+                defaultRentCents={t.rent_cents}
+                defaultCurrentEffectiveDate={t.last_rent_increase_date}
+              />
+            )}
 
             {/* Exemption (owner-asserted) -------------------------------- */}
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -278,8 +294,11 @@ export default async function WatchLeasePage({
             />
           </div>
           <div>
-            <label className={labelCls}>Monthly rent ($)</label>
+            <label className={labelCls}>
+              {leaseTermShiftOn ? "Lease rent ($)" : "Monthly rent ($)"}
+            </label>
             <input
+              id={leaseTermShiftOn ? "watch-rent" : undefined}
               type="number"
               name="rent"
               step="0.01"
@@ -292,19 +311,23 @@ export default async function WatchLeasePage({
             <label className={labelCls}>Lease start</label>
             <input type="date" name="start_date" required className={inputCls} />
           </div>
-          <div>
-            <label className={labelCls}>Last rent increase (optional)</label>
-            <input
-              type="date"
-              name="last_rent_increase_date"
-              className={inputCls}
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Leave blank if rent hasn&apos;t been raised since move-in — the clock
-              runs from the lease start.
-            </p>
-          </div>
+          {!leaseTermShiftOn && (
+            <div>
+              <label className={labelCls}>Last rent increase (optional)</label>
+              <input
+                type="date"
+                name="last_rent_increase_date"
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Leave blank if rent hasn&apos;t been raised since move-in — the clock
+                runs from the lease start.
+              </p>
+            </div>
+          )}
         </div>
+
+        {leaseTermShiftOn && <RentReconciliationFields rentInputId="watch-rent" />}
 
         {/* Exemption (owner-asserted) ----------------------------------- */}
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">

@@ -31,6 +31,7 @@ import {
   resolveAssignedView,
   type AssignedView,
 } from "@/lib/dashboard-assigned";
+import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 
 export const dynamic = "force-dynamic";
 
@@ -248,10 +249,25 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     serve_late: 1,
     serve_window: 2,
   };
+  const activeTenancyIds = ((tenancyRows ?? []) as { id: string }[]).map((t) => t.id);
+  const leaseTermShiftOn = leaseTermShiftEnabled();
+  const { data: confirmedRentRows } =
+    leaseTermShiftOn && activeTenancyIds.length > 0
+      ? await supabase
+          .from("tenancy_rent_adjustments")
+          .select("tenancy_id")
+          .in("tenancy_id", activeTenancyIds)
+      : { data: [] };
+  const rentConfirmedTenancyIds = new Set(
+    ((confirmedRentRows ?? []) as { tenancy_id: string | null }[])
+      .map((row) => row.tenancy_id)
+      .filter((id): id is string => !!id),
+  );
   // S466: back the guideline with the DB (0135) so the overview matches serveN1/the card.
   const overviewGuideline = await loadGuidelineLookup(supabase);
   const rentIncreaseAlerts = ((tenancyRows ?? []) as unknown as TenancyRow[])
     .flatMap((t) => {
+      if (leaseTermShiftOn && !rentConfirmedTenancyIds.has(t.id)) return [];
       if (t.rent_cents == null || !t.start_date) return [];
       const result = deriveRentIncrease(
         { startDate: t.start_date, currentRentCents: t.rent_cents, guideline: overviewGuideline },

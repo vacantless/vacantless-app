@@ -21,6 +21,7 @@ import {
   RENT_INCREASE_URGENCY,
 } from "@/lib/rent-increase-sweep";
 import { tenantNoticeDedupeKey } from "@/lib/tenant-message-approvals";
+import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 
 // Rent-increase reminder sweep — the proactive "autopilot" half of the free
 // compliance wedge (S339). The calc core (lib/rent-increase.ts) + pre-filled N1
@@ -124,6 +125,7 @@ export async function GET(req: NextRequest) {
 
   // S466: load the DB-backed guideline ONCE (global; matches serveN1/the card).
   const guideline = await loadGuidelineLookup(admin);
+  const leaseTermShiftOn = leaseTermShiftEnabled();
 
   const params = req.nextUrl.searchParams;
   const force = params.get("force") === "1";
@@ -177,9 +179,27 @@ export async function GET(req: NextRequest) {
         .eq("organization_id", org.id)
         .eq("status", "active");
 
+      const tenancyIds = ((tenancyRows ?? []) as unknown as { id: string }[]).map((t) => t.id);
+      const { data: confirmedRentRows } =
+        leaseTermShiftOn && tenancyIds.length > 0
+          ? await admin
+              .from("tenancy_rent_adjustments")
+              .select("tenancy_id")
+              .in("tenancy_id", tenancyIds)
+          : { data: [] };
+      const confirmedRentTenancies = new Set(
+        ((confirmedRentRows ?? []) as { tenancy_id: string | null }[])
+          .map((row) => row.tenancy_id)
+          .filter((id): id is string => !!id),
+      );
+
       const due: Array<{ t: TenancyRow; result: NonNullable<ReturnType<typeof deriveRentIncrease>>; stampFor: string }> = [];
       for (const raw of (tenancyRows ?? []) as any[]) {
         const t = raw as TenancyRow;
+        if (leaseTermShiftOn && !confirmedRentTenancies.has(t.id)) {
+          summary.skipped++;
+          continue;
+        }
         if (t.rent_cents == null || !t.start_date) {
           summary.skipped++;
           continue;

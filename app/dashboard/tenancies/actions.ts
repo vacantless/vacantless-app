@@ -33,6 +33,16 @@ import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
+import {
+  resolveRentReconciliation,
+  type RentAdjustmentSource,
+} from "@/lib/rent-adjustments";
+import {
+  appendN1RentAdjustment,
+  hasConfirmedRentLedger,
+  leaseTermShiftEnabled,
+  seedConfirmedRentLedger,
+} from "@/lib/rent-adjustments-server";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 const SERVE_APP_URL = (
@@ -126,6 +136,59 @@ function tenantArraysFrom(formData: FormData) {
   };
 }
 
+function rentReconciliationSource(formData: FormData): RentAdjustmentSource {
+  return s(formData, "rent_reconciliation_source") === "lease_ocr"
+    ? "lease_ocr"
+    : "landlord_confirm";
+}
+
+function rentReconciliationRequired(formData: FormData): boolean {
+  return s(formData, "rent_reconciliation_required") === "1";
+}
+
+function optionalRentAdjustmentRows(formData: FormData) {
+  const dates = formData.getAll("rent_adjustment_effective_date").map((v) => String(v));
+  const rents = formData.getAll("rent_adjustment_rent").map((v) => String(v));
+  const kinds = formData.getAll("rent_adjustment_kind").map((v) => String(v));
+  const notes = formData.getAll("rent_adjustment_note").map((v) => String(v));
+  const length = Math.max(dates.length, rents.length, kinds.length, notes.length);
+  const rows: Array<{
+    effectiveDate: string | null;
+    rentCents: number | null;
+    kind: string | null;
+    note: string | null;
+  }> = [];
+  for (let i = 0; i < length; i++) {
+    rows.push({
+      effectiveDate: parseDateOrNull(dates[i] ?? ""),
+      rentCents: parseMoneyToCents(rents[i] ?? ""),
+      kind: (kinds[i] ?? "").trim() || null,
+      note: (notes[i] ?? "").trim() || null,
+    });
+  }
+  return rows;
+}
+
+function resolveRentReconciliationFromForm(
+  formData: FormData,
+  leaseStartDate: string | null,
+  requiredOverride?: boolean,
+) {
+  const shiftEnabled = leaseTermShiftEnabled();
+  return resolveRentReconciliation({
+    required: shiftEnabled
+      ? requiredOverride ?? rentReconciliationRequired(formData)
+      : false,
+    status: shiftEnabled ? s(formData, "rent_current_status") || null : null,
+    leaseStartDate,
+    originalRentCents: parseMoneyToCents(s(formData, "rent")),
+    currentRentCents: parseMoneyToCents(s(formData, "current_rent")),
+    currentEffectiveDate: parseDateOrNull(s(formData, "current_rent_effective_date")),
+    originalSource: rentReconciliationSource(formData),
+    optionalAdjustments: optionalRentAdjustmentRows(formData),
+  });
+}
+
 // ===========================================================================
 // Create — used by both the standalone "Add tenancy" form and the lead
 // "Convert to tenancy" flow (the convert page just prefills the same form).
@@ -147,6 +210,13 @@ export async function createTenancy(formData: FormData) {
     const q = fromLead ? `from=${fromLead}&` : "";
     redirect(`/dashboard/tenancies/new?${q}err=${check.code}`);
   }
+
+  const rentConfirmation = resolveRentReconciliationFromForm(formData, startDate);
+  if (!rentConfirmation.ok) {
+    const q = fromLead ? `from=${fromLead}&` : "";
+    redirect(`/dashboard/tenancies/new?${q}err=${rentConfirmation.code}`);
+  }
+  const confirmedRent = rentConfirmation.reconciliation;
 
   const statusRaw = s(formData, "status");
   const status = isTenancyStatus(statusRaw) ? statusRaw : "active";
@@ -200,12 +270,13 @@ export async function createTenancy(formData: FormData) {
       organization_id: org.id,
       property_id: propertyId,
       lead_id: fromLead,
-      rent_cents: parseMoneyToCents(s(formData, "rent")),
+      rent_cents: confirmedRent ? null : parseMoneyToCents(s(formData, "rent")),
       deposit_cents: parseMoneyToCents(s(formData, "deposit")),
       start_date: startDate,
       end_date: endDate,
       term_months: parseTermMonths(s(formData, "term_months")),
       status,
+      last_rent_increase_date: null,
       payment_notes: s(formData, "payment_notes") || null,
       move_in_notes: s(formData, "move_in_notes") || null,
       notes: s(formData, "notes") || null,
@@ -215,6 +286,14 @@ export async function createTenancy(formData: FormData) {
 
   const tenancyId = (inserted as { id: string } | null)?.id;
   if (!tenancyId) redirect("/dashboard/tenancies");
+  if (confirmedRent) {
+    await seedConfirmedRentLedger({
+      supabase,
+      orgId: org.id,
+      tenancyId,
+      reconciliation: confirmedRent,
+    });
+  }
 
   // P1 status truth (Codex re-review S371): a unit with an active/upcoming
   // tenancy must not stay publicly bookable. The lifecycle rail already reads
@@ -343,7 +422,10 @@ export async function watchLease(formData: FormData) {
 
   const address = s(formData, "address");
   const startDate = parseDateOrNull(s(formData, "start_date"));
-  const lastIncreaseDate = parseDateOrNull(s(formData, "last_rent_increase_date"));
+  const leaseTermShiftOn = leaseTermShiftEnabled();
+  const lastIncreaseDate = leaseTermShiftOn
+    ? null
+    : parseDateOrNull(s(formData, "last_rent_increase_date"));
   const firstOccupancyDate = parseDateOrNull(s(formData, "first_occupancy_date"));
   const exempt = s(formData, "rent_control_exempt") === "on";
   const primaryName = s(formData, "tenant_name");
@@ -356,7 +438,19 @@ export async function watchLease(formData: FormData) {
   });
   if (!check.ok) redirect(`/dashboard/tenancies/watch?err=${check.code}`);
 
-  const rentCents = parseMoneyToCents(s(formData, "rent"));
+  const rentConfirmation = resolveRentReconciliationFromForm(
+    formData,
+    startDate,
+    leaseTermShiftOn,
+  );
+  if (!rentConfirmation.ok) {
+    redirect(`/dashboard/tenancies/watch?err=${rentConfirmation.code}`);
+  }
+  const confirmedRent = rentConfirmation.reconciliation;
+  if (leaseTermShiftOn && !confirmedRent) {
+    redirect("/dashboard/tenancies/watch?err=current_rent_confirm");
+  }
+  const rentCents = confirmedRent?.currentRentCents ?? parseMoneyToCents(s(formData, "rent"));
   const supabase = createClient();
 
   // 1. The private unit. off_market keeps it off the public /r page — a watched
@@ -383,15 +477,23 @@ export async function watchLease(formData: FormData) {
     .insert({
       organization_id: org.id,
       property_id: propertyId,
-      rent_cents: rentCents,
+      rent_cents: confirmedRent ? null : rentCents,
       start_date: startDate,
-      last_rent_increase_date: lastIncreaseDate,
+      last_rent_increase_date: confirmedRent ? null : lastIncreaseDate,
       status: "active",
     })
     .select("id")
     .maybeSingle();
   const tenancyId = (inserted as { id: string } | null)?.id;
   if (!tenancyId) redirect("/dashboard/tenancies");
+  if (confirmedRent) {
+    await seedConfirmedRentLedger({
+      supabase,
+      orgId: org.id,
+      tenancyId,
+      reconciliation: confirmedRent,
+    });
+  }
 
   // 3. The primary tenant (resolved to the durable per-org person vault).
   const email = s(formData, "tenant_email") || null;
@@ -444,11 +546,30 @@ async function watchExistingTenancy(
   }
 
   const startDate = parseDateOrNull(s(formData, "start_date"));
-  const lastIncreaseDate = parseDateOrNull(s(formData, "last_rent_increase_date"));
+  const leaseTermShiftOn = leaseTermShiftEnabled();
+  const lastIncreaseDate = leaseTermShiftOn
+    ? null
+    : parseDateOrNull(s(formData, "last_rent_increase_date"));
   const firstOccupancyDate = parseDateOrNull(s(formData, "first_occupancy_date"));
   const exempt = s(formData, "rent_control_exempt") === "on";
+  const rentConfirmation = resolveRentReconciliationFromForm(
+    formData,
+    startDate,
+    leaseTermShiftOn,
+  );
+  if (!rentConfirmation.ok) {
+    redirect(`/dashboard/tenancies/watch?tenancy=${tenancyId}&err=${rentConfirmation.code}`);
+  }
+  const confirmedRent = rentConfirmation.reconciliation;
+  if (leaseTermShiftOn && !confirmedRent) {
+    redirect(`/dashboard/tenancies/watch?tenancy=${tenancyId}&err=current_rent_confirm`);
+  }
+  const effectiveLastIncreaseDate = confirmedRent?.lastIncreaseDate ?? lastIncreaseDate;
 
-  const check = validateWatchExistingLease({ startDate, lastIncreaseDate });
+  const check = validateWatchExistingLease({
+    startDate,
+    lastIncreaseDate: effectiveLastIncreaseDate,
+  });
   if (!check.ok) {
     redirect(`/dashboard/tenancies/watch?tenancy=${tenancyId}&err=${check.code}`);
   }
@@ -458,14 +579,25 @@ async function watchExistingTenancy(
   // anniversary (recording a different last-increase date shifts the clock).
   const tenancyUpdate: Record<string, unknown> = {
     start_date: startDate,
-    last_rent_increase_date: lastIncreaseDate,
+    last_rent_increase_date: effectiveLastIncreaseDate,
     rent_increase_nudged_for: null,
     updated_at: new Date().toISOString(),
   };
-  // Only touch rent when a value was actually entered, so a blanked field can't
-  // silently null an existing rent.
-  const rentCents = parseMoneyToCents(s(formData, "rent"));
-  if (rentCents != null) tenancyUpdate.rent_cents = rentCents;
+  if (confirmedRent) {
+    tenancyUpdate.rent_cents = confirmedRent.currentRentCents;
+  } else {
+    const rentCents = parseMoneyToCents(s(formData, "rent"));
+    if (rentCents != null) tenancyUpdate.rent_cents = rentCents;
+  }
+
+  if (confirmedRent) {
+    await seedConfirmedRentLedger({
+      supabase,
+      orgId,
+      tenancyId,
+      reconciliation: confirmedRent,
+    });
+  }
 
   await supabase
     .from("tenancies")
@@ -494,8 +626,8 @@ async function watchExistingTenancy(
 // autopilot. The sweep nags until the increase is taken, but nothing rolled the
 // anniversary forward once it was: this sets the new last-increase anchor (so
 // next year's eligible date is anchor + 12mo), optionally bumps the stored rent
-// to the new amount, and clears the once-per-cycle nudge stamp so the next sweep
-// re-arms. One tap from the rent-increase card; no new rows, no migration.
+// to the new amount, appends an 'n1' rent-ledger row, and clears the once-per-
+// cycle nudge stamp so the next sweep re-arms.
 // ===========================================================================
 export async function recordRentIncrease(formData: FormData) {
   await requireCapability("manage_tenancies", FORBIDDEN);
@@ -521,6 +653,9 @@ export async function recordRentIncrease(formData: FormData) {
   if (startDate && effectiveDate < startDate) {
     redirect(`/dashboard/tenancies/${id}?increase=before_start`);
   }
+  if (leaseTermShiftEnabled() && !(await hasConfirmedRentLedger(supabase, id))) {
+    redirect(`/dashboard/tenancies/${id}?increase=unconfirmed`);
+  }
 
   const update: Record<string, unknown> = {
     last_rent_increase_date: effectiveDate,
@@ -530,7 +665,18 @@ export async function recordRentIncrease(formData: FormData) {
   // Only bump rent when a new amount was entered; a blank field leaves the
   // stored rent untouched.
   const newRent = parseMoneyToCents(s(formData, "new_rent"));
-  if (newRent != null) update.rent_cents = newRent;
+  if (newRent != null) {
+    update.rent_cents = newRent;
+    if (newRent > 0) {
+      await appendN1RentAdjustment({
+        supabase,
+        orgId: org.id,
+        tenancyId: id,
+        effectiveDate,
+        rentCents: newRent,
+      });
+    }
+  }
 
   await supabase.from("tenancies").update(update).eq("id", id);
 
@@ -824,6 +970,9 @@ export async function serveN1(formData: FormData) {
   // Serve only makes sense for an active tenancy with a rent + start date.
   if (t.status !== "active" || t.rent_cents == null || !t.start_date) {
     redirect(`/dashboard/tenancies/${id}?serve=notready#renewal`);
+  }
+  if (leaseTermShiftEnabled() && !(await hasConfirmedRentLedger(supabase, id))) {
+    redirect(`/dashboard/tenancies/${id}?serve=unconfirmed#renewal`);
   }
 
   // Codex P2 fix: recompute the effective date + amounts SERVER-SIDE (never trust

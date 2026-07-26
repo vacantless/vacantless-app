@@ -14,6 +14,8 @@ import { isPubliclyVisible } from "@/lib/listing-state";
 import { LeaseUploadPrefill } from "./lease-upload-prefill";
 import { getCurrentOrg } from "@/lib/org";
 import { canUseLeaseOcr } from "@/lib/billing";
+import { RentReconciliationFields } from "@/components/rent-reconciliation-fields";
+import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +108,7 @@ export default async function NewTenancyPage({
     (lead?.move_in && parseDateOrNull(lead.move_in)) || "";
 
   const errMsg = tenancyErrorMessage(searchParams.err);
+  const leaseTermShiftOn = leaseTermShiftEnabled();
 
   // Lease-OCR prefill ships DARK behind its OWN flag (not just the shared
   // ANTHROPIC_API_KEY, which already powers appliance-scan) so it can't auto-go-
@@ -305,6 +308,16 @@ export default async function NewTenancyPage({
               />
             </div>
           </div>
+
+          {leaseTermShiftOn && (
+            <RentReconciliationFields
+              rentInputId="tenancy-rent"
+              source="lease_ocr"
+              visible={false}
+              title="Confirm the current rent from this lease"
+              description="Lease OCR can find the original rent. Confirm whether that is still the rent the tenant pays today before rent-increase tracking starts."
+            />
+          )}
 
           {/* Tenants ------------------------------------------------------ */}
           <div>

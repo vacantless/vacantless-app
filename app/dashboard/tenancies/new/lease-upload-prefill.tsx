@@ -150,7 +150,14 @@ export function LeaseUploadPrefill({
     if (d.start_date) setVal("tenancy-start-date", d.start_date);
     if (d.end_date) setVal("tenancy-end-date", d.end_date);
     if (d.term_months != null) setVal("tenancy-term-months", String(d.term_months));
-    if (d.rent_cents != null) setVal("tenancy-rent", centsToDollars(d.rent_cents));
+    if (d.rent_cents != null) {
+      setVal("tenancy-rent", centsToDollars(d.rent_cents));
+      document.dispatchEvent(
+        new CustomEvent("vacantless:lease-ocr-rent-confirmation", {
+          detail: { rentCents: d.rent_cents },
+        }),
+      );
+    }
     if (d.deposit_cents != null) setVal("tenancy-deposit", centsToDollars(d.deposit_cents));
 
     // Tenants -> the fixed 3 rows (row 0 is primary by default).

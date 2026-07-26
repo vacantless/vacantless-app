@@ -24,6 +24,7 @@ import {
   removeTenant,
   makePrimaryTenant,
   recordRentIncrease,
+  watchLease,
   setRenewalAutopilot,
   requestRenewalCheckin,
   serveN1,
@@ -101,6 +102,11 @@ import type { N1Snapshot } from "@/lib/n1-render";
 import { RentIncreaseCard } from "@/components/rent-increase-card";
 import { RentIncreaseMarketNote } from "@/components/rent-increase-market-note";
 import { deriveRentIncreaseMarketContext } from "@/lib/rent-increase-market";
+import { RentReconciliationFields } from "@/components/rent-reconciliation-fields";
+import {
+  hasConfirmedRentLedger,
+  leaseTermShiftEnabled,
+} from "@/lib/rent-adjustments-server";
 import {
   benchmarksFor,
   cityFromBenchmarkAddress,
@@ -579,12 +585,18 @@ export default async function TenancyDetailPage({
   const n4AppUrl =
     process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
   const guidelineLookup = await loadGuidelineLookup(supabase);
+  const leaseTermShiftOn = leaseTermShiftEnabled();
+  const rentLedgerConfirmed = leaseTermShiftOn
+    ? await hasConfirmedRentLedger(supabase, t.id)
+    : true;
+  const rentIncreaseReady =
+    t.status === "active" && t.rent_cents != null && !!t.start_date;
   const rentIncrease =
-    t.status === "active" && t.rent_cents != null && t.start_date
+    rentLedgerConfirmed && rentIncreaseReady
       ? deriveRentIncrease(
           {
             startDate: t.start_date,
-            currentRentCents: t.rent_cents,
+            currentRentCents: t.rent_cents ?? 0,
             lastIncreaseDate: t.last_rent_increase_date ?? null,
             exempt: t.property?.rent_control_exempt === true,
             guideline: guidelineLookup,
@@ -592,6 +604,8 @@ export default async function TenancyDetailPage({
           todayOntario,
         )
       : null;
+  const rentIncreasePendingConfirm =
+    leaseTermShiftOn && rentIncreaseReady && !rentLedgerConfirmed;
 
   // Is the N1 served for the CURRENT annual cycle? (S460d: the frozen snapshot's
   // effective date must equal the currently-derived one, else the serve is stale.)
@@ -707,6 +721,7 @@ export default async function TenancyDetailPage({
     badmethod: "Pick how the notice was served.",
     noamount:
       "No new-rent amount yet — the rent-increase guideline for this notice's effective year isn't in the system (or the unit is exempt). It can't be served until an amount is available.",
+    unconfirmed: "Confirm the current rent before serving an N1.",
     filenone: "Attach the printed N1 PDF to file it.",
     filetype: "The vault accepts a PDF — print the N1 and save it as PDF first.",
     filefail: "Could not file the notice. Try again.",
@@ -1054,6 +1069,7 @@ export default async function TenancyDetailPage({
   const INCREASE_ERROR: Record<string, string> = {
     baddate: "Pick the date the increase takes effect.",
     before_start: "The increase date can't be before the lease start.",
+    unconfirmed: "Confirm the current rent before recording an increase.",
   };
   const increaseFlash =
     searchParams.increase === "recorded"
@@ -1691,6 +1707,86 @@ export default async function TenancyDetailPage({
       )}
 
       {/* Rent increase (N1 v1) ------------------------------------------- */}
+      {rentIncreasePendingConfirm && (
+        <CollapsibleSection
+          id="rent-increase"
+          title="Rent increase"
+          status="Confirm rent"
+          defaultOpen={openSection === "rent-increase"}
+        >
+          <form
+            action={watchLease}
+            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+          >
+            <input type="hidden" name="tenancy_id" value={t.id} />
+            <p className="text-sm font-semibold text-gray-700">
+              Confirm current rent before tracking starts
+            </p>
+            <p className="mb-4 mt-1 text-xs text-gray-500">
+              The N1 and reminder math will use the confirmed current rent, not a stale lease amount.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Lease start</label>
+                <input
+                  type="date"
+                  name="start_date"
+                  required
+                  defaultValue={t.start_date ?? ""}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Lease rent ($)</label>
+                <input
+                  id="tenancy-detail-rent-confirm"
+                  type="number"
+                  name="rent"
+                  step="0.01"
+                  min="0"
+                  defaultValue={dollars(t.rent_cents)}
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <RentReconciliationFields
+              rentInputId="tenancy-detail-rent-confirm"
+              defaultRentCents={t.rent_cents}
+              defaultCurrentEffectiveDate={t.last_rent_increase_date}
+              className="mt-4"
+            />
+            <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  name="rent_control_exempt"
+                  defaultChecked={t.property?.rent_control_exempt === true}
+                  className="mt-0.5"
+                />
+                <span>
+                  This unit was first occupied after Nov 15, 2018 (rent-control exempt).
+                  <span className="mt-0.5 block text-xs text-gray-500">
+                    We store your classification and do not determine it for you.
+                  </span>
+                </span>
+              </label>
+              <div className="mt-3">
+                <label className={labelCls}>First occupancy date (optional)</label>
+                <input
+                  type="date"
+                  name="first_occupancy_date"
+                  defaultValue={t.property?.first_occupancy_date ?? ""}
+                  className={`${inputCls} max-w-xs`}
+                />
+              </div>
+            </div>
+            <button type="submit" className={`${SECONDARY_ACTION_CLASS} mt-4`}>
+              Confirm &amp; track rent increases
+            </button>
+          </form>
+        </CollapsibleSection>
+      )}
+
       {rentIncrease && (
         <CollapsibleSection
           id="rent-increase"

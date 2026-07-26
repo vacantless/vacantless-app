@@ -161,6 +161,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   lead_mismatch: "That inquiry is for a different rental than the one selected.",
   dup_tenancy:
     "This rental already has an active or upcoming tenancy. End it first, or pick another rental.",
+  increase_before_start: "The current rent date can't be before the lease start.",
+  current_rent_confirm: "Confirm whether the lease rent is still current.",
+  current_rent: "Enter the current monthly rent.",
+  current_rent_effective: "Pick the date the current rent took effect.",
+  current_rent_history: "Complete both the date and rent for the earlier change, or leave it blank.",
+  current_rent_history_date:
+    "Earlier rent changes must be after the lease start and before the current rent date.",
+  rent: "Enter the original monthly rent from the lease.",
 };
 
 export function tenancyErrorMessage(code: string | undefined): string | null {

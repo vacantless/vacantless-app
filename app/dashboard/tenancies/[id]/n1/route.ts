@@ -6,6 +6,10 @@ import { formatRentCents } from "@/lib/tenancy";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { renderN1Html, type N1RenderModel } from "@/lib/n1-render";
+import {
+  hasConfirmedRentLedger,
+  leaseTermShiftEnabled,
+} from "@/lib/rent-adjustments-server";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +40,7 @@ export async function GET(
   const { data: tenancyRow } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, start_date, property:properties(address), tenants(name, is_primary)",
+      "id, status, rent_cents, start_date, last_rent_increase_date, property:properties(address, rent_control_exempt), tenants(name, is_primary)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -46,7 +50,8 @@ export async function GET(
     status: string;
     rent_cents: number | null;
     start_date: string | null;
-    property: { address: string } | null;
+    last_rent_increase_date: string | null;
+    property: { address: string; rent_control_exempt: boolean | null } | null;
     tenants: { name: string | null; is_primary: boolean }[];
   };
 
@@ -62,6 +67,15 @@ export async function GET(
       { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } },
     );
   }
+  if (
+    leaseTermShiftEnabled() &&
+    !(await hasConfirmedRentLedger(supabase, params.id))
+  ) {
+    return new NextResponse(
+      "Confirm the current rent before opening a pre-filled N1.",
+      { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } },
+    );
+  }
 
   // Anchor "today" to America/Toronto so the legal date math matches the card
   // (Vercel server components run in UTC — KI443).
@@ -71,7 +85,13 @@ export async function GET(
 
   const guideline = await loadGuidelineLookup(supabase);
   const result = deriveRentIncrease(
-    { startDate: tenancy.start_date, currentRentCents: tenancy.rent_cents, guideline },
+    {
+      startDate: tenancy.start_date,
+      currentRentCents: tenancy.rent_cents,
+      lastIncreaseDate: tenancy.last_rent_increase_date ?? null,
+      exempt: tenancy.property?.rent_control_exempt === true,
+      guideline,
+    },
     todayOntario,
   );
   if (!result) {
