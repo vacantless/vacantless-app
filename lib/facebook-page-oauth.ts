@@ -10,6 +10,11 @@ export const FACEBOOK_PAGE_SCOPES = [
   "pages_show_list",
   "pages_read_engagement",
   "pages_manage_posts",
+  // Needed to enumerate business-managed Pages via /me/businesses ->
+  // owned_pages / client_pages (KI921: those Pages do NOT appear in
+  // /me/accounts). Must be added to the Meta app use case ("Ready for
+  // testing" in DEV mode) or OAuth rejects the whole login as Invalid Scopes.
+  "business_management",
 ] as const;
 
 export type FacebookOAuthState = {

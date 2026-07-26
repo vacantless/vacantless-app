@@ -41,6 +41,20 @@ type PagesResponse = {
   data?: FacebookPageCandidate[];
 };
 
+type BusinessListResponse = {
+  data?: { id?: string; name?: string }[];
+};
+
+type PageIdNameResponse = {
+  data?: { id?: string; name?: string }[];
+};
+
+type PageNodeResponse = {
+  id?: string;
+  name?: string;
+  access_token?: string;
+};
+
 function clearCookie(res: NextResponse, name: string): void {
   res.cookies.set(name, "", {
     httpOnly: true,
@@ -77,6 +91,59 @@ async function graphGet<T>(
 function graphTokenError(json: GraphJson<unknown>): string | null {
   if (!json.error) return null;
   return json.error.code != null ? `graph_${json.error.code}` : "graph_error";
+}
+
+// Business-managed Pages do NOT appear in /me/accounts (KI921). Fall back to
+// the user's Business Portfolios: list their businesses, enumerate the Pages
+// each business owns or manages for a client, then mint a Page access token
+// per Page id. Any Graph error is treated as "no business Pages" so the
+// callback falls through to the same `nopages` result as before.
+async function collectBusinessPageCandidates(
+  userToken: string,
+): Promise<FacebookPageCandidate[]> {
+  const businesses = await graphGet<BusinessListResponse>("/me/businesses", {
+    fields: "id,name",
+    limit: "100",
+    access_token: userToken,
+  });
+  if (graphTokenError(businesses) || !businesses.data?.length) return [];
+
+  // Unique page id -> a best-effort display name from the edge.
+  const pageIds = new Map<string, string>();
+  for (const biz of businesses.data) {
+    if (!biz.id) continue;
+    for (const edge of ["owned_pages", "client_pages"] as const) {
+      const resp = await graphGet<PageIdNameResponse>(`/${biz.id}/${edge}`, {
+        fields: "id,name",
+        limit: "100",
+        access_token: userToken,
+      });
+      if (graphTokenError(resp)) continue;
+      for (const p of resp.data ?? []) {
+        if (p.id && !pageIds.has(p.id)) pageIds.set(p.id, p.name ?? p.id);
+      }
+    }
+  }
+  if (pageIds.size === 0) return [];
+
+  // The edges above do not reliably return a Page token for business-managed
+  // Pages, so mint one explicitly per Page id with the long-lived user token.
+  const candidates: FacebookPageCandidate[] = [];
+  for (const [pageId, fallbackName] of pageIds) {
+    const node = await graphGet<PageNodeResponse>(`/${pageId}`, {
+      fields: "id,name,access_token",
+      access_token: userToken,
+    });
+    if (graphTokenError(node)) continue;
+    if (node.id && node.access_token) {
+      candidates.push({
+        id: node.id,
+        name: node.name || fallbackName,
+        access_token: node.access_token,
+      });
+    }
+  }
+  return candidates;
 }
 
 export async function GET(req: NextRequest) {
@@ -127,9 +194,14 @@ export async function GET(req: NextRequest) {
   const pagesErr = graphTokenError(pages);
   if (pagesErr) return redirectBack(req, state.propertyId, "error", pagesErr);
 
-  const candidates = (pages.data ?? []).filter(
+  let candidates = (pages.data ?? []).filter(
     (p) => p.id && p.name && p.access_token,
   );
+  // Personally-owned Pages come back from /me/accounts. Business-managed
+  // Pages do not (KI921) - fall back to the user's Business Portfolios.
+  if (candidates.length === 0) {
+    candidates = await collectBusinessPageCandidates(longToken.access_token);
+  }
   if (candidates.length === 0) {
     return redirectBack(req, state.propertyId, "error", "nopages");
   }
