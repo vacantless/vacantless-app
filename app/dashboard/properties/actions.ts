@@ -127,6 +127,12 @@ import {
   type ChannelTileStatusRow,
   type DistributionChannelAccountTileRow,
 } from "@/lib/distribution-channel-tile-statuses";
+import {
+  buildAfterLiveSummary,
+  type AfterLiveLeadRow,
+  type AfterLiveListingPostRow,
+  type AfterLiveSummary,
+} from "@/lib/after-live-summary";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -1611,6 +1617,30 @@ export async function listChannelTileStatuses(
 
     return (accounts ?? []) as DistributionChannelAccountTileRow[];
   });
+}
+
+export async function propertyAfterLiveSummary(
+  propertyId: string,
+): Promise<AfterLiveSummary> {
+  const supabase = createClient();
+
+  const [leadsResult, postsResult] = await Promise.all([
+    supabase
+      .from("leads")
+      .select("id, organization_id, property_id, source, name, email, phone, created_at")
+      .eq("property_id", propertyId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("listing_posts")
+      .select("portal, status, created_at")
+      .eq("property_id", propertyId)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  return buildAfterLiveSummary(
+    (leadsResult.data ?? []) as AfterLiveLeadRow[],
+    (postsResult.data ?? []) as AfterLiveListingPostRow[],
+  );
 }
 
 export async function startDistributionRun(formData: FormData) {
