@@ -98,6 +98,7 @@ export type LaunchRunData = {
   // Distribution Lane B: REALTOR_REFERRAL_ENABLED firewall, threaded to the
   // Realtor.ca "dispatch a network agent" referral option in the run panel.
   realtorReferralEnabled: boolean;
+  leaseupTakedownEnabled?: boolean;
 };
 
 export type ReplyInputs = {
@@ -247,7 +248,11 @@ function nextRunAction(items: RunItemView[]): { label: string } | null {
   if (!best) return null;
   const it = best.item;
   const label =
-    it.publishStatus === "needs_payment"
+    it.transport === "takedown" && it.publishStatus === "needs_operator"
+      ? `Remove ${it.channelLabel} ad`
+      : it.transport === "takedown" && it.publishStatus === "queued"
+        ? `Waiting on ${it.channelLabel} removal`
+        : it.publishStatus === "needs_payment"
       ? `Sign in or pay on ${it.channelLabel} to post it`
       : it.publishStatus === "needs_login"
         ? `Sign in on ${it.channelLabel} to post it`
@@ -544,6 +549,7 @@ export function DistributeTab({
         selectable={launchRun.selectable}
         startChannels={launchRun.startChannels}
         realtorReferralEnabled={launchRun.realtorReferralEnabled}
+        leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
       />
 
       {/* Proof links (Slice 1): keep source-of-truth live ad URLs easy to save;

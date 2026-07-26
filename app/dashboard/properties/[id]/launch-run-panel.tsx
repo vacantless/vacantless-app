@@ -18,6 +18,7 @@ import {
   verifyOrgFeedInclusion,
   recordItemProof,
   authorizeAutopilotSubmit,
+  confirmLeaseupTakedownRemovedAction,
 } from "../distribution-actions";
 import {
   verificationResultLabel,
@@ -155,6 +156,7 @@ function DisplayStatusChip({ item }: { item: RunItemView }) {
 //    override to warning + "Submitted to feed - not live yet".
 //  - staleRefresh (needs_refresh) -> amber "Needs refresh".
 function displayStatus(item: RunItemView): { label: string; tone: PublishTone } {
+  if (isRemovedTakedownItem(item)) return { label: "Removed", tone: "positive" };
   if (item.liveWithoutUrl) return { label: "Needs ad URL", tone: "danger" };
   if (item.staleRefresh) return { label: "Needs refresh", tone: "warning" };
   if (item.publishStatus === "submitted")
@@ -162,7 +164,20 @@ function displayStatus(item: RunItemView): { label: string; tone: PublishTone } 
   return { label: item.statusLabel, tone: item.statusTone };
 }
 
+function isTakedownItem(item: RunItemView): boolean {
+  return item.transport === "takedown";
+}
+
+function isOperatorTakedownItem(item: RunItemView): boolean {
+  return isTakedownItem(item) && item.publishStatus === "needs_operator";
+}
+
+function isRemovedTakedownItem(item: RunItemView): boolean {
+  return isTakedownItem(item) && item.publishStatus === "skipped" && item.status === "done";
+}
+
 function nextActionLabel(item: RunItemView): string {
+  if (isTakedownItem(item)) return "Open the ad";
   if (item.channel === "vacantless") return "Open renter page";
   if (item.channel === "org_feed") return "Open listing feed";
   if (item.mode === "broker") return "Open broker page";
@@ -209,6 +224,11 @@ function primaryOperatorItem(items: RunItemView[]): RunItemView | null {
 }
 
 function operatorActionSummary(item: RunItemView): string {
+  if (isTakedownItem(item)) {
+    if (isRemovedTakedownItem(item)) return `${item.channelLabel} ad removal is recorded.`;
+    if (item.publishStatus === "queued") return `${item.channelLabel} ad removal is queued.`;
+    return `Remove the ${item.channelLabel} ad, then mark it removed.`;
+  }
   if (item.liveWithoutUrl) {
     return "Paste the real live ad URL before this channel can count as Live.";
   }
@@ -251,6 +271,9 @@ function operatorActionSummary(item: RunItemView): string {
 }
 
 function operatorOwnerLine(item: RunItemView): string {
+  if (isTakedownItem(item)) {
+    return "Vacantless keeps the tracker row for attribution and records your removal confirmation here.";
+  }
   if (item.channel === "facebook_feed") {
     return "Vacantless can post to the connected Facebook Page only after you authorize this item. It still needs Graph API proof before it counts as Live.";
   }
@@ -280,6 +303,7 @@ export function LaunchRunPanel({
   selectable,
   startChannels,
   realtorReferralEnabled,
+  leaseupTakedownEnabled,
 }: {
   propertyId: string;
   run: { id: string } | null;
@@ -293,6 +317,7 @@ export function LaunchRunPanel({
   // When off, Realtor.ca shows only the "your own agent" broker handoff — never
   // the "dispatch a network agent" referral.
   realtorReferralEnabled: boolean;
+  leaseupTakedownEnabled: boolean;
 }) {
   const suggestedStartChannels = startChannels.filter(
     (channel) => channel.defaultSelected,
@@ -492,7 +517,7 @@ export function LaunchRunPanel({
                       {publishModeLabel(item.mode)}
                     </span>
                     <DisplayStatusChip item={item} />
-                    {item.verificationStatus && (
+                    {item.verificationStatus && !isRemovedTakedownItem(item) && (
                       <span
                         title="Verification"
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[verificationResultTone(item.verificationStatus)]}`}
@@ -544,7 +569,7 @@ export function LaunchRunPanel({
 
             {/* Co-pilot channels get the guided panel instead of the flat
                 step list; everything else keeps the plain checklist. */}
-            {!item.copilotScript && (
+            {!item.copilotScript && !isTakedownItem(item) && (
               <ol className="mb-3 space-y-1.5">
                 {item.steps.map((s, i) => (
                   <li key={s.key} className="flex gap-2 text-xs text-gray-600">
@@ -584,6 +609,18 @@ export function LaunchRunPanel({
               >
                 {nextActionLabel(item)}
               </a>
+            )}
+            {leaseupTakedownEnabled && isOperatorTakedownItem(item) && (
+              <form action={confirmLeaseupTakedownRemovedAction} className="mb-3">
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="item_id" value={item.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
+                >
+                  Mark ad removed
+                </button>
+              </form>
             )}
             {/* Concierge / referral handoff. Realtor.ca is a special case
                 (Distribution Lane B): a rental can only reach Realtor.ca through

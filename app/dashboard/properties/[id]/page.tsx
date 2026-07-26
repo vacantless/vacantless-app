@@ -1477,7 +1477,9 @@ export default async function PropertyDetailPage({
       }),
       canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
       canAutopilot:
-        autopilotChannels.has(r.channel) && publishStatus === "needs_operator",
+        r.transport !== "takedown" &&
+        autopilotChannels.has(r.channel) &&
+        publishStatus === "needs_operator",
       autopilotApproved: r.operator_submit_approved_at != null,
       copilotScript,
       // S543: explicit item freshness state wins; only older rows without it
@@ -1516,6 +1518,7 @@ export default async function PropertyDetailPage({
     conciergeUsage,
     conciergeDailyLostLabel,
     realtorReferralEnabled,
+    leaseupTakedownEnabled: process.env.LEASEUP_TAKEDOWN_ENABLED === "true",
   };
   const copilotNotice: DistributeRunNotice | null =
     searchParams.dist === "copilot_live"
@@ -1571,7 +1574,21 @@ export default async function PropertyDetailPage({
                   : null;
   const distributeRunNotice: DistributeRunNotice | null =
     copilotNotice ??
-    (searchParams.run === "concierge"
+    (searchParams.dist === "takedown_removed"
+      ? {
+          tone: "success",
+          title: "Ad removal recorded.",
+          body:
+            "The external ad is marked removed in Vacantless and the take-down task is closed.",
+        }
+      : searchParams.dist === "takedown_failed"
+        ? {
+            tone: "danger",
+            title: "Ad removal was not recorded.",
+            body:
+              "Refresh the checklist and confirm this is still an open take-down task before trying again.",
+          }
+        : searchParams.run === "concierge"
       ? {
           tone: "success",
           title: "Handed to the desk.",

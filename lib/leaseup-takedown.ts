@@ -11,7 +11,7 @@ import type { Org } from "@/lib/org";
 // worker command (`npm run takedown:leaseup`) keyed by TAKEDOWN_ITEM_ID. App
 // enqueue marks these rows transport='takedown' so the publish-prep cron never
 // claims them as new-post jobs.
-const FEATURE_FLAG = "LEASEUP_TAKEDOWN_ENABLED";
+export const LEASEUP_TAKEDOWN_FEATURE_FLAG = "LEASEUP_TAKEDOWN_ENABLED";
 const FB_PAGE_FEED = "facebook_feed";
 const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"
@@ -46,8 +46,8 @@ type CompatibleSiblingRow = {
   unit_type: string | null;
 };
 
-function leaseupTakedownEnabled(): boolean {
-  return process.env[FEATURE_FLAG] === "true";
+export function leaseupTakedownEnabled(): boolean {
+  return process.env[LEASEUP_TAKEDOWN_FEATURE_FLAG] === "true";
 }
 
 function compatibleSiblingCount(
@@ -170,7 +170,7 @@ async function logLeaseupDecision(
       source: "leaseup_lifecycle",
       action: args.action,
       reason: args.reason,
-      feature_flag: FEATURE_FLAG,
+      feature_flag: LEASEUP_TAKEDOWN_FEATURE_FLAG,
       leaseup_takedown_enabled: true,
       sibling_available_count: args.siblingAvailableCount,
       waitlist_enabled: args.waitlistEnabled,

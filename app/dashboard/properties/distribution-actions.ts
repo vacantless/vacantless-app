@@ -55,6 +55,7 @@ import {
   type AttemptActorType,
 } from "@/lib/distribution-attempts";
 import { deleteChannelSession } from "@/lib/distribution-session-crypto";
+import { confirmLeaseupTakedownRemoved } from "@/lib/leaseup-takedown-confirm";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
@@ -296,6 +297,29 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?autopilot=authorized#distribute-header`);
+}
+
+export async function confirmLeaseupTakedownRemovedAction(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyIdForm = s(formData, "property_id");
+  const itemId = s(formData, "item_id");
+  if (!itemId) redirect(propertyIdForm ? `/dashboard/properties/${propertyIdForm}` : "/dashboard/properties");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+  const result = await confirmLeaseupTakedownRemoved({
+    supabase,
+    org,
+    runItemId: itemId,
+  });
+  const propertyId = result.propertyId ?? propertyIdForm;
+  if (propertyId) {
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    backTo(propertyId, result.ok ? "takedown_removed" : "takedown_failed");
+  }
+  redirect("/dashboard/properties");
 }
 
 // ---------------------------------------------------------------------------
