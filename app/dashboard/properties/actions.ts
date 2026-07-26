@@ -122,6 +122,11 @@ import { plateFieldsToQuery, normalizePendingDocId, type AssetDraft } from "@/li
 import { validateExpenseInput } from "@/lib/expenses";
 import { parseMoneyToCents } from "@/lib/tenancy";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
+import {
+  listChannelTileStatuses as listChannelTileStatusesFromAccounts,
+  type ChannelTileStatusRow,
+  type DistributionChannelAccountTileRow,
+} from "@/lib/distribution-channel-tile-statuses";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -1591,6 +1596,21 @@ async function stageDistributionRunForProperty({
   );
 
   return true;
+}
+
+export async function listChannelTileStatuses(
+  orgId: string,
+): Promise<ChannelTileStatusRow[]> {
+  const supabase = createClient();
+
+  return listChannelTileStatusesFromAccounts(orgId, async () => {
+    const { data: accounts } = await supabase
+      .from("distribution_channel_accounts")
+      .select("channel, account_status, automation_authorized")
+      .eq("organization_id", orgId);
+
+    return (accounts ?? []) as DistributionChannelAccountTileRow[];
+  });
 }
 
 export async function startDistributionRun(formData: FormData) {
