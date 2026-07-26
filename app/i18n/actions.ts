@@ -7,3 +7,8 @@ export async function setLocale(locale: string) {
   setUserLocale(locale);
   revalidatePath("/");
 }
+
+export async function setLocaleFromFormData(formData: FormData) {
+  const locale = formData.get("locale");
+  await setLocale(typeof locale === "string" ? locale : "");
+}

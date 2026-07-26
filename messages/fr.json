@@ -3,8 +3,10 @@
   "common": {
     "brand": "Vacantless",
     "language": "Langue",
+    "apply": "Appliquer",
     "back": "Retour",
-    "next": "Étape suivante"
+    "next": "Étape suivante",
+    "stepNavigation": "Navigation des étapes"
   },
   "stages": {
     "s1": "Reliez vos portails",

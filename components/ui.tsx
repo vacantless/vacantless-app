@@ -1,5 +1,12 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type {
+  AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
+  CSSProperties,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+} from "react";
 
 /**
  * Shared SaaS UI primitives. Server-component friendly (no client state) so
@@ -10,6 +17,10 @@ import type { ReactNode } from "react";
  * portal page. Brand color flows from the --brand-color CSS var set on the
  * dashboard shell, so every accent stays tenant-aware.
  */
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
 // --- Shared action class tokens ----------------------------------------------
 
@@ -407,3 +418,538 @@ export function EmptyState({
     </div>
   );
 }
+
+// --- Presentation kit shells ------------------------------------------------
+
+export function StageShell({
+  as = "main",
+  children,
+  title,
+  subtitle,
+  eyebrow,
+  action,
+  className = "",
+}: {
+  as?: "main" | "section" | "div";
+  children?: ReactNode;
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  eyebrow?: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  const Shell = as;
+
+  return (
+    <Shell
+      className={cx(
+        "mx-auto flex min-h-screen w-full max-w-[40rem] flex-col px-5 py-8 text-[length:var(--vl-type-guided-body)] leading-[1.6] text-[var(--vl-text-primary)] sm:px-6 sm:py-12",
+        className,
+      )}
+    >
+      {(title || subtitle || eyebrow || action) && (
+        <header className="mb-8 space-y-3">
+          {eyebrow && (
+            <p className="text-[length:var(--vl-type-workbench-body)] font-semibold uppercase tracking-wider text-[var(--vl-accent)]">
+              {eyebrow}
+            </p>
+          )}
+          {title && (
+            <h1 className="text-[length:var(--vl-type-h1)] font-bold leading-tight tracking-normal text-[var(--vl-text-primary)]">
+              {title}
+            </h1>
+          )}
+          {subtitle && (
+            <p className="max-w-2xl text-[length:var(--vl-type-guided-body)] text-[var(--vl-text-secondary)]">
+              {subtitle}
+            </p>
+          )}
+          {action && <div className="pt-1">{action}</div>}
+        </header>
+      )}
+      <div className="flex flex-1 flex-col gap-[var(--vl-space-guided)]">
+        {children}
+      </div>
+    </Shell>
+  );
+}
+
+export function PageShell({
+  children,
+  title,
+  subtitle,
+  eyebrow,
+  icon,
+  action,
+  className = "",
+}: {
+  children?: ReactNode;
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  eyebrow?: ReactNode;
+  icon?: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <main
+      className={cx(
+        "mx-auto w-full max-w-7xl px-4 py-6 text-[length:var(--vl-type-workbench-body)] leading-[1.55] text-[var(--vl-text-primary)] sm:px-6 lg:px-8",
+        className,
+      )}
+    >
+      {(title || subtitle || eyebrow || icon || action) && (
+        <PageHeader
+          title={title}
+          subtitle={subtitle}
+          eyebrow={eyebrow}
+          icon={icon}
+          action={action}
+        />
+      )}
+      <div className="space-y-[var(--vl-space-workbench)]">{children}</div>
+    </main>
+  );
+}
+
+// --- Macro status banner ----------------------------------------------------
+
+export type StatusBannerTone = "success" | "attention" | "neutral" | "info";
+
+export const STATUS_BANNER_TONE_TO_CHIP_TONE: Record<
+  StatusBannerTone,
+  ChipTone
+> = {
+  success: "success",
+  attention: "warn",
+  neutral: "neutral",
+  info: "info",
+};
+
+const STATUS_BANNER_CLASSES: Record<StatusBannerTone, string> = {
+  success:
+    "border-[var(--vl-status-success-border)] bg-[var(--vl-status-success-bg)] text-[var(--vl-status-success-text)]",
+  attention:
+    "border-[var(--vl-status-attention-border)] bg-[var(--vl-status-attention-bg)] text-[var(--vl-status-attention-text)]",
+  neutral:
+    "border-[var(--vl-status-neutral-border)] bg-[var(--vl-status-neutral-bg)] text-[var(--vl-status-neutral-text)]",
+  info: "border-[var(--vl-status-info-border)] bg-[var(--vl-status-info-bg)] text-[var(--vl-status-info-text)]",
+};
+
+export function StatusBanner({
+  title,
+  children,
+  tone = "neutral",
+  action,
+  className = "",
+}: {
+  title: ReactNode;
+  children?: ReactNode;
+  tone?: StatusBannerTone;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      role="status"
+      className={cx(
+        "rounded-[var(--vl-radius-md)] border p-4 shadow-sm",
+        STATUS_BANNER_CLASSES[tone],
+        className,
+      )}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-lg font-bold leading-tight tracking-normal">
+            {title}
+          </p>
+          {children && (
+            <div className="mt-1 text-sm leading-relaxed">{children}</div>
+          )}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+    </section>
+  );
+}
+
+// --- Buttons ----------------------------------------------------------------
+
+export type ButtonVariant = "primary" | "secondary" | "ghost";
+export type ButtonSize = "sm" | "md" | "lg";
+
+const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
+  primary: PRIMARY_ACTION_CLASS,
+  secondary: SECONDARY_ACTION_CLASS,
+  ghost:
+    "inline-flex items-center justify-center gap-1.5 rounded-lg border border-transparent bg-transparent px-4 py-2 text-sm font-medium text-[var(--vl-accent)] transition hover:bg-[var(--vl-accent-soft)]",
+};
+
+const BUTTON_SIZE_CLASSES: Record<ButtonSize, string> = {
+  sm: "min-h-9 px-3 py-1.5 text-sm",
+  md: "min-h-10 px-4 py-2 text-sm",
+  lg: "min-h-12 px-6 py-3 text-lg",
+};
+
+export function Button({
+  children,
+  variant = "primary",
+  size = "md",
+  className = "",
+  style,
+  type = "button",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+}) {
+  const buttonStyle: CSSProperties | undefined =
+    variant === "primary"
+      ? { background: "var(--brand-gradient, var(--brand-color))", ...style }
+      : style;
+
+  return (
+    <button
+      {...props}
+      type={type}
+      style={buttonStyle}
+      className={cx(
+        BUTTON_VARIANT_CLASSES[variant],
+        BUTTON_SIZE_CLASSES[size],
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vl-focus-ring)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function ButtonLink({
+  children,
+  href,
+  variant = "primary",
+  size = "md",
+  className = "",
+  style,
+  disabled = false,
+  ...props
+}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
+  href: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  disabled?: boolean;
+}) {
+  const linkStyle: CSSProperties | undefined =
+    variant === "primary"
+      ? { background: "var(--brand-gradient, var(--brand-color))", ...style }
+      : style;
+
+  return (
+    <Link
+      {...props}
+      href={disabled ? "#" : href}
+      aria-disabled={disabled ? true : props["aria-disabled"]}
+      tabIndex={disabled ? -1 : props.tabIndex}
+      style={linkStyle}
+      className={cx(
+        BUTTON_VARIANT_CLASSES[variant],
+        BUTTON_SIZE_CLASSES[size],
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vl-focus-ring)] focus-visible:ring-offset-2",
+        disabled && "pointer-events-none opacity-50",
+        className,
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+// --- Fields -----------------------------------------------------------------
+
+export function Field({
+  children,
+  label,
+  htmlFor,
+  hint,
+  error,
+  className = "",
+}: {
+  children?: ReactNode;
+  label: ReactNode;
+  htmlFor?: string;
+  hint?: ReactNode;
+  error?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx("space-y-1.5", className)}>
+      <label
+        htmlFor={htmlFor}
+        className="block text-sm font-semibold text-[var(--vl-text-primary)]"
+      >
+        {label}
+      </label>
+      {children}
+      {hint && !error && (
+        <p className="text-sm text-[var(--vl-text-muted)]">{hint}</p>
+      )}
+      {error && (
+        <p className="text-sm font-medium text-red-700" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+  invalid?: boolean;
+};
+
+export function Input({ className = "", invalid = false, ...props }: InputProps) {
+  return (
+    <input
+      {...props}
+      aria-invalid={invalid ? true : props["aria-invalid"]}
+      className={cx(
+        "w-full rounded-[var(--vl-radius-md)] border border-[var(--vl-border)] bg-[var(--vl-surface-elevated)] px-3 py-2 text-[length:var(--vl-type-workbench-body)] text-[var(--vl-text-primary)] shadow-sm transition duration-vl-fast ease-vl-standard placeholder:text-[var(--vl-text-muted)] focus:border-[var(--vl-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--vl-focus-ring)] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500",
+        invalid && "border-red-300 focus:border-red-500 focus:ring-red-200",
+        className,
+      )}
+    />
+  );
+}
+
+type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
+  invalid?: boolean;
+};
+
+export function Select({
+  children,
+  className = "",
+  invalid = false,
+  ...props
+}: SelectProps) {
+  return (
+    <select
+      {...props}
+      aria-invalid={invalid ? true : props["aria-invalid"]}
+      className={cx(
+        "w-full rounded-[var(--vl-radius-md)] border border-[var(--vl-border)] bg-[var(--vl-surface-elevated)] px-3 py-2 text-[length:var(--vl-type-workbench-body)] text-[var(--vl-text-primary)] shadow-sm transition duration-vl-fast ease-vl-standard focus:border-[var(--vl-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--vl-focus-ring)] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500",
+        invalid && "border-red-300 focus:border-red-500 focus:ring-red-200",
+        className,
+      )}
+    >
+      {children}
+    </select>
+  );
+}
+
+// --- Language dropdown ------------------------------------------------------
+
+export type LanguageDropdownLocale = "en" | "fr";
+export type LanguageDropdownFormAction =
+  | string
+  | ((formData: FormData) => void | Promise<void>);
+
+export const LANGUAGE_DROPDOWN_OPTIONS: ReadonlyArray<{
+  value: LanguageDropdownLocale;
+  label: string;
+}> = [
+  { value: "en", label: "EN" },
+  { value: "fr", label: "FR" },
+];
+
+export function languageDropdownFormAction(
+  setLocaleAction: (locale: string) => void | Promise<void>,
+) {
+  return async (formData: FormData) => {
+    const locale = formData.get("locale");
+    await setLocaleAction(typeof locale === "string" ? locale : "");
+  };
+}
+
+export function LanguageDropdown({
+  locale,
+  action,
+  label = "Language",
+  submitLabel = "Apply",
+  id = "language",
+  pinned = false,
+  size = "sm",
+  className = "",
+}: {
+  locale: LanguageDropdownLocale;
+  action: LanguageDropdownFormAction;
+  label?: string;
+  submitLabel?: string;
+  id?: string;
+  pinned?: boolean;
+  size?: ButtonSize;
+  className?: string;
+}) {
+  return (
+    <form
+      action={action}
+      className={cx(
+        "flex flex-wrap items-end gap-2",
+        pinned &&
+          "sticky top-4 z-20 rounded-[var(--vl-radius-md)] border border-[var(--vl-border)] bg-[var(--vl-surface-elevated)] p-2 shadow-sm",
+        className,
+      )}
+    >
+      <Field label={label} htmlFor={id} className="min-w-28">
+        <Select
+          id={id}
+          name="locale"
+          defaultValue={locale}
+          aria-label={label}
+          className={size === "lg" ? "min-h-12 text-base" : undefined}
+        >
+          {LANGUAGE_DROPDOWN_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Button type="submit" variant="secondary" size={size}>
+        {submitLabel}
+      </Button>
+    </form>
+  );
+}
+
+// --- Back / next anchors ----------------------------------------------------
+
+export function BackNext({
+  backHref,
+  nextHref,
+  backLabel = "Back",
+  nextLabel = "Next",
+  ariaLabel = "Step navigation",
+  className = "",
+}: {
+  backHref: string;
+  nextHref: string;
+  backLabel?: ReactNode;
+  nextLabel?: ReactNode;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  return (
+    <nav
+      aria-label={ariaLabel}
+      className={cx(
+        "pointer-events-none fixed inset-x-0 bottom-0 z-30 flex items-end justify-between gap-4 p-4 sm:p-6",
+        className,
+      )}
+    >
+      <Link
+        href={backHref}
+        className="pointer-events-auto inline-flex min-h-12 items-center justify-center rounded-[var(--vl-radius-md)] border border-[var(--vl-border)] bg-[var(--vl-surface-elevated)] px-5 py-3 text-base font-semibold text-[var(--vl-text-secondary)] shadow-sm transition duration-vl-fast ease-vl-standard hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vl-focus-ring)] focus-visible:ring-offset-2"
+      >
+        {backLabel}
+      </Link>
+      <Link
+        href={nextHref}
+        className="pointer-events-auto inline-flex min-h-12 items-center justify-center rounded-[var(--vl-radius-md)] px-6 py-3 text-base font-semibold text-white shadow-sm transition duration-vl-fast ease-vl-standard hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vl-focus-ring)] focus-visible:ring-offset-2"
+        style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+      >
+        {nextLabel}
+      </Link>
+    </nav>
+  );
+}
+
+// --- Workbench data table ---------------------------------------------------
+
+export function DataTable({
+  children,
+  caption,
+  className = "",
+}: {
+  children?: ReactNode;
+  caption?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "overflow-hidden rounded-[var(--vl-radius-md)] border border-[var(--vl-border)] bg-[var(--vl-surface-elevated)] shadow-sm",
+        className,
+      )}
+    >
+      <table className="min-w-full border-collapse text-left text-[length:var(--vl-type-workbench-body)] text-[var(--vl-text-primary)]">
+        {caption && <caption className="sr-only">{caption}</caption>}
+        {children}
+      </table>
+    </div>
+  );
+}
+
+export function DataTableRow({
+  children,
+  className = "",
+  interactive = false,
+  selected = false,
+}: {
+  children?: ReactNode;
+  className?: string;
+  interactive?: boolean;
+  selected?: boolean;
+}) {
+  return (
+    <tr
+      data-selected={selected ? "true" : undefined}
+      className={cx(
+        "border-b border-[var(--vl-border)] last:border-b-0",
+        interactive &&
+          "transition duration-vl-fast ease-vl-standard hover:bg-[var(--vl-accent-soft)] focus-within:bg-[var(--vl-accent-soft)]",
+        selected && "bg-[var(--vl-accent-soft)]",
+        className,
+      )}
+    >
+      {children}
+    </tr>
+  );
+}
+
+export function DataTableCell({
+  children,
+  as = "td",
+  scope,
+  numeric = false,
+  muted = false,
+  className = "",
+}: {
+  children?: ReactNode;
+  as?: "td" | "th";
+  scope?: "col" | "row";
+  numeric?: boolean;
+  muted?: boolean;
+  className?: string;
+}) {
+  const classes = cx(
+    "px-3 py-2 align-middle",
+    as === "th" && "text-xs font-semibold uppercase tracking-wider",
+    muted && "text-[var(--vl-text-muted)]",
+    numeric && "text-right tabular-nums",
+    className,
+  );
+
+  if (as === "th") {
+    return (
+      <th scope={scope ?? "col"} className={classes}>
+        {children}
+      </th>
+    );
+  }
+
+  return <td className={classes}>{children}</td>;
+}
+
+export const Table = DataTable;
+export const TableRow = DataTableRow;
+export const TableCell = DataTableCell;
