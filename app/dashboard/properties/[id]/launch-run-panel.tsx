@@ -319,6 +319,12 @@ export function LaunchRunPanel({
   realtorReferralEnabled: boolean;
   leaseupTakedownEnabled: boolean;
 }) {
+  // S588: gated entry into the guided distribution wizard for this listing.
+  // Dark like the nav entry — only shows when DISTRIBUTION_WIZARD_ENABLED is set.
+  const wizardEnabled = process.env.DISTRIBUTION_WIZARD_ENABLED === "1";
+  const guidedHref = `/dashboard/link-portals?property=${encodeURIComponent(
+    propertyId,
+  )}`;
   const suggestedStartChannels = startChannels.filter(
     (channel) => channel.defaultSelected,
   );
@@ -376,12 +382,22 @@ export function LaunchRunPanel({
           <h3 className="text-sm font-semibold text-gray-950">
             Channels
           </h3>
-          <Link
-            href="/dashboard/settings?tab=distribution"
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Connect accounts
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {wizardEnabled && (
+              <Link
+                href={guidedHref}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Guided setup
+              </Link>
+            )}
+            <Link
+              href="/dashboard/settings?tab=distribution"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Connect accounts
+            </Link>
+          </div>
         </div>
         <p className="mb-3 text-xs text-gray-500">Select reach. Keep it short.</p>
         <form action={startDistributionRun}>

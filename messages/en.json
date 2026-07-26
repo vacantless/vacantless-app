@@ -6,7 +6,8 @@
     "apply": "Apply",
     "back": "Back",
     "next": "Next Step",
-    "stepNavigation": "Step navigation"
+    "stepNavigation": "Step navigation",
+    "forListing": "For this listing:"
   },
   "stages": {
     "s1": "Link your portals",

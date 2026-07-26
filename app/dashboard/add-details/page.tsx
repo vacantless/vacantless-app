@@ -16,6 +16,7 @@ import {
   DEFAULT_INGEST_DOMAIN,
 } from "@/lib/email-ingest";
 import { assertSupportedLocale } from "@/lib/i18n/locale";
+import { withPropertyParam } from "@/lib/stage-wizard-nav";
 import {
   STAGE2_METHODS,
   stage2FieldStatusKey,
@@ -28,7 +29,11 @@ export const dynamic = "force-dynamic";
 // nav. Guided density on the S583a kit. The three cards route to the existing
 // intake rails; the read panel shows the honest empty state until a real
 // intake result is threaded in (a later slice).
-export default async function AddDetailsPage() {
+export default async function AddDetailsPage({
+  searchParams,
+}: {
+  searchParams: { property?: string };
+}) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
@@ -44,6 +49,24 @@ export default async function AddDetailsPage() {
   const ingestAddress = addr?.token
     ? ingestAddressFromToken(addr.token, ingestDomain)
     : null;
+
+  // Optional per-listing context. Validate org ownership before trusting the
+  // id; the document/manual intake cards then deep-link to that property.
+  let ownedPropertyId: string | null = null;
+  let propertyAddress: string | null = null;
+  const requestedProperty = searchParams.property?.trim();
+  if (requestedProperty) {
+    const { data: owned } = await supabase
+      .from("properties")
+      .select("id, address")
+      .eq("id", requestedProperty)
+      .eq("organization_id", org.id)
+      .maybeSingle();
+    if (owned?.id) {
+      ownedPropertyId = owned.id as string;
+      propertyAddress = (owned.address as string | null) ?? null;
+    }
+  }
 
   const [locale, tStage2, tStages, tCommon] = await Promise.all([
     getLocale(),
@@ -73,25 +96,42 @@ export default async function AddDetailsPage() {
       }
       className="min-h-[calc(100vh-14rem)] pb-28 pt-0"
     >
+      {propertyAddress && (
+        <p className="text-[length:var(--vl-type-guided-body)] text-[var(--vl-text-secondary)]">
+          {tCommon("forListing")}{" "}
+          <span className="font-semibold text-[var(--vl-text-primary)]">
+            {propertyAddress}
+          </span>
+        </p>
+      )}
       <div className="space-y-4">
-        {STAGE2_METHODS.map((method) => (
-          <Card key={method.id} className="space-y-3" padded>
-            <h2 className="text-xl font-bold leading-tight text-[var(--vl-text-primary)]">
-              {tStage2(method.titleKey)}
-            </h2>
-            <p className="text-[length:var(--vl-type-guided-body)] leading-relaxed text-[var(--vl-text-secondary)]">
-              {tStage2(method.bodyKey)}
-            </p>
-            {method.id === "email" && ingestAddress && (
-              <p className="break-all rounded-[var(--vl-radius-md)] border border-[var(--vl-border)] bg-[var(--vl-surface)] px-3 py-2 font-mono text-base text-[var(--vl-text-primary)]">
-                {ingestAddress}
+        {STAGE2_METHODS.map((method) => {
+          // Document + manual intake target THIS listing when one is in
+          // context; email stays the org-level ingest address.
+          const methodHref =
+            ownedPropertyId &&
+            (method.id === "document" || method.id === "manual")
+              ? `/dashboard/properties/${ownedPropertyId}`
+              : method.href;
+          return (
+            <Card key={method.id} className="space-y-3" padded>
+              <h2 className="text-xl font-bold leading-tight text-[var(--vl-text-primary)]">
+                {tStage2(method.titleKey)}
+              </h2>
+              <p className="text-[length:var(--vl-type-guided-body)] leading-relaxed text-[var(--vl-text-secondary)]">
+                {tStage2(method.bodyKey)}
               </p>
-            )}
-            <ButtonLink href={method.href} size="lg">
-              {tStage2(method.titleKey)}
-            </ButtonLink>
-          </Card>
-        ))}
+              {method.id === "email" && ingestAddress && (
+                <p className="break-all rounded-[var(--vl-radius-md)] border border-[var(--vl-border)] bg-[var(--vl-surface)] px-3 py-2 font-mono text-base text-[var(--vl-text-primary)]">
+                  {ingestAddress}
+                </p>
+              )}
+              <ButtonLink href={methodHref} size="lg">
+                {tStage2(method.titleKey)}
+              </ButtonLink>
+            </Card>
+          );
+        })}
       </div>
 
       <Card className="space-y-3" padded>
@@ -137,8 +177,8 @@ export default async function AddDetailsPage() {
       </Card>
 
       <BackNext
-        backHref="/dashboard/link-portals"
-        nextHref="/dashboard/send-live"
+        backHref={withPropertyParam("/dashboard/link-portals", ownedPropertyId)}
+        nextHref={withPropertyParam("/dashboard/send-live", ownedPropertyId)}
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}
         ariaLabel={tCommon("stepNavigation")}

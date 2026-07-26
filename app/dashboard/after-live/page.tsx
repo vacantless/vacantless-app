@@ -14,6 +14,7 @@ import { channelByKey } from "@/lib/distribution-channels";
 import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { assertSupportedLocale } from "@/lib/i18n/locale";
+import { withPropertyParam } from "@/lib/stage-wizard-nav";
 import { stage4BadgeKey } from "@/lib/stage4-after-live";
 import type { AfterLiveSummary } from "@/lib/after-live-summary";
 import { propertyAfterLiveSummary } from "../properties/actions";
@@ -44,17 +45,21 @@ export default async function AfterLivePage({
   // Optional per-property context. Verify org ownership BEFORE reading the
   // summary so a raw ?property id can't surface another org's leads.
   let summary: AfterLiveSummary | null = null;
-  const propertyId = searchParams.property?.trim();
-  if (propertyId) {
+  let ownedPropertyId: string | null = null;
+  let propertyAddress: string | null = null;
+  const requestedProperty = searchParams.property?.trim();
+  if (requestedProperty) {
     const supabase = createClient();
     const { data: owned } = await supabase
       .from("properties")
-      .select("id")
-      .eq("id", propertyId)
+      .select("id, address")
+      .eq("id", requestedProperty)
       .eq("organization_id", org.id)
       .maybeSingle();
     if (owned?.id) {
-      summary = await propertyAfterLiveSummary(owned.id);
+      ownedPropertyId = owned.id as string;
+      propertyAddress = (owned.address as string | null) ?? null;
+      summary = await propertyAfterLiveSummary(ownedPropertyId);
     }
   }
 
@@ -76,6 +81,14 @@ export default async function AfterLivePage({
       }
       className="min-h-[calc(100vh-14rem)] pb-28 pt-0"
     >
+      {propertyAddress && (
+        <p className="text-[length:var(--vl-type-guided-body)] text-[var(--vl-text-secondary)]">
+          {tCommon("forListing")}{" "}
+          <span className="font-semibold text-[var(--vl-text-primary)]">
+            {propertyAddress}
+          </span>
+        </p>
+      )}
       <Card className="space-y-3" padded>
         <h2 className="text-[length:var(--vl-type-h2)] font-semibold leading-tight text-[var(--vl-text-primary)]">
           {tStage4("leadsTitle")}
@@ -137,7 +150,7 @@ export default async function AfterLivePage({
       </Card>
 
       <BackNext
-        backHref="/dashboard/send-live"
+        backHref={withPropertyParam("/dashboard/send-live", ownedPropertyId)}
         nextHref="/dashboard"
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}

@@ -15,6 +15,7 @@ import { channelByKey } from "@/lib/distribution-channels";
 import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { assertSupportedLocale } from "@/lib/i18n/locale";
+import { withPropertyParam } from "@/lib/stage-wizard-nav";
 import {
   buildStage3SendRows,
   stage3AllLive,
@@ -54,47 +55,54 @@ export default async function SendLivePage({
   // any run data so a raw ?property id can't surface another org's run.
   const publishStatusByChannel = new Map<string, string | null>();
   const verifiedLiveChannels = new Set<string>();
-  const propertyId = searchParams.property?.trim();
-  if (propertyId && sendable.length > 0) {
+  let ownedPropertyId: string | null = null;
+  let propertyAddress: string | null = null;
+  const requestedProperty = searchParams.property?.trim();
+  if (requestedProperty) {
     const supabase = createClient();
     const { data: owned } = await supabase
       .from("properties")
-      .select("id")
-      .eq("id", propertyId)
+      .select("id, address")
+      .eq("id", requestedProperty)
       .eq("organization_id", org.id)
       .maybeSingle();
     if (owned?.id) {
-      const { data: run } = await supabase
-        .from("distribution_runs")
-        .select("id")
-        .eq("property_id", owned.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const runId = (run?.id as string | undefined) ?? null;
-      if (runId) {
-        const { data: items } = await supabase
-          .from("distribution_run_items")
-          .select("channel, publish_status")
-          .eq("run_id", runId);
-        for (const item of items ?? []) {
-          const channel = (item as { channel: string | null }).channel;
-          if (channel) {
-            publishStatusByChannel.set(
-              channel,
-              (item as { publish_status: string | null }).publish_status ?? null,
-            );
+      ownedPropertyId = owned.id as string;
+      propertyAddress = (owned.address as string | null) ?? null;
+      if (sendable.length > 0) {
+        const { data: run } = await supabase
+          .from("distribution_runs")
+          .select("id")
+          .eq("property_id", ownedPropertyId)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const runId = (run?.id as string | undefined) ?? null;
+        if (runId) {
+          const { data: items } = await supabase
+            .from("distribution_run_items")
+            .select("channel, publish_status")
+            .eq("run_id", runId);
+          for (const item of items ?? []) {
+            const channel = (item as { channel: string | null }).channel;
+            if (channel) {
+              publishStatusByChannel.set(
+                channel,
+                (item as { publish_status: string | null }).publish_status ??
+                  null,
+              );
+            }
           }
-        }
-        const { data: proofs } = await supabase
-          .from("distribution_verifications")
-          .select("channel, result")
-          .eq("run_id", runId)
-          .eq("result", "verified_live");
-        for (const proof of proofs ?? []) {
-          const channel = (proof as { channel: string | null }).channel;
-          if (channel) verifiedLiveChannels.add(channel);
+          const { data: proofs } = await supabase
+            .from("distribution_verifications")
+            .select("channel, result")
+            .eq("run_id", runId)
+            .eq("result", "verified_live");
+          for (const proof of proofs ?? []) {
+            const channel = (proof as { channel: string | null }).channel;
+            if (channel) verifiedLiveChannels.add(channel);
+          }
         }
       }
     }
@@ -125,12 +133,23 @@ export default async function SendLivePage({
       }
       className="min-h-[calc(100vh-14rem)] pb-28 pt-0"
     >
+      {propertyAddress && (
+        <p className="text-[length:var(--vl-type-guided-body)] text-[var(--vl-text-secondary)]">
+          {tCommon("forListing")}{" "}
+          <span className="font-semibold text-[var(--vl-text-primary)]">
+            {propertyAddress}
+          </span>
+        </p>
+      )}
       {sendable.length === 0 ? (
         <StatusBanner
           tone="attention"
           title={tStage3("onlyLinked")}
           action={
-            <ButtonLink href="/dashboard/link-portals" size="lg">
+            <ButtonLink
+              href={withPropertyParam("/dashboard/link-portals", ownedPropertyId)}
+              size="lg"
+            >
               {tStages("s1")}
             </ButtonLink>
           }
@@ -174,8 +193,8 @@ export default async function SendLivePage({
       )}
 
       <BackNext
-        backHref="/dashboard/add-details"
-        nextHref="/dashboard/after-live"
+        backHref={withPropertyParam("/dashboard/add-details", ownedPropertyId)}
+        nextHref={withPropertyParam("/dashboard/after-live", ownedPropertyId)}
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}
         ariaLabel={tCommon("stepNavigation")}

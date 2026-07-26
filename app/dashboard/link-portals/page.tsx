@@ -11,6 +11,7 @@ import {
 } from "@/components/ui";
 import { channelByKey } from "@/lib/distribution-channels";
 import { getCurrentOrg } from "@/lib/org";
+import { createClient } from "@/lib/supabase/server";
 import {
   canRenderStage1Connect,
   groupStage1ChannelRows,
@@ -20,13 +21,37 @@ import {
   STAGE1_CONNECT_KIND_COPY,
 } from "@/lib/stage1-link-portals";
 import { assertSupportedLocale } from "@/lib/i18n/locale";
+import { withPropertyParam } from "@/lib/stage-wizard-nav";
 import { listChannelTileStatuses } from "../properties/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function LinkPortalsPage() {
+export default async function LinkPortalsPage({
+  searchParams,
+}: {
+  searchParams: { property?: string };
+}) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+
+  // Optional per-listing context. Validate org ownership before trusting the
+  // id, then thread only the VALIDATED id through the wizard (Stages 1-4).
+  let ownedPropertyId: string | null = null;
+  let propertyAddress: string | null = null;
+  const requestedProperty = searchParams.property?.trim();
+  if (requestedProperty) {
+    const supabase = createClient();
+    const { data: owned } = await supabase
+      .from("properties")
+      .select("id, address")
+      .eq("id", requestedProperty)
+      .eq("organization_id", org.id)
+      .maybeSingle();
+    if (owned?.id) {
+      ownedPropertyId = owned.id as string;
+      propertyAddress = (owned.address as string | null) ?? null;
+    }
+  }
 
   const [rows, locale, tStage1, tStages, tCommon] = await Promise.all([
     listChannelTileStatuses(org.id),
@@ -55,6 +80,14 @@ export default async function LinkPortalsPage() {
       }
       className="min-h-[calc(100vh-14rem)] pb-28 pt-0"
     >
+      {propertyAddress && (
+        <p className="text-[length:var(--vl-type-guided-body)] text-[var(--vl-text-secondary)]">
+          {tCommon("forListing")}{" "}
+          <span className="font-semibold text-[var(--vl-text-primary)]">
+            {propertyAddress}
+          </span>
+        </p>
+      )}
       {groups.map((group) => {
         if (group.rows.length === 0) return null;
 
@@ -118,7 +151,7 @@ export default async function LinkPortalsPage() {
 
       <BackNext
         backHref="/dashboard"
-        nextHref="/dashboard/add-details"
+        nextHref={withPropertyParam("/dashboard/add-details", ownedPropertyId)}
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}
         ariaLabel={tCommon("stepNavigation")}

@@ -6,7 +6,8 @@
     "apply": "Appliquer",
     "back": "Retour",
     "next": "Étape suivante",
-    "stepNavigation": "Navigation des étapes"
+    "stepNavigation": "Navigation des étapes",
+    "forListing": "Pour cette annonce :"
   },
   "stages": {
     "s1": "Reliez vos portails",
