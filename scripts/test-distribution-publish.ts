@@ -130,6 +130,18 @@ ok("mode label feed partner is candidate", publishModeLabel("feed_partner") === 
   ok("instagram mode browser co-pilot", plan.mode === "browser_copilot");
 }
 {
+  const plan = preparePublishChannel("facebook_feed", base);
+  ok("facebook_feed needs connection before Page posting", plan.status === "needs_login");
+  ok("facebook_feed mode automatic", plan.mode === "automatic");
+}
+{
+  const plan = preparePublishChannel("facebook_feed", {
+    ...base,
+    channelAccountStatus: "connected",
+  });
+  ok("connected facebook_feed waits for operator approval", plan.status === "needs_operator");
+}
+{
   const plan = preparePublishChannel("kijiji", {
     ...base,
     linkIsLive: false,

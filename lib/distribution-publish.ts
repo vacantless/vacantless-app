@@ -15,6 +15,7 @@ import {
   channelByKey,
   type DistributionChannel,
 } from "./distribution-channels";
+import type { ChannelAccountStatus } from "./distribution-capabilities";
 import {
   isPartnerActive,
   type PartnerStatus,
@@ -137,6 +138,7 @@ export type PublishChannelContext = {
   orgFeedUrl: string | null;
   networkFeedEnabled: boolean;
   partner: PublishPartnerState | null;
+  channelAccountStatus?: ChannelAccountStatus | null;
   existingLiveUrl: string | null;
   existingListingPostId: string | null;
 };
@@ -492,12 +494,28 @@ export function preparePublishChannel(
     return feedPartnerPlan(meta, context);
   }
 
+  if (key === "facebook_feed") {
+    if (context.channelAccountStatus !== "connected") {
+      return plan(meta, {
+        status: "needs_login",
+        operatorActionUrl: null,
+        auditMessage:
+          "Connect a Facebook Business Page before Vacantless can post to the Page feed.",
+      });
+    }
+    return plan(meta, {
+      status: "needs_operator",
+      operatorActionUrl: null,
+      auditMessage:
+        "Facebook Page is connected. Authorize autopilot only after reviewing the prepared post; Live still requires Graph API proof.",
+    });
+  }
+
   if (
     key === "facebook" ||
     key === "kijiji" ||
     key === "linkedin" ||
     key === "instagram" ||
-    key === "facebook_feed" ||
     key === "whatsapp" ||
     key === "snapchat"
   ) {
@@ -608,6 +626,7 @@ function feedPartnerPlan(
 function publishModeForDistributionChannel(
   channel: DistributionChannel,
 ): PublishMode {
+  if (channel.mode === "api_automatic") return "automatic";
   if (channel.mode === "feed_or_assisted") return "feed_partner";
   if (channel.mode === "broker") return "broker";
   return "browser_copilot";

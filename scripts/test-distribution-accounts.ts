@@ -39,7 +39,9 @@ eq(channelCapability("facebook").postingPolicy, "human_confirmed", "facebook hum
 eq(channelCapability("kijiji").transport, "browser_copilot", "kijiji is co-pilot");
 eq(channelCapability("linkedin").transport, "browser_copilot", "linkedin is co-pilot");
 eq(channelCapability("instagram").requiresLogin, true, "instagram needs login");
+eq(channelCapability("facebook_feed").transport, "automatic", "facebook feed is Graph automatic");
 eq(channelCapability("facebook_feed").postingPolicy, "human_confirmed", "facebook feed human confirmed");
+eq(channelCapability("facebook_feed").requiresLogin, false, "facebook feed uses stored Page token");
 eq(channelCapability("whatsapp").supportsConcierge, true, "whatsapp supports concierge");
 eq(channelCapability("snapchat").supportsCopilot, true, "snapchat supports co-pilot");
 eq(channelCapability("viewit").requiresPayment, true, "viewit needs payment");
@@ -96,6 +98,18 @@ eq(allChannelCapabilities().length, 16, "16 channel capabilities");
   const r = channelAccountReadiness({ capability: channelCapability("facebook") });
   eq(r.status, "ready", "facebook ready to co-pilot");
   eq(r.nextActionKind, "open_copilot", "facebook open_copilot");
+}
+{
+  const r = channelAccountReadiness({ capability: channelCapability("facebook_feed") });
+  eq(r.status, "needs_setup", "facebook_feed needs Page connection");
+}
+{
+  const r = channelAccountReadiness({
+    capability: channelCapability("facebook_feed"),
+    accountStatus: "connected",
+  });
+  eq(r.status, "ready", "facebook_feed connected => ready");
+  eq(r.nextActionKind, "publish_now", "facebook_feed uses automatic runner");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("instagram") });

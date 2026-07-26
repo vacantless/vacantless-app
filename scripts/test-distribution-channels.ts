@@ -55,7 +55,8 @@ ok("facebook copyKey = facebook", channelByKey("facebook")?.copyKey === "faceboo
 ok("facebook is assisted_manual", channelByKey("facebook")?.mode === "assisted_manual");
 ok("linkedin is assisted_manual", channelByKey("linkedin")?.mode === "assisted_manual");
 ok("instagram copyKey = instagram", channelByKey("instagram")?.copyKey === "instagram");
-ok("facebook feed is separate from Marketplace", channelByKey("facebook_feed")?.label === "Facebook feed");
+ok("facebook feed is separate from Marketplace", channelByKey("facebook_feed")?.label === "Facebook Page feed");
+ok("facebook feed is API posting", channelByKey("facebook_feed")?.mode === "api_automatic");
 ok("whatsapp uses guided posting", channelByKey("whatsapp")?.mode === "assisted_manual");
 ok("snapchat is NOT feed-eligible", channelByKey("snapchat")?.feedEligible === false);
 ok("rentals_ca is feed-eligible", channelByKey("rentals_ca")?.feedEligible === true);

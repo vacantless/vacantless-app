@@ -23,6 +23,7 @@ import {
   upsertPartnerAccount,
   requestConciergePublish,
 } from "../actions";
+import { disconnectFacebookPage } from "../distribution-actions";
 import { startConciergePackCheckout } from "../../billing/actions";
 import {
   PARTNER_STATUSES,
@@ -130,6 +131,12 @@ export type PartnerAccountView = {
   notes: string | null;
 };
 
+export type FacebookPageAccountView = {
+  enabled: boolean;
+  accountStatus: string | null;
+  pageName: string | null;
+};
+
 // A fully-resolved channel card: the matrix row + computed status + the
 // matching channel copy + feed note + partner account + this channel's posts.
 export type DistributeChannelCard = {
@@ -139,6 +146,7 @@ export type DistributeChannelCard = {
   fillSheet: FillSheet | null;
   feed: { inFeed: boolean; hint: string } | null;
   partner: PartnerAccountView | null;
+  facebookPage?: FacebookPageAccountView | null;
   posts: DistributePostRow[];
 };
 
@@ -1302,6 +1310,7 @@ function ChannelCard({
   reservedTrackedUrl: string | null;
 }) {
   const { channel, status, copy, fillSheet, feed, partner } = card;
+  const facebookPage = card.facebookPage;
   const tone = channelStatusTone(status.value);
   const combinedCopy = copy ? `${copy.title}\n\n${copy.body}` : null;
   // Reply snippets for the assisted-manual + feed channels (a renter messages
@@ -1409,6 +1418,39 @@ function ChannelCard({
         </summary>
         <div className="mt-3 space-y-3">
           <p className="text-xs text-gray-500">{channel.blurb}</p>
+
+          {channel.key === "facebook_feed" && facebookPage?.enabled && (
+            <div className="space-y-2 border-l-2 border-gray-200 pl-3 text-xs text-gray-600">
+              <p>
+                Organic Page posts reach people who see or follow the Page. For
+                Facebook Marketplace renter traffic, keep using the Marketplace
+                channel; for paid reach, use Meta Ads.
+              </p>
+              {facebookPage.accountStatus === "connected" && facebookPage.pageName ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-gray-800">
+                    Connected: {facebookPage.pageName}
+                  </span>
+                  <form action={disconnectFacebookPage}>
+                    <input type="hidden" name="property_id" value={propertyId} />
+                    <button
+                      type="submit"
+                      className="text-xs font-medium text-red-600 underline"
+                    >
+                      Disconnect
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <a
+                  href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
+                  className={SECONDARY_BTN}
+                >
+                  Connect Facebook Page
+                </a>
+              )}
+            </div>
+          )}
 
           {status.blockers.length > 0 && (
             <div>

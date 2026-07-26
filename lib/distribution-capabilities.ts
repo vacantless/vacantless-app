@@ -105,10 +105,11 @@ const CHANNEL_CAPABILITIES: Record<PublishChannelKey, ChannelCapability> = {
     requiresLogin: true,
     postingPolicy: "human_confirmed",
   }),
-  facebook_feed: CAP("facebook_feed", "browser_copilot", {
-    supportsCopilot: true,
+  facebook_feed: CAP("facebook_feed", "automatic", {
+    supportsCopilot: false,
     supportsConcierge: true,
-    requiresLogin: true,
+    requiresLogin: false,
+    needsOrgAccount: true,
     postingPolicy: "human_confirmed",
   }),
   whatsapp: CAP("whatsapp", "browser_copilot", {
@@ -266,21 +267,21 @@ export function channelAccountReadiness(
     return { ...base, status: "needs_payment", nextActionLabel: "Complete paid placement", nextActionKind: "open_copilot" };
   }
 
-  // Our own automatic surfaces never need an external account.
-  if (cap.transport === "automatic") {
-    return { ...base, status: "ready", nextActionLabel: null, nextActionKind: "publish_now" };
-  }
-
-  // Feed-partner channels require an accepted org route before they are "ready".
+  // External account-backed channels require a connected org route before ready.
   if (cap.needsOrgAccount) {
     if (status === "accepted" || status === "connected" || input.hasFeedRoute) {
-      return { ...base, status: "ready", nextActionLabel: "Include in feed", nextActionKind: "feed_setup" };
+      return {
+        ...base,
+        status: "ready",
+        nextActionLabel: cap.transport === "automatic" ? null : "Include in feed",
+        nextActionKind: cap.transport === "automatic" ? "publish_now" : "feed_setup",
+      };
     }
     if (status === "submitted") {
       return {
         ...base,
         status: "submitted",
-        blockers: ["Feed submitted — waiting on the partner to accept the route."],
+        blockers: ["Setup submitted - waiting on the channel to accept the route."],
         nextActionLabel: "Check partner acceptance",
         nextActionKind: "feed_setup",
       };
@@ -288,10 +289,15 @@ export function channelAccountReadiness(
     return {
       ...base,
       status: "needs_setup",
-      blockers: ["Set up this channel's feed/partner route before it can carry listings."],
-      nextActionLabel: "Set up feed route",
+      blockers: ["Set up this channel's account before it can carry listings."],
+      nextActionLabel: "Set up channel",
       nextActionKind: "feed_setup",
     };
+  }
+
+  // Our own automatic surfaces never need an external account.
+  if (cap.transport === "automatic") {
+    return { ...base, status: "ready", nextActionLabel: null, nextActionKind: "publish_now" };
   }
 
   // Human-transport channels can always be attempted; the login/payment gates

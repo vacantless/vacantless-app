@@ -16,6 +16,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { buildShareReadiness } from "@/lib/share-readiness";
@@ -53,6 +54,7 @@ import {
   buildAttemptRecord,
   type AttemptActorType,
 } from "@/lib/distribution-attempts";
+import { deleteChannelSession } from "@/lib/distribution-session-crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
@@ -611,6 +613,77 @@ export async function upsertChannelAccount(formData: FormData) {
     backTo(propertyId, "account_saved");
   }
   redirect("/dashboard/settings");
+}
+
+// ---------------------------------------------------------------------------
+// disconnectFacebookPage — revoke the stored Facebook Page token for the
+// Graph-backed facebook_feed channel. This never touches Marketplace (`facebook`)
+// and never flips automation on; disconnecting also clears authorization so an
+// approved item cannot keep offering autopilot with no token behind it.
+// ---------------------------------------------------------------------------
+export async function disconnectFacebookPage(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = s(formData, "property_id");
+  const supabase = createClient();
+
+  let orgId: string | null = null;
+  if (propertyId) {
+    const { data: prop } = await supabase
+      .from("properties")
+      .select("organization_id")
+      .eq("id", propertyId)
+      .maybeSingle();
+    orgId = (prop?.organization_id as string | undefined) ?? null;
+    if (!orgId) backTo(propertyId, "facebook_forbidden");
+  } else {
+    const org = await getCurrentOrg();
+    orgId = org?.id ?? null;
+  }
+  if (!orgId) redirect("/dashboard/properties?forbidden=1");
+
+  const admin = createAdminClient();
+  if (!admin) {
+    if (propertyId) {
+      redirect(`/dashboard/properties/${propertyId}?fb=error&reason=config#distribute-header`);
+    }
+    redirect("/dashboard/properties?fb=error&reason=config");
+  }
+
+  await deleteChannelSession({
+    organizationId: orgId,
+    channel: "facebook_feed",
+    admin,
+  });
+
+  const nowISO = new Date().toISOString();
+  await admin.from("distribution_channel_accounts").upsert(
+    {
+      organization_id: orgId,
+      channel: "facebook_feed",
+      transport: "automatic",
+      account_status: "paused",
+      external_account_label: null,
+      requires_login: false,
+      requires_payment: false,
+      supports_feed: false,
+      supports_copilot: false,
+      supports_concierge: true,
+      supports_live_verification: true,
+      posting_policy: "human_confirmed",
+      automation_authorized: false,
+      automation_authorized_at: null,
+      automation_authorized_by: null,
+      last_setup_checked_at: nowISO,
+      updated_at: nowISO,
+    },
+    { onConflict: "organization_id,channel" },
+  );
+
+  if (propertyId) {
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    redirect(`/dashboard/properties/${propertyId}?fb=disconnected#distribute-header`);
+  }
+  redirect("/dashboard/properties?fb=disconnected");
 }
 
 // ---------------------------------------------------------------------------

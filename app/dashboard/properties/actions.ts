@@ -51,6 +51,7 @@ import {
   type PublishChannelKey,
   type PublishPartnerState,
 } from "@/lib/distribution-publish";
+import type { ChannelAccountStatus } from "@/lib/distribution-capabilities";
 import { isCopilotChannel } from "@/lib/distribution-copilot";
 import { buildShareReadiness, type ShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
@@ -1326,7 +1327,13 @@ async function stageDistributionRunForProperty({
   if (!prop) return false;
   const orgId = prop.organization_id;
 
-  const [{ count: photoCount }, { count: availabilityCount }, { data: posts }, { data: partners }] =
+  const [
+    { count: photoCount },
+    { count: availabilityCount },
+    { data: posts },
+    { data: partners },
+    { data: accounts },
+  ] =
     await Promise.all([
       supabase
         .from("property_photos")
@@ -1343,6 +1350,10 @@ async function stageDistributionRunForProperty({
       supabase
         .from("distribution_partner_accounts")
         .select("channel, status, feed_url"),
+      supabase
+        .from("distribution_channel_accounts")
+        .select("channel, account_status")
+        .eq("organization_id", orgId),
     ]);
 
   const postRows = (posts ?? []) as PublishPostRow[];
@@ -1356,6 +1367,15 @@ async function stageDistributionRunForProperty({
       status: normalizePartnerStatus(row.status),
       feedUrl: row.feed_url,
     });
+  }
+  const accountStatusByChannel = new Map<string, ChannelAccountStatus>();
+  for (const row of (accounts ?? []) as Array<{
+    channel: string;
+    account_status: string | null;
+  }>) {
+    if (row.account_status) {
+      accountStatusByChannel.set(row.channel, row.account_status as ChannelAccountStatus);
+    }
   }
 
   const normalizedStatus = normalizePropertyStatus(prop.status);
@@ -1453,6 +1473,7 @@ async function stageDistributionRunForProperty({
       orgFeedUrl,
       networkFeedEnabled,
       partner: partnerByChannel.get(channel) ?? null,
+      channelAccountStatus: accountStatusByChannel.get(channel) ?? null,
       existingLiveUrl: livePost?.url ?? null,
       existingListingPostId: livePost?.id ?? null,
     };

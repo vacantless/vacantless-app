@@ -251,6 +251,9 @@ function operatorActionSummary(item: RunItemView): string {
 }
 
 function operatorOwnerLine(item: RunItemView): string {
+  if (item.channel === "facebook_feed") {
+    return "Vacantless can post to the connected Facebook Page only after you authorize this item. It still needs Graph API proof before it counts as Live.";
+  }
   if (item.mode === "automatic") {
     return "Vacantless can check this inside the app, then it saves proof here.";
   }
@@ -637,9 +640,9 @@ export function LaunchRunPanel({
                   Authorize autopilot to post
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
-                  Vacantless posts this prepared ad to {item.channelLabel}{" "}
-                  automatically and reports back. You approve once; a card is
-                  never entered and only the free plan is used.
+                  {item.channel === "facebook_feed"
+                    ? "Vacantless posts one organic Page-feed link through Graph API and reports back with the post proof. Marketplace and paid ads stay separate."
+                    : `Vacantless posts this prepared ad to ${item.channelLabel} automatically and reports back. You approve once; a card is never entered and only the free plan is used.`}
                 </span>
               </form>
             )}

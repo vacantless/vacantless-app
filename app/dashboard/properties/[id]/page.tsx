@@ -1109,15 +1109,30 @@ export default async function PropertyDetailPage({
   // account is recorded.
   const { data: channelAccountRows } = await supabase
     .from("distribution_channel_accounts")
-    .select("channel, account_status, feed_url")
+    .select("channel, account_status, feed_url, external_account_label, transport")
     .eq("organization_id", propertyOrgId);
-  const channelAccountByKey = new Map<string, { status: string; feedUrl: string | null }>();
+  const channelAccountByKey = new Map<
+    string,
+    {
+      status: string;
+      feedUrl: string | null;
+      externalAccountLabel: string | null;
+      transport: string | null;
+    }
+  >();
   for (const row of (channelAccountRows ?? []) as Array<{
     channel: string;
     account_status: string;
     feed_url: string | null;
+    external_account_label: string | null;
+    transport: string | null;
   }>) {
-    channelAccountByKey.set(row.channel, { status: row.account_status, feedUrl: row.feed_url });
+    channelAccountByKey.set(row.channel, {
+      status: row.account_status,
+      feedUrl: row.feed_url,
+      externalAccountLabel: row.external_account_label,
+      transport: row.transport,
+    });
   }
   const readinessToneFor = (
     v: ChannelReadinessValue,
@@ -1164,6 +1179,16 @@ export default async function PropertyDetailPage({
         partner: channel.feedEligible
           ? partnerByChannel.get(channel.key) ?? null
           : null,
+        facebookPage:
+          channel.key === "facebook_feed"
+            ? {
+                enabled: process.env.FB_PAGE_CHANNEL_ENABLED === "true",
+                accountStatus:
+                  (channelAccountByKey.get(channel.key)?.status as ChannelAccountStatus | undefined) ??
+                  null,
+                pageName: channelAccountByKey.get(channel.key)?.externalAccountLabel ?? null,
+              }
+            : null,
         posts,
       };
     });
@@ -1209,6 +1234,7 @@ export default async function PropertyDetailPage({
       orgFeedUrl,
       networkFeedEnabled,
       partner: partnerState,
+      channelAccountStatus: accountStatusForChannel(channel),
       existingLiveUrl: livePost?.url ?? null,
       existingListingPostId: livePost?.id ?? null,
     };

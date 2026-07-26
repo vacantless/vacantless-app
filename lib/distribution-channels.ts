@@ -30,10 +30,12 @@ import type { ListingPostStatus } from "./listing-distribution";
 //  - feed_or_assisted: the channel accepts structured listings and is a feed
 //    CANDIDATE (Vacantless has an XML feed), but until a partner route is proven
 //    it is still guided manual. (Rentals.ca, Zumper.)
+//  - api_automatic: a sanctioned API post still gated by operator approval.
 //  - broker: a realtor/DDF route (Realtor.ca) — not a self-serve landlord post.
 export const CHANNEL_MODES = [
   "assisted_manual",
   "feed_or_assisted",
+  "api_automatic",
   "broker",
 ] as const;
 export type ChannelMode = (typeof CHANNEL_MODES)[number];
@@ -41,6 +43,7 @@ export type ChannelMode = (typeof CHANNEL_MODES)[number];
 const CHANNEL_MODE_LABELS: Record<ChannelMode, string> = {
   assisted_manual: "Guided posting",
   feed_or_assisted: "Feed candidate / guided",
+  api_automatic: "API posting",
   broker: "Broker / MLS",
 };
 
@@ -126,10 +129,10 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   },
   {
     key: "facebook_feed",
-    label: "Facebook feed",
-    mode: "assisted_manual",
+    label: "Facebook Page feed",
+    mode: "api_automatic",
     blurb:
-      "Vacantless prepares a social-feed post for your business page or group. You review it, publish from the connected Facebook account, then save the post URL as proof.",
+      "Vacantless can post a tracked listing link to a connected Facebook Business Page after you approve that item. Organic Page posts reach Page followers; Marketplace and ads are separate channels.",
     copyKey: "facebook_feed",
     hasFillSheet: true,
     hasGuardrails: true,
