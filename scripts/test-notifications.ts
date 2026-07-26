@@ -324,6 +324,10 @@ ok(
   "lane: distribution_job_needs_action is listing",
   getNotificationEvent("leasing.distribution_job_needs_action")?.lane === "listing",
 );
+ok(
+  "lane: distribution_takedown_needed is listing",
+  getNotificationEvent("leasing.distribution_takedown_needed")?.lane === "listing",
+);
 ok("lane: rent_increase is owner", getNotificationEvent("leasing.rent_increase")?.lane === "owner");
 // Tenant/dispatch events never get a lane.
 ok(

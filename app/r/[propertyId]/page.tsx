@@ -85,6 +85,62 @@ type Listing = {
   photos: string[];
 };
 
+type OpenSibling = {
+  id: string;
+  address: string;
+  rent_cents: number | null;
+  beds: number | null;
+  baths: number | null;
+  available_date: string | null;
+};
+
+function parseOpenSiblings(value: unknown): OpenSibling[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item): OpenSibling | null => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const id = typeof row.id === "string" ? row.id : "";
+      const address = typeof row.address === "string" ? row.address : "";
+      if (!id || !address) return null;
+      const rent =
+        typeof row.rent_cents === "number" && Number.isFinite(row.rent_cents)
+          ? row.rent_cents
+          : null;
+      const beds =
+        typeof row.beds === "number" && Number.isFinite(row.beds)
+          ? row.beds
+          : null;
+      const baths =
+        typeof row.baths === "number" && Number.isFinite(row.baths)
+          ? row.baths
+          : null;
+      return {
+        id,
+        address,
+        rent_cents: rent,
+        beds,
+        baths,
+        available_date:
+          typeof row.available_date === "string" ? row.available_date : null,
+      };
+    })
+    .filter((item): item is OpenSibling => item != null);
+}
+
+function siblingSummary(sibling: OpenSibling): string {
+  const parts = [
+    sibling.rent_cents
+      ? `$${(sibling.rent_cents / 100).toLocaleString()}/mo`
+      : null,
+    sibling.beds != null
+      ? `${sibling.beds} bed${sibling.beds === 1 ? "" : "s"}`
+      : null,
+    sibling.baths != null ? `${sibling.baths} bath` : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.join(" · ");
+}
+
 const loadPublicListing = cache(async (propertyId: string): Promise<Listing | null> => {
   const supabase = createClient();
   const { data } = await supabase.rpc("get_public_listing", {
@@ -149,13 +205,17 @@ export default async function PublicListingPage({
     typeof searchParams.p === "string" ? searchParams.p : "";
   const sourceHint = leadSourceHintFromParam(searchParams.src);
   const supabase = createClient();
-  const [listing, { data: avData }] = await Promise.all([
+  const [listing, { data: avData }, { data: siblingData }] = await Promise.all([
     loadPublicListing(params.propertyId),
     supabase.rpc("get_public_availability", { p_property_id: params.propertyId }),
+    supabase.rpc("get_public_leaseup_siblings", {
+      p_property_id: params.propertyId,
+    }),
   ]);
 
   if (!listing) notFound();
   const l = listing;
+  const openSiblings = parseOpenSiblings(siblingData);
   // A unit can be marked "leased" (or off-market) after its link is shared. The
   // public action RPCs (availability / inquiry / booking) hard-block anything
   // that isn't 'available'; the page must visibly reflect that instead of still
@@ -413,10 +473,47 @@ export default async function PublicListingPage({
                     This rental is no longer available
                   </h2>
                   <p className="mt-2 text-sm text-gray-600">
-                    Want it if it opens up again? Join the waiting list and{" "}
-                    {l.org_name} will email you the moment it&apos;s available.
+                    {openSiblings.length > 0
+                      ? `${l.org_name} has other rentals available now. You can also join the waiting list for this one.`
+                      : `Want it if it opens up again? Join the waiting list and ${l.org_name} will email you the moment it's available.`}
                   </p>
                 </div>
+                {openSiblings.length > 0 ? (
+                  <div className="mt-5 border-y border-gray-100 py-4">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Available now
+                    </h3>
+                    <div className="mt-3 divide-y divide-gray-100">
+                      {openSiblings.map((sibling) => {
+                        const hrefParams = new URLSearchParams();
+                        if (sourceHint) hrefParams.set("src", sourceHint);
+                        const siblingQuery = hrefParams.toString();
+                        const href = `/r/${sibling.id}${siblingQuery ? `?${siblingQuery}` : ""}`;
+                        return (
+                          <a
+                            key={sibling.id}
+                            href={href}
+                            className="flex items-center justify-between gap-3 py-3 text-left transition hover:text-[var(--brand-color)]"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium text-gray-900">
+                                {sibling.address}
+                              </span>
+                              {siblingSummary(sibling) ? (
+                                <span className="mt-0.5 block text-xs text-gray-500">
+                                  {siblingSummary(sibling)}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 text-xs font-semibold text-[var(--brand-color)]">
+                              View
+                            </span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 {searchParams.waitlist === "needcontact" ? (
                   <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-sm text-amber-800">
                     Please add an email or phone so we can reach you.

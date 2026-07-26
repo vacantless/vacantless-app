@@ -348,6 +348,33 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#2563eb",
     active: true,
   },
+  // Lease-up ad closeout task (S575). Audience operator. When a unit is marked
+  // leased and the policy ladder reaches hard take-down, non-Graph/manual
+  // channels become a human task instead of an automated delete. The worker may
+  // only delete a Graph-backed facebook_feed post after object-state proof; this
+  // event is the safe fallback for browser channels, unconnected accounts, paid
+  // placements, or anything that needs a person to remove the outside ad.
+  {
+    key: "leasing.distribution_takedown_needed",
+    family: "leasing",
+    audience: "operator",
+    label: "A leased unit's ad needs take-down",
+    description:
+      "When a unit is leased and an outside ad should be removed by a person, your listing team gets the channel, reason, and Distribute link. Vacantless never deletes paid or manually posted ads unless the channel is explicitly authorized and proven removed.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "channel_label",
+      "external_url",
+      "reason",
+      "dashboard_url",
+    ],
+    defaultSubject:
+      "Take down {{channel_label}} for leased unit — {{property_address}}",
+    defaultBody:
+      "{{property_address}} is now leased, and the {{channel_label}} ad needs a human take-down.\n\nReason: {{reason}}\nAd URL: {{external_url}}\n\nOpen Distribute: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Renter-initiated cancellation (S418, KI632). Audience operator; the missing
   // half of the showing loop. A "Cancel this viewing" link in the renter booking
   // confirmation email flips the showing to cancelled and fires THIS event to the
@@ -1040,6 +1067,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   // listing — ad / syndication / distribution / done-for-you posting
   "leasing.listing_health": "listing",
   "leasing.distribution_job_needs_action": "listing",
+  "leasing.distribution_takedown_needed": "listing",
   // owner — landlord / property-owner compliance, assets, rent increases
   "leasing.rent_increase": "owner",
   "leasing.landlord_insurance_review": "owner",

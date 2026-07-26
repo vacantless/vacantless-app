@@ -121,6 +121,7 @@ import { parseAssetImage, isVisionImageType } from "@/lib/asset-capture-vision";
 import { plateFieldsToQuery, normalizePendingDocId, type AssetDraft } from "@/lib/asset-capture";
 import { validateExpenseInput } from "@/lib/expenses";
 import { parseMoneyToCents } from "@/lib/tenancy";
+import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 
 const PHOTO_BUCKET = "property-photos";
 
@@ -554,9 +555,25 @@ export async function updateProperty(formData: FormData) {
     })
     .eq("id", id);
 
-  if (!relistBlocked && priorStatus !== "available" && effectiveStatus === "available") {
-    const org = await getCurrentOrg();
-    if (org) await maybePrepareAvailableListing(supabase, org, id);
+  let orgAfterSave: Org | null = null;
+  if (
+    (!relistBlocked && priorStatus !== "available" && effectiveStatus === "available") ||
+    (priorStatus !== "leased" && effectiveStatus === "leased")
+  ) {
+    orgAfterSave = await getCurrentOrg();
+  }
+
+  if (
+    !relistBlocked &&
+    priorStatus !== "available" &&
+    effectiveStatus === "available" &&
+    orgAfterSave
+  ) {
+    await maybePrepareAvailableListing(supabase, orgAfterSave, id);
+  }
+
+  if (priorStatus !== "leased" && effectiveStatus === "leased" && orgAfterSave) {
+    await handleLeaseupAdLifecycle({ supabase, org: orgAfterSave, propertyId: id });
   }
 
   revalidatePath(`/dashboard/properties/${id}`);

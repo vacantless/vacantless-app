@@ -32,6 +32,7 @@ import { formatRentCents } from "@/lib/tenancy";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import type { N1Snapshot } from "@/lib/n1-render";
+import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 
 const FORBIDDEN = "/dashboard/tenancies?forbidden=1";
 const SERVE_APP_URL = (
@@ -231,13 +232,18 @@ export async function createTenancy(formData: FormData) {
   // watchLease's private units stay private, and `leased`/`draft` are already
   // non-bookable (no-op).
   const tookUnitOffMarket = tenancyTakesUnitOffMarket(status);
-  if (tookUnitOffMarket) {
-    await supabase
+  if (tookUnitOffMarket && propertyId) {
+    const { data: leasedProperty } = await supabase
       .from("properties")
       .update({ status: "leased" })
       .eq("id", propertyId)
       .eq("organization_id", org.id)
-      .in("status", ["available", "paused"]);
+      .in("status", ["available", "paused"])
+      .select("id")
+      .maybeSingle();
+    if (leasedProperty?.id) {
+      await handleLeaseupAdLifecycle({ supabase, org, propertyId });
+    }
     revalidatePath(`/dashboard/properties/${propertyId}`);
     revalidatePath("/dashboard/properties");
   }
