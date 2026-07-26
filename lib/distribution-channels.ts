@@ -53,6 +53,33 @@ export function channelModeLabel(mode: unknown): string {
     : "Guided posting";
 }
 
+// --- canonical channel registry fields ------------------------------------
+// Extra metadata for the presentation-layer "Link Your Portals" screen. These
+// fields say whether a customer can connect/post through Vacantless today; they
+// do not change any existing publish or tracking behavior.
+export const CHANNEL_CATEGORIES = [
+  "portal",
+  "classifieds",
+  "social",
+  "chat",
+] as const;
+export type ChannelCategory = (typeof CHANNEL_CATEGORIES)[number];
+
+export const CHANNEL_INTEGRATION_STATUSES = [
+  "live",
+  "planned",
+  "mls_gated",
+] as const;
+export type ChannelIntegrationStatus =
+  (typeof CHANNEL_INTEGRATION_STATUSES)[number];
+
+export const CHANNEL_CONNECT_KINDS = [
+  "oauth",
+  "account_login",
+  "none",
+] as const;
+export type ChannelConnectKind = (typeof CHANNEL_CONNECT_KINDS)[number];
+
 // --- the channel matrix ----------------------------------------------------
 // One row per real destination channel. "other" is NOT in the matrix — it is a
 // free-form manual catch-all handled separately by the UI (custom tracked post).
@@ -61,6 +88,12 @@ export type DistributionChannel = {
   // and lead source attribution all line up with an existing row.
   key: Exclude<PortalKey, "other">;
   label: string;
+  category: ChannelCategory;
+  // "live" is reserved for channels with a real account connection and post path
+  // today. "planned" must not render a working connect CTA.
+  integrationStatus: ChannelIntegrationStatus;
+  connectKind: ChannelConnectKind;
+  notes?: string;
   mode: ChannelMode;
   // One-line "what Vacantless does here", operator-facing.
   blurb: string;
@@ -82,6 +115,11 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "facebook",
     label: "Facebook Marketplace",
+    category: "classifieds",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "Marketplace is not a connected Vacantless channel yet. Use the guided posting tools until a real account connection exists.",
     mode: "assisted_manual",
     blurb:
       "Vacantless prepares Facebook-safe wording, photo order, and renter replies. You review the Facebook post, then paste the live ad link back here.",
@@ -94,6 +132,9 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "kijiji",
     label: "Kijiji",
+    category: "classifieds",
+    integrationStatus: "live",
+    connectKind: "account_login",
     mode: "assisted_manual",
     blurb:
       "Vacantless gives you the title, description, field sheet, and Kijiji reminders. You post on Kijiji, then paste the live ad link back here.",
@@ -106,6 +147,11 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "linkedin",
     label: "LinkedIn",
+    category: "social",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "LinkedIn is listed for the roadmap, but Vacantless does not have a real connected posting path for it yet.",
     mode: "assisted_manual",
     blurb:
       "Vacantless prepares a polished social caption and tracked inquiry link. Post from the connected LinkedIn account, then save the post URL as proof.",
@@ -118,6 +164,9 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "instagram",
     label: "Instagram",
+    category: "social",
+    integrationStatus: "live",
+    connectKind: "oauth",
     mode: "api_automatic",
     blurb:
       "Vacantless can publish a single-image post to a linked Instagram Business account after you approve that item. Captions include the tracked inquiry link; Stories, Reels, and carousels stay separate.",
@@ -130,6 +179,9 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "facebook_feed",
     label: "Facebook Page feed",
+    category: "social",
+    integrationStatus: "live",
+    connectKind: "oauth",
     mode: "api_automatic",
     blurb:
       "Vacantless can post a tracked listing link to a connected Facebook Business Page after you approve that item. Organic Page posts reach Page followers; Marketplace and ads are separate channels.",
@@ -142,6 +194,11 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "whatsapp",
     label: "WhatsApp",
+    category: "chat",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "WhatsApp Business is in the target channel list, but there is no connected Vacantless posting or send path for this tile yet.",
     mode: "assisted_manual",
     blurb:
       "Vacantless prepares a compact share message with the tracked inquiry link. Send it through WhatsApp or a broadcast list, then save a proof link or note.",
@@ -154,6 +211,11 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "snapchat",
     label: "Snapchat",
+    category: "social",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "Snapchat is in the target channel list, but Vacantless does not have a real connected posting path for it yet.",
     mode: "assisted_manual",
     blurb:
       "Vacantless prepares short social copy and the tracked inquiry link. Post from the connected Snapchat account, then save the post or story proof.",
@@ -166,6 +228,9 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "rentals_ca",
     label: "Rentals.ca",
+    category: "portal",
+    integrationStatus: "live",
+    connectKind: "account_login",
     mode: "feed_or_assisted",
     blurb:
       "Rentals.ca is a feed candidate, not a live Vacantless integration. Until a partner route is accepted, use the guided copy, field sheet, and proof tracking.",
@@ -178,6 +243,11 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "rentfaster",
     label: "RentFaster.ca",
+    category: "portal",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "RentFaster.ca remains guided/manual in Vacantless; do not show it as connected until a real account-backed posting route exists.",
     mode: "feed_or_assisted",
     blurb:
       "RentFaster is a feed candidate and paid self-serve listing lane. Start logged in, choose Single Unit, review package/add-ons, then paste the live ad link.",
@@ -190,6 +260,9 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "zumper",
     label: "Zumper + PadMapper",
+    category: "portal",
+    integrationStatus: "live",
+    connectKind: "account_login",
     mode: "feed_or_assisted",
     blurb:
       "Zumper is the managed posting path and can also reach PadMapper. Use guided posting until a partner route is accepted; submitted is not counted as live until proof comes back.",
@@ -202,6 +275,11 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "viewit",
     label: "Viewit.ca",
+    category: "portal",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "Viewit.ca is a target portal, but Vacantless does not have a connected posting path for it yet.",
     mode: "assisted_manual",
     blurb:
       "Viewit is a paid listing site. Vacantless prepares the copy and fields; you review any payment and paste the live ad link back here.",
@@ -214,6 +292,11 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   {
     key: "realtor_ca",
     label: "Realtor.ca",
+    category: "portal",
+    integrationStatus: "mls_gated",
+    connectKind: "none",
+    notes:
+      "Realtor.ca listings must go through an MLS or broker route; this is not a self-serve landlord portal.",
     mode: "broker",
     blurb:
       "Realtor.ca is an agent or MLS route, not a self-serve landlord post. Vacantless prepares the field sheet for your agent.",
@@ -231,6 +314,80 @@ export function channelByKey(
   return (
     DISTRIBUTION_CHANNELS.find((c) => c.key === key) ?? null
   );
+}
+
+export const CANONICAL_CHANNEL_REGISTRY = DISTRIBUTION_CHANNELS;
+
+export const CHANNEL_TILE_STATES = [
+  "linked",
+  "not_linked",
+  "not_available_yet",
+  "mls_only",
+] as const;
+export type ChannelTileState = (typeof CHANNEL_TILE_STATES)[number];
+
+export type ChannelTileAccount = {
+  account_status?: string | null;
+  automation_authorized?: boolean | null;
+};
+
+export type ChannelTileStatus = {
+  state: ChannelTileState;
+  headline: string;
+  canConnect: boolean;
+};
+
+/**
+ * Presentation verdict for the future "Link Your Portals" tile. Pure: callers
+ * pass the optional distribution_channel_accounts row; this function never reads
+ * env, DB, or network state.
+ */
+export function channelTileStatus(
+  channelKey: unknown,
+  account?: ChannelTileAccount | null,
+): ChannelTileStatus {
+  const channel = channelByKey(channelKey);
+  if (!channel) {
+    return {
+      state: "not_available_yet",
+      headline: "This channel is not configured yet.",
+      canConnect: false,
+    };
+  }
+
+  if (channel.integrationStatus === "mls_gated") {
+    return {
+      state: "mls_only",
+      headline: `${channel.label} requires an MLS or broker route.`,
+      canConnect: false,
+    };
+  }
+
+  if (channel.integrationStatus === "planned") {
+    return {
+      state: "not_available_yet",
+      headline: channel.notes ?? `${channel.label} is not available yet.`,
+      canConnect: false,
+    };
+  }
+
+  const linked =
+    account?.account_status === "connected" &&
+    account?.automation_authorized === true;
+
+  if (linked) {
+    return {
+      state: "linked",
+      headline: `${channel.label} is linked and authorized.`,
+      canConnect: false,
+    };
+  }
+
+  return {
+    state: "not_linked",
+    headline: `Link ${channel.label} to publish here.`,
+    canConnect: true,
+  };
 }
 
 // --- per-channel status ----------------------------------------------------

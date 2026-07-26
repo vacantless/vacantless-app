@@ -2,10 +2,15 @@
 // Run: npx tsx scripts/test-distribution-channels.ts
 import { readFileSync } from "node:fs";
 import {
+  CANONICAL_CHANNEL_REGISTRY,
+  CHANNEL_CATEGORIES,
+  CHANNEL_CONNECT_KINDS,
+  CHANNEL_INTEGRATION_STATUSES,
   CHANNEL_MODES,
   DISTRIBUTION_CHANNELS,
   channelByKey,
   channelModeLabel,
+  channelTileStatus,
   CHANNEL_STATUS_VALUES,
   channelStatusLabel,
   channelStatusTone,
@@ -14,6 +19,7 @@ import {
   computeChannelStatus,
   type ChannelPost,
 } from "../lib/distribution-channels";
+import { PORTAL_KEYS } from "../lib/listing-distribution";
 
 let passed = 0;
 let failed = 0;
@@ -39,14 +45,90 @@ ok(
 ok("channelByKey resolves kijiji", channelByKey("kijiji")?.label === "Kijiji");
 ok("channelByKey junk -> null", channelByKey("nope") === null);
 ok("channelByKey other -> null (not a matrix row)", channelByKey("other") === null);
+ok(
+  "canonical registry reuses the channel matrix",
+  CANONICAL_CHANNEL_REGISTRY === DISTRIBUTION_CHANNELS,
+);
+
+const registryKeys = DISTRIBUTION_CHANNELS.map((c) => c.key);
+const registryKeySet = new Set(registryKeys);
+ok("registry has no duplicate keys", registryKeySet.size === registryKeys.length);
+for (const key of PORTAL_KEYS.filter((key) => key !== "other")) {
+  ok(`registry covers listing_posts portal ${key}`, registryKeySet.has(key));
+}
 
 // Every channel keeps its wiring coherent.
 for (const c of DISTRIBUTION_CHANNELS) {
   ok(`${c.key}: mode is valid`, (CHANNEL_MODES as readonly string[]).includes(c.mode));
+  ok(`${c.key}: category is valid`, (CHANNEL_CATEGORIES as readonly string[]).includes(c.category));
+  ok(
+    `${c.key}: integration status is valid`,
+    (CHANNEL_INTEGRATION_STATUSES as readonly string[]).includes(c.integrationStatus),
+  );
+  ok(
+    `${c.key}: connect kind is valid`,
+    (CHANNEL_CONNECT_KINDS as readonly string[]).includes(c.connectKind),
+  );
   ok(`${c.key}: portalUrl is https`, /^https:\/\//.test(c.portalUrl));
   ok(`${c.key}: has a blurb`, c.blurb.length > 20);
   ok(`${c.key}: no em dashes in blurb`, !/[—–]/.test(c.blurb));
 }
+
+const keysForIntegration = (status: string) =>
+  DISTRIBUTION_CHANNELS.filter((c) => c.integrationStatus === status)
+    .map((c) => c.key)
+    .sort();
+const sameKeys = (actual: string[], expected: string[]) =>
+  actual.join("|") === [...expected].sort().join("|");
+const liveKeys = keysForIntegration("live");
+const plannedKeys = keysForIntegration("planned");
+const mlsGatedKeys = keysForIntegration("mls_gated");
+ok(
+  "live split is grounded in real connect/post paths",
+  sameKeys(liveKeys, ["facebook_feed", "instagram", "kijiji", "rentals_ca", "zumper"]),
+);
+ok(
+  "planned split stays dark for non-integrated targets",
+  sameKeys(plannedKeys, ["facebook", "linkedin", "rentfaster", "snapchat", "viewit", "whatsapp"]),
+);
+ok("mls gated split is Realtor.ca only", sameKeys(mlsGatedKeys, ["realtor_ca"]));
+
+for (const c of DISTRIBUTION_CHANNELS.filter((c) => c.integrationStatus === "live")) {
+  const linked = channelTileStatus(c.key, {
+    account_status: "connected",
+    automation_authorized: true,
+  });
+  ok(`${c.key}: connected+authorized -> linked`, linked.state === "linked");
+  ok(`${c.key}: linked cannot connect again`, linked.canConnect === false);
+
+  const missing = channelTileStatus(c.key, null);
+  ok(`${c.key}: no account -> not_linked`, missing.state === "not_linked");
+  ok(`${c.key}: no account can connect`, missing.canConnect === true);
+
+  const unauthorized = channelTileStatus(c.key, {
+    account_status: "connected",
+    automation_authorized: false,
+  });
+  ok(`${c.key}: connected without auth -> not_linked`, unauthorized.state === "not_linked");
+}
+
+for (const c of DISTRIBUTION_CHANNELS.filter((c) => c.integrationStatus === "planned")) {
+  const status = channelTileStatus(c.key, {
+    account_status: "connected",
+    automation_authorized: true,
+  });
+  ok(`${c.key}: planned -> not_available_yet`, status.state === "not_available_yet");
+  ok(`${c.key}: planned cannot connect`, status.canConnect === false);
+}
+{
+  const status = channelTileStatus("realtor_ca", {
+    account_status: "connected",
+    automation_authorized: true,
+  });
+  ok("realtor_ca -> mls_only", status.state === "mls_only");
+  ok("realtor_ca cannot connect", status.canConnect === false);
+}
+ok("unknown channel -> not_available_yet", channelTileStatus("not_real").state === "not_available_yet");
 
 // Copy/feed/mode facts the plan pins down.
 ok("realtor_ca is broker mode", channelByKey("realtor_ca")?.mode === "broker");
