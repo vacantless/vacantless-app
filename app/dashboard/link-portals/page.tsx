@@ -118,7 +118,7 @@ export default async function LinkPortalsPage() {
 
       <BackNext
         backHref="/dashboard"
-        nextHref="/dashboard/link-portals"
+        nextHref="/dashboard/add-details"
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}
         ariaLabel={tCommon("stepNavigation")}

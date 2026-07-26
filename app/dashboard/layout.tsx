@@ -74,6 +74,9 @@ export default async function DashboardLayout({
             orgName={org.name}
             referralsEnabled={process.env.REFERRALS_ENABLED === "1"}
             capturesEnabled={!!process.env.INBOUND_WEBHOOK_SECRET}
+            distributionWizardEnabled={
+              process.env.DISTRIBUTION_WIZARD_ENABLED === "1"
+            }
           />
         </div>
       </header>

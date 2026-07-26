@@ -137,8 +137,8 @@ export default async function AfterLivePage({
       </Card>
 
       <BackNext
-        backHref="/dashboard/add-details"
-        nextHref="/dashboard/after-live"
+        backHref="/dashboard/send-live"
+        nextHref="/dashboard"
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}
         ariaLabel={tCommon("stepNavigation")}

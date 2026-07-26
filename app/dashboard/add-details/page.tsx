@@ -138,7 +138,7 @@ export default async function AddDetailsPage() {
 
       <BackNext
         backHref="/dashboard/link-portals"
-        nextHref="/dashboard/add-details"
+        nextHref="/dashboard/send-live"
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}
         ariaLabel={tCommon("stepNavigation")}

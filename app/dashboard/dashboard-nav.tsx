@@ -84,6 +84,21 @@ const REFERRALS: NavItem = { href: "/dashboard/referrals", label: "Refer a landl
 // live - the layout passes capturesEnabled = INBOUND_WEBHOOK_SECRET is set.
 const CAPTURES: NavItem = { href: "/dashboard/captures", label: "Captures" };
 
+// Guided distribution command center (S583-S586). Ships dark like REFERRALS and
+// CAPTURES: the four wizard pages (/dashboard/link-portals -> add-details ->
+// send-live -> after-live) are always reachable by URL, but this entry only
+// appears when DISTRIBUTION_WIZARD_ENABLED is set (read in the layout, passed as
+// distributionWizardEnabled). Opens at Stage 1 "Link your portals".
+const DISTRIBUTION_WIZARD: NavItem = {
+  href: "/dashboard/link-portals",
+  label: "Post a Listing",
+  match: [
+    "/dashboard/add-details",
+    "/dashboard/send-live",
+    "/dashboard/after-live",
+  ],
+};
+
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/dashboard") return pathname === "/dashboard";
   if (pathname.startsWith(item.href)) return true;
@@ -99,10 +114,12 @@ export function DashboardNav({
   orgName,
   referralsEnabled = false,
   capturesEnabled = false,
+  distributionWizardEnabled = false,
 }: {
   orgName: string;
   referralsEnabled?: boolean;
   capturesEnabled?: boolean;
+  distributionWizardEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false); // mobile menu
@@ -110,6 +127,7 @@ export function DashboardNav({
   const accountRef = useRef<HTMLDivElement>(null);
 
   const account = [
+    ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
     ...ACCOUNT,
     ...(referralsEnabled ? [REFERRALS] : []),
     ...(capturesEnabled ? [CAPTURES] : []),
