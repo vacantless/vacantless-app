@@ -1,0 +1,93 @@
+{
+  "_note": "Lib-agnostic source catalog extracted from the S578 prototype. Nested keys work as-is with next-intl namespaces or a plain lookup helper. {name} is a runtime interpolation (the channel name). Keep operator-facing strings ONLY here; no string ships as a literal in the UI.",
+  "common": {
+    "brand": "Vacantless",
+    "language": "Language",
+    "back": "Back",
+    "next": "Next Step"
+  },
+  "stages": {
+    "s1": "Link your portals",
+    "s2": "Add property details",
+    "s3": "Choose & send live",
+    "s4": "After it is live"
+  },
+  "stage1": {
+    "title": "Link your portals",
+    "sub": "Connect each website one time. After that, Vacantless can post your listing for you.",
+    "groupReady": "Ready to connect now",
+    "groupComing": "Coming soon",
+    "groupAgent": "Agent / MLS only",
+    "kindLogin": "You log in with your own account",
+    "kindOauth": "One secure connect button",
+    "kindNone": "Not connected through Vacantless",
+    "status": {
+      "linked": "ALREADY LINKED",
+      "linkedSub": "Ready to automatically send your listings.",
+      "notLinked": "NOT LINKED YET",
+      "notLinkedSub": "Connect once and we can post here for you.",
+      "notAvailable": "NOT AVAILABLE YET",
+      "notAvailableSub": "We are still building this connection. Nothing to do here yet.",
+      "mlsOnly": "AGENT / MLS ONLY",
+      "mlsOnlySub": "Realtor.ca is not a direct post. We prepare the sheet for your agent."
+    },
+    "buttons": {
+      "login": "CLICK HERE TO LOG IN WITH YOUR {name} PASSWORD",
+      "connect": "CLICK HERE TO CONNECT YOUR {name}",
+      "disconnect": "Disconnect"
+    },
+    "igNote": "Needs a Facebook Page with a linked Instagram Business account."
+  },
+  "stage2": {
+    "title": "Add property details",
+    "sub": "Give us the details one time. We fill every website for you. Pick one way to start.",
+    "cardEmailTitle": "Forward an email",
+    "cardEmailBody": "Send any notes or a draft to your private Vacantless address.",
+    "cardDocTitle": "Drop a document",
+    "cardDocBody": "Drag in an old lease, a PDF brochure, or an MLS sheet.",
+    "cardManualTitle": "Type it in",
+    "cardManualBody": "Fill a simple form by hand.",
+    "reading": "Reading your document...",
+    "readTitle": "What the computer has read so far",
+    "pickPrompt": "Pick one way to start above, and the details will appear here.",
+    "fields": {
+      "rent": "Rent",
+      "beds": "Bedrooms",
+      "baths": "Bathrooms",
+      "address": "Address",
+      "available": "Available date",
+      "parking": "Parking"
+    },
+    "found": "Found",
+    "pleaseCheck": "Please check",
+    "polishedTitle": "Public description (polished for you)"
+  },
+  "stage3": {
+    "title": "Choose & send live",
+    "sub": "Review once, then send to every connected website at the same time.",
+    "onlyLinked": "We only send to the websites you have linked. The rest stay off until they are ready.",
+    "blast": "CLICK HERE TO SEND THIS LISTING TO ALL PORTALS NOW",
+    "sending": "Sending now — please keep this screen open",
+    "allDone": "All done. Your listing is live everywhere it can be.",
+    "micro": {
+      "waiting": "Waiting to start...",
+      "formatting": "Formatting text...",
+      "uploading": "Uploading photos...",
+      "posting": "Posting to {name}...",
+      "live": "LIVE!"
+    }
+  },
+  "stage4": {
+    "title": "After it is live",
+    "sub": "This is what publish-only tools cannot show you: the leads coming back, and the ad turning itself off when the home is leased.",
+    "leadsTitle": "Leads landing here",
+    "leadsBody": "Every reply from every website comes back to one place.",
+    "takedownTitle": "Ad take-down on lease-up",
+    "takedownBody": "When the home is leased, Vacantless removes each ad for you. No forgotten live ads.",
+    "markLeased": "MARK THIS HOME AS LEASED",
+    "leasedDone": "Leased. Vacantless is removing your ads now.",
+    "badgeLive": "LIVE",
+    "badgeRemoving": "REMOVING...",
+    "badgeRemoved": "REMOVED"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "_note": "Catalogue source FR, mêmes clés que en.json. {name} est une interpolation (le nom du canal).",
+  "common": {
+    "brand": "Vacantless",
+    "language": "Langue",
+    "back": "Retour",
+    "next": "Étape suivante"
+  },
+  "stages": {
+    "s1": "Reliez vos portails",
+    "s2": "Détails du logement",
+    "s3": "Choisir et publier",
+    "s4": "Après la publication"
+  },
+  "stage1": {
+    "title": "Reliez vos portails",
+    "sub": "Connectez chaque site une seule fois. Ensuite, Vacantless peut publier votre annonce pour vous.",
+    "groupReady": "Prêt à connecter maintenant",
+    "groupComing": "Bientôt disponible",
+    "groupAgent": "Agent / MLS seulement",
+    "kindLogin": "Vous vous connectez avec votre propre compte",
+    "kindOauth": "Un bouton de connexion sécurisé",
+    "kindNone": "Non connecté via Vacantless",
+    "status": {
+      "linked": "DÉJÀ RELIÉ",
+      "linkedSub": "Prêt à envoyer vos annonces automatiquement.",
+      "notLinked": "PAS ENCORE RELIÉ",
+      "notLinkedSub": "Connectez une fois et nous pouvons publier ici pour vous.",
+      "notAvailable": "PAS ENCORE DISPONIBLE",
+      "notAvailableSub": "Nous construisons encore cette connexion. Rien à faire ici pour l'instant.",
+      "mlsOnly": "AGENT / MLS SEULEMENT",
+      "mlsOnlySub": "Realtor.ca n'est pas une publication directe. Nous préparons la fiche pour votre agent."
+    },
+    "buttons": {
+      "login": "CLIQUEZ ICI POUR VOUS CONNECTER AVEC VOTRE MOT DE PASSE {name}",
+      "connect": "CLIQUEZ ICI POUR CONNECTER VOTRE {name}",
+      "disconnect": "Déconnecter"
+    },
+    "igNote": "Nécessite une Page Facebook avec un compte Instagram Business relié."
+  },
+  "stage2": {
+    "title": "Détails du logement",
+    "sub": "Donnez-nous les détails une seule fois. Nous remplissons chaque site pour vous. Choisissez une façon de commencer.",
+    "cardEmailTitle": "Transférer un courriel",
+    "cardEmailBody": "Envoyez vos notes ou un brouillon à votre adresse Vacantless privée.",
+    "cardDocTitle": "Déposer un document",
+    "cardDocBody": "Glissez un ancien bail, une brochure PDF ou une fiche MLS.",
+    "cardManualTitle": "Le saisir",
+    "cardManualBody": "Remplissez un formulaire simple à la main.",
+    "reading": "Lecture de votre document...",
+    "readTitle": "Ce que l'ordinateur a lu jusqu'à présent",
+    "pickPrompt": "Choisissez une façon de commencer ci-dessus, et les détails apparaîtront ici.",
+    "fields": {
+      "rent": "Loyer",
+      "beds": "Chambres",
+      "baths": "Salles de bain",
+      "address": "Adresse",
+      "available": "Date de disponibilité",
+      "parking": "Stationnement"
+    },
+    "found": "Trouvé",
+    "pleaseCheck": "À vérifier",
+    "polishedTitle": "Description publique (améliorée pour vous)"
+  },
+  "stage3": {
+    "title": "Choisir et publier",
+    "sub": "Vérifiez une fois, puis envoyez à tous les sites connectés en même temps.",
+    "onlyLinked": "Nous envoyons seulement aux sites que vous avez reliés. Les autres restent inactifs jusqu'à ce qu'ils soient prêts.",
+    "blast": "CLIQUEZ ICI POUR ENVOYER CETTE ANNONCE À TOUS LES PORTAILS MAINTENANT",
+    "sending": "Envoi en cours — veuillez garder cet écran ouvert",
+    "allDone": "Terminé. Votre annonce est en ligne partout où c'est possible.",
+    "micro": {
+      "waiting": "En attente...",
+      "formatting": "Mise en forme du texte...",
+      "uploading": "Téléchargement des photos...",
+      "posting": "Publication sur {name}...",
+      "live": "EN LIGNE!"
+    }
+  },
+  "stage4": {
+    "title": "Après la publication",
+    "sub": "Voici ce que les outils de publication seule ne montrent pas : les demandes qui reviennent, et l'annonce qui s'éteint quand le logement est loué.",
+    "leadsTitle": "Les demandes arrivent ici",
+    "leadsBody": "Chaque réponse de chaque site revient à un seul endroit.",
+    "takedownTitle": "Retrait de l'annonce à la location",
+    "takedownBody": "Quand le logement est loué, Vacantless retire chaque annonce pour vous. Aucune annonce oubliée en ligne.",
+    "markLeased": "MARQUER CE LOGEMENT COMME LOUÉ",
+    "leasedDone": "Loué. Vacantless retire vos annonces maintenant.",
+    "badgeLive": "EN LIGNE",
+    "badgeRemoving": "RETRAIT...",
+    "badgeRemoved": "RETIRÉE"
+  }
+}
