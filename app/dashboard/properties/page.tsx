@@ -232,9 +232,9 @@ export default async function PropertiesPage({
                     <Link
                       href={`/dashboard/properties/${p.id}#distribute-header`}
                       className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
-                      title="Open the marketing checklist. Nothing is posted automatically."
+                      title="Get this listing online. Nothing is posted automatically."
                     >
-                      Marketing checklist →
+                      Get this listing online →
                     </Link>
                   </>
                 ) : isPubliclyVisible(p.status) ? (
@@ -248,11 +248,21 @@ export default async function PropertiesPage({
                       : "Paused - not accepting inquiries"}
                   </span>
                 ) : (
-                  // Draft / off-market: the public /r link 404s, so don't offer
-                  // a Copy button that hands out a broken link (QA blocker #1).
-                  <span className="text-xs text-gray-400">
-                    Set Live to share
-                  </span>
+                  // Draft / off-market: the public /r link 404s, so no Copy
+                  // button (QA blocker #1). Still give one obvious way to start
+                  // getting this listing online - into the unit's posting prep.
+                  <>
+                    <Link
+                      href={`/dashboard/properties/${p.id}#distribute-header`}
+                      className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
+                      title="Get this listing online. Nothing is posted automatically."
+                    >
+                      Get this listing online &rarr;
+                    </Link>
+                    <span className="text-xs text-gray-400">
+                      Set Live to share your link
+                    </span>
+                  </>
                 )}
                 <Link
                   href={`/dashboard/properties/${p.id}`}

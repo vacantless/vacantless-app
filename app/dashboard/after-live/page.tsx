@@ -143,9 +143,14 @@ export default async function AfterLivePage({
         {summary?.leasedUp ? (
           <StatusBanner tone="success" title={tStage4("leasedDone")} />
         ) : (
-          <Button size="lg" disabled>
-            {tStage4("markLeased")}
-          </Button>
+          <div className="space-y-2">
+            <Button size="lg" disabled>
+              {tStage4("markLeased")}
+            </Button>
+            <p className="text-[length:var(--vl-type-guided-body)] text-[var(--vl-text-secondary)]">
+              {tStage4("markLeasedHint")}
+            </p>
+          </div>
         )}
       </Card>
 

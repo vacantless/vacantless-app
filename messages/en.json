@@ -10,14 +10,14 @@
     "forListing": "For this listing:"
   },
   "stages": {
-    "s1": "Link your portals",
+    "s1": "Connect sites",
     "s2": "Add property details",
     "s3": "Choose & send live",
     "s4": "After it is live"
   },
   "stage1": {
-    "title": "Link your portals",
-    "sub": "Connect each website one time. After that, Vacantless can post your listing for you.",
+    "title": "Connect your rental sites",
+    "sub": "Connect each website once. Then Vacantless helps you post to all of them from one place.",
     "groupReady": "Ready to connect now",
     "groupComing": "Coming soon",
     "groupAgent": "Agent / MLS only",
@@ -67,7 +67,7 @@
   },
   "stage3": {
     "title": "Choose & send live",
-    "sub": "Review once, then send to every connected website at the same time.",
+    "sub": "Review once, then open the send page to post to each connected website.",
     "onlyLinked": "We only send to the websites you have linked. The rest stay off until they are ready.",
     "blast": "CLICK HERE TO SEND THIS LISTING TO ALL PORTALS NOW",
     "openSend": "OPEN THIS LISTING'S SEND PAGE",
@@ -90,7 +90,8 @@
     "takedownTitle": "Ad take-down on lease-up",
     "takedownBody": "When the home is leased, Vacantless can take each ad down for you, so no ad is left live by mistake.",
     "markLeased": "MARK THIS HOME AS LEASED",
-    "leasedDone": "Leased. Vacantless is removing your ads now.",
+    "markLeasedHint": "This turns on soon. For now, mark the home leased from its property page.",
+    "leasedDone": "Leased. Your tracked ads are marked removed.",
     "badgeLive": "LIVE",
     "badgeRemoving": "REMOVING...",
     "badgeRemoved": "REMOVED"

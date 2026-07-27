@@ -411,11 +411,11 @@ export function DistributeTab({
         <div className="mb-2 flex items-center gap-2.5">
           <IconTile><Icons.link className="h-4 w-4" /></IconTile>
           <h3 className="text-sm font-semibold text-white">
-            Distribution
+            Get this listing online
           </h3>
         </div>
         <p className="mb-3 max-w-2xl text-sm text-slate-300">
-          Choose channels, connect accounts, post yourself, or let Vacantless run it.
+          Choose where to post, connect your accounts, and post it yourself, or have Vacantless post for you.
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
@@ -426,13 +426,13 @@ export function DistributeTab({
             }`}
           >
             {readyToShare
-              ? "Ready to distribute"
+              ? "Ready to post"
               : `${requiredOutstanding} ${
                   requiredOutstanding === 1 ? "thing" : "things"
                 } to finish first`}
           </span>
           <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
-            {liveChannels} {liveChannels === 1 ? "channel" : "channels"} posted
+            {liveChannels} {liveChannels === 1 ? "site" : "sites"} posted
           </span>
           {!readyToShare && (
             <a href="#rental-details" className="font-medium text-white underline">

@@ -10,14 +10,14 @@
     "forListing": "Pour cette annonce :"
   },
   "stages": {
-    "s1": "Reliez vos portails",
+    "s1": "Connecter les sites",
     "s2": "Détails du logement",
     "s3": "Choisir et publier",
     "s4": "Après la publication"
   },
   "stage1": {
-    "title": "Reliez vos portails",
-    "sub": "Connectez chaque site une seule fois. Ensuite, Vacantless peut publier votre annonce pour vous.",
+    "title": "Connectez vos sites de location",
+    "sub": "Connectez chaque site une seule fois. Ensuite, Vacantless vous aide à publier sur tous ces sites depuis un seul endroit.",
     "groupReady": "Prêt à connecter maintenant",
     "groupComing": "Bientôt disponible",
     "groupAgent": "Agent / MLS seulement",
@@ -67,7 +67,7 @@
   },
   "stage3": {
     "title": "Choisir et publier",
-    "sub": "Vérifiez une fois, puis envoyez à tous les sites connectés en même temps.",
+    "sub": "Vérifiez une fois, puis ouvrez la page d’envoi pour publier sur chaque site connecté.",
     "onlyLinked": "Nous envoyons seulement aux sites que vous avez reliés. Les autres restent inactifs jusqu'à ce qu'ils soient prêts.",
     "blast": "CLIQUEZ ICI POUR ENVOYER CETTE ANNONCE À TOUS LES PORTAILS MAINTENANT",
     "openSend": "OUVRIR LA PAGE D'ENVOI DE CETTE ANNONCE",
@@ -90,7 +90,8 @@
     "takedownTitle": "Retrait de l'annonce à la location",
     "takedownBody": "Quand le logement est loué, Vacantless peut retirer chaque annonce pour vous, pour qu'aucune annonce ne reste en ligne par erreur.",
     "markLeased": "MARQUER CE LOGEMENT COMME LOUÉ",
-    "leasedDone": "Loué. Vacantless retire vos annonces maintenant.",
+    "markLeasedHint": "Cette option arrive bientôt. Pour l’instant, marquez le logement comme loué depuis sa page.",
+    "leasedDone": "Loué. Vos annonces suivies sont marquées comme retirées.",
     "badgeLive": "EN LIGNE",
     "badgeRemoving": "RETRAIT...",
     "badgeRemoved": "RETIRÉE"

@@ -2981,7 +2981,7 @@ export default async function PropertyDetailPage({
         <div className="mb-3 flex items-center gap-2.5">
           <IconTile size="sm"><Icons.list className="h-4 w-4" /></IconTile>
           <h3 className="text-sm font-semibold text-gray-900">
-            Posting reference
+            What to paste on each site
           </h3>
         </div>
         <p className="mb-4 text-xs text-gray-500">
@@ -3010,7 +3010,7 @@ export default async function PropertyDetailPage({
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-gray-900">
-              Distribute tools
+              Ready to post?
             </p>
             <p className="text-xs text-gray-600">
               Your copy, photos, and field sheet are ready. Open Distribute to
@@ -3021,7 +3021,7 @@ export default async function PropertyDetailPage({
             href="#distribute-header"
             className={SECONDARY_ACTION_CLASS}
           >
-            Open Distribute →
+            Open Get online →
           </a>
         </div>
       </div>
@@ -3070,7 +3070,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="distribute"
-        label="Distribute"
+        label="Get online"
         anchorId="distribute"
         done={distributeChannelCards.some(
           (c) =>

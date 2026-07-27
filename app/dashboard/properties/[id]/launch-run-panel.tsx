@@ -380,7 +380,7 @@ export function LaunchRunPanel({
       >
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-950">
-            Channels
+            Rental sites
           </h3>
           <div className="flex flex-wrap items-center gap-2">
             {wizardEnabled && (
@@ -399,7 +399,7 @@ export function LaunchRunPanel({
             </Link>
           </div>
         </div>
-        <p className="mb-3 text-xs text-gray-500">Select reach. Keep it short.</p>
+        <p className="mb-3 text-xs text-gray-500">Pick the sites where renters find this listing.</p>
         <form action={startDistributionRun}>
           <input type="hidden" name="property_id" value={propertyId} />
           <div className="mb-3 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-inner">
@@ -423,7 +423,7 @@ export function LaunchRunPanel({
             className={PRIMARY_BTN}
             style={{ backgroundColor: "var(--brand-color)" }}
           >
-            Add selected channels
+            Add these sites
           </button>
         </form>
       </div>
@@ -452,7 +452,7 @@ export function LaunchRunPanel({
     >
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-gray-950">
-          Channels
+          Rental sites
         </h3>
         <div className="flex flex-wrap items-center gap-3">
           <Link

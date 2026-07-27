@@ -374,7 +374,7 @@ export default async function SettingsPage({
     <div>
       <PageHeader
         icon={<Icons.settings />}
-        title="Settings"
+        title="Company settings"
         subtitle="Control how your brand appears to renters and how automated messages behave."
       />
 
@@ -828,7 +828,7 @@ export default async function SettingsPage({
         <div className="mt-6 space-y-6">
           {searchParams.distribution === "saved" && (
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-              Channel setup saved.
+              Account settings saved.
             </div>
           )}
           {searchParams.distribution === "badchannel" && (
@@ -858,12 +858,11 @@ export default async function SettingsPage({
                 <IconTile size="sm"><Icons.link className="h-4 w-4" /></IconTile>
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                    Channel setup
+                    Connect accounts
                   </h3>
                   <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                    Set each channel&apos;s account state once here. Rental-level
-                    publishing still happens from Distribute, with feed/live proof
-                    tracked on each publish run.
+                    Connect each website&apos;s account once here. You post each
+                    listing from the property&apos;s Get online tab.
                   </p>
                 </div>
               </div>

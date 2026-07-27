@@ -68,7 +68,7 @@ const PRIMARY: NavItem[] = [
 // are NOT daily work - they configure or step outside the operating surface.
 const ACCOUNT: NavItem[] = [
   { href: "/dashboard/me", label: "My settings" },
-  { href: "/dashboard/settings", label: "Settings" },
+  { href: "/dashboard/settings", label: "Company settings" },
   { href: "/dashboard/automations", label: "Automations & templates" },
   { href: "/dashboard/billing", label: "Your plan" },
 ];
@@ -91,7 +91,7 @@ const CAPTURES: NavItem = { href: "/dashboard/captures", label: "Captures" };
 // distributionWizardEnabled). Opens at Stage 1 "Link your portals".
 const DISTRIBUTION_WIZARD: NavItem = {
   href: "/dashboard/link-portals",
-  label: "Post a Listing",
+  label: "Get a listing online",
   match: [
     "/dashboard/add-details",
     "/dashboard/send-live",
