@@ -70,6 +70,8 @@
     "sub": "Review once, then send to every connected website at the same time.",
     "onlyLinked": "We only send to the websites you have linked. The rest stay off until they are ready.",
     "blast": "CLICK HERE TO SEND THIS LISTING TO ALL PORTALS NOW",
+    "openSend": "OPEN THIS LISTING'S SEND PAGE",
+    "pickListing": "CHOOSE A LISTING TO SEND",
     "sending": "Sending now — please keep this screen open",
     "allDone": "All done. Your listing is live everywhere it can be.",
     "micro": {
@@ -82,11 +84,11 @@
   },
   "stage4": {
     "title": "After it is live",
-    "sub": "This is what publish-only tools cannot show you: the leads coming back, and the ad turning itself off when the home is leased.",
+    "sub": "This is what publish-only tools cannot show you: the leads coming back to one place, and the option to have each ad come down automatically once the home is leased.",
     "leadsTitle": "Leads landing here",
     "leadsBody": "Every reply from every website comes back to one place.",
     "takedownTitle": "Ad take-down on lease-up",
-    "takedownBody": "When the home is leased, Vacantless removes each ad for you. No forgotten live ads.",
+    "takedownBody": "When the home is leased, Vacantless can take each ad down for you, so no ad is left live by mistake.",
     "markLeased": "MARK THIS HOME AS LEASED",
     "leasedDone": "Leased. Vacantless is removing your ads now.",
     "badgeLive": "LIVE",

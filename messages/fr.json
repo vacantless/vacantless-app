@@ -70,6 +70,8 @@
     "sub": "Vérifiez une fois, puis envoyez à tous les sites connectés en même temps.",
     "onlyLinked": "Nous envoyons seulement aux sites que vous avez reliés. Les autres restent inactifs jusqu'à ce qu'ils soient prêts.",
     "blast": "CLIQUEZ ICI POUR ENVOYER CETTE ANNONCE À TOUS LES PORTAILS MAINTENANT",
+    "openSend": "OUVRIR LA PAGE D'ENVOI DE CETTE ANNONCE",
+    "pickListing": "CHOISISSEZ UNE ANNONCE À ENVOYER",
     "sending": "Envoi en cours — veuillez garder cet écran ouvert",
     "allDone": "Terminé. Votre annonce est en ligne partout où c'est possible.",
     "micro": {
@@ -82,11 +84,11 @@
   },
   "stage4": {
     "title": "Après la publication",
-    "sub": "Voici ce que les outils de publication seule ne montrent pas : les demandes qui reviennent, et l'annonce qui s'éteint quand le logement est loué.",
+    "sub": "Voici ce que les outils de publication seule ne montrent pas : les demandes qui reviennent à un seul endroit, et l'option de retirer chaque annonce automatiquement une fois le logement loué.",
     "leadsTitle": "Les demandes arrivent ici",
     "leadsBody": "Chaque réponse de chaque site revient à un seul endroit.",
     "takedownTitle": "Retrait de l'annonce à la location",
-    "takedownBody": "Quand le logement est loué, Vacantless retire chaque annonce pour vous. Aucune annonce oubliée en ligne.",
+    "takedownBody": "Quand le logement est loué, Vacantless peut retirer chaque annonce pour vous, pour qu'aucune annonce ne reste en ligne par erreur.",
     "markLeased": "MARQUER CE LOGEMENT COMME LOUÉ",
     "leasedDone": "Loué. Vacantless retire vos annonces maintenant.",
     "badgeLive": "EN LIGNE",

@@ -3,7 +3,6 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { setLocaleFromFormData } from "@/app/i18n/actions";
 import {
   BackNext,
-  Button,
   ButtonLink,
   Card,
   LanguageDropdown,
@@ -184,10 +183,17 @@ export default async function SendLivePage({
 
           {allLive ? (
             <StatusBanner tone="success" title={tStage3("allDone")} />
+          ) : ownedPropertyId ? (
+            <ButtonLink
+              href={`/dashboard/properties/${ownedPropertyId}#distribute-header`}
+              size="lg"
+            >
+              {tStage3("openSend")}
+            </ButtonLink>
           ) : (
-            <Button size="lg" disabled>
-              {tStage3("blast")}
-            </Button>
+            <ButtonLink href="/dashboard/properties" size="lg">
+              {tStage3("pickListing")}
+            </ButtonLink>
           )}
         </>
       )}
