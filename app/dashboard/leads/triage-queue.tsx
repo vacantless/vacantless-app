@@ -150,7 +150,13 @@ function QueueRow({
           </span>
         </p>
       </div>
-      <div className="sm:shrink-0">
+      <div className="flex items-center gap-2 sm:shrink-0">
+        <Link
+          href={`/dashboard/leads/${l.id}#reply`}
+          className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
+        >
+          Reply
+        </Link>
         <StatusSelect
           leadId={l.id}
           status={l.status}

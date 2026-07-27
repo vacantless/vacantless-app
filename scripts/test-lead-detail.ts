@@ -9,6 +9,7 @@ import {
   suggestedNextStages,
   suggestedNextStageOptions,
   canOfferEarlyTenancy,
+  buildReplyDraft,
 } from "../lib/lead-detail";
 
 let passed = 0;
@@ -140,6 +141,56 @@ ok(
 );
 ok("no-suitable-time: false silent", noSuitableTimeBadge(false) === null);
 ok("no-suitable-time: null silent", noSuitableTimeBadge(null) === null);
+
+// --- buildReplyDraft --------------------------------------------------------
+ok(
+  "reply-draft: uses first name and rental address",
+  (() => {
+    const r = buildReplyDraft(
+      { name: "Aaliyah Chen", property: { address: "12 Donwoods Dr" } },
+      "North Star Rentals",
+    );
+    return (
+      r.subject === "Re: your inquiry about 12 Donwoods Dr" &&
+      r.body.includes("Hi Aaliyah,") &&
+      r.body.includes("Thanks for reaching out about 12 Donwoods Dr.")
+    );
+  })(),
+);
+ok(
+  "reply-draft: missing name falls back to there",
+  buildReplyDraft(
+    { name: null, property: { address: "12 Donwoods Dr" } },
+    "North Star Rentals",
+  ).body.includes("Hi there,"),
+);
+ok(
+  "reply-draft: blank name falls back to there",
+  buildReplyDraft(
+    { name: "   ", property: { address: "12 Donwoods Dr" } },
+    "North Star Rentals",
+  ).body.includes("Hi there,"),
+);
+ok(
+  "reply-draft: missing address falls back to the rental",
+  (() => {
+    const r = buildReplyDraft(
+      { name: "Aaliyah", property: null },
+      "North Star Rentals",
+    );
+    return (
+      r.subject === "Re: your inquiry about the rental" &&
+      r.body.includes("Thanks for reaching out about the rental.")
+    );
+  })(),
+);
+ok(
+  "reply-draft: org name signs the body",
+  buildReplyDraft(
+    { name: "Aaliyah", property: { address: "12 Donwoods Dr" } },
+    "North Star Rentals",
+  ).body.endsWith("Thanks,\nNorth Star Rentals"),
+);
 
 // --- followUpStatus ---------------------------------------------------------
 ok("followUp: none when null", followUpStatus(null, "2026-06-15") === "none");

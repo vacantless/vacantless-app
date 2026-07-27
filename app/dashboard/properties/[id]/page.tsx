@@ -3013,8 +3013,8 @@ export default async function PropertyDetailPage({
               Ready to post?
             </p>
             <p className="text-xs text-gray-600">
-              Your copy, photos, and field sheet are ready. Open Distribute to
-              post to each channel, save proof, and track what is actually live.
+              Use the Get online tab to pick rental sites, copy the listing
+              text, and finish posting.
             </p>
           </div>
           <a

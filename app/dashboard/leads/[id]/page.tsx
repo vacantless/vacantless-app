@@ -16,6 +16,7 @@ import {
   followUpLabel,
   suggestedNextStageOptions,
   canOfferEarlyTenancy,
+  buildReplyDraft,
   type FollowUpStatus,
 } from "@/lib/lead-detail";
 import { PageHeader, SectionHeading, EmptyState } from "@/components/ui";
@@ -33,6 +34,7 @@ import { canUseRentalApplications } from "@/lib/billing";
 import { ALLOWED_FORM_FIELDS } from "@/lib/rental-application";
 import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
+import { InquiryReplyPanel } from "../inquiry-reply-panel";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -173,6 +175,7 @@ export default async function LeadDetailPage({
 
   const org = await getCurrentOrg();
   const timeZone = org?.booking_timezone ?? "America/Toronto";
+  const orgName = org?.name ?? "Vacantless";
   const canApplications = canUseRentalApplications(org?.plan);
   const applyBannerKey = searchParams.apply ?? null;
   // "Today" in the org's timezone as YYYY-MM-DD (en-CA formats that way).
@@ -187,6 +190,7 @@ export default async function LeadDetailPage({
   const followStatus = followUpStatus(l.next_action_at, today);
   const followText = followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
+  const replyDraft = buildReplyDraft(l, orgName);
 
   // Operator-only income magnitude for the qualify-out flag (S258): how far the
   // renter's reported income sits from THIS org's requirement (multiple x rent).
@@ -551,6 +555,13 @@ export default async function LeadDetailPage({
         </>
       )}
 
+      <InquiryReplyPanel
+        email={l.email}
+        phone={l.phone}
+        subject={replyDraft.subject}
+        body={replyDraft.body}
+      />
+
       <div className="mt-8">
         <SectionHeading>Activity</SectionHeading>
       </div>
@@ -560,6 +571,9 @@ export default async function LeadDetailPage({
         className="mb-5 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
       >
         <input type="hidden" name="id" value={l.id} />
+        <p className="mb-2 text-xs text-gray-500">
+          This only saves a private note for you. It is not sent to the renter.
+        </p>
         <textarea
           name="body"
           rows={2}
@@ -585,25 +599,34 @@ export default async function LeadDetailPage({
         />
       ) : (
         <ul className="space-y-2">
-          {messages.map((m) => (
-            <li
-              key={m.id}
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
-            >
-              <div className="mb-1 flex items-center gap-2 text-xs text-gray-400">
-                <span className="font-medium uppercase tracking-wider">
-                  {m.channel ?? "note"}
+          {messages.map((m) => {
+            const isNote = m.channel === "note";
+            const channelLabel = isNote ? "private note" : (m.channel ?? "note");
+            const directionLabel = isNote ? null : m.direction;
+            return (
+              <li
+                key={m.id}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
+              >
+                <div className="mb-1 flex items-center gap-2 text-xs text-gray-400">
+                  <span className="font-medium uppercase tracking-wider">
+                    {channelLabel}
                 </span>
-                <span>·</span>
-                <span>{m.direction ?? ""}</span>
-                <span>·</span>
-                <span>{new Date(m.created_at).toLocaleString("en-US", { timeZone })}</span>
-              </div>
-              <p className="whitespace-pre-wrap text-sm text-gray-700">
-                {m.body}
-              </p>
-            </li>
-          ))}
+                {directionLabel ? (
+                  <>
+                    <span>·</span>
+                    <span>{directionLabel}</span>
+                  </>
+                ) : null}
+                  <span>·</span>
+                  <span>{new Date(m.created_at).toLocaleString("en-US", { timeZone })}</span>
+                </div>
+                <p className="whitespace-pre-wrap text-sm text-gray-700">
+                  {m.body}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

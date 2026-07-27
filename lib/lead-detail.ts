@@ -95,6 +95,21 @@ export function noSuitableTimeBadge(
   return noSuitableTime ? "Wanted to book — no suitable time" : null;
 }
 
+export function buildReplyDraft(
+  lead: { name: string | null; property: { address: string } | null },
+  orgName: string,
+): { subject: string; body: string } {
+  const first = (lead.name ?? "").trim().split(/\s+/)[0] || "there";
+  const place = lead.property?.address ?? "the rental";
+  const subject = `Re: your inquiry about ${place}`;
+  const body =
+    `Hi ${first},\n\n` +
+    `Thanks for reaching out about ${place}. ` +
+    `Would you like to book a viewing? Reply here and I can share a few times that work.\n\n` +
+    `Thanks,\n${orgName}`;
+  return { subject, body };
+}
+
 // --- follow-up / next action ----------------------------------------------
 
 export type FollowUpStatus = "none" | "overdue" | "today" | "upcoming";
