@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { setSelectedOrg } from "./org-actions";
 
 // ============================================================================
 // Dashboard navigation - IA v2 (S427).
@@ -104,6 +105,12 @@ const DISTRIBUTION_WIZARD: NavItem = {
   ],
 };
 
+// Cross-org "agent book" overview (Tier 1 A/B). The /agent page is dark behind
+// AGENT_BOOK_ENABLED; this primary-bar link only appears when the flag is on AND
+// the caller actually belongs to more than one org (a real agent), so a
+// single-org landlord never sees it even after the flag flips.
+const AGENT_BOOK: NavItem = { href: "/agent", label: "Agent book" };
+
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/dashboard") return pathname === "/dashboard";
   if (pathname.startsWith(item.href)) return true;
@@ -117,19 +124,40 @@ function isActive(pathname: string, item: NavItem) {
  */
 export function DashboardNav({
   orgName,
+  orgs = [],
+  currentOrgId,
+  agentBookEnabled = false,
   referralsEnabled = false,
   capturesEnabled = false,
   distributionWizardEnabled = false,
 }: {
   orgName: string;
+  orgs?: { id: string; name: string }[];
+  currentOrgId?: string;
+  agentBookEnabled?: boolean;
   referralsEnabled?: boolean;
   capturesEnabled?: boolean;
   distributionWizardEnabled?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false); // mobile menu
   const [accountOpen, setAccountOpen] = useState(false); // desktop org menu
   const accountRef = useRef<HTMLDivElement>(null);
+  const [switching, startSwitch] = useTransition();
+
+  // A real agent belongs to more than one org — only then does any switcher /
+  // agent-book surface appear. Single-org users see the nav exactly as before.
+  const isMultiOrg = orgs.length > 1;
+  const showAgentBook = agentBookEnabled && isMultiOrg;
+
+  function switchOrg(orgId: string) {
+    if (orgId === currentOrgId) return;
+    startSwitch(async () => {
+      await setSelectedOrg(orgId);
+      router.refresh();
+    });
+  }
 
   // "Get Online" (the guided wizard) is the front door for the signature
   // capability, so when enabled it rides the PRIMARY bar rather than the org
@@ -137,6 +165,7 @@ export function DashboardNav({
   const primary = [
     ...PRIMARY,
     ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
+    ...(showAgentBook ? [AGENT_BOOK] : []),
   ];
   const account = [
     ...ACCOUNT,
@@ -220,6 +249,29 @@ export function DashboardNav({
               role="menu"
               className="absolute right-0 top-full z-30 mt-1 min-w-48 overflow-hidden rounded-lg border border-black/5 bg-white py-1 text-gray-700 shadow-lg"
             >
+              {isMultiOrg && (
+                <>
+                  <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Switch client
+                  </p>
+                  {orgs.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      role="menuitem"
+                      disabled={switching}
+                      onClick={() => switchOrg(o.id)}
+                      className={`flex w-full items-center justify-between gap-2 px-4 py-2 text-left font-medium transition hover:bg-gray-100 disabled:opacity-50 ${
+                        o.id === currentOrgId ? "text-brand" : ""
+                      }`}
+                    >
+                      <span className="truncate">{o.name}</span>
+                      {o.id === currentOrgId && <span aria-hidden>✓</span>}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-gray-100" />
+                </>
+              )}
               {account.map((item) => (
                 <Link
                   key={item.href}
@@ -276,6 +328,25 @@ export function DashboardNav({
             <p className="px-3 pb-0.5 pt-1 text-xs uppercase tracking-wider text-white/60">
               {orgName}
             </p>
+            {isMultiOrg && (
+              <>
+                {orgs.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    disabled={switching}
+                    onClick={() => switchOrg(o.id)}
+                    className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left font-medium transition hover:bg-white/15 disabled:opacity-50 ${
+                      o.id === currentOrgId ? "bg-white/25" : ""
+                    }`}
+                  >
+                    <span className="truncate">{o.name}</span>
+                    {o.id === currentOrgId && <span aria-hidden>✓</span>}
+                  </button>
+                ))}
+                <div className="my-1 border-t border-white/15" />
+              </>
+            )}
             {account.map((item) => (
               <Link
                 key={item.href}

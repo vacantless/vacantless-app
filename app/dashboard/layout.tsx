@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentOrg } from "@/lib/org";
+import { getCurrentOrg, listMyOrgs } from "@/lib/org";
 import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { DashboardNav } from "./dashboard-nav";
 import { VacantlessMark } from "@/components/vacantless-mark";
@@ -21,6 +21,10 @@ export default async function DashboardLayout({
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+
+  // The caller's orgs, for the multi-org switcher. Only agents/users who belong
+  // to more than one org see any switcher UI; single-org users are unaffected.
+  const orgs = await listMyOrgs();
 
   // Guardrail: a pale tenant brand color makes the white header text + the
   // white-on-brand buttons unreadable. Derive an accessible (darkened-as-needed)
@@ -72,6 +76,9 @@ export default async function DashboardLayout({
           </div>
           <DashboardNav
             orgName={org.name}
+            orgs={orgs}
+            currentOrgId={org.id}
+            agentBookEnabled={!!process.env.AGENT_BOOK_ENABLED}
             referralsEnabled={process.env.REFERRALS_ENABLED === "1"}
             capturesEnabled={!!process.env.INBOUND_WEBHOOK_SECRET}
             distributionWizardEnabled={

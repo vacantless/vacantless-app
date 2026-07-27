@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { readSelectedOrgCookie, validateSelectedOrg } from "@/lib/selected-org";
 
 export type Org = {
   id: string;
@@ -69,15 +70,62 @@ export type Org = {
   dispatch_terms_accepted_at: string | null;
 };
 
-// The org the signed-in user belongs to. RLS scopes the row to the caller,
-// so this returns only their own organization (or null if none yet).
+const ORG_COLUMNS =
+  "id, name, slug, brand_color, brand_color_secondary, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, booking_requires_confirmation, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours, showing_autoclose_enabled, showing_autoclose_after_hours, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, public_contact_phone, public_contact_email, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, dispatch_terms_accepted_at";
+
+// The active org for the signed-in user. A user can belong to several orgs
+// (multi-org agents); the ACTIVE one is resolved from the `selected_org` cookie,
+// validated against the caller's memberships, falling back to their first
+// membership when the cookie is unset or invalid. Single-org users are wholly
+// unaffected (their one org is always the fallback). Returns null when the user
+// has no membership yet (pre-onboarding).
+//
+// Historically this did a bare `.limit(1)` and let RLS surface an arbitrary one
+// of the caller's orgs; the cookie now makes the choice deterministic.
 export async function getCurrentOrg(): Promise<Org | null> {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // The caller's membership org ids (RLS: only their own rows are readable).
+  const { data: memberships } = await supabase
+    .from("memberships")
+    .select("organization_id")
+    .eq("user_id", user.id);
+  const membershipOrgIds = (memberships ?? [])
+    .map((m) => (m as { organization_id: string | null }).organization_id)
+    .filter((id): id is string => id != null);
+
+  const selectedId = validateSelectedOrg(
+    readSelectedOrgCookie(),
+    membershipOrgIds,
+  );
+  if (!selectedId) return null;
+
   const { data } = await supabase
     .from("organizations")
-    .select(
-      "id, name, slug, brand_color, brand_color_secondary, logo_url, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, booking_requires_confirmation, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours, showing_autoclose_enabled, showing_autoclose_after_hours, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, public_contact_phone, public_contact_email, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, dispatch_terms_accepted_at",
-    )
+    .select(ORG_COLUMNS)
+    .eq("id", selectedId)
     .limit(1);
   return (data?.[0] as Org) ?? null;
+}
+
+// The caller's orgs (id + name), for the org switcher. RLS on `organizations`
+// (id in user_org_ids()) scopes the read to just the orgs the caller belongs to.
+export async function listMyOrgs(): Promise<{ id: string; name: string }[]> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data } = await supabase
+    .from("organizations")
+    .select("id, name")
+    .order("name", { ascending: true });
+  return (data ?? []).map((o) => ({
+    id: (o as { id: string }).id,
+    name: (o as { name: string | null }).name ?? "Untitled org",
+  }));
 }

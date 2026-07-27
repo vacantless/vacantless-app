@@ -14,6 +14,8 @@
 import { DEFAULT_BRAND_COLOR } from "./brand-theme";
 export { DEFAULT_BRAND_COLOR };
 
+import { revealCopy, type RevealKey } from "./landlord-campaign";
+
 export type ChecklistStatus = "complete" | "current" | "todo";
 
 export type ChecklistStep = {
@@ -199,5 +201,29 @@ export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
     totalCount: steps.length,
     allComplete: completedCount === steps.length,
     nextStep,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Landlord campaign mirror (Tier 1 C, additive). When the reveal sweep has a
+// due reveal for a free-plan org, the Overview can surface that same reveal as
+// a next-best-action card, so the in-app nudge and the email stay in lockstep.
+// Pure + additive: it does not touch buildLaunchChecklist or any existing step;
+// the Overview page opts in by calling this with the org's due RevealKey (from
+// lib/landlord-campaign.nextRevealDue) when LANDLORD_CAMPAIGN_ENABLED is set.
+// ---------------------------------------------------------------------------
+export function landlordCampaignNextBestAction(
+  reveal: RevealKey | null,
+  ctx: { orgName?: string | null; propertyAddress?: string | null } = {},
+): ChecklistStep | null {
+  if (!reveal) return null;
+  const copy = revealCopy(reveal, ctx);
+  return {
+    key: `campaign_${reveal}`,
+    label: copy.subject,
+    description: copy.body.split("\n\n")[0] ?? copy.body,
+    href: copy.ctaPath,
+    cta: copy.ctaLabel,
+    status: "current",
   };
 }
