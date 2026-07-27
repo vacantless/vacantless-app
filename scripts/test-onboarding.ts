@@ -20,6 +20,8 @@ function ok(name: string, cond: boolean) {
 
 const EMPTY: ChecklistInput = {
   propertyCount: 0,
+  listingOnlineCount: 0,
+  wizardEnabled: false,
   availabilityWindowCount: 0,
   replyToConfigured: false,
   leadCount: 0,
@@ -28,6 +30,8 @@ const EMPTY: ChecklistInput = {
 
 const ALL: ChecklistInput = {
   propertyCount: 3,
+  listingOnlineCount: 2,
+  wizardEnabled: false,
   availabilityWindowCount: 5,
   replyToConfigured: true,
   leadCount: 12,
@@ -37,20 +41,20 @@ const ALL: ChecklistInput = {
 // --- Structure -------------------------------------------------------------
 {
   const c = buildLaunchChecklist(EMPTY);
-  ok("five steps", c.steps.length === 5 && c.totalCount === 5);
+  ok("six steps", c.steps.length === 6 && c.totalCount === 6);
   ok("empty -> 0 complete", c.completedCount === 0);
   ok("empty -> not all complete", c.allComplete === false);
   ok(
-    "step order is property,availability,replyto,intake,golive",
+    "step order is property,getonline,availability,replyto,intake,golive",
     c.steps.map((s) => s.key).join(",") ===
-      "property,availability,replyto,intake,golive",
+      "property,getonline,availability,replyto,intake,golive",
   );
 }
 
 // --- All complete ----------------------------------------------------------
 {
   const c = buildLaunchChecklist(ALL);
-  ok("all -> 5 complete", c.completedCount === 5);
+  ok("all -> 6 complete", c.completedCount === 6);
   ok("all -> allComplete true", c.allComplete === true);
   ok("all -> no next step", c.nextStep === null);
   ok(
@@ -72,18 +76,29 @@ const ALL: ChecklistInput = {
   );
 }
 
-// --- Current advances as earlier steps complete ----------------------------
+// --- Get-online is the next best action once a rental exists ---------------
+// (a first-timer with a listing but nothing posted is pointed at getting online)
+{
+  const c = buildLaunchChecklist({ ...EMPTY, propertyCount: 1 });
+  ok("property complete", c.steps[0].status === "complete");
+  ok("get-online is the new current", c.steps[1].status === "current");
+  ok("nextStep advanced to getonline", c.nextStep?.key === "getonline");
+  ok("completedCount is 1", c.completedCount === 1);
+}
+
+// --- Current advances past get-online once a listing is live ---------------
 {
   const c = buildLaunchChecklist({
     ...EMPTY,
     propertyCount: 1,
+    listingOnlineCount: 1,
     availabilityWindowCount: 2,
   });
-  ok("property complete", c.steps[0].status === "complete");
-  ok("availability complete", c.steps[1].status === "complete");
-  ok("reply-to is the new current", c.steps[2].status === "current");
+  ok("get-online complete", c.steps[1].status === "complete");
+  ok("availability complete", c.steps[2].status === "complete");
+  ok("reply-to is the new current", c.steps[3].status === "current");
   ok("nextStep advanced to reply-to", c.nextStep?.key === "replyto");
-  ok("completedCount is 2", c.completedCount === 2);
+  ok("completedCount is 3", c.completedCount === 3);
 }
 
 // --- A later step done while an earlier one is open stays NOT current ------
@@ -93,7 +108,7 @@ const ALL: ChecklistInput = {
     ...EMPTY,
     subscriptionActive: true, // last step done, earlier ones not
   });
-  ok("golive counts complete out of order", c.steps[4].status === "complete");
+  ok("golive counts complete out of order", c.steps[5].status === "complete");
   ok("first gap still current", c.steps[0].status === "current");
   ok("completedCount counts the out-of-order one", c.completedCount === 1);
   ok("not all complete", c.allComplete === false);
@@ -106,6 +121,28 @@ const ALL: ChecklistInput = {
     "every step has href + cta",
     c.steps.every((s) => s.href.startsWith("/dashboard/") && s.cta.length > 0),
   );
+}
+
+// --- Get-online step routing (wizard-aware, honest either way) -------------
+{
+  const getOnlineOf = (c: ReturnType<typeof buildLaunchChecklist>) =>
+    c.steps.find((s) => s.key === "getonline")!;
+
+  // Wizard dark → Properties list (open a listing's Get online tab), same-tab.
+  const dark = getOnlineOf(buildLaunchChecklist(EMPTY));
+  ok("get-online defaults to /dashboard/properties", dark.href === "/dashboard/properties");
+  ok("get-online CTA is Get online", dark.cta === "Get online");
+  ok("get-online opens same-tab", !dark.newTab);
+
+  // Wizard enabled → drives Stage 1 of the guided wizard.
+  const live = getOnlineOf(buildLaunchChecklist({ ...EMPTY, wizardEnabled: true }));
+  ok("get-online drives the wizard when enabled", live.href === "/dashboard/link-portals");
+
+  // Done once a listing is actually live somewhere.
+  const posted = getOnlineOf(
+    buildLaunchChecklist({ ...EMPTY, propertyCount: 1, listingOnlineCount: 1 }),
+  );
+  ok("get-online completes on a live listing_post", posted.status === "complete");
 }
 
 // --- Intake step deep-links to a property's public page when one exists -----

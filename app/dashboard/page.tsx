@@ -148,6 +148,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     { data: workOrderRows },
     { count: pendingMessageCount },
     { count: awaitingConfirmationCount },
+    { count: listingOnlineCount },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -204,6 +205,13 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     // this?" oversight the Howard episode exposed. Renders only when > 0
     // (conditional-visibility rule).
     awaitingConfirmationQuery,
+    // Listings actually posted to an external rental site (a live listing_posts
+    // row) — completes the "Get your first listing online" checklist step. Real
+    // object status, not a self-report: status='live' only. RLS scopes to org.
+    supabase
+      .from("listing_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "live"),
   ]);
 
   // Open + urgent work-order counts for the Overview tile.
@@ -305,6 +313,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
 
   const checklist = buildLaunchChecklist({
     propertyCount: propertyCount ?? 0,
+    listingOnlineCount: listingOnlineCount ?? 0,
+    wizardEnabled: process.env.DISTRIBUTION_WIZARD_ENABLED === "1",
     availabilityWindowCount: availabilityCount ?? 0,
     replyToConfigured: org ? isReplyToConfigured(org) : false,
     leadCount: allLeads.length,

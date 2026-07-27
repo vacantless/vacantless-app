@@ -38,6 +38,20 @@ export type LaunchChecklist = {
 
 export type ChecklistInput = {
   propertyCount: number;
+  /**
+   * Number of listings this org has actually posted to an external rental site
+   * (a live `listing_posts` row, status='live'). Drives the "Get your first
+   * listing online" step. A real object-status signal, never a self-report:
+   * the step only completes once an ad is genuinely live somewhere.
+   */
+  listingOnlineCount: number;
+  /**
+   * Whether the guided distribution wizard is enabled
+   * (DISTRIBUTION_WIZARD_ENABLED). When true the get-online step drives the
+   * wizard (Stage 1); when dark it points at the Properties list so the operator
+   * opens a listing's Get online tab. Passed in so this stays pure (no env here).
+   */
+  wizardEnabled: boolean;
   availabilityWindowCount: number;
   replyToConfigured: boolean;
   leadCount: number;
@@ -84,6 +98,16 @@ const STEP_DEFS: StepDef[] = [
     cta: "Add rental",
   },
   {
+    key: "getonline",
+    label: "Get your first listing online",
+    description:
+      "Post your rental to the sites where renters search, then track the leads that come back here.",
+    // Default (wizard dark): send them to the Properties list to open a
+    // listing's Get online tab. Rewritten to the wizard entry when enabled.
+    href: "/dashboard/properties",
+    cta: "Get online",
+  },
+  {
     key: "availability",
     label: "Set viewing availability",
     description:
@@ -125,6 +149,7 @@ const STEP_DEFS: StepDef[] = [
 export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
   const done: boolean[] = [
     input.propertyCount > 0,
+    input.listingOnlineCount > 0,
     input.availabilityWindowCount > 0,
     input.replyToConfigured,
     input.leadCount > 0,
@@ -141,6 +166,13 @@ export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
       currentAssigned = true;
     } else {
       status = "todo";
+    }
+
+    // When the guided wizard is live, the get-online step drives it (Stage 1);
+    // when dark it keeps its default Properties-list href so the operator opens
+    // a listing's Get online tab. Honest either way — never a broken link.
+    if (def.key === "getonline" && input.wizardEnabled) {
+      return { ...def, href: "/dashboard/link-portals", status };
     }
 
     // Once a property exists, the "intake" step deep-links straight to that
