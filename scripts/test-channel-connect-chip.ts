@@ -89,6 +89,30 @@ assertChip("org_feed", "always_on", "positive");
 }
 
 {
+  const chip = chipFor("facebook", { accountStatus: "connected" });
+  eq("planned facebook with connected account stays coming soon", chip.state, "coming_soon");
+  eq("planned facebook with connected account stays neutral", chip.tone, "neutral");
+}
+
+{
+  const chip = chipFor("facebook", { hasFeedRoute: true });
+  eq("planned facebook with feed route stays coming soon", chip.state, "coming_soon");
+  eq("planned facebook with feed route stays neutral", chip.tone, "neutral");
+}
+
+{
+  const chip = chipFor("realtor_ca", { accountStatus: "connected" });
+  eq("mls realtor with connected account stays mls route", chip.state, "mls_route");
+  eq("mls realtor with connected account stays neutral", chip.tone, "neutral");
+}
+
+{
+  const chip = chipFor("realtor_ca", { hasFeedRoute: true });
+  eq("mls realtor with feed route stays mls route", chip.state, "mls_route");
+  eq("mls realtor with feed route stays neutral", chip.tone, "neutral");
+}
+
+{
   const chip = chipFor("kijiji", { accountStatus: "needs_login" });
   eq("needs-login kijiji state", chip.state, "needs_login");
   eq("needs-login kijiji tone", chip.tone, "warning");

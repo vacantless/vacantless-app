@@ -417,6 +417,12 @@ export function channelConnectChip(input: {
   accountStatus: string | null;
   hasFeedRoute: boolean;
 }): ConnectChip {
+  if (input.integrationStatus === "mls_gated" || input.transport === "broker") {
+    return { state: "mls_route", label: "MLS / broker route", tone: "neutral", canConnect: false };
+  }
+  if (input.integrationStatus === "planned") {
+    return { state: "coming_soon", label: "Coming soon", tone: "neutral", canConnect: false };
+  }
   if (input.accountStatus === "connected" || input.accountStatus === "accepted") {
     return { state: "connected", label: "Connected", tone: "positive", canConnect: false };
   }
@@ -437,12 +443,6 @@ export function channelConnectChip(input: {
   }
   if (input.accountStatus === "submitted") {
     return { state: "submitted", label: "Submitted", tone: "neutral", canConnect: false };
-  }
-  if (input.integrationStatus === "mls_gated" || input.transport === "broker") {
-    return { state: "mls_route", label: "MLS / broker route", tone: "neutral", canConnect: false };
-  }
-  if (input.integrationStatus === "planned") {
-    return { state: "coming_soon", label: "Coming soon", tone: "neutral", canConnect: false };
   }
   if (input.integrationStatus === null && input.transport === "automatic") {
     return { state: "always_on", label: "On", tone: "positive", canConnect: false };
