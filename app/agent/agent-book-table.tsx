@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   groupAgentBookByOrg,
   AGENT_BOOK_PRIORITY,
   type AgentBookRow,
 } from "@/lib/agent-book";
+import { marketUnitForClient } from "./agent-actions";
 
 // Read-only cross-org agent book. Grouped by client (org), filterable by stage
 // and by "needs action". No cross-org navigation yet — deep links into a chosen
@@ -13,6 +14,27 @@ import {
 
 function needsAction(row: AgentBookRow): boolean {
   return row.priority <= AGENT_BOOK_PRIORITY.setupOrMarket;
+}
+
+// "Market this unit for [client]" (Tier 1 D): switches the active org to this
+// row's client and routes into the Get-online wizard with the unit pre-staged.
+// The server action re-validates membership + ownership, so this is a plain
+// trigger. It does not publish the unit; the wizard's send-live stage does.
+function MarketButton({ row }: { row: AgentBookRow }) {
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() =>
+        startTransition(() => marketUnitForClient(row.orgId, row.propertyId))
+      }
+      className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand transition hover:bg-brand/10 disabled:opacity-50"
+      title={`Switch to ${row.orgName} and open the Get online wizard for this unit`}
+    >
+      {pending ? "Opening…" : "Market →"}
+    </button>
+  );
 }
 
 function FlagChips({ row }: { row: AgentBookRow }) {
@@ -144,6 +166,7 @@ export function AgentBookTable({ rows }: { rows: AgentBookRow[] }) {
                       {row.nextAction && (
                         <span className="text-xs text-gray-500">{row.nextAction}</span>
                       )}
+                      <MarketButton row={row} />
                     </div>
                   </li>
                 ))}
