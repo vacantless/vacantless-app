@@ -47,15 +47,17 @@ import {
   CHANNEL_ACCOUNT_STATUSES,
   allChannelCapabilities,
   channelAccountReadiness,
-  channelReadinessLabel,
   isChannelAccountStatus,
   transportLabel,
   type ChannelAccountStatus,
-  type ChannelReadinessValue,
 } from "@/lib/distribution-capabilities";
 import {
+  channelByKey,
+  channelConnectChip,
+  type ConnectChipTone,
+} from "@/lib/distribution-channels";
+import {
   publishChannelMeta,
-  type PublishTone,
 } from "@/lib/distribution-publish";
 
 export const dynamic = "force-dynamic";
@@ -100,21 +102,12 @@ const ACCOUNT_STATUS_LABELS: Record<ChannelAccountStatus, string> = {
   needs_payment: "Needs payment",
 };
 
-const READINESS_TONE: Record<ChannelReadinessValue, PublishTone> = {
-  ready: "positive",
-  needs_setup: "neutral",
-  submitted: "positive",
-  needs_login: "warning",
-  needs_payment: "warning",
-  rejected: "danger",
-  paused: "neutral",
-};
-
-const STATUS_CHIP: Record<PublishTone, string> = {
+const STATUS_CHIP: Record<ConnectChipTone, string> = {
   positive: "bg-green-50 text-green-700",
   warning: "bg-amber-50 text-amber-700",
   danger: "bg-red-50 text-red-700",
   neutral: "bg-gray-100 text-gray-600",
+  accent: "bg-blue-50 text-blue-700",
 };
 
 export default async function SettingsPage({
@@ -306,6 +299,14 @@ export default async function SettingsPage({
     const accountStatus = isChannelAccountStatus(account?.account_status)
       ? account.account_status
       : null;
+    const registry = channelByKey(cap.channel);
+    const connectChip = channelConnectChip({
+      integrationStatus: registry?.integrationStatus ?? null,
+      transport: cap.transport,
+      needsOrgAccount: cap.needsOrgAccount,
+      accountStatus,
+      hasFeedRoute: Boolean(account?.feed_url),
+    });
     const readiness = channelAccountReadiness({
       capability: cap,
       accountStatus,
@@ -317,8 +318,22 @@ export default async function SettingsPage({
       account,
       accountStatus: accountStatus ?? "not_started",
       readiness,
+      connectChip,
     };
   });
+  const connectSummary = distributionChannels.reduce(
+    (summary, { connectChip }) => {
+      if (connectChip.state === "connected" || connectChip.state === "always_on") {
+        summary.connected += 1;
+      } else if (connectChip.canConnect) {
+        summary.toSetUp += 1;
+      } else {
+        summary.other += 1;
+      }
+      return summary;
+    },
+    { connected: 0, toSetUp: 0, other: 0 },
+  );
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
   const showingConfirmMode = org.showing_confirm_mode === "agent" ? "agent" : "auto";
@@ -864,6 +879,10 @@ export default async function SettingsPage({
                     Connect each website&apos;s account once here. You post each
                     listing from the property&apos;s Get online tab.
                   </p>
+                  <p className="mt-1 max-w-2xl text-xs text-gray-400">
+                    {connectSummary.connected} connected · {connectSummary.toSetUp} to set up ·{" "}
+                    {connectSummary.other} guided or coming soon
+                  </p>
                 </div>
               </div>
               <Link
@@ -905,7 +924,7 @@ export default async function SettingsPage({
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness }) => {
+            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness, connectChip }) => {
               const statusId = `dist-${cap.channel}-status`;
               const feedId = `dist-${cap.channel}-feed`;
               const managerId = `dist-${cap.channel}-manager`;
@@ -933,9 +952,9 @@ export default async function SettingsPage({
                       </p>
                     </div>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CHIP[READINESS_TONE[readiness.status]]}`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CHIP[connectChip.tone]}`}
                     >
-                      {channelReadinessLabel(readiness.status)}
+                      {connectChip.label}
                     </span>
                   </div>
 

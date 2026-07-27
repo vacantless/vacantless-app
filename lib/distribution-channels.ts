@@ -390,6 +390,69 @@ export function channelTileStatus(
   };
 }
 
+export type ConnectChipTone = "positive" | "warning" | "danger" | "neutral" | "accent";
+export type ConnectChipState =
+  | "connected"
+  | "connect"
+  | "needs_login"
+  | "needs_payment"
+  | "submitted"
+  | "rejected"
+  | "paused"
+  | "coming_soon"
+  | "mls_route"
+  | "manual"
+  | "always_on";
+export type ConnectChip = {
+  state: ConnectChipState;
+  label: string;
+  tone: ConnectChipTone;
+  canConnect: boolean;
+};
+
+export function channelConnectChip(input: {
+  integrationStatus: ChannelIntegrationStatus | null;
+  transport: string;
+  needsOrgAccount: boolean;
+  accountStatus: string | null;
+  hasFeedRoute: boolean;
+}): ConnectChip {
+  if (input.accountStatus === "connected" || input.accountStatus === "accepted") {
+    return { state: "connected", label: "Connected", tone: "positive", canConnect: false };
+  }
+  if (input.hasFeedRoute === true) {
+    return { state: "connected", label: "Connected", tone: "positive", canConnect: false };
+  }
+  if (input.accountStatus === "needs_login") {
+    return { state: "needs_login", label: "Needs login", tone: "warning", canConnect: true };
+  }
+  if (input.accountStatus === "needs_payment") {
+    return { state: "needs_payment", label: "Needs payment", tone: "warning", canConnect: true };
+  }
+  if (input.accountStatus === "rejected") {
+    return { state: "rejected", label: "Rejected", tone: "danger", canConnect: true };
+  }
+  if (input.accountStatus === "paused") {
+    return { state: "paused", label: "Paused", tone: "neutral", canConnect: true };
+  }
+  if (input.accountStatus === "submitted") {
+    return { state: "submitted", label: "Submitted", tone: "neutral", canConnect: false };
+  }
+  if (input.integrationStatus === "mls_gated" || input.transport === "broker") {
+    return { state: "mls_route", label: "MLS / broker route", tone: "neutral", canConnect: false };
+  }
+  if (input.integrationStatus === "planned") {
+    return { state: "coming_soon", label: "Coming soon", tone: "neutral", canConnect: false };
+  }
+  if (input.integrationStatus === null && input.transport === "automatic") {
+    return { state: "always_on", label: "On", tone: "positive", canConnect: false };
+  }
+  if (input.transport === "custom") {
+    return { state: "manual", label: "Manual", tone: "neutral", canConnect: false };
+  }
+  return { state: "connect", label: "Connect", tone: "accent", canConnect: true };
+}
+
 // --- per-channel status ----------------------------------------------------
 // The single operator-facing state of a channel, derived from listing_posts +
 // share-readiness. Mirrors the vocabulary Noam asked for.

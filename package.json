@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "test": "tsx scripts/test-lead-detail.ts",
+    "test:channel-connect-chip": "tsx scripts/test-channel-connect-chip.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
