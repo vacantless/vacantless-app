@@ -11,8 +11,12 @@ import { useEffect, useRef, useState } from "react";
 // items moved out of the old "More ▾" dropdown (which mixed core work beside
 // account settings) into a right-side ORG MENU keyed to the org name.
 //
-//   PRIMARY:  Overview · Properties · Leasing · Tenants · Money · Maintenance
+//   PRIMARY:  Overview · Properties · Leasing · Tenants · Money · Maintenance · [Get Online]
 //   ORG ▾  :  My settings · Settings · Your plan · [Refer] · [Captures] · Sign out
+//
+// "Get Online" is the guided distribution wizard, appended to the primary bar
+// as its front door (S587) when DISTRIBUTION_WIZARD_ENABLED is set. It was
+// previously buried in the org menu, so the owner could not find it.
 //
 // Leasing, Tenants and Money are hub landings that tab across existing routes
 // (via `match` prefixes, so a hub item stays lit while you're on a child route).
@@ -84,14 +88,15 @@ const REFERRALS: NavItem = { href: "/dashboard/referrals", label: "Refer a landl
 // live - the layout passes capturesEnabled = INBOUND_WEBHOOK_SECRET is set.
 const CAPTURES: NavItem = { href: "/dashboard/captures", label: "Captures" };
 
-// Guided distribution command center (S583-S586). Ships dark like REFERRALS and
-// CAPTURES: the four wizard pages (/dashboard/link-portals -> add-details ->
-// send-live -> after-live) are always reachable by URL, but this entry only
-// appears when DISTRIBUTION_WIZARD_ENABLED is set (read in the layout, passed as
-// distributionWizardEnabled). Opens at Stage 1 "Link your portals".
+// Guided distribution command center (S583-S587). The four wizard pages
+// (/dashboard/link-portals -> add-details -> send-live -> after-live) are always
+// reachable by URL, but this entry only appears when DISTRIBUTION_WIZARD_ENABLED
+// is set (read in the layout, passed as distributionWizardEnabled). Opens at
+// Stage 1 "Link your portals". S587: promoted from the org menu to the PRIMARY
+// bar (appended below) so the signature capability has a front door.
 const DISTRIBUTION_WIZARD: NavItem = {
   href: "/dashboard/link-portals",
-  label: "Get a listing online",
+  label: "Get Online",
   match: [
     "/dashboard/add-details",
     "/dashboard/send-live",
@@ -126,8 +131,14 @@ export function DashboardNav({
   const [accountOpen, setAccountOpen] = useState(false); // desktop org menu
   const accountRef = useRef<HTMLDivElement>(null);
 
-  const account = [
+  // "Get Online" (the guided wizard) is the front door for the signature
+  // capability, so when enabled it rides the PRIMARY bar rather than the org
+  // menu (S587). Appended last to keep the sacred daily-work order intact.
+  const primary = [
+    ...PRIMARY,
     ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
+  ];
+  const account = [
     ...ACCOUNT,
     ...(referralsEnabled ? [REFERRALS] : []),
     ...(capturesEnabled ? [CAPTURES] : []),
@@ -169,7 +180,7 @@ export function DashboardNav({
     <>
       {/* Desktop: inline primary links + org account pill */}
       <div className="hidden items-center gap-1 text-sm md:flex">
-        {PRIMARY.map((item) => (
+        {primary.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -250,7 +261,7 @@ export function DashboardNav({
       {open && (
         <div className="absolute left-0 right-0 top-full z-20 border-t border-white/20 bg-brand shadow-lg md:hidden">
           <nav className="mx-auto flex max-w-5xl flex-col gap-1 px-6 py-3 text-sm">
-            {PRIMARY.map((item) => (
+            {primary.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
