@@ -21,7 +21,7 @@
     "groupReady": "Ready to connect now",
     "groupComing": "Coming soon",
     "groupAgent": "Agent / MLS only",
-    "kindLogin": "You log in with your own account",
+    "kindLogin": "You use your own account for this site.",
     "kindOauth": "One secure connect button",
     "kindNone": "Not connected through Vacantless",
     "status": {
@@ -35,7 +35,7 @@
       "mlsOnlySub": "Realtor.ca is not a direct post. We prepare the sheet for your agent."
     },
     "buttons": {
-      "login": "CLICK HERE TO LOG IN WITH YOUR {name} PASSWORD",
+      "login": "CLICK HERE TO SET UP YOUR {name} ACCOUNT",
       "connect": "CLICK HERE TO CONNECT YOUR {name}",
       "disconnect": "Disconnect"
     },

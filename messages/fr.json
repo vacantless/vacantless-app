@@ -21,7 +21,7 @@
     "groupReady": "Prêt à connecter maintenant",
     "groupComing": "Bientôt disponible",
     "groupAgent": "Agent / MLS seulement",
-    "kindLogin": "Vous vous connectez avec votre propre compte",
+    "kindLogin": "Vous utilisez votre propre compte pour ce site.",
     "kindOauth": "Un bouton de connexion sécurisé",
     "kindNone": "Non connecté via Vacantless",
     "status": {
@@ -35,7 +35,7 @@
       "mlsOnlySub": "Realtor.ca n'est pas une publication directe. Nous préparons la fiche pour votre agent."
     },
     "buttons": {
-      "login": "CLIQUEZ ICI POUR VOUS CONNECTER AVEC VOTRE MOT DE PASSE {name}",
+      "login": "CLIQUEZ ICI POUR CONFIGURER VOTRE COMPTE {name}",
       "connect": "CLIQUEZ ICI POUR CONNECTER VOTRE {name}",
       "disconnect": "Déconnecter"
     },
