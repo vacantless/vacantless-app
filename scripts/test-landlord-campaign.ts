@@ -4,6 +4,8 @@ import {
   buildRentConfirmUnits,
   nextRevealDue,
   revealCopy,
+  resolveLandlordCampaignRecipient,
+  normalizeCampaignEmail,
   REVEAL_KEYS,
   STEP_THRESHOLD_DAYS,
   MIN_GAP_HOURS,
@@ -213,6 +215,13 @@ ok(
   brandedRentConfirm.text.includes("token-1") &&
     brandedRentConfirm.text.includes("token-3"),
 );
+
+// --- recipient routing: landlord email only, never the org member ----------
+ok("recipient resolves a valid landlord email (lowercased)", resolveLandlordCampaignRecipient("David@Example.com ") === "david@example.com");
+ok("recipient null when landlord email missing", resolveLandlordCampaignRecipient(null) === null);
+ok("recipient null when landlord email blank", resolveLandlordCampaignRecipient("   ") === null);
+ok("recipient null when landlord email lacks @", resolveLandlordCampaignRecipient("not-an-email") === null);
+ok("normalizeCampaignEmail trims + lowercases", normalizeCampaignEmail("  A@B.CA ") === "a@b.ca");
 
 console.log(
   `\ntest-landlord-campaign: ${passed} passed, ${failed} failed (${passed + failed} total)`,
