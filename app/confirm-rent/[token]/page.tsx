@@ -154,7 +154,7 @@ export default async function ConfirmRentPage({
 
         <section className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Unit
+            Property
           </p>
           <h2 className="mt-1 text-xl font-semibold text-gray-950">{unit}</h2>
           {tenantName && (
