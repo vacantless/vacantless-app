@@ -1,4 +1,4 @@
-export type RentConfirmStatus = "unchanged" | "changed";
+export type RentConfirmStatus = "unchanged" | "changed" | "set";
 
 export type ParsedRentConfirmSubmission =
   | {
@@ -40,7 +40,7 @@ export function parseRentConfirmSubmission(input: {
   effectiveDate: string | null | undefined;
 }): ParsedRentConfirmSubmission {
   const status = String(input.status ?? "").trim();
-  if (status !== "unchanged" && status !== "changed") {
+  if (status !== "unchanged" && status !== "changed" && status !== "set") {
     return { ok: false, reason: "bad_status" };
   }
   if (status === "unchanged") {

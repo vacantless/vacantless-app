@@ -53,6 +53,15 @@ ok("changed parse succeeds", changed.ok && changed.status === "changed");
 ok("changed parses cents", changed.ok && changed.currentRentCents === 275000);
 ok("changed keeps effective date", changed.ok && changed.effectiveDate === "2026-08-01");
 
+const setBaseline = parseRentConfirmSubmission({
+  status: "set",
+  currentRent: "2400",
+  effectiveDate: "2026-07-01",
+});
+ok("set parse succeeds", setBaseline.ok && setBaseline.status === "set");
+ok("set parses cents", setBaseline.ok && setBaseline.currentRentCents === 240000);
+ok("set keeps effective date", setBaseline.ok && setBaseline.effectiveDate === "2026-07-01");
+
 const badStatus = parseRentConfirmSubmission({
   status: "confirm",
   currentRent: "2750",
@@ -67,12 +76,26 @@ const badRent = parseRentConfirmSubmission({
 });
 ok("changed requires rent", !badRent.ok && badRent.reason === "bad_rent");
 
+const setBadRent = parseRentConfirmSubmission({
+  status: "set",
+  currentRent: "",
+  effectiveDate: "2026-08-01",
+});
+ok("set requires rent", !setBadRent.ok && setBadRent.reason === "bad_rent");
+
 const badDate = parseRentConfirmSubmission({
   status: "changed",
   currentRent: "2750",
   effectiveDate: "",
 });
 ok("changed requires ISO date", !badDate.ok && badDate.reason === "bad_date");
+
+const setBadDate = parseRentConfirmSubmission({
+  status: "set",
+  currentRent: "2750",
+  effectiveDate: "08/01/2026",
+});
+ok("set requires ISO date", !setBadDate.ok && setBadDate.reason === "bad_date");
 
 console.log(
   `\ntest-rent-confirm-public: ${passed} passed, ${failed} failed (${passed + failed} total)`,
