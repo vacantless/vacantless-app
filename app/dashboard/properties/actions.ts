@@ -127,6 +127,7 @@ import {
   type ChannelTileStatusRow,
   type DistributionChannelAccountTileRow,
 } from "@/lib/distribution-channel-tile-statuses";
+import { normalizeAddressDisplayMode } from "@/lib/address-privacy";
 import {
   buildAfterLiveSummary,
   type AfterLiveLeadRow,
@@ -533,6 +534,9 @@ export async function updateProperty(formData: FormData) {
       // renters text/call on arrival). Blank clears -> falls back to the org default.
       showing_arrival_phone: String(formData.get("showing_arrival_phone") ?? "").trim() || null,
       status: effectiveStatus,
+      address_display_mode: normalizeAddressDisplayMode(
+        String(formData.get("address_display_mode") ?? ""),
+      ),
       price_drop_pending_cents: nextPending,
       // Unit-level fields
       available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),

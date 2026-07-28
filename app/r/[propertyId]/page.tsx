@@ -24,6 +24,11 @@ import {
   jsonLdScriptText,
   leadSourceHintFromParam,
 } from "@/lib/listing-seo";
+import { parseCityFromAddress } from "@/lib/browse-surface";
+import {
+  publicAddressLabel,
+  type AddressDisplayMode,
+} from "@/lib/address-privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +38,7 @@ const APP_URL =
 type Listing = {
   id: string;
   address: string;
+  address_display_mode?: AddressDisplayMode | null;
   rent_cents: number | null;
   beds: number | null;
   baths: number | null;
@@ -88,6 +94,7 @@ type Listing = {
 type OpenSibling = {
   id: string;
   address: string;
+  address_display_mode?: AddressDisplayMode | null;
   rent_cents: number | null;
   beds: number | null;
   baths: number | null;
@@ -118,6 +125,11 @@ function parseOpenSiblings(value: unknown): OpenSibling[] {
       return {
         id,
         address,
+        address_display_mode:
+          row.address_display_mode === "hide_unit" ||
+          row.address_display_mode === "approximate"
+            ? row.address_display_mode
+            : "full",
         rent_cents: rent,
         beds,
         baths,
@@ -149,6 +161,16 @@ const loadPublicListing = cache(async (propertyId: string): Promise<Listing | nu
   return (data as Listing | null) ?? null;
 });
 
+function displayAddressFor(
+  listing: Pick<Listing | OpenSibling, "address" | "address_display_mode">,
+): string {
+  return publicAddressLabel({
+    address: listing.address,
+    city: parseCityFromAddress(listing.address),
+    mode: listing.address_display_mode,
+  });
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -162,8 +184,9 @@ export async function generateMetadata({
     };
   }
 
-  const title = buildListingMetaTitle(listing);
-  const description = buildListingMetaDescription(listing);
+  const publicListing = { ...listing, address: displayAddressFor(listing) };
+  const title = buildListingMetaTitle(publicListing);
+  const description = buildListingMetaDescription(publicListing);
   const coverPhoto = Array.isArray(listing.photos)
     ? listing.photos.find((photo) => photo && photo.trim())
     : null;
@@ -216,6 +239,13 @@ export default async function PublicListingPage({
   if (!listing) notFound();
   const l = listing;
   const openSiblings = parseOpenSiblings(siblingData);
+  // Portal syndication feeds still use the full address; this masks only
+  // Vacantless-hosted public surfaces.
+  const displayAddress = displayAddressFor(l);
+  const displayOpenSiblings = openSiblings.map((sibling) => ({
+    ...sibling,
+    displayAddress: displayAddressFor(sibling),
+  }));
   // A unit can be marked "leased" (or off-market) after its link is shared. The
   // public action RPCs (availability / inquiry / booking) hard-block anything
   // that isn't 'available'; the page must visibly reflect that instead of still
@@ -320,7 +350,7 @@ export default async function PublicListingPage({
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: jsonLdScriptText(
-              buildListingJsonLd(l, { canonicalUrl }),
+              buildListingJsonLd({ ...l, address: displayAddress }, { canonicalUrl }),
             ),
           }}
         />
@@ -346,7 +376,7 @@ export default async function PublicListingPage({
       <main className="mx-auto max-w-2xl px-6 py-8">
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            {l.address}
+            {displayAddress}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             <p className="text-xl font-bold" style={{ color: brand }}>
@@ -403,7 +433,7 @@ export default async function PublicListingPage({
           )}
         </div>
 
-        <PhotoGallery address={l.address} photos={photos} available={isAvailable} />
+        <PhotoGallery address={displayAddress} photos={photos} available={isAvailable} />
 
         {tour && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -414,7 +444,7 @@ export default async function PublicListingPage({
               <div className="overflow-hidden rounded-xl bg-gray-100">
                 <iframe
                   src={tour.embedUrl}
-                  title={`Virtual tour of ${l.address}`}
+                  title={`Virtual tour of ${displayAddress}`}
                   className="aspect-video w-full"
                   loading="lazy"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; xr-spatial-tracking; fullscreen; vr"
@@ -473,18 +503,18 @@ export default async function PublicListingPage({
                     This rental is no longer available
                   </h2>
                   <p className="mt-2 text-sm text-gray-600">
-                    {openSiblings.length > 0
+                    {displayOpenSiblings.length > 0
                       ? `${l.org_name} has other rentals available now. You can also join the waiting list for this one.`
                       : `Want it if it opens up again? Join the waiting list and ${l.org_name} will email you the moment it's available.`}
                   </p>
                 </div>
-                {openSiblings.length > 0 ? (
+                {displayOpenSiblings.length > 0 ? (
                   <div className="mt-5 border-y border-gray-100 py-4">
                     <h3 className="text-sm font-semibold text-gray-900">
                       Available now
                     </h3>
                     <div className="mt-3 divide-y divide-gray-100">
-                      {openSiblings.map((sibling) => {
+                      {displayOpenSiblings.map((sibling) => {
                         const hrefParams = new URLSearchParams();
                         if (sourceHint) hrefParams.set("src", sourceHint);
                         const siblingQuery = hrefParams.toString();
@@ -497,7 +527,7 @@ export default async function PublicListingPage({
                           >
                             <span className="min-w-0">
                               <span className="block truncate text-sm font-medium text-gray-900">
-                                {sibling.address}
+                                {sibling.displayAddress}
                               </span>
                               {siblingSummary(sibling) ? (
                                 <span className="mt-0.5 block text-xs text-gray-500">
