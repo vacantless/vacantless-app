@@ -48,6 +48,8 @@ export type AgentBookUnitInput = {
   leadStatuses: LeadStatus[];
   tenancyId?: string | null;
   tenancyStatus?: TenancyLifecycleStatus | null;
+  /** Active tenancy exists but its current-rent ledger still needs landlord confirmation. */
+  needsRentConfirm?: boolean;
   /** Distribution run items on this unit currently stuck at needs_operator. */
   needsOperatorCount: number;
 };
@@ -62,6 +64,8 @@ export type AgentBookFlags = {
   photosMissing: boolean;
   /** Set up + has a photo, but sitting in Draft/Paused instead of Live. */
   notLiveButShould: boolean;
+  /** Active tenancy must confirm current rent before rent-increase tracking starts. */
+  rentUnconfirmed: boolean;
 };
 
 // Priority buckets, lowest = "needs you most first". Exposed so the table can
@@ -78,6 +82,7 @@ export type AgentBookRow = {
   orgId: string;
   orgName: string;
   propertyId: string;
+  tenancyId: string | null;
   /** Display label (unitLabel when present, else the address). */
   unitLabel: string;
   address: string;
@@ -170,15 +175,17 @@ export function buildAgentBookRows(input: AgentBookInput): AgentBookRow[] {
       bedsSet &&
       bathsSet &&
       u.photoCount >= 1;
+    const rentUnconfirmed = u.needsRentConfirm === true;
 
     const flags: AgentBookFlags = {
       newLeadCount,
       needsOperatorCount: u.needsOperatorCount,
       photosMissing,
       notLiveButShould,
+      rentUnconfirmed,
     };
 
-    const priority =
+    const basePriority =
       newLeadCount > 0
         ? AGENT_BOOK_PRIORITY.newLeads
         : u.needsOperatorCount > 0
@@ -191,6 +198,10 @@ export function buildAgentBookRows(input: AgentBookInput): AgentBookRow[] {
             : currentStep != null
               ? AGENT_BOOK_PRIORITY.inFlight
               : AGENT_BOOK_PRIORITY.quiet;
+    const priority =
+      rentUnconfirmed && basePriority > AGENT_BOOK_PRIORITY.setupOrMarket
+        ? AGENT_BOOK_PRIORITY.setupOrMarket
+        : basePriority;
 
     const label = (u.unitLabel ?? "").trim();
 
@@ -198,6 +209,7 @@ export function buildAgentBookRows(input: AgentBookInput): AgentBookRow[] {
       orgId: u.orgId,
       orgName: orgNameById.get(u.orgId) ?? "Unknown",
       propertyId: u.propertyId,
+      tenancyId: u.tenancyId ?? null,
       unitLabel: label !== "" ? label : u.address,
       address: u.address,
       stage: currentStep ? lifecycleStepLabel(currentStep) : "Tenanted",

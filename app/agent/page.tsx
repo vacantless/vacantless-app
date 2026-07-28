@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isLeadStatus, type LeadStatus } from "@/lib/pipeline";
 import { normalizePropertyStatus } from "@/lib/listing-state";
+import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 import {
   buildAgentBookRows,
   type AgentBookUnitInput,
@@ -64,7 +65,7 @@ export default async function AgentBookPage() {
     supabase.from("leads").select("property_id, status"),
     supabase
       .from("tenancies")
-      .select("property_id, status, start_date, created_at"),
+      .select("id, property_id, status, start_date, created_at"),
     supabase.from("listing_posts").select("property_id"),
     supabase.from("availability_rules").select("organization_id"),
     supabase.from("distribution_runs").select("id, property_id"),
@@ -112,18 +113,25 @@ export default async function AgentBookPage() {
   // Best tenancy per property: active > upcoming > most recent ended.
   const bestTenancy = new Map<
     string,
-    { status: TenancyLifecycleStatus; startDate: string | null; createdAt: string | null }
+    {
+      id: string;
+      status: TenancyLifecycleStatus;
+      startDate: string | null;
+      createdAt: string | null;
+    }
   >();
   for (const r of (tenanciesRes.data ?? []) as {
+    id: string | null;
     property_id: string | null;
     status: string | null;
     start_date: string | null;
     created_at: string | null;
   }[]) {
-    if (!r.property_id) continue;
+    if (!r.id || !r.property_id) continue;
     if (r.status !== "active" && r.status !== "upcoming" && r.status !== "ended")
       continue;
     const cand = {
+      id: r.id,
       status: r.status as TenancyLifecycleStatus,
       startDate: r.start_date,
       createdAt: r.created_at,
@@ -165,8 +173,31 @@ export default async function AgentBookPage() {
     );
   }
 
+  const rentConfirmEnabled = leaseTermShiftEnabled();
+  const confirmedTenancyIds = new Set<string>();
+  if (rentConfirmEnabled) {
+    const confirmedRes = await supabase
+      .from("tenancy_rent_adjustments")
+      .select("tenancy_id");
+    if (confirmedRes.error) {
+      console.error("agent rent-confirm ledger read failed", {
+        error: confirmedRes.error.message,
+      });
+    }
+    for (const r of (confirmedRes.data ?? []) as { tenancy_id: string | null }[]) {
+      if (r.tenancy_id) confirmedTenancyIds.add(r.tenancy_id);
+    }
+  }
+
   const units: AgentBookUnitInput[] = properties.map((p) => {
     const tenancy = bestTenancy.get(p.id) ?? null;
+    const tenancyId = tenancy?.id ?? null;
+    const needsRentConfirm =
+      rentConfirmEnabled &&
+      tenancy?.status === "active" &&
+      (p.rent_cents ?? 0) > 0 &&
+      tenancyId != null &&
+      !confirmedTenancyIds.has(tenancyId);
     return {
       orgId: p.organization_id,
       propertyId: p.id,
@@ -180,8 +211,9 @@ export default async function AgentBookPage() {
       listingPostCount: postCounts.get(p.id) ?? 0,
       hasAvailability: orgsWithAvailability.has(p.organization_id),
       leadStatuses: leadStatusesByProp.get(p.id) ?? [],
-      tenancyId: null,
+      tenancyId,
       tenancyStatus: tenancy?.status ?? null,
+      needsRentConfirm,
       needsOperatorCount: needsOperatorByProp.get(p.id) ?? 0,
     };
   });
