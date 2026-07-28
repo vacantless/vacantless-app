@@ -105,13 +105,22 @@ export default async function AccountantPackagePage({
     );
   }
 
-  // Only the date columns — enough to offer the years that actually have
-  // activity. RLS scopes every read to the current org.
+  // Only the selected org's date columns — enough to offer the years that
+  // actually have activity.
   const supabase = createClient();
   const [{ data: rentData }, { data: woData }, { data: expData }] = await Promise.all([
-    supabase.from("rent_payments").select("paid_on"),
-    supabase.from("work_orders").select("completed_on"),
-    supabase.from("expenses").select("incurred_on"),
+    supabase
+      .from("rent_payments")
+      .select("paid_on")
+      .eq("organization_id", org.id),
+    supabase
+      .from("work_orders")
+      .select("completed_on")
+      .eq("organization_id", org.id),
+    supabase
+      .from("expenses")
+      .select("incurred_on")
+      .eq("organization_id", org.id),
   ]);
 
   const currentYear = new Date().getFullYear();

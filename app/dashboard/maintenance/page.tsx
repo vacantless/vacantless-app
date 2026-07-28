@@ -630,6 +630,8 @@ export default async function MaintenancePage({
   };
 }) {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
 
   const [
     { data: woData },
@@ -638,26 +640,29 @@ export default async function MaintenancePage({
     { data: tenData },
     { data: dirData },
     { data: reportData },
-    org,
   ] = await Promise.all([
     supabase
       .from("work_orders")
       .select(
         "id, title, description, category, priority, status, cost_cents, quote_cents, expected_start, expected_finish, reported_on, scheduled_for, completed_on, property_id, building_key, tenancy_id, trade_contact_id, property:properties(address), trade:trade_contacts(name, trade_type)",
       )
+      .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("trade_contacts")
       .select("id, name, trade_type, phone, email, note, archived, directory_opt_in, supplier_window_rules")
+      .eq("organization_id", org.id)
       .order("archived", { ascending: true })
       .order("name", { ascending: true }),
     supabase
       .from("properties")
       .select("id, address, building_key")
+      .eq("organization_id", org.id)
       .order("address", { ascending: true }),
     supabase
       .from("tenancies")
       .select("id, property:properties(address), tenants(name, is_primary)")
+      .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
     // The directory read policy (0055) returns LISTED, non-archived rows from
     // ANY org, plus this org's own contributed rows (even unlisted). We filter
@@ -668,28 +673,29 @@ export default async function MaintenancePage({
         "id, source, business_name, trade_type, service_area, blurb, phone, email, contact_public, verified, used_count, listed, archived, contributed_by_org, source_trade_contact_id",
       )
       .order("used_count", { ascending: false }),
-    // Open tenant incident reports awaiting triage (Slice 3). RLS scopes to the
-    // org; oldest first so the operator works the backlog top-down.
+    // Open tenant incident reports awaiting triage (Slice 3), scoped to the
+    // selected org; oldest first so the operator works the backlog top-down.
     supabase
       .from("incident_reports")
       .select(
         "id, category, description, reporter_name, reporter_contact, status, submitted_at, property:properties(address), tenancy:tenancies(id, tenants(name, is_primary))",
       )
+      .eq("organization_id", org.id)
       .in("status", ["submitted", "under_review"])
       .order("submitted_at", { ascending: true }),
-    getCurrentOrg(),
   ]);
 
   const allOrders = (woData ?? []) as unknown as WorkOrderRow[];
 
   // Operator-attached work-order photos (S328), with a freshly-signed preview URL
-  // per object (RLS client; the incident-media SELECT policy scopes them to this
-  // org's folder — same pattern as the tenant report gallery above).
+  // per object. Parent work orders are selected-org scoped; the media SELECT
+  // policy also scopes storage paths to this org's folder.
   const woPhotos = new Map<string, { id: string; url: string }[]>();
   if (allOrders.length > 0) {
     const { data: woMediaData } = await supabase
       .from("work_order_media")
       .select("id, work_order_id, storage_path")
+      .eq("organization_id", org.id)
       .in(
         "work_order_id",
         allOrders.map((o) => o.id),
@@ -720,14 +726,14 @@ export default async function MaintenancePage({
   const trades = (tradeData ?? []) as TradeRow[];
   const properties = (propData ?? []) as PropertyRef[];
   const activeTrades = trades.filter((t) => !t.archived);
-  const orgId = org?.id ?? null;
+  const orgId = org.id;
 
   // --- Tenant incident reports: triage inbox (Option B Slice 3) --------------
   // Gated on the incident_intake entitlement (Growth+). When entitled we surface
   // the open queue + the tenant's attached photos/video (signed preview URLs,
   // minted with the operator's RLS client — the 0060 SELECT policy scopes them to
   // this org's folder). When not entitled we show a locked upsell instead.
-  const canIntake = canUseIncidentIntake(org?.plan);
+  const canIntake = canUseIncidentIntake(org.plan);
   const openReports = (reportData ?? []) as unknown as IncidentReportRow[];
 
   // Map report id -> its media (with a freshly-signed preview URL per object).
@@ -736,6 +742,7 @@ export default async function MaintenancePage({
     const { data: mediaData } = await supabase
       .from("incident_media")
       .select("id, incident_report_id, storage_path, mime_type, kind")
+      .eq("organization_id", org.id)
       .in(
         "incident_report_id",
         openReports.map((r) => r.id),
@@ -772,11 +779,11 @@ export default async function MaintenancePage({
   // offer "dispatch to a trade". The partial-unique index guarantees at most one
   // active dispatch per work order. When NOT entitled the row shows a locked
   // upsell (show-locked, never hide — the two-axis visibility rule).
-  const canDispatch = canUseIncidentDispatch(org?.plan);
+  const canDispatch = canUseIncidentDispatch(org.plan);
   // Slice 0 Block C: the org's one-time dispatch acknowledgment. Until it's
   // accepted, an entitled org sees the acknowledgment card instead of the
   // per-work-order dispatch form (and the server action refuses to dispatch).
-  const dispatchTermsAccepted = !!org?.dispatch_terms_accepted_at;
+  const dispatchTermsAccepted = !!org.dispatch_terms_accepted_at;
   const activeDispatchByWo = new Map<string, DispatchRow>();
   const dispatchMessagesByDispatch = new Map<string, DispatchMessage[]>();
   if (canDispatch && allOrders.length > 0) {
@@ -785,6 +792,7 @@ export default async function MaintenancePage({
       .select(
         "id, work_order_id, dispatch_status, trade_name_snapshot, quote_cents, quote_note, proposed_date, scheduled_for, decline_reason",
       )
+      .eq("organization_id", org.id)
       .in(
         "work_order_id",
         allOrders.map((o) => o.id),
@@ -795,13 +803,14 @@ export default async function MaintenancePage({
     }
 
     // S329: the message thread for each active dispatch (trade questions +
-    // operator replies), oldest-first, grouped by dispatch id. RLS scopes this to
-    // the org; we only fetch threads for the dispatches we just loaded.
+    // operator replies), oldest-first, grouped by dispatch id. We only fetch
+    // threads for the selected-org dispatches we just loaded.
     const activeDispatchIds = Array.from(activeDispatchByWo.values()).map((d) => d.id);
     if (activeDispatchIds.length > 0) {
       const { data: msgData } = await supabase
         .from("dispatch_messages")
         .select("id, dispatch_id, sender, body, created_at")
+        .eq("organization_id", org.id)
         .in("dispatch_id", activeDispatchIds)
         .order("created_at", { ascending: true });
       for (const m of (msgData ?? []) as (DispatchMessage & { dispatch_id: string })[]) {
@@ -814,8 +823,8 @@ export default async function MaintenancePage({
 
   // --- Repair scheduling (S386, Slice 2) -------------------------------------
   // Per-work-order appointment record: both sides' window sets + the confirmed
-  // slot. RLS scopes to the org; we only fetch for the orders just loaded. Ships
-  // inert (no rows until an operator opens scheduling on a job).
+  // slot. We only fetch for the selected-org orders just loaded. Ships inert
+  // (no rows until an operator opens scheduling on a job).
   const appointmentByWo = new Map<string, ApptRow>();
   if (allOrders.length > 0) {
     const { data: apptData } = await supabase
@@ -823,6 +832,7 @@ export default async function MaintenancePage({
       .select(
         "work_order_id, supplier_windows, tenant_availability, chosen_date, chosen_start_minute, chosen_end_minute, status, tenant_access_token, token_expires_at",
       )
+      .eq("organization_id", org.id)
       .in(
         "work_order_id",
         allOrders.map((o) => o.id),

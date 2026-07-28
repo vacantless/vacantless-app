@@ -44,10 +44,13 @@ export default async function NewTenancyPage({
   searchParams: { from?: string; err?: string; property?: string };
 }) {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
 
   const { data: propData } = await supabase
     .from("properties")
     .select("id, address, rent_cents, status")
+    .eq("organization_id", org.id)
     .order("address", { ascending: true });
   const allProperties = (propData ?? []) as PropertyOpt[];
 
@@ -58,6 +61,7 @@ export default async function NewTenancyPage({
       .from("leads")
       .select("id, name, email, phone, move_in, property_id, status")
       .eq("id", searchParams.from)
+      .eq("organization_id", org.id)
       .maybeSingle();
     lead = (data as LeadPrefill | null) ?? null;
   }
@@ -74,6 +78,7 @@ export default async function NewTenancyPage({
   const { data: liveTenancyRows } = await supabase
     .from("tenancies")
     .select("property_id")
+    .eq("organization_id", org.id)
     .in("status", ["active", "upcoming"]);
   const spokenFor = new Set(
     ((liveTenancyRows ?? []) as { property_id: string | null }[])
@@ -117,8 +122,7 @@ export default async function NewTenancyPage({
   const leaseOcrEnabled = process.env.LEASE_OCR_ENABLED === "1";
   // Tier gate: entitled plans (Growth+) get the working uploader; others see the
   // locked upsell (the server action enforces this too).
-  const org = leaseOcrEnabled ? await getCurrentOrg() : null;
-  const leaseOcrEntitled = canUseLeaseOcr(org?.plan);
+  const leaseOcrEntitled = leaseOcrEnabled && canUseLeaseOcr(org.plan);
 
   return (
     <div>

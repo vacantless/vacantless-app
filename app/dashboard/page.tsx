@@ -72,7 +72,8 @@ function assignedToggleClass(view: AssignedView, target: AssignedView) {
 export default async function OverviewPage({ searchParams }: OverviewPageProps) {
   const supabase = createClient();
   const org = await getCurrentOrg();
-  const timeZone = org?.booking_timezone ?? "America/Toronto";
+  if (!org) return null;
+  const timeZone = org.booking_timezone ?? "America/Toronto";
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -112,6 +113,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     .select(
       "id, scheduled_at, outcome, lead:leads(id, name, email), property:properties(address)",
     )
+    .eq("organization_id", org.id)
     .eq("outcome", "scheduled")
     .gte("scheduled_at", new Date().toISOString())
     .order("scheduled_at", { ascending: true })
@@ -126,6 +128,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   let awaitingConfirmationQuery = supabase
     .from("showings")
     .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
     .not("assigned_agent_id", "is", null)
     .is("confirmed_at", null)
     .gte("scheduled_at", new Date().toISOString())
@@ -137,7 +140,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     );
   }
 
-  // RLS scopes all of these to the caller's org automatically.
+  // RLS admits every org the caller belongs to; selected-org filtering keeps the
+  // dashboard anchored to the active client/org.
   const [
     { data: leads },
     { count: propertyCount },
@@ -155,14 +159,17 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .select(
         "id, name, email, source, status, created_at, property_id, qualified_out, property:properties(address)",
       )
+      .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
     // Total property count — drives the "Add your first rental" checklist step.
     supabase
       .from("properties")
-      .select("id", { count: "exact", head: true }),
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id),
     supabase
       .from("availability_rules")
-      .select("id", { count: "exact", head: true }),
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id),
     upcomingShowingsQuery,
     // Active tenancies — feed the rent-increase rollup (N1 v1, S282). Renders
     // only when something is actionable, so a pure-leasing org never sees it
@@ -170,6 +177,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     supabase
       .from("tenancies")
       .select("id, status, rent_cents, start_date, property:properties(address)")
+      .eq("organization_id", org.id)
       .eq("status", "active"),
     // Most-recent AVAILABLE property — deep-links the "Test your renter inquiry
     // page" checklist step to a public /r page that actually renders. The public
@@ -180,6 +188,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     supabase
       .from("properties")
       .select("id")
+      .eq("organization_id", org.id)
       .eq("status", "available")
       .order("created_at", { ascending: false })
       .limit(1),
@@ -189,6 +198,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     supabase
       .from("work_orders")
       .select("id, status, priority")
+      .eq("organization_id", org.id)
       .in("status", ["open", "assigned", "in_progress"]),
     // Pending tenant-message drafts awaiting approval (approve-to-send drip,
     // S341). Drives a conditional Overview rollup → /dashboard/messages. Renders
@@ -197,6 +207,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     supabase
       .from("pending_tenant_messages")
       .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
       .eq("status", "pending"),
     // Upcoming viewings that are assigned to a showing agent but not yet confirmed
     // with the renter (the awaiting_confirmation coordination state, S440 Slice 3).
@@ -207,10 +218,11 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     awaitingConfirmationQuery,
     // Listings actually posted to an external rental site (a live listing_posts
     // row) — completes the "Get your first listing online" checklist step. Real
-    // object status, not a self-report: status='live' only. RLS scopes to org.
+    // object status, not a self-report: status='live' only.
     supabase
       .from("listing_posts")
       .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
       .eq("status", "live"),
   ]);
 
@@ -264,6 +276,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       ? await supabase
           .from("tenancy_rent_adjustments")
           .select("tenancy_id")
+          .eq("organization_id", org.id)
           .in("tenancy_id", activeTenancyIds)
       : { data: [] };
   const rentConfirmedTenancyIds = new Set(

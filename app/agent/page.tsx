@@ -232,7 +232,7 @@ export default async function AgentBookPage() {
         </Link>
       </div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">My Portfolio</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">All clients</h1>
         <p className="mt-1 text-sm text-gray-500">
           Every active lease-up across all of your clients, in one place. Sorted
           by which unit needs you most.

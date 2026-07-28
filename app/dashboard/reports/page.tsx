@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import { propertyStatusLabel } from "@/lib/pipeline";
 import { PageHeader, StatCard } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -34,11 +35,14 @@ export default async function ReportsPage({
   searchParams: { days?: string };
 }) {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
   const window = parseWindow(searchParams.days);
   const nowMs = Date.now();
   const startMs = windowStartMs(window, nowMs);
 
-  // RLS scopes every query to the caller's org.
+  // Report rows are scoped to the selected org; RLS alone would include every
+  // org the operator belongs to.
   const [
     { data: leadsData },
     { data: showingsData },
@@ -47,14 +51,20 @@ export default async function ReportsPage({
   ] = await Promise.all([
     supabase
       .from("leads")
-      .select("id, source, status, created_at, leased_date, property_id"),
+      .select("id, source, status, created_at, leased_date, property_id")
+      .eq("organization_id", org.id),
     supabase
       .from("showings")
-      .select("id, outcome, scheduled_at, created_at, property_id"),
+      .select("id, outcome, scheduled_at, created_at, property_id")
+      .eq("organization_id", org.id),
     supabase
       .from("properties")
-      .select("id, address, status, rent_cents, created_at"),
-    supabase.from("feedback").select("rating, created_at"),
+      .select("id, address, status, rent_cents, created_at")
+      .eq("organization_id", org.id),
+    supabase
+      .from("feedback")
+      .select("rating, created_at")
+      .eq("organization_id", org.id),
   ]);
 
   const allLeads = (leadsData ?? []) as LeadLite[];

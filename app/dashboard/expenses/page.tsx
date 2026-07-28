@@ -247,25 +247,32 @@ export default async function ExpensesPage({
       supabase
         .from("bank_connections")
         .select("id, provider, institution_name, status, last_synced_at, import_format")
+        .eq("organization_id", org.id)
         .order("created_at", { ascending: true }),
       supabase
         .from("bank_transactions")
         .select(
           "id, posted_on, amount_cents, merchant, description, raw_category, account_name, currency, merchant_entity_id, stream_id, account_external_id",
         )
+        .eq("organization_id", org.id)
         .eq("triage_status", "pending")
         .eq("direction", "debit")
         .order("posted_on", { ascending: false })
         .limit(100),
-      supabase.from("properties").select("id, address, building_key"),
+      supabase
+        .from("properties")
+        .select("id, address, building_key")
+        .eq("organization_id", org.id),
       supabase
         .from("categorization_rules")
         .select(
           "id, scope_kind, merchant_entity_id, stream_id, merchant_norm, account_external_id, amount_min_cents, amount_max_cents, day_min, day_max, category, property_id, building_key, last_applied_at, created_at",
-        ),
+        )
+        .eq("organization_id", org.id),
       supabase
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id)
         .eq("triage_status", "assigned"),
       // True count of ALL pending debits (the visible list is capped at 100) so
       // the bulk-ignore control can tell the operator when more lines exist
@@ -273,6 +280,7 @@ export default async function ExpensesPage({
       supabase
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id)
         .eq("triage_status", "pending")
         .eq("direction", "debit"),
     ]);
@@ -289,6 +297,7 @@ export default async function ExpensesPage({
     const { data: tenData } = await supabase
       .from("tenancies")
       .select("id, rent_cents, property_id, properties(address), tenants(name, is_primary)")
+      .eq("organization_id", org.id)
       .eq("status", "active");
     const propAddr = new Map(properties.map((p) => [p.id, p.address]));
     type TenRow = {
@@ -352,6 +361,7 @@ export default async function ExpensesPage({
         .select(
           "id, posted_on, amount_cents, merchant, description, raw_category, account_name, currency, merchant_entity_id, stream_id, account_external_id",
         )
+        .eq("organization_id", org.id)
         .eq("triage_status", "pending")
         .eq("direction", "credit")
         .order("posted_on", { ascending: false })

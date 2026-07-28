@@ -122,6 +122,7 @@ export default async function CapturesPage({
   const { data: captureRows } = await supabase
     .from("documents")
     .select("id, title, mime_type, storage_path, source, ingest_draft, created_at")
+    .eq("organization_id", org.id)
     .in("source", ["ingest_email", "ingest_sms"])
     .not("pending_until", "is", null)
     .is("appliance_id", null)
@@ -143,6 +144,7 @@ export default async function CapturesPage({
   const { data: propRows } = await supabase
     .from("properties")
     .select("id, address")
+    .eq("organization_id", org.id)
     .order("address", { ascending: true });
   const properties = (propRows ?? []) as Array<{ id: string; address: string }>;
 

@@ -35,6 +35,7 @@ export default async function TenantMessageTemplatesPage({
   const { data: templateRows } = await supabase
     .from("tenant_message_templates")
     .select("id, name, channel, subject, body")
+    .eq("organization_id", org.id)
     .order("name", { ascending: true });
   const templates = (templateRows ?? []) as TemplateRow[];
 

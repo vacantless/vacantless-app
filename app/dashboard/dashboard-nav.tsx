@@ -109,7 +109,7 @@ const DISTRIBUTION_WIZARD: NavItem = {
 // AGENT_BOOK_ENABLED; this primary-bar link only appears when the flag is on AND
 // the caller actually belongs to more than one org (a real agent), so a
 // single-org landlord never sees it even after the flag flips.
-const AGENT_BOOK: NavItem = { href: "/agent", label: "My Portfolio" };
+const AGENT_BOOK: NavItem = { href: "/agent", label: "All clients" };
 
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/dashboard") return pathname === "/dashboard";

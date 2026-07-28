@@ -124,7 +124,8 @@ export default async function ShowingsPage({
 }) {
   const supabase = createClient();
   const org = await getCurrentOrg();
-  const timeZone = org?.booking_timezone ?? "America/Toronto";
+  if (!org) return null;
+  const timeZone = org.booking_timezone ?? "America/Toronto";
   // Role-gate the write affordances so a showing_helper (server-blocked from both
   // actions) doesn't see forbidden-click controls (Codex P3).
   const role = await getCurrentRole();
@@ -136,6 +137,7 @@ export default async function ShowingsPage({
     .select(
       "id, created_at, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address, status), feedback(rating, comments)",
     )
+    .eq("organization_id", org.id)
     .order("scheduled_at", { ascending: true });
 
   const all = (data ?? []) as unknown as ShowingRow[];
@@ -145,6 +147,7 @@ export default async function ShowingsPage({
   const { data: agentData } = await supabase
     .from("showing_agents")
     .select("id, name, tier, phone, archived, product_types, weekly_capacity")
+    .eq("organization_id", org.id)
     .order("name", { ascending: true });
   const agents = (agentData ?? []) as AgentRow[];
   const activeAgentOptions: AgentOption[] = agents
@@ -220,7 +223,7 @@ export default async function ShowingsPage({
       }),
     ),
   ).length;
-  const showingConfirmMode = org?.showing_confirm_mode === "agent" ? "agent" : "auto";
+  const showingConfirmMode = org.showing_confirm_mode === "agent" ? "agent" : "auto";
   const atRiskShowings =
     showingConfirmMode === "agent"
       ? upcoming.filter((s) =>
@@ -245,6 +248,7 @@ export default async function ShowingsPage({
       ? await supabase
           .from("email_delivery_events")
           .select("email, event, occurred_at")
+          .eq("organization_id", org.id)
           .in("email", atRiskEmails)
       : { data: [] };
   const deliveryEventsByEmail = new Map<string, EmailDeliveryEventRow[]>();
@@ -348,7 +352,7 @@ export default async function ShowingsPage({
 
   // Route view: when clustering is on, group upcoming showings into building+day
   // blocks (2+ showings) so the agent sees what's grouped where.
-  const blocks = org?.clustering_enabled
+  const blocks = org.clustering_enabled
     ? groupShowingsIntoBlocks(
         upcoming.map((s) => ({
           scheduled_at: s.scheduled_at,

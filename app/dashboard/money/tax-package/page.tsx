@@ -195,16 +195,20 @@ export default async function TaxPackagePage({
   const [{ data: rentData }, { data: woData }, { data: expData }, { data: propData }] = await Promise.all([
     supabase
       .from("rent_payments")
-      .select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
+      .select("amount_cents, paid_on, tenancy:tenancies(property_id)")
+      .eq("organization_id", org.id),
     supabase
       .from("work_orders")
-      .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
+      .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)")
+      .eq("organization_id", org.id),
     supabase
       .from("expenses")
-      .select("property_id, building_key, category, amount_cents, incurred_on"),
+      .select("property_id, building_key, category, amount_cents, incurred_on")
+      .eq("organization_id", org.id),
     supabase
       .from("properties")
       .select("id, address, building_key")
+      .eq("organization_id", org.id)
       .order("address", { ascending: true }),
   ]);
 

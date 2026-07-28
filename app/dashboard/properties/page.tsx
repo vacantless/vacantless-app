@@ -39,6 +39,9 @@ export default async function PropertiesPage({
   searchParams: { added?: string; import?: string };
 }) {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
+
   const [
     { data: properties },
     { data: leadRefs },
@@ -48,16 +51,21 @@ export default async function PropertiesPage({
     supabase
       .from("properties")
       .select("id, address, rent_cents, beds, baths, status, description")
+      .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
-    supabase.from("leads").select("property_id"),
-    supabase.from("property_photos").select("property_id"),
+    supabase.from("leads").select("property_id").eq("organization_id", org.id),
+    supabase
+      .from("property_photos")
+      .select("property_id")
+      .eq("organization_id", org.id),
     // Org-wide weekly viewing windows — the same signal the property-detail
-    // share-readiness check uses. One count for the whole org (RLS-scoped), so
+    // share-readiness check uses. One count for the selected org, so
     // the "Viewings" readiness chip reflects whether ANY rental can be
     // self-booked once a renter lands.
     supabase
       .from("availability_rules")
-      .select("id", { count: "exact", head: true }),
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id),
   ]);
 
   const rows = (properties ?? []) as PropertyRow[];
@@ -66,11 +74,10 @@ export default async function PropertiesPage({
   // path when the env flag is set AND the org's plan carries the entitlement
   // (Growth+). Off => the card isn't rendered and the page behaves exactly as
   // before. The server action re-checks this gate.
-  const org = await getCurrentOrg();
   const aiImageImportEnabled =
-    !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org?.plan);
+    !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org.plan);
 
-  // Per-property inquiry counts (RLS already scopes both reads to this org).
+  // Per-property inquiry counts for the selected org.
   const leadCounts = new Map<string, number>();
   for (const r of (leadRefs ?? []) as { property_id: string | null }[]) {
     if (r.property_id) {

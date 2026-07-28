@@ -289,7 +289,10 @@ export default async function ReconcilePage({
         "id, scope_kind, merchant_entity_id, stream_id, merchant_norm, account_external_id, amount_min_cents, amount_max_cents, day_min, day_max, category, property_id, building_key, times_applied, last_applied_at, created_at",
       )
       .eq("organization_id", org.id),
-    supabase.from("properties").select("id, address, building_key"),
+    supabase
+      .from("properties")
+      .select("id, address, building_key")
+      .eq("organization_id", org.id),
   ]);
 
   const rows = (txnData ?? []) as BankTxnRow[];

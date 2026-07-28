@@ -150,6 +150,7 @@ export default async function SettingsPage({
   const { data: propertyRows } = await supabase
     .from("properties")
     .select("id, address, status")
+    .eq("organization_id", org.id)
     .not("status", "in", "(draft,off_market)")
     .order("created_at", { ascending: false });
   const renterPageProperties = (propertyRows ?? []) as {
@@ -165,11 +166,12 @@ export default async function SettingsPage({
   } = await supabase.auth.getUser();
   const operatorEmail = user?.email ?? "";
 
-  // Rotessa rent-collection connection (RLS scopes the row to this org). The
-  // stored key is never read here — we only surface status + environment.
+  // Rotessa rent-collection connection for the selected org. The stored key is
+  // never read here — we only surface status + environment.
   const { data: rotessaRows } = await supabase
     .from("rotessa_accounts")
     .select("environment, connection_status, last_verified_at, last_error, api_key_encrypted")
+    .eq("organization_id", org.id)
     .limit(1);
   const rotessaRow = rotessaRows?.[0] as
     | {
@@ -191,13 +193,14 @@ export default async function SettingsPage({
     : null;
   const rotessaEncConfigured = encryptionConfigured();
 
-  // Stripe Connect rent-collection connection (RLS scopes the row to this org).
-  // We surface only the cached status snapshot — never a secret (there isn't one).
+  // Stripe Connect rent-collection connection for the selected org. We surface
+  // only the cached status snapshot — never a secret (there isn't one).
   const { data: stripeConnectRows } = await supabase
     .from("stripe_connect_accounts")
     .select(
       "connected_account_id, country, charges_enabled, payouts_enabled, details_submitted, acss_status, ach_status, onboarding_state, last_synced_at, last_error",
     )
+    .eq("organization_id", org.id)
     .limit(1);
   const stripeConnectRow = stripeConnectRows?.[0] as
     | {

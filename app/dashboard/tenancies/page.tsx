@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import {
   TENANCY_STATUSES,
   tenancyStatusLabel,
@@ -48,11 +49,15 @@ export default async function TenanciesPage({
   searchParams: { created?: string; deleted?: string; forbidden?: string };
 }) {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
+
   const { data } = await supabase
     .from("tenancies")
     .select(
       "id, status, rent_cents, start_date, end_date, property:properties(address), tenants(name, is_primary)",
     )
+    .eq("organization_id", org.id)
     .order("start_date", { ascending: false });
 
   const rows = ((data ?? []) as unknown as TenancyRow[]).slice().sort((a, b) => {
