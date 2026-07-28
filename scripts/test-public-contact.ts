@@ -3,8 +3,10 @@
 import {
   validatePublicContactPhone,
   validatePublicContactEmail,
+  validateLandlordContactEmail,
   validatePublicContact,
   MAX_PUBLIC_PHONE_LEN,
+  MAX_PUBLIC_EMAIL_LEN,
 } from "../lib/public-contact";
 
 let passed = 0;
@@ -64,6 +66,21 @@ ok("email trimmed", (() => {
 })());
 ok("malformed email rejected", !validatePublicContactEmail("not-an-email").ok);
 ok("email with display name rejected", !validatePublicContactEmail("Name <a@b.co>").ok);
+
+// --- private landlord/account contact email --------------------------------
+ok("blank landlord email -> null/ok", (() => {
+  const r = validateLandlordContactEmail("");
+  return r.ok && r.value === null;
+})());
+ok("mixed-case landlord email lowercased", (() => {
+  const r = validateLandlordContactEmail("Owner@Agile.CA");
+  return r.ok && r.value === "owner@agile.ca";
+})());
+ok("malformed landlord email rejected", !validateLandlordContactEmail("owner at agile").ok);
+ok(
+  "over-length landlord email rejected",
+  !validateLandlordContactEmail(`${"a".repeat(MAX_PUBLIC_EMAIL_LEN)}@x.ca`).ok,
+);
 
 // --- combined --------------------------------------------------------------
 ok("both blank -> ok with nulls", (() => {
