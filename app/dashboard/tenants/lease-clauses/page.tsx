@@ -40,11 +40,12 @@ export default async function LeaseClausesPage({
 
   const supabase = createClient();
 
-  // Lease clause library (#11 slice 2). Fetch clauses + their versions, then
-  // shape into ClauseView[] (versions newest-first). RLS scopes both to this org.
+  // Lease clause library (#11 slice 2). Fetch selected-org clauses + their
+  // versions, then shape into ClauseView[] (versions newest-first).
   const { data: clauseRows } = await supabase
     .from("lease_clauses")
     .select("id, key, title, category, applicable_to, risk_level, jurisdiction, notes_for_landlord")
+    .eq("organization_id", org.id)
     .order("category", { ascending: true })
     .order("key", { ascending: true });
   const clauseList = (clauseRows ?? []) as {
@@ -60,6 +61,7 @@ export default async function LeaseClausesPage({
   const { data: versionRows } = await supabase
     .from("lease_clause_versions")
     .select("id, clause_id, version, is_current, body, note")
+    .eq("organization_id", org.id)
     .order("version", { ascending: false });
   const versionList = (versionRows ?? []) as {
     id: string;

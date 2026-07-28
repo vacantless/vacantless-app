@@ -137,17 +137,27 @@ export default async function RentRollPage({
   const propertyValueCents = parseMoneyToCents(valueDollars);
 
   const supabase = createClient();
-  // RLS scopes every query to the caller's org.
+  // Rent roll rows are scoped to the selected org; RLS alone would include every
+  // org the operator belongs to.
   const [{ data: tenData }, { data: propData }, { data: woData }, { data: expData }] =
     await Promise.all([
       supabase
         .from("tenancies")
-        .select("status, rent_cents, start_date, end_date, property_id, tenants(name, is_primary)"),
-      supabase.from("properties").select("id, address, building_key, rent_cents").order("address", { ascending: true }),
+        .select("status, rent_cents, start_date, end_date, property_id, tenants(name, is_primary)")
+        .eq("organization_id", org.id),
+      supabase
+        .from("properties")
+        .select("id, address, building_key, rent_cents")
+        .eq("organization_id", org.id)
+        .order("address", { ascending: true }),
       supabase
         .from("work_orders")
-        .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
-      supabase.from("expenses").select("property_id, building_key, category, amount_cents, incurred_on"),
+        .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)")
+        .eq("organization_id", org.id),
+      supabase
+        .from("expenses")
+        .select("property_id, building_key, category, amount_cents, incurred_on")
+        .eq("organization_id", org.id),
     ]);
 
   // --- Rent roll (snapshot) -------------------------------------------------

@@ -39,16 +39,19 @@ export default async function LeadsPage({
   searchParams: { status?: string; screen?: string; property?: string };
 }) {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
+
   const { data } = await supabase
     .from("leads")
     .select(
       "id, name, email, phone, source, status, created_at, next_action_at, qualified_out, property_id, property:properties(address)",
     )
+    .eq("organization_id", org.id)
     .order("created_at", { ascending: false });
 
   const all = (data ?? []) as unknown as LeadRow[];
-  const org = await getCurrentOrg();
-  const timeZone = org?.booking_timezone ?? "America/Toronto";
+  const timeZone = org.booking_timezone ?? "America/Toronto";
   const today = new Date().toLocaleDateString("en-CA", { timeZone });
   const filter =
     searchParams.status && isLeadStatus(searchParams.status)

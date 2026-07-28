@@ -3,6 +3,7 @@ import { BrandBanner, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { redirect } from "next/navigation";
 import { hasEntitlement } from "@/lib/billing";
 import { isRentCollectionActive } from "@/lib/rent-status";
 
@@ -77,12 +78,21 @@ const SECTIONS: Section[] = [
 export default async function MoneyHubPage() {
   const supabase = createClient();
   const org = await getCurrentOrg();
-  const accounting = hasEntitlement(org?.plan, "accounting");
-  // RLS scopes both reads to the current org; we select only the status fields
-  // needed to decide whether a rent rail is connected.
+  if (!org) redirect("/onboarding");
+  const accounting = hasEntitlement(org.plan, "accounting");
+  // Select only the current org's status fields needed to decide whether a rent
+  // rail is connected.
   const [{ data: stripeRows }, { data: rotessaRows }] = await Promise.all([
-    supabase.from("stripe_connect_accounts").select("charges_enabled").limit(1),
-    supabase.from("rotessa_accounts").select("connection_status").limit(1),
+    supabase
+      .from("stripe_connect_accounts")
+      .select("charges_enabled")
+      .eq("organization_id", org.id)
+      .limit(1),
+    supabase
+      .from("rotessa_accounts")
+      .select("connection_status")
+      .eq("organization_id", org.id)
+      .limit(1),
   ]);
   const rentActive = isRentCollectionActive({
     stripeChargesEnabled: (stripeRows?.[0] as { charges_enabled?: boolean } | undefined)

@@ -3,6 +3,7 @@ import { PageHeader, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { watchLeaseErrorMessage } from "@/lib/watch-lease";
+import { getCurrentOrg } from "@/lib/org";
 import { watchLease } from "../actions";
 import { RentReconciliationFields } from "@/components/rent-reconciliation-fields";
 import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
@@ -49,13 +50,15 @@ export default async function WatchLeasePage({
 }) {
   const errMsg = watchLeaseErrorMessage(searchParams.err);
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
   const leaseTermShiftOn = leaseTermShiftEnabled();
 
   // --- Confirm-an-existing-tenancy (prefill) mode ----------------------------
   // Landing here with ?tenancy=<id> means the landlord is enrolling a lease the
   // app already holds (from the leasing pipeline) — so the unit + parties are
   // known and we PREFILL, asking only to confirm and add the rent-increase
-  // fields. RLS scopes the read to the caller's org.
+  // fields.
   if (searchParams.tenancy) {
     const { data } = await supabase
       .from("tenancies")
@@ -65,6 +68,7 @@ export default async function WatchLeasePage({
           "tenants(name, is_primary)",
       )
       .eq("id", searchParams.tenancy)
+      .eq("organization_id", org.id)
       .maybeSingle();
     const t = data as ExistingTenancy | null;
 
@@ -217,6 +221,7 @@ export default async function WatchLeasePage({
     .select(
       "id, rent_cents, start_date, property:properties(address), tenants(name, is_primary)",
     )
+    .eq("organization_id", org.id)
     .eq("status", "active")
     .order("start_date", { ascending: false });
   const active = (activeRows ?? []) as unknown as ExistingTenancy[];

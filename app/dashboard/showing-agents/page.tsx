@@ -58,16 +58,18 @@ export default async function ShowingAgentsPage({
   await requireCapability("manage_settings", "/dashboard/showings?forbidden=1");
   const supabase = createClient();
   const org = await getCurrentOrg();
+  if (!org) return null;
   const { data } = await supabase
     .from("showing_agents")
     .select(
       "id, name, email, phone, tier, service_area, product_types, weekly_capacity, note, archived",
     )
+    .eq("organization_id", org.id)
     .order("name", { ascending: true });
   const agents = (data ?? []) as Agent[];
   const active = agents.filter((a) => !a.archived);
   const archived = agents.filter((a) => a.archived);
-  const autoAssign = org?.auto_assign_agents ?? false;
+  const autoAssign = org.auto_assign_agents ?? false;
 
   const flash = searchParams.agent ? FLASH[searchParams.agent] : null;
 

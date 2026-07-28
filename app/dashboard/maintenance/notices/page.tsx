@@ -62,19 +62,21 @@ export default async function BuildingNoticesPage({
   searchParams: SearchParams;
 }) {
   const org = await getCurrentOrg();
+  if (!org) return null;
   const supabase = createClient();
 
   const { data: propData } = await supabase
     .from("properties")
-    .select("id, address, building_key");
+    .select("id, address, building_key")
+    .eq("organization_id", org.id);
   const buildingOptions = buildBuildingOptions(
     (propData ?? []) as { id: string; address: string; building_key: string | null }[],
   );
 
   // Notice-from-work-order (plan §10 pt 3): ?from_wo=<id> drops the operator into
   // the composer pre-filled from a scheduled work order. We resolve the work
-  // order (RLS-scoped to the org), derive its building (its own building_key, or
-  // its unit's), and build an editable draft. An explicit ?building= still wins.
+  // order scoped to the selected org, derive its building (its own building_key,
+  // or its unit's), and build an editable draft. An explicit ?building= still wins.
   const fromWoId = (searchParams.from_wo ?? "").trim() || null;
   let prefillSubject = "";
   let prefillBody = "";
@@ -89,6 +91,7 @@ export default async function BuildingNoticesPage({
         "id, title, description, category, building_key, scheduled_for, expected_start, expected_finish, property:properties(building_key), trade:trade_contacts(name)",
       )
       .eq("id", fromWoId)
+      .eq("organization_id", org.id)
       .maybeSingle();
     if (wo) {
       const w = wo as unknown as {
@@ -132,6 +135,7 @@ export default async function BuildingNoticesPage({
       .select(
         "id, rent_cents, property:properties!inner(address, building_key), tenants(id, name, email, phone, sms_opt_out)",
       )
+      .eq("organization_id", org.id)
       .eq("property.building_key", selectedBuildingKey);
 
     const tenancies: BuildingTenancy[] = ((tenData ?? []) as unknown as {
@@ -156,10 +160,11 @@ export default async function BuildingNoticesPage({
     .select(
       "id, building_label, building_key, subject, recipient_count, sent_count, skipped_count, created_at",
     )
+    .eq("organization_id", org.id)
     .order("created_at", { ascending: false })
     .limit(10);
 
-  const tz = org?.booking_timezone || "America/Toronto";
+  const tz = org.booking_timezone || "America/Toronto";
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-CA", {
       timeZone: tz,
@@ -212,9 +217,9 @@ export default async function BuildingNoticesPage({
                   selectedBuildingKey={selectedBuildingKey}
                   summary={summary}
                   sampleAddress={sampleAddress}
-                  orgName={org?.name ?? null}
-                  orgContactEmail={org?.public_contact_email ?? null}
-                  orgContactPhone={org?.public_contact_phone ?? null}
+                  orgName={org.name ?? null}
+                  orgContactEmail={org.public_contact_email ?? null}
+                  orgContactPhone={org.public_contact_phone ?? null}
                   initialSubject={prefillSubject}
                   initialBody={prefillBody}
                   initialImpact={prefillImpact}

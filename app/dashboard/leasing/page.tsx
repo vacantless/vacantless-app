@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 // their lists — but it DOES answer "what needs me right now" with live counts,
 // so the page the nav calls "Leasing" is a triage surface, not a launcher.
 //
-// Counts are read-only (RLS-scoped, id-only selects) and mirror the exact
+// Counts are read-only (selected-org, id-only selects) and mirror the exact
 // definitions the child pages use: "new" inquiries = the Inquiries reply queue;
 // unconfirmed = the Viewings at-risk board (agent confirm mode only, via the
 // same isAtRisk helper). No writes, no messages, nothing automated here.
@@ -46,6 +46,7 @@ type LeaseOutcomeRow = {
 export default async function LeasingHubPage() {
   const supabase = createClient();
   const org = await getCurrentOrg();
+  if (!org) return null;
   const nowIso = new Date().toISOString();
   const nowMs = Date.now();
 
@@ -53,12 +54,14 @@ export default async function LeasingHubPage() {
   const { count: newLeadCount } = await supabase
     .from("leads")
     .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
     .eq("status", "new");
 
   // Upcoming scheduled viewings; unconfirmed mirrors the Viewings at-risk board.
   const { data: upcomingRows } = await supabase
     .from("showings")
     .select("id, scheduled_at, confirmed_at, outcome")
+    .eq("organization_id", org.id)
     .eq("outcome", "scheduled")
     .gte("scheduled_at", nowIso)
     .order("scheduled_at", { ascending: true })
@@ -69,7 +72,7 @@ export default async function LeasingHubPage() {
     confirmed_at: string | null;
     outcome: string | null;
   }[];
-  const confirmMode = org?.showing_confirm_mode === "agent" ? "agent" : "auto";
+  const confirmMode = org.showing_confirm_mode === "agent" ? "agent" : "auto";
   const unconfirmedCount =
     confirmMode === "agent"
       ? upcoming.filter((s) =>
@@ -86,12 +89,14 @@ export default async function LeasingHubPage() {
   const { data: propertyRows } = await supabase
     .from("properties")
     .select("id, status, rent_cents, available_since")
+    .eq("organization_id", org.id)
     .limit(500);
   const vacancyProperties = (propertyRows ?? []) as VacancyPropertyRow[];
 
   const { data: leaseOutcomeRows } = await supabase
     .from("leased_outcomes")
     .select("days_on_market")
+    .eq("organization_id", org.id)
     .order("leased_at", { ascending: false })
     .limit(500);
   const leaseOutcomes = (leaseOutcomeRows ?? []) as LeaseOutcomeRow[];

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import { personDisplayName, sortPeople, type PersonSummary } from "@/lib/persons";
 import { EmptyState, BrandBanner } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -25,12 +26,14 @@ type VaultFileRow = { id: string; tenancy_id: string | null; person_id: string |
 // when, and jump to that person's whole document history.
 export default async function PeoplePage() {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
 
-  // RLS scopes every query to the operator's org. Counts are computed in-memory
-  // from these org-scoped sets (small) to avoid an N+1 per person. The document
-  // count spans BOTH document sources the detail page shows: in-app lease
-  // documents (lease_documents, via tenancy or signer) AND uploaded vault files
-  // (0076 `documents`, via tenancy or filed directly about the person).
+  // Counts are computed in-memory from selected-org sets (small) to avoid an
+  // N+1 per person. The document count spans BOTH document sources the detail
+  // page shows: in-app lease documents (lease_documents, via tenancy or signer)
+  // AND uploaded vault files (0076 `documents`, via tenancy or filed directly
+  // about the person).
   const [
     { data: personRows },
     { data: tenantRows },
@@ -38,11 +41,27 @@ export default async function PeoplePage() {
     { data: signerRows },
     { data: vaultRows },
   ] = await Promise.all([
-    supabase.from("persons").select("id, full_name, email, phone"),
-    supabase.from("tenants").select("person_id, tenancy_id"),
-    supabase.from("lease_documents").select("id, tenancy_id"),
-    supabase.from("lease_signers").select("person_id, lease_document_id"),
-    supabase.from("documents").select("id, tenancy_id, person_id").is("deleted_at", null),
+    supabase
+      .from("persons")
+      .select("id, full_name, email, phone")
+      .eq("organization_id", org.id),
+    supabase
+      .from("tenants")
+      .select("person_id, tenancy_id")
+      .eq("organization_id", org.id),
+    supabase
+      .from("lease_documents")
+      .select("id, tenancy_id")
+      .eq("organization_id", org.id),
+    supabase
+      .from("lease_signers")
+      .select("person_id, lease_document_id")
+      .eq("organization_id", org.id),
+    supabase
+      .from("documents")
+      .select("id, tenancy_id, person_id")
+      .eq("organization_id", org.id)
+      .is("deleted_at", null),
   ]);
 
   const persons = (personRows ?? []) as PersonRow[];

@@ -80,6 +80,7 @@ export default async function AvailabilityPage({
   searchParams: { saved?: string; error?: string; forbidden?: string };
 }) {
   const org = await getCurrentOrg();
+  if (!org) return null;
   const supabase = createClient();
 
   const savedMessage = searchParams.saved
@@ -101,20 +102,23 @@ export default async function AvailabilityPage({
         .select(
           "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, allow_double_booking, viewing_reminder_enabled, viewing_reminder_weekday, viewing_reminder_hour",
         )
-        .eq("id", org?.id ?? "")
+        .eq("id", org.id)
         .maybeSingle(),
       supabase
         .from("availability_rules")
         .select("id, weekday, start_minute, end_minute")
+        .eq("organization_id", org.id)
         .order("weekday")
         .order("start_minute"),
       supabase
         .from("availability_days_off")
         .select("id, day")
+        .eq("organization_id", org.id)
         .order("day"),
       supabase
         .from("availability_overrides")
         .select("id, day, start_minute, end_minute")
+        .eq("organization_id", org.id)
         .order("day")
         .order("start_minute"),
     ]);

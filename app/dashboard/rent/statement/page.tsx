@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
 import {
   BrandBanner,
   Card,
@@ -85,6 +86,8 @@ export default async function StatementPage({
   searchParams: { preset?: string; from?: string; to?: string };
 }) {
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return null;
 
   const presetRaw = searchParams.preset ?? "this_year";
   const preset = (STATEMENT_PRESETS as readonly string[]).includes(presetRaw)
@@ -97,20 +100,25 @@ export default async function StatementPage({
   const todayIso = new Date().toISOString().slice(0, 10);
   const range = rangeForPreset(preset, todayIso, customRange);
 
-  // RLS scopes every query to the caller's org.
+  // Statement rows are scoped to the selected org; RLS alone would include every
+  // org the operator belongs to.
   const [{ data: rentData }, { data: woData }, { data: expData }, { data: propData }] = await Promise.all([
     supabase
       .from("rent_payments")
-      .select("amount_cents, paid_on, tenancy:tenancies(property_id)"),
+      .select("amount_cents, paid_on, tenancy:tenancies(property_id)")
+      .eq("organization_id", org.id),
     supabase
       .from("work_orders")
-      .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)"),
+      .select("property_id, building_key, category, status, cost_cents, completed_on, tenancy:tenancies(property_id)")
+      .eq("organization_id", org.id),
     supabase
       .from("expenses")
-      .select("property_id, building_key, category, amount_cents, incurred_on"),
+      .select("property_id, building_key, category, amount_cents, incurred_on")
+      .eq("organization_id", org.id),
     supabase
       .from("properties")
       .select("id, address, building_key")
+      .eq("organization_id", org.id)
       .order("address", { ascending: true }),
   ]);
 

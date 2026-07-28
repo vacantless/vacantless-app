@@ -399,13 +399,16 @@ export default async function TenancyDetailPage({
     .slice()
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary));
   const primary = tenants.find((x) => x.is_primary) ?? tenants[0] ?? null;
+  const org = await getCurrentOrg();
+  if (!org) return null;
 
-  // The org's Rotessa connection state (RLS scopes the row to this org). We
-  // surface whether rent collection is connected so the Rent-collection card
-  // below can show the right call-to-action; the stored key is never read here.
+  // The selected org's Rotessa connection state. We surface whether rent
+  // collection is connected so the Rent-collection card below can show the
+  // right call-to-action; the stored key is never read here.
   const { data: rotessaRows } = await supabase
     .from("rotessa_accounts")
     .select("connection_status, api_key_encrypted")
+    .eq("organization_id", org.id)
     .limit(1);
   const rotessaRow = rotessaRows?.[0] as
     | { connection_status: string; api_key_encrypted: string | null }
@@ -413,11 +416,12 @@ export default async function TenancyDetailPage({
   const rotessaConnected = !!rotessaRow?.api_key_encrypted;
   const rotessaStatus = rotessaRow?.connection_status ?? "not_connected";
 
-  // The org's Stripe Connect rent rail state (sibling of Rotessa). RLS scopes
-  // to this org. Drives the Stripe rent-collection section below.
+  // The selected org's Stripe Connect rent rail state (sibling of Rotessa).
+  // Drives the Stripe rent-collection section below.
   const { data: stripeConnectRows } = await supabase
     .from("stripe_connect_accounts")
     .select("connected_account_id, country, charges_enabled, onboarding_state")
+    .eq("organization_id", org.id)
     .limit(1);
   const stripeConnectRow = stripeConnectRows?.[0] as
     | { connected_account_id: string; country: string | null; charges_enabled: boolean; onboarding_state: string }
@@ -509,11 +513,12 @@ export default async function TenancyDetailPage({
   }[];
   const openWorkOrders = workOrders.filter((w) => isActiveStatus(w.status));
 
-  // Org-level saved message templates (for the composer's "start from template"
-  // picker) and the send history for this tenancy. RLS scopes both to this org.
+  // Selected-org saved message templates for the composer's "start from
+  // template" picker.
   const { data: templateRows } = await supabase
     .from("tenant_message_templates")
     .select("id, name, channel, subject, body")
+    .eq("organization_id", org.id)
     .order("name", { ascending: true });
   const templates = (templateRows ?? []) as ComposerTemplate[];
 
@@ -540,8 +545,7 @@ export default async function TenancyDetailPage({
   // Plan gate for the composer (S214): SMS is a paid-tier capability. The server
   // action enforces this regardless; here we mirror it so the composer can hide
   // the locked channels and show an upgrade nudge instead of a silent skip.
-  const org = await getCurrentOrg();
-  const smsAllowed = canUseSms(org?.plan);
+  const smsAllowed = canUseSms(org.plan);
 
   // Rent-increase status (N1 v1, S282). "Today" is anchored to Ontario time —
   // this is an Ontario LTB feature, and server components run UTC on Vercel.
@@ -625,7 +629,7 @@ export default async function TenancyDetailPage({
   // or when the unit has no benchmark. Only computed when a rent-increase card
   // shows (active tenancy with rent + start date).
   const marketRentEnabled =
-    canUseMarketRent(org?.plan ?? null) &&
+    canUseMarketRent(org.plan) &&
     process.env.MARKET_RENT_ENABLED === "true";
   let marketRentSuggestion: MarketRentSuggestion | null = null;
   if (rentIncrease && marketRentEnabled && t.property) {
@@ -638,7 +642,7 @@ export default async function TenancyDetailPage({
     });
     let leasedRows: LeasedOutcomeComp[] = [];
     let activeRows: ActiveListingComp[] = [];
-    if (marketRentCity && beds != null && org?.id) {
+    if (marketRentCity && beds != null) {
       const { data: leasedData } = await supabase
         .from("leased_outcomes")
         .select(
@@ -738,19 +742,19 @@ export default async function TenancyDetailPage({
     .limit(20);
   const messages = (messageRows ?? []) as TenantMessageRow[];
 
-  // Generated lease documents for this tenancy (newest first). RLS scopes to
-  // this org. The two most recent power the renewal diff (#11 slice 2).
+  // Generated lease documents for this tenancy (newest first). The two most
+  // recent power the renewal diff (#11 slice 2).
   const { data: leaseRows } = await supabase
     .from("lease_documents")
     .select("id, title, status, assembled_body, executed_clause_versions, created_at, executed_at")
     .eq("tenancy_id", t.id)
     .order("created_at", { ascending: false });
   // Signers across all of this tenancy's leases (one query; grouped in code).
-  // RLS scopes to this org. Powers the per-signer status + magic-link UI.
+  // Selected-org signer rows power the per-signer status + magic-link UI.
   const { data: signerRows } = await supabase
     .from("lease_signers")
     .select("id, lease_document_id, role, name, status, token, sign_order")
-    .eq("organization_id", org?.id ?? "")
+    .eq("organization_id", org.id)
     .order("sign_order", { ascending: true });
   const signersByLease = new Map<string, LeaseSignerView[]>();
   for (const r of (signerRows ?? []) as {
@@ -905,18 +909,19 @@ export default async function TenancyDetailPage({
     };
   });
 
-  // The org clause library powers the clause-selection wizard (#11 slice 7).
-  // RLS scopes both reads to this org. We resolve each clause to its current
-  // version and enrich with the slice-6 display metadata (category / risk /
-  // landlord note) the wizard renders.
+  // The selected-org clause library powers the clause-selection wizard (#11
+  // slice 7). We resolve each clause to its current version and enrich with the
+  // slice-6 display metadata (category / risk / landlord note) the wizard renders.
   const { data: clauseRows } = await supabase
     .from("lease_clauses")
     .select("id, key, title, applicable_to, category, risk_level, notes_for_landlord")
+    .eq("organization_id", org.id)
     .order("category", { ascending: true })
     .order("key", { ascending: true });
   const { data: clauseVersionRows } = await supabase
     .from("lease_clause_versions")
-    .select("id, clause_id, version, is_current, body");
+    .select("id, clause_id, version, is_current, body")
+    .eq("organization_id", org.id);
   const clauseMeta = new Map(
     ((clauseRows ?? []) as {
       id: string;
@@ -970,13 +975,13 @@ export default async function TenancyDetailPage({
   // read that snapshot + the unit/date for the affordance label; the pure
   // seedSelectionFromSnapshot maps it to the CURRENT library clauseIds (so the
   // new lease assembles current wording, never the old pinned version). RLS
-  // scopes the read to this org.
+  // scoped to the selected org.
   const { data: lastSignedRow } = await supabase
     .from("lease_documents")
     .select(
       "id, executed_at, created_at, executed_clause_versions, tenancy:tenancies(property:properties(address))",
     )
-    .eq("organization_id", org?.id ?? "")
+    .eq("organization_id", org.id)
     .eq("status", "executed")
     .order("executed_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
