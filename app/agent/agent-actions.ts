@@ -49,3 +49,36 @@ export async function marketUnitForClient(
   writeSelectedOrgCookie(orgId);
   redirect(`/dashboard/link-portals?property=${propertyId}`);
 }
+
+// Same org-switch guard as marketUnitForClient, but routes to the existing
+// tenancy rent-confirm section. This is discovery only: it does not write the
+// rent ledger or arm any live send path.
+export async function confirmRentForClient(
+  orgId: string,
+  tenancyId: string,
+): Promise<void> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login?next=/agent");
+
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("organization_id", orgId)
+    .limit(1);
+  if (!membership || membership.length === 0) redirect("/agent");
+
+  const { data: tenancy } = await supabase
+    .from("tenancies")
+    .select("id")
+    .eq("id", tenancyId)
+    .eq("organization_id", orgId)
+    .limit(1);
+  if (!tenancy || tenancy.length === 0) redirect("/agent");
+
+  writeSelectedOrgCookie(orgId);
+  redirect(`/dashboard/tenancies/${tenancyId}#rent-increase`);
+}

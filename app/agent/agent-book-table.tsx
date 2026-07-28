@@ -6,14 +6,17 @@ import {
   AGENT_BOOK_PRIORITY,
   type AgentBookRow,
 } from "@/lib/agent-book";
-import { marketUnitForClient } from "./agent-actions";
+import { confirmRentForClient, marketUnitForClient } from "./agent-actions";
 
 // Read-only cross-org agent book. Grouped by client (org), filterable by stage
 // and by "needs action". No cross-org navigation yet — deep links into a chosen
 // client's org are a later ticket (the org switcher + market-this-unit trigger).
 
 function needsAction(row: AgentBookRow): boolean {
-  return row.priority <= AGENT_BOOK_PRIORITY.setupOrMarket;
+  return (
+    row.priority <= AGENT_BOOK_PRIORITY.setupOrMarket ||
+    row.flags.rentUnconfirmed
+  );
 }
 
 // "Market this unit for [client]" (Tier 1 D): switches the active org to this
@@ -37,6 +40,25 @@ function MarketButton({ row }: { row: AgentBookRow }) {
   );
 }
 
+function ConfirmRentButton({ row }: { row: AgentBookRow }) {
+  const [pending, startTransition] = useTransition();
+  const tenancyId = row.tenancyId;
+  if (!tenancyId) return null;
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() =>
+        startTransition(() => confirmRentForClient(row.orgId, tenancyId))
+      }
+      className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
+      title={`Switch to ${row.orgName} and open the rent confirmation section`}
+    >
+      {pending ? "Opening…" : "Confirm rent →"}
+    </button>
+  );
+}
+
 function FlagChips({ row }: { row: AgentBookRow }) {
   const chips: { label: string; className: string }[] = [];
   if (row.flags.newLeadCount > 0)
@@ -53,6 +75,11 @@ function FlagChips({ row }: { row: AgentBookRow }) {
     chips.push({
       label: "Ready — not live",
       className: "bg-blue-50 text-blue-700 border-blue-200",
+    });
+  if (row.flags.rentUnconfirmed)
+    chips.push({
+      label: "Confirm rent",
+      className: "bg-indigo-50 text-indigo-700 border-indigo-200",
     });
   if (row.flags.photosMissing)
     chips.push({
@@ -165,6 +192,9 @@ export function AgentBookTable({ rows }: { rows: AgentBookRow[] }) {
                       </span>
                       {row.nextAction && (
                         <span className="text-xs text-gray-500">{row.nextAction}</span>
+                      )}
+                      {row.flags.rentUnconfirmed && row.tenancyId && (
+                        <ConfirmRentButton row={row} />
                       )}
                       <MarketButton row={row} />
                     </div>

@@ -1342,12 +1342,14 @@ export default async function TenancyDetailPage({
 
   // Smart default-open (S286): open the one section that needs attention now,
   // instead of always-Tenants. Falls back to Tenants when nothing's pending.
-  const openSection = pickDefaultOpenSection({
-    tenantCount: tenants.length,
-    leaseDocStatus,
-    rentCollectionStatus,
-    rentIncreaseStatus: rentIncrease?.status ?? null,
-  });
+  const openSection = rentIncreasePendingConfirm
+    ? "rent-increase"
+    : pickDefaultOpenSection({
+        tenantCount: tenants.length,
+        leaseDocStatus,
+        rentCollectionStatus,
+        rentIncreaseStatus: rentIncrease?.status ?? null,
+      });
 
   return (
     <div>

@@ -25,6 +25,10 @@ const P_A2 = "22222222-2222-2222-2222-222222222222";
 const P_A3 = "33333333-3333-3333-3333-333333333333";
 const P_B1 = "44444444-4444-4444-4444-444444444444";
 const P_B2 = "55555555-5555-5555-5555-555555555555";
+const P_C1 = "66666666-6666-6666-6666-666666666666";
+const P_C2 = "77777777-7777-7777-7777-777777777777";
+const T_C1 = "88888888-8888-8888-8888-888888888888";
+const T_C2 = "99999999-9999-9999-9999-999999999999";
 
 function unit(over: Partial<AgentBookUnitInput> & { orgId: string; propertyId: string; address: string }): AgentBookUnitInput {
   return {
@@ -109,6 +113,38 @@ const unlabelled = buildAgentBookRows({
   units: [unit({ orgId: ORG_A, propertyId: P_A1, address: "1 Alpha St", unitLabel: "  " })],
 });
 ok("falls back to address when unitLabel is blank", unlabelled[0]?.unitLabel === "1 Alpha St");
+
+// --- rent-confirm discovery -----------------------------------------------
+const rentConfirmRows = buildAgentBookRows({
+  orgs: [{ id: ORG_A, name: "Alpha Realty" }],
+  units: [
+    unit({
+      orgId: ORG_A,
+      propertyId: P_C1,
+      address: "6 Confirm Cres",
+      status: "leased",
+      tenancyId: T_C1,
+      tenancyStatus: "active",
+      needsRentConfirm: true,
+    }),
+    unit({
+      orgId: ORG_A,
+      propertyId: P_C2,
+      address: "7 Quiet Quay",
+      status: "leased",
+      tenancyId: T_C2,
+      tenancyStatus: "active",
+      needsRentConfirm: false,
+    }),
+  ],
+});
+const confirmRow = rentConfirmRows.find((r) => r.propertyId === P_C1);
+const confirmedRow = rentConfirmRows.find((r) => r.propertyId === P_C2);
+ok("rent-confirm unit is flagged", confirmRow?.flags.rentUnconfirmed === true);
+ok("rent-confirm unit enters setup/market action band", confirmRow?.priority === AGENT_BOOK_PRIORITY.setupOrMarket);
+ok("rent-confirm unit carries tenancyId", confirmRow?.tenancyId === T_C1);
+ok("confirmed rent unit is not flagged", confirmedRow?.flags.rentUnconfirmed === false);
+ok("confirmed rent unit stays quiet", confirmedRow?.priority === AGENT_BOOK_PRIORITY.quiet);
 
 console.log(
   `\ntest-agent-book: ${passed} passed, ${failed} failed (${passed + failed} total)`,
