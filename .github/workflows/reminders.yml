@@ -194,3 +194,9 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/distribution-worker" \
             -w "\nHTTP %{http_code}\n"
+      - name: Trigger landlord-campaign sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/landlord-campaign" \
+            -w "\nHTTP %{http_code}\n"
