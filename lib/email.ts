@@ -2254,6 +2254,128 @@ export async function sendTradeDispatchInvite(
 }
 
 // ---------------------------------------------------------------------------
+// Landlord rent confirmation campaign email. Sent only by the dark
+// LANDLORD_CAMPAIGN_ENABLED campaign for the rent_increase_confirm reveal.
+// ---------------------------------------------------------------------------
+
+export type LandlordRentConfirmEmailUnit = {
+  address: string;
+  rentCents: number | null;
+  confirmUrl: string;
+};
+
+export type LandlordRentConfirmEmailPayload = {
+  org_name?: string | null;
+  brand_color?: string | null;
+  logo_url?: string | null;
+  units: LandlordRentConfirmEmailUnit[];
+};
+
+export function renderLandlordRentConfirmEmail(
+  p: LandlordRentConfirmEmailPayload,
+): { subject: string; html: string; text: string } {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Vacantless");
+  const units = p.units;
+  const subject =
+    units.length === 1
+      ? `Confirm current rent for ${units[0].address}`
+      : "Confirm current rent for your units";
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const cards = units
+    .map((unit) => {
+      const address = escapeHtml(unit.address);
+      const rent = formatRent(unit.rentCents);
+      const rentChip = rent ? escapeHtml(rent) : "Rent not set";
+      const url = escapeHtml(unit.confirmUrl);
+      return `<div style="margin:0 0 14px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 8px;font-size:15px;"><strong>${address}</strong></p>
+        <p style="margin:0 0 14px;"><span style="display:inline-block;padding:6px 10px;border-radius:999px;background:#eef8f4;color:#17362f;font-size:13px;font-weight:700;">${rentChip}</span></p>
+        <p style="margin:0 0 10px;">
+          <a href="${url}" style="display:inline-block;background:${escapeHtml(
+            brand,
+          )};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700;">Confirm your rent</a>
+        </p>
+        <p style="margin:0;font-size:12px;color:#71717a;word-break:break-all;">${url}</p>
+      </div>`;
+    })
+    .join("");
+
+  const text =
+    "Is this still the rent? Tap to confirm or fix it.\n\n" +
+    units
+      .map((unit) => {
+        const rent = formatRent(unit.rentCents) ?? "rent not set";
+        return `- ${unit.address} (${rent}): ${unit.confirmUrl}`;
+      })
+      .join("\n");
+
+  const html = `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Is this still the rent? Tap to confirm or fix it.</p>
+      ${cards}
+      <p style="margin:20px 0 0;color:#52525b;font-size:13px;">This keeps your rent increase guideline math and N1 notice draft accurate.</p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      Sent by ${org} via Vacantless.
+    </div>
+  </div>
+</body></html>`;
+
+  return { subject, html, text };
+}
+
+export async function sendLandlordRentConfirmEmail(
+  p: LandlordRentConfirmEmailPayload & {
+    to_email: string;
+    reply_to_email: string | null;
+  },
+): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+  if (p.units.length === 0) return { sent: false, reason: "no_units" };
+
+  const rendered = renderLandlordRentConfirmEmail(p);
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name ?? null),
+    subject: rendered.subject,
+    htmlContent: rendered.html,
+    textContent: rendered.text,
+    tags: ["kind:landlord_rent_confirm"],
+  };
+
+  try {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject: rendered.subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Generic customizable notification (Slice 6 substrate, S327). One branded
 // shell every per-org notification draws from: the subject + body are ALREADY
 // rendered (operator-edited template or the code default, token-substituted by

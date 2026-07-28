@@ -1,6 +1,7 @@
 // Unit tests for the landlord feature-reveal campaign (Tier 1 C).
 // Run: npx tsx scripts/test-landlord-campaign.ts
 import {
+  buildRentConfirmUnits,
   nextRevealDue,
   revealCopy,
   REVEAL_KEYS,
@@ -10,6 +11,7 @@ import {
   CAMPAIGN_MAX_AGE_DAYS,
   type LandlordRevealInput,
 } from "../lib/landlord-campaign";
+import { renderLandlordRentConfirmEmail } from "../lib/email";
 
 let passed = 0;
 let failed = 0;
@@ -112,6 +114,105 @@ for (const key of REVEAL_KEYS) {
 ok("every reveal has complete copy, a relative href, and no em dashes", copyOk);
 ok("upgrade reveals point at billing", revealCopy("rent_collection").ctaPath === "/dashboard/billing");
 ok("free rent-increase nudge points at the rent surface", revealCopy("rent_increase_confirm").ctaPath === "/dashboard/rent");
+
+// --- rent-confirm per-unit helper ------------------------------------------
+const rentConfirmUnits = buildRentConfirmUnits({
+  tenancies: [
+    {
+      id: "tenancy-1",
+      address: "18 Shorncliffe Ave Unit 3",
+      rentCents: 199500,
+      confirmToken: "token-1",
+    },
+    {
+      id: "tenancy-2",
+      address: "22 Main St",
+      rentCents: 240000,
+      confirmToken: "token-2",
+    },
+    {
+      id: "tenancy-3",
+      address: null,
+      rentCents: null,
+      confirmToken: "token-3",
+    },
+  ],
+  confirmedTenancyIds: new Set(["tenancy-2"]),
+  urlFor: (token) => `https://app.vacantless.com/confirm-rent/${token}`,
+});
+ok("rent-confirm helper filters confirmed tenancies", rentConfirmUnits.length === 2);
+ok(
+  "rent-confirm helper keeps stable input order",
+  rentConfirmUnits[0]?.confirmUrl.endsWith("/token-1") === true &&
+    rentConfirmUnits[1]?.confirmUrl.endsWith("/token-3") === true,
+);
+ok(
+  "rent-confirm helper preserves rent cents and builds URLs",
+  rentConfirmUnits[0]?.rentCents === 199500 &&
+    rentConfirmUnits[0]?.confirmUrl ===
+      "https://app.vacantless.com/confirm-rent/token-1",
+);
+ok(
+  "rent-confirm helper handles null address/rent",
+  rentConfirmUnits[1]?.address === "your unit" &&
+    rentConfirmUnits[1]?.rentCents === null,
+);
+ok(
+  "rent-confirm helper returns no units when every tenancy is confirmed",
+  buildRentConfirmUnits({
+    tenancies: [
+      {
+        id: "tenancy-1",
+        address: "18 Shorncliffe Ave Unit 3",
+        rentCents: 199500,
+        confirmToken: "token-1",
+      },
+    ],
+    confirmedTenancyIds: new Set(["tenancy-1"]),
+    urlFor: (token) => `https://app.vacantless.com/confirm-rent/${token}`,
+  }).length === 0,
+);
+
+// --- branded rent-confirm email renderer -----------------------------------
+const brandedRentConfirm = renderLandlordRentConfirmEmail({
+  org_name: "Agile Rentals",
+  brand_color: "#17362f",
+  logo_url: "https://cdn.example.com/logo.png?name=<agile>",
+  units: [
+    {
+      address: "18 <Shorncliffe> Ave",
+      rentCents: 199500,
+      confirmUrl: "https://app.vacantless.com/confirm-rent/token-1?x=<bad>",
+    },
+    {
+      address: "your unit",
+      rentCents: null,
+      confirmUrl: "https://app.vacantless.com/confirm-rent/token-3",
+    },
+  ],
+});
+ok("rent-confirm email has a subject", brandedRentConfirm.subject.length > 0);
+ok(
+  "rent-confirm email renders one pill per unit",
+  (brandedRentConfirm.html.match(/Confirm your rent/g) ?? []).length === 2,
+);
+ok(
+  "rent-confirm email escapes interpolated HTML",
+  brandedRentConfirm.html.includes("18 &lt;Shorncliffe&gt; Ave") &&
+    !brandedRentConfirm.html.includes("18 <Shorncliffe> Ave") &&
+    brandedRentConfirm.html.includes("name=&lt;agile&gt;") &&
+    brandedRentConfirm.html.includes("x=&lt;bad&gt;"),
+);
+ok(
+  "rent-confirm email includes rent chip and null-rent fallback",
+  brandedRentConfirm.html.includes("$1,995/month") &&
+    brandedRentConfirm.html.includes("Rent not set"),
+);
+ok(
+  "rent-confirm email has a plain-text fallback with the public links",
+  brandedRentConfirm.text.includes("token-1") &&
+    brandedRentConfirm.text.includes("token-3"),
+);
 
 console.log(
   `\ntest-landlord-campaign: ${passed} passed, ${failed} failed (${passed + failed} total)`,
