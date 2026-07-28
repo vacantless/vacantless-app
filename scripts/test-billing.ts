@@ -508,8 +508,12 @@ ok("canUseRenterSms: pilot true", canUseRenterSms("pilot") === true);
 ok("canUseRenterSms: core true (legacy leasing tier)", canUseRenterSms("core") === true);
 ok("canUseRenterSms: null false", canUseRenterSms(null) === false);
 
-// --- Rent-collection gate (Growth & up) ------------------------------------
-ok("canCollectRentByPlan: free false", canCollectRentByPlan("free") === false);
+// --- Rent-collection gate (Free+; trial remains off) -----------------------
+ok("canCollectRentByPlan: free true", canCollectRentByPlan("free") === true);
+ok(
+  "rent_collection: free true (repositioned free S594)",
+  hasEntitlement("free", "rent_collection") === true,
+);
 ok("canCollectRentByPlan: growth true", canCollectRentByPlan("growth") === true);
 ok("canCollectRentByPlan: premium true", canCollectRentByPlan("premium") === true);
 ok("canCollectRentByPlan: managed true", canCollectRentByPlan("managed") === true);
@@ -729,6 +733,12 @@ ok("Growth is config-shape purchasable", isTierPurchasable(TIERS.growth) === tru
 ok("Premium is config-shape purchasable", isTierPurchasable(TIERS.premium) === true);
 ok("Managed is config-shape purchasable", isTierPurchasable(TIERS.managed) === true);
 ok("Free is $0 and never purchasable", isTierPurchasable(TIERS.free) === false);
+const freeTierCopy = `${TIERS.free.blurb} ${TIERS.free.features.join(" ")}`.toLowerCase();
+const growthTierCopy = `${TIERS.growth.blurb} ${TIERS.growth.features.join(" ")}`.toLowerCase();
+ok("Free tier card shows rent collection", freeTierCopy.includes("rent collection"));
+ok("Free tier card names unlimited units", freeTierCopy.includes("unlimited units"));
+ok("Growth tier card no longer lists rent collection", !growthTierCopy.includes("rent collection"));
+ok("Growth blurb no longer says collect rent", !TIERS.growth.blurb.toLowerCase().includes("collect rent"));
 
 // --- Listing allowance (Free funnel cap; config-only until wired) -----------
 ok("listing cap: free = 1", TIERS.free.maxActiveListings === 1);

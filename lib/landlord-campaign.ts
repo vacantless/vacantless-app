@@ -2,8 +2,9 @@
 // Landlord feature-reveal campaign — pure scheduling + copy (Tier 1 C).
 //
 // A near-exact port of the renter nurture engine (lib/nurture.ts) retargeted
-// from a LEAD to an ORG. It reveals one paid capability at a time to a FREE-plan
-// org that has a tenancy, and routes them to upgrade. The cron sweep
+// from a LEAD to an ORG. It reveals one capability at a time to a FREE-plan
+// org that has a tenancy, and routes them to the right activation/upgrade
+// surface. The cron sweep
 // (app/api/cron/landlord-campaign) sends only the NEXT due reveal and bumps
 // organizations.landlord_campaign_step_sent, so a re-run never double-sends.
 //
@@ -31,8 +32,9 @@ export const MIN_GAP_HOURS = 24;
 export const CAMPAIGN_MAX_AGE_DAYS = 120;
 
 // The reveal sequence, in order. rent_increase_confirm is a FREE nudge (correct
-// your base rent so the guideline math is right); the middle three are Growth
-// capabilities; upgrade_ask is the closer.
+// your base rent so the guideline math is right); rent_collection is a free
+// activation reveal; tax_export/listing_marketing are Growth capabilities;
+// upgrade_ask is the closer.
 export const REVEAL_KEYS = [
   "rent_increase_confirm",
   "rent_collection",
@@ -198,8 +200,8 @@ export function buildRentConfirmUnits(input: {
 const BILLING = "/dashboard/billing";
 
 /**
- * Copy for one reveal. Pure. The upgrade reveals point at the real billing
- * surface; the free rent-increase nudge points at the rent surface.
+ * Copy for one reveal. Pure. Upgrade reveals point at the real billing
+ * surface; free activation nudges point at the relevant product surface.
  */
 export function revealCopy(key: RevealKey, ctx: RevealContext = {}): RevealCopy {
   const unit = (ctx.propertyAddress ?? "").trim() || "your unit";
@@ -217,10 +219,10 @@ export function revealCopy(key: RevealKey, ctx: RevealContext = {}): RevealCopy 
       return {
         subject: "Collect rent automatically, straight from the tenant's bank",
         body:
-          "Stop chasing e-transfers. Vacantless pulls rent from your tenant's bank on the day it is due and deposits it into your account, for a flat fee of about $5 per pull with no cut taken.\n\n" +
-          "Move to Growth to turn it on.",
+          "Stop chasing e-transfers. Vacantless can pull rent from your tenant's bank on the day it is due and deposit it into your account, for a flat fee of about $5 per pull with no cut taken.\n\n" +
+          "It is included free on your plan. Set it up in a few minutes.",
         ctaLabel: "Set up rent collection",
-        ctaPath: BILLING,
+        ctaPath: "/dashboard/money",
       };
     case "tax_export":
       return {
@@ -244,7 +246,7 @@ export function revealCopy(key: RevealKey, ctx: RevealContext = {}): RevealCopy 
       return {
         subject: "Ready to get more out of Vacantless?",
         body:
-          "You have the essentials on the free plan. Growth adds automatic rent collection, your year-end tax package, and listing marketing for $99 a month.\n\n" +
+          "You have the essentials on the free plan, including automatic rent collection. Growth adds your year-end tax package, listing marketing, renter screening, and unlimited live listings for $99 a month.\n\n" +
           "Take a look whenever you are ready.",
         ctaLabel: "Move to Growth",
         ctaPath: BILLING,

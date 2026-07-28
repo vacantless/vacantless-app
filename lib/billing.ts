@@ -65,7 +65,7 @@ export function isAnyPaidPlan(plan: string | null | undefined): boolean {
 // FEATURES (capabilities that may be gated):
 //   sms             landlord -> tenant SMS (email is ALWAYS free, never gated)
 //   renter_sms      public booking/reminder SMS to renters (the leasing wedge)
-//   rent_collection automated rent rails (Stripe Connect / Rotessa)
+//   rent_collection automated rent rails (Stripe Connect / Rotessa; Free+)
 //   tax_export      year-end rent / tax CSV export
 //   bank_feed       live bank/card transaction sync (Growth+; Plaid). Distinct
 //                   from `accounting`: bank_feed says a live feed exists at all;
@@ -203,10 +203,10 @@ export type AnyPlanKey = PlanKey | TierKey;
 // for legacy orgs (which migrate to the new tiers anyway).
 //
 // Live ladder (S296, Package B):
-//   Free     = lead-gen funnel. One live listing + the standalone tools; EMAIL
-//              ONLY (no renter SMS) and no paid capabilities.
-//   Growth   = rent collection + landlord<->tenant + renter SMS + tax export +
-//              live bank feed (Plaid).
+//   Free     = lead-gen funnel. One live listing + the standalone tools, rent
+//              collection included, EMAIL ONLY (no renter SMS).
+//   Growth   = landlord<->tenant + renter SMS + tax export + live bank feed
+//              (Plaid) + the paid leasing/ops tools.
 //   Premium  = + accounting module + Premium aggregator (Flinks).
 export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   // Legacy leasing-era plans (migrate to the new ladder; `sms` value frozen).
@@ -215,7 +215,7 @@ export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   core: { serve_notice: false, applications: false, sms: false, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false, market_rent: false },
   plus: { serve_notice: false, applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false, market_rent: false },
   // Live ladder.
-  free: noEntitlements(), // funnel tier: email only, no paid capabilities
+  free: { ...noEntitlements(), rent_collection: true }, // funnel tier: email only; rent collection included
   growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   managed: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Premium feature set plus the larger concierge allowance.
@@ -257,6 +257,7 @@ export function canUseRenterSms(plan: string | null | undefined): boolean {
 }
 
 // Whether this plan may use the automated rent-collection rails (Stripe/Rotessa).
+// Free is intentionally true; trial/unknown remain false.
 export function canCollectRentByPlan(plan: string | null | undefined): boolean {
   return hasEntitlement(plan, "rent_collection");
 }
@@ -514,6 +515,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "One active listing with a branded inquiry page",
       "Every inquiry organized in one list",
       "Rent-increase guideline calculator + N1 form",
+      "Automatic rent collection from your tenants' bank - unlimited units",
       "Listing-copy generator + MLS data-sheet import",
       "Email replies and reminders (no texting)",
     ],
@@ -524,11 +526,10 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceCents: 9900,
     priceEnv: "STRIPE_PRICE_GROWTH",
     maxActiveListings: null,
-    blurb: "Everything in Free, plus collect rent, screen renters, and manage tenants.",
+    blurb: "Everything in Free, plus screen renters, market unlimited listings, and manage tenants.",
     highlight: true,
     features: [
       "Unlimited active listings",
-      "Online rent collection (Stripe / Rotessa)",
       "Renter pre-screening questions",
       "Tenant + renter messaging by email and text",
       "Automated lead nurture and post-viewing follow-up",

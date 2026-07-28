@@ -114,14 +114,55 @@ export async function GET(req: NextRequest) {
   // Which candidate orgs have a tenancy (a real landlord), and one property
   // address each (for reveal copy). Both RLS-bypassing service-role reads,
   // scoped to the candidate set.
-  const [{ data: tenancyRows }, { data: propRows }] = await Promise.all([
+  const [
+    { data: tenancyRows },
+    { data: propRows },
+    { data: stripeRentRows, error: stripeRentErr },
+    { data: rotessaRentRows, error: rotessaRentErr },
+  ] = await Promise.all([
     admin.from("tenancies").select("organization_id").in("organization_id", orgIds),
     admin.from("properties").select("organization_id, address").in("organization_id", orgIds),
+    admin
+      .from("stripe_connect_accounts")
+      .select("organization_id, charges_enabled")
+      .in("organization_id", orgIds)
+      .eq("charges_enabled", true),
+    admin
+      .from("rotessa_accounts")
+      .select("organization_id, connection_status")
+      .in("organization_id", orgIds)
+      .eq("connection_status", "connected"),
   ]);
+  if (stripeRentErr || rotessaRentErr) {
+    const message = stripeRentErr?.message ?? rotessaRentErr?.message ?? "unknown";
+    return NextResponse.json(
+      { ok: false, reason: `query_error:${message}`, scanned: orgs.length, sent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { status: 200 },
+    );
+  }
   const orgsWithTenancy = new Set<string>();
   for (const r of (tenancyRows ?? []) as { organization_id: string | null }[]) {
     if (r.organization_id) orgsWithTenancy.add(r.organization_id);
   }
+  const activeRentRailOrgIds = new Set<string>();
+  for (const r of (stripeRentRows ?? []) as Array<{
+    organization_id: string | null;
+    charges_enabled: boolean | null;
+  }>) {
+    if (r.organization_id && r.charges_enabled === true) {
+      activeRentRailOrgIds.add(r.organization_id);
+    }
+  }
+  for (const r of (rotessaRentRows ?? []) as Array<{
+    organization_id: string | null;
+    connection_status: string | null;
+  }>) {
+    if (r.organization_id && r.connection_status === "connected") {
+      activeRentRailOrgIds.add(r.organization_id);
+    }
+  }
+  const orgHasActiveRentRail = (orgId: string): boolean =>
+    activeRentRailOrgIds.has(orgId);
   const firstAddress = new Map<string, string>();
   for (const r of (propRows ?? []) as { organization_id: string | null; address: string | null }[]) {
     if (r.organization_id && r.address && !firstAddress.has(r.organization_id)) {
@@ -142,7 +183,7 @@ export async function GET(req: NextRequest) {
         lastSentAtMs: org.landlord_campaign_last_sent_at
           ? new Date(org.landlord_campaign_last_sent_at).getTime()
           : null,
-        hasRentCollection: hasEntitlement(org.plan, "rent_collection"),
+        hasRentCollection: orgHasActiveRentRail(org.id),
         hasTaxExport: hasEntitlement(org.plan, "tax_export"),
         hasListingMarketing: hasEntitlement(org.plan, "listing_marketing"),
       });

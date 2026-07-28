@@ -87,13 +87,20 @@ ok("disabled campaign gets nothing", nextRevealDue(inp({ enabled: false })) === 
 ok("converted (growth) org stops", nextRevealDue(inp({ plan: "growth" })) === null);
 ok("no-tenancy org gets nothing", nextRevealDue(inp({ hasTenancy: false })) === null);
 
-// --- skip-owned advances past a held feature -------------------------------
-// Org already has rent_collection. From step 1 at day 14, the resolved reveal
-// should skip rent_collection (index 1) and land on tax_export (index 2).
+// --- active rent rail advances past the free activation reveal --------------
+const rentCollectionActivation = nextRevealDue(
+  inp({ stepSent: 1, campaignStartMs: NOW - 7 * DAY, hasRentCollection: false }),
+);
+ok(
+  "free org without active rent rail gets rent_collection activation reveal",
+  rentCollectionActivation?.key === "rent_collection" && rentCollectionActivation?.index === 1,
+);
+// Org already has active rent_collection. From step 1 at day 14, the resolved
+// reveal should skip rent_collection (index 1) and land on tax_export (index 2).
 const owned = nextRevealDue(
   inp({ stepSent: 1, campaignStartMs: NOW - 14 * DAY, hasRentCollection: true }),
 );
-ok("skip-owned lands on tax_export (index 2)", owned?.key === "tax_export" && owned?.index === 2);
+ok("active rent rail skips to tax_export (index 2)", owned?.key === "tax_export" && owned?.index === 2);
 // If it also owns tax_export, it should skip to listing_marketing (index 3) at 21d.
 const owned2 = nextRevealDue(
   inp({ stepSent: 1, campaignStartMs: NOW - 21 * DAY, hasRentCollection: true, hasTaxExport: true }),
@@ -114,7 +121,16 @@ for (const key of REVEAL_KEYS) {
   if (c.body.includes("—") || c.subject.includes("—")) copyOk = false; // no em dash
 }
 ok("every reveal has complete copy, a relative href, and no em dashes", copyOk);
-ok("upgrade reveals point at billing", revealCopy("rent_collection").ctaPath === "/dashboard/billing");
+ok("rent collection activation points at Money", revealCopy("rent_collection").ctaPath === "/dashboard/money");
+ok(
+  "rent collection copy says included free",
+  revealCopy("rent_collection").body.includes("included free on your plan"),
+);
+ok(
+  "upgrade ask does not sell rent collection",
+  !revealCopy("upgrade_ask").body.includes("Growth adds automatic rent collection"),
+);
+ok("tax export reveal still points at billing", revealCopy("tax_export").ctaPath === "/dashboard/billing");
 ok("free rent-increase nudge points at the rent surface", revealCopy("rent_increase_confirm").ctaPath === "/dashboard/rent");
 
 // --- rent-confirm per-unit helper ------------------------------------------

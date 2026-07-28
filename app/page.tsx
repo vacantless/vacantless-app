@@ -177,7 +177,7 @@ function Hero() {
           </div>
           <p className="max-w-[34rem] text-[0.86rem] font-semibold leading-snug text-[#59655f]">
             <span className="text-[var(--color-accent-strong)]">Free to start</span> with one rental.
-            Automatic rent collection is part of Growth, set up when you and your
+            Automatic rent collection is included free, set up when you and your
             tenant are ready.
           </p>
         </div>
@@ -748,10 +748,10 @@ function RentSection() {
         <div className="mt-10 rounded-lg border border-[#d9e1dc] bg-white p-5 shadow-[0_12px_32px_rgba(28,43,36,0.08)] sm:p-6">
           <h3 className="text-[1.06rem] font-semibold">What it costs</h3>
           <p className="mt-2 max-w-[62rem] text-base leading-relaxed text-[#384a42]">
-            One flat plan, no matter how many units. The Growth plan is CA$99 a
-            month. Stripe adds about CA$5 per payment it pulls. Vacantless takes
-            no cut of your rent, and the more units you run, the less each one
-            costs.
+            Rent collection has no Vacantless platform fee. Stripe adds about
+            CA$5 per successful payment it pulls. Vacantless takes no cut of
+            your rent, and paid subscriptions are for the extra leasing,
+            screening, reporting, and operations tools.
           </p>
           <details className="mt-4 rounded-lg border border-[#d9e1dc] bg-[#fbfcfb]">
             <summary className="cursor-pointer list-none px-4 py-3 text-[0.9rem] font-bold text-[var(--color-primary)] [&::-webkit-details-marker]:hidden">
@@ -760,7 +760,7 @@ function RentSection() {
             <div className="border-t border-[#d9e1dc] px-1 pb-2">
               <div className="hidden px-4 py-3 text-[0.72rem] font-extrabold uppercase tracking-[0.06em] text-[#59655f] md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] md:gap-4">
                 <span>Your property</span>
-                <span>Stripe + Growth</span>
+                <span>Processor fee</span>
                 <span>Per month</span>
                 <span>Per unit</span>
               </div>
@@ -774,7 +774,7 @@ function RentSection() {
                   </strong>
                   <div className="text-[0.85rem] leading-snug text-[#59655f]">
                     <span className="mb-0.5 block text-[0.64rem] font-extrabold uppercase tracking-[0.05em] text-[#98938d] md:hidden">
-                      Stripe + Growth
+                      Processor fee
                     </span>
                     {r.breakdown}
                   </div>
@@ -818,8 +818,8 @@ const MONEY_LEAKS: string[] = [
 
 const RENT_STEPS: { title: string; body: string }[] = [
   {
-    title: "Choose the Growth plan",
-    body: "Automatic rent collection is included on Growth and Premium.",
+    title: "Start on Free",
+    body: "Automatic rent collection is included free, with processor fees passed through at cost.",
   },
   {
     title: "Add the tenancy",
@@ -851,39 +851,39 @@ const COST_ROWS: {
 }[] = [
   {
     property: "1 unit (condo or basement unit)",
-    breakdown: "CA$5 Stripe + CA$99 Growth",
-    perMonth: "CA$104",
-    perUnit: "CA$104.00 / unit",
+    breakdown: "CA$5 Stripe",
+    perMonth: "CA$5",
+    perUnit: "CA$5.00 / unit",
   },
   {
     property: "2 units (duplex)",
-    breakdown: "CA$10 Stripe + CA$99 Growth",
-    perMonth: "CA$109",
-    perUnit: "CA$54.50 / unit",
+    breakdown: "CA$10 Stripe",
+    perMonth: "CA$10",
+    perUnit: "CA$5.00 / unit",
   },
   {
     property: "3 units (triplex)",
-    breakdown: "CA$15 Stripe + CA$99 Growth",
-    perMonth: "CA$114",
-    perUnit: "CA$38.00 / unit",
+    breakdown: "CA$15 Stripe",
+    perMonth: "CA$15",
+    perUnit: "CA$5.00 / unit",
   },
   {
     property: "4 units (fourplex)",
-    breakdown: "CA$20 Stripe + CA$99 Growth",
-    perMonth: "CA$119",
-    perUnit: "CA$29.75 / unit",
+    breakdown: "CA$20 Stripe",
+    perMonth: "CA$20",
+    perUnit: "CA$5.00 / unit",
   },
   {
     property: "5 units (fiveplex)",
-    breakdown: "CA$25 Stripe + CA$99 Growth",
-    perMonth: "CA$124",
-    perUnit: "CA$24.80 / unit",
+    breakdown: "CA$25 Stripe",
+    perMonth: "CA$25",
+    perUnit: "CA$5.00 / unit",
   },
   {
     property: "20 units (small portfolio)",
-    breakdown: "CA$100 Stripe + CA$99 Growth",
-    perMonth: "CA$199",
-    perUnit: "CA$9.95 / unit",
+    breakdown: "CA$100 Stripe",
+    perMonth: "CA$100",
+    perUnit: "CA$5.00 / unit",
   },
 ];
 
@@ -900,9 +900,10 @@ function Pricing() {
   return (
     <section id="pricing" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Three plans. Rent collection starts on Growth.">
-          Start free to fill a vacancy. Move to Growth when you want to collect
-          rent automatically. Premium adds your books, repairs, and reminders.
+        <SectionHead title="Three plans. Rent collection is free.">
+          Start free to fill a vacancy and collect rent automatically. Move to
+          Growth for screening, unlimited listings, and tenant management.
+          Premium adds your books, repairs, and reminders.
         </SectionHead>
         <div className="grid gap-4 lg:grid-cols-3">
           {PLANS.map((p) => (
@@ -991,10 +992,11 @@ const PLANS: {
     name: "Free",
     price: "CA$0",
     priceNote: "/ month",
-    body: "Fill one vacancy at a time. Post the page, collect inquiries, and book viewings. No card needed.",
+    body: "Fill one vacancy at a time, collect inquiries, book viewings, and set up automatic rent collection. No card needed.",
     includes: [
       "One live rental page",
       "Inquiries and viewing bookings in one list",
+      "Automatic rent collection via Stripe or Rotessa",
       "Email replies and reminders (no texting)",
     ],
     cta: "Start free",
@@ -1004,10 +1006,9 @@ const PLANS: {
     name: "Growth",
     price: "CA$99",
     priceNote: "/ month",
-    body: "The plan for a landlord who wants to stop chasing rent. Everything in Free, plus automatic rent collection and full tenant management.",
+    body: "The plan for a landlord who wants the full leasing and tenant-management workflow. Everything in Free, plus screening, unlimited listings, and deeper follow-up.",
     includes: [
       "Unlimited live rentals",
-      "Automatic rent collection via Stripe (Rotessa coming)",
       "Tenant records and rent ledger",
       "Rental applications and applicant tracking",
       "Email replies and reminders",
@@ -1087,8 +1088,8 @@ function ClosingCta() {
             Ready to run your rentals in one place?
           </h2>
           <p className="mt-2.5 max-w-[42ch] text-[#cfe0d8]">
-            Start free with one rental. Add automatic rent collection on Growth
-            when you and your tenant are ready.
+            Start free with one rental. Add automatic rent collection whenever
+            you and your tenant are ready.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
