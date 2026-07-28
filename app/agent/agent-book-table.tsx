@@ -76,11 +76,8 @@ function FlagChips({ row }: { row: AgentBookRow }) {
       label: "Ready — not live",
       className: "bg-blue-50 text-blue-700 border-blue-200",
     });
-  if (row.flags.rentUnconfirmed)
-    chips.push({
-      label: "Confirm rent",
-      className: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    });
+  // "Confirm rent" is surfaced as the actionable Confirm rent -> button in the
+  // row (ConfirmRentButton), so it is intentionally NOT duplicated as a chip.
   if (row.flags.photosMissing)
     chips.push({
       label: "No photos",

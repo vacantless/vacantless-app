@@ -9,6 +9,7 @@ import {
 } from "@/lib/agent-book";
 import { type TenancyLifecycleStatus } from "@/lib/rental-lifecycle";
 import { AgentBookTable } from "./agent-book-table";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -222,8 +223,16 @@ export default async function AgentBookPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <div className="mb-4">
+        <Link
+          href="/dashboard"
+          className="text-sm font-medium text-gray-500 transition hover:text-gray-700"
+        >
+          &larr; Back to dashboard
+        </Link>
+      </div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Agent book</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">My Portfolio</h1>
         <p className="mt-1 text-sm text-gray-500">
           Every active lease-up across all of your clients, in one place. Sorted
           by which unit needs you most.
