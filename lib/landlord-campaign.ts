@@ -178,6 +178,7 @@ export type RentConfirmCampaignTenancy = {
 };
 
 export type RentConfirmCampaignUnit = {
+  tenancyId: string;
   address: string;
   rentCents: number | null;
   confirmUrl: string;
@@ -191,10 +192,84 @@ export function buildRentConfirmUnits(input: {
   return input.tenancies
     .filter((tenancy) => !input.confirmedTenancyIds.has(tenancy.id))
     .map((tenancy) => ({
+      tenancyId: tenancy.id,
       address: tenancy.address?.trim() || "your unit",
       rentCents: tenancy.rentCents,
       confirmUrl: input.urlFor(tenancy.confirmToken),
     }));
+}
+
+export type RentConfirmAnniversaryCandidate = RentConfirmCampaignUnit & {
+  rentIncrease: {
+    status: string;
+    earliestEffectiveDate: string;
+    effectiveDate: string;
+    serveByDate: string;
+    guidelinePercent: number | null;
+    currentRentCents: number;
+    newRentCents: number | null;
+    increaseCents: number | null;
+    note: string;
+  } | null;
+};
+
+export type RentConfirmAnniversaryHero = RentConfirmCampaignUnit & {
+  rentIncrease: NonNullable<RentConfirmAnniversaryCandidate["rentIncrease"]>;
+};
+
+export function selectAnniversaryHero(
+  candidates: RentConfirmAnniversaryCandidate[],
+): RentConfirmAnniversaryHero | null {
+  const actionable = candidates
+    .filter((unit) => {
+      const status = unit.rentIncrease?.status;
+      return (
+        unit.rentIncrease != null &&
+        unit.rentIncrease.newRentCents != null &&
+        (status === "overdue" || status === "serve_late" || status === "serve_window")
+      );
+    })
+    .sort((a, b) => {
+      const urgency: Record<string, number> = {
+        overdue: 0,
+        serve_late: 1,
+        serve_window: 2,
+      };
+      const aResult = a.rentIncrease!;
+      const bResult = b.rentIncrease!;
+      return (
+        (urgency[aResult.status] ?? 9) -
+          (urgency[bResult.status] ?? 9) ||
+        aResult.earliestEffectiveDate.localeCompare(bResult.earliestEffectiveDate)
+      );
+    });
+
+  const hero = actionable[0];
+  if (!hero?.rentIncrease) return null;
+  return {
+    tenancyId: hero.tenancyId,
+    address: hero.address,
+    rentCents: hero.rentCents,
+    confirmUrl: hero.confirmUrl,
+    rentIncrease: hero.rentIncrease,
+  };
+}
+
+export function buildAnniversaryRentConfirmPlan(
+  candidates: RentConfirmAnniversaryCandidate[],
+): { hero: RentConfirmAnniversaryHero | null; others: RentConfirmCampaignUnit[] } {
+  const hero = selectAnniversaryHero(candidates);
+  return {
+    hero,
+    others: candidates
+      .filter((unit) => !hero || unit.tenancyId !== hero.tenancyId)
+      .map((unit) => ({
+        tenancyId: unit.tenancyId,
+        address: unit.address,
+        rentCents: unit.rentCents,
+        confirmUrl: unit.confirmUrl,
+      })),
+  };
 }
 
 const BILLING = "/dashboard/billing";

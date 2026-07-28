@@ -2259,9 +2259,23 @@ export async function sendTradeDispatchInvite(
 // ---------------------------------------------------------------------------
 
 export type LandlordRentConfirmEmailUnit = {
+  tenancyId?: string;
   address: string;
   rentCents: number | null;
   confirmUrl: string;
+};
+
+export type LandlordRentIncreaseHero = LandlordRentConfirmEmailUnit & {
+  rentIncrease: {
+    status: string;
+    effectiveDate: string;
+    serveByDate: string;
+    guidelinePercent: number | null;
+    currentRentCents: number;
+    newRentCents: number | null;
+    increaseCents: number | null;
+    note: string;
+  };
 };
 
 export type LandlordRentConfirmEmailPayload = {
@@ -2332,18 +2346,128 @@ export function renderLandlordRentConfirmEmail(
   return { subject, html, text };
 }
 
+export function renderLandlordAnniversaryRentConfirmEmail(
+  p: LandlordRentConfirmEmailPayload & {
+    hero: LandlordRentIncreaseHero;
+  },
+): { subject: string; html: string; text: string } {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Vacantless");
+  const hero = p.hero;
+  const result = hero.rentIncrease;
+  const currentRent = formatRent(result.currentRentCents) ?? "Current rent";
+  const newRent = formatRent(result.newRentCents) ?? "New rent";
+  const increase = formatRent(result.increaseCents);
+  const guideline =
+    result.guidelinePercent != null
+      ? `${result.guidelinePercent}% guideline`
+      : "published guideline";
+  const subject =
+    result.status === "overdue"
+      ? `Rent increase overdue for ${hero.address}`
+      : result.status === "serve_late"
+        ? `Serve now for ${hero.address}`
+        : `Prepare the rent increase for ${hero.address}`;
+  const statusLine =
+    result.status === "overdue"
+      ? "This increase window is overdue. Confirm the rent, then prepare the notice."
+      : result.status === "serve_late"
+        ? "You can still serve the notice, but the effective date moves forward."
+        : "You are in the serve window. Confirm the rent and prepare the notice.";
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(
+        p.logo_url,
+      )}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const heroUrl = escapeHtml(hero.confirmUrl);
+  const secondary = p.units
+    .map((unit) => {
+      const address = escapeHtml(unit.address);
+      const rent = formatRent(unit.rentCents);
+      const rentChip = rent ? escapeHtml(rent) : "Rent not set";
+      const url = escapeHtml(unit.confirmUrl);
+      return `<div style="margin:0 0 12px;padding:14px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 8px;font-size:14px;"><strong>${address}</strong></p>
+        <p style="margin:0 0 12px;color:#52525b;font-size:13px;">${rentChip}</p>
+        <a href="${url}" style="display:inline-block;background:#ffffff;color:${escapeHtml(
+          brand,
+        )};text-decoration:none;padding:9px 15px;border-radius:999px;font-size:13px;font-weight:700;border:1px solid ${escapeHtml(
+          brand,
+        )};">Confirm</a>
+      </div>`;
+    })
+    .join("");
+
+  const textLines = [
+    subject,
+    "",
+    `${hero.address}: ${statusLine}`,
+    `${currentRent} -> ${newRent}`,
+    increase ? `Increase: ${increase}` : null,
+    `Effective date: ${result.effectiveDate}`,
+    `Serve by: ${result.serveByDate}`,
+    `Based on the ${guideline}.`,
+    `Confirm and prepare the increase: ${hero.confirmUrl}`,
+  ].filter((line): line is string => line != null);
+  if (p.units.length > 0) {
+    textLines.push("", "Other active units to confirm:");
+    for (const unit of p.units) {
+      textLines.push(`- ${unit.address}: ${unit.confirmUrl}`);
+    }
+  }
+
+  const html = `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">${escapeHtml(statusLine)}</p>
+      <div style="margin:0 0 18px;padding:18px;border-radius:12px;background:#eef8f4;border:1px solid #b7dccf;">
+        <p style="margin:0 0 8px;font-size:16px;"><strong>${escapeHtml(hero.address)}</strong></p>
+        <p style="margin:0 0 12px;color:#17362f;font-weight:700;">${escapeHtml(currentRent)} &rarr; ${escapeHtml(newRent)}</p>
+        <p style="margin:0 0 6px;color:#3f3f46;">Effective date: <strong>${escapeHtml(result.effectiveDate)}</strong></p>
+        <p style="margin:0 0 6px;color:#3f3f46;">Serve by: <strong>${escapeHtml(result.serveByDate)}</strong></p>
+        <p style="margin:0 0 16px;color:#52525b;font-size:13px;">Based on the ${escapeHtml(guideline)}.${increase ? ` Estimated increase: ${escapeHtml(increase)}.` : ""}</p>
+        <a href="${heroUrl}" style="display:inline-block;background:#17362f;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:700;">Confirm &amp; prepare the increase</a>
+        <p style="margin:12px 0 0;font-size:12px;color:#71717a;word-break:break-all;">${heroUrl}</p>
+      </div>
+      ${
+        p.units.length > 0
+          ? `<p style="margin:0 0 12px;font-weight:700;color:#27272a;">Other active units</p>${secondary}`
+          : ""
+      }
+      <p style="margin:20px 0 0;color:#52525b;font-size:13px;">This keeps your rent increase calendar and N1 notice draft accurate.</p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      Sent by ${org} via Vacantless.
+    </div>
+  </div>
+</body></html>`;
+
+  return { subject, html, text: textLines.join("\n") };
+}
+
 export async function sendLandlordRentConfirmEmail(
   p: LandlordRentConfirmEmailPayload & {
     to_email: string;
     reply_to_email: string | null;
+    hero?: LandlordRentIncreaseHero | null;
   },
 ): Promise<SendResult> {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) return { sent: false, reason: "no_api_key" };
   if (!p.to_email) return { sent: false, reason: "no_recipient" };
-  if (p.units.length === 0) return { sent: false, reason: "no_units" };
+  if (p.units.length === 0 && !p.hero) return { sent: false, reason: "no_units" };
 
-  const rendered = renderLandlordRentConfirmEmail(p);
+  const rendered = p.hero
+    ? renderLandlordAnniversaryRentConfirmEmail({
+        org_name: p.org_name,
+        brand_color: p.brand_color,
+        logo_url: p.logo_url,
+        units: p.units,
+        hero: p.hero,
+      })
+    : renderLandlordRentConfirmEmail(p);
   const body = {
     sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
     to: [{ email: p.to_email }],

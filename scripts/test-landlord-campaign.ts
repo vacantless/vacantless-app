@@ -1,6 +1,7 @@
 // Unit tests for the landlord feature-reveal campaign (Tier 1 C).
 // Run: npx tsx scripts/test-landlord-campaign.ts
 import {
+  buildAnniversaryRentConfirmPlan,
   buildRentConfirmUnits,
   nextRevealDue,
   revealCopy,
@@ -13,7 +14,10 @@ import {
   CAMPAIGN_MAX_AGE_DAYS,
   type LandlordRevealInput,
 } from "../lib/landlord-campaign";
-import { renderLandlordRentConfirmEmail } from "../lib/email";
+import {
+  renderLandlordAnniversaryRentConfirmEmail,
+  renderLandlordRentConfirmEmail,
+} from "../lib/email";
 
 let passed = 0;
 let failed = 0;
@@ -167,6 +171,7 @@ ok(
 ok(
   "rent-confirm helper preserves rent cents and builds URLs",
   rentConfirmUnits[0]?.rentCents === 199500 &&
+    rentConfirmUnits[0]?.tenancyId === "tenancy-1" &&
     rentConfirmUnits[0]?.confirmUrl ===
       "https://app.vacantless.com/confirm-rent/token-1",
 );
@@ -231,6 +236,114 @@ ok(
   brandedRentConfirm.text.includes("token-1") &&
     brandedRentConfirm.text.includes("token-3"),
 );
+
+// --- anniversary hero selection + renderer ---------------------------------
+function increase(over: Partial<NonNullable<ReturnType<typeof buildAnniversaryRentConfirmPlan>["hero"]>["rentIncrease"]> = {}) {
+  return {
+    status: "serve_window",
+    earliestEffectiveDate: "2026-10-01",
+    effectiveDate: "2026-10-01",
+    serveByDate: "2026-07-03",
+    guidelinePercent: 2.1,
+    currentRentCents: 200000,
+    newRentCents: 204200,
+    increaseCents: 4200,
+    note: "Serve the N1 now for a 2026-10-01 increase at the 2.1% guideline.",
+    ...over,
+  };
+}
+
+const anniversaryPlan = buildAnniversaryRentConfirmPlan([
+  {
+    tenancyId: "tenancy-window",
+    address: "Window Unit",
+    rentCents: 200000,
+    confirmUrl: "https://app.vacantless.com/confirm-rent/window",
+    rentIncrease: increase({ status: "serve_window", earliestEffectiveDate: "2026-10-01" }),
+  },
+  {
+    tenancyId: "tenancy-overdue",
+    address: "Overdue Unit",
+    rentCents: 210000,
+    confirmUrl: "https://app.vacantless.com/confirm-rent/overdue",
+    rentIncrease: increase({
+      status: "overdue",
+      earliestEffectiveDate: "2026-09-01",
+      effectiveDate: "2026-11-01",
+      serveByDate: "2026-08-03",
+    }),
+  },
+  {
+    tenancyId: "tenancy-scheduled",
+    address: "Scheduled Unit",
+    rentCents: 220000,
+    confirmUrl: "https://app.vacantless.com/confirm-rent/scheduled",
+    rentIncrease: increase({ status: "scheduled", earliestEffectiveDate: "2027-04-01" }),
+  },
+]);
+ok("anniversary plan picks the most urgent actionable hero", anniversaryPlan.hero?.tenancyId === "tenancy-overdue");
+ok(
+  "anniversary plan excludes the hero from secondary units",
+  anniversaryPlan.others.length === 2 &&
+    anniversaryPlan.others.every((unit) => unit.tenancyId !== "tenancy-overdue"),
+);
+
+const anniversaryTie = buildAnniversaryRentConfirmPlan([
+  {
+    tenancyId: "late-second",
+    address: "Late Second",
+    rentCents: 200000,
+    confirmUrl: "https://app.vacantless.com/confirm-rent/late-second",
+    rentIncrease: increase({ status: "serve_late", earliestEffectiveDate: "2026-12-01" }),
+  },
+  {
+    tenancyId: "late-first",
+    address: "Late First",
+    rentCents: 200000,
+    confirmUrl: "https://app.vacantless.com/confirm-rent/late-first",
+    rentIncrease: increase({ status: "serve_late", earliestEffectiveDate: "2026-11-01" }),
+  },
+]);
+ok("anniversary tie-break uses earliest effective date", anniversaryTie.hero?.tenancyId === "late-first");
+
+const noAnniversaryHero = buildAnniversaryRentConfirmPlan([
+  {
+    tenancyId: "missing-guideline",
+    address: "Missing Guideline",
+    rentCents: 200000,
+    confirmUrl: "https://app.vacantless.com/confirm-rent/missing",
+    rentIncrease: increase({ status: "overdue", newRentCents: null, increaseCents: null }),
+  },
+]);
+ok("anniversary plan falls back when math is incomplete", noAnniversaryHero.hero === null);
+
+const anniversaryEmail = renderLandlordAnniversaryRentConfirmEmail({
+  org_name: "Agile Rentals",
+  brand_color: "#17362f",
+  logo_url: null,
+  hero: anniversaryPlan.hero!,
+  units: anniversaryPlan.others,
+});
+ok("anniversary email subject names the hero", anniversaryEmail.subject.includes("Overdue Unit"));
+ok(
+  "anniversary email renders hero CTA and secondary confirm pills",
+  anniversaryEmail.html.includes("Confirm &amp; prepare the increase") &&
+    (anniversaryEmail.html.match(/>Confirm</g) ?? []).length === 2,
+);
+ok(
+  "anniversary email includes rent math and dates",
+  anniversaryEmail.html.includes("$2,000/month") &&
+    anniversaryEmail.html.includes("$2,042/month") &&
+    anniversaryEmail.html.includes("2026-11-01") &&
+    anniversaryEmail.html.includes("2026-08-03"),
+);
+ok(
+  "anniversary email text includes all public links",
+  anniversaryEmail.text.includes("/confirm-rent/overdue") &&
+    anniversaryEmail.text.includes("/confirm-rent/window") &&
+    anniversaryEmail.text.includes("/confirm-rent/scheduled"),
+);
+ok("anniversary customer copy has no em dash", !anniversaryEmail.subject.includes("—") && !anniversaryEmail.html.includes("—") && !anniversaryEmail.text.includes("—"));
 
 // --- recipient routing: landlord email only, never the org member ----------
 ok("recipient resolves a valid landlord email (lowercased)", resolveLandlordCampaignRecipient("David@Example.com ") === "david@example.com");
