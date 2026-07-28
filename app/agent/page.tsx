@@ -9,6 +9,9 @@ import {
 } from "@/lib/agent-book";
 import { type TenancyLifecycleStatus } from "@/lib/rental-lifecycle";
 import { AgentBookTable } from "./agent-book-table";
+import { quickOnboardLandlordLeaseFromForm } from "./agent-actions";
+import { QUICK_ONBOARD_FIRST_TOUCH_EVENT } from "@/lib/quick-onboard";
+import { rentConfirmUrl } from "@/lib/rent-confirm-public";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +40,195 @@ const TENANCY_RANK: Record<TenancyLifecycleStatus, number> = {
   ended: 1,
 };
 
-export default async function AgentBookPage() {
+type AgentSearchParams = {
+  quick_onboard?: string;
+  reason?: string;
+  created_org?: string;
+  tenancy?: string;
+};
+
+type QuickOnboardReadback = {
+  address: string | null;
+  confirmUrl: string;
+  draftSubject: string | null;
+  draftStatus: string | null;
+  createdOrg: boolean;
+};
+
+function one<T>(rel: T | T[] | null | undefined): T | null {
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  return (rel as T) ?? null;
+}
+
+const QUICK_ONBOARD_ERRORS: Record<string, string> = {
+  landlord_name: "Add the landlord name.",
+  landlord_email: "Add one valid landlord email.",
+  property_address: "Add the rental address.",
+  occupancy_date: "Add the lease start date.",
+  rent: "Enter rent as a dollar amount, or leave it blank.",
+  forbidden: "Your role cannot add rentals and tenancies for that client.",
+  org_create: "The client account could not be created.",
+  org_update: "The client account could not be updated.",
+  property_create: "The rental could not be created.",
+  tenancy_create: "The tenancy could not be created.",
+  confirm_token: "The tenancy was created, but no rent-confirm link was returned.",
+  draft_create: "The first-touch draft could not be queued.",
+};
+
+async function loadQuickOnboardReadback(
+  supabase: ReturnType<typeof createClient>,
+  searchParams: AgentSearchParams,
+): Promise<QuickOnboardReadback | null> {
+  if (searchParams.quick_onboard !== "ok" || !searchParams.tenancy) return null;
+  const { data: tenancy } = await supabase
+    .from("tenancies")
+    .select("id, confirm_token, property:properties(address)")
+    .eq("id", searchParams.tenancy)
+    .maybeSingle();
+  const token = (tenancy as { confirm_token?: string | null } | null)?.confirm_token;
+  if (!token) return null;
+
+  const { data: draft } = await supabase
+    .from("pending_tenant_messages")
+    .select("subject, status")
+    .eq("tenancy_id", searchParams.tenancy)
+    .eq("event_key", QUICK_ONBOARD_FIRST_TOUCH_EVENT)
+    .maybeSingle();
+  const property = one<{ address: string | null }>(
+    (tenancy as { property?: { address: string | null } | { address: string | null }[] | null })?.property,
+  );
+  return {
+    address: property?.address ?? null,
+    confirmUrl: rentConfirmUrl(token),
+    draftSubject: (draft as { subject?: string | null } | null)?.subject ?? null,
+    draftStatus: (draft as { status?: string | null } | null)?.status ?? null,
+    createdOrg: searchParams.created_org === "1",
+  };
+}
+
+function QuickOnboardPanel({
+  error,
+  readback,
+}: {
+  error: string | null;
+  readback: QuickOnboardReadback | null;
+}) {
+  return (
+    <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">
+            Add a lease
+          </h2>
+        </div>
+        <Link
+          href="/dashboard/messages"
+          className="text-sm font-medium text-brand hover:underline"
+        >
+          Review drafts
+        </Link>
+      </div>
+
+      {error && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+
+      {readback && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          <p className="font-semibold">
+            {readback.createdOrg ? "New client added" : "Lease added to existing client"}
+            {readback.address ? `: ${readback.address}` : ""}
+          </p>
+          <p className="mt-1 break-all">
+            Rent-confirm link:{" "}
+            <a href={readback.confirmUrl} className="font-medium underline">
+              {readback.confirmUrl}
+            </a>
+          </p>
+          <p className="mt-1">
+            First-touch draft: {readback.draftSubject ?? "queued"}{" "}
+            {readback.draftStatus ? `(${readback.draftStatus})` : ""}
+          </p>
+        </div>
+      )}
+
+      <form action={quickOnboardLandlordLeaseFromForm} className="grid gap-3 md:grid-cols-2">
+        <label className="text-sm font-medium text-gray-700">
+          Landlord name
+          <input
+            name="landlord_name"
+            required
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            placeholder="David Harel"
+          />
+        </label>
+        <label className="text-sm font-medium text-gray-700">
+          Landlord email
+          <input
+            name="landlord_email"
+            type="email"
+            required
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            placeholder="landlord@example.com"
+          />
+        </label>
+        <label className="text-sm font-medium text-gray-700 md:col-span-2">
+          Rental address
+          <input
+            name="property_address"
+            required
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            placeholder="18 Shorncliffe Ave Unit 3"
+          />
+        </label>
+        <label className="text-sm font-medium text-gray-700">
+          Lease start date
+          <input
+            name="occupancy_date"
+            type="date"
+            required
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="text-sm font-medium text-gray-700">
+          Monthly rent
+          <input
+            name="rent"
+            inputMode="decimal"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            placeholder="Leave blank if unknown"
+          />
+        </label>
+        <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 md:col-span-2">
+          <input
+            name="marketing_consent"
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-gray-300"
+          />
+          <span>
+            I have consent to contact this landlord about brokerage and real-estate services.
+          </span>
+        </label>
+        <div className="md:col-span-2">
+          <button
+            type="submit"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand/90"
+          >
+            Add lease
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+export default async function AgentBookPage({
+  searchParams = {},
+}: {
+  searchParams?: AgentSearchParams;
+}) {
   if (!process.env.AGENT_BOOK_ENABLED) notFound();
 
   const supabase = createClient();
@@ -220,6 +411,15 @@ export default async function AgentBookPage() {
   });
 
   const rows = buildAgentBookRows({ orgs, units });
+  const quickOnboardReadback = await loadQuickOnboardReadback(
+    supabase,
+    searchParams,
+  );
+  const quickOnboardError =
+    searchParams.quick_onboard === "error"
+      ? QUICK_ONBOARD_ERRORS[searchParams.reason ?? ""] ??
+        "The lease could not be added."
+      : null;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -238,6 +438,10 @@ export default async function AgentBookPage() {
           by which unit needs you most.
         </p>
       </div>
+      <QuickOnboardPanel
+        error={quickOnboardError}
+        readback={quickOnboardReadback}
+      />
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
           No units yet. Once you manage units across one or more client accounts,
