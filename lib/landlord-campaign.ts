@@ -44,6 +44,30 @@ export const REVEAL_KEYS = [
 export type RevealKey = (typeof REVEAL_KEYS)[number];
 export const CAMPAIGN_STEPS = REVEAL_KEYS.length;
 
+/**
+ * Normalize a landlord campaign email: trim, lowercase, require a bare "@".
+ * Returns null for a blank / obviously-invalid address. Pure.
+ */
+export function normalizeCampaignEmail(
+  email: string | null | undefined,
+): string | null {
+  const t = (email ?? "").trim().toLowerCase();
+  return t && t.includes("@") ? t : null;
+}
+
+/**
+ * Resolve who the landlord feature-reveal campaign emails: the org's explicit
+ * landlord_campaign_email ONLY. The campaign is landlord-facing, and a
+ * proxy-onboarded org's member is the AGENT (not the landlord), so there is no
+ * safe member fallback — an org with no landlord email is skipped by the cron.
+ * Pure.
+ */
+export function resolveLandlordCampaignRecipient(
+  landlordEmail: string | null | undefined,
+): string | null {
+  return normalizeCampaignEmail(landlordEmail);
+}
+
 export type LandlordRevealInput = {
   /** Campaign start (org.created_at) in ms. Null => not eligible. */
   campaignStartMs: number | null;

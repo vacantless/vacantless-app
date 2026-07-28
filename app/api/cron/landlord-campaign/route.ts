@@ -4,14 +4,13 @@ import {
   sendLandlordRentConfirmEmail,
   sendNotificationEmail,
 } from "@/lib/email";
-import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
-import type { NotifyMember } from "@/lib/incident-reports";
 import { hasEntitlement } from "@/lib/billing";
 import { rentConfirmUrl } from "@/lib/rent-confirm-public";
 import {
   buildRentConfirmUnits,
   nextRevealDue,
   revealCopy,
+  resolveLandlordCampaignRecipient,
   CAMPAIGN_STEPS,
   CAMPAIGN_MAX_AGE_DAYS,
 } from "@/lib/landlord-campaign";
@@ -79,7 +78,7 @@ export async function GET(req: NextRequest) {
   const { data: orgData, error: orgErr } = await admin
     .from("organizations")
     .select(
-      "id, name, brand_color, logo_url, reply_to_email, public_contact_email, plan, created_at, landlord_campaign_step_sent, landlord_campaign_last_sent_at, landlord_campaign_opted_out",
+      "id, name, brand_color, logo_url, reply_to_email, public_contact_email, plan, created_at, landlord_campaign_step_sent, landlord_campaign_last_sent_at, landlord_campaign_opted_out, landlord_campaign_email",
     )
     .eq("plan", "free")
     .eq("landlord_campaign_opted_out", false)
@@ -104,6 +103,7 @@ export async function GET(req: NextRequest) {
     created_at: string | null;
     landlord_campaign_step_sent: number | null;
     landlord_campaign_last_sent_at: string | null;
+    landlord_campaign_email: string | null;
   }>;
   const summary: Summary = { ok: true, scanned: orgs.length, sent: 0, skipped: 0, errors: 0, details: [] };
 
@@ -152,25 +152,16 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Resolve the operator recipient: org members' login emails first, then
-      // the org's reply-to / public contact (same resolver as new-lead alerts).
-      const { data: memberRows } = await admin
-        .from("memberships")
-        .select("user_id, role")
-        .eq("organization_id", org.id);
-      const members: NotifyMember[] = [];
-      for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
-        const { data: u } = await admin.auth.admin.getUserById(m.user_id);
-        members.push({ role: m.role, email: u?.user?.email ?? null });
-      }
-      const recipients = resolveLeadNotifyEmailsPreferMemberFallback(members, [
-        org.reply_to_email,
-        org.public_contact_email,
-      ]);
-      const to = recipients[0] ?? null;
+      // Route to the LANDLORD, never the org member. A proxy-onboarded org's
+      // sole member is the AGENT (e.g. Noam), so the old member-first fallback
+      // emailed the wrong person. Require an explicit landlord email; if it is
+      // not set, skip the org this run WITHOUT stamping, so the sequence
+      // resumes once the landlord email is filled in. This is the gate that
+      // makes a LANDLORD_CAMPAIGN_ENABLED flip safe.
+      const to = resolveLandlordCampaignRecipient(org.landlord_campaign_email);
       if (!to) {
         summary.skipped++;
-        summary.details.push({ org: org.id, skipped: "no_recipient", reveal: due.key });
+        summary.details.push({ org: org.id, skipped: "no_landlord_email", reveal: due.key });
         continue;
       }
 

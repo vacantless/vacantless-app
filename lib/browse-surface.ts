@@ -7,9 +7,15 @@ import {
   listingFeedReadiness,
   type FeedListingInput,
 } from "./listing-feed";
+import {
+  publicAddressLabel,
+  type AddressDisplayMode,
+} from "./address-privacy";
 import { buildSpecLine, formatAvailability } from "./property-features";
 
-export type BrowseListing = FeedListingInput;
+export type BrowseListing = FeedListingInput & {
+  address_display_mode?: AddressDisplayMode | null;
+};
 
 export type BrowseProvider = {
   org: {
@@ -138,6 +144,13 @@ export function buildBrowseIndex(
       const parsedCity = parseCityFromAddress(address);
       const city = parsedCity ?? ONTARIO_GROUP;
       const slug = citySlug(city);
+      // Portal syndication feeds still use the full address; this masks only the
+      // Vacantless-hosted public browse cards.
+      const displayAddress = publicAddressLabel({
+        address,
+        city: parsedCity,
+        mode: listing.address_display_mode,
+      });
       const group =
         groups.get(city) ??
         {
@@ -148,7 +161,7 @@ export function buildBrowseIndex(
 
       group.listings.push({
         id: listing.id,
-        address,
+        address: displayAddress,
         rentCents: normalizeRentCents(listing.rent_cents),
         specLine: buildSpecLine({
           ...listing,

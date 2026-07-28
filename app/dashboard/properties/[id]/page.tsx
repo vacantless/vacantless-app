@@ -216,6 +216,7 @@ import {
   scanExpensePrefillFromQuery,
 } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
+import type { AddressDisplayMode } from "@/lib/address-privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -235,6 +236,7 @@ type Property = {
   id: string;
   organization_id: string;
   address: string;
+  address_display_mode: AddressDisplayMode;
   rent_cents: number | null;
   beds: number | null;
   baths: number | null;
@@ -362,7 +364,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -2253,6 +2255,28 @@ export default async function PropertyDetailPage({
             ))}
           </ul>
         </details>
+        <div className="border-t border-gray-100 pt-4">
+          <label
+            htmlFor="address_display_mode"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
+            Public address display
+          </label>
+          <select
+            id="address_display_mode"
+            name="address_display_mode"
+            defaultValue={p.address_display_mode ?? "full"}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm sm:w-72"
+          >
+            <option value="full">Full address</option>
+            <option value="hide_unit">Hide unit number</option>
+            <option value="approximate">Approximate (street + city only)</option>
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Rental portals (Kijiji, Rentals.ca, Zumper) still receive the full
+            address, which they require to post.
+          </p>
+        </div>
         </section>
 
         {marketRentEnabled && (

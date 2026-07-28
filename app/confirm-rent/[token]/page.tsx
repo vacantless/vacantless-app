@@ -15,6 +15,7 @@ type RentConfirmContext = {
   current_effective_date?: string | null;
   primary_tenant_name?: string | null;
   already_confirmed?: boolean;
+  has_baseline?: boolean;
 };
 
 function asContext(value: unknown): RentConfirmContext | null {
@@ -123,9 +124,15 @@ export default async function ConfirmRentPage({
   const invalid = searchParams.status === "invalid";
   const errored = searchParams.status === "error";
   const alreadyConfirmed = context.already_confirmed === true;
+  const hasBaseline =
+    typeof context.has_baseline === "boolean"
+      ? context.has_baseline
+      : context.current_rent_cents != null && context.current_rent_cents > 0;
   const unit = context.unit_address?.trim() || "Your unit";
   const tenantName = context.primary_tenant_name?.trim();
-  const currentRent = formatRent(context.current_rent_cents);
+  const currentRent = hasBaseline
+    ? formatRent(context.current_rent_cents)
+    : "No rent on file yet";
 
   return (
     <Shell>
@@ -180,65 +187,117 @@ export default async function ConfirmRentPage({
           />
         ) : (
           <section className="space-y-3">
-            <p className="text-sm text-gray-600">
-              Please confirm the rent the tenant pays today. This keeps the
-              rent-increase math from using an old lease amount.
-            </p>
+            {hasBaseline ? (
+              <>
+                <p className="text-sm text-gray-600">
+                  Please confirm the rent the tenant pays today. This keeps the
+                  rent-increase math from using an old lease amount.
+                </p>
 
-            <form action={confirmRentFromToken}>
-              <input type="hidden" name="token" value={token} />
-              <input type="hidden" name="status" value="unchanged" />
-              <button
-                type="submit"
-                className="w-full rounded-2xl px-4 py-4 text-base font-semibold text-white shadow-sm transition hover:opacity-95"
-                style={{ backgroundColor: "#17362f" }}
-              >
-                Still the same
-              </button>
-            </form>
+                <form action={confirmRentFromToken}>
+                  <input type="hidden" name="token" value={token} />
+                  <input type="hidden" name="status" value="unchanged" />
+                  <button
+                    type="submit"
+                    className="w-full rounded-2xl px-4 py-4 text-base font-semibold text-white shadow-sm transition hover:opacity-95"
+                    style={{ backgroundColor: "#17362f" }}
+                  >
+                    Still the same
+                  </button>
+                </form>
 
-            <details className="group rounded-2xl border border-gray-200 bg-white">
-              <summary className="cursor-pointer list-none rounded-2xl px-4 py-4 text-center text-base font-semibold text-[#17362f] outline-none transition hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-                It changed
-              </summary>
-              <form action={confirmRentFromToken} className="space-y-4 border-t border-gray-100 p-4">
-                <input type="hidden" name="token" value={token} />
-                <input type="hidden" name="status" value="changed" />
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Current monthly rent ($)
-                  </label>
-                  <input
-                    type="number"
-                    name="current_rent"
-                    step="0.01"
-                    min="0"
-                    required
-                    defaultValue={dollarsValue(context.current_rent_cents)}
-                    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-base"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
-                    Date this rent started
-                  </label>
-                  <input
-                    type="date"
-                    name="current_rent_effective_date"
-                    required
-                    defaultValue={context.current_effective_date ?? ""}
-                    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-base"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full rounded-2xl px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:opacity-95"
-                  style={{ backgroundColor: "#17362f" }}
+                <details className="group rounded-2xl border border-gray-200 bg-white">
+                  <summary className="cursor-pointer list-none rounded-2xl px-4 py-4 text-center text-base font-semibold text-[#17362f] outline-none transition hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                    It changed
+                  </summary>
+                  <form action={confirmRentFromToken} className="space-y-4 border-t border-gray-100 p-4">
+                    <input type="hidden" name="token" value={token} />
+                    <input type="hidden" name="status" value="changed" />
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Current monthly rent ($)
+                      </label>
+                      <input
+                        type="number"
+                        name="current_rent"
+                        step="0.01"
+                        min="0"
+                        required
+                        defaultValue={dollarsValue(context.current_rent_cents)}
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-base"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Date this rent started
+                      </label>
+                      <input
+                        type="date"
+                        name="current_rent_effective_date"
+                        required
+                        defaultValue={context.current_effective_date ?? ""}
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 text-base"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full rounded-2xl px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:opacity-95"
+                      style={{ backgroundColor: "#17362f" }}
+                    >
+                      Confirm updated rent
+                    </button>
+                  </form>
+                </details>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600">
+                  We do not have a rent on file for this unit yet. Enter the
+                  current rent so Vacantless can track your rent increase
+                  timing.
+                </p>
+
+                <form
+                  action={confirmRentFromToken}
+                  className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4"
                 >
-                  Confirm updated rent
-                </button>
-              </form>
-            </details>
+                  <input type="hidden" name="token" value={token} />
+                  <input type="hidden" name="status" value="set" />
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Current monthly rent ($)
+                    </label>
+                    <input
+                      type="number"
+                      name="current_rent"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-base"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Date this rent started
+                    </label>
+                    <input
+                      type="date"
+                      name="current_rent_effective_date"
+                      required
+                      defaultValue={context.current_effective_date ?? ""}
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-base"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full rounded-2xl px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:opacity-95"
+                    style={{ backgroundColor: "#17362f" }}
+                  >
+                    Confirm your rent
+                  </button>
+                </form>
+              </>
+            )}
           </section>
         )}
       </div>
