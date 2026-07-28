@@ -1,10 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendNotificationEmail } from "@/lib/email";
+import {
+  sendLandlordRentConfirmEmail,
+  sendNotificationEmail,
+} from "@/lib/email";
 import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import { hasEntitlement } from "@/lib/billing";
+import { rentConfirmUrl } from "@/lib/rent-confirm-public";
 import {
+  buildRentConfirmUnits,
   nextRevealDue,
   revealCopy,
   CAMPAIGN_STEPS,
@@ -166,6 +171,164 @@ export async function GET(req: NextRequest) {
       if (!to) {
         summary.skipped++;
         summary.details.push({ org: org.id, skipped: "no_recipient", reveal: due.key });
+        continue;
+      }
+
+      if (due.key === "rent_increase_confirm") {
+        const { data: rentConfirmRows, error: rentConfirmErr } = await admin
+          .from("tenancies")
+          .select("id, property_id, rent_cents, confirm_token")
+          .eq("organization_id", org.id)
+          .eq("status", "active");
+
+        if (rentConfirmErr) {
+          summary.errors++;
+          summary.details.push({
+            org: org.id,
+            reveal: due.key,
+            error: `rent_confirm_tenancies_failed:${rentConfirmErr.message}`,
+          });
+          continue;
+        }
+
+        const rawTenancies = (rentConfirmRows ?? []) as Array<{
+          id: string | null;
+          property_id: string | null;
+          rent_cents: number | null;
+          confirm_token: string | null;
+        }>;
+        const tenancyIds = rawTenancies.flatMap((row) => (row.id ? [row.id] : []));
+        const propertyIds = Array.from(
+          new Set(rawTenancies.flatMap((row) => (row.property_id ? [row.property_id] : []))),
+        );
+        const addressByPropertyId = new Map<string, string | null>();
+        if (propertyIds.length > 0) {
+          const { data: addressRows, error: addressErr } = await admin
+            .from("properties")
+            .select("id, address")
+            .eq("organization_id", org.id)
+            .in("id", propertyIds);
+          if (addressErr) {
+            summary.errors++;
+            summary.details.push({
+              org: org.id,
+              reveal: due.key,
+              error: `rent_confirm_properties_failed:${addressErr.message}`,
+            });
+            continue;
+          }
+          for (const row of (addressRows ?? []) as Array<{
+            id: string | null;
+            address: string | null;
+          }>) {
+            if (row.id) addressByPropertyId.set(row.id, row.address);
+          }
+        }
+
+        const confirmedTenancyIds = new Set<string>();
+        if (tenancyIds.length > 0) {
+          const { data: confirmedRows, error: confirmedErr } = await admin
+            .from("tenancy_rent_adjustments")
+            .select("tenancy_id")
+            .eq("organization_id", org.id)
+            .eq("source", "landlord_confirm")
+            .in("tenancy_id", tenancyIds);
+          if (confirmedErr) {
+            summary.errors++;
+            summary.details.push({
+              org: org.id,
+              reveal: due.key,
+              error: `rent_confirm_ledger_failed:${confirmedErr.message}`,
+            });
+            continue;
+          }
+          for (const row of (confirmedRows ?? []) as { tenancy_id: string | null }[]) {
+            if (row.tenancy_id) confirmedTenancyIds.add(row.tenancy_id);
+          }
+        }
+
+        const units = buildRentConfirmUnits({
+          tenancies: rawTenancies.flatMap((row) =>
+            row.id && row.confirm_token
+              ? [
+                  {
+                    id: row.id,
+                    address: row.property_id
+                      ? addressByPropertyId.get(row.property_id) ?? null
+                      : null,
+                    rentCents: row.rent_cents,
+                    confirmToken: row.confirm_token,
+                  },
+                ]
+              : [],
+          ),
+          confirmedTenancyIds,
+          urlFor: rentConfirmUrl,
+        });
+
+        if (units.length === 0) {
+          const { error: stampErr } = await admin
+            .from("organizations")
+            .update({ landlord_campaign_step_sent: due.index + 1 })
+            .eq("id", org.id);
+
+          if (stampErr) {
+            summary.errors++;
+            summary.details.push({
+              org: org.id,
+              reveal: due.key,
+              error: `stamp_failed:${stampErr.message}`,
+            });
+            continue;
+          }
+
+          summary.skipped++;
+          summary.details.push({
+            org: org.id,
+            skipped: "no_unconfirmed_rent_units",
+            reveal: due.key,
+            step: due.index + 1,
+          });
+          continue;
+        }
+
+        const result = await sendLandlordRentConfirmEmail({
+          to_email: to,
+          org_name: org.name,
+          brand_color: org.brand_color,
+          logo_url: org.logo_url,
+          reply_to_email: org.reply_to_email,
+          units,
+        });
+
+        if (!result.sent) {
+          summary.errors++;
+          summary.details.push({ org: org.id, reveal: due.key, error: result.reason });
+          continue;
+        }
+
+        const { error: stampErr } = await admin
+          .from("organizations")
+          .update({
+            landlord_campaign_step_sent: due.index + 1,
+            landlord_campaign_last_sent_at: new Date().toISOString(),
+          })
+          .eq("id", org.id);
+
+        if (stampErr) {
+          summary.errors++;
+          summary.details.push({ org: org.id, reveal: due.key, error: `stamp_failed:${stampErr.message}` });
+          continue;
+        }
+
+        summary.sent++;
+        summary.details.push({
+          org: org.id,
+          reveal: due.key,
+          step: due.index + 1,
+          to,
+          units: units.length,
+        });
         continue;
       }
 

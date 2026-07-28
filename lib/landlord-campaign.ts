@@ -144,6 +144,33 @@ export type RevealContext = {
   propertyAddress?: string | null;
 };
 
+export type RentConfirmCampaignTenancy = {
+  id: string;
+  address: string | null;
+  rentCents: number | null;
+  confirmToken: string;
+};
+
+export type RentConfirmCampaignUnit = {
+  address: string;
+  rentCents: number | null;
+  confirmUrl: string;
+};
+
+export function buildRentConfirmUnits(input: {
+  tenancies: RentConfirmCampaignTenancy[];
+  confirmedTenancyIds: Set<string>;
+  urlFor: (token: string) => string;
+}): RentConfirmCampaignUnit[] {
+  return input.tenancies
+    .filter((tenancy) => !input.confirmedTenancyIds.has(tenancy.id))
+    .map((tenancy) => ({
+      address: tenancy.address?.trim() || "your unit",
+      rentCents: tenancy.rentCents,
+      confirmUrl: input.urlFor(tenancy.confirmToken),
+    }));
+}
+
 const BILLING = "/dashboard/billing";
 
 /**
