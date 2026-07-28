@@ -643,7 +643,8 @@ export default async function SettingsPage({
 
             {searchParams.feed === "saved" && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Contact details saved. Your feed now includes them.
+                Contact details saved. Your feed contact and private landlord
+                campaign email are updated.
               </div>
             )}
             {searchParams.feed === "phone" && (
@@ -655,6 +656,12 @@ export default async function SettingsPage({
             {searchParams.feed === "email" && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
                 The contact email must be a valid email address, or left blank.
+              </div>
+            )}
+            {searchParams.feed === "landlord_email" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                The landlord email must be a single valid email address, or left
+                blank to skip this account in the campaign.
               </div>
             )}
             {searchParams.feed === "error" && (
@@ -699,6 +706,24 @@ export default async function SettingsPage({
                 />
                 <span className="mt-1 block text-xs text-gray-400">
                   Leave blank to use your reply-to email.
+                </span>
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Landlord email (account contact)
+                </span>
+                <input
+                  name="landlord_campaign_email"
+                  type="email"
+                  inputMode="email"
+                  placeholder="owner@yourcompany.com"
+                  defaultValue={org.landlord_campaign_email ?? ""}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Where Vacantless sends account updates and the landlord email
+                  campaign for this account. Private — never shown on listings.
+                  Leave blank to skip this account in the campaign.
                 </span>
               </label>
               <div className="sm:col-span-2">

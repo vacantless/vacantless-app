@@ -15,7 +15,10 @@ import {
   validateNewQuestion,
   normalizePreferredAnswer,
 } from "@/lib/screening-questions";
-import { validatePublicContact } from "@/lib/public-contact";
+import {
+  validateLandlordContactEmail,
+  validatePublicContact,
+} from "@/lib/public-contact";
 import {
   validatePolicyProfileSettings,
   validateBuildingPolicySettings,
@@ -337,11 +340,20 @@ export async function updatePublicContact(formData: FormData) {
   if (!result.ok) {
     redirect(`/dashboard/settings?tab=brand&feed=${result.field}`);
   }
+  const landlordEmail = validateLandlordContactEmail(
+    String(formData.get("landlord_campaign_email") ?? ""),
+  );
+  if (!landlordEmail.ok) {
+    redirect("/dashboard/settings?tab=brand&feed=landlord_email");
+  }
 
   const supabase = createClient();
   const { error } = await supabase
     .from("organizations")
-    .update(result.values)
+    .update({
+      ...result.values,
+      landlord_campaign_email: landlordEmail.value,
+    })
     .eq("id", org.id);
   if (error) {
     redirect("/dashboard/settings?tab=brand&feed=error");

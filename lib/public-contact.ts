@@ -29,6 +29,10 @@ export type PublicEmailResult =
   | { ok: true; value: string | null }
   | { ok: false };
 
+export type LandlordContactEmailResult =
+  | { ok: true; value: string | null }
+  | { ok: false };
+
 /**
  * Validate a public contact phone. Blank/whitespace is valid and means "unset"
  * (value: null). A non-empty value must contain 7–15 digits (NANP local 7 up
@@ -57,6 +61,22 @@ export function validatePublicContactPhone(
 export function validatePublicContactEmail(
   input: string | null | undefined,
 ): PublicEmailResult {
+  const s = (input ?? "").trim();
+  if (s === "") return { ok: true, value: null };
+  if (s.length > MAX_PUBLIC_EMAIL_LEN) return { ok: false };
+  if (!EMAIL_RE.test(s)) return { ok: false };
+  return { ok: true, value: s.toLowerCase() };
+}
+
+/**
+ * Validate the private landlord/account contact for internal campaign email.
+ * Blank is valid (value: null = skip this org in the landlord campaign).
+ * Mirrors public email validation: conservative single-address syntax,
+ * max 254 chars, lowercased on save.
+ */
+export function validateLandlordContactEmail(
+  input: string | null | undefined,
+): LandlordContactEmailResult {
   const s = (input ?? "").trim();
   if (s === "") return { ok: true, value: null };
   if (s.length > MAX_PUBLIC_EMAIL_LEN) return { ok: false };
