@@ -628,6 +628,7 @@ export async function createTradeContact(formData: FormData) {
     phone: s(formData, "phone") || null,
     email: check.value.email,
     note: s(formData, "note") || null,
+    city: s(formData, "city") || null,
   });
 
   revalidatePath(BASE);
@@ -655,6 +656,7 @@ export async function updateTradeContact(formData: FormData) {
       phone: s(formData, "phone") || null,
       email: check.value.email,
       note: s(formData, "note") || null,
+      city: s(formData, "city") || null,
     })
     .eq("id", id);
 
@@ -705,7 +707,7 @@ export async function promoteTradeToDirectory(formData: FormData) {
   // RLS scopes this read to the caller's org — a forged id resolves to nothing.
   const { data: trade } = await supabase
     .from("trade_contacts")
-    .select("id, name, trade_type, phone, email")
+    .select("id, name, trade_type, phone, email, city")
     .eq("id", tradeContactId)
     .maybeSingle();
   if (!trade) redirect(`${BASE}?dir=notfound#trades`);
@@ -747,6 +749,7 @@ export async function promoteTradeToDirectory(formData: FormData) {
     blurb: check.value.blurb,
     phone: check.value.phone,
     email: check.value.email,
+    city: trade.city ?? null,
     contact_public: contactPublic,
     listed: true,
   };

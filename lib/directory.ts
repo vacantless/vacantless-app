@@ -206,6 +206,7 @@ export type DirectoryListing = {
   business_name: string;
   trade_type: string | null;
   service_area: string | null;
+  city: string | null;
   blurb: string | null;
   phone: string | null;
   email: string | null;

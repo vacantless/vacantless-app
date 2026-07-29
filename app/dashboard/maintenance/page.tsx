@@ -151,6 +151,7 @@ type TradeRow = {
   note: string | null;
   archived: boolean;
   directory_opt_in: boolean;
+  city: string | null;
   supplier_window_rules?: unknown;
 };
 
@@ -628,6 +629,8 @@ export default async function MaintenancePage({
     dir?: string;
     dirType?: string;
     dirArea?: string;
+    dirCity?: string;
+    tradeCity?: string;
     disp?: string;
     sched?: string;
   };
@@ -657,7 +660,7 @@ export default async function MaintenancePage({
       .order("created_at", { ascending: false }),
     supabase
       .from("trade_contacts")
-      .select("id, name, trade_type, phone, email, note, archived, directory_opt_in, supplier_window_rules")
+      .select("id, name, trade_type, phone, email, note, archived, directory_opt_in, supplier_window_rules, city")
       .eq("organization_id", org.id)
       .order("archived", { ascending: true })
       .order("name", { ascending: true }),
@@ -677,7 +680,7 @@ export default async function MaintenancePage({
     supabase
       .from("directory_trades")
       .select(
-        "id, source, business_name, trade_type, service_area, blurb, phone, email, contact_public, verified, used_count, listed, archived, contributed_by_org, source_trade_contact_id",
+        "id, source, business_name, trade_type, service_area, city, blurb, phone, email, contact_public, verified, used_count, listed, archived, contributed_by_org, source_trade_contact_id",
       )
       .order("used_count", { ascending: false }),
     // Open tenant incident reports awaiting triage (Slice 3), scoped to the
@@ -985,18 +988,34 @@ export default async function MaintenancePage({
   const rolodexNames = new Set(
     trades.filter((t) => !t.archived).map((t) => t.name.trim().toLowerCase()),
   );
+  const tradeCities = Array.from(
+    new Set(trades.map((t) => t.city).filter((c): c is string => !!c)),
+  ).sort((a, b) => a.localeCompare(b));
+  const fTradeCity = (searchParams.tradeCity ?? "").trim();
   const dirType = (searchParams.dirType ?? "").trim();
   const dirArea = (searchParams.dirArea ?? "").trim().toLowerCase();
+  const dirCity = (searchParams.dirCity ?? "").trim();
+  const nearCities = new Set(tradeCities.map((c) => c.toLowerCase()));
 
   const browse = allListings.filter((l) => l.listed && !l.archived);
   const directoryTypes = Array.from(
     new Set(browse.map((l) => l.trade_type).filter((t): t is string => !!t)),
+  ).sort((a, b) => a.localeCompare(b));
+  const directoryCities = Array.from(
+    new Set(browse.map((l) => l.city).filter((c): c is string => !!c)),
   ).sort((a, b) => a.localeCompare(b));
 
   const directoryCards = rankListings(
     browse.filter((l) => {
       if (dirType && (l.trade_type ?? "") !== dirType) return false;
       if (dirArea && !(l.service_area ?? "").toLowerCase().includes(dirArea)) return false;
+      if (dirCity === "__all__") {
+        // no city filter — every city
+      } else if (dirCity) {
+        if ((l.city ?? "").toLowerCase() !== dirCity.toLowerCase()) return false;
+      } else if (nearCities.size > 0) {
+        if (!l.city || !nearCities.has(l.city.toLowerCase())) return false;
+      }
       return true;
     }),
   ).map((l) => {
@@ -2002,9 +2021,32 @@ export default async function MaintenancePage({
           Your own roster of vendors. Add the people you already use; assign them to work orders. You pay your trades directly. Vacantless keeps the list and the history.
         </p>
 
+        {tradeCities.length > 1 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard/maintenance#trades"
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${!fTradeCity ? "border-brand bg-brand/10 text-brand" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+            >
+              All cities
+            </Link>
+            {tradeCities.map((c) => (
+              <Link
+                key={c}
+                href={`/dashboard/maintenance?tradeCity=${encodeURIComponent(c)}#trades`}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${fTradeCity === c ? "border-brand bg-brand/10 text-brand" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+              >
+                {c}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {activeTrades.length === 0 && trades.length === 0 ? null : (
           <div className="mb-3 grid gap-3 sm:grid-cols-2">
-            {trades.map((t) => {
+            {[...trades]
+              .filter((t) => !fTradeCity || (t.city ?? "") === fTradeCity)
+              .sort((a, b) => (a.city ?? "").localeCompare(b.city ?? "") || a.name.localeCompare(b.name))
+              .map((t) => {
               return (
                 <Card key={t.id} className={t.archived ? "opacity-60" : ""}>
                   <div className="flex items-start justify-between gap-2">
@@ -2012,6 +2054,7 @@ export default async function MaintenancePage({
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-gray-900">{t.name}</h3>
                         {t.trade_type && <StatusChip tone="info">{t.trade_type}</StatusChip>}
+                        {t.city && <StatusChip tone="neutral">{t.city}</StatusChip>}
                         {t.archived && <StatusChip tone="neutral">Archived</StatusChip>}
                       </div>
                       <p className="mt-1 text-xs text-gray-500">
@@ -2028,6 +2071,7 @@ export default async function MaintenancePage({
                       <input name="trade_type" defaultValue={t.trade_type ?? ""} placeholder="Trade (e.g. Plumber)" className={inputCls} />
                       <input name="phone" defaultValue={t.phone ?? ""} placeholder="Phone" className={inputCls} />
                       <input name="email" defaultValue={t.email ?? ""} placeholder="Email" className={inputCls} />
+                      <input name="city" defaultValue={t.city ?? ""} placeholder="City" className={inputCls} />
                       <input name="note" defaultValue={t.note ?? ""} placeholder="Note" className={inputCls} />
                       <div className="flex items-center gap-2">
                         <SubmitButton className={`${SECONDARY_ACTION_CLASS} justify-center`} pendingLabel="Saving…">
@@ -2122,6 +2166,15 @@ export default async function MaintenancePage({
               <label className={labelCls}>Email (optional)</label>
               <input name="email" type="email" placeholder="name@example.com" className={inputCls} />
             </div>
+            <div>
+              <label className={labelCls}>City (optional)</label>
+              <input name="city" list="trade-cities" placeholder="Toronto, Blue Mountains…" className={inputCls} />
+              <datalist id="trade-cities">
+                {tradeCities.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </div>
             <div className="sm:col-span-2">
               <label className={labelCls}>Note (optional)</label>
               <input name="note" placeholder="Rates, hours, who to ask for…" className={inputCls} />
@@ -2171,10 +2224,22 @@ export default async function MaintenancePage({
                 className={inputCls}
               />
             </div>
+            <div>
+              <label className={labelCls}>City</label>
+              <select name="dirCity" defaultValue={dirCity} className={inputCls}>
+                {nearCities.size > 0 && <option value="">Near you</option>}
+                <option value="__all__">All cities</option>
+                {directoryCities.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
             <SubmitButton className={`${SECONDARY_ACTION_CLASS} justify-center`} pendingLabel="…">
               Filter
             </SubmitButton>
-            {(dirType || dirArea) && (
+            {(dirType || dirArea || dirCity) && (
               <Link href="/dashboard/maintenance#network" className="text-xs font-medium text-brand hover:underline">
                 Clear
               </Link>
@@ -2201,6 +2266,7 @@ export default async function MaintenancePage({
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-gray-900">{l.business_name}</h3>
                       {l.trade_type && <StatusChip tone="info">{l.trade_type}</StatusChip>}
+                      {l.city && <StatusChip tone="neutral">{l.city}</StatusChip>}
                       {l.verified && <StatusChip tone="success">Vacantless-verified</StatusChip>}
                       {l.isOwn && <StatusChip tone="neutral">Your listing</StatusChip>}
                     </div>
