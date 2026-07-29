@@ -14,7 +14,11 @@ import {
   statusOffersTenantUpdate,
 } from "@/lib/work-orders";
 import { validateDirectoryListingInput, minimizeForDirectory } from "@/lib/directory";
-import { canUseIncidentIntake, canUseIncidentDispatch } from "@/lib/billing";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+  type OrgFeatureKey,
+} from "@/lib/feature-entitlements";
 import {
   workOrderTitleFromReport,
   normalizeDeclineReason,
@@ -78,6 +82,21 @@ function notifyOrgOf(org: {
     logo_url: org.logo_url,
     reply_to_email: org.reply_to_email,
   };
+}
+
+async function orgFeatureEnabled(
+  org: { id: string; plan?: string | null },
+  featureKey: OrgFeatureKey,
+): Promise<boolean> {
+  const supabase = createClient();
+  const featureFlags = await loadOrganizationFeatureFlags(supabase, org.id, [
+    featureKey,
+  ]);
+  return isFeatureEnabledForOrg(
+    featureKey,
+    { ...org, featureFlags },
+    { env: process.env },
+  );
 }
 
 // Job title + property address + the tenancy's primary-tenant contact for a work
@@ -517,7 +536,7 @@ export async function deleteWorkOrder(formData: FormData) {
 async function requireIncidentIntake(suffix: string) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  if (!canUseIncidentIntake(org.plan)) {
+  if (!(await orgFeatureEnabled(org, "incident_intake"))) {
     redirect(`${BASE}?report=locked${suffix}`);
   }
   return org;
@@ -861,7 +880,7 @@ export async function addDirectoryTradeToRolodex(formData: FormData) {
 async function requireIncidentDispatch(suffix: string) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  if (!canUseIncidentDispatch(org.plan)) {
+  if (!(await orgFeatureEnabled(org, "incident_dispatch"))) {
     redirect(`${BASE}?disp=locked${suffix}`);
   }
   return org;

@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseAmountToCents } from "@/lib/payments";
 import { validateDispatchQuote } from "@/lib/work-order-dispatch";
-import { canUseIncidentDispatch } from "@/lib/billing";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+} from "@/lib/feature-entitlements";
 import { resolveIncidentNotifyEmails, type NotifyMember } from "@/lib/incident-reports";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import { firstWord, tradeUpdateStatusLabel, tradeUpdateDetail } from "@/lib/notifications";
@@ -52,7 +55,18 @@ async function loadDispatchOperatorContext(
     .maybeSingle();
   if (!org) return null;
   // Defensive: only an entitled org could have an active dispatch, but re-check.
-  if (!canUseIncidentDispatch(org.plan)) return null;
+  const featureFlags = await loadOrganizationFeatureFlags(admin, d.organization_id, [
+    "incident_dispatch",
+  ]);
+  if (
+    !isFeatureEnabledForOrg(
+      "incident_dispatch",
+      { ...org, featureFlags },
+      { env: process.env },
+    )
+  ) {
+    return null;
+  }
 
   const { data: wo } = await admin
     .from("work_orders")

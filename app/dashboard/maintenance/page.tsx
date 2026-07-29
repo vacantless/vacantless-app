@@ -37,7 +37,10 @@ import {
 } from "@/lib/directory";
 import { splitAddressUnit } from "@/lib/listing-fill-sheet";
 import { getCurrentOrg } from "@/lib/org";
-import { canUseIncidentIntake, canUseIncidentDispatch } from "@/lib/billing";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+} from "@/lib/feature-entitlements";
 import {
   incidentCategoryLabel,
   incidentReportStatusLabel,
@@ -632,6 +635,10 @@ export default async function MaintenancePage({
   const supabase = createClient();
   const org = await getCurrentOrg();
   if (!org) return null;
+  const featureFlags = await loadOrganizationFeatureFlags(supabase, org.id, [
+    "incident_intake",
+    "incident_dispatch",
+  ]);
 
   const [
     { data: woData },
@@ -733,7 +740,11 @@ export default async function MaintenancePage({
   // the open queue + the tenant's attached photos/video (signed preview URLs,
   // minted with the operator's RLS client — the 0060 SELECT policy scopes them to
   // this org's folder). When not entitled we show a locked upsell instead.
-  const canIntake = canUseIncidentIntake(org.plan);
+  const canIntake = isFeatureEnabledForOrg(
+    "incident_intake",
+    { ...org, featureFlags },
+    { env: process.env },
+  );
   const openReports = (reportData ?? []) as unknown as IncidentReportRow[];
 
   // Map report id -> its media (with a freshly-signed preview URL per object).
@@ -779,7 +790,11 @@ export default async function MaintenancePage({
   // offer "dispatch to a trade". The partial-unique index guarantees at most one
   // active dispatch per work order. When NOT entitled the row shows a locked
   // upsell (show-locked, never hide — the two-axis visibility rule).
-  const canDispatch = canUseIncidentDispatch(org.plan);
+  const canDispatch = isFeatureEnabledForOrg(
+    "incident_dispatch",
+    { ...org, featureFlags },
+    { env: process.env },
+  );
   // Slice 0 Block C: the org's one-time dispatch acknowledgment. Until it's
   // accepted, an entitled org sees the acknowledgment card instead of the
   // per-work-order dispatch form (and the server action refuses to dispatch).

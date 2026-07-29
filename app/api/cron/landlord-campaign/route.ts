@@ -1,10 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import {
   sendLandlordRentConfirmEmail,
   sendNotificationEmail,
 } from "@/lib/email";
 import { hasEntitlement } from "@/lib/billing";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlagsByOrg,
+} from "@/lib/feature-entitlements";
 import { localDateString } from "@/lib/leasing-snapshot";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
@@ -61,7 +66,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Dark switch: the whole campaign is off until the flag is set.
-  if (!process.env.LANDLORD_CAMPAIGN_ENABLED) {
+  if (!envFlagEnabled(process.env.LANDLORD_CAMPAIGN_ENABLED)) {
     return NextResponse.json(
       { ok: true, reason: "disabled", scanned: 0, sent: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
       { status: 200 },
@@ -118,6 +123,11 @@ export async function GET(req: NextRequest) {
   if (orgs.length === 0) return NextResponse.json(summary, { status: 200 });
 
   const orgIds = orgs.map((o) => o.id);
+  const featureFlagsByOrg = await loadOrganizationFeatureFlagsByOrg(
+    admin,
+    orgIds,
+    ["landlord_campaign"],
+  );
 
   // Which candidate orgs have a tenancy (a real landlord), and one property
   // address each (for reveal copy). Both RLS-bypassing service-role reads,
@@ -180,6 +190,18 @@ export async function GET(req: NextRequest) {
 
   for (const org of orgs) {
     try {
+      if (
+        !isFeatureEnabledForOrg(
+          "landlord_campaign",
+          { ...org, featureFlags: featureFlagsByOrg.get(org.id) ?? [] },
+          { env: process.env },
+        )
+      ) {
+        summary.skipped++;
+        summary.details.push({ org: org.id, skipped: "feature_disabled" });
+        continue;
+      }
+
       const due = nextRevealDue({
         campaignStartMs: org.created_at ? new Date(org.created_at).getTime() : null,
         nowMs,

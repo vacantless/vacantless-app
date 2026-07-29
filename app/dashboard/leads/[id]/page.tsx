@@ -35,7 +35,11 @@ import { ALLOWED_FORM_FIELDS } from "@/lib/rental-application";
 import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
 import { InquiryReplyPanel } from "../inquiry-reply-panel";
-import { aiReplyEnabled, buildAiReplyDraft } from "@/lib/ai-reply";
+import { buildAiReplyDraft } from "@/lib/ai-reply";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+} from "@/lib/feature-entitlements";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -188,6 +192,9 @@ export default async function LeadDetailPage({
   const timeZone = org?.booking_timezone ?? "America/Toronto";
   const orgName = org?.name ?? "Vacantless";
   const canApplications = canUseRentalApplications(org?.plan);
+  const aiReplyFeatureFlags = org
+    ? await loadOrganizationFeatureFlags(supabase, org.id, ["ai_reply"])
+    : [];
   const applyBannerKey = searchParams.apply ?? null;
   // "Today" in the org's timezone as YYYY-MM-DD (en-CA formats that way).
   const today = new Date().toLocaleDateString("en-CA", { timeZone });
@@ -202,7 +209,14 @@ export default async function LeadDetailPage({
   const followText = followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
   const replyDraft = buildReplyDraft(l, orgName);
-  const aiReplyDraft = aiReplyEnabled(process.env.AI_REPLY_ENABLED)
+  const canUseAiReply =
+    org != null &&
+    isFeatureEnabledForOrg(
+      "ai_reply",
+      { ...org, featureFlags: aiReplyFeatureFlags },
+      { env: process.env },
+    );
+  const aiReplyDraft = canUseAiReply
     ? buildAiReplyDraft({
         renterName: l.name,
         orgName,

@@ -16,7 +16,10 @@ import {
   incidentMediaStoragePath,
 } from "@/lib/incident-media";
 import { createIncidentMediaUploadUrl } from "@/lib/incident-media-server";
-import { canUseIncidentIntake } from "@/lib/billing";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+} from "@/lib/feature-entitlements";
 import { sendIncidentReportNotification } from "@/lib/email";
 
 // Public, UNAUTHENTICATED tenant incident-intake actions (Option B Slice 2).
@@ -109,13 +112,24 @@ async function notifyOperatorsOfNewReport(
   // Org branding + fallback addresses + plan gate.
   const { data: org } = await admin
     .from("organizations")
-    .select("name, brand_color, logo_url, reply_to_email, public_contact_email, plan")
+    .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email, plan")
     .eq("id", organizationId)
     .maybeSingle();
   if (!org) return;
   // Defensive: only notify when the org actually has the intake feature (the link
   // could only have been generated while entitled, but re-check anyway).
-  if (!canUseIncidentIntake(org.plan)) return;
+  const featureFlags = await loadOrganizationFeatureFlags(admin, organizationId, [
+    "incident_intake",
+  ]);
+  if (
+    !isFeatureEnabledForOrg(
+      "incident_intake",
+      { ...org, featureFlags },
+      { env: process.env },
+    )
+  ) {
+    return;
+  }
 
   // The report + its unit address (for the email subject/body).
   const { data: report } = await admin

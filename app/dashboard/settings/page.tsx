@@ -21,6 +21,7 @@ import {
   updateShowingConfirmationSettings,
   updateShowingAutocloseSettings,
   updateComplianceCalendarSettings,
+  updateOrganizationFeatureFlag,
   sendTestEmailAction,
   uploadOrgLogo,
   removeOrgLogo,
@@ -61,6 +62,15 @@ import {
 import {
   publishChannelMeta,
 } from "@/lib/distribution-publish";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import {
+  SETTINGS_ORG_FEATURES,
+  envMasterForFeature,
+  featureFlagOverrideForOrg,
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+  planDefaultForFeature,
+} from "@/lib/feature-entitlements";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +95,7 @@ function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   }
   if (sp.distribution) return "distribution";
   if (sp.rotessa || sp.stripeconnect) return "banking";
-  if (sp.test || sp.sender || sp.renter || sp.sms || sp.confirm || sp.autoclose || sp.compliance) {
+  if (sp.test || sp.sender || sp.renter || sp.sms || sp.confirm || sp.autoclose || sp.compliance || sp.features) {
     return "comms";
   }
   // saved / error / logo / logoerr all belong to the brand tab.
@@ -132,6 +142,7 @@ export default async function SettingsPage({
     confirm?: string; // Communications → Showing confirmation flash
     autoclose?: string; // Communications → Showing auto-close flash
     compliance?: string; // Communications → Compliance calendar flash
+    features?: string; // Communications → Feature access flash
     feed?: string; // Public Page & Brand → syndication contact flash
     distribution?: string; // Distribution → channel account/setup flash
   };
@@ -388,7 +399,25 @@ export default async function SettingsPage({
   const smsFlash = searchParams.sms;
   const confirmFlash = searchParams.confirm;
   const complianceFlash = searchParams.compliance;
+  const featuresFlash = searchParams.features;
   const canRenterSms = canUseRenterSms(org.plan);
+  const featureFlags = await loadOrganizationFeatureFlags(supabase, org.id);
+  const featureControls = SETTINGS_ORG_FEATURES.map((feature) => {
+    const envMaster = envMasterForFeature(feature.key);
+    const envEnabled = envMaster ? envFlagEnabled(process.env[envMaster]) : null;
+    return {
+      ...feature,
+      envMaster,
+      envEnabled,
+      effectiveEnabled: isFeatureEnabledForOrg(
+        feature.key,
+        { ...org, featureFlags },
+        { env: process.env },
+      ),
+      override: featureFlagOverrideForOrg(feature.key, { ...org, featureFlags }),
+      planDefault: planDefaultForFeature(feature.key, org.plan),
+    };
+  });
   // S528 honesty: the toggle is a PLAN feature, but whether texts actually go
   // out is a TRANSPORT fact (SMS_LIVE + provider creds). Read it so the UI
   // never implies texting while the account's SMS is not connected.
@@ -1616,6 +1645,11 @@ export default async function SettingsPage({
               Only an owner/admin can change compliance calendar reminders.
             </div>
           )}
+          {featuresFlash === "forbidden" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Only an owner/admin can change feature access.
+            </div>
+          )}
 
           {canManageOwnerSettings && (
             <form
@@ -1669,6 +1703,113 @@ export default async function SettingsPage({
                 Save compliance calendar
               </button>
             </form>
+          )}
+
+          {canManageOwnerSettings && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center gap-2.5">
+                <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                  Feature access
+                </h3>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Choose which features this organization gets beyond the plan
+                default. Global master switches still stay in force.
+              </p>
+
+              {featuresFlash === "saved" && (
+                <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                  Feature access saved.
+                </div>
+              )}
+              {featuresFlash === "invalid" && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                  Pick a valid feature and access setting.
+                </div>
+              )}
+              {featuresFlash === "error" && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                  Something went wrong saving feature access. Please try again.
+                </div>
+              )}
+
+              <div className="mt-4 divide-y divide-gray-100">
+                {featureControls.map((feature) => (
+                  <form
+                    key={feature.key}
+                    action={updateOrganizationFeatureFlag}
+                    className="py-4 first:pt-0 last:pb-0"
+                  >
+                    <input type="hidden" name="feature_key" value={feature.key} />
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm font-semibold text-gray-900">
+                            {feature.label}
+                          </h4>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              feature.effectiveEnabled
+                                ? "bg-green-50 text-green-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {feature.effectiveEnabled ? "On" : "Off"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-gray-500">
+                          {feature.description}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-400">
+                          Plan default: {feature.planDefault ? "on" : "off"}
+                          {" · "}
+                          {feature.envMaster
+                            ? `${feature.envMaster}: ${feature.envEnabled ? "on" : "off"}`
+                            : "No global switch"}
+                        </p>
+                      </div>
+
+                      <fieldset className="grid min-w-[18rem] grid-cols-3 gap-2 text-sm">
+                        <label className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-gray-700">
+                          <input
+                            type="radio"
+                            name="mode"
+                            value="default"
+                            defaultChecked={feature.override === null}
+                            className="h-4 w-4 border-gray-300"
+                          />
+                          <span>Default</span>
+                        </label>
+                        <label className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-gray-700">
+                          <input
+                            type="radio"
+                            name="mode"
+                            value="on"
+                            defaultChecked={feature.override === true}
+                            className="h-4 w-4 border-gray-300"
+                          />
+                          <span>On</span>
+                        </label>
+                        <label className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-gray-700">
+                          <input
+                            type="radio"
+                            name="mode"
+                            value="off"
+                            defaultChecked={feature.override === false}
+                            className="h-4 w-4 border-gray-300"
+                          />
+                          <span>Off</span>
+                        </label>
+                      </fieldset>
+                    </div>
+                    <button className="mt-3 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm">
+                      Save access
+                    </button>
+                  </form>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* S499b: tenant message templates moved to their point-of-use under

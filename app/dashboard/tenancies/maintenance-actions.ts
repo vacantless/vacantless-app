@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { validateWorkOrderInput } from "@/lib/work-orders";
-import { canUseIncidentIntake } from "@/lib/billing";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+} from "@/lib/feature-entitlements";
 import { generateReportToken } from "@/lib/incident-reports";
 
 // Tenancy-scoped "Report an issue" action (work-order module Slice 3). A thin
@@ -85,11 +88,20 @@ export async function generateTenantReportLink(formData: FormData) {
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  if (!canUseIncidentIntake(org.plan)) {
+  const supabase = createClient();
+  const featureFlags = await loadOrganizationFeatureFlags(supabase, org.id, [
+    "incident_intake",
+  ]);
+  if (
+    !isFeatureEnabledForOrg(
+      "incident_intake",
+      { ...org, featureFlags },
+      { env: process.env },
+    )
+  ) {
     redirect(`${tenancyPath(tenancyId)}?report=locked#maintenance`);
   }
 
-  const supabase = createClient();
   const { data: tRow } = await supabase
     .from("tenancies")
     .select("id, report_token")

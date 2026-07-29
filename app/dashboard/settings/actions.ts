@@ -25,6 +25,7 @@ import {
 } from "@/lib/policy-profile";
 import { sendTestEmail } from "@/lib/email";
 import { canUseRenterSms } from "@/lib/billing";
+import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import {
   validateLogoUpload,
   extForLogoType,
@@ -82,12 +83,14 @@ async function requireSettingsOrg() {
   return org;
 }
 
-async function requireOwnerAdminSettingsOrg() {
+async function requireOwnerAdminSettingsOrg(
+  forbiddenRedirect = "/dashboard/settings?tab=comms&compliance=forbidden",
+) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
   const role = await getRoleForOrg(org.id);
   if (role !== "owner_admin") {
-    redirect("/dashboard/settings?tab=comms&compliance=forbidden");
+    redirect(forbiddenRedirect);
   }
   return org;
 }
@@ -691,6 +694,43 @@ export async function updateComplianceCalendarSettings(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=comms&compliance=saved");
+}
+
+export async function updateOrganizationFeatureFlag(formData: FormData) {
+  const org = await requireOwnerAdminSettingsOrg(
+    "/dashboard/settings?tab=comms&features=forbidden",
+  );
+  const featureKey = String(formData.get("feature_key") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "").trim();
+  if (!isOrgFeatureKey(featureKey) || !["default", "on", "off"].includes(mode)) {
+    redirect("/dashboard/settings?tab=comms&features=invalid");
+  }
+
+  const supabase = createClient();
+  const query = supabase
+    .from("organization_feature_flags")
+    .delete()
+    .eq("organization_id", org.id)
+    .eq("feature_key", featureKey);
+
+  const { error } =
+    mode === "default"
+      ? await query
+      : await supabase.from("organization_feature_flags").upsert(
+          {
+            organization_id: org.id,
+            feature_key: featureKey,
+            enabled: mode === "on",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "organization_id,feature_key" },
+        );
+
+  if (error) {
+    redirect("/dashboard/settings?tab=comms&features=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&features=saved");
 }
 
 // Send the operator a copy of their branded renter auto-reply so they can
