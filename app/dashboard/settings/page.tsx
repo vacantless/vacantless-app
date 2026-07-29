@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
+import { getRoleForOrg } from "@/lib/membership";
 import { canUseRenterSms } from "@/lib/billing";
 import { isSmsConfigured } from "@/lib/sms";
 import { createClient } from "@/lib/supabase/server";
@@ -19,6 +20,7 @@ import {
   updateTextMessages,
   updateShowingConfirmationSettings,
   updateShowingAutocloseSettings,
+  updateComplianceCalendarSettings,
   sendTestEmailAction,
   uploadOrgLogo,
   removeOrgLogo,
@@ -83,7 +85,7 @@ function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   }
   if (sp.distribution) return "distribution";
   if (sp.rotessa || sp.stripeconnect) return "banking";
-  if (sp.test || sp.sender || sp.renter || sp.sms || sp.confirm) {
+  if (sp.test || sp.sender || sp.renter || sp.sms || sp.confirm || sp.autoclose || sp.compliance) {
     return "comms";
   }
   // saved / error / logo / logoerr all belong to the brand tab.
@@ -129,12 +131,15 @@ export default async function SettingsPage({
     sms?: string; // Communications → Text messages flash
     confirm?: string; // Communications → Showing confirmation flash
     autoclose?: string; // Communications → Showing auto-close flash
+    compliance?: string; // Communications → Compliance calendar flash
     feed?: string; // Public Page & Brand → syndication contact flash
     distribution?: string; // Distribution → channel account/setup flash
   };
 }) {
   const org = await getCurrentOrg();
   if (!org) return null;
+  const currentOrgRole = await getRoleForOrg(org.id);
+  const canManageOwnerSettings = currentOrgRole === "owner_admin";
 
   // Properties power the "View public renter page" picker — a one-click way to
   // see exactly what renters get from the shared intake URL, for ANY listing
@@ -382,6 +387,7 @@ export default async function SettingsPage({
   const renterFlash = searchParams.renter;
   const smsFlash = searchParams.sms;
   const confirmFlash = searchParams.confirm;
+  const complianceFlash = searchParams.compliance;
   const canRenterSms = canUseRenterSms(org.plan);
   // S528 honesty: the toggle is a PLAN feature, but whether texts actually go
   // out is a TRANSPORT fact (SMS_LIVE + provider creds). Read it so the UI
@@ -1604,6 +1610,66 @@ export default async function SettingsPage({
               Save auto-close settings
             </button>
           </form>
+
+          {complianceFlash === "forbidden" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Only an owner/admin can change compliance calendar reminders.
+            </div>
+          )}
+
+          {canManageOwnerSettings && (
+            <form
+              action={updateComplianceCalendarSettings}
+              className="rounded-2xl border border-gray-200 bg-white p-5"
+            >
+              <div className="flex items-center gap-2.5">
+                <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                  Compliance calendar reminders
+                </h3>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Turn on the organization-level calendar for Vacant Home Tax
+                deadlines, seasonal water shutoff and turn-on, winter walkways
+                and ice, furnace service and filters, smoke and CO alarms,
+                insurance review, and rent-increase timing reminders.
+              </p>
+
+              {complianceFlash === "saved" && (
+                <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                  Compliance calendar setting saved.
+                </div>
+              )}
+              {complianceFlash === "error" && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                  Something went wrong saving this setting. Please try again.
+                </div>
+              )}
+
+              <label className="mt-4 flex items-start gap-3">
+                <input
+                  name="compliance_calendar_enabled"
+                  type="checkbox"
+                  defaultChecked={org.compliance_calendar_enabled === true}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Enable compliance calendar reminders for this organization
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Tenant notes still draft for approval, landlord reminders
+                    still respect Automations settings, and the global master
+                    switch remains the final kill-switch.
+                  </span>
+                </span>
+              </label>
+
+              <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+                Save compliance calendar
+              </button>
+            </form>
+          )}
 
           {/* S499b: tenant message templates moved to their point-of-use under
               Tenancies; org-level communications defaults stay here. */}

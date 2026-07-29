@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { requireCapability } from "@/lib/membership";
+import { getRoleForOrg, requireCapability } from "@/lib/membership";
 import {
   validateBrandIdentity,
   validateReplyToEmail,
@@ -79,6 +79,16 @@ async function requireSettingsOrg() {
   const org = await getCurrentOrg();
   if (!org) redirect("/login");
   await requireCapability("manage_settings", "/dashboard/settings?forbidden=1");
+  return org;
+}
+
+async function requireOwnerAdminSettingsOrg() {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  const role = await getRoleForOrg(org.id);
+  if (role !== "owner_admin") {
+    redirect("/dashboard/settings?tab=comms&compliance=forbidden");
+  }
   return org;
 }
 
@@ -662,6 +672,25 @@ export async function updateShowingAutocloseSettings(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=comms&autoclose=saved");
+}
+
+// Owner/admin-only coarse opt-in for the compliance-calendar sweep. The cron
+// still requires COMPLIANCE_CALENDAR_ENABLED, then this org flag, then each
+// existing event-level setting before it drafts/sends anything.
+export async function updateComplianceCalendarSettings(formData: FormData) {
+  const org = await requireOwnerAdminSettingsOrg();
+  const enabled = formData.get("compliance_calendar_enabled") != null;
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ compliance_calendar_enabled: enabled })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/settings?tab=comms&compliance=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&compliance=saved");
 }
 
 // Send the operator a copy of their branded renter auto-reply so they can

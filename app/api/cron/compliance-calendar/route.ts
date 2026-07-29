@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import {
   getNotificationEvent,
@@ -29,9 +30,9 @@ import {
 // courtesy note (furnace filter / outdoor water off+on / smoke+CO test) into the
 // pending_tenant_messages approval queue (0075). It NEVER sends: a human operator
 // reviews/edits and taps Approve & Send at /dashboard/messages (the exact same
-// surface the rent-increase courtesy note uses). The whole tier ships dark —
-// enqueue is OPT-IN per org+event (isDripEnqueueEnabled), so nothing drafts until
-// an operator turns a seasonal event on.
+// surface the rent-increase courtesy note uses). The whole tier ships dark: the
+// env master switch, org-level compliance_calendar_enabled flag, and per-event
+// isDripEnqueueEnabled setting must all allow it before anything drafts.
 //
 // Rides the notification substrate (copy/recipients/branding/on-off) like every
 // other event; idempotency is the pending_tenant_messages unique dedupe index
@@ -45,8 +46,14 @@ import {
 // notify, like leasing.rent_increase), ONE email per org per season — NOT a
 // tenant draft. Because they are org-wide (no per-tenancy stamp, no pending_
 // tenant_messages row to dedupe on), their at-most-once guard is the dedicated
-// compliance_reminder_log table (0079), keyed (org, event, season). Same opt-in
-// posture (isDripEnqueueEnabled) so each ships dark until an operator turns it on.
+// compliance_reminder_log table (0079), keyed (org, event, season). Same coarse
+// env/org gates, then the event-level isDripEnqueueEnabled setting, so each item
+// stays dark until the org and item are deliberately enabled.
+//
+// Master gate: COMPLIANCE_CALENDAR_ENABLED must be true/1 AND the org row must
+// have organizations.compliance_calendar_enabled=true before any touchpoint is
+// considered. Event-level notification_settings still controls each individual
+// draft/reminder underneath that coarse org opt-in.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
 //   ?org=<id>   limit the sweep to one org
@@ -123,6 +130,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   }
 
+  if (!envFlagEnabled(process.env.COMPLIANCE_CALENDAR_ENABLED)) {
+    return NextResponse.json(
+      { ok: true, reason: "global_disabled", scanned: 0, enqueued: 0, notified: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
+      { status: 200 },
+    );
+  }
+
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
@@ -139,8 +153,9 @@ export async function GET(req: NextRequest) {
   let orgQuery = admin
     .from("organizations")
     .select(
-      "id, name, booking_timezone, brand_color, logo_url, reply_to_email, public_contact_email",
-    );
+      "id, name, booking_timezone, brand_color, logo_url, reply_to_email, public_contact_email, compliance_calendar_enabled",
+    )
+    .eq("compliance_calendar_enabled", true);
   if (onlyOrg) orgQuery = orgQuery.eq("id", onlyOrg);
   const { data: orgs, error: orgErr } = await orgQuery;
 

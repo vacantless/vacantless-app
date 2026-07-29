@@ -1,5 +1,6 @@
 // Unit tests for the seasonal compliance-calendar pure scheduling logic (S343).
 // Run: npx tsx scripts/test-compliance-calendar.ts
+import { readFileSync } from "node:fs";
 import {
   COMPLIANCE_CALENDAR_ITEMS,
   LANDLORD_CALENDAR_ITEMS,
@@ -194,6 +195,10 @@ ok(
     JSON.stringify(LANDLORD_CALENDAR_ITEMS.map((i) => i.eventKey)),
 );
 ok("landlordReminderEventKeys has 6 entries", landlordReminderEventKeys().length === 6);
+ok(
+  "compliance calendar has 14 scheduled touchpoints",
+  COMPLIANCE_CALENDAR_ITEMS.length + LANDLORD_CALENDAR_ITEMS.length === 14,
+);
 
 // --- summarizeReminderLog -----------------------------------------------------
 {
@@ -243,6 +248,77 @@ ok("landlordReminderEventKeys has 6 entries", landlordReminderEventKeys().length
   // Custom eventKeys arg overrides the default seed set.
   const custom = summarizeReminderLog([], ["a.one", "a.two"]);
   ok("summarize honors custom eventKeys", custom.length === 2 && custom[0].eventKey === "a.one");
+}
+
+// --- per-org enablement gate --------------------------------------------------
+{
+  const migration = readFileSync(
+    "supabase/migrations/0197_compliance_calendar_org_toggle.sql",
+    "utf8",
+  );
+  ok(
+    "migration adds organizations.compliance_calendar_enabled default false",
+    migration.includes("add column if not exists compliance_calendar_enabled boolean not null default false"),
+  );
+
+  const routeSource = readFileSync("app/api/cron/compliance-calendar/route.ts", "utf8");
+  const disabledReturn = routeSource.indexOf('reason: "global_disabled"');
+  const adminCreate = routeSource.indexOf("const admin = createAdminClient()");
+  ok(
+    "cron no-ops before DB scan while global switch is off",
+    routeSource.includes("COMPLIANCE_CALENDAR_ENABLED") &&
+      routeSource.includes("envFlagEnabled(process.env.COMPLIANCE_CALENDAR_ENABLED)") &&
+      disabledReturn >= 0 &&
+      adminCreate >= 0 &&
+      disabledReturn < adminCreate &&
+      routeSource.includes("scanned: 0"),
+  );
+  ok(
+    "cron selects the per-org compliance flag",
+    routeSource.includes("compliance_calendar_enabled"),
+  );
+  ok(
+    "cron only scans flag-true orgs",
+    routeSource.includes('.eq("compliance_calendar_enabled", true)'),
+  );
+
+  const orgSource = readFileSync("lib/org.ts", "utf8");
+  ok(
+    "selected-org shape includes compliance_calendar_enabled",
+    orgSource.includes("compliance_calendar_enabled: boolean") &&
+      orgSource.includes("landlord_campaign_email, compliance_calendar_enabled, showing_arrival_phone"),
+  );
+
+  const settingsAction = readFileSync("app/dashboard/settings/actions.ts", "utf8");
+  ok(
+    "settings action enforces owner_admin for compliance toggle",
+    settingsAction.includes("getRoleForOrg(org.id)") &&
+      settingsAction.includes('role !== "owner_admin"') &&
+      settingsAction.includes("updateComplianceCalendarSettings"),
+  );
+  ok(
+    "settings action scopes compliance update to selected org",
+    settingsAction.includes("compliance_calendar_enabled: enabled") &&
+      settingsAction.includes('.eq("id", org.id)'),
+  );
+
+  const settingsPage = readFileSync("app/dashboard/settings/page.tsx", "utf8");
+  ok(
+    "settings page renders owner-admin-only compliance card",
+    settingsPage.includes("canManageOwnerSettings") &&
+      settingsPage.includes("Compliance calendar reminders") &&
+      settingsPage.includes("org.compliance_calendar_enabled === true"),
+  );
+  ok(
+    "settings copy names the expected compliance reminders",
+    settingsPage.includes("Vacant Home Tax") &&
+      settingsPage.includes("seasonal water shutoff") &&
+      settingsPage.includes("winter walkways") &&
+      settingsPage.includes("furnace service") &&
+      settingsPage.includes("smoke and CO alarms") &&
+      settingsPage.includes("insurance review") &&
+      settingsPage.includes("rent-increase timing"),
+  );
 }
 
 console.log(`\ncompliance-calendar: ${passed} passed, ${failed} failed`);
