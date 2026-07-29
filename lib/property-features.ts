@@ -244,6 +244,43 @@ export function forRentByLabel(value: unknown): string | null {
   return isForRentBy(value) ? FOR_RENT_BY_LABELS[value] : null;
 }
 
+// --- Structure type ---------------------------------------------------------
+// Operator-confirmed ownership/mechanical-responsibility signal for compliance
+// reminders. This deliberately does NOT reuse unit_type: "apartment" can be a
+// freehold apartment-over-store or a highrise rental/condo where building
+// mechanicals are outside the landlord's control.
+
+export const STRUCTURE_TYPE_OPTIONS = [
+  "freehold",
+  "condo",
+  "rental_unit",
+] as const;
+export type StructureType = (typeof STRUCTURE_TYPE_OPTIONS)[number];
+
+export function isStructureType(value: unknown): value is StructureType {
+  return (
+    typeof value === "string" &&
+    (STRUCTURE_TYPE_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+/** Normalize a raw form value to a valid structure type or null (= unknown). */
+export function normalizeStructureType(raw: unknown): StructureType | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return isStructureType(v) ? v : null;
+}
+
+const STRUCTURE_TYPE_LABELS: Record<StructureType, string> = {
+  freehold: "Freehold",
+  condo: "Condo",
+  rental_unit: "Rental unit",
+};
+
+export function structureTypeLabel(value: unknown): string | null {
+  return isStructureType(value) ? STRUCTURE_TYPE_LABELS[value] : null;
+}
+
 /**
  * The renter-facing unit fields. All optional/nullable so a partially-filled
  * property still renders cleanly.
@@ -253,9 +290,11 @@ export type UnitFeatures = {
   sqft?: number | null;
   floor?: string | null;
   parking?: string | null;
-  // Kijiji autopilot field map (S550): structural type + who is listing.
+  // Kijiji autopilot field map (S550): listing category + who is listing.
   unit_type?: UnitType | string | null;
   for_rent_by?: ForRentBy | string | null;
+  // Compliance-calendar structure/mechanical responsibility. Not renter-facing.
+  structure_type?: StructureType | string | null;
   laundry?: Laundry | string | null;
   air_conditioning?: boolean | null;
   balcony?: boolean | null;

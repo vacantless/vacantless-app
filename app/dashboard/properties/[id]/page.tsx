@@ -102,6 +102,8 @@ import {
   unitTypeLabel,
   FOR_RENT_BY_OPTIONS,
   forRentByLabel,
+  STRUCTURE_TYPE_OPTIONS,
+  structureTypeLabel,
 } from "@/lib/property-features";
 import {
   resolveEffectiveFeatures,
@@ -255,6 +257,7 @@ type Property = {
   // apartment downstream); for_rent_by is NOT NULL default 'owner'.
   unit_type: string | null;
   for_rent_by: string | null;
+  structure_type: string | null;
   laundry: string | null;
   air_conditioning: boolean;
   balcony: boolean;
@@ -364,7 +367,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -2436,6 +2439,30 @@ export default async function PropertyDetailPage({
               </select>
               <p className="mt-1 text-xs text-gray-400">
                 Rides along to the portals (e.g. Kijiji posts it as this type).
+              </p>
+            </div>
+            <div className="w-56">
+              <label
+                htmlFor="property-structure-type"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Structure
+              </label>
+              <select
+                id="property-structure-type"
+                name="structure_type"
+                defaultValue={p.structure_type ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Unknown</option>
+                {STRUCTURE_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {structureTypeLabel(opt)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                Used only to keep owner/mechanical reminders relevant.
               </p>
             </div>
             <div className="w-44">

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "test": "tsx scripts/test-lead-detail.ts",
+    "test:ai-reply": "tsx scripts/test-ai-reply.ts",
     "test:channel-connect-chip": "tsx scripts/test-channel-connect-chip.ts",
     "test:selected-org-dashboard-scope": "tsx scripts/test-selected-org-dashboard-scope.ts",
     "build": "next build",

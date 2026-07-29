@@ -79,13 +79,11 @@ export const COMPLIANCE_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
 // the operator directly (audience operator, sendMode notify), NOT the tenant.
 // One per org per season; the cron gates them with the compliance_reminder_log
 // (0079) idempotency table. These are the landlord's OWN recurring obligations,
-// so they fire independent of occupancy (a vacant unit still needs insurance and
-// a furnace service). Extend by adding a row here AND registering the matching
-// operator event in lib/notifications.ts — no cron/UI changes needed. Ontario-
-// appropriate anchors; generous lead windows so a fortnightly glance catches them.
+// so they fire independent of occupancy. Extend by adding a row here AND
+// registering the matching operator event in lib/notifications.ts AND classifying
+// it in the applicability map below. Ontario-appropriate anchors; generous lead
+// windows so a fortnightly glance catches them.
 export const LANDLORD_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
-  // Start of the year — review property/landlord insurance coverage + renewal.
-  { eventKey: "leasing.landlord_insurance_review", anchorMonth: 1, anchorDay: 15, leadDays: 14, graceDays: 30 },
   // Ahead of heating season — book a licensed heating-system service.
   { eventKey: "leasing.landlord_furnace_service", anchorMonth: 9, anchorDay: 15, leadDays: 21, graceDays: 21 },
   // Heating season begins (clocks change) — verify smoke + CO alarm compliance.
@@ -100,6 +98,131 @@ export const LANDLORD_CALENDAR_ITEMS: readonly ComplianceCalendarItem[] = [
   // tenant outdoor-water note (Oct 20) so the landlord can plan the work.
   { eventKey: "leasing.landlord_winter_water_shutoff", anchorMonth: 10, anchorDay: 15, leadDays: 21, graceDays: 21 },
 ] as const;
+
+export type ComplianceApplicability =
+  | "all_properties"
+  | "freehold_only"
+  | "toronto_residential";
+
+export type ComplianceCalendarProperty = {
+  id?: string | null;
+  address?: string | null;
+  city?: string | null;
+  structure_type?: string | null;
+};
+
+export const FREEHOLD_ONLY_COMPLIANCE_EVENT_KEYS = [
+  "leasing.landlord_furnace_service",
+  "leasing.landlord_winter_water_shutoff",
+  "leasing.seasonal_furnace_filter",
+  "leasing.seasonal_water_shutoff",
+  "leasing.seasonal_water_turnon",
+  "leasing.seasonal_eavestrough",
+  "leasing.seasonal_winter_walkways",
+  "leasing.seasonal_ac_startup",
+] as const;
+
+export const ALL_PROPERTIES_COMPLIANCE_EVENT_KEYS = [
+  "leasing.landlord_fire_safety",
+  "leasing.seasonal_smoke_co_test",
+  "leasing.seasonal_dryer_vent",
+] as const;
+
+export const TORONTO_RESIDENTIAL_COMPLIANCE_EVENT_KEYS = [
+  "leasing.landlord_vacant_home_tax_60d",
+  "leasing.landlord_vacant_home_tax_30d",
+] as const;
+
+const FREEHOLD_ONLY_COMPLIANCE_EVENT_KEY_SET = new Set<string>(
+  FREEHOLD_ONLY_COMPLIANCE_EVENT_KEYS,
+);
+const ALL_PROPERTIES_COMPLIANCE_EVENT_KEY_SET = new Set<string>(
+  ALL_PROPERTIES_COMPLIANCE_EVENT_KEYS,
+);
+const TORONTO_RESIDENTIAL_COMPLIANCE_EVENT_KEY_SET = new Set<string>(
+  TORONTO_RESIDENTIAL_COMPLIANCE_EVENT_KEYS,
+);
+
+function eventKeyOf(itemOrKey: ComplianceCalendarItem | string): string {
+  return typeof itemOrKey === "string" ? itemOrKey : itemOrKey.eventKey;
+}
+
+export function complianceApplicabilityForEventKey(
+  eventKey: string,
+): ComplianceApplicability | null {
+  if (FREEHOLD_ONLY_COMPLIANCE_EVENT_KEY_SET.has(eventKey)) {
+    return "freehold_only";
+  }
+  if (ALL_PROPERTIES_COMPLIANCE_EVENT_KEY_SET.has(eventKey)) {
+    return "all_properties";
+  }
+  if (TORONTO_RESIDENTIAL_COMPLIANCE_EVENT_KEY_SET.has(eventKey)) {
+    return "toronto_residential";
+  }
+  return null;
+}
+
+export function isComplianceCalendarEventKey(eventKey: string): boolean {
+  return complianceApplicabilityForEventKey(eventKey) != null;
+}
+
+function normalizedLocationPart(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function propertyIsToronto(property: ComplianceCalendarProperty): boolean {
+  const city = normalizedLocationPart(property.city);
+  if (city) return city === "toronto";
+
+  // The current properties table has no reliable city column. Fall back to the
+  // address tail so existing rows like "12 Main St, Toronto, ON" still qualify
+  // for VHT; once a city column exists, the city branch above wins.
+  const address = property.address ?? "";
+  const parts = address.split(",").slice(1).map(normalizedLocationPart);
+  if (parts.some((part) => part === "toronto" || part.startsWith("toronto "))) {
+    return true;
+  }
+  return /\btoronto\b/.test(normalizedLocationPart(address));
+}
+
+export function propertyMatchesComplianceApplicability(
+  property: ComplianceCalendarProperty,
+  applicability: ComplianceApplicability,
+): boolean {
+  switch (applicability) {
+    case "all_properties":
+      return true;
+    case "freehold_only":
+      return property.structure_type === "freehold";
+    case "toronto_residential":
+      return propertyIsToronto(property);
+  }
+}
+
+export function complianceItemEligibleForProperties(
+  itemOrKey: ComplianceCalendarItem | string,
+  properties: readonly ComplianceCalendarProperty[],
+): boolean {
+  const applicability = complianceApplicabilityForEventKey(eventKeyOf(itemOrKey));
+  if (!applicability) return false;
+  return (properties ?? []).some((property) =>
+    propertyMatchesComplianceApplicability(property, applicability),
+  );
+}
+
+export function eligibleComplianceItemsForProperties(
+  items: readonly ComplianceCalendarItem[],
+  properties: readonly ComplianceCalendarProperty[],
+): ComplianceCalendarItem[] {
+  return items.filter((item) => complianceItemEligibleForProperties(item, properties));
+}
 
 // --- Date helpers (UTC-anchored on YYYY-MM-DD strings; no TZ drift) -----------
 

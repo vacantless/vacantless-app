@@ -19,7 +19,11 @@ import {
   anchorDateFor,
   seasonalDedupeKey,
   complianceReminderDedupeKey,
+  complianceApplicabilityForEventKey,
+  complianceItemEligibleForProperties,
+  propertyMatchesComplianceApplicability,
   type ComplianceCalendarItem,
+  type ComplianceCalendarProperty,
   type DueComplianceItem,
 } from "@/lib/compliance-calendar";
 
@@ -41,7 +45,7 @@ import {
 // rent-increase sweep): the dedupe row IS the once-per-season guard.
 //
 // S357 adds a SECOND tier to the same sweep: the LANDLORD-NOTIFY annual reminders
-// (LANDLORD_CALENDAR_ITEMS — insurance review / heating service / alarm
+// (LANDLORD_CALENDAR_ITEMS — heating service / alarm
 // compliance). These go to the OPERATOR directly (audience operator, sendMode
 // notify, like leasing.rent_increase), ONE email per org per season — NOT a
 // tenant draft. Because they are org-wide (no per-tenancy stamp, no pending_
@@ -102,6 +106,44 @@ type TenancyRow = {
   property: { address: string | null } | null;
   tenants: { name: string | null; email: string | null; is_primary: boolean | null }[] | null;
 };
+
+function missingStructureTypeColumn(error: { message?: string | null } | null | undefined): boolean {
+  return /structure_type/i.test(error?.message ?? "");
+}
+
+function toComplianceProperties(rows: readonly any[]): ComplianceCalendarProperty[] {
+  return (rows ?? []).map((r) => ({
+    id: typeof r.id === "string" ? r.id : null,
+    address: typeof r.address === "string" ? r.address : null,
+    city: typeof r.city === "string" ? r.city : null,
+    structure_type: typeof r.structure_type === "string" ? r.structure_type : null,
+  }));
+}
+
+async function loadComplianceProperties(
+  admin: any,
+  orgId: string,
+): Promise<{ properties: ComplianceCalendarProperty[]; usedFallback: boolean }> {
+  const { data, error } = await admin
+    .from("properties")
+    .select("id, address, structure_type")
+    .eq("organization_id", orgId);
+  if (!error) {
+    return { properties: toComplianceProperties(data ?? []), usedFallback: false };
+  }
+  if (!missingStructureTypeColumn(error)) {
+    throw error;
+  }
+
+  // Deploy-order guard: if the source lands before migration 0198, keep the
+  // calendar fail-closed for freehold-only items instead of aborting the sweep.
+  const fallback = await admin
+    .from("properties")
+    .select("id, address")
+    .eq("organization_id", orgId);
+  if (fallback.error) throw fallback.error;
+  return { properties: toComplianceProperties(fallback.data ?? []), usedFallback: true };
+}
 
 /** The primary tenant (is_primary first, else the first listed) — the address
  *  for the soft courtesy draft. */
@@ -175,13 +217,40 @@ export async function GET(req: NextRequest) {
       const tz: string = org.booking_timezone || "America/Toronto";
       const today = localDateString(nowMs, tz);
       const todayYear = Number(today.slice(0, 4));
+      const { properties: complianceProperties, usedFallback: usedPropertyFallback } =
+        await loadComplianceProperties(admin, org.id);
+      const propertyById = new Map(
+        complianceProperties
+          .filter((p) => typeof p.id === "string" && p.id.trim() !== "")
+          .map((p) => [p.id as string, p]),
+      );
+      if (usedPropertyFallback) {
+        summary.details.push({
+          org: org.id,
+          tier: "eligibility",
+          structure_type_unavailable: true,
+        });
+      }
 
       // ======================================================================
       // TIER 1 — SOFT tenant courtesy notes (approve_to_send drafts). Drafts one
       // per active tenancy into pending_tenant_messages; idempotency = that
-      // table's unique dedupe index. Unchanged from S343.
+      // table's unique dedupe index. Property eligibility keeps noisy structure-
+      // specific tenant notes out of mismatched units.
       // ======================================================================
-      const dueTenant = force ? allItemsForYear(todayYear) : dueComplianceItems(today);
+      const candidateTenant = force ? allItemsForYear(todayYear) : dueComplianceItems(today);
+      const dueTenant = candidateTenant.filter((d) =>
+        complianceItemEligibleForProperties(d.item, complianceProperties),
+      );
+      const tenantEligibilitySkipped = candidateTenant.length - dueTenant.length;
+      if (tenantEligibilitySkipped > 0) {
+        summary.skipped += tenantEligibilitySkipped;
+        summary.details.push({
+          org: org.id,
+          tier: "tenant",
+          ineligible: tenantEligibilitySkipped,
+        });
+      }
       if (dueTenant.length === 0) {
         summary.details.push({ org: org.id, tier: "tenant", due: 0 });
       } else {
@@ -224,7 +293,17 @@ export async function GET(req: NextRequest) {
 
           for (const { d, setting } of enabledDue) {
             const event = getNotificationEvent(d.item.eventKey)!;
+            const applicability = complianceApplicabilityForEventKey(d.item.eventKey);
             for (const t of tenancies) {
+              const tenancyProperty = t.property_id ? propertyById.get(t.property_id) ?? null : null;
+              if (
+                !applicability ||
+                !tenancyProperty ||
+                !propertyMatchesComplianceApplicability(tenancyProperty, applicability)
+              ) {
+                summary.skipped++;
+                continue;
+              }
               const primary = primaryTenantOf(t);
               const tenantEmail = (primary?.email ?? "").trim() || null;
               // A draft with nowhere to go isn't actionable — skip tenancies with no
@@ -309,9 +388,21 @@ export async function GET(req: NextRequest) {
       // since these are org-wide (no per-tenancy stamp, no pending draft to
       // dedupe on). Opt-in per org (isDripEnqueueEnabled), so dark until turned on.
       // ======================================================================
-      const dueLandlord = force
+      const candidateLandlord = force
         ? allItemsForYear(todayYear, LANDLORD_CALENDAR_ITEMS)
         : dueComplianceItems(today, LANDLORD_CALENDAR_ITEMS);
+      const dueLandlord = candidateLandlord.filter((d) =>
+        complianceItemEligibleForProperties(d.item, complianceProperties),
+      );
+      const landlordEligibilitySkipped = candidateLandlord.length - dueLandlord.length;
+      if (landlordEligibilitySkipped > 0) {
+        summary.skipped += landlordEligibilitySkipped;
+        summary.details.push({
+          org: org.id,
+          tier: "landlord",
+          ineligible: landlordEligibilitySkipped,
+        });
+      }
 
       const enabledLandlord: Array<{ d: DueComplianceItem; setting: NotificationSettingRow | null }> = [];
       for (const d of dueLandlord) {

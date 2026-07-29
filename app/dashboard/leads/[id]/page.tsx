@@ -35,6 +35,7 @@ import { ALLOWED_FORM_FIELDS } from "@/lib/rental-application";
 import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
 import { InquiryReplyPanel } from "../inquiry-reply-panel";
+import { aiReplyEnabled, buildAiReplyDraft } from "@/lib/ai-reply";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -73,7 +74,17 @@ type Lead = {
   qualified_out: boolean;
   qualify_out_reasons: string[] | null;
   screen_custom_answers: CustomAnswerSnapshot[] | null;
-  property: { id: string; address: string; rent_cents: number | null } | null;
+  property: {
+    id: string;
+    address: string;
+    rent_cents: number | null;
+    beds: number | null;
+    baths: number | null;
+    parking: string | null;
+    available_date: string | null;
+    laundry: string | null;
+    pet_friendly: boolean | null;
+  } | null;
   listing_post: ListingPost;
 };
 
@@ -102,7 +113,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -191,6 +202,27 @@ export default async function LeadDetailPage({
   const followText = followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
   const replyDraft = buildReplyDraft(l, orgName);
+  const aiReplyDraft = aiReplyEnabled(process.env.AI_REPLY_ENABLED)
+    ? buildAiReplyDraft({
+        renterName: l.name,
+        orgName,
+        inquiryText: l.notes,
+        moveInDate: l.move_in,
+        noSuitableTime: l.no_suitable_time,
+        listing: l.property
+          ? {
+              address: l.property.address,
+              rentCents: l.property.rent_cents,
+              beds: l.property.beds,
+              baths: l.property.baths,
+              parking: l.property.parking,
+              availableDate: l.property.available_date,
+              laundry: l.property.laundry,
+              petFriendly: l.property.pet_friendly,
+            }
+          : null,
+      })
+    : null;
 
   // Operator-only income magnitude for the qualify-out flag (S258): how far the
   // renter's reported income sits from THIS org's requirement (multiple x rent).
@@ -560,6 +592,7 @@ export default async function LeadDetailPage({
         phone={l.phone}
         subject={replyDraft.subject}
         body={replyDraft.body}
+        aiDraft={aiReplyDraft}
       />
 
       <div className="mt-8">

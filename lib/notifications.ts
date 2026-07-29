@@ -795,8 +795,8 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
   // emails the operator ONCE per org per season — its at-most-once guard is the
   // compliance_reminder_log table (0079), not a tenant draft.
   //
-  // These are the LANDLORD'S OWN recurring obligations (insurance, heating-system
-  // service, smoke/CO alarm compliance), so they read as a to-do reminder TO the
+  // These are the LANDLORD'S OWN recurring obligations (heating-system service,
+  // smoke/CO alarm compliance), so they read as a to-do reminder TO the
   // operator, with {{dashboard_url}} as the "work from your inbox" link. They are
   // operational reminders, NOT legal LTB-served notices (N1..N14 stay separate,
   // notify-the-landlord + official form, gated behind a legal pass — never auto-
@@ -805,19 +805,6 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
   // so each ships dark until the operator turns it on. No alert accent (planning
   // reminders, not emergencies). Tokens: {{org_name}} {{season_year}}
   // {{dashboard_url}} + the common {{property_address}} (renders generically here).
-  {
-    key: "leasing.landlord_insurance_review",
-    family: "leasing",
-    audience: "operator",
-    label: "Annual: review your property insurance",
-    description:
-      "Once a year, a reminder to review and renew your landlord/property insurance — confirm the policy is current, reflects the rental use, and that coverage and rebuild value are still adequate. Goes to your team, not the tenant. Off until you turn it on.",
-    tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
-    defaultSubject: "Annual reminder: review your property insurance ({{season_year}})",
-    defaultBody:
-      "It's a good time for your yearly insurance check.\n\nA quick annual review of your landlord/property insurance helps avoid surprises at claim time:\n\n- Confirm the policy is active and renews on schedule.\n- Make sure it reflects that the property is a rental (a homeowner policy often won't cover a tenanted unit).\n- Check the rebuild/replacement value and liability limits are still adequate.\n- Consider requiring tenants to carry their own contents + liability insurance.\n\nReview your units and records in your dashboard: {{dashboard_url}}",
-    active: true,
-  },
   {
     key: "leasing.landlord_furnace_service",
     family: "leasing",
@@ -1070,7 +1057,6 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.distribution_takedown_needed": "listing",
   // owner — landlord / property-owner compliance, assets, rent increases
   "leasing.rent_increase": "owner",
-  "leasing.landlord_insurance_review": "owner",
   "leasing.landlord_furnace_service": "owner",
   "leasing.landlord_fire_safety": "owner",
   "leasing.landlord_vacant_home_tax_60d": "owner",

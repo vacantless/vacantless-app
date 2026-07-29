@@ -14,7 +14,10 @@ import {
   type NotificationSettingRow,
 } from "@/lib/notifications";
 import {
+  complianceApplicabilityForEventKey,
+  complianceItemEligibleForProperties,
   summarizeReminderLog,
+  type ComplianceCalendarProperty,
   type ComplianceReminderLogRow,
   type ReminderLogSummary,
 } from "@/lib/compliance-calendar";
@@ -37,7 +40,7 @@ const LANES: { lane: NotificationLane; label: string; hint: string }[] = [
   {
     lane: "owner",
     label: "Owner / landlord",
-    hint: "Handles landlord reminders: rent increases, insurance, detector and equipment end-of-life, inspections, and other compliance.",
+    hint: "Handles landlord reminders: rent increases, detector and equipment end-of-life, inspections, and other compliance.",
   },
 ];
 const LANE_LABEL: Record<NotificationLane, string> = {
@@ -64,8 +67,8 @@ export const dynamic = "force-dynamic";
 // outcome nudge, and the daily leads/showings digest. These are the only leasing
 // operator events whose empty-recipients fallback should read "members who manage
 // inquiries". The rest of the `leasing` family that reaches an operator is
-// landlord/compliance/asset reminders (rent increase, insurance review, detector /
-// equipment EOL, appliance warranty, inspections, ...) which do NOT route through
+// landlord/compliance/asset reminders (rent increase, detector / equipment EOL,
+// appliance warranty, inspections, ...) which do NOT route through
 // inquiry managers - those take the neutral "manage this account" hint.
 const INQUIRY_OPERATOR_EVENTS = new Set<string>([
   "leasing.new_lead",
@@ -139,6 +142,52 @@ function errorBanner(code: string | undefined): string | null {
   }
 }
 
+function missingStructureTypeColumn(error: { message?: string | null } | null | undefined): boolean {
+  return /structure_type/i.test(error?.message ?? "");
+}
+
+function toComplianceProperties(rows: readonly any[]): ComplianceCalendarProperty[] {
+  return (rows ?? []).map((r) => ({
+    id: typeof r.id === "string" ? r.id : null,
+    address: typeof r.address === "string" ? r.address : null,
+    city: typeof r.city === "string" ? r.city : null,
+    structure_type: typeof r.structure_type === "string" ? r.structure_type : null,
+  }));
+}
+
+async function loadComplianceProperties(
+  supabase: any,
+  orgId: string,
+): Promise<ComplianceCalendarProperty[]> {
+  const { data, error } = await supabase
+    .from("properties")
+    .select("id, address, structure_type")
+    .eq("organization_id", orgId);
+  if (!error) return toComplianceProperties(data ?? []);
+  if (!missingStructureTypeColumn(error)) return [];
+
+  const fallback = await supabase
+    .from("properties")
+    .select("id, address")
+    .eq("organization_id", orgId);
+  if (fallback.error) return [];
+  return toComplianceProperties(fallback.data ?? []);
+}
+
+function complianceUnavailableCopy(eventKey: string): string {
+  const applicability = complianceApplicabilityForEventKey(eventKey);
+  switch (applicability) {
+    case "freehold_only":
+      return "Add at least one property marked Freehold before enabling this reminder.";
+    case "toronto_residential":
+      return "Add at least one Toronto property before enabling this reminder.";
+    case "all_properties":
+      return "Add a property before enabling this reminder.";
+    default:
+      return "";
+  }
+}
+
 export default async function AutomationsPage({
   searchParams,
 }: {
@@ -184,6 +233,8 @@ export default async function AutomationsPage({
   for (const s of summarizeReminderLog((reminderRows ?? []) as ComplianceReminderLogRow[])) {
     reminderByKey.set(s.eventKey, s);
   }
+
+  const complianceProperties = await loadComplianceProperties(supabase, org.id);
 
   // "Default recipients today" for the new-inquiry alert (P3, post-S402): show
   // the landlord the exact address(es) that receive the first real inquiry when
@@ -316,7 +367,12 @@ export default async function AutomationsPage({
               .filter((e) => e.family === family)
               .map((event) => {
                 const row = byKey.get(event.key) ?? null;
-                const enabled = row ? row.enabled : true;
+                const calendarApplicability = complianceApplicabilityForEventKey(event.key);
+                const calendarEligible = calendarApplicability
+                  ? complianceItemEligibleForProperties(event.key, complianceProperties)
+                  : true;
+                const calendarUnavailable = calendarApplicability != null && !calendarEligible;
+                const enabled = calendarUnavailable ? false : row ? row.enabled : true;
                 const recipients = (row?.recipients ?? []).join("\n");
                 const highlight = savedKey === event.key;
                 const fieldIdPrefix = `notification-${event.key.replace(
@@ -333,6 +389,7 @@ export default async function AutomationsPage({
                     action={saveNotificationSetting}
                     className={[
                       "rounded-xl border bg-white p-5 shadow-sm",
+                      calendarUnavailable ? "opacity-70" : "",
                       highlight ? "border-brand" : "border-gray-200",
                     ].join(" ")}
                   >
@@ -349,6 +406,11 @@ export default async function AutomationsPage({
                           </span>
                         )}
                         <p className="mt-1 text-sm text-gray-600">{event.description}</p>
+                        {calendarUnavailable && (
+                          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                            {complianceUnavailableCopy(event.key)}
+                          </p>
+                        )}
                         {reminderByKey.has(event.key) && (
                           <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
                             {reminderByKey.get(event.key)!.lastSentAt
@@ -369,6 +431,7 @@ export default async function AutomationsPage({
                           type="checkbox"
                           name="enabled"
                           defaultChecked={enabled}
+                          disabled={calendarUnavailable}
                           className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
                         />
                         On
@@ -389,6 +452,7 @@ export default async function AutomationsPage({
                           name="subject_template"
                           defaultValue={row?.subject_template ?? ""}
                           placeholder={event.defaultSubject}
+                          disabled={calendarUnavailable}
                           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:ring-brand"
                         />
                       </div>
@@ -406,6 +470,7 @@ export default async function AutomationsPage({
                           defaultValue={row?.body_template ?? ""}
                           placeholder={event.defaultBody}
                           rows={5}
+                          disabled={calendarUnavailable}
                           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:ring-brand"
                         />
                         <p className="mt-1.5 text-xs text-gray-500">
@@ -432,6 +497,7 @@ export default async function AutomationsPage({
                           defaultValue={recipients}
                           placeholder={"name@example.com\nanother@example.com"}
                           rows={2}
+                          disabled={calendarUnavailable}
                           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:ring-brand"
                         />
                         <p className="mt-1.5 text-xs text-gray-500">
@@ -500,6 +566,7 @@ export default async function AutomationsPage({
                     <div className="mt-4 flex justify-end">
                       <button
                         type="submit"
+                        disabled={calendarUnavailable}
                         className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                       >
                         Save

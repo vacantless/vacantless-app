@@ -22,8 +22,10 @@ name: Vacantless background sweeps
 #   * /api/cron/rent-increase — per-tenancy N1 reminder (self-gates to once per
 #     increase cycle via tenancies.rent_increase_nudged_for)
 #   * /api/cron/compliance-calendar — seasonal soft tenant courtesy notes (drafts
-#     into pending_tenant_messages on the season window; opt-in per org+event,
-#     self-gates to once/season via the pending_tenant_messages dedupe index)
+#     into pending_tenant_messages on the season window; dark unless
+#     COMPLIANCE_CALENDAR_ENABLED=true and the org's compliance_calendar_enabled
+#     flag is true; event settings still gate each item; self-gates to once/season
+#     via the pending_tenant_messages dedupe index)
 #   * /api/cron/document-retention — permanently purges soft-deleted vault
 #     documents past their retention window (documents.retention_until); acts only
 #     on already soft-deleted rows, so frequent pings are safe

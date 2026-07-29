@@ -1631,8 +1631,8 @@ export default async function SettingsPage({
               <p className="mt-1 text-sm text-gray-500">
                 Turn on the organization-level calendar for Vacant Home Tax
                 deadlines, seasonal water shutoff and turn-on, winter walkways
-                and ice, furnace service and filters, smoke and CO alarms,
-                insurance review, and rent-increase timing reminders.
+                and ice, furnace service and filters, smoke and CO alarms, and
+                rent-increase timing reminders.
               </p>
 
               {complianceFlash === "saved" && (

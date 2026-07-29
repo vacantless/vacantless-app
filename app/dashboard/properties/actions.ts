@@ -17,6 +17,7 @@ import {
   normalizeAcType,
   normalizeUnitType,
   normalizeForRentBy,
+  normalizeStructureType,
 } from "@/lib/property-features";
 import { parseMlsListing, emptyParsedListing, type ParsedListing } from "@/lib/mls-import";
 import { applyAiListing } from "@/lib/listing-extract";
@@ -548,6 +549,7 @@ export async function updateProperty(formData: FormData) {
       // normalizer never returns null (missing/invalid -> 'owner').
       unit_type: normalizeUnitType(formData.get("unit_type")),
       for_rent_by: normalizeForRentBy(formData.get("for_rent_by")),
+      structure_type: normalizeStructureType(formData.get("structure_type")),
       laundry: normalizeLaundry(formData.get("laundry")),
       air_conditioning: parseCheckbox(formData, "air_conditioning"),
       balcony: parseCheckbox(formData, "balcony"),

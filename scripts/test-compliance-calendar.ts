@@ -9,9 +9,17 @@ import {
   dueComplianceItems,
   seasonalDedupeKey,
   complianceReminderDedupeKey,
+  complianceApplicabilityForEventKey,
+  complianceItemEligibleForProperties,
+  eligibleComplianceItemsForProperties,
+  propertyMatchesComplianceApplicability,
+  FREEHOLD_ONLY_COMPLIANCE_EVENT_KEYS,
+  ALL_PROPERTIES_COMPLIANCE_EVENT_KEYS,
+  TORONTO_RESIDENTIAL_COMPLIANCE_EVENT_KEYS,
   landlordReminderEventKeys,
   summarizeReminderLog,
   type ComplianceCalendarItem,
+  type ComplianceCalendarProperty,
 } from "../lib/compliance-calendar";
 import { getNotificationEvent, notificationSendMode } from "../lib/notifications";
 
@@ -70,6 +78,36 @@ for (const item of LANDLORD_CALENDAR_ITEMS) {
   ok(
     "tenant and landlord item sets are disjoint",
     LANDLORD_CALENDAR_ITEMS.every((i) => !tenantKeys.has(i.eventKey)),
+  );
+}
+
+{
+  const scheduledKeys = [
+    ...COMPLIANCE_CALENDAR_ITEMS.map((i) => i.eventKey),
+    ...LANDLORD_CALENDAR_ITEMS.map((i) => i.eventKey),
+  ];
+  ok(
+    "every scheduled compliance item is classified",
+    scheduledKeys.every((key) => complianceApplicabilityForEventKey(key) != null),
+  );
+  ok(
+    "classification covers exactly the scheduled items",
+    [
+      ...FREEHOLD_ONLY_COMPLIANCE_EVENT_KEYS,
+      ...ALL_PROPERTIES_COMPLIANCE_EVENT_KEYS,
+      ...TORONTO_RESIDENTIAL_COMPLIANCE_EVENT_KEYS,
+    ]
+      .slice()
+      .sort()
+      .join("|") === scheduledKeys.slice().sort().join("|"),
+  );
+  ok(
+    "landlord insurance review is not scheduled",
+    !scheduledKeys.includes("leasing.landlord_insurance_review"),
+  );
+  ok(
+    "landlord insurance review is not registered",
+    getNotificationEvent("leasing.landlord_insurance_review") == null,
   );
 }
 
@@ -135,10 +173,6 @@ function landlordKeys(today: string): string[] {
     .map((d) => d.item.eventKey)
     .sort();
 }
-// insurance review: anchor Jan 15, lead 14, grace 30 -> window [Jan 1, Feb 14].
-ok("insurance review due on anchor", landlordKeys("2026-01-15").includes("leasing.landlord_insurance_review"));
-ok("insurance review due in grace", landlordKeys("2026-02-10").includes("leasing.landlord_insurance_review"));
-ok("insurance review not due after grace", !landlordKeys("2026-03-01").includes("leasing.landlord_insurance_review"));
 // furnace service: anchor Sep 15, lead 21, grace 21 -> window [Aug 25, Oct 6].
 ok("furnace service due on anchor", landlordKeys("2026-09-15").includes("leasing.landlord_furnace_service"));
 // fire safety: anchor Oct 1, lead 21, grace 21 -> window [Sep 10, Oct 22].
@@ -161,7 +195,7 @@ ok("winter-walkways due on anchor (Dec 1)", dueKeys("2026-12-01").includes("leas
 ok("winter-walkways due at grace close (Dec 31)", dueKeys("2026-12-31").includes("leasing.seasonal_winter_walkways"));
 ok("winter-walkways NOT due day after grace (Jan 1)", !dueKeys("2027-01-01").includes("leasing.seasonal_winter_walkways"));
 // The default tenant call must NOT surface landlord items, and vice-versa.
-ok("tenant call excludes landlord items", !dueKeys("2026-01-15").includes("leasing.landlord_insurance_review"));
+ok("tenant call excludes landlord items", !dueKeys("2026-09-15").includes("leasing.landlord_furnace_service"));
 ok("landlord call excludes tenant items", !landlordKeys("2026-10-01").includes("leasing.seasonal_furnace_filter"));
 ok("landlord mid-summer (Jul 1) has nothing due", landlordKeys("2026-07-01").length === 0);
 
@@ -194,17 +228,113 @@ ok(
   JSON.stringify(landlordReminderEventKeys()) ===
     JSON.stringify(LANDLORD_CALENDAR_ITEMS.map((i) => i.eventKey)),
 );
-ok("landlordReminderEventKeys has 6 entries", landlordReminderEventKeys().length === 6);
+ok("landlordReminderEventKeys has 5 entries", landlordReminderEventKeys().length === 5);
 ok(
-  "compliance calendar has 14 scheduled touchpoints",
-  COMPLIANCE_CALENDAR_ITEMS.length + LANDLORD_CALENDAR_ITEMS.length === 14,
+  "compliance calendar has 13 scheduled touchpoints",
+  COMPLIANCE_CALENDAR_ITEMS.length + LANDLORD_CALENDAR_ITEMS.length === 13,
 );
+
+// --- property-structure / Toronto eligibility --------------------------------
+function eligibleKeysFor(
+  items: readonly ComplianceCalendarItem[],
+  properties: readonly ComplianceCalendarProperty[],
+): string[] {
+  return eligibleComplianceItemsForProperties(items, properties)
+    .map((item) => item.eventKey)
+    .sort();
+}
+
+{
+  const condoToronto: ComplianceCalendarProperty[] = [
+    { id: "condo-1", address: "1 Bedford Rd, Toronto, ON", structure_type: "condo" },
+  ];
+  const condoLandlord = eligibleKeysFor(LANDLORD_CALENDAR_ITEMS, condoToronto);
+  ok(
+    "condo-only Toronto org: landlord tier allows VHT + fire only",
+    JSON.stringify(condoLandlord) ===
+      JSON.stringify([
+        "leasing.landlord_fire_safety",
+        "leasing.landlord_vacant_home_tax_30d",
+        "leasing.landlord_vacant_home_tax_60d",
+      ].sort()),
+  );
+  const condoTenant = eligibleKeysFor(COMPLIANCE_CALENDAR_ITEMS, condoToronto);
+  ok(
+    "condo-only org: tenant tier allows smoke/CO + dryer only",
+    JSON.stringify(condoTenant) ===
+      JSON.stringify([
+        "leasing.seasonal_dryer_vent",
+        "leasing.seasonal_smoke_co_test",
+      ].sort()),
+  );
+}
+
+{
+  const freeholdOutsideToronto: ComplianceCalendarProperty[] = [
+    { id: "freehold-1", address: "10 King St, Hamilton, ON", structure_type: "freehold" },
+  ];
+  const freeholdLandlord = eligibleKeysFor(LANDLORD_CALENDAR_ITEMS, freeholdOutsideToronto);
+  ok(
+    "freehold org: landlord tier allows furnace/water/fire",
+    JSON.stringify(freeholdLandlord) ===
+      JSON.stringify([
+        "leasing.landlord_fire_safety",
+        "leasing.landlord_furnace_service",
+        "leasing.landlord_winter_water_shutoff",
+      ].sort()),
+  );
+  const freeholdTenant = eligibleKeysFor(COMPLIANCE_CALENDAR_ITEMS, freeholdOutsideToronto);
+  ok(
+    "freehold org: tenant tier allows furnace/water/eaves/walkways/AC plus all-property items",
+    FREEHOLD_ONLY_COMPLIANCE_EVENT_KEYS.filter((key) => key.startsWith("leasing.seasonal_")).every((key) =>
+      freeholdTenant.includes(key),
+    ) &&
+      freeholdTenant.includes("leasing.seasonal_smoke_co_test") &&
+      freeholdTenant.includes("leasing.seasonal_dryer_vent"),
+  );
+}
+
+{
+  const unknownToronto: ComplianceCalendarProperty[] = [
+    { id: "unknown-1", address: "25 Queen St W, Toronto, ON", structure_type: null },
+  ];
+  ok(
+    "unknown structure does not qualify freehold-only items",
+    !complianceItemEligibleForProperties("leasing.landlord_furnace_service", unknownToronto) &&
+      !complianceItemEligibleForProperties("leasing.seasonal_water_shutoff", unknownToronto),
+  );
+  ok(
+    "unknown Toronto property still qualifies VHT",
+    complianceItemEligibleForProperties("leasing.landlord_vacant_home_tax_60d", unknownToronto),
+  );
+  ok(
+    "property matcher fails closed for freehold-only null structure",
+    !propertyMatchesComplianceApplicability(unknownToronto[0], "freehold_only"),
+  );
+}
+
+{
+  const cityOnlyToronto: ComplianceCalendarProperty[] = [
+    { id: "city-1", city: "toronto", address: "Hidden address", structure_type: "rental_unit" },
+  ];
+  const nonToronto: ComplianceCalendarProperty[] = [
+    { id: "city-2", city: "Hamilton", address: "100 Toronto St, Hamilton, ON", structure_type: "condo" },
+  ];
+  ok(
+    "VHT can use a city value when one exists",
+    complianceItemEligibleForProperties("leasing.landlord_vacant_home_tax_30d", cityOnlyToronto),
+  );
+  ok(
+    "city value wins over an address containing Toronto as a street name",
+    !complianceItemEligibleForProperties("leasing.landlord_vacant_home_tax_30d", nonToronto),
+  );
+}
 
 // --- summarizeReminderLog -----------------------------------------------------
 {
   // Empty log: every landlord event present, all null, count 0.
   const empty = summarizeReminderLog([]);
-  ok("summarize seeds all landlord keys when log empty", empty.length === 6);
+  ok("summarize seeds all landlord keys when log empty", empty.length === 5);
   ok("summarize all-null on empty log", empty.every((s) => s.lastSentAt === null && s.count === 0));
   ok(
     "summarize preserves landlord calendar order",
@@ -214,14 +344,14 @@ ok(
 
   // Newest sent_at wins within a key; count reflects all rows.
   const rows = [
-    { event_key: "leasing.landlord_insurance_review", sent_at: "2025-01-16T10:00:00Z" },
-    { event_key: "leasing.landlord_insurance_review", sent_at: "2026-01-15T09:00:00Z" },
-    { event_key: "leasing.landlord_insurance_review", sent_at: "2024-01-20T09:00:00Z" },
+    { event_key: "leasing.landlord_furnace_service", sent_at: "2025-09-16T10:00:00Z" },
+    { event_key: "leasing.landlord_furnace_service", sent_at: "2026-09-15T09:00:00Z" },
+    { event_key: "leasing.landlord_furnace_service", sent_at: "2024-09-20T09:00:00Z" },
   ];
   const sum = summarizeReminderLog(rows);
-  const ins = sum.find((s) => s.eventKey === "leasing.landlord_insurance_review")!;
-  ok("summarize picks newest sent_at", ins.lastSentAt === "2026-01-15T09:00:00Z");
-  ok("summarize counts all rows for a key", ins.count === 3);
+  const furnace = sum.find((s) => s.eventKey === "leasing.landlord_furnace_service")!;
+  ok("summarize picks newest sent_at", furnace.lastSentAt === "2026-09-15T09:00:00Z");
+  ok("summarize counts all rows for a key", furnace.count === 3);
   const fire = sum.find((s) => s.eventKey === "leasing.landlord_fire_safety")!;
   ok("summarize leaves untouched key null", fire.lastSentAt === null && fire.count === 0);
 
@@ -229,9 +359,9 @@ ok(
   const withExtra = summarizeReminderLog([
     { event_key: "leasing.landlord_future_item", sent_at: "2026-03-01T00:00:00Z" },
   ]);
-  ok("summarize appends unknown keys", withExtra.length === 7);
-  ok("summarize keeps known keys first", withExtra[6].eventKey === "leasing.landlord_future_item");
-  ok("summarize records the extra key's send", withExtra[6].lastSentAt === "2026-03-01T00:00:00Z");
+  ok("summarize appends unknown keys", withExtra.length === 6);
+  ok("summarize keeps known keys first", withExtra[5].eventKey === "leasing.landlord_future_item");
+  ok("summarize records the extra key's send", withExtra[5].lastSentAt === "2026-03-01T00:00:00Z");
 
   // Robustness: blank/garbage sent_at counted but never chosen as "last".
   const messy = summarizeReminderLog([
@@ -256,9 +386,22 @@ ok(
     "supabase/migrations/0197_compliance_calendar_org_toggle.sql",
     "utf8",
   );
+  const structureMigration = readFileSync(
+    "supabase/migrations/0198_properties_structure_type.sql",
+    "utf8",
+  );
   ok(
     "migration adds organizations.compliance_calendar_enabled default false",
     migration.includes("add column if not exists compliance_calendar_enabled boolean not null default false"),
+  );
+  ok(
+    "structure migration adds nullable properties.structure_type",
+    structureMigration.includes("add column if not exists structure_type text") &&
+      structureMigration.includes("properties_structure_type_check") &&
+      structureMigration.includes("'freehold'::text") &&
+      structureMigration.includes("'condo'::text") &&
+      structureMigration.includes("'rental_unit'::text") &&
+      !structureMigration.toLowerCase().includes("update public.properties"),
   );
 
   const routeSource = readFileSync("app/api/cron/compliance-calendar/route.ts", "utf8");
@@ -280,6 +423,16 @@ ok(
   ok(
     "cron only scans flag-true orgs",
     routeSource.includes('.eq("compliance_calendar_enabled", true)'),
+  );
+  ok(
+    "cron loads property structure facts for eligibility",
+    routeSource.includes('select("id, address, structure_type")') &&
+      routeSource.includes("loadComplianceProperties"),
+  );
+  ok(
+    "cron filters due items by property eligibility",
+    routeSource.includes("complianceItemEligibleForProperties(d.item, complianceProperties)") &&
+      routeSource.includes("propertyMatchesComplianceApplicability(tenancyProperty, applicability)"),
   );
 
   const orgSource = readFileSync("lib/org.ts", "utf8");
@@ -316,8 +469,30 @@ ok(
       settingsPage.includes("winter walkways") &&
       settingsPage.includes("furnace service") &&
       settingsPage.includes("smoke and CO alarms") &&
-      settingsPage.includes("insurance review") &&
+      !settingsPage.includes("insurance review") &&
       settingsPage.includes("rent-increase timing"),
+  );
+
+  const propertyPage = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
+  const propertyAction = readFileSync("app/dashboard/properties/actions.ts", "utf8");
+  ok(
+    "property detail page exposes structure_type control",
+    propertyPage.includes("structure_type") &&
+      propertyPage.includes("STRUCTURE_TYPE_OPTIONS") &&
+      propertyPage.includes("property-structure-type"),
+  );
+  ok(
+    "property action persists normalized structure_type",
+    propertyAction.includes("normalizeStructureType") &&
+      propertyAction.includes("structure_type: normalizeStructureType"),
+  );
+
+  const automationsPage = readFileSync("app/dashboard/automations/page.tsx", "utf8");
+  ok(
+    "automations page disables ineligible compliance events",
+    automationsPage.includes("complianceItemEligibleForProperties(event.key, complianceProperties)") &&
+      automationsPage.includes("calendarUnavailable") &&
+      automationsPage.includes("disabled={calendarUnavailable}"),
   );
 }
 

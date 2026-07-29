@@ -2,24 +2,37 @@
 
 import { useState } from "react";
 import { copyToClipboard } from "@/lib/copy-to-clipboard";
+import type { AiReplyDraft } from "@/lib/ai-reply";
 
 export function InquiryReplyPanel({
   email,
   phone,
   subject,
   body,
+  aiDraft,
 }: {
   email: string | null;
   phone: string | null;
   subject: string;
   body: string;
+  aiDraft?: AiReplyDraft | null;
 }) {
+  const [subjectText, setSubjectText] = useState(subject);
   const [text, setText] = useState(body);
   const [copied, setCopied] = useState(false);
+  const [drafted, setDrafted] = useState(false);
 
   const mailto = email
-    ? `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`
+    ? `mailto:${email}?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(text)}`
     : undefined;
+
+  function onAiDraft() {
+    if (!aiDraft) return;
+    setSubjectText(aiDraft.subject);
+    setText(aiDraft.body);
+    setDrafted(true);
+    setCopied(false);
+  }
 
   async function onCopy() {
     if (await copyToClipboard(text)) {
@@ -48,6 +61,15 @@ export function InquiryReplyPanel({
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
       />
       <div className="mt-2 flex flex-wrap items-center gap-2">
+        {aiDraft ? (
+          <button
+            type="button"
+            onClick={onAiDraft}
+            className="rounded-lg border border-brand/30 bg-white px-3 py-2 text-sm font-medium text-brand hover:bg-brand/5"
+          >
+            {drafted ? "AI draft added" : "AI draft"}
+          </button>
+        ) : null}
         {mailto ? (
           <a
             href={mailto}
@@ -67,6 +89,11 @@ export function InquiryReplyPanel({
         >
           {copied ? "Copied!" : "Copy message"}
         </button>
+        {drafted ? (
+          <span className="text-xs text-gray-500">
+            Review the draft before opening or copying.
+          </span>
+        ) : null}
       </div>
     </div>
   );
