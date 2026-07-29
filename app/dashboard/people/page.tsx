@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { personDisplayName, sortPeople, type PersonSummary } from "@/lib/persons";
-import { EmptyState, BrandBanner } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -140,7 +140,7 @@ export default async function PeoplePage() {
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         icon={<Icons.users />}
         eyebrow="Tenants & contacts"
         title="People"

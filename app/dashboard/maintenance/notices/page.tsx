@@ -179,13 +179,13 @@ export default async function BuildingNoticesPage({
   return (
     <div>
       <BrandBanner
-        eyebrow="Maintenance"
+        eyebrow="Repairs"
         title="Building notices"
         subtitle="Send one notice by email to every tenant in a building - the right tool for scheduled work, like an electrical shutdown or water shut-off. You always draft and review before it sends. Nothing here dispatches a trade or moves money."
         icon={<Icons.bolt className="h-6 w-6" />}
         action={
           <Link href="/dashboard/maintenance" className={SECONDARY_ACTION_CLASS}>
-            ← Back to maintenance
+            ← Back to repairs
           </Link>
         }
       />

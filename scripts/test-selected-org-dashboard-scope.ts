@@ -209,6 +209,18 @@ assertEveryChainContains("app/dashboard/availability/page.tsx", "organizations",
 
 const nav = read("app/dashboard/dashboard-nav.tsx");
 const agent = read("app/agent/page.tsx");
+ok("dashboard nav labels the home route Today", nav.includes(`{ href: "/dashboard", label: "Today" }`));
+ok("dashboard nav labels rentals plainly", nav.includes(`{ href: "/dashboard/properties", label: "Rentals" }`));
+ok("dashboard nav has a Renters primary item", nav.includes(`label: "Renters"`));
+ok("dashboard nav has a Viewings primary item", nav.includes(`label: "Viewings"`));
+ok("dashboard nav labels repairs plainly", nav.includes(`{ href: "/dashboard/maintenance", label: "Repairs" }`));
+ok("dashboard nav moves tenant lease work behind More", nav.includes(`label: "Tenants & leases"`));
+ok("dashboard nav labels site setup as Rental sites", nav.includes(`label: "Rental sites"`));
+ok("dashboard nav does not expose old Properties label", !nav.includes(`label: "Properties"`));
+ok("dashboard nav does not expose old Leasing label", !nav.includes(`label: "Leasing"`));
+ok("dashboard nav does not expose old Viewing Times label", !nav.includes(`label: "Viewing Times"`));
+ok("dashboard nav does not expose old Maintenance label", !nav.includes(`label: "Maintenance"`));
+ok("dashboard nav does not expose old Get Online label", !nav.includes(`label: "Get Online"`));
 ok("dashboard nav labels /agent as All clients", nav.includes(`label: "All clients"`));
 ok("agent heading is All clients", agent.includes(">All clients<"));
 ok(

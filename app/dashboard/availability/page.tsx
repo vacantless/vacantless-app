@@ -12,7 +12,7 @@ import {
   addAvailabilityOverride,
   removeAvailabilityOverride,
 } from "./actions";
-import { BrandBanner } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -206,10 +206,10 @@ export default async function AvailabilityPage({
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         icon={<Icons.clock />}
-        eyebrow="Scheduling"
-        title="Viewing Times"
+        eyebrow="Viewings"
+        title="Set viewing times"
         subtitle="Set the weekly windows when renters can book their own viewings. Open slots are generated from these times minus anything already booked."
       />
 

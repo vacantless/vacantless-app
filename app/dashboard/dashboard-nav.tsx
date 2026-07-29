@@ -12,18 +12,18 @@ import { setSelectedOrg } from "./org-actions";
 // items moved out of the old "More ▾" dropdown (which mixed core work beside
 // account settings) into a right-side ORG MENU keyed to the org name.
 //
-//   PRIMARY:  Overview · Properties · Leasing · Tenants · Money · Maintenance · [Get Online]
-//   ORG ▾  :  My settings · Settings · Your plan · [Refer] · [Captures] · Sign out
+//   PRIMARY:  Today · Rentals · Renters · Viewings · Repairs · Money
+//   MORE ▾ :  Company settings · Rental sites · Messages & reminders · Plan/admin
 //
-// "Get Online" is the guided distribution wizard, appended to the primary bar
-// as its front door (S587) when DISTRIBUTION_WIZARD_ENABLED is set. It was
-// previously buried in the org menu, so the owner could not find it.
+// "Rental sites" is the guided distribution/site-coverage front door, visible
+// behind More when DISTRIBUTION_WIZARD_ENABLED is set. Per S606, daily posting
+// still starts contextually from a rental row/detail, while site/account setup
+// stays out of the daily nav peer set.
 //
-// Leasing, Tenants and Money are hub landings that tab across existing routes
+// Renters, Viewings and Money are hub landings that tab across routes
 // (via `match` prefixes, so a hub item stays lit while you're on a child route).
-//   • Leasing  → Inquiries / Viewings / Pre-screening / Reports
-//   • Viewing Times links directly to /dashboard/availability for operator access.
-//   • Tenants  → Tenancies / People / Messages
+//   • Renters  → Inquiries / Pre-screening / Reports
+//   • Viewings → Showings / Set viewing times (availability) / Showing agents
 //   • Money    → Rent (+ statement / rent-roll) / Expenses
 //
 // Money is ALWAYS visible now (S427): Expenses and Reports are useful without
@@ -40,42 +40,43 @@ type NavItem = {
 };
 
 const PRIMARY: NavItem[] = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/properties", label: "Properties" },
+  { href: "/dashboard", label: "Today" },
+  { href: "/dashboard/properties", label: "Rentals" },
   {
     href: "/dashboard/leasing",
-    label: "Leasing",
-    // /dashboard/reports is the leasing FUNNEL report (inquiries/viewings/
-    // channels/lease-timing), so it lights up Leasing, not Money.
-    match: [
-      "/dashboard/leads",
-      "/dashboard/showings",
-      "/dashboard/showing-agents",
-      "/dashboard/reports",
-    ],
+    label: "Renters",
+    // Renter inquiries + the leasing FUNNEL report (inquiries/viewings/
+    // channels/lease-timing). Showings/viewing-times light Viewings, not this.
+    match: ["/dashboard/leads", "/dashboard/reports"],
   },
-  { href: "/dashboard/availability", label: "Viewing Times" },
   {
-    href: "/dashboard/tenants",
-    label: "Tenants",
-    match: ["/dashboard/tenancies", "/dashboard/people", "/dashboard/messages"],
+    href: "/dashboard/showings",
+    label: "Viewings",
+    // One "who is coming" home: the showings list plus set-viewing-times
+    // (availability) and showing agents.
+    match: ["/dashboard/availability", "/dashboard/showing-agents"],
   },
+  { href: "/dashboard/maintenance", label: "Repairs" },
   {
     href: "/dashboard/money",
     label: "Money",
     // /dashboard/rent covers its children (statement, rent-roll) via startsWith.
     match: ["/dashboard/rent", "/dashboard/expenses"],
   },
-  { href: "/dashboard/maintenance", label: "Maintenance" },
 ];
 
 // Org / account menu (behind the org pill on desktop; inline on mobile). These
 // are NOT daily work - they configure or step outside the operating surface.
 const ACCOUNT: NavItem[] = [
-  { href: "/dashboard/me", label: "My settings" },
   { href: "/dashboard/settings", label: "Company settings" },
-  { href: "/dashboard/automations", label: "Automations & templates" },
+  { href: "/dashboard/automations", label: "Messages & reminders" },
+  {
+    href: "/dashboard/tenants",
+    label: "Tenants & leases",
+    match: ["/dashboard/tenancies", "/dashboard/people", "/dashboard/messages"],
+  },
   { href: "/dashboard/billing", label: "Your plan" },
+  { href: "/dashboard/me", label: "My settings" },
 ];
 
 // Referral surface (Slice 2). Ships dark: the /dashboard/referrals page is
@@ -91,13 +92,12 @@ const CAPTURES: NavItem = { href: "/dashboard/captures", label: "Captures" };
 
 // Guided distribution command center (S583-S587). The four wizard pages
 // (/dashboard/link-portals -> add-details -> send-live -> after-live) are always
-// reachable by URL, but this entry only appears when DISTRIBUTION_WIZARD_ENABLED
-// is set (read in the layout, passed as distributionWizardEnabled). Opens at
-// Stage 1 "Link your portals". S587: promoted from the org menu to the PRIMARY
-// bar (appended below) so the signature capability has a front door.
+// reachable by URL, but this More-menu entry only appears when
+// DISTRIBUTION_WIZARD_ENABLED is set (read in the layout, passed as
+// distributionWizardEnabled). Opens at Stage 1 "Link your portals".
 const DISTRIBUTION_WIZARD: NavItem = {
   href: "/dashboard/link-portals",
-  label: "Get Online",
+  label: "Rental sites",
   match: [
     "/dashboard/add-details",
     "/dashboard/send-live",
@@ -159,16 +159,11 @@ export function DashboardNav({
     });
   }
 
-  // "Get Online" (the guided wizard) is the front door for the signature
-  // capability, so when enabled it rides the PRIMARY bar rather than the org
-  // menu (S587). Appended last to keep the sacred daily-work order intact.
-  const primary = [
-    ...PRIMARY,
-    ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
-    ...(showAgentBook ? [AGENT_BOOK] : []),
-  ];
+  const primary = PRIMARY;
   const account = [
     ...ACCOUNT,
+    ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
+    ...(showAgentBook ? [AGENT_BOOK] : []),
     ...(referralsEnabled ? [REFERRALS] : []),
     ...(capturesEnabled ? [CAPTURES] : []),
   ];
@@ -236,7 +231,7 @@ export function DashboardNav({
             >
               {initial}
             </span>
-            <span className="max-w-[9rem] truncate font-medium">{orgName}</span>
+            <span className="max-w-[9rem] truncate font-medium">More</span>
             <span
               aria-hidden
               className={`transition ${accountOpen ? "rotate-180" : ""}`}
@@ -313,6 +308,9 @@ export function DashboardNav({
       {open && (
         <div className="absolute left-0 right-0 top-full z-20 border-t border-white/20 bg-brand shadow-lg md:hidden">
           <nav className="mx-auto flex max-w-5xl flex-col gap-1 px-6 py-3 text-sm">
+            <p className="px-3 pb-0.5 pt-1 text-xs uppercase tracking-wider text-white/60">
+              Daily work
+            </p>
             {primary.map((item) => (
               <Link
                 key={item.href}
@@ -326,10 +324,13 @@ export function DashboardNav({
             ))}
             <div className="my-1 border-t border-white/15" />
             <p className="px-3 pb-0.5 pt-1 text-xs uppercase tracking-wider text-white/60">
-              {orgName}
+              More
             </p>
             {isMultiOrg && (
               <>
+                <p className="px-3 pt-1 text-xs text-white/60">
+                  Switch client
+                </p>
                 {orgs.map((o) => (
                   <button
                     key={o.id}

@@ -272,8 +272,8 @@ export default async function AutomationsPage({
     <div>
       <PageHeader
         icon={<Icons.chat />}
-        title="Automations & Templates"
-        subtitle="Choose which updates send automatically, who receives them, and what they say."
+        title="Messages & reminders"
+        subtitle="Choose which reminders and updates send automatically, who receives them, and what they say."
       />
 
       <div className="mt-6 space-y-6">

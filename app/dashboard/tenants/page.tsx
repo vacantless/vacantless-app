@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BrandBanner, Card, IconTile } from "@/components/ui";
+import { PageHeader, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +60,7 @@ const SECTIONS: Section[] = [
 export default function TenantsHubPage() {
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         eyebrow="Tenants"
         title="Your occupied units"
         subtitle="Active leases and the people in them. Open a tenancy to handle its lease paperwork, rent setup, and messages."

@@ -24,11 +24,11 @@ const TABS: {
   icon: keyof typeof Icons;
   href?: string;
 }[] = [
-  { key: "brand", label: "Public Page & Brand", icon: "page" },
-  { key: "distribution", label: "Websites & portals", icon: "link" },
+  { key: "brand", label: "Public page", icon: "page" },
+  { key: "distribution", label: "Rental site accounts", icon: "link" },
   { key: "comms", label: "Communications", icon: "mail" },
-  { key: "banking", label: "Banking & Rent", icon: "card" },
-  { key: "account", label: "Account & Plan", icon: "key" },
+  { key: "banking", label: "Banking & rent", icon: "card" },
+  { key: "account", label: "Plan & admin", icon: "key" },
 ];
 
 export function SettingsTabs({ active }: { active: SettingsTab }) {

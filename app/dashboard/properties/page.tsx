@@ -7,7 +7,7 @@ import {
   StatusChip,
   propertyStatusTone,
   EmptyState,
-  BrandBanner,
+  PageHeader,
   SectionHeading,
   PRIMARY_ACTION_CLASS,
 } from "@/components/ui";
@@ -103,10 +103,10 @@ export default async function PropertiesPage({
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         icon={<Icons.building />}
         eyebrow="Portfolio"
-        title="Properties"
+        title="Rentals"
         subtitle="Your rentals and their marketing status."
       />
 

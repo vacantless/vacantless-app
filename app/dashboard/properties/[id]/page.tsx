@@ -1848,7 +1848,7 @@ export default async function PropertyDetailPage({
         href="/dashboard/properties"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
       >
-        ← Properties
+        ← Rentals
       </Link>
 
       {searchParams.saved && (

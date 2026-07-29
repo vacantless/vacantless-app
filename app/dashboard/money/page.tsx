@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BrandBanner, Card, IconTile } from "@/components/ui";
+import { PageHeader, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -103,7 +103,7 @@ export default async function MoneyHubPage() {
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         eyebrow="Money"
         title="Rent, expenses, and the bottom line"
         subtitle="Collect the rent, track what each unit costs, and see how the portfolio is doing - all in one place. Open any rental to work a single unit end-to-end."

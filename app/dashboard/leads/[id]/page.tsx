@@ -569,7 +569,7 @@ export default async function LeadDetailPage({
             href="/dashboard/availability"
             className="font-medium text-brand hover:underline"
           >
-            Viewing Times
+            Set viewing times
           </Link>
           .
         </div>

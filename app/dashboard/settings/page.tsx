@@ -1710,7 +1710,7 @@ export default async function SettingsPage({
               <div className="flex items-center gap-2.5">
                 <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                  Feature access
+                  Account features
                 </h3>
               </div>
               <p className="mt-1 text-sm text-gray-500">
@@ -1720,7 +1720,7 @@ export default async function SettingsPage({
 
               {featuresFlash === "saved" && (
                 <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                  Feature access saved.
+                  Account features saved.
                 </div>
               )}
               {featuresFlash === "invalid" && (

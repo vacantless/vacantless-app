@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BrandBanner, Card, IconTile } from "@/components/ui";
+import { PageHeader, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -146,8 +146,8 @@ export default async function LeasingHubPage() {
     },
     {
       href: "/dashboard/availability",
-      title: "Viewing Times",
-      desc: "Set the viewing times renters can book — this is the setup behind Viewings.",
+      title: "Set viewing times",
+      desc: "Set when renters can book - this is the setup behind Viewings.",
       icon: "clock",
     },
     {
@@ -181,15 +181,15 @@ export default async function LeasingHubPage() {
 
   return (
     <div>
-      <BrandBanner
-        eyebrow="Leasing"
-        title="Convert your inquiries"
+      <PageHeader
+        eyebrow="Daily work"
+        title="Renters"
         subtitle={
           needsYou > 0
             ? `${needsYou} item${needsYou === 1 ? "" : "s"} need${
                 needsYou === 1 ? "s" : ""
-              } you right now — new inquiries to answer and viewings to confirm are counted below.`
-            : "Nothing needs you right now. Inquiries, viewings, and the times renters can book all live here — open any rental to work a single unit end-to-end."
+              } you right now - new inquiries to answer and viewings to confirm are counted below.`
+            : "Nothing needs you right now. Inquiries, viewings, and the times renters can book all live here - open any rental to work a single unit end-to-end."
         }
         icon={<Icons.key className="h-6 w-6" />}
       />

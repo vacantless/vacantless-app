@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BrandBanner, Card, IconTile } from "@/components/ui";
+import { PageHeader, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +50,7 @@ const SECTIONS: Section[] = [
 export default function MoneyHubPage() {
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         eyebrow="Money"
         title="Rent coming in"
         subtitle="Rent your tenants pay you. Set it up inside each tenancy, manage your rails in Banking, and export your records here."

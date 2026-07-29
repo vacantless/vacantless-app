@@ -366,6 +366,7 @@ export default async function ShowingsPage({
     <div>
       <PageHeader
         icon={<Icons.calendar />}
+        eyebrow="Daily work"
         title="Viewings"
         subtitle="Viewings renters booked online, plus ones you scheduled. Mark the outcome after each one to keep your renter list accurate."
       />
@@ -532,7 +533,7 @@ function AtRiskBoard({
         <p className="mb-2 text-xs text-gray-500">
           &ldquo;Mark confirmed&rdquo; only records it — no message.
           &ldquo;Nudge renter&rdquo; emails the renter a confirm link now.
-          &ldquo;Release&rdquo; cancels the booking and reopens the slot.
+          &ldquo;Cancel and reopen time&rdquo; cancels the booking and reopens the slot.
           &ldquo;Email bouncing&rdquo; means the reminder did not reach the renter; call them.
         </p>
       )}
@@ -603,7 +604,7 @@ function AtRiskBoard({
                     className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                   >
                     <Icons.calendar className="h-3.5 w-3.5" />
-                    Release
+                    Cancel and reopen time
                   </button>
                 </form>
               </div>

@@ -17,7 +17,7 @@ import {
   EmptyState,
   StatusChip,
   StatCard,
-  BrandBanner,
+  PageHeader,
   leadStatusTone,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -354,11 +354,11 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         <LaunchChecklist checklist={checklist} variant="full" />
       )}
 
-      <BrandBanner
+      <PageHeader
         icon={<Icons.home />}
-        eyebrow="Dashboard"
-        title="Overview"
-        subtitle="Everything that needs your attention, at a glance."
+        eyebrow="Daily work"
+        title="Today"
+        subtitle="What needs your attention now, across rentals, renters, viewings, repairs, and money."
       />
 
       <TodayLane items={todayItems} firstRun={showFullChecklistOnTop} />
@@ -456,8 +456,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
 
       {activeWorkOrders.length > 0 && (
         <>
-          <SectionHeading action={{ href: "/dashboard/maintenance", label: "Open Maintenance" }}>
-            Maintenance
+          <SectionHeading action={{ href: "/dashboard/maintenance", label: "Open Repairs" }}>
+            Repairs
           </SectionHeading>
           <Link href="/dashboard/maintenance" className="mb-8 block">
             <div className="flex items-center gap-3.5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -478,7 +478,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
                   )}
                 </p>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  Repairs and maintenance still in progress. Open Maintenance to assign trades and track them to done.
+                  Repairs still in progress. Open Repairs to assign trades and track them to done.
                 </p>
               </div>
             </div>
