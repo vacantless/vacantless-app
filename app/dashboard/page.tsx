@@ -176,7 +176,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     // (conditional-visibility rule, like the Money nav).
     supabase
       .from("tenancies")
-      .select("id, status, rent_cents, start_date, property:properties(address)")
+      .select("id, status, rent_cents, start_date, last_rent_increase_date, property:properties(address, rent_control_exempt)")
       .eq("organization_id", org.id)
       .eq("status", "active"),
     // Most-recent AVAILABLE property — deep-links the "Test your renter inquiry
@@ -261,7 +261,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     id: string;
     rent_cents: number | null;
     start_date: string | null;
-    property: { address: string } | null;
+    last_rent_increase_date: string | null;
+    property: { address: string; rent_control_exempt: boolean | null } | null;
   };
   const today = new Date().toLocaleDateString("en-CA", { timeZone });
   const URGENCY: Record<string, number> = {
@@ -291,7 +292,13 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       if (leaseTermShiftOn && !rentConfirmedTenancyIds.has(t.id)) return [];
       if (t.rent_cents == null || !t.start_date) return [];
       const result = deriveRentIncrease(
-        { startDate: t.start_date, currentRentCents: t.rent_cents, guideline: overviewGuideline },
+        {
+          startDate: t.start_date,
+          lastIncreaseDate: t.last_rent_increase_date ?? null,
+          exempt: t.property?.rent_control_exempt ?? false,
+          currentRentCents: t.rent_cents,
+          guideline: overviewGuideline,
+        },
         today,
       );
       if (!result || !(result.status in URGENCY)) return [];

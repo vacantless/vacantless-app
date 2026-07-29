@@ -375,6 +375,17 @@ export default async function AutomationsPage({
                 const enabled = calendarUnavailable ? false : row ? row.enabled : true;
                 const recipients = (row?.recipients ?? []).join("\n");
                 const highlight = savedKey === event.key;
+                // Basic mode (S602): the wording / recipients / colour fields
+                // collapse by default so the everyday view is just on/off. Auto-
+                // expand for an event that already carries a customization (or one
+                // just saved) so an operator never "loses" edits behind the fold.
+                const advancedOpen = Boolean(
+                  row?.subject_template ||
+                    row?.body_template ||
+                    (row?.recipients && row.recipients.length > 0) ||
+                    row?.accent_color ||
+                    highlight,
+                );
                 const fieldIdPrefix = `notification-${event.key.replace(
                   /[^a-zA-Z0-9_-]/g,
                   "-",
@@ -438,7 +449,14 @@ export default async function AutomationsPage({
                       </label>
                     </div>
 
-                    <div className="mt-4 space-y-4">
+                    <details
+                      open={advancedOpen}
+                      className="mt-4 rounded-lg border border-gray-100 bg-gray-50/40"
+                    >
+                      <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
+                        Edit wording, recipients &amp; colour
+                      </summary>
+                      <div className="space-y-4 px-3 pb-4 pt-1">
                       <div>
                         <label
                           htmlFor={subjectId}
@@ -561,7 +579,8 @@ export default async function AutomationsPage({
                           event.defaultAccent ?? org.brand_color ?? DEFAULT_ACCENT
                         }
                       />
-                    </div>
+                      </div>
+                    </details>
 
                     <div className="mt-4 flex justify-end">
                       <button
