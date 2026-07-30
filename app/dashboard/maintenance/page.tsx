@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
-  BrandBanner,
+  PageHeader,
   Card,
   StatCard,
   StatusChip,
@@ -919,6 +919,18 @@ export default async function MaintenancePage({
     return true;
   });
 
+  // Priority-first inbox order (ESL Slice 7): active before closed, then
+  // urgent -> high -> normal -> low, then oldest reported first so stale
+  // repairs surface at the top. Pure display sort; stats below use allOrders.
+  const PRIORITY_RANK: Record<string, number> = { urgent: 3, high: 2, normal: 1, low: 0 };
+  orders.sort((a, b) => {
+    const activeDelta = (isActiveStatus(b.status) ? 1 : 0) - (isActiveStatus(a.status) ? 1 : 0);
+    if (activeDelta !== 0) return activeDelta;
+    const priorityDelta = (PRIORITY_RANK[b.priority] ?? 1) - (PRIORITY_RANK[a.priority] ?? 1);
+    if (priorityDelta !== 0) return priorityDelta;
+    return (a.reported_on ?? "").localeCompare(b.reported_on ?? "");
+  });
+
   // --- Stats (across all orders, not the filtered view) ----------------------
   const openCount = allOrders.filter((o) => isActiveStatus(o.status)).length;
   const urgentOpen = allOrders.filter(
@@ -1064,7 +1076,7 @@ export default async function MaintenancePage({
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         eyebrow="Repairs"
         title="Repairs and work orders"
         subtitle="Log a repair issue, assign it to one of your own trades, and track it to done. Costs you record here feed your year-end statements. Vacantless tracks the work; it never dispatches a trade or moves money."
