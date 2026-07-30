@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { getCurrentOrg } from "@/lib/org";
@@ -294,6 +295,18 @@ export default async function AutomationsPage({
           Use <code className="rounded bg-white px-1 py-0.5 text-gray-800">{"{{token}}"}</code>{" "}
           placeholders — they&apos;re filled in automatically when the email is sent.
         </div>
+
+        <p className="text-sm text-gray-500">
+          Looking for the sending address, text messaging, or
+          viewing-confirmation rules? Those live in{" "}
+          <Link
+            href="/dashboard/settings?tab=comms"
+            className="font-medium text-brand underline"
+          >
+            Settings → Message setup
+          </Link>
+          .
+        </p>
 
         {/* Operator lanes (S554): set who handles each KIND of alert once. Any
             event below with its own recipients still overrides its lane. */}

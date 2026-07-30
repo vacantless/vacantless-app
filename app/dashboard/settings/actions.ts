@@ -698,12 +698,12 @@ export async function updateComplianceCalendarSettings(formData: FormData) {
 
 export async function updateOrganizationFeatureFlag(formData: FormData) {
   const org = await requireOwnerAdminSettingsOrg(
-    "/dashboard/settings?tab=comms&features=forbidden",
+    "/dashboard/settings?tab=account&features=forbidden",
   );
   const featureKey = String(formData.get("feature_key") ?? "").trim();
   const mode = String(formData.get("mode") ?? "").trim();
   if (!isOrgFeatureKey(featureKey) || !["default", "on", "off"].includes(mode)) {
-    redirect("/dashboard/settings?tab=comms&features=invalid");
+    redirect("/dashboard/settings?tab=account&features=invalid");
   }
 
   const supabase = createClient();
@@ -727,10 +727,10 @@ export async function updateOrganizationFeatureFlag(formData: FormData) {
         );
 
   if (error) {
-    redirect("/dashboard/settings?tab=comms&features=error");
+    redirect("/dashboard/settings?tab=account&features=error");
   }
 
-  redirect("/dashboard/settings?tab=comms&features=saved");
+  redirect("/dashboard/settings?tab=account&features=saved");
 }
 
 // Send the operator a copy of their branded renter auto-reply so they can

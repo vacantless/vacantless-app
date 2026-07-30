@@ -26,7 +26,7 @@ const TABS: {
 }[] = [
   { key: "brand", label: "Public page", icon: "page" },
   { key: "distribution", label: "Rental site accounts", icon: "link" },
-  { key: "comms", label: "Communications", icon: "mail" },
+  { key: "comms", label: "Message setup", icon: "mail" },
   { key: "banking", label: "Banking & rent", icon: "card" },
   { key: "account", label: "Plan & admin", icon: "key" },
 ];
