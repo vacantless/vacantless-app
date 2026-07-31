@@ -230,7 +230,7 @@ function operatorActionSummary(item: RunItemView): string {
     return `Remove the ${item.channelLabel} ad, then mark it removed.`;
   }
   if (item.liveWithoutUrl) {
-    return "Paste the real live ad URL before this channel can count as Live.";
+    return "Paste the real live ad URL before this site can count as Live.";
   }
   if (item.staleRefresh) {
     return "Refresh this ad, then save fresh proof so renters do not hit an old listing.";
@@ -284,7 +284,7 @@ function operatorOwnerLine(item: RunItemView): string {
     return "Vacantless prepares the feed; a partner site may still need to accept it before it is truly live.";
   }
   if (item.mode === "browser_copilot") {
-    return "The helper opens in front of you with copy and proof fields. Behind the scenes, Vacantless tracks this channel as waiting until you save the real ad URL.";
+    return "The helper opens in front of you with copy and proof fields. Behind the scenes, Vacantless tracks this site as waiting until you save the real ad URL.";
   }
   if (item.mode === "concierge") {
     return "The Vacantless publishing desk can work this, but it still needs real live-ad proof before it counts.";
@@ -407,7 +407,7 @@ export function LaunchRunPanel({
             {optionalStartChannels.length > 0 && (
               <details className="border-t border-slate-100">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-                  <span>More channels</span>
+                  <span>More sites</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
                     {optionalStartChannels.length}
                   </span>
@@ -486,7 +486,7 @@ export function LaunchRunPanel({
             <p className="mt-2 text-xs text-gray-600">
               {priorityItem
                 ? operatorOwnerLine(priorityItem)
-                : "Your public page and finished channels stay tracked here. Submitted feed rows are not treated as Live until proof exists."}
+                : "Your public page and finished sites stay tracked here. Submitted feed rows are not treated as Live until the real ad link exists."}
             </p>
             <p className="mt-2 text-xs text-gray-500">
               {liveProofCount} of {progress.total} channels have live proof. A

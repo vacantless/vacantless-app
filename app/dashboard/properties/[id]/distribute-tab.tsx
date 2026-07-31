@@ -508,8 +508,8 @@ export function DistributeTab({
             </div>
             <p className="text-xs text-gray-600">
               Vacantless prepares the copy, links, and checks. You still approve
-              any outside-site post or payment, and a channel counts as Live
-              only after real proof is saved.
+              any outside-site post or payment, and a site counts as Live
+              only after the real ad link is saved.
             </p>
           </div>
           <a
@@ -559,7 +559,7 @@ export function DistributeTab({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900">
-                Proof links
+                Live ad links
               </p>
               <p className="text-xs text-gray-500">
                 {proofPostCount} saved
@@ -596,7 +596,7 @@ export function DistributeTab({
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-900">
-                  Other proof links
+                  Other live ad links
                 </p>
                 <p className="text-xs text-gray-500">
                   {otherPosts.length} saved outside the main channel list
@@ -731,7 +731,7 @@ function DistributionStatusStrip({
         </IconTile>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900">
-            Distribution status
+            Posting status
           </p>
           <p className="truncate text-xs text-gray-600">
             {summaryParts.join(" · ")}
@@ -790,11 +790,11 @@ function DistributionBasicsPanel({
       action: readyToShare ? "Use property" : "Finish setup",
     },
     {
-      title: "Channels",
+      title: "Sites",
       value: `${selectedChannelCount} selected`,
-      detail: hasRun ? `${liveChannels} live` : "Pick reach",
+      detail: hasRun ? `${liveChannels} live` : "Pick sites",
       href: "#publish-checklist",
-      action: hasRun ? "Open channels" : "Choose channels",
+      action: hasRun ? "Open sites" : "Choose sites",
     },
     {
       title: "Account access",
@@ -871,8 +871,8 @@ function PostingModePanel({
     : target
       ? referralTarget
         ? "A licensed network agent handles the Realtor.ca path through their brokerage."
-        : "Vacantless takes over the channel and records the live proof here."
-      : "Choose channels first, then the done-for-you option appears here.";
+        : "Vacantless takes over the site and records the live ad link here."
+      : "Choose sites first, then the done-for-you option appears here.";
   return (
     <section
       id="posting-mode"
@@ -945,7 +945,7 @@ function PostingModePanel({
               href="#publish-checklist"
               className="inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
             >
-              Choose channels
+              Choose sites
             </a>
           )}
         </div>
@@ -967,7 +967,7 @@ function DistributionHealthPanel({ health }: { health: DistributionHealth }) {
         : "positive";
   const attentionLabel =
     health.proofIssueChannels > 0
-      ? `${health.proofIssueChannels} proof gap${
+      ? `${health.proofIssueChannels} missing ad link${
           health.proofIssueChannels === 1 ? "" : "s"
         }`
       : health.attentionChannels > 0
@@ -988,7 +988,7 @@ function DistributionHealthPanel({ health }: { health: DistributionHealth }) {
             <Icons.list className="h-4 w-4" />
           </IconTile>
           <h3 className="text-sm font-semibold text-gray-900">
-            Distribution health
+            Posting details
           </h3>
         </div>
         <span
@@ -1024,7 +1024,7 @@ function DistributionHealthPanel({ health }: { health: DistributionHealth }) {
           value={String(health.staleChannels)}
         />
         <HealthMetric
-          label="Proof gaps"
+          label="Missing ad links"
           value={String(health.proofIssueChannels)}
         />
       </div>
@@ -1098,7 +1098,7 @@ function AutomationStatusPanel({
             {hasRun
               ? summary.line
               : readyToShare
-                ? "Set it Live or start the checklist to stage the default channels."
+                ? "Set it Live or start the checklist to stage the default sites."
                 : "Finish the required listing details before automation can start."}
           </p>
           <p className="mt-1 text-xs text-gray-500">{ownSurface}</p>
@@ -1141,14 +1141,14 @@ function AnalyticsPanel({ rows }: { rows: ChannelAnalyticsRow[] }) {
         See which places actually produced renters: {totals.leads}{" "}
         {totals.leads === 1 ? "inquiry" : "inquiries"} across{" "}
         {totals.channelsWithLeads}{" "}
-        {totals.channelsWithLeads === 1 ? "channel" : "channels"},{" "}
+        {totals.channelsWithLeads === 1 ? "site" : "sites"},{" "}
         {totals.advanced} that booked or progressed.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-200 text-left text-gray-500">
-              <th className="py-1.5 pr-3 font-medium">Channel</th>
+              <th className="py-1.5 pr-3 font-medium">Site</th>
               <th className="py-1.5 pr-3 font-medium">Leads</th>
               <th className="py-1.5 pr-3 font-medium">Booked+</th>
               <th className="py-1.5 pr-3 font-medium">Days live</th>
@@ -1558,7 +1558,7 @@ function ChannelCard({
             {combinedCopy && (
               <CopyTextButton
                 value={combinedCopy}
-                label="Copy this channel's wording"
+                label="Copy this site's wording"
               />
             )}
             <a

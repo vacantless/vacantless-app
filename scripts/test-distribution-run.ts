@@ -229,10 +229,10 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     panelSource.includes("The helper opens in front of you"),
   );
   ok(
-    "channel picker and active run list stay compact when channels grow",
+    "site picker and active run list stay compact when sites grow",
     panelSource.includes("max-h-80 overflow-y-auto") &&
       panelSource.includes("max-h-[42rem]") &&
-      panelSource.includes("More channels") &&
+      panelSource.includes("More sites") &&
       panelSource.includes("Connect accounts"),
   );
 }
@@ -244,7 +244,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "next banner explains outside-site approval",
     distributeSource.includes("You still approve") &&
-      distributeSource.includes("only after real proof is saved"),
+      distributeSource.includes("only after the real ad link is saved"),
   );
   ok(
     "done-for-you posting is front of the collapsed status strip",
@@ -269,7 +269,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "distribution dashboard uses plain four-part model",
     distributeSource.includes("Distribution") &&
       distributeSource.includes("Property") &&
-      distributeSource.includes("Channels") &&
+      distributeSource.includes("Sites") &&
       distributeSource.includes("Account access") &&
       distributeSource.includes("Posting choice"),
   );
@@ -285,8 +285,8 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("activeItem?.conciergeRequestedAt"),
   );
   ok(
-    "posted links drawer is now a proof-link manager",
-    distributeSource.includes("Proof links") &&
+    "posted links drawer is now a live-ad-link manager",
+    distributeSource.includes("Live ad links") &&
       distributeSource.includes("Manage links") &&
       distributeSource.includes("Save live ad URL"),
   );
