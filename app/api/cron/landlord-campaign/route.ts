@@ -66,6 +66,31 @@ type CampaignDeps = {
   rentConfirmUrl: typeof rentConfirmUrl;
 };
 
+type CampaignOrg = {
+  id: string;
+  name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  reply_to_email: string | null;
+  public_contact_email: string | null;
+  booking_timezone: string | null;
+  plan: string | null;
+  created_at: string | null;
+  landlord_campaign_step_sent: number | null;
+  landlord_campaign_last_sent_at: string | null;
+  landlord_campaign_email?: string | null;
+};
+
+type RentConfirmPlan = {
+  units: ReturnType<typeof buildRentConfirmUnits>;
+  firstYearSkippedUnits: ReturnType<typeof buildRentConfirmUnits>;
+  anniversaryPlan: ReturnType<typeof buildAnniversaryRentConfirmPlan>;
+};
+
+type RentConfirmPlanResult =
+  | { ok: true; plan: RentConfirmPlan }
+  | { ok: false; error: string };
+
 const defaultDeps: CampaignDeps = {
   env: process.env,
   nowMs: () => Date.now(),
@@ -95,6 +120,179 @@ function isCampaignDeps(value: unknown): value is CampaignDeps {
   );
 }
 
+function normalizeSingleTestEmail(value: string): string | null {
+  const email = value.trim().toLowerCase();
+  if (!email) return null;
+  if (/[\s,;]/.test(email)) return null;
+  if ((email.match(/@/g) ?? []).length !== 1) return null;
+  if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return null;
+  return email;
+}
+
+async function loadRentConfirmPlanForOrg(args: {
+  admin: NonNullable<ReturnType<typeof createAdminClient>>;
+  org: Pick<CampaignOrg, "id" | "booking_timezone">;
+  nowMs: number;
+  guideline: Awaited<ReturnType<typeof loadGuidelineLookup>>;
+  leaseTermShiftOn: boolean;
+  rentConfirmUrl: typeof rentConfirmUrl;
+}): Promise<RentConfirmPlanResult> {
+  const { admin, org, nowMs, guideline, leaseTermShiftOn } = args;
+  const { data: rentConfirmRows, error: rentConfirmErr } = await admin
+    .from("tenancies")
+    .select("id, property_id, rent_cents, confirm_token, start_date, last_rent_increase_date")
+    .eq("organization_id", org.id)
+    .eq("status", "active");
+
+  if (rentConfirmErr) {
+    return { ok: false, error: `rent_confirm_tenancies_failed:${rentConfirmErr.message}` };
+  }
+
+  const rawTenancies = (rentConfirmRows ?? []) as Array<{
+    id: string | null;
+    property_id: string | null;
+    rent_cents: number | null;
+    confirm_token: string | null;
+    start_date: string | null;
+    last_rent_increase_date: string | null;
+  }>;
+  const tenancyIds = rawTenancies.flatMap((row) => (row.id ? [row.id] : []));
+  const propertyIds = Array.from(
+    new Set(rawTenancies.flatMap((row) => (row.property_id ? [row.property_id] : []))),
+  );
+  const addressByPropertyId = new Map<string, string | null>();
+  const rentControlExemptByPropertyId = new Map<string, boolean>();
+  if (propertyIds.length > 0) {
+    const { data: addressRows, error: addressErr } = await admin
+      .from("properties")
+      .select("id, address, rent_control_exempt")
+      .eq("organization_id", org.id)
+      .in("id", propertyIds);
+    if (addressErr) {
+      return { ok: false, error: `rent_confirm_properties_failed:${addressErr.message}` };
+    }
+    for (const row of (addressRows ?? []) as Array<{
+      id: string | null;
+      address: string | null;
+      rent_control_exempt: boolean | null;
+    }>) {
+      if (row.id) {
+        addressByPropertyId.set(row.id, row.address);
+        rentControlExemptByPropertyId.set(
+          row.id,
+          row.rent_control_exempt === true,
+        );
+      }
+    }
+  }
+
+  const confirmedTenancyIds = new Set<string>();
+  const baselineConfirmedTenancyIds = new Set<string>();
+  if (tenancyIds.length > 0) {
+    const [confirmedResult, baselineResult] = await Promise.all([
+      admin
+        .from("tenancy_rent_adjustments")
+        .select("tenancy_id")
+        .eq("organization_id", org.id)
+        .eq("source", "landlord_confirm")
+        .in("tenancy_id", tenancyIds),
+      leaseTermShiftOn
+        ? admin
+            .from("tenancy_rent_adjustments")
+            .select("tenancy_id")
+            .eq("organization_id", org.id)
+            .in("tenancy_id", tenancyIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    const { data: confirmedRows, error: confirmedErr } = confirmedResult;
+    const { data: baselineRows, error: baselineErr } = baselineResult;
+    if (confirmedErr) {
+      return { ok: false, error: `rent_confirm_ledger_failed:${confirmedErr.message}` };
+    }
+    if (baselineErr) {
+      return { ok: false, error: `rent_confirm_baseline_failed:${baselineErr.message}` };
+    }
+    for (const row of (confirmedRows ?? []) as { tenancy_id: string | null }[]) {
+      if (row.tenancy_id) confirmedTenancyIds.add(row.tenancy_id);
+    }
+    for (const row of (baselineRows ?? []) as { tenancy_id: string | null }[]) {
+      if (row.tenancy_id) baselineConfirmedTenancyIds.add(row.tenancy_id);
+    }
+  }
+
+  const today = localDateString(nowMs, org.booking_timezone || "America/Toronto");
+  const campaignTenancies = rawTenancies.flatMap((row) =>
+    row.id && row.confirm_token
+      ? [
+          {
+            id: row.id,
+            address: row.property_id
+              ? addressByPropertyId.get(row.property_id) ?? null
+              : null,
+            rentCents: row.rent_cents,
+            confirmToken: row.confirm_token,
+            startDate: row.start_date,
+          },
+        ]
+      : [],
+  );
+  const firstYearTenancies = campaignTenancies.filter((tenancy) =>
+    isWithinFirstYear(tenancy.startDate, today),
+  );
+  const eligibleTenancies = campaignTenancies.filter(
+    (tenancy) => !isWithinFirstYear(tenancy.startDate, today),
+  );
+  const firstYearSkippedUnits = buildRentConfirmUnits({
+    tenancies: firstYearTenancies,
+    confirmedTenancyIds,
+    urlFor: args.rentConfirmUrl,
+  });
+  const units = buildRentConfirmUnits({
+    tenancies: eligibleTenancies,
+    confirmedTenancyIds,
+    urlFor: args.rentConfirmUrl,
+  });
+
+  const unitByTenancyId = new Map(units.map((unit) => [unit.tenancyId, unit]));
+  const anniversaryPlan = buildAnniversaryRentConfirmPlan(
+    rawTenancies.flatMap((row) => {
+      if (!row.id) return [];
+      const unit = unitByTenancyId.get(row.id);
+      if (!unit) return [];
+      if (
+        row.rent_cents == null ||
+        row.rent_cents <= 0 ||
+        !row.start_date ||
+        (leaseTermShiftOn && !baselineConfirmedTenancyIds.has(row.id))
+      ) {
+        return [{ ...unit, rentIncrease: null }];
+      }
+      const result = deriveRentIncrease(
+        {
+          startDate: row.start_date,
+          currentRentCents: row.rent_cents,
+          lastIncreaseDate: row.last_rent_increase_date ?? null,
+          exempt: row.property_id
+            ? rentControlExemptByPropertyId.get(row.property_id) === true
+            : false,
+          guideline,
+        },
+        today,
+      );
+      return [{ ...unit, rentIncrease: result }];
+    }),
+  );
+
+  return {
+    ok: true,
+    plan: {
+      units,
+      firstYearSkippedUnits,
+      anniversaryPlan,
+    },
+  };
+}
+
 async function runLandlordCampaign(
   req: NextRequest,
   deps: CampaignDeps = defaultDeps,
@@ -104,9 +302,30 @@ async function runLandlordCampaign(
   }
 
   const dry = req.nextUrl.searchParams.get("dry") === "1";
+  const rawTestTo = req.nextUrl.searchParams.get("test_to");
+  const rawTestOrg = req.nextUrl.searchParams.get("test_org");
+  const hasTestParam = rawTestTo !== null || rawTestOrg !== null;
+  const testTo = rawTestTo?.trim() ?? "";
+  const testOrg = rawTestOrg?.trim() ?? "";
+  const testMode = hasTestParam && testTo.length > 0 && testOrg.length > 0;
+
+  if (hasTestParam && !testMode) {
+    return NextResponse.json(
+      { ok: false, test: true, reason: "missing_test_params", sent: 0 },
+      { status: 400 },
+    );
+  }
+
+  const normalizedTestTo = testMode ? normalizeSingleTestEmail(testTo) : null;
+  if (testMode && !normalizedTestTo) {
+    return NextResponse.json(
+      { ok: false, test: true, reason: "invalid_test_to", sent: 0 },
+      { status: 400 },
+    );
+  }
 
   // Dark switch: the whole campaign is off until the flag is set.
-  if (!dry && !envFlagEnabled(deps.env.LANDLORD_CAMPAIGN_ENABLED)) {
+  if (!dry && !testMode && !envFlagEnabled(deps.env.LANDLORD_CAMPAIGN_ENABLED)) {
     return NextResponse.json(
       { ok: true, reason: "disabled", scanned: 0, sent: 0, wouldSend: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
       { status: 200 },
@@ -125,6 +344,118 @@ async function runLandlordCampaign(
   const guideline = await deps.loadGuidelineLookup(admin);
   const leaseTermShiftOn = deps.leaseTermShiftEnabled();
   const oldestIso = new Date(nowMs - CAMPAIGN_MAX_AGE_DAYS * DAY_MS).toISOString();
+
+  if (testMode) {
+    const { data: testOrgData, error: testOrgErr } = await admin
+      .from("organizations")
+      .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone, plan")
+      .eq("id", testOrg);
+
+    if (testOrgErr) {
+      return NextResponse.json(
+        { ok: false, test: true, reason: `query_error:${testOrgErr.message}`, sent: 0 },
+        { status: 400 },
+      );
+    }
+
+    const testOrgs = (testOrgData ?? []) as CampaignOrg[];
+    if (testOrgs.length !== 1) {
+      return NextResponse.json(
+        { ok: false, test: true, reason: "invalid_test_org", sent: 0 },
+        { status: 400 },
+      );
+    }
+
+    const org = testOrgs[0]!;
+    const featureFlagsByOrg = await loadOrganizationFeatureFlagsByOrg(
+      admin,
+      [org.id],
+      ["landlord_campaign"],
+    );
+    const enabled = isFeatureEnabledForOrg(
+      "landlord_campaign",
+      { ...org, featureFlags: featureFlagsByOrg.get(org.id) ?? [] },
+      { env: { ...deps.env, LANDLORD_CAMPAIGN_ENABLED: "1" } },
+    );
+
+    if (!enabled) {
+      return NextResponse.json(
+        { ok: true, test: true, sent: 0, reason: "feature_disabled", org: testOrg },
+        { status: 200 },
+      );
+    }
+
+    const plan = await loadRentConfirmPlanForOrg({
+      admin,
+      org,
+      nowMs,
+      guideline,
+      leaseTermShiftOn,
+      rentConfirmUrl: deps.rentConfirmUrl,
+    });
+
+    if (!plan.ok) {
+      return NextResponse.json(
+        { ok: false, test: true, reason: plan.error, sent: 0, org: testOrg },
+        { status: 200 },
+      );
+    }
+
+    const { units, anniversaryPlan } = plan.plan;
+    if (units.length === 0) {
+      return NextResponse.json(
+        {
+          ok: true,
+          test: true,
+          sent: 0,
+          reason: "no_eligible_units",
+          org: testOrg,
+          units: 0,
+          hero: null,
+        },
+        { status: 200 },
+      );
+    }
+
+    const result = await deps.sendLandlordRentConfirmEmail({
+      to_email: normalizedTestTo!,
+      org_name: org.name,
+      brand_color: org.brand_color,
+      logo_url: org.logo_url,
+      reply_to_email: org.reply_to_email,
+      units: anniversaryPlan.hero ? anniversaryPlan.others : units,
+      hero: anniversaryPlan.hero,
+    });
+
+    if (!result.sent) {
+      return NextResponse.json(
+        {
+          ok: false,
+          test: true,
+          sent: 0,
+          reason: result.reason,
+          org: testOrg,
+          to: normalizedTestTo,
+          units: units.length,
+          hero: anniversaryPlan.hero?.tenancyId ?? null,
+        },
+        { status: 200 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        test: true,
+        sent: 1,
+        to: normalizedTestTo,
+        org: testOrg,
+        units: units.length,
+        hero: anniversaryPlan.hero?.tenancyId ?? null,
+      },
+      { status: 200 },
+    );
+  }
 
   // Candidate orgs: free plan, not opted out, not finished, still fresh.
   const { data: orgData, error: orgErr } = await admin
@@ -281,174 +612,26 @@ async function runLandlordCampaign(
       }
 
       if (due.key === "rent_increase_confirm") {
-        const { data: rentConfirmRows, error: rentConfirmErr } = await admin
-          .from("tenancies")
-          .select("id, property_id, rent_cents, confirm_token, start_date, last_rent_increase_date")
-          .eq("organization_id", org.id)
-          .eq("status", "active");
+        const plan = await loadRentConfirmPlanForOrg({
+          admin,
+          org,
+          nowMs,
+          guideline,
+          leaseTermShiftOn,
+          rentConfirmUrl: deps.rentConfirmUrl,
+        });
 
-        if (rentConfirmErr) {
+        if (!plan.ok) {
           summary.errors++;
           summary.details.push({
             org: org.id,
             reveal: due.key,
-            error: `rent_confirm_tenancies_failed:${rentConfirmErr.message}`,
+            error: plan.error,
           });
           continue;
         }
 
-        const rawTenancies = (rentConfirmRows ?? []) as Array<{
-          id: string | null;
-          property_id: string | null;
-          rent_cents: number | null;
-          confirm_token: string | null;
-          start_date: string | null;
-          last_rent_increase_date: string | null;
-        }>;
-        const tenancyIds = rawTenancies.flatMap((row) => (row.id ? [row.id] : []));
-        const propertyIds = Array.from(
-          new Set(rawTenancies.flatMap((row) => (row.property_id ? [row.property_id] : []))),
-        );
-        const addressByPropertyId = new Map<string, string | null>();
-        const rentControlExemptByPropertyId = new Map<string, boolean>();
-        if (propertyIds.length > 0) {
-          const { data: addressRows, error: addressErr } = await admin
-            .from("properties")
-            .select("id, address, rent_control_exempt")
-            .eq("organization_id", org.id)
-            .in("id", propertyIds);
-          if (addressErr) {
-            summary.errors++;
-            summary.details.push({
-              org: org.id,
-              reveal: due.key,
-              error: `rent_confirm_properties_failed:${addressErr.message}`,
-            });
-            continue;
-          }
-          for (const row of (addressRows ?? []) as Array<{
-            id: string | null;
-            address: string | null;
-            rent_control_exempt: boolean | null;
-          }>) {
-            if (row.id) {
-              addressByPropertyId.set(row.id, row.address);
-              rentControlExemptByPropertyId.set(
-                row.id,
-                row.rent_control_exempt === true,
-              );
-            }
-          }
-        }
-
-        const confirmedTenancyIds = new Set<string>();
-        const baselineConfirmedTenancyIds = new Set<string>();
-        if (tenancyIds.length > 0) {
-          const [confirmedResult, baselineResult] = await Promise.all([
-            admin
-              .from("tenancy_rent_adjustments")
-              .select("tenancy_id")
-              .eq("organization_id", org.id)
-              .eq("source", "landlord_confirm")
-              .in("tenancy_id", tenancyIds),
-            leaseTermShiftOn
-              ? admin
-                  .from("tenancy_rent_adjustments")
-                  .select("tenancy_id")
-                  .eq("organization_id", org.id)
-                  .in("tenancy_id", tenancyIds)
-              : Promise.resolve({ data: [], error: null }),
-          ]);
-          const { data: confirmedRows, error: confirmedErr } = confirmedResult;
-          const { data: baselineRows, error: baselineErr } = baselineResult;
-          if (confirmedErr) {
-            summary.errors++;
-            summary.details.push({
-              org: org.id,
-              reveal: due.key,
-              error: `rent_confirm_ledger_failed:${confirmedErr.message}`,
-            });
-            continue;
-          }
-          if (baselineErr) {
-            summary.errors++;
-            summary.details.push({
-              org: org.id,
-              reveal: due.key,
-              error: `rent_confirm_baseline_failed:${baselineErr.message}`,
-            });
-            continue;
-          }
-          for (const row of (confirmedRows ?? []) as { tenancy_id: string | null }[]) {
-            if (row.tenancy_id) confirmedTenancyIds.add(row.tenancy_id);
-          }
-          for (const row of (baselineRows ?? []) as { tenancy_id: string | null }[]) {
-            if (row.tenancy_id) baselineConfirmedTenancyIds.add(row.tenancy_id);
-          }
-        }
-
-        const today = localDateString(nowMs, org.booking_timezone || "America/Toronto");
-        const campaignTenancies = rawTenancies.flatMap((row) =>
-          row.id && row.confirm_token
-            ? [
-                {
-                  id: row.id,
-                  address: row.property_id
-                    ? addressByPropertyId.get(row.property_id) ?? null
-                    : null,
-                  rentCents: row.rent_cents,
-                  confirmToken: row.confirm_token,
-                  startDate: row.start_date,
-                },
-              ]
-            : [],
-        );
-        const firstYearTenancies = campaignTenancies.filter((tenancy) =>
-          isWithinFirstYear(tenancy.startDate, today),
-        );
-        const eligibleTenancies = campaignTenancies.filter(
-          (tenancy) => !isWithinFirstYear(tenancy.startDate, today),
-        );
-        const firstYearSkippedUnits = buildRentConfirmUnits({
-          tenancies: firstYearTenancies,
-          confirmedTenancyIds,
-          urlFor: deps.rentConfirmUrl,
-        });
-        const units = buildRentConfirmUnits({
-          tenancies: eligibleTenancies,
-          confirmedTenancyIds,
-          urlFor: deps.rentConfirmUrl,
-        });
-
-        const unitByTenancyId = new Map(units.map((unit) => [unit.tenancyId, unit]));
-        const anniversaryPlan = buildAnniversaryRentConfirmPlan(
-          rawTenancies.flatMap((row) => {
-            if (!row.id) return [];
-            const unit = unitByTenancyId.get(row.id);
-            if (!unit) return [];
-            if (
-              row.rent_cents == null ||
-              row.rent_cents <= 0 ||
-              !row.start_date ||
-              (leaseTermShiftOn && !baselineConfirmedTenancyIds.has(row.id))
-            ) {
-              return [{ ...unit, rentIncrease: null }];
-            }
-            const result = deriveRentIncrease(
-              {
-                startDate: row.start_date,
-                currentRentCents: row.rent_cents,
-                lastIncreaseDate: row.last_rent_increase_date ?? null,
-                exempt: row.property_id
-                  ? rentControlExemptByPropertyId.get(row.property_id) === true
-                  : false,
-                guideline,
-              },
-              today,
-            );
-            return [{ ...unit, rentIncrease: result }];
-          }),
-        );
+        const { units, firstYearSkippedUnits, anniversaryPlan } = plan.plan;
 
         if (dry) {
           if (units.length > 0) {

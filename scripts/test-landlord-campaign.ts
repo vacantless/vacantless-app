@@ -519,6 +519,7 @@ type FakeOrg = {
   created_at: string;
   landlord_campaign_step_sent: number;
   landlord_campaign_last_sent_at: string | null;
+  landlord_campaign_opted_out: boolean;
   landlord_campaign_email: string;
 };
 
@@ -530,6 +531,7 @@ type FakeTenancy = {
   confirm_token: string;
   start_date: string;
   last_rent_increase_date: string | null;
+  status: "active";
 };
 
 type FakeProperty = {
@@ -541,6 +543,12 @@ type FakeProperty = {
 
 class FakeCampaignDb {
   public updates: Array<{ table: string; payload: Record<string, unknown> | null }> = [];
+  public queries: Array<{
+    table: string;
+    selectColumns: string;
+    operation: "select" | "update";
+    filters: FakeFilter[];
+  }> = [];
 
   public orgs: FakeOrg[] = [
     org("david", "David Harel", "david@example.com"),
@@ -569,42 +577,51 @@ class FakeCampaignDb {
   }
 
   resolve(query: FakeQuery): { data: unknown; error: null } {
+    this.queries.push({
+      table: query.table,
+      selectColumns: query.selectColumns,
+      operation: query.operation,
+      filters: [...query.filters],
+    });
     if (query.operation === "update") {
       this.updates.push({ table: query.table, payload: query.updatePayload });
       return { data: null, error: null };
     }
     if (query.table === "organizations") {
-      return { data: this.orgs, error: null };
+      return {
+        data: this.orgs.filter((row) => matchesFilters(row, query.filters)),
+        error: null,
+      };
     }
     if (query.table === "organization_feature_flags") {
       return { data: [], error: null };
     }
     if (query.table === "tenancies") {
+      const rows = this.tenancies.filter((row) => matchesFilters(row, query.filters));
       if (query.selectColumns === "organization_id") {
         return {
-          data: this.tenancies.map((row) => ({ organization_id: row.organization_id })),
+          data: rows.map((row) => ({ organization_id: row.organization_id })),
           error: null,
         };
       }
-      const orgId = eqFilter(query, "organization_id");
       return {
-        data: this.tenancies.filter((row) => row.organization_id === orgId),
+        data: rows,
         error: null,
       };
     }
     if (query.table === "properties") {
+      const rows = this.properties.filter((row) => matchesFilters(row, query.filters));
       if (query.selectColumns === "organization_id, address") {
         return {
-          data: this.properties.map((row) => ({
+          data: rows.map((row) => ({
             organization_id: row.organization_id,
             address: row.address,
           })),
           error: null,
         };
       }
-      const orgId = eqFilter(query, "organization_id");
       return {
-        data: this.properties.filter((row) => row.organization_id === orgId),
+        data: rows,
         error: null,
       };
     }
@@ -632,6 +649,7 @@ function org(id: string, name: string, email: string): FakeOrg {
     created_at: "2026-07-15T12:00:00.000Z",
     landlord_campaign_step_sent: 0,
     landlord_campaign_last_sent_at: null,
+    landlord_campaign_opted_out: false,
     landlord_campaign_email: email,
   };
 }
@@ -651,6 +669,7 @@ function tenancy(
     confirm_token: `token-${id}`,
     start_date: startDate,
     last_rent_increase_date: null,
+    status: "active",
   };
 }
 
@@ -665,36 +684,65 @@ function propertyAddress(orgId: string, propertyId: string): string {
   return addresses[propertyId] ?? `${orgId} unit`;
 }
 
-function eqFilter(query: FakeQuery, column: string): unknown {
-  return query.filters.find((filter) => filter.op === "eq" && filter.column === column)?.value;
+function matchesFilters(
+  row: Record<string, unknown>,
+  filters: FakeFilter[],
+): boolean {
+  return filters.every((filter) => {
+    const value = row[filter.column];
+    switch (filter.op) {
+      case "eq":
+        return value === filter.value;
+      case "in":
+        return Array.isArray(filter.value) && filter.value.includes(value);
+      case "lt":
+        return (typeof value === "number" && typeof filter.value === "number") ||
+          (typeof value === "string" && typeof filter.value === "string")
+          ? value < filter.value
+          : true;
+      case "gt":
+        return (typeof value === "number" && typeof filter.value === "number") ||
+          (typeof value === "string" && typeof filter.value === "string")
+          ? value > filter.value
+          : true;
+    }
+  });
+}
+
+function campaignDeps(overrides: {
+  db: FakeCampaignDb;
+  rentConfirmCalls?: Array<Record<string, unknown>>;
+  notificationCalls?: Array<Record<string, unknown>>;
+}) {
+  return {
+    env: {
+      CRON_SECRET: "test",
+      NEXT_PUBLIC_APP_URL: "https://app.vacantless.com",
+    },
+    nowMs: () => Date.parse("2026-07-31T16:00:00.000Z"),
+    createAdminClient: () => overrides.db as never,
+    loadGuidelineLookup: async () => () => 2.1,
+    leaseTermShiftEnabled: () => false,
+    sendLandlordRentConfirmEmail: async (payload: Record<string, unknown>) => {
+      overrides.rentConfirmCalls?.push(payload);
+      return { sent: true };
+    },
+    sendNotificationEmail: async (payload: Record<string, unknown>) => {
+      overrides.notificationCalls?.push(payload);
+      return { sent: true };
+    },
+    rentConfirmUrl: (token: string) =>
+      `https://app.vacantless.com/confirm-rent/${token}`,
+  };
 }
 
 async function runDryPreviewTest() {
   const fakeDb = new FakeCampaignDb();
-  let rentConfirmSends = 0;
-  let notificationSends = 0;
+  const rentConfirmCalls: Array<Record<string, unknown>> = [];
+  const notificationCalls: Array<Record<string, unknown>> = [];
   const response = await runLandlordCampaign(
     new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&dry=1"),
-    {
-      env: {
-        CRON_SECRET: "test",
-        NEXT_PUBLIC_APP_URL: "https://app.vacantless.com",
-      },
-      nowMs: () => Date.parse("2026-07-31T16:00:00.000Z"),
-      createAdminClient: () => fakeDb as never,
-      loadGuidelineLookup: async () => () => 2.1,
-      leaseTermShiftEnabled: () => false,
-      sendLandlordRentConfirmEmail: async () => {
-        rentConfirmSends++;
-        return { sent: true };
-      },
-      sendNotificationEmail: async () => {
-        notificationSends++;
-        return { sent: true };
-      },
-      rentConfirmUrl: (token: string) =>
-        `https://app.vacantless.com/confirm-rent/${token}`,
-    },
+    campaignDeps({ db: fakeDb, rentConfirmCalls, notificationCalls }),
   );
   const body = (await response.json()) as {
     scanned: number;
@@ -708,7 +756,7 @@ async function runDryPreviewTest() {
 
   ok("dry preview scans while campaign env master is dark", body.scanned === 4);
   ok("dry preview records would-send count only", body.sent === 0 && body.wouldSend === 2);
-  ok("dry preview does not call send seams", rentConfirmSends === 0 && notificationSends === 0);
+  ok("dry preview does not call send seams", rentConfirmCalls.length === 0 && notificationCalls.length === 0);
   ok("dry preview does not update organizations", fakeDb.updates.length === 0);
   ok(
     "dry preview would send mature David/Fiona orgs",
@@ -726,7 +774,102 @@ async function runDryPreviewTest() {
   );
 }
 
-runDryPreviewTest()
+async function runTestSendRouteTests() {
+  {
+    const fakeDb = new FakeCampaignDb();
+    const rentConfirmCalls: Array<Record<string, unknown>> = [];
+    const response = await runLandlordCampaign(
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=Noam%40Example.com&test_org=david"),
+      campaignDeps({ db: fakeDb, rentConfirmCalls }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    const orgSelects = fakeDb.queries.filter((query) => query.table === "organizations");
+
+    ok("test send returns one explicit test send", response.status === 200 && body.ok === true && body.test === true && body.sent === 1);
+    ok("test send routes only to test_to", body.to === "noam@example.com" && rentConfirmCalls[0]?.to_email === "noam@example.com");
+    ok("test send includes only the selected org units", body.org === "david" && body.units === 2);
+    ok("test send does not stamp organizations", fakeDb.updates.length === 0);
+    ok(
+      "test send does not select landlord_campaign_email",
+      orgSelects.length === 1 &&
+        orgSelects.every((query) => !query.selectColumns.includes("landlord_campaign_email")),
+    );
+  }
+
+  {
+    const fakeDb = new FakeCampaignDb();
+    const rentConfirmCalls: Array<Record<string, unknown>> = [];
+    const response = await runLandlordCampaign(
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com,other@example.com&test_org=david"),
+      campaignDeps({ db: fakeDb, rentConfirmCalls }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    ok("test send rejects comma fan-out", response.status === 400 && body.reason === "invalid_test_to" && rentConfirmCalls.length === 0);
+  }
+
+  {
+    const fakeDb = new FakeCampaignDb();
+    const rentConfirmCalls: Array<Record<string, unknown>> = [];
+    const response = await runLandlordCampaign(
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com%20other@example.com&test_org=david"),
+      campaignDeps({ db: fakeDb, rentConfirmCalls }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    ok("test send rejects whitespace fan-out", response.status === 400 && body.reason === "invalid_test_to" && rentConfirmCalls.length === 0);
+  }
+
+  {
+    const fakeDb = new FakeCampaignDb();
+    const rentConfirmCalls: Array<Record<string, unknown>> = [];
+    const response = await runLandlordCampaign(
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com"),
+      campaignDeps({ db: fakeDb, rentConfirmCalls }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    ok("test send rejects missing test_org", response.status === 400 && body.reason === "missing_test_params" && rentConfirmCalls.length === 0);
+  }
+
+  {
+    const fakeDb = new FakeCampaignDb();
+    const rentConfirmCalls: Array<Record<string, unknown>> = [];
+    const response = await runLandlordCampaign(
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com&test_org=missing"),
+      campaignDeps({ db: fakeDb, rentConfirmCalls }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    ok("test send rejects unknown test_org", response.status === 400 && body.reason === "invalid_test_org" && rentConfirmCalls.length === 0);
+  }
+
+  {
+    const fakeDb = new FakeCampaignDb();
+    const rentConfirmCalls: Array<Record<string, unknown>> = [];
+    const response = await runLandlordCampaign(
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com&test_org=paul"),
+      campaignDeps({ db: fakeDb, rentConfirmCalls }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    ok("first-year-only test org sends nothing", response.status === 200 && body.sent === 0 && body.reason === "no_eligible_units" && rentConfirmCalls.length === 0);
+    ok("first-year-only test org does not stamp", fakeDb.updates.length === 0);
+  }
+
+  {
+    const fakeDb = new FakeCampaignDb();
+    const rentConfirmCalls: Array<Record<string, unknown>> = [];
+    const response = await runLandlordCampaign(
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test"),
+      campaignDeps({ db: fakeDb, rentConfirmCalls }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+    ok("normal dark run unchanged without test params", response.status === 200 && body.reason === "disabled" && rentConfirmCalls.length === 0);
+  }
+}
+
+async function runRouteTests() {
+  await runDryPreviewTest();
+  await runTestSendRouteTests();
+}
+
+runRouteTests()
   .catch((err) => {
     failed++;
     console.error(err instanceof Error ? err.message : err);
