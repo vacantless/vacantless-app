@@ -132,7 +132,7 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   const a = deriveNextAction(inp({ currentStep: "market", hasRent: true, photoCount: 4, isLive: false, channelCount: 5 }));
   ok("market: no photos gap when photos present", !findGap(a, "photos"));
   ok("market: live gap still present", findGap(a, "live"));
-  ok("market: cta -> rental-details (set live) when photos present", a?.cta.href === `/dashboard/properties/${PID}#rental-details`);
+  ok("market: cta -> Set Live action when photos present", a?.cta.href === `/dashboard/properties/${PID}#publish-action`);
 }
 {
   const inherited = new Set(["lease_term", "smoking"]);

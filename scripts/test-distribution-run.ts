@@ -384,8 +384,8 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 {
   const propertiesSource = readFileSync("app/dashboard/properties/page.tsx", "utf8");
   ok(
-    "properties list opens marketing checklist",
-    propertiesSource.includes("Marketing checklist"),
+    "properties list opens posting entry point",
+    propertiesSource.includes("Get this listing online"),
   );
 }
 

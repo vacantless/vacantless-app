@@ -2126,7 +2126,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="setup"
-        label="Unit details"
+        label="Setup"
         anchorId="rental-details"
         done={setUpStep?.state === "done"}
       >
@@ -2855,7 +2855,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="market"
-        label="Photos & listing copy"
+        label="Photos & ad"
         done={marketStep?.state === "done"}
       >
 
@@ -3121,7 +3121,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="distribute"
-        label="Get online"
+        label="Post online"
         anchorId="distribute"
         done={distributeChannelCards.some(
           (c) =>
@@ -3148,7 +3148,7 @@ export default async function PropertyDetailPage({
         />
       </TabPanel>
 
-      <TabPanel tabId="assets" label="Assets">
+      <TabPanel tabId="assets" label="Safety & appliances">
 
       <CollapsibleSection
         id="detectors"
@@ -3207,7 +3207,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="inquiries"
-        label="Inquiries"
+        label="Renters"
         anchorId="inquiries"
         badge={leadRows.length}
         done={stepOf("inquiries")?.state === "done"}
