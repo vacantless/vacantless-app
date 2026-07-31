@@ -3,10 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import {
   PIPELINE_STAGES,
+  PIPELINE_SEGMENTS,
   statusLabel,
   statusDescription,
   isLeadStatus,
+  isPipelineSegment,
+  stagesForSegment,
   type LeadStatus,
+  type PipelineSegmentKey,
 } from "@/lib/pipeline";
 import {
   isScreenFilter,
@@ -36,7 +40,12 @@ type LeadRow = {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { status?: string; screen?: string; property?: string };
+  searchParams: {
+    status?: string;
+    segment?: string;
+    screen?: string;
+    property?: string;
+  };
 }) {
   const supabase = createClient();
   const org = await getCurrentOrg();
@@ -57,6 +66,12 @@ export default async function LeadsPage({
     searchParams.status && isLeadStatus(searchParams.status)
       ? searchParams.status
       : null;
+  // Primary filter = a task segment (a group of stages). The raw per-stage
+  // `status` filter (advanced) takes precedence when both are present.
+  const segment: PipelineSegmentKey | null =
+    searchParams.segment && isPipelineSegment(searchParams.segment)
+      ? searchParams.segment
+      : null;
   const screen: ScreenFilter | null = isScreenFilter(searchParams.screen)
     ? searchParams.screen
     : null;
@@ -76,10 +91,16 @@ export default async function LeadsPage({
     ? all.filter((l) => l.property_id === propertyId)
     : all;
 
-  // Stage and screening filters are orthogonal — apply both, within scope.
+  // Stage/segment and screening filters are orthogonal — apply both, within
+  // scope. A raw stage `status` wins over a `segment` when both are set.
+  const segmentStages = segment ? stagesForSegment(segment) : null;
   const rows = scoped.filter(
     (l) =>
-      (filter ? l.status === filter : true) &&
+      (filter
+        ? l.status === filter
+        : segmentStages
+          ? segmentStages.includes(l.status)
+          : true) &&
       matchesScreenFilter(l.qualified_out, screen),
   );
 
@@ -115,24 +136,47 @@ export default async function LeadsPage({
         </div>
       )}
 
+      {/* Primary filter: plain task segments (ESL Slice 6). */}
       <div className="mb-3 flex flex-wrap gap-2 text-sm">
         <FilterChip
           label={`All (${scoped.length})`}
-          href={leadsHref(null, screen, propertyId)}
-          active={!filter}
+          href={leadsHref(null, null, screen, propertyId)}
+          active={!filter && !segment}
         />
-        {PIPELINE_STAGES.map((s) => {
-          const n = scoped.filter((l) => l.status === s).length;
+        {PIPELINE_SEGMENTS.map((seg) => {
+          const n = scoped.filter((l) =>
+            (seg.stages as readonly string[]).includes(l.status),
+          ).length;
           return (
             <FilterChip
-              key={s}
-              label={`${statusLabel(s)} (${n})`}
-              href={leadsHref(s, screen, propertyId)}
-              active={filter === s}
+              key={seg.key}
+              label={`${seg.label} (${n})`}
+              href={leadsHref(null, seg.key, screen, propertyId)}
+              active={!filter && segment === seg.key}
             />
           );
         })}
       </div>
+
+      {/* Advanced: the exact eight stages, for operators who want them. */}
+      <details className="mb-3 text-sm" open={!!filter}>
+        <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
+          All stages
+        </summary>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {PIPELINE_STAGES.map((s) => {
+            const n = scoped.filter((l) => l.status === s).length;
+            return (
+              <FilterChip
+                key={s}
+                label={`${statusLabel(s)} (${n})`}
+                href={leadsHref(s, null, screen, propertyId)}
+                active={filter === s}
+              />
+            );
+          })}
+        </div>
+      </details>
 
       {showScreenFilter && (
         <div className="mb-5 flex flex-wrap items-center gap-2 text-sm">
@@ -141,17 +185,17 @@ export default async function LeadsPage({
           </span>
           <FilterChip
             label="All fits"
-            href={leadsHref(filter, null, propertyId)}
+            href={leadsHref(filter, segment, null, propertyId)}
             active={!screen}
           />
           <FilterChip
             label={`Good fits (${fitCount})`}
-            href={leadsHref(filter, "ok", propertyId)}
+            href={leadsHref(filter, segment, "ok", propertyId)}
             active={screen === "ok"}
           />
           <FilterChip
             label={`Possible mismatch (${mismatchCount})`}
-            href={leadsHref(filter, "out", propertyId)}
+            href={leadsHref(filter, segment, "out", propertyId)}
             active={screen === "out"}
           />
           <Link
@@ -209,11 +253,13 @@ export default async function LeadsPage({
  */
 function leadsHref(
   status: LeadStatus | null,
+  segment: PipelineSegmentKey | null,
   screen: ScreenFilter | null,
   property: string | null,
 ): string {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
+  if (segment) params.set("segment", segment);
   if (screen) params.set("screen", screen);
   if (property) params.set("property", property);
   const qs = params.toString();

@@ -57,6 +57,34 @@ export function needsReply(status: string): boolean {
   return status === "new";
 }
 
+/**
+ * Task segments (ESL Slice 6): the 8 granular pipeline stages grouped into a
+ * few plain "what do I do next" buckets for the primary Renters filter. The raw
+ * per-stage chips stay available behind an "All stages" toggle. Every stage is
+ * covered by exactly one segment, so segment counts sum to the stage counts.
+ */
+export const PIPELINE_SEGMENTS = [
+  { key: "needs_reply", label: "Needs reply", stages: ["new"] },
+  { key: "in_conversation", label: "In conversation", stages: ["replied", "contacted"] },
+  { key: "viewing", label: "Viewing", stages: ["booked", "showed"] },
+  { key: "deciding", label: "Deciding", stages: ["applied"] },
+  { key: "closed", label: "Closed", stages: ["leased", "lost"] },
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  stages: readonly LeadStatus[];
+}[];
+
+export type PipelineSegmentKey = (typeof PIPELINE_SEGMENTS)[number]["key"];
+
+export function isPipelineSegment(value: string): value is PipelineSegmentKey {
+  return PIPELINE_SEGMENTS.some((seg) => seg.key === value);
+}
+
+export function stagesForSegment(key: string): readonly LeadStatus[] {
+  return PIPELINE_SEGMENTS.find((seg) => seg.key === key)?.stages ?? [];
+}
+
 export const SHOWING_OUTCOMES = [
   "scheduled",
   "attended",
