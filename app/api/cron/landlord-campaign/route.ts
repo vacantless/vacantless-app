@@ -18,6 +18,7 @@ import { rentConfirmUrl } from "@/lib/rent-confirm-public";
 import {
   buildAnniversaryRentConfirmPlan,
   buildRentConfirmUnits,
+  isWithinFirstYear,
   nextRevealDue,
   revealCopy,
   resolveLandlordCampaignRecipient,
@@ -38,8 +39,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
+const DEFAULT_APP_URL = "https://vacantless-app.vercel.app";
 const DAY_MS = 24 * 3_600_000;
 
 type Summary = {
@@ -47,43 +47,83 @@ type Summary = {
   reason?: string;
   scanned: number;
   sent: number;
+  wouldSend: number;
   skipped: number;
   errors: number;
   details: Array<Record<string, unknown>>;
 };
 
-function authorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
+type CampaignEnv = Record<string, string | undefined>;
+
+type CampaignDeps = {
+  env: CampaignEnv;
+  nowMs: () => number;
+  createAdminClient: typeof createAdminClient;
+  loadGuidelineLookup: typeof loadGuidelineLookup;
+  leaseTermShiftEnabled: typeof leaseTermShiftEnabled;
+  sendLandlordRentConfirmEmail: typeof sendLandlordRentConfirmEmail;
+  sendNotificationEmail: typeof sendNotificationEmail;
+  rentConfirmUrl: typeof rentConfirmUrl;
+};
+
+const defaultDeps: CampaignDeps = {
+  env: process.env,
+  nowMs: () => Date.now(),
+  createAdminClient,
+  loadGuidelineLookup,
+  leaseTermShiftEnabled,
+  sendLandlordRentConfirmEmail,
+  sendNotificationEmail,
+  rentConfirmUrl,
+};
+
+function authorized(req: NextRequest, env: CampaignEnv): boolean {
+  const secret = env.CRON_SECRET;
   if (!secret) return false;
   const auth = req.headers.get("authorization");
   if (auth === `Bearer ${secret}`) return true;
   return req.nextUrl.searchParams.get("secret") === secret;
 }
 
-export async function GET(req: NextRequest) {
-  if (!authorized(req)) {
+function isCampaignDeps(value: unknown): value is CampaignDeps {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    "env" in value &&
+    "createAdminClient" in value &&
+    "sendLandlordRentConfirmEmail" in value
+  );
+}
+
+async function runLandlordCampaign(
+  req: NextRequest,
+  deps: CampaignDeps = defaultDeps,
+) {
+  if (!authorized(req, deps.env)) {
     return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   }
 
+  const dry = req.nextUrl.searchParams.get("dry") === "1";
+
   // Dark switch: the whole campaign is off until the flag is set.
-  if (!envFlagEnabled(process.env.LANDLORD_CAMPAIGN_ENABLED)) {
+  if (!dry && !envFlagEnabled(deps.env.LANDLORD_CAMPAIGN_ENABLED)) {
     return NextResponse.json(
-      { ok: true, reason: "disabled", scanned: 0, sent: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
+      { ok: true, reason: "disabled", scanned: 0, sent: 0, wouldSend: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
 
-  const admin = createAdminClient();
+  const admin = deps.createAdminClient();
   if (!admin) {
     return NextResponse.json(
-      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
+      { ok: false, reason: "service_role_not_configured", scanned: 0, sent: 0, wouldSend: 0, skipped: 0, errors: 0, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
 
-  const nowMs = Date.now();
-  const guideline = await loadGuidelineLookup(admin);
-  const leaseTermShiftOn = leaseTermShiftEnabled();
+  const nowMs = deps.nowMs();
+  const guideline = await deps.loadGuidelineLookup(admin);
+  const leaseTermShiftOn = deps.leaseTermShiftEnabled();
   const oldestIso = new Date(nowMs - CAMPAIGN_MAX_AGE_DAYS * DAY_MS).toISOString();
 
   // Candidate orgs: free plan, not opted out, not finished, still fresh.
@@ -99,7 +139,7 @@ export async function GET(req: NextRequest) {
 
   if (orgErr) {
     return NextResponse.json(
-      { ok: false, reason: `query_error:${orgErr.message}`, scanned: 0, sent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: `query_error:${orgErr.message}`, scanned: 0, sent: 0, wouldSend: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -118,7 +158,7 @@ export async function GET(req: NextRequest) {
     landlord_campaign_last_sent_at: string | null;
     landlord_campaign_email: string | null;
   }>;
-  const summary: Summary = { ok: true, scanned: orgs.length, sent: 0, skipped: 0, errors: 0, details: [] };
+  const summary: Summary = { ok: true, scanned: orgs.length, sent: 0, wouldSend: 0, skipped: 0, errors: 0, details: [] };
 
   if (orgs.length === 0) return NextResponse.json(summary, { status: 200 });
 
@@ -154,7 +194,7 @@ export async function GET(req: NextRequest) {
   if (stripeRentErr || rotessaRentErr) {
     const message = stripeRentErr?.message ?? rotessaRentErr?.message ?? "unknown";
     return NextResponse.json(
-      { ok: false, reason: `query_error:${message}`, scanned: orgs.length, sent: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
+      { ok: false, reason: `query_error:${message}`, scanned: orgs.length, sent: 0, wouldSend: 0, skipped: 0, errors: 1, details: [] } satisfies Summary,
       { status: 200 },
     );
   }
@@ -194,7 +234,11 @@ export async function GET(req: NextRequest) {
         !isFeatureEnabledForOrg(
           "landlord_campaign",
           { ...org, featureFlags: featureFlagsByOrg.get(org.id) ?? [] },
-          { env: process.env },
+          {
+            env: dry
+              ? { ...deps.env, LANDLORD_CAMPAIGN_ENABLED: "1" }
+              : deps.env,
+          },
         )
       ) {
         summary.skipped++;
@@ -343,53 +387,40 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        const units = buildRentConfirmUnits({
-          tenancies: rawTenancies.flatMap((row) =>
-            row.id && row.confirm_token
-              ? [
-                  {
-                    id: row.id,
-                    address: row.property_id
-                      ? addressByPropertyId.get(row.property_id) ?? null
-                      : null,
-                    rentCents: row.rent_cents,
-                    confirmToken: row.confirm_token,
-                  },
-                ]
-              : [],
-          ),
+        const today = localDateString(nowMs, org.booking_timezone || "America/Toronto");
+        const campaignTenancies = rawTenancies.flatMap((row) =>
+          row.id && row.confirm_token
+            ? [
+                {
+                  id: row.id,
+                  address: row.property_id
+                    ? addressByPropertyId.get(row.property_id) ?? null
+                    : null,
+                  rentCents: row.rent_cents,
+                  confirmToken: row.confirm_token,
+                  startDate: row.start_date,
+                },
+              ]
+            : [],
+        );
+        const firstYearTenancies = campaignTenancies.filter((tenancy) =>
+          isWithinFirstYear(tenancy.startDate, today),
+        );
+        const eligibleTenancies = campaignTenancies.filter(
+          (tenancy) => !isWithinFirstYear(tenancy.startDate, today),
+        );
+        const firstYearSkippedUnits = buildRentConfirmUnits({
+          tenancies: firstYearTenancies,
           confirmedTenancyIds,
-          urlFor: rentConfirmUrl,
+          urlFor: deps.rentConfirmUrl,
+        });
+        const units = buildRentConfirmUnits({
+          tenancies: eligibleTenancies,
+          confirmedTenancyIds,
+          urlFor: deps.rentConfirmUrl,
         });
 
-        if (units.length === 0) {
-          const { error: stampErr } = await admin
-            .from("organizations")
-            .update({ landlord_campaign_step_sent: due.index + 1 })
-            .eq("id", org.id);
-
-          if (stampErr) {
-            summary.errors++;
-            summary.details.push({
-              org: org.id,
-              reveal: due.key,
-              error: `stamp_failed:${stampErr.message}`,
-            });
-            continue;
-          }
-
-          summary.skipped++;
-          summary.details.push({
-            org: org.id,
-            skipped: "no_unconfirmed_rent_units",
-            reveal: due.key,
-            step: due.index + 1,
-          });
-          continue;
-        }
-
         const unitByTenancyId = new Map(units.map((unit) => [unit.tenancyId, unit]));
-        const today = localDateString(nowMs, org.booking_timezone || "America/Toronto");
         const anniversaryPlan = buildAnniversaryRentConfirmPlan(
           rawTenancies.flatMap((row) => {
             if (!row.id) return [];
@@ -419,7 +450,55 @@ export async function GET(req: NextRequest) {
           }),
         );
 
-        const result = await sendLandlordRentConfirmEmail({
+        if (dry) {
+          if (units.length > 0) {
+            summary.wouldSend++;
+          } else {
+            summary.skipped++;
+          }
+          summary.details.push({
+            org: org.id,
+            reveal: due.key,
+            dry: true,
+            step: due.index + 1,
+            would_send_to: units.length > 0 ? to : null,
+            eligible_units: units.map((unit) => unit.address),
+            first_year_skipped: firstYearSkippedUnits.map((unit) => unit.address),
+            hero: anniversaryPlan.hero?.tenancyId ?? null,
+            ...(units.length === 0
+              ? { skipped: "no_unconfirmed_rent_units" }
+              : {}),
+          });
+          continue;
+        }
+
+        if (units.length === 0) {
+          const { error: stampErr } = await admin
+            .from("organizations")
+            .update({ landlord_campaign_step_sent: due.index + 1 })
+            .eq("id", org.id);
+
+          if (stampErr) {
+            summary.errors++;
+            summary.details.push({
+              org: org.id,
+              reveal: due.key,
+              error: `stamp_failed:${stampErr.message}`,
+            });
+            continue;
+          }
+
+          summary.skipped++;
+          summary.details.push({
+            org: org.id,
+            skipped: "no_unconfirmed_rent_units",
+            reveal: due.key,
+            step: due.index + 1,
+          });
+          continue;
+        }
+
+        const result = await deps.sendLandlordRentConfirmEmail({
           to_email: to,
           org_name: org.name,
           brand_color: org.brand_color,
@@ -439,7 +518,7 @@ export async function GET(req: NextRequest) {
           .from("organizations")
           .update({
             landlord_campaign_step_sent: due.index + 1,
-            landlord_campaign_last_sent_at: new Date().toISOString(),
+            landlord_campaign_last_sent_at: new Date(nowMs).toISOString(),
           })
           .eq("id", org.id);
 
@@ -466,12 +545,24 @@ export async function GET(req: NextRequest) {
         propertyAddress: firstAddress.get(org.id) ?? null,
       });
 
-      const result = await sendNotificationEmail({
+      if (dry) {
+        summary.wouldSend++;
+        summary.details.push({
+          org: org.id,
+          reveal: due.key,
+          dry: true,
+          step: due.index + 1,
+          would_send_to: to,
+        });
+        continue;
+      }
+
+      const result = await deps.sendNotificationEmail({
         to_email: to,
         subject: copy.subject,
         body: copy.body,
         action_label: copy.ctaLabel,
-        action_url: `${APP_URL}${copy.ctaPath}`,
+        action_url: `${deps.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL}${copy.ctaPath}`,
         org_name: org.name,
         brand_color: org.brand_color,
         logo_url: org.logo_url,
@@ -489,7 +580,7 @@ export async function GET(req: NextRequest) {
         .from("organizations")
         .update({
           landlord_campaign_step_sent: due.index + 1,
-          landlord_campaign_last_sent_at: new Date().toISOString(),
+          landlord_campaign_last_sent_at: new Date(nowMs).toISOString(),
         })
         .eq("id", org.id);
 
@@ -511,4 +602,11 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(summary, { status: 200 });
+}
+
+export async function GET(req: NextRequest, maybeDeps?: unknown) {
+  return runLandlordCampaign(
+    req,
+    isCampaignDeps(maybeDeps) ? maybeDeps : defaultDeps,
+  );
 }

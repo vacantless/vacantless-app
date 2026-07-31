@@ -184,6 +184,68 @@ export type RentConfirmCampaignUnit = {
   confirmUrl: string;
 };
 
+function parseYmd(value: string | null | undefined): {
+  year: number;
+  month: number;
+  day: number;
+} | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec((value ?? "").trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
+}
+
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function addMonths(
+  date: { year: number; month: number; day: number },
+  months: number,
+): { year: number; month: number; day: number } {
+  const targetMonthIndex = date.year * 12 + (date.month - 1) + months;
+  const year = Math.floor(targetMonthIndex / 12);
+  const month = (targetMonthIndex % 12) + 1;
+  const day = Math.min(date.day, lastDayOfMonth(year, month));
+  return { year, month, day };
+}
+
+function compareYmd(
+  a: { year: number; month: number; day: number },
+  b: { year: number; month: number; day: number },
+): number {
+  return (
+    a.year - b.year ||
+    a.month - b.month ||
+    a.day - b.day
+  );
+}
+
+/**
+ * True when the tenancy is inside its first 12 months, so the rent-increase
+ * confirm touch skips it. Missing or unparseable dates are treated as legacy
+ * tenancies, not first-year tenancies. Pure: caller supplies org-local today.
+ */
+export function isWithinFirstYear(
+  startDate: string | null | undefined,
+  today: string,
+): boolean {
+  const start = parseYmd(startDate);
+  const current = parseYmd(today);
+  if (!start || !current) return false;
+  return compareYmd(addMonths(start, 12), current) > 0;
+}
+
 export function buildRentConfirmUnits(input: {
   tenancies: RentConfirmCampaignTenancy[];
   confirmedTenancyIds: Set<string>;
