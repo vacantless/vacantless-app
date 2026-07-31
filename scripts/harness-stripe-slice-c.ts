@@ -40,6 +40,26 @@ const NEW1 = 224180; // $2,241.80  (1.9% guideline)
 const NEW2 = 228440; // next-year increase
 const DAY = 86400;
 
+type InvoiceWithParentSubscription = Stripe.Invoice & {
+  parent?: {
+    subscription_details?: {
+      subscription?: string | { id?: string | null } | null;
+    } | null;
+  } | null;
+};
+type InvoiceLineWithModernFields = Stripe.InvoiceLineItem & {
+  parent?: {
+    subscription_item_details?: {
+      subscription?: string | null;
+    } | null;
+  } | null;
+  pricing?: {
+    price_details?: {
+      price?: string | null;
+    } | null;
+  } | null;
+};
+
 let passed = 0;
 let failed = 0;
 function ok(name: string, cond: boolean) {
@@ -53,6 +73,58 @@ function ok(name: string, cond: boolean) {
 }
 function isoDate(unix: number): string {
   return new Date(unix * 1000).toISOString().slice(0, 10);
+}
+function money(cents: number, currency = "usd"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(cents / 100);
+}
+function linePriceId(line: Stripe.InvoiceLineItem): string | null {
+  const modernLine = line as InvoiceLineWithModernFields;
+  const price = modernLine.pricing?.price_details?.price;
+  if (typeof price === "string" && price.trim()) return price;
+  const legacyPrice = line.price;
+  return typeof legacyPrice?.id === "string" ? legacyPrice.id : null;
+}
+function subscriptionIdOfInvoice(invoice: Stripe.Invoice): string | null {
+  const modernInvoice = invoice as InvoiceWithParentSubscription;
+  const parentSubscription = modernInvoice.parent?.subscription_details?.subscription;
+  if (typeof parentSubscription === "string") return parentSubscription;
+  if (parentSubscription && typeof parentSubscription === "object") return parentSubscription.id ?? null;
+  const legacySubscription = invoice.subscription;
+  if (typeof legacySubscription === "string") return legacySubscription;
+  if (legacySubscription && typeof legacySubscription === "object") return legacySubscription.id ?? null;
+  return null;
+}
+function invoiceRentLineAmount(invoice: Stripe.Invoice, subId: string): number | null {
+  const lines = invoice.lines?.data ?? [];
+  const subscriptionLines = lines.filter((line) => {
+    const modernLine = line as InvoiceLineWithModernFields;
+    return modernLine.parent?.subscription_item_details?.subscription === subId;
+  });
+  const candidates = subscriptionLines.length > 0 ? subscriptionLines : lines;
+  const recurring = candidates.find((line) => linePriceId(line) != null);
+  return recurring?.amount ?? candidates[0]?.amount ?? null;
+}
+async function latestInvoiceForSubscription(subId: string, customerId: string): Promise<{
+  id: string;
+  created: number;
+  amount: number;
+  currency: string;
+}> {
+  const invoices = await stripe.invoices.list({
+    customer: customerId,
+    limit: 10,
+    expand: ["data.lines"],
+  });
+  for (const invoice of invoices.data) {
+    if (subscriptionIdOfInvoice(invoice) !== subId) continue;
+    const amount = invoiceRentLineAmount(invoice, subId);
+    if (amount == null) continue;
+    return { id: invoice.id, created: invoice.created, amount, currency: invoice.currency };
+  }
+  throw new Error(`no invoice with a rent line found for ${subId}`);
 }
 async function waitClockReady(clockId: string) {
   for (let i = 0; i < 60; i++) {
@@ -142,12 +214,18 @@ async function main() {
     ok("#1 schedule has exactly 2 phases (no stacking)", (sched.phases?.length ?? 0) === 2);
     ok("#1 phase 2 starts exactly on the effective date", sched.phases[1].start_date === check1.effectiveUnix);
 
-    // No early bill: BEFORE the effective date the live price is still OLD.
+    // No early bill: advance to the last OLD-rent billing boundary before the
+    // legal effective date, then read the actual invoice line amount.
+    await stripe.testHelpers.testClocks.advance(clock.id, { frozen_time: check1.effectiveUnix - 3 * DAY });
+    await waitClockReady(clock.id);
+
     const subBefore = await stripe.subscriptions.retrieve(sub.id, { expand: ["items.data.price"] });
     ok(
       "#1 no early bill: current price is still OLD before effective date",
       (subBefore.items.data[0].price as Stripe.Price).unit_amount === OLD,
     );
+    const invoiceBefore = await latestInvoiceForSubscription(sub.id, customer.id);
+    ok("#1 invoice before effective date bills OLD rent", invoiceBefore.amount === OLD);
 
     // =====================================================================
     // ANNUAL TRANSITION — advance the clock PAST the effective date so
@@ -161,6 +239,13 @@ async function main() {
       "transition: live price is NEW1 after the effective date",
       (subAfter.items.data[0].price as Stripe.Price).unit_amount === NEW1,
     );
+    const invoiceAfter = await latestInvoiceForSubscription(sub.id, customer.id);
+    ok("transition: invoice after effective date bills NEW1 rent", invoiceAfter.amount === NEW1);
+
+    console.log("\nInvoice boundary proof:");
+    console.log(`  INVOICE @ ${isoDate(invoiceBefore.created)} (${invoiceBefore.id}): ${money(invoiceBefore.amount, invoiceBefore.currency)}`);
+    console.log(`  INVOICE @ ${isoDate(invoiceAfter.created)} (${invoiceAfter.id}): ${money(invoiceAfter.amount, invoiceAfter.currency)}`);
+    console.log(`  Effective date: ${eff1Iso}`);
 
     sched = await stripe.subscriptionSchedules.retrieve(sched.id);
     sel = selectActiveSchedulePhase(sched as unknown as Parameters<typeof selectActiveSchedulePhase>[0]);
