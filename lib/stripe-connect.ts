@@ -667,7 +667,7 @@ export type StripeRentUpdateCheck =
       code: "nosub" | "subinactive" | "noamount" | "noop" | "baddate";
     };
 
-export function validateStripeRentUpdate(input: {
+export type StripeRentUpdateInput = {
   subscriptionId: string | null;
   subscriptionStatus: string | null;
   newAmountCents: number | null;
@@ -678,7 +678,9 @@ export function validateStripeRentUpdate(input: {
   /** The legal floor: never earlier than the recorded increase effective date. */
   recordedEffectiveIso: string | null;
   todayIso: string;
-}): StripeRentUpdateCheck {
+};
+
+export function validateStripeRentUpdate(input: StripeRentUpdateInput): StripeRentUpdateCheck {
   if (!input.subscriptionId) return { ok: false, code: "nosub" };
 
   const status = (input.subscriptionStatus ?? "").toLowerCase();
@@ -709,6 +711,10 @@ export function validateStripeRentUpdate(input: {
   }
 
   return { ok: true, newAmountCents: rounded, effectiveUnix: effUnix };
+}
+
+export function shouldPromptRentRailSync(input: StripeRentUpdateInput): boolean {
+  return validateStripeRentUpdate(input).ok;
 }
 
 // ============================================================================

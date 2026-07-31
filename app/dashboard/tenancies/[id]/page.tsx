@@ -36,6 +36,7 @@ import TenancyStripeRentSection, {
   type TenancyStripeRentView,
 } from "@/components/tenancy-stripe-rent-section";
 import { getStripe } from "@/lib/stripe";
+import { shouldPromptRentRailSync } from "@/lib/stripe-connect";
 import { recordPayment, deletePayment } from "../payment-actions";
 import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -188,6 +189,7 @@ type Tenancy = {
   stripe_payment_method_id: string | null;
   stripe_mandate_status: string | null;
   stripe_rent_synced_at: string | null;
+  stripe_rent_amount_synced_cents: number | null;
   stripe_subscription_id: string | null;
   stripe_subscription_status: string | null;
   report_token: string | null;
@@ -388,7 +390,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_rent_amount_synced_cents, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -449,6 +451,22 @@ export default async function TenancyDetailPage({
   const defaultProcessDate = defaultFirstProcessDate(todayIso);
   const minProcDate = minProcessDate(todayIso);
   const thisMonth = todayIso.slice(0, 7); // "YYYY-MM" for the period <input type="month">
+  const rentRailSyncPrompt = shouldPromptRentRailSync({
+    subscriptionId: t.stripe_subscription_id,
+    subscriptionStatus: t.stripe_subscription_status,
+    newAmountCents: t.n1_snapshot?.newRentCents ?? null,
+    syncedAmountCents: t.stripe_rent_amount_synced_cents,
+    effectiveIso: t.n1_snapshot?.effectiveDate ?? null,
+    recordedEffectiveIso: t.last_rent_increase_date,
+    todayIso,
+  });
+  const rentRailSyncTenantName = primary?.name?.trim() || "This tenant";
+  const rentRailSyncNewRent =
+    t.n1_snapshot?.newRent?.trim() ||
+    (t.n1_snapshot?.newRentCents != null
+      ? formatRentCents(t.n1_snapshot.newRentCents)
+      : "");
+  const rentRailSyncEffectiveDate = t.n1_snapshot?.effectiveDate ?? "";
 
   // Manual rent payments recorded against this tenancy (newest first). RLS
   // scopes to this org. We reconcile them against the monthly rent below.
@@ -1877,35 +1895,6 @@ export default async function TenancyDetailPage({
             </form>
           )}
 
-          {/* Slice C: push the SERVED increase to the Stripe rail, from the
-              frozen n1_snapshot (Codex P1a fix - never the live re-derive, which
-              rolls to next cycle after recordRentIncrease). Shows once served. */}
-          {t.stripe_subscription_id &&
-            t.n1_snapshot &&
-            t.n1_snapshot.newRentCents != null &&
-            t.n1_snapshot.effectiveDate === rentIncrease.effectiveDate && (
-              <form
-                action={updateStripeRentAmount}
-                className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
-              >
-                <input type="hidden" name="tenancy_id" value={t.id} />
-                <p className="text-sm font-semibold text-gray-700">
-                  Collect the new rent automatically
-                </p>
-                <p className="mb-3 text-xs text-gray-500">
-                  This tenant pays by Stripe. Update the charge to the served
-                  amount{t.n1_snapshot.newRent ? ` (${t.n1_snapshot.newRent}/mo)` : ""}
-                  {t.n1_snapshot.effectiveDate
-                    ? ` starting ${t.n1_snapshot.effectiveDate}`
-                    : ""}
-                  . It bills the new amount on that date and never before.
-                </p>
-                <button type="submit" className={SECONDARY_ACTION_CLASS}>
-                  Update the Stripe rent charge
-                </button>
-              </form>
-            )}
-
           {/* Slice B: serve the N1 on the landlord's behalf + file to vault -- */}
           {rentIncrease.status !== "exempt" && (
             <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -1987,6 +1976,35 @@ export default async function TenancyDetailPage({
         done={rentAutomatic}
         defaultOpen={openSection === "rent-collection"}
       >
+      {rentRailSyncPrompt && (
+        <form
+          action={updateStripeRentAmount}
+          className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm"
+        >
+          <input type="hidden" name="tenancy_id" value={t.id} />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-950">
+                {rentRailSyncTenantName} is still on the old rent on autopay.
+              </p>
+              <p className="mt-1 text-sm text-emerald-900">
+                Your served increase to{" "}
+                <span className="font-semibold">{rentRailSyncNewRent}</span>{" "}
+                takes effect{" "}
+                <span className="font-semibold">{rentRailSyncEffectiveDate}</span>{" "}
+                &mdash; update autopay now so they&apos;re billed the new amount automatically on that date.
+              </p>
+            </div>
+            <button
+              type="submit"
+              className="inline-flex w-full shrink-0 items-center justify-center gap-1 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 sm:w-auto"
+            >
+              Update the rent on autopay <span aria-hidden="true">&rarr;</span>
+            </button>
+          </div>
+        </form>
+      )}
+
       {/* Stripe Connect — primary rent rail (shown first for now; Rotessa's
           multi-tenant Platform API is closed to new clients, so Stripe is the
           productized path). Rotessa stays below as the secondary rail. */}

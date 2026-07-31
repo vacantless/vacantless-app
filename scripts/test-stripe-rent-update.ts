@@ -1,7 +1,11 @@
 // Unit tests for validateStripeRentUpdate (autopilot Slice C, S460 / spec S420).
 // The impure Stripe schedule orchestration lives in stripe-rent-actions.ts and
 // is covered by the live sandbox flow. Run: npx tsx scripts/test-stripe-rent-update.ts
-import { validateStripeRentUpdate, selectActiveSchedulePhase } from "../lib/stripe-connect";
+import {
+  validateStripeRentUpdate,
+  shouldPromptRentRailSync,
+  selectActiveSchedulePhase,
+} from "../lib/stripe-connect";
 
 let passed = 0;
 let failed = 0;
@@ -31,6 +35,16 @@ const base = {
     ok("carries rounded amount", r.newAmountCents === 210000);
     ok("carries effective unix", r.effectiveUnix === Math.floor(Date.UTC(2027, 2, 1, 12) / 1000));
   }
+}
+
+// --- rent-rail sync prompt mirrors the update action guard ------------------
+{
+  ok("prompt shows for action-valid served increase", shouldPromptRentRailSync(base) === true);
+  ok("prompt hides when already synced", shouldPromptRentRailSync({ ...base, syncedAmountCents: 210000 }) === false);
+  ok("prompt hides without served amount", shouldPromptRentRailSync({ ...base, newAmountCents: null }) === false);
+  ok("prompt hides without Stripe subscription", shouldPromptRentRailSync({ ...base, subscriptionId: null }) === false);
+  ok("prompt hides for inactive subscription", shouldPromptRentRailSync({ ...base, subscriptionStatus: "canceled" }) === false);
+  ok("prompt hides before legal floor", shouldPromptRentRailSync({ ...base, effectiveIso: "2027-02-01" }) === false);
 }
 
 // --- no subscription --------------------------------------------------------
