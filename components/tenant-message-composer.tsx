@@ -7,12 +7,14 @@
 // logic — fan-out, recipient resolution, token substitution — is server-side in
 // lib/tenant-comms; this is just the form state.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import type { FormEvent } from "react";
 import {
   MESSAGE_CHANNELS,
   channelLabel,
   channelIncludesEmail,
   channelIncludesSms,
+  commsErrorMessage,
   renderForRecipient,
   buildTenantSmsBody,
   type MessageChannel,
@@ -34,6 +36,28 @@ export type ComposerTemplate = {
   subject: string | null;
   body: string;
 };
+
+type UndoPayload = {
+  tenancyId: string;
+  channel: string;
+  subject: string | null;
+  body: string;
+  recipientIds: string[];
+};
+
+type EnqueueUndoAction = (
+  payload: UndoPayload,
+) => Promise<{ ok: true; id: string } | { ok: false; code: string }>;
+type FlushScheduledAction = (
+  id: string,
+) => Promise<{
+  ok: boolean;
+  outcome: "sent" | "failed" | "noone" | "already" | "disabled";
+  sent?: number;
+  failed?: number;
+  skipped?: number;
+}>;
+type CancelScheduledAction = (id: string) => Promise<{ ok: boolean; canceled: boolean }>;
 
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
@@ -57,6 +81,17 @@ const CONTACT_CHIPS: { token: string; label: string }[] = [
   { token: "business_phone", label: "Your phone" },
 ];
 
+function localDateTimeValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function isoFromLocalInput(value: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : "";
+}
+
 export default function TenantMessageComposer({
   tenancyId,
   tenants,
@@ -70,6 +105,11 @@ export default function TenantMessageComposer({
   initialTemplateId = null,
   initialDetails = null,
   sendAction,
+  schedulingEnabled = false,
+  undoSeconds = 30,
+  enqueueUndoAction,
+  flushScheduledAction,
+  cancelScheduledAction,
 }: {
   tenancyId: string;
   tenants: ComposerTenant[];
@@ -97,6 +137,11 @@ export default function TenantMessageComposer({
   // template so the operator lands on a ready note with the concrete numbers in.
   initialDetails?: string | null;
   sendAction: (formData: FormData) => void | Promise<void>;
+  schedulingEnabled?: boolean;
+  undoSeconds?: number;
+  enqueueUndoAction?: EnqueueUndoAction;
+  flushScheduledAction?: FlushScheduledAction;
+  cancelScheduledAction?: CancelScheduledAction;
 }) {
   const [channel, setChannel] = useState<MessageChannel>("email");
   const [subject, setSubject] = useState("");
@@ -105,6 +150,16 @@ export default function TenantMessageComposer({
     () => new Set(tenants.map((t) => t.id)),
   );
   const [templateId, setTemplateId] = useState("");
+  const [sendMode, setSendMode] = useState<"now" | "later">("now");
+  const [scheduledLocal, setScheduledLocal] = useState("");
+  const [undoState, setUndoState] = useState<{
+    id: string;
+    deadlineMs: number;
+    remaining: number;
+    flushing: boolean;
+  } | null>(null);
+  const [inlineNotice, setInlineNotice] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   // Token chip insertion — drop {{token}} at the cursor of whichever field the
   // operator last touched (defaults to the body), then restore focus + caret.
@@ -252,10 +307,136 @@ export default function TenantMessageComposer({
   const hasContent =
     body.trim().length > 0 || (usesEmail && subject.trim().length > 0);
 
+  const schedulingReady =
+    schedulingEnabled && !!enqueueUndoAction && !!flushScheduledAction && !!cancelScheduledAction;
+  const scheduleBounds = useMemo(() => {
+    const min = new Date(Date.now() + 60 * 1000);
+    const max = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    return {
+      min: localDateTimeValue(min),
+      max: localDateTimeValue(max),
+    };
+  }, []);
+  const scheduledIso = isoFromLocalInput(scheduledLocal);
+
+  function messageUrl(outcome: "sent" | "failed" | "noone", counts: {
+    sent?: number;
+    failed?: number;
+    skipped?: number;
+  }) {
+    const s = counts.sent ?? 0;
+    const f = counts.failed ?? 0;
+    const k = counts.skipped ?? 0;
+    return `/dashboard/tenancies/${tenancyId}?msg=${outcome}&s=${s}&k=${k}&f=${f}#message`;
+  }
+
+  function flushUndo(id: string) {
+    if (!flushScheduledAction) {
+      setInlineNotice("Could not send from the outbox. Refresh and try again.");
+      return;
+    }
+    setUndoState((current) =>
+      current?.id === id ? { ...current, flushing: true, remaining: 0 } : current,
+    );
+    startTransition(() => {
+      void (async () => {
+        const result = await flushScheduledAction(id);
+        if (
+          result.outcome === "sent" ||
+          result.outcome === "failed" ||
+          result.outcome === "noone"
+        ) {
+          window.location.assign(messageUrl(result.outcome, result));
+          return;
+        }
+        setUndoState(null);
+        setInlineNotice(
+          result.outcome === "already"
+            ? "This message was already handled."
+            : "Could not send from the outbox. Refresh and try again.",
+        );
+      })();
+    });
+  }
+
+  useEffect(() => {
+    if (!undoState || undoState.flushing) return;
+    const id = undoState.id;
+    const deadlineMs = undoState.deadlineMs;
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+      setUndoState((current) =>
+        current?.id === id ? { ...current, remaining } : current,
+      );
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    const timeout = window.setTimeout(
+      () => flushUndo(id),
+      Math.max(0, deadlineMs - Date.now()),
+    );
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoState?.id, undoState?.deadlineMs, undoState?.flushing]);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    const enqueue = enqueueUndoAction;
+    if (!schedulingReady || !enqueue || sendMode !== "now") return;
+    event.preventDefault();
+    if (undoState || isPending) return;
+
+    setInlineNotice(null);
+    startTransition(() => {
+      void (async () => {
+        const result = await enqueue({
+          tenancyId,
+          channel,
+          subject,
+          body,
+          recipientIds: Array.from(selected),
+        });
+        if (!result.ok) {
+          setInlineNotice(commsErrorMessage(result.code) ?? "Check the message and try again.");
+          return;
+        }
+        setUndoState({
+          id: result.id,
+          deadlineMs: Date.now() + undoSeconds * 1000,
+          remaining: undoSeconds,
+          flushing: false,
+        });
+      })();
+    });
+  }
+
+  function cancelUndo(id: string) {
+    if (!cancelScheduledAction) return;
+    startTransition(() => {
+      void (async () => {
+        const result = await cancelScheduledAction(id);
+        if (result.canceled) {
+          setUndoState(null);
+          setInlineNotice("Message canceled.");
+          return;
+        }
+        setInlineNotice("Too late to cancel - the message is already being sent.");
+      })();
+    });
+  }
+
   return (
-    <form action={sendAction} className="space-y-4">
+    <form action={sendAction} onSubmit={handleSubmit} className="space-y-4">
       <input type="hidden" name="tenancy_id" value={tenancyId} />
       <input type="hidden" name="channel" value={channel} />
+      {schedulingEnabled && <input type="hidden" name="send_mode" value={sendMode} />}
+      {schedulingEnabled && sendMode === "later" && (
+        <input type="hidden" name="scheduled_send_at" value={scheduledIso} />
+      )}
 
       {/* Template picker (optional) */}
       {templates.length > 0 && (
@@ -315,6 +496,50 @@ export default function TenantMessageComposer({
           </div>
         )}
       </div>
+
+      {schedulingEnabled && (
+        <div>
+          <label className={labelCls}>When to send</label>
+          <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 bg-white text-sm font-medium">
+            <button
+              type="button"
+              onClick={() => setSendMode("now")}
+              className={
+                "px-3 py-1.5 transition " +
+                (sendMode === "now"
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-700 hover:bg-gray-50")
+              }
+            >
+              Send now
+            </button>
+            <button
+              type="button"
+              onClick={() => setSendMode("later")}
+              className={
+                "border-l border-gray-300 px-3 py-1.5 transition " +
+                (sendMode === "later"
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-700 hover:bg-gray-50")
+              }
+            >
+              Send later
+            </button>
+          </div>
+          {sendMode === "later" && (
+            <div className="mt-3 max-w-xs">
+              <input
+                type="datetime-local"
+                value={scheduledLocal}
+                min={scheduleBounds.min}
+                max={scheduleBounds.max}
+                onChange={(e) => setScheduledLocal(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Subject (email only) */}
       {showSubject && (
@@ -482,12 +707,39 @@ export default function TenantMessageComposer({
         )}
       </div>
 
+      {inlineNotice && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+          {inlineNotice}
+        </div>
+      )}
+
+      {undoState && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>
+            {undoState.flushing
+              ? "Sending now..."
+              : `Sending in ${undoState.remaining}s`}
+          </span>
+          {!undoState.flushing && (
+            <button
+              type="button"
+              onClick={() => cancelUndo(undoState.id)}
+              disabled={isPending}
+              className="font-semibold text-amber-950 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Undo
+            </button>
+          )}
+        </div>
+      )}
+
       <button
         type="submit"
+        disabled={isPending || !!undoState}
         className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
         style={{ background: "var(--brand-gradient, var(--brand-color))" }}
       >
-        Send message
+        {schedulingEnabled && sendMode === "later" ? "Schedule message" : "Send message"}
       </button>
     </form>
   );

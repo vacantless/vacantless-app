@@ -41,7 +41,12 @@ import { recordPayment, deletePayment } from "../payment-actions";
 import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { tenantReportPath } from "@/lib/incident-reports";
-import { sendTenantMessage } from "../comms-actions";
+import {
+  cancelScheduledTenantMessage,
+  enqueueTenantMessageForUndo,
+  flushScheduledTenantMessage,
+  sendTenantMessage,
+} from "../comms-actions";
 import { updateStripeRentAmount } from "../stripe-rent-actions";
 import {
   WORK_ORDER_CATEGORIES,
@@ -68,6 +73,10 @@ import {
   type PaymentRow,
 } from "@/lib/payments";
 import { channelLabel, commsErrorMessage } from "@/lib/tenant-comms";
+import {
+  UNDO_WINDOW_SECONDS,
+  tenantCommsOutboxEnabled,
+} from "@/lib/tenant-comms-schedule";
 import { getCurrentOrg } from "@/lib/org";
 import { canUseSms, canUseMarketRent } from "@/lib/billing";
 import TenantMessageComposer, {
@@ -233,6 +242,16 @@ type TenantMessageRow = {
   sent_count: number;
   failed_count: number;
   skipped_count: number;
+  created_at: string;
+};
+
+type ScheduledTenantMessageRow = {
+  id: string;
+  channel: string;
+  subject: string | null;
+  body: string;
+  scheduled_send_at: string;
+  origin: string;
   created_at: string;
 };
 
@@ -564,6 +583,7 @@ export default async function TenancyDetailPage({
   // action enforces this regardless; here we mirror it so the composer can hide
   // the locked channels and show an upgrade nudge instead of a silent skip.
   const smsAllowed = canUseSms(org.plan);
+  const schedulingEnabled = tenantCommsOutboxEnabled();
 
   // Rent-increase status (N1 v1, S282). "Today" is anchored to Ontario time —
   // this is an Ontario LTB feature, and server components run UTC on Vercel.
@@ -759,6 +779,18 @@ export default async function TenancyDetailPage({
     .order("created_at", { ascending: false })
     .limit(20);
   const messages = (messageRows ?? []) as TenantMessageRow[];
+
+  let scheduledMessages: ScheduledTenantMessageRow[] = [];
+  if (schedulingEnabled) {
+    const { data: scheduledRows } = await supabase
+      .from("scheduled_tenant_messages")
+      .select("id, channel, subject, body, scheduled_send_at, origin, created_at")
+      .eq("organization_id", org.id)
+      .eq("tenancy_id", t.id)
+      .eq("status", "scheduled")
+      .order("scheduled_send_at", { ascending: true });
+    scheduledMessages = (scheduledRows ?? []) as ScheduledTenantMessageRow[];
+  }
 
   // Generated lease documents for this tenancy (newest first). The two most
   // recent power the renewal diff (#11 slice 2).
@@ -1048,13 +1080,15 @@ export default async function TenancyDetailPage({
       ? `Message sent to ${msgCounts.s} recipient${msgCounts.s === 1 ? "" : "s"}.` +
         (msgCounts.k > 0 ? ` ${msgCounts.k} skipped (no contact details or opted out).` : "") +
         (msgCounts.f > 0 ? ` ${msgCounts.f} failed to send.` : "")
+      : searchParams.msg === "scheduled"
+        ? "Message scheduled."
       : null;
   const msgError =
     searchParams.msg === "failed"
       ? "We couldn't send the message. Check that email/SMS is configured and try again."
       : searchParams.msg === "noone"
         ? "Nobody was messaged — the selected tenants have no usable contact details for that channel (or opted out of texts)."
-        : searchParams.msg && searchParams.msg !== "sent"
+        : searchParams.msg && searchParams.msg !== "sent" && searchParams.msg !== "scheduled"
           ? commsErrorMessage(searchParams.msg)
           : null;
 
@@ -2578,7 +2612,47 @@ export default async function TenancyDetailPage({
             initialTemplateId={initialTemplateId}
             initialDetails={initialDetails}
             sendAction={sendTenantMessage}
+            schedulingEnabled={schedulingEnabled}
+            undoSeconds={UNDO_WINDOW_SECONDS}
+            enqueueUndoAction={enqueueTenantMessageForUndo}
+            flushScheduledAction={flushScheduledTenantMessage}
+            cancelScheduledAction={cancelScheduledTenantMessage}
           />
+        )}
+
+        {schedulingEnabled && scheduledMessages.length > 0 && (
+          <div className="border-t border-gray-100 pt-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Scheduled messages
+            </h3>
+            <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+              {scheduledMessages.map((m) => (
+                <li key={m.id} className="px-4 py-3 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="font-medium text-gray-900">
+                        {m.subject || (m.channel === "sms" ? "Text message" : "(no subject)")}
+                      </span>
+                      <span className="ml-2 text-xs text-gray-400">
+                        {channelLabel(m.channel)} · {new Date(m.scheduled_send_at).toLocaleString()}
+                      </span>
+                    </span>
+                    <form
+                      action={async () => {
+                        "use server";
+                        await cancelScheduledTenantMessage(m.id);
+                      }}
+                    >
+                      <button className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50">
+                        Cancel
+                      </button>
+                    </form>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-gray-500">{m.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {/* Message history */}

@@ -212,6 +212,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   savefailed: "Sorry, the template didn't save. Please try again.",
   sms_locked:
     "Texting tenants is part of a higher plan. Upgrade to send texts, or message by email instead.",
+  scheduled: "Message scheduled.",
+  schedule_invalid: "Pick a future send time within the next 90 days.",
+  schedule_failed: "Sorry, the message could not be scheduled. Please try again.",
+  disabled: "Scheduled sending is not available right now.",
 };
 
 export function commsErrorMessage(code: string | undefined): string | null {

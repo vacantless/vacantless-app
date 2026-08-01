@@ -6,47 +6,118 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import {
+  isMessageChannel,
   validateMessageInput,
-  planDeliveries,
-  applySmsEntitlement,
-  isSendable,
-  renderForRecipient,
-  buildTenantSmsBody,
-  type TenantContact,
-  type TokenContext,
+  type MessageChannel,
 } from "@/lib/tenant-comms";
 import { canUseSms } from "@/lib/billing";
-import { sendTenantMessageEmail } from "@/lib/email";
-import { sendSms, smsLive } from "@/lib/sms";
+import { dispatchTenantMessage } from "@/lib/tenant-comms-dispatch";
+import {
+  UNDO_WINDOW_SECONDS,
+  tenantCommsOutboxEnabled,
+  validateScheduledSendAt,
+} from "@/lib/tenant-comms-schedule";
 
 // Send a landlord -> tenant message (platform pivot step 3). Guarded on
 // manage_tenancies (the post-lease property-management capability, same as the
 // rest of the tenancy CRUD + the manual payment ledger). REDIRECT-based (the
-// S170 revalidate-503 WATCH). The pure logic — channel fan-out, recipient
-// resolution, token substitution, SMS body assembly — lives in lib/tenant-comms;
-// this action just orchestrates the I/O (load tenancy, send per channel, log).
-//
-// Every send is logged: one tenant_messages parent + one
-// tenant_message_deliveries row per (tenant x channel) attempt, recording the
-// outcome (sent / failed / skipped) so the tenancy history is a real audit trail.
+// S170 revalidate-503 WATCH). The fan-out/logging core now lives in
+// lib/tenant-comms-dispatch so inline sends and outbox dispatch cannot drift.
 
 const BASE = "/dashboard/tenancies";
 
 function s(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
+
+function clean(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
 function tenancyPath(id: string): string {
   return `${BASE}/${id}`;
 }
 
-type DeliveryRow = {
-  tenant_id: string | null;
-  tenant_name: string | null;
-  channel: "email" | "sms";
-  destination: string | null;
-  status: "sent" | "failed" | "skipped";
-  reason: string | null;
+function outcomeFor(result: { sent: number; failed: number }): "sent" | "failed" | "noone" {
+  return result.sent > 0 ? "sent" : result.failed > 0 ? "failed" : "noone";
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000);
+}
+
+type SupabaseClientLike = {
+  from: (table: string) => any;
 };
+
+type SelectedMessageInput = {
+  tenancyId: string;
+  channel: string;
+  subject: string | null;
+  body: string;
+  recipientIds: string[];
+};
+
+type ValidSelectedMessage = {
+  channel: MessageChannel;
+  subject: string | null;
+  body: string;
+  recipientIds: string[];
+};
+
+async function validateSelectedMessage(args: {
+  supabase: SupabaseClientLike;
+  orgId: string;
+  orgPlan: string;
+  input: SelectedMessageInput;
+}): Promise<
+  | { ok: true; value: ValidSelectedMessage }
+  | { ok: false; code: string; notFound?: boolean }
+> {
+  const { supabase, orgId, orgPlan, input } = args;
+
+  const { data } = await supabase
+    .from("tenancies")
+    .select("id, tenants(id)")
+    .eq("id", input.tenancyId)
+    .eq("organization_id", orgId)
+    .maybeSingle();
+  if (!data) return { ok: false, code: "notfound", notFound: true };
+
+  const tenantIds = new Set(
+    (((data as { tenants?: { id: string | null }[] | null }).tenants ?? [])
+      .map((t) => t.id)
+      .filter((id): id is string => !!id)),
+  );
+  const seen = new Set<string>();
+  const recipientIds = input.recipientIds.filter((id) => {
+    if (!tenantIds.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  const check = validateMessageInput({
+    channel: input.channel,
+    subject: input.subject,
+    body: input.body,
+    recipientCount: recipientIds.length,
+  });
+  if (!check.ok) return { ok: false, code: check.code };
+
+  if (check.value.channel === "sms" && !canUseSms(orgPlan)) {
+    return { ok: false, code: "sms_locked" };
+  }
+
+  return {
+    ok: true,
+    value: {
+      channel: check.value.channel,
+      subject: check.value.subject,
+      body: check.value.body,
+      recipientIds,
+    },
+  };
+}
 
 export async function sendTenantMessage(formData: FormData) {
   const tenancyId = s(formData, "tenancy_id");
@@ -56,177 +127,259 @@ export async function sendTenantMessage(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  const channel = s(formData, "channel");
-  const subject = s(formData, "subject") || null;
-  const body = s(formData, "body");
-  const selectedRaw = formData.getAll("recipient_ids").map((v) => String(v));
-
   const supabase = createClient();
-  // Load the tenancy with its tenants + property address (for {{tokens}}). RLS
-  // scopes to this org; a missing row means not-ours / deleted.
-  const { data } = await supabase
-    .from("tenancies")
-    .select(
-      "id, rent_cents, property:properties(address), tenants(id, name, email, phone, sms_opt_out)",
-    )
-    .eq("id", tenancyId)
-    .maybeSingle();
-  if (!data) redirect(BASE);
-
-  const row = data as unknown as {
-    id: string;
-    rent_cents: number | null;
-    property: { address: string } | null;
-    tenants: TenantContact[];
-  };
-  const tenants = row.tenants ?? [];
-
-  // Only keep selected ids that are real tenants on this tenancy.
-  const selectedSet = new Set(
-    selectedRaw.filter((id) => tenants.some((t) => t.id === id)),
-  );
-
-  const check = validateMessageInput({
-    channel,
-    subject,
-    body,
-    recipientCount: selectedSet.size,
+  const selectedRaw = formData.getAll("recipient_ids").map((v) => String(v));
+  const validated = await validateSelectedMessage({
+    supabase,
+    orgId: org.id,
+    orgPlan: org.plan,
+    input: {
+      tenancyId,
+      channel: s(formData, "channel"),
+      subject: s(formData, "subject") || null,
+      body: s(formData, "body"),
+      recipientIds: selectedRaw,
+    },
   });
-  if (!check.ok) redirect(`${tenancyPath(tenancyId)}?msg=${check.code}`);
-
-  // Plan gate (S214): SMS is a paid-tier capability; email is free on every
-  // tier. Enforced HERE (server-side) — the composer also hides locked channels,
-  // but a hand-crafted POST must still be blocked. An SMS-only send on a plan
-  // without SMS is rejected outright with an upsell; a "both" send proceeds over
-  // email and the SMS legs are skipped below (applySmsEntitlement).
-  const smsEntitled = canUseSms(org.plan);
-  if (check.value.channel === "sms" && !smsEntitled) {
-    redirect(`${tenancyPath(tenancyId)}?msg=sms_locked`);
+  if (!validated.ok) {
+    if (validated.notFound) redirect(BASE);
+    redirect(`${tenancyPath(tenancyId)}?msg=${validated.code}`);
   }
-  const smsAllowed = org.sms_enabled === true && smsEntitled && smsLive();
-
-  const plan = applySmsEntitlement(
-    planDeliveries(check.value.channel, tenants, selectedSet),
-    smsAllowed,
-  );
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const propertyAddress = row.property?.address ?? null;
-  const rentCents = row.rent_cents ?? null;
-  const tenantById = new Map(tenants.map((t) => [t.id, t]));
-
-  const deliveries: DeliveryRow[] = [];
-  const recipientTenants = new Set<string>();
-  let sent = 0;
-  let failed = 0;
-  let skipped = 0;
-
-  for (const d of plan) {
-    recipientTenants.add(d.tenantId);
-    const t = tenantById.get(d.tenantId);
-    const ctx: TokenContext = {
-      tenantName: t?.name ?? null,
-      orgName: org.name,
-      propertyAddress,
-      rentCents,
-      orgContactEmail: org.public_contact_email,
-      orgContactPhone: org.public_contact_phone,
-    };
-
-    if (!isSendable(d)) {
-      skipped++;
-      deliveries.push({
-        tenant_id: d.tenantId,
-        tenant_name: d.tenantName,
-        channel: d.channel,
-        destination: d.destination,
-        status: "skipped",
-        reason: d.skipReason ?? "skipped",
-      });
-      continue;
+  const sendMode = s(formData, "send_mode") || "now";
+  if (tenantCommsOutboxEnabled() && sendMode === "later") {
+    const scheduled = validateScheduledSendAt(s(formData, "scheduled_send_at"), Date.now());
+    if (!scheduled.ok) {
+      redirect(`${tenancyPath(tenancyId)}?msg=schedule_invalid`);
     }
 
-    if (d.channel === "email") {
-      const renderedSubject = renderForRecipient(check.value.subject ?? "", ctx);
-      const renderedBody = renderForRecipient(check.value.body, ctx);
-      const r = await sendTenantMessageEmail({
-        tenant_email: d.destination as string,
-        tenant_name: t?.name ?? null,
-        org_name: org.name,
-        brand_color: org.brand_color,
-        logo_url: org.logo_url,
-        reply_to_email: org.reply_to_email,
-        subject: renderedSubject,
-        body: renderedBody,
-      });
-      if (r.sent) sent++;
-      else failed++;
-      deliveries.push({
-        tenant_id: d.tenantId,
-        tenant_name: d.tenantName,
-        channel: "email",
-        destination: d.destination,
-        status: r.sent ? "sent" : "failed",
-        reason: r.reason ?? null,
-      });
-    } else {
-      const renderedBody = renderForRecipient(check.value.body, ctx);
-      const smsBody = buildTenantSmsBody(renderedBody, org.name);
-      const r = await sendSms({ to: d.destination, body: smsBody });
-      if (r.sent) sent++;
-      else failed++;
-      deliveries.push({
-        tenant_id: d.tenantId,
-        tenant_name: d.tenantName,
-        channel: "sms",
-        destination: d.destination,
-        status: r.sent ? "sent" : "failed",
-        reason: r.reason ?? null,
-      });
-    }
+    const { error } = await supabase.from("scheduled_tenant_messages").insert({
+      organization_id: org.id,
+      tenancy_id: tenancyId,
+      channel: validated.value.channel,
+      subject: validated.value.subject,
+      body: validated.value.body,
+      recipient_ids: validated.value.recipientIds,
+      scheduled_send_at: new Date(scheduled.value.atMs).toISOString(),
+      status: "scheduled",
+      origin: "scheduled",
+      created_by: user?.id ?? null,
+    });
+    if (error) redirect(`${tenancyPath(tenancyId)}?msg=schedule_failed`);
+
+    revalidatePath(tenancyPath(tenancyId));
+    redirect(`${tenancyPath(tenancyId)}?msg=scheduled`);
   }
 
-  // Log the send: parent first, then the per-recipient delivery rows.
-  const { data: msgRow } = await supabase
-    .from("tenant_messages")
+  const result = await dispatchTenantMessage({
+    supabase,
+    org,
+    tenancyId,
+    channel: validated.value.channel,
+    subject: validated.value.subject,
+    body: validated.value.body,
+    recipientIds: validated.value.recipientIds,
+    sentBy: user?.id ?? null,
+  });
+
+  revalidatePath(tenancyPath(tenancyId));
+  const outcome = outcomeFor(result);
+  redirect(
+    `${tenancyPath(tenancyId)}?msg=${outcome}&s=${result.sent}&k=${result.skipped}&f=${result.failed}`,
+  );
+}
+
+export type TenantMessageUndoPayload = {
+  tenancyId: string;
+  channel: string;
+  subject: string | null;
+  body: string;
+  recipientIds: string[];
+};
+
+export type EnqueueTenantMessageForUndoResult =
+  | { ok: true; id: string }
+  | { ok: false; code: string };
+
+export async function enqueueTenantMessageForUndo(
+  payload: TenantMessageUndoPayload,
+): Promise<EnqueueTenantMessageForUndoResult> {
+  if (!tenantCommsOutboxEnabled()) return { ok: false, code: "disabled" };
+
+  const tenancyId = clean(payload?.tenancyId);
+  if (!tenancyId) return { ok: false, code: "notfound" };
+  await requireCapability("manage_tenancies", `${tenancyPath(tenancyId)}?msg=forbidden`);
+
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, code: "notfound" };
+
+  const supabase = createClient();
+  const validated = await validateSelectedMessage({
+    supabase,
+    orgId: org.id,
+    orgPlan: org.plan,
+    input: {
+      tenancyId,
+      channel: clean(payload.channel),
+      subject: clean(payload.subject) || null,
+      body: clean(payload.body),
+      recipientIds: Array.isArray(payload.recipientIds)
+        ? payload.recipientIds.map(clean).filter(Boolean)
+        : [],
+    },
+  });
+  if (!validated.ok) return { ok: false, code: validated.code };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const scheduledAt = new Date(Date.now() + UNDO_WINDOW_SECONDS * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("scheduled_tenant_messages")
     .insert({
       organization_id: org.id,
       tenancy_id: tenancyId,
-      channel: check.value.channel,
-      subject: check.value.subject,
-      body: check.value.body,
-      recipient_count: recipientTenants.size,
-      sent_count: sent,
-      failed_count: failed,
-      skipped_count: skipped,
-      sent_by: user?.id ?? null,
+      channel: validated.value.channel,
+      subject: validated.value.subject,
+      body: validated.value.body,
+      recipient_ids: validated.value.recipientIds,
+      scheduled_send_at: scheduledAt,
+      status: "scheduled",
+      origin: "undo",
+      created_by: user?.id ?? null,
     })
     .select("id")
     .single();
 
-  if (msgRow?.id) {
-    await supabase.from("tenant_message_deliveries").insert(
-      deliveries.map((d) => ({
-        organization_id: org.id,
-        message_id: msgRow.id,
-        tenant_id: d.tenant_id,
-        tenant_name: d.tenant_name,
-        channel: d.channel,
-        destination: d.destination,
-        status: d.status,
-        reason: d.reason,
-      })),
-    );
-  }
+  const id = (data as { id?: string } | null)?.id ?? null;
+  if (error || !id) return { ok: false, code: "schedule_failed" };
+  return { ok: true, id };
+}
 
-  revalidatePath(tenancyPath(tenancyId));
-  // Outcome: something sent -> success; else if any failed -> failed; else
-  // everyone was skipped (no usable address / all opted out).
-  const outcome = sent > 0 ? "sent" : failed > 0 ? "failed" : "noone";
-  redirect(
-    `${tenancyPath(tenancyId)}?msg=${outcome}&s=${sent}&k=${skipped}&f=${failed}`,
-  );
+type ScheduledTenantMessageRow = {
+  id: string;
+  organization_id: string;
+  tenancy_id: string;
+  channel: string;
+  subject: string | null;
+  body: string;
+  recipient_ids: string[] | null;
+  created_by: string | null;
+  attempts: number | null;
+};
+
+export type FlushScheduledTenantMessageResult = {
+  ok: boolean;
+  outcome: "sent" | "failed" | "noone" | "already" | "disabled";
+  messageId?: string | null;
+  sent?: number;
+  failed?: number;
+  skipped?: number;
+};
+
+export async function flushScheduledTenantMessage(
+  id: string,
+): Promise<FlushScheduledTenantMessageResult> {
+  if (!tenantCommsOutboxEnabled()) return { ok: false, outcome: "disabled" };
+
+  const cleanId = clean(id);
+  if (!cleanId) return { ok: true, outcome: "already" };
+
+  await requireCapability("manage_tenancies");
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, outcome: "failed" };
+
+  const supabase = createClient();
+  const { data: claimed, error: claimError } = await supabase
+    .from("scheduled_tenant_messages")
+    .update({ status: "sending" })
+    .eq("id", cleanId)
+    .eq("organization_id", org.id)
+    .eq("status", "scheduled")
+    .lte("scheduled_send_at", new Date().toISOString())
+    .select("id, organization_id, tenancy_id, channel, subject, body, recipient_ids, created_by, attempts")
+    .maybeSingle();
+
+  if (claimError) return { ok: false, outcome: "failed" };
+  const row = claimed as ScheduledTenantMessageRow | null;
+  if (!row) return { ok: true, outcome: "already" };
+
+  try {
+    if (!isMessageChannel(row.channel)) throw new Error("bad_channel");
+    const result = await dispatchTenantMessage({
+      supabase,
+      org,
+      tenancyId: row.tenancy_id,
+      channel: row.channel,
+      subject: row.subject,
+      body: row.body,
+      recipientIds: row.recipient_ids ?? [],
+      sentBy: row.created_by,
+    });
+    if (!result.ok) throw new Error("dispatch_failed");
+
+    await supabase
+      .from("scheduled_tenant_messages")
+      .update({
+        status: "sent",
+        sent_message_id: result.messageId,
+        dispatched_at: new Date().toISOString(),
+        error: null,
+      })
+      .eq("id", row.id)
+      .eq("organization_id", org.id);
+
+    revalidatePath(tenancyPath(row.tenancy_id));
+    return {
+      ok: true,
+      outcome: outcomeFor(result),
+      messageId: result.messageId,
+      sent: result.sent,
+      failed: result.failed,
+      skipped: result.skipped,
+    };
+  } catch (error) {
+    await supabase
+      .from("scheduled_tenant_messages")
+      .update({
+        status: "failed",
+        error: errorText(error),
+        attempts: (row.attempts ?? 0) + 1,
+      })
+      .eq("id", row.id)
+      .eq("organization_id", org.id);
+    revalidatePath(tenancyPath(row.tenancy_id));
+    return { ok: false, outcome: "failed" };
+  }
+}
+
+export async function cancelScheduledTenantMessage(
+  id: string,
+): Promise<{ ok: boolean; canceled: boolean }> {
+  if (!tenantCommsOutboxEnabled()) return { ok: false, canceled: false };
+
+  const cleanId = clean(id);
+  if (!cleanId) return { ok: true, canceled: false };
+
+  await requireCapability("manage_tenancies");
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, canceled: false };
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("scheduled_tenant_messages")
+    .update({ status: "canceled", canceled_at: new Date().toISOString() })
+    .eq("id", cleanId)
+    .eq("organization_id", org.id)
+    .eq("status", "scheduled")
+    .select("id, tenancy_id")
+    .maybeSingle();
+
+  const row = data as { id: string; tenancy_id: string } | null;
+  if (row?.tenancy_id) revalidatePath(tenancyPath(row.tenancy_id));
+  return { ok: !error, canceled: !!row };
 }
