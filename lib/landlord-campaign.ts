@@ -19,9 +19,14 @@
 export const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-// Cumulative cadence in DAYS since the campaign started (org.created_at), one
-// threshold per reveal. Reveal N is eligible once STEP_THRESHOLD_DAYS[N] days
-// have elapsed. Gentle: right away, then weekly.
+export const LANDLORD_CAMPAIGN_START_ISO = "2026-08-01T00:00:00.000Z";
+export const LANDLORD_CAMPAIGN_START_MS = Date.parse(
+  LANDLORD_CAMPAIGN_START_ISO,
+);
+
+// Cumulative cadence in DAYS since the campaign anchor, one threshold per
+// reveal. The anchor is max(org.created_at, LANDLORD_CAMPAIGN_START) so orgs
+// created before the campaign went live do not burst catch-up emails.
 export const STEP_THRESHOLD_DAYS = [0, 7, 14, 21, 28] as const;
 
 // Minimum spacing between two sends to the same org (pacing a catch-up sweep).
@@ -71,8 +76,10 @@ export function resolveLandlordCampaignRecipient(
 }
 
 export type LandlordRevealInput = {
-  /** Campaign start (org.created_at) in ms. Null => not eligible. */
+  /** Candidate org start (organizations.created_at) in ms. Null => not eligible. */
   campaignStartMs: number | null;
+  /** Campaign activation/start in ms. Defaults to LANDLORD_CAMPAIGN_START_MS. */
+  campaignActivatedAtMs?: number | null;
   nowMs: number;
   /** organizations.plan. The campaign only runs while it is "free". */
   plan: string | null;
@@ -107,6 +114,18 @@ function isRevealOwned(key: RevealKey, input: LandlordRevealInput): boolean {
   }
 }
 
+export function campaignCadenceAnchorMs(
+  campaignStartMs: number | null,
+  campaignActivatedAtMs: number | null | undefined = LANDLORD_CAMPAIGN_START_MS,
+): number | null {
+  if (campaignStartMs == null || Number.isNaN(campaignStartMs)) return null;
+  const activationMs =
+    campaignActivatedAtMs == null || Number.isNaN(campaignActivatedAtMs)
+      ? LANDLORD_CAMPAIGN_START_MS
+      : campaignActivatedAtMs;
+  return Math.max(campaignStartMs, activationMs);
+}
+
 /**
  * Which reveal is due for this org right now, and the index the cron should
  * persist as landlord_campaign_step_sent (index + 1). Returns null for "nothing
@@ -116,7 +135,7 @@ function isRevealOwned(key: RevealKey, input: LandlordRevealInput): boolean {
  *   - the campaign is enabled and the org has not opted out
  *   - the org is still on the free plan (a conversion stops the sequence)
  *   - the org has a tenancy
- *   - the campaign start is known and within the freshness cap
+ *   - the org start is known and within the freshness cap
  *   - at least MIN_GAP_HOURS have passed since the last send
  *   - after advancing past any reveal whose capability the org already owns,
  *     the resolved reveal's cadence threshold has elapsed
@@ -132,9 +151,17 @@ export function nextRevealDue(
   if (!input.hasTenancy) return null;
   if (input.campaignStartMs == null) return null;
 
-  const age = input.nowMs - input.campaignStartMs;
-  if (age < 0) return null; // start in the future
-  if (age > CAMPAIGN_MAX_AGE_DAYS * DAY_MS) return null; // too old
+  const orgAge = input.nowMs - input.campaignStartMs;
+  if (orgAge < 0) return null; // org start in the future
+  if (orgAge > CAMPAIGN_MAX_AGE_DAYS * DAY_MS) return null; // too old
+
+  const cadenceStartMs = campaignCadenceAnchorMs(
+    input.campaignStartMs,
+    input.campaignActivatedAtMs,
+  );
+  if (cadenceStartMs == null) return null;
+  const cadenceAge = input.nowMs - cadenceStartMs;
+  if (cadenceAge < 0) return null; // campaign not active for this org yet
 
   if (
     input.lastSentAtMs != null &&
@@ -151,7 +178,7 @@ export function nextRevealDue(
   }
   if (idx >= REVEAL_KEYS.length) return null; // nothing left
 
-  if (age < STEP_THRESHOLD_DAYS[idx] * DAY_MS) return null; // too soon
+  if (cadenceAge < STEP_THRESHOLD_DAYS[idx] * DAY_MS) return null; // too soon
 
   return { key: REVEAL_KEYS[idx], index: idx };
 }

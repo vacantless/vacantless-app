@@ -18,6 +18,7 @@ import { rentConfirmUrl } from "@/lib/rent-confirm-public";
 import {
   buildAnniversaryRentConfirmPlan,
   buildRentConfirmUnits,
+  campaignCadenceAnchorMs,
   isWithinFirstYear,
   nextRevealDue,
   revealCopy,
@@ -25,6 +26,7 @@ import {
   CAMPAIGN_STEPS,
   CAMPAIGN_MAX_AGE_DAYS,
   HOUR_MS,
+  LANDLORD_CAMPAIGN_START_MS,
   MIN_GAP_HOURS,
   STEP_THRESHOLD_DAYS,
 } from "@/lib/landlord-campaign";
@@ -116,6 +118,13 @@ function authorized(req: NextRequest, env: CampaignEnv): boolean {
   const auth = req.headers.get("authorization");
   if (auth === `Bearer ${secret}`) return true;
   return req.nextUrl.searchParams.get("secret") === secret;
+}
+
+function landlordCampaignActivatedAtMs(env: CampaignEnv): number {
+  const raw = env.LANDLORD_CAMPAIGN_START ?? env.CAMPAIGN_START;
+  if (!raw?.trim()) return LANDLORD_CAMPAIGN_START_MS;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? LANDLORD_CAMPAIGN_START_MS : parsed;
 }
 
 function isCampaignDeps(value: unknown): value is CampaignDeps {
@@ -314,7 +323,11 @@ function dryPreviewDue(args: {
     lastSentAtMs: args.lastSentAtMs,
   });
   if (immediate) return { due: immediate, dueAtMs: args.nowMs };
-  if (args.base.campaignStartMs == null) return null;
+  const cadenceAnchorMs = campaignCadenceAnchorMs(
+    args.base.campaignStartMs,
+    args.base.campaignActivatedAtMs,
+  );
+  if (cadenceAnchorMs == null) return null;
 
   const minGapMs =
     args.lastSentAtMs == null
@@ -326,7 +339,7 @@ function dryPreviewDue(args: {
 
   for (let idx = startIndex; idx < CAMPAIGN_STEPS; idx++) {
     const thresholdMs =
-      args.base.campaignStartMs + (STEP_THRESHOLD_DAYS[idx] ?? 0) * DAY_MS;
+      cadenceAnchorMs + (STEP_THRESHOLD_DAYS[idx] ?? 0) * DAY_MS;
     const dueAtMs = Math.max(args.nowMs, thresholdMs, minGapMs);
     const due = nextRevealDue({
       ...args.base,
@@ -352,12 +365,14 @@ async function previewDryCampaignJourney(args: {
   hasRentCollection: boolean;
   hasTaxExport: boolean;
   hasListingMarketing: boolean;
+  campaignActivatedAtMs: number;
 }): Promise<DryJourneyResult> {
   const campaignStartMs = args.org.created_at
     ? new Date(args.org.created_at).getTime()
     : null;
   const base = {
     campaignStartMs,
+    campaignActivatedAtMs: args.campaignActivatedAtMs,
     plan: args.org.plan,
     hasTenancy: args.hasTenancy,
     enabled: true,
@@ -525,6 +540,7 @@ async function runLandlordCampaign(
   }
 
   const nowMs = deps.nowMs();
+  const campaignActivatedAtMs = landlordCampaignActivatedAtMs(deps.env);
   const guideline = await deps.loadGuidelineLookup(admin);
   const leaseTermShiftOn = deps.leaseTermShiftEnabled();
   const oldestIso = new Date(nowMs - CAMPAIGN_MAX_AGE_DAYS * DAY_MS).toISOString();
@@ -763,6 +779,7 @@ async function runLandlordCampaign(
 
       const due = nextRevealDue({
         campaignStartMs: org.created_at ? new Date(org.created_at).getTime() : null,
+        campaignActivatedAtMs,
         nowMs,
         plan: org.plan,
         hasTenancy: orgsWithTenancy.has(org.id),
@@ -808,6 +825,7 @@ async function runLandlordCampaign(
           hasRentCollection: orgHasActiveRentRail(org.id),
           hasTaxExport: hasEntitlement(org.plan, "tax_export"),
           hasListingMarketing: hasEntitlement(org.plan, "listing_marketing"),
+          campaignActivatedAtMs,
         });
 
         if (preview.kind === "would_send") {

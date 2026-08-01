@@ -13,6 +13,7 @@ import {
   MIN_GAP_HOURS,
   HOUR_MS,
   CAMPAIGN_MAX_AGE_DAYS,
+  LANDLORD_CAMPAIGN_START_MS,
   type LandlordRevealInput,
 } from "../lib/landlord-campaign";
 import {
@@ -65,6 +66,94 @@ ok(
   "step 1 not due before 7d",
   nextRevealDue(inp({ stepSent: 1, campaignStartMs: NOW - 6 * DAY })) === null,
 );
+
+// --- campaign-start cadence anchor -----------------------------------------
+{
+  const paulCreatedAt = Date.parse("2026-06-26T00:00:00.000Z");
+  const paulLastSentAt = Date.parse("2026-08-01T00:54:00.000Z");
+  const afterMinGapOnly = paulLastSentAt + (MIN_GAP_HOURS + 1) * HOUR_MS;
+  ok(
+    "old org step 2 does not catch up after only the 24h min gap",
+    nextRevealDue(
+      inp({
+        campaignStartMs: paulCreatedAt,
+        nowMs: afterMinGapOnly,
+        stepSent: 2,
+        lastSentAtMs: paulLastSentAt,
+      }),
+    ) === null,
+  );
+  ok(
+    "old org step 2 is due at campaign start + 14d",
+    nextRevealDue(
+      inp({
+        campaignStartMs: paulCreatedAt,
+        nowMs: LANDLORD_CAMPAIGN_START_MS + 14 * DAY,
+        stepSent: 2,
+        lastSentAtMs: paulLastSentAt,
+      }),
+    )?.key === "tax_export",
+  );
+  ok(
+    "old org remaining steps stay weekly after the campaign start",
+    nextRevealDue(
+      inp({
+        campaignStartMs: paulCreatedAt,
+        nowMs: LANDLORD_CAMPAIGN_START_MS + 21 * DAY,
+        stepSent: 3,
+        lastSentAtMs: LANDLORD_CAMPAIGN_START_MS + 14 * DAY,
+      }),
+    )?.key === "listing_marketing" &&
+      nextRevealDue(
+        inp({
+          campaignStartMs: paulCreatedAt,
+          nowMs: LANDLORD_CAMPAIGN_START_MS + 28 * DAY,
+          stepSent: 4,
+          lastSentAtMs: LANDLORD_CAMPAIGN_START_MS + 21 * DAY,
+        }),
+      )?.key === "upgrade_ask",
+  );
+}
+{
+  const preFlipCreatedAt = Date.parse("2026-07-29T00:00:00.000Z");
+  ok(
+    "pre-flip org waits for campaign start + 7d, not created_at + 7d",
+    nextRevealDue(
+      inp({
+        campaignStartMs: preFlipCreatedAt,
+        nowMs: preFlipCreatedAt + 7 * DAY,
+        stepSent: 1,
+      }),
+    ) === null &&
+      nextRevealDue(
+        inp({
+          campaignStartMs: preFlipCreatedAt,
+          nowMs: LANDLORD_CAMPAIGN_START_MS + 7 * DAY,
+          stepSent: 1,
+        }),
+      )?.key === "rent_collection",
+  );
+}
+{
+  const postFlipCreatedAt = LANDLORD_CAMPAIGN_START_MS + 10 * DAY;
+  ok(
+    "post-flip org anchors to its own created_at",
+    nextRevealDue(
+      inp({
+        campaignStartMs: postFlipCreatedAt,
+        nowMs: postFlipCreatedAt + 6 * DAY,
+        stepSent: 1,
+      }),
+    ) === null &&
+      nextRevealDue(
+        inp({
+          campaignStartMs: postFlipCreatedAt,
+          nowMs: postFlipCreatedAt + 7 * DAY,
+          stepSent: 1,
+        }),
+      )?.key === "rent_collection",
+  );
+}
 
 // --- min-gap suppression ---------------------------------------------------
 ok(
