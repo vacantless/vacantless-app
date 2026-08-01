@@ -104,6 +104,7 @@ import {
   forRentByLabel,
   STRUCTURE_TYPE_OPTIONS,
   structureTypeLabel,
+  smartLockLabel,
 } from "@/lib/property-features";
 import {
   resolveEffectiveFeatures,
@@ -271,6 +272,7 @@ type Property = {
   heat_included: boolean | null;
   hydro_included: boolean | null;
   water_included: boolean | null;
+  has_smart_lock: boolean;
   photos_ready: boolean;
   // Standard-policy per-unit overrides (0048); null = inherit org profile.
   lease_term: string | null;
@@ -367,7 +369,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -791,6 +793,7 @@ export default async function PropertyDetailPage({
         heat_included: p.heat_included,
         hydro_included: p.hydro_included,
         water_included: p.water_included,
+        has_smart_lock: p.has_smart_lock,
         lease_term: p.lease_term,
         smoking: p.smoking,
         ac_type: p.ac_type,
@@ -2837,6 +2840,21 @@ export default async function PropertyDetailPage({
               className="h-4 w-4 rounded border-gray-300"
             />
             Listing photos ready
+          </label>
+          <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="has_smart_lock"
+              defaultChecked={p.has_smart_lock}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+            />
+            <span>
+              {smartLockLabel(true)}
+              <span className="block text-xs text-gray-500">
+                Sends the operator smart-lock battery reminder when that reminder
+                is turned on for this company.
+              </span>
+            </span>
           </label>
         </fieldset>
 

@@ -45,6 +45,9 @@ name: Vacantless background sweeps
 #     authorized concierge job and stops at the human gate; dark unless
 #     DISTRIBUTION_WORKER_ENABLED=true AND the channel is automation_authorized
 #     (S553). Never logs in, pays, submits, or sets live.
+#   * /api/cron/smart-lock-battery — recurring smart-lock battery reminder for
+#     units flagged has_smart_lock; opt-in per org+event and self-gates via the
+#     unit's last_smart_lock_battery_reminder_at stamp
 #
 # SETUP (one-time, Noam):
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
@@ -147,6 +150,12 @@ jobs:
           curl -sS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/appliance-care" \
+            -w "\nHTTP %{http_code}\n"
+      - name: Trigger smart-lock-battery sweep
+        run: |
+          curl -sS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/smart-lock-battery" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger tenancy-insurance sweep
         run: |

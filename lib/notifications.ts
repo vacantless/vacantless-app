@@ -926,6 +926,24 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     active: true,
   },
   {
+    // Smart-lock battery reminder (S610). This is the recurring, unit-flagged
+    // sibling of the detector/equipment asset reminders: it does not integrate
+    // with smart-lock hardware and reads no telemetry. It fires from the unit's
+    // has_smart_lock flag plus last_smart_lock_battery_reminder_at, on a fixed
+    // six-month cadence, and ships dark until the org turns this event on.
+    key: "leasing.landlord_smart_lock_battery",
+    family: "leasing",
+    audience: "operator",
+    label: "Smart-lock battery replacement",
+    description:
+      "For units you flag as having a smart lock, your team gets a recurring reminder every 6 months to replace the batteries before a showing, tenant, or trade visit gets stuck at the door. Goes to your team, not the tenant. Off until you turn it on.",
+    tokens: [...COMMON_TOKENS, "smart_lock_list", "interval_months", "next_due_date", "dashboard_url"],
+    defaultSubject: "Replace smart-lock batteries — {{property_address}}",
+    defaultBody:
+      "This unit is flagged as having a smart lock. Replace the batteries now so access keeps working for renters, tenants, trades, and showing agents:\n\n{{smart_lock_list}}\n\nThis reminder repeats every {{interval_months}} months. After this reminder is stamped, the next one is due around {{next_due_date}}.\n\nReview this rental's setup: {{dashboard_url}}",
+    active: true,
+  },
+  {
     // Appliance WARRANTY reminder (S362). The one-shot, asset-tracked sibling of
     // landlord_equipment_eol: fires off the recorded appliance inventory
     // (unit_appliances) when an appliance's manufacturer warranty is about to
@@ -1064,6 +1082,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.landlord_winter_water_shutoff": "owner",
   "leasing.landlord_detector_eol": "owner",
   "leasing.landlord_equipment_eol": "owner",
+  "leasing.landlord_smart_lock_battery": "owner",
   "leasing.landlord_appliance_warranty": "owner",
   "leasing.landlord_appliance_consumable": "owner",
   "leasing.landlord_insurance_lapse": "owner",

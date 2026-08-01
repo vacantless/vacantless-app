@@ -39,6 +39,7 @@ import {
   isForRentBy,
   normalizeForRentBy,
   forRentByLabel,
+  smartLockLabel,
 } from "../lib/property-features";
 
 let passed = 0;
@@ -247,6 +248,9 @@ ok("hasAnyFeature: utility -> true", hasAnyFeature({ heat_included: true }));
 ok("hasAnyFeature: sqft -> true", hasAnyFeature({ sqft: 800 }));
 ok("hasAnyFeature: floor -> true", hasAnyFeature({ floor: "3rd" }));
 ok("hasAnyFeature: blank floor -> false", !hasAnyFeature({ floor: "  " }));
+ok("smart lock label true", smartLockLabel(true) === "Smart lock");
+ok("smart lock label false hidden", smartLockLabel(false) === null);
+ok("hasAnyFeature: smart lock is operator-only", !hasAnyFeature({ has_smart_lock: true }));
 ok(
   "hasAnyFeature: available_date alone -> false (shown separately)",
   !hasAnyFeature({ available_date: "2026-07-01" }),

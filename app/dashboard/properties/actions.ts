@@ -563,6 +563,7 @@ export async function updateProperty(formData: FormData) {
       heat_included: parseTriStateBool(formData, "heat_included"),
       hydro_included: parseTriStateBool(formData, "hydro_included"),
       water_included: parseTriStateBool(formData, "water_included"),
+      has_smart_lock: parseCheckbox(formData, "has_smart_lock"),
       photos_ready: parseCheckbox(formData, "photos_ready"),
       // Standard-policy per-unit overrides (0048); null = inherit org profile.
       lease_term: normalizeLeaseTerm(formData.get("lease_term")),
@@ -739,7 +740,7 @@ export async function duplicateProperty(formData: FormData) {
   const { data: source } = await supabase
     .from("properties")
     .select(
-      "address, rent_cents, beds, baths, parking, description, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, photos_ready, lease_term, smoking, ac_type, on_site_management",
+      "address, rent_cents, beds, baths, parking, description, available_date, virtual_tour_url, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management",
     )
     .eq("id", id)
     .maybeSingle();
@@ -769,6 +770,7 @@ export async function duplicateProperty(formData: FormData) {
     heat_included: boolean | null;
     hydro_included: boolean | null;
     water_included: boolean | null;
+    has_smart_lock: boolean;
     photos_ready: boolean;
     lease_term: string | null;
     smoking: string | null;
@@ -803,6 +805,7 @@ export async function duplicateProperty(formData: FormData) {
       heat_included: s.heat_included,
       hydro_included: s.hydro_included,
       water_included: s.water_included,
+      has_smart_lock: s.has_smart_lock,
       // Carry the per-unit policy overrides too — a duplicate is almost always a
       // same-building unit, so its standard-policy exceptions (if any) match.
       lease_term: s.lease_term,

@@ -308,6 +308,8 @@ export type UnitFeatures = {
   heat_included?: boolean | null;
   hydro_included?: boolean | null;
   water_included?: boolean | null;
+  // Operator-only: powers the smart-lock battery reminder; not renter-facing.
+  has_smart_lock?: boolean | null;
   // Standard-policy fields (0048). On a UnitFeatures these are the RESOLVED
   // EFFECTIVE values (unit override ?? org profile default), produced by
   // lib/policy-profile resolveEffectiveFeatures. The bare air_conditioning
@@ -478,6 +480,11 @@ export function buildUtilitiesIncluded(f: UnitFeatures): string[] {
   if (f.hydro_included) out.push("Hydro");
   if (f.water_included) out.push("Water");
   return out;
+}
+
+/** Human label for the operator-only smart-lock unit flag. */
+export function smartLockLabel(value: unknown): string | null {
+  return value === true ? "Smart lock" : null;
 }
 
 /**
