@@ -50,6 +50,12 @@ const SECTIONS: Section[] = [
     icon: "chart",
   },
   {
+    href: "/dashboard/money/spend",
+    title: "Spend",
+    desc: "Category share, monthly trend, and recurring charges from the expense ledger you already keep. Premium.",
+    icon: "chart",
+  },
+  {
     href: "/dashboard/money/tax-package",
     title: "Tax package (T776)",
     desc: "Your year of rent and expenses mapped to the T776 tax lines, ready for your accountant. Premium.",
@@ -147,6 +153,7 @@ export default async function MoneyHubPage() {
             (s.href === "/dashboard/money/reconcile" ||
               s.href === "/dashboard/money/import-history" ||
               s.href === "/dashboard/money/income-statement" ||
+              s.href === "/dashboard/money/spend" ||
               s.href === "/dashboard/money/tax-package" ||
               s.href === "/dashboard/money/accountant-package") &&
             !accounting;
