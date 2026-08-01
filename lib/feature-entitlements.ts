@@ -1,14 +1,19 @@
-import { hasEntitlement } from "./billing";
+import { PLAN_FEATURES, hasEntitlement, type PlanFeature } from "./billing";
 import { envFlagEnabled } from "./auto-listing-copy";
 
-export const ORG_FEATURE_KEYS = [
+const SPECIAL_ORG_FEATURE_KEYS = [
   "ai_reply",
   "landlord_campaign",
-  "incident_intake",
-  "incident_dispatch",
 ] as const;
 
-export type OrgFeatureKey = (typeof ORG_FEATURE_KEYS)[number];
+type SpecialOrgFeatureKey = (typeof SPECIAL_ORG_FEATURE_KEYS)[number];
+
+export const ORG_FEATURE_KEYS = [
+  ...SPECIAL_ORG_FEATURE_KEYS,
+  ...PLAN_FEATURES,
+] as const;
+
+export type OrgFeatureKey = SpecialOrgFeatureKey | PlanFeature;
 
 export type OrganizationFeatureFlag = {
   organization_id?: string | null;
@@ -35,45 +40,63 @@ export type OrgFeatureSetting = {
   description: string;
 };
 
-export const SETTINGS_ORG_FEATURES: OrgFeatureSetting[] = [
-  {
+const SPECIAL_ORG_FEATURE_SETTINGS: Record<SpecialOrgFeatureKey, OrgFeatureSetting> = {
+  ai_reply: {
     key: "ai_reply",
     label: "AI reply drafts",
     description: "Adds the AI draft helper to renter inquiry replies.",
   },
-  {
+  landlord_campaign: {
     key: "landlord_campaign",
     label: "Landlord onboarding campaign",
     description: "Sends the rent-confirm and feature reveal sequence to eligible Free orgs.",
   },
-  {
+};
+
+const MAINTENANCE_ORG_FEATURE_SETTINGS = {
+  incident_intake: {
     key: "incident_intake",
     label: "Tenant issue intake",
     description: "Lets tenants submit maintenance reports through their private link.",
   },
-  {
+  incident_dispatch: {
     key: "incident_dispatch",
     label: "Trade dispatch",
     description: "Lets operators dispatch work orders to trades and manage quote scheduling.",
   },
+} satisfies Record<"incident_intake" | "incident_dispatch", OrgFeatureSetting>;
+
+export const SETTINGS_ORG_FEATURES: OrgFeatureSetting[] = [
+  SPECIAL_ORG_FEATURE_SETTINGS.ai_reply,
+  SPECIAL_ORG_FEATURE_SETTINGS.landlord_campaign,
+  MAINTENANCE_ORG_FEATURE_SETTINGS.incident_intake,
+  MAINTENANCE_ORG_FEATURE_SETTINGS.incident_dispatch,
 ];
 
 const ORG_FEATURE_KEY_SET = new Set<string>(ORG_FEATURE_KEYS);
+const PLAN_FEATURE_KEY_SET = new Set<string>(PLAN_FEATURES);
 
 export function isOrgFeatureKey(value: string): value is OrgFeatureKey {
   return ORG_FEATURE_KEY_SET.has(value);
 }
 
+function isPlanFeatureKey(value: string): value is PlanFeature {
+  return PLAN_FEATURE_KEY_SET.has(value);
+}
+
+export type FeatureEnvMaster =
+  | "AI_REPLY_ENABLED"
+  | "LANDLORD_CAMPAIGN_ENABLED";
+
 export function envMasterForFeature(
   featureKey: OrgFeatureKey,
-): "AI_REPLY_ENABLED" | "LANDLORD_CAMPAIGN_ENABLED" | null {
+): FeatureEnvMaster | null {
   switch (featureKey) {
     case "ai_reply":
       return "AI_REPLY_ENABLED";
     case "landlord_campaign":
       return "LANDLORD_CAMPAIGN_ENABLED";
-    case "incident_intake":
-    case "incident_dispatch":
+    default:
       return null;
   }
 }
@@ -87,12 +110,8 @@ export function planDefaultForFeature(
       return true;
     case "landlord_campaign":
       return plan === "free";
-    case "incident_intake":
-      return hasEntitlement(plan, "incident_intake");
-    case "incident_dispatch":
-      return hasEntitlement(plan, "incident_dispatch");
     default:
-      return false;
+      return isPlanFeatureKey(featureKey) ? hasEntitlement(plan, featureKey) : false;
   }
 }
 

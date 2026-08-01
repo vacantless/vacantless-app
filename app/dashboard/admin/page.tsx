@@ -1,20 +1,88 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminEmail, inviteStatusLabel, inviteSourceLabel } from "@/lib/provisioning";
 import { listRecentInvites, adminEmails } from "@/lib/provisioning-server";
 import { OnboardLandlordForm } from "./onboard-form";
 import { HandoffLandlordForm } from "./handoff-form";
 import { GuidelineForm } from "./guideline-form";
+import { setOrgFeatureFlagAsAdmin } from "./actions";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import {
+  SETTINGS_ORG_FEATURES,
+  envMasterForFeature,
+  featureFlagOverrideForOrg,
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlagsByOrg,
+  planDefaultForFeature,
+  type OrganizationFeatureFlag,
+} from "@/lib/feature-entitlements";
 
 export const dynamic = "force-dynamic";
 // Service-role reads of org_invites must always see live rows.
 export const fetchCache = "force-no-store";
 
+type AdminSearchParams = {
+  features?: string;
+};
+
+type AdminOrgRow = {
+  id: string;
+  name: string | null;
+  slug: string | null;
+  plan: string | null;
+};
+
+function featureFlash(status: string | undefined): {
+  className: string;
+  text: string;
+} | null {
+  switch (status) {
+    case "saved":
+      return {
+        className: "border-green-200 bg-green-50 text-green-800",
+        text: "Feature access saved.",
+      };
+    case "invalid":
+      return {
+        className: "border-red-200 bg-red-50 text-red-800",
+        text: "Pick a valid organization, feature, and access setting.",
+      };
+    case "not_configured":
+      return {
+        className: "border-red-200 bg-red-50 text-red-800",
+        text: "Service role is not configured, so client feature access cannot be saved.",
+      };
+    case "forbidden":
+      return {
+        className: "border-red-200 bg-red-50 text-red-800",
+        text: "Not authorized to change client feature access.",
+      };
+    case "error":
+      return {
+        className: "border-red-200 bg-red-50 text-red-800",
+        text: "Something went wrong saving feature access.",
+      };
+    default:
+      return null;
+  }
+}
+
+function featureModeButtonClass(active: boolean): string {
+  return active
+    ? "rounded-md border border-slate-900 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-100"
+    : "rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-400 hover:text-slate-900";
+}
+
 // Superadmin-only operator console (S354). Dark by default: it 404s for anyone
 // not on the PROVISIONING_ADMIN_EMAILS allowlist, so ordinary owners/operators
 // never see it. Standing up a brand-new landlord org (operator concierge
 // onboarding) is the scale version of the manual WORKFLOW 112 steps.
-export default async function AdminConsolePage() {
+export default async function AdminConsolePage({
+  searchParams = {},
+}: {
+  searchParams?: AdminSearchParams;
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -28,6 +96,29 @@ export default async function AdminConsolePage() {
     .from("rent_guidelines")
     .select("year, percent, source, updated_at")
     .order("year", { ascending: false });
+  const admin = createAdminClient();
+  let featureAccessError: string | null = admin
+    ? null
+    : "Service role is not configured, so client feature access cannot be read.";
+  let orgRows: AdminOrgRow[] = [];
+  let featureFlagsByOrg = new Map<string, OrganizationFeatureFlag[]>();
+  if (admin) {
+    const { data: orgData, error: orgError } = await admin
+      .from("organizations")
+      .select("id, name, slug, plan")
+      .order("name", { ascending: true })
+      .limit(100);
+    if (orgError) {
+      featureAccessError = orgError.message;
+    } else {
+      orgRows = ((orgData ?? []) as AdminOrgRow[]).filter((org) => !!org.id);
+      featureFlagsByOrg = await loadOrganizationFeatureFlagsByOrg(
+        admin,
+        orgRows.map((org) => org.id),
+      );
+    }
+  }
+  const featureFlashMessage = featureFlash(searchParams.features);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 py-6">
@@ -47,6 +138,141 @@ export default async function AdminConsolePage() {
       </header>
 
       <OnboardLandlordForm />
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-700">Client feature access</h2>
+        {featureFlashMessage && (
+          <div className={`rounded-lg border px-4 py-3 text-sm ${featureFlashMessage.className}`}>
+            {featureFlashMessage.text}
+          </div>
+        )}
+        {featureAccessError ? (
+          <p className="text-sm text-red-600">{featureAccessError}</p>
+        ) : orgRows.length === 0 ? (
+          <p className="text-sm text-slate-400">No organizations found.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="min-w-[220rem] text-left text-xs">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="sticky left-0 z-10 min-w-56 bg-slate-50 px-3 py-2 font-medium">
+                    Organization
+                  </th>
+                  {SETTINGS_ORG_FEATURES.map((feature) => (
+                    <th key={feature.key} className="min-w-40 px-3 py-2 font-medium">
+                      <span className="block text-slate-700 normal-case">
+                        {feature.label}
+                      </span>
+                      <span className="block font-mono normal-case text-slate-400">
+                        {feature.key}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {orgRows.map((org) => {
+                  const featureFlags = featureFlagsByOrg.get(org.id) ?? [];
+                  return (
+                    <tr key={org.id} className="align-top">
+                      <th className="sticky left-0 z-10 bg-white px-3 py-3 font-medium text-slate-800">
+                        <span className="block text-sm">{org.name ?? "Unnamed organization"}</span>
+                        <span className="mt-0.5 block font-mono text-[11px] font-normal text-slate-400">
+                          {org.slug ?? org.id}
+                        </span>
+                        <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {org.plan ?? "trial"}
+                        </span>
+                      </th>
+                      {SETTINGS_ORG_FEATURES.map((feature) => {
+                        const orgForResolver = { ...org, featureFlags };
+                        const override = featureFlagOverrideForOrg(
+                          feature.key,
+                          orgForResolver,
+                        );
+                        const effectiveEnabled = isFeatureEnabledForOrg(
+                          feature.key,
+                          orgForResolver,
+                          { env: process.env },
+                        );
+                        const planDefault = planDefaultForFeature(feature.key, org.plan);
+                        const envMaster = envMasterForFeature(feature.key);
+                        const envEnabled = envMaster
+                          ? envFlagEnabled(process.env[envMaster])
+                          : null;
+                        const mode =
+                          override === null ? "default" : override ? "on" : "off";
+                        return (
+                          <td key={`${org.id}-${feature.key}`} className="px-3 py-3">
+                            <form action={setOrgFeatureFlagAsAdmin} className="space-y-2">
+                              <input type="hidden" name="organization_id" value={org.id} />
+                              <input type="hidden" name="feature_key" value={feature.key} />
+                              <div className="space-y-1">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                    effectiveEnabled
+                                      ? "bg-green-50 text-green-700"
+                                      : "bg-slate-100 text-slate-600"
+                                  }`}
+                                >
+                                  {effectiveEnabled ? "On" : "Off"}
+                                </span>
+                                <p className="text-[11px] text-slate-500">
+                                  Plan {planDefault ? "on" : "off"}
+                                  {" / "}
+                                  {override === null
+                                    ? "default"
+                                    : override
+                                      ? "override on"
+                                      : "override off"}
+                                </p>
+                                {envMaster && (
+                                  <p className="font-mono text-[10px] text-slate-400">
+                                    {envMaster}: {envEnabled ? "on" : "off"}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-3 gap-1">
+                                <button
+                                  type="submit"
+                                  name="mode"
+                                  value="default"
+                                  disabled={mode === "default"}
+                                  className={featureModeButtonClass(mode === "default")}
+                                >
+                                  Plan
+                                </button>
+                                <button
+                                  type="submit"
+                                  name="mode"
+                                  value="on"
+                                  disabled={mode === "on"}
+                                  className={featureModeButtonClass(mode === "on")}
+                                >
+                                  On
+                                </button>
+                                <button
+                                  type="submit"
+                                  name="mode"
+                                  value="off"
+                                  disabled={mode === "off"}
+                                  className={featureModeButtonClass(mode === "off")}
+                                >
+                                  Off
+                                </button>
+                              </div>
+                            </form>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-slate-700">Recent provisioning</h2>

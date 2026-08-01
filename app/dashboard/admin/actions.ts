@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -13,6 +14,7 @@ import {
   handoffProvisionedOrg,
   adminEmails,
 } from "@/lib/provisioning-server";
+import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 
 // Operator-initiated landlord onboarding (the scale version of WORKFLOW 112).
 // Double-gated: the page 404s for non-admins, AND this action rechecks the
@@ -116,4 +118,52 @@ export async function upsertRentGuidelineAction(input: {
 
   revalidatePath("/dashboard/admin");
   return { ok: true, year, percent };
+}
+
+export async function setOrgFeatureFlagAsAdmin(
+  formData: FormData,
+): Promise<void> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!isAdminEmail(user?.email, adminEmails())) {
+    redirect("/dashboard/admin?features=forbidden");
+  }
+
+  const orgId = String(formData.get("organization_id") ?? "").trim();
+  const featureKey = String(formData.get("feature_key") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "").trim();
+  if (!orgId || !isOrgFeatureKey(featureKey) || !["default", "on", "off"].includes(mode)) {
+    redirect("/dashboard/admin?features=invalid");
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    redirect("/dashboard/admin?features=not_configured");
+  }
+
+  const write =
+    mode === "default"
+      ? await admin
+          .from("organization_feature_flags")
+          .delete()
+          .eq("organization_id", orgId)
+          .eq("feature_key", featureKey)
+      : await admin.from("organization_feature_flags").upsert(
+          {
+            organization_id: orgId,
+            feature_key: featureKey,
+            enabled: mode === "on",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "organization_id,feature_key" },
+        );
+
+  if (write.error) {
+    redirect("/dashboard/admin?features=error");
+  }
+
+  revalidatePath("/dashboard/admin");
+  redirect("/dashboard/admin?features=saved");
 }
