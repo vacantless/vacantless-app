@@ -239,14 +239,6 @@ async function main() {
       "transition: live price is NEW1 after the effective date",
       (subAfter.items.data[0].price as Stripe.Price).unit_amount === NEW1,
     );
-    const invoiceAfter = await latestInvoiceForSubscription(sub.id, customer.id);
-    ok("transition: invoice after effective date bills NEW1 rent", invoiceAfter.amount === NEW1);
-
-    console.log("\nInvoice boundary proof:");
-    console.log(`  INVOICE @ ${isoDate(invoiceBefore.created)} (${invoiceBefore.id}): ${money(invoiceBefore.amount, invoiceBefore.currency)}`);
-    console.log(`  INVOICE @ ${isoDate(invoiceAfter.created)} (${invoiceAfter.id}): ${money(invoiceAfter.amount, invoiceAfter.currency)}`);
-    console.log(`  Effective date: ${eff1Iso}`);
-
     sched = await stripe.subscriptionSchedules.retrieve(sched.id);
     sel = selectActiveSchedulePhase(sched as unknown as Parameters<typeof selectActiveSchedulePhase>[0]);
     ok("transition: selectActiveSchedulePhase picks the now-current phase 2", sel.ok && sel.startDate === check1.effectiveUnix);
@@ -308,6 +300,18 @@ async function main() {
 
     sched = await stripe.subscriptionSchedules.retrieve(sched.id);
     ok("#2 schedule still has 2 phases (replaced, not stacked)", (sched.phases?.length ?? 0) === 2);
+
+    // Capture the NEW-rent invoice at the first monthly boundary after the
+    // effective date. Done LAST so advancing the clock can't disturb the #2
+    // schedule update; Sept 30 bills NEW1 (before the #2 NEW2 date). (S607)
+    await stripe.testHelpers.testClocks.advance(clock.id, { frozen_time: check1.effectiveUnix + 30 * DAY });
+    await waitClockReady(clock.id);
+    const invoiceAfter = await latestInvoiceForSubscription(sub.id, customer.id);
+    ok("transition: invoice after effective date bills NEW1 rent", invoiceAfter.amount === NEW1);
+    console.log("\nInvoice boundary proof:");
+    console.log(`  INVOICE @ ${isoDate(invoiceBefore.created)} (${invoiceBefore.id}): ${money(invoiceBefore.amount, invoiceBefore.currency)}`);
+    console.log(`  INVOICE @ ${isoDate(invoiceAfter.created)} (${invoiceAfter.id}): ${money(invoiceAfter.amount, invoiceAfter.currency)}`);
+    console.log(`  Effective date: ${eff1Iso}`);
   } finally {
     try {
       await stripe.testHelpers.testClocks.del(clock.id);
