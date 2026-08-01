@@ -755,22 +755,30 @@ async function runDryPreviewTest() {
     body.details.find((row) => row.org === orgId) ?? {};
 
   ok("dry preview scans while campaign env master is dark", body.scanned === 4);
-  ok("dry preview records would-send count only", body.sent === 0 && body.wouldSend === 2);
+  ok("dry preview records would-send count only", body.sent === 0 && body.wouldSend === 4);
   ok("dry preview does not call send seams", rentConfirmCalls.length === 0 && notificationCalls.length === 0);
   ok("dry preview does not update organizations", fakeDb.updates.length === 0);
   ok(
     "dry preview would send mature David/Fiona orgs",
     detail("david").would_send_to === "david@example.com" &&
+      detail("david").reveal === "rent_increase_confirm" &&
       detail("fiona").would_send_to === "fiona@example.com",
   );
   ok(
-    "dry preview first-year-only Mahmood/Paul drop out of step 1",
-    detail("mahmood").would_send_to === null &&
-      Array.isArray(detail("mahmood").first_year_skipped) &&
-      (detail("mahmood").first_year_skipped as string[]).includes("1 Bloor 3701") &&
-      detail("paul").would_send_to === null &&
-      Array.isArray(detail("paul").first_year_skipped) &&
-      (detail("paul").first_year_skipped as string[]).includes("10 Bellair 1604"),
+    "dry preview first-year-only Mahmood/Paul advances to rent collection",
+    detail("mahmood").would_send_to === "mahmood@example.com" &&
+      detail("mahmood").reveal === "rent_collection" &&
+      detail("mahmood").step === 2 &&
+      detail("paul").would_send_to === "paul@example.com" &&
+      detail("paul").reveal === "rent_collection" &&
+      detail("paul").step === 2,
+  );
+  ok(
+    "dry preview keeps intermediate first-year skip proof",
+    Array.isArray(detail("mahmood").journey) &&
+      ((detail("mahmood").journey as Array<Record<string, unknown>>)[0]?.first_year_skipped as string[]).includes("1 Bloor 3701") &&
+      Array.isArray(detail("paul").journey) &&
+      ((detail("paul").journey as Array<Record<string, unknown>>)[0]?.first_year_skipped as string[]).includes("10 Bellair 1604"),
   );
 }
 

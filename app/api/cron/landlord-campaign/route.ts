@@ -24,6 +24,9 @@ import {
   resolveLandlordCampaignRecipient,
   CAMPAIGN_STEPS,
   CAMPAIGN_MAX_AGE_DAYS,
+  HOUR_MS,
+  MIN_GAP_HOURS,
+  STEP_THRESHOLD_DAYS,
 } from "@/lib/landlord-campaign";
 
 // Landlord feature-reveal sweep (Tier 1 C). Finds FREE-plan orgs with a tenancy
@@ -90,6 +93,11 @@ type RentConfirmPlan = {
 type RentConfirmPlanResult =
   | { ok: true; plan: RentConfirmPlan }
   | { ok: false; error: string };
+
+type DryJourneyResult =
+  | { kind: "would_send"; detail: Record<string, unknown> }
+  | { kind: "skipped"; detail: Record<string, unknown> }
+  | { kind: "error"; detail: Record<string, unknown> };
 
 const defaultDeps: CampaignDeps = {
   env: process.env,
@@ -289,6 +297,182 @@ async function loadRentConfirmPlanForOrg(args: {
       units,
       firstYearSkippedUnits,
       anniversaryPlan,
+    },
+  };
+}
+
+function dryPreviewDue(args: {
+  base: Omit<Parameters<typeof nextRevealDue>[0], "nowMs" | "stepSent" | "lastSentAtMs">;
+  nowMs: number;
+  stepSent: number;
+  lastSentAtMs: number | null;
+}): { due: NonNullable<ReturnType<typeof nextRevealDue>>; dueAtMs: number } | null {
+  const immediate = nextRevealDue({
+    ...args.base,
+    nowMs: args.nowMs,
+    stepSent: args.stepSent,
+    lastSentAtMs: args.lastSentAtMs,
+  });
+  if (immediate) return { due: immediate, dueAtMs: args.nowMs };
+  if (args.base.campaignStartMs == null) return null;
+
+  const minGapMs =
+    args.lastSentAtMs == null
+      ? 0
+      : args.lastSentAtMs + MIN_GAP_HOURS * HOUR_MS;
+  const startIndex = Number.isInteger(args.stepSent) && args.stepSent > 0
+    ? args.stepSent
+    : 0;
+
+  for (let idx = startIndex; idx < CAMPAIGN_STEPS; idx++) {
+    const thresholdMs =
+      args.base.campaignStartMs + (STEP_THRESHOLD_DAYS[idx] ?? 0) * DAY_MS;
+    const dueAtMs = Math.max(args.nowMs, thresholdMs, minGapMs);
+    const due = nextRevealDue({
+      ...args.base,
+      nowMs: dueAtMs,
+      stepSent: args.stepSent,
+      lastSentAtMs: args.lastSentAtMs,
+    });
+    if (due) return { due, dueAtMs };
+  }
+
+  return null;
+}
+
+async function previewDryCampaignJourney(args: {
+  admin: NonNullable<ReturnType<typeof createAdminClient>>;
+  org: CampaignOrg;
+  nowMs: number;
+  guideline: Awaited<ReturnType<typeof loadGuidelineLookup>>;
+  leaseTermShiftOn: boolean;
+  rentConfirmUrl: typeof rentConfirmUrl;
+  to: string;
+  hasTenancy: boolean;
+  hasRentCollection: boolean;
+  hasTaxExport: boolean;
+  hasListingMarketing: boolean;
+}): Promise<DryJourneyResult> {
+  const campaignStartMs = args.org.created_at
+    ? new Date(args.org.created_at).getTime()
+    : null;
+  const base = {
+    campaignStartMs,
+    plan: args.org.plan,
+    hasTenancy: args.hasTenancy,
+    enabled: true,
+    optedOut: false,
+    hasRentCollection: args.hasRentCollection,
+    hasTaxExport: args.hasTaxExport,
+    hasListingMarketing: args.hasListingMarketing,
+  };
+  let stepSent = args.org.landlord_campaign_step_sent ?? 0;
+  let lastSentAtMs = args.org.landlord_campaign_last_sent_at
+    ? new Date(args.org.landlord_campaign_last_sent_at).getTime()
+    : null;
+  let previewNowMs = args.nowMs;
+  const journey: Array<Record<string, unknown>> = [];
+
+  for (let guard = 0; guard <= CAMPAIGN_STEPS; guard++) {
+    const resolved = dryPreviewDue({
+      base,
+      nowMs: previewNowMs,
+      stepSent,
+      lastSentAtMs,
+    });
+
+    if (!resolved) {
+      return {
+        kind: "skipped",
+        detail: {
+          org: args.org.id,
+          dry: true,
+          skipped: journey.length > 0 ? "no_terminal_action" : "not_due",
+          journey,
+        },
+      };
+    }
+
+    const { due, dueAtMs } = resolved;
+    previewNowMs = dueAtMs;
+
+    if (due.key === "rent_increase_confirm") {
+      const plan = await loadRentConfirmPlanForOrg({
+        admin: args.admin,
+        org: args.org,
+        nowMs: dueAtMs,
+        guideline: args.guideline,
+        leaseTermShiftOn: args.leaseTermShiftOn,
+        rentConfirmUrl: args.rentConfirmUrl,
+      });
+
+      if (!plan.ok) {
+        return {
+          kind: "error",
+          detail: {
+            org: args.org.id,
+            reveal: due.key,
+            step: due.index + 1,
+            error: plan.error,
+            journey,
+          },
+        };
+      }
+
+      const { units, firstYearSkippedUnits, anniversaryPlan } = plan.plan;
+      if (units.length === 0) {
+        journey.push({
+          reveal: due.key,
+          step: due.index + 1,
+          skipped: "no_unconfirmed_rent_units",
+          eligible_units: [],
+          first_year_skipped: firstYearSkippedUnits.map((unit) => unit.address),
+          preview_at: new Date(dueAtMs).toISOString(),
+        });
+        stepSent = due.index + 1;
+        // Match live skip-advance behavior: no last_sent_at stamp is written.
+        lastSentAtMs = lastSentAtMs ?? null;
+        continue;
+      }
+
+      return {
+        kind: "would_send",
+        detail: {
+          org: args.org.id,
+          reveal: due.key,
+          dry: true,
+          step: due.index + 1,
+          would_send_to: args.to,
+          eligible_units: units.map((unit) => unit.address),
+          first_year_skipped: firstYearSkippedUnits.map((unit) => unit.address),
+          hero: anniversaryPlan.hero?.tenancyId ?? null,
+          preview_at: new Date(dueAtMs).toISOString(),
+          journey,
+        },
+      };
+    }
+
+    return {
+      kind: "would_send",
+      detail: {
+        org: args.org.id,
+        reveal: due.key,
+        dry: true,
+        step: due.index + 1,
+        would_send_to: args.to,
+        preview_at: new Date(dueAtMs).toISOString(),
+        journey,
+      },
+    };
+  }
+
+  return {
+    kind: "skipped",
+    detail: {
+      org: args.org.id,
+      dry: true,
+      skipped: "preview_guard_exhausted",
+      journey,
     },
   };
 }
@@ -593,7 +777,7 @@ async function runLandlordCampaign(
         hasListingMarketing: hasEntitlement(org.plan, "listing_marketing"),
       });
 
-      if (!due) {
+      if (!due && !dry) {
         summary.skipped++;
         continue;
       }
@@ -607,7 +791,38 @@ async function runLandlordCampaign(
       const to = resolveLandlordCampaignRecipient(org.landlord_campaign_email);
       if (!to) {
         summary.skipped++;
-        summary.details.push({ org: org.id, skipped: "no_landlord_email", reveal: due.key });
+        summary.details.push({ org: org.id, skipped: "no_landlord_email", reveal: due?.key ?? null });
+        continue;
+      }
+
+      if (dry) {
+        const preview = await previewDryCampaignJourney({
+          admin,
+          org,
+          nowMs,
+          guideline,
+          leaseTermShiftOn,
+          rentConfirmUrl: deps.rentConfirmUrl,
+          to,
+          hasTenancy: orgsWithTenancy.has(org.id),
+          hasRentCollection: orgHasActiveRentRail(org.id),
+          hasTaxExport: hasEntitlement(org.plan, "tax_export"),
+          hasListingMarketing: hasEntitlement(org.plan, "listing_marketing"),
+        });
+
+        if (preview.kind === "would_send") {
+          summary.wouldSend++;
+        } else if (preview.kind === "error") {
+          summary.errors++;
+        } else {
+          summary.skipped++;
+        }
+        summary.details.push(preview.detail);
+        continue;
+      }
+
+      if (!due) {
+        summary.skipped++;
         continue;
       }
 
@@ -631,29 +846,7 @@ async function runLandlordCampaign(
           continue;
         }
 
-        const { units, firstYearSkippedUnits, anniversaryPlan } = plan.plan;
-
-        if (dry) {
-          if (units.length > 0) {
-            summary.wouldSend++;
-          } else {
-            summary.skipped++;
-          }
-          summary.details.push({
-            org: org.id,
-            reveal: due.key,
-            dry: true,
-            step: due.index + 1,
-            would_send_to: units.length > 0 ? to : null,
-            eligible_units: units.map((unit) => unit.address),
-            first_year_skipped: firstYearSkippedUnits.map((unit) => unit.address),
-            hero: anniversaryPlan.hero?.tenancyId ?? null,
-            ...(units.length === 0
-              ? { skipped: "no_unconfirmed_rent_units" }
-              : {}),
-          });
-          continue;
-        }
+        const { units, anniversaryPlan } = plan.plan;
 
         if (units.length === 0) {
           const { error: stampErr } = await admin
@@ -727,18 +920,6 @@ async function runLandlordCampaign(
         orgName: org.name,
         propertyAddress: firstAddress.get(org.id) ?? null,
       });
-
-      if (dry) {
-        summary.wouldSend++;
-        summary.details.push({
-          org: org.id,
-          reveal: due.key,
-          dry: true,
-          step: due.index + 1,
-          would_send_to: to,
-        });
-        continue;
-      }
 
       const result = await deps.sendNotificationEmail({
         to_email: to,
