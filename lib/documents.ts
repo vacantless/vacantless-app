@@ -361,3 +361,60 @@ export function partitionVaultDocuments<T extends VaultDocRowLike>(
   }
   return { uploaded, executedPdfByLeaseId };
 }
+
+// ---------------------------------------------------------------------------
+// Work-order / property filing scopes (S610 receipt-vault lane).
+//
+// The vault's original tenancy/person scopes remain unchanged. These helpers are
+// pure filters over nullable FK columns, so a receipt linked to a work order can
+// appear under both its work order and its property, while a tenancy-only doc
+// continues to resolve only under its tenancy.
+// ---------------------------------------------------------------------------
+
+export type DocumentScopeRowLike = {
+  tenancy_id?: string | null;
+  property_id?: string | null;
+  work_order_id?: string | null;
+};
+
+export function documentBelongsToTenancy(
+  doc: DocumentScopeRowLike,
+  tenancyId: string,
+): boolean {
+  return doc.tenancy_id === tenancyId;
+}
+
+export function documentBelongsToProperty(
+  doc: DocumentScopeRowLike,
+  propertyId: string,
+): boolean {
+  return doc.property_id === propertyId;
+}
+
+export function documentBelongsToWorkOrder(
+  doc: DocumentScopeRowLike,
+  workOrderId: string,
+): boolean {
+  return doc.work_order_id === workOrderId;
+}
+
+export function documentsForTenancy<T extends DocumentScopeRowLike>(
+  docs: readonly T[],
+  tenancyId: string,
+): T[] {
+  return docs.filter((doc) => documentBelongsToTenancy(doc, tenancyId));
+}
+
+export function documentsForProperty<T extends DocumentScopeRowLike>(
+  docs: readonly T[],
+  propertyId: string,
+): T[] {
+  return docs.filter((doc) => documentBelongsToProperty(doc, propertyId));
+}
+
+export function documentsForWorkOrder<T extends DocumentScopeRowLike>(
+  docs: readonly T[],
+  workOrderId: string,
+): T[] {
+  return docs.filter((doc) => documentBelongsToWorkOrder(doc, workOrderId));
+}

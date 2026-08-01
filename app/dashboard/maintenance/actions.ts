@@ -46,6 +46,8 @@ import {
   createIncidentMediaDownloadUrls,
   removeIncidentMedia,
 } from "@/lib/incident-media-server";
+import { validateDocumentUpload } from "@/lib/documents";
+import { createUploadedVaultDocument } from "@/lib/documents-server";
 import {
   workOrderMediaStoragePath,
   MAX_PHOTOS_PER_WORK_ORDER,
@@ -358,6 +360,54 @@ export async function uploadWorkOrderPhoto(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?wo=photo_added#wo-${workOrderId}`);
+}
+
+export async function uploadWorkOrderReceipt(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?wo=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const workOrderId = s(formData, "work_order_id");
+  if (!workOrderId) redirect(`${BASE}?wo=notfound`);
+
+  const file = formData.get("receipt");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect(`${BASE}?wo=receipt_empty#wo-${workOrderId}`);
+  }
+  const check = validateDocumentUpload({ type: file.type, size: file.size });
+  if (!check.ok) redirect(`${BASE}?wo=receipt_${check.reason}#wo-${workOrderId}`);
+
+  const supabase = createClient();
+  const { data: wo } = await supabase
+    .from("work_orders")
+    .select("id, title, property_id")
+    .eq("id", workOrderId)
+    .maybeSingle();
+  if (!wo) redirect(`${BASE}?wo=notfound`);
+  const workOrder = wo as {
+    id: string;
+    title: string | null;
+    property_id: string | null;
+  };
+
+  const titleOverride = s(formData, "receipt_title");
+  const result = await createUploadedVaultDocument(supabase, {
+    organizationId: org.id,
+    file,
+    docType: "receipt",
+    title:
+      titleOverride ||
+      (workOrder.title ? `${workOrder.title} receipt` : null),
+    workOrderId: workOrder.id,
+    propertyId: workOrder.property_id,
+  });
+  if (!result.ok) redirect(`${BASE}?wo=receipt_failed#wo-${workOrderId}`);
+
+  revalidatePath(BASE);
+  if (workOrder.property_id) {
+    revalidatePath(`/dashboard/properties/${workOrder.property_id}`);
+  }
+  redirect(`${BASE}?wo=receipt_added#wo-${workOrderId}`);
 }
 
 // Remove an operator-attached work-order photo (bytes + row). RLS scopes the

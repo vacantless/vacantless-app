@@ -246,6 +246,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   photo_empty: "That file appears to be empty.",
   photo_too_many: "You've reached the photo limit for this work order.",
   photo_failed: "The photo couldn't be uploaded. Please try again.",
+  receipt_type: "Attach a receipt as a PDF or scan image.",
+  receipt_size: "That receipt is too large for the document vault.",
+  receipt_empty: "That receipt file appears to be empty.",
+  receipt_failed: "The receipt couldn't be uploaded. Please try again.",
 };
 
 export function workOrderErrorMessage(code: string | undefined): string | null {

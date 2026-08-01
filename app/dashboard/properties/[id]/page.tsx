@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { getRoleForOrg } from "@/lib/membership";
+import { roleCan } from "@/lib/roles";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import {
   PROPERTY_STATUSES,
@@ -205,6 +207,10 @@ import {
   type ApplianceReceiptView,
 } from "./appliances-section";
 import {
+  PropertyDocumentsSection,
+  type PropertyDocumentView,
+} from "./documents-section";
+import {
   warrantyExpiryDate,
   warrantyStatusFor,
   appliancePurchaseAnchor,
@@ -212,7 +218,10 @@ import {
   consumableStatusFor,
   type ApplianceType,
 } from "@/lib/appliance-care";
-import { createDocumentDownloadUrls } from "@/lib/documents-server";
+import {
+  createDocumentDownloadUrls,
+  listDocumentsForProperty,
+} from "@/lib/documents-server";
 import {
   appliancePrefillFromQuery,
   pendingDocIdFromQuery,
@@ -220,6 +229,7 @@ import {
 } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
 import type { AddressDisplayMode } from "@/lib/address-privacy";
+import { shareLinkStatus } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -345,6 +355,7 @@ export default async function PropertyDetailPage({
     run?: string;
     runerr?: string;
     tourerr?: string;
+    docs?: string;
     // Relist-over-active-tenancy confirmation (S447 Codex P2).
     relist?: string;
     relisted?: string;
@@ -380,6 +391,9 @@ export default async function PropertyDetailPage({
   // S480: this page is scoped to ONE property = ONE org; every distribution
   // account/proof read is filtered to THIS property's org (KI744 / Codex fold).
   const propertyOrgId = p.organization_id;
+  const propertyRole = await getRoleForOrg(propertyOrgId);
+  const canManagePropertyDocuments =
+    propertyRole != null && roleCan(propertyRole, "manage_tenancies");
 
   const { data: leads } = await supabase
     .from("leads")
@@ -713,6 +727,97 @@ export default async function PropertyDetailPage({
         a.receipts = byAppliance.get(a.id) ?? [];
       }
     }
+  }
+
+  let propertyDocuments: PropertyDocumentView[] = [];
+  if (canManagePropertyDocuments) {
+    const propertyDocRows = await listDocumentsForProperty(
+      supabase,
+      propertyOrgId,
+      p.id,
+    );
+
+    const workOrderIds = Array.from(
+      new Set(
+        propertyDocRows
+          .map((d) => d.work_order_id)
+          .filter((id): id is string => !!id),
+      ),
+    );
+    const workOrderTitleById = new Map<string, string>();
+    if (workOrderIds.length > 0) {
+      const { data: workOrderRows } = await supabase
+        .from("work_orders")
+        .select("id, title")
+        .eq("organization_id", propertyOrgId)
+        .in("id", workOrderIds);
+      for (const row of (workOrderRows ?? []) as {
+        id: string;
+        title: string | null;
+      }[]) {
+        workOrderTitleById.set(row.id, row.title ?? "Work order");
+      }
+    }
+
+    const propertyDocIds = propertyDocRows.map((d) => d.id);
+    const { data: shareRows } = await supabase
+      .from("document_share_links")
+      .select("id, document_id, token, expires_at, revoked_at")
+      .in(
+        "document_id",
+        propertyDocIds.length > 0
+          ? propertyDocIds
+          : ["00000000-0000-0000-0000-000000000000"],
+      )
+      .order("created_at", { ascending: false });
+    const sharesByDoc = new Map<
+      string,
+      {
+        id: string;
+        token: string;
+        status: "active" | "expired" | "revoked";
+        expires_at: string | null;
+      }[]
+    >();
+    const nowForShares = new Date();
+    for (const r of (shareRows ?? []) as {
+      id: string;
+      document_id: string;
+      token: string;
+      expires_at: string | null;
+      revoked_at: string | null;
+    }[]) {
+      const links = sharesByDoc.get(r.document_id) ?? [];
+      links.push({
+        id: r.id,
+        token: r.token,
+        status: shareLinkStatus(r, nowForShares),
+        expires_at: r.expires_at,
+      });
+      sharesByDoc.set(r.document_id, links);
+    }
+
+    const docSigned = await createDocumentDownloadUrls(
+      supabase,
+      propertyDocRows.map((d) => d.storage_path),
+    );
+    const urlByPath = new Map<string, string | null>();
+    if (docSigned.ok) {
+      for (const u of docSigned.urls) urlByPath.set(u.path, u.signedUrl);
+    }
+
+    propertyDocuments = propertyDocRows.map((d) => ({
+      id: d.id,
+      title: d.title,
+      doc_type: d.doc_type,
+      size_bytes: d.size_bytes,
+      created_at: d.created_at,
+      signedUrl: urlByPath.get(d.storage_path) ?? null,
+      workOrderTitle: d.work_order_id
+        ? workOrderTitleById.get(d.work_order_id) ?? "Work order"
+        : null,
+      shareLinks: sharesByDoc.get(d.id) ?? [],
+    }));
   }
 
   const applianceAttention = applianceViews.filter(
@@ -3220,6 +3325,25 @@ export default async function PropertyDetailPage({
           expenseStatus={searchParams.scanexp ?? null}
         />
       </CollapsibleSection>
+
+      {canManagePropertyDocuments && (
+        <CollapsibleSection
+          id="documents"
+          title="Documents"
+          status={
+            propertyDocuments.length === 0
+              ? "Not stored"
+              : `${propertyDocuments.length} stored`
+          }
+          done={propertyDocuments.length > 0}
+        >
+          <PropertyDocumentsSection
+            propertyId={p.id}
+            documents={propertyDocuments}
+            flash={searchParams.docs ?? null}
+          />
+        </CollapsibleSection>
+      )}
 
       </TabPanel>
 

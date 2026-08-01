@@ -55,6 +55,11 @@ import {
 } from "@/lib/work-order-dispatch";
 import { createIncidentMediaDownloadUrls } from "@/lib/incident-media-server";
 import {
+  createDocumentDownloadUrls,
+  listDocumentsForWorkOrdersById,
+} from "@/lib/documents-server";
+import { formatBytes } from "@/lib/documents";
+import {
   normalizeWindows,
   sortWindows,
   windowKey,
@@ -94,6 +99,7 @@ import {
   replyToDispatchQuestion,
   uploadWorkOrderPhoto,
   deleteWorkOrderPhoto,
+  uploadWorkOrderReceipt,
   addAppointmentWindow,
   removeAppointmentWindow,
   fillSupplierWindowsFromRules,
@@ -140,6 +146,14 @@ type WorkOrderRow = {
   trade_contact_id: string | null;
   property: { address: string } | null;
   trade: { name: string; trade_type: string | null } | null;
+};
+
+type WorkOrderReceiptView = {
+  id: string;
+  title: string;
+  size_bytes: number;
+  created_at: string;
+  signedUrl: string | null;
 };
 
 type TradeRow = {
@@ -249,6 +263,7 @@ const WO_SUCCESS: Record<string, string> = {
   deleted: "Work order deleted.",
   photo_added: "Photo added to the work order.",
   photo_removed: "Photo removed.",
+  receipt_added: "Receipt filed to the work order and property vault.",
 };
 const TRADE_SUCCESS: Record<string, string> = {
   created: "Trade contact added.",
@@ -729,6 +744,43 @@ export default async function MaintenancePage({
         const list = woPhotos.get(m.work_order_id) ?? [];
         list.push({ id: m.id, url });
         woPhotos.set(m.work_order_id, list);
+      }
+    }
+  }
+
+  // Work-order receipts are stored in the private document vault, linked to the
+  // work order and its property. Download URLs use the same short-lived signed
+  // document URL path as tenancy vault files.
+  const woReceipts = new Map<string, WorkOrderReceiptView[]>();
+  if (allOrders.length > 0) {
+    const receiptDocsByWo = await listDocumentsForWorkOrdersById(
+      supabase,
+      org.id,
+      allOrders.map((o) => o.id),
+    );
+    const receiptDocs = Array.from(receiptDocsByWo.values())
+      .flat()
+      .filter((doc) => doc.doc_type === "receipt");
+    if (receiptDocs.length > 0) {
+      const signed = await createDocumentDownloadUrls(
+        supabase,
+        receiptDocs.map((d) => d.storage_path),
+      );
+      const urlByPath = new Map<string, string | null>();
+      if (signed.ok) {
+        for (const u of signed.urls) urlByPath.set(u.path, u.signedUrl);
+      }
+      for (const d of receiptDocs) {
+        if (!d.work_order_id) continue;
+        const list = woReceipts.get(d.work_order_id) ?? [];
+        list.push({
+          id: d.id,
+          title: d.title,
+          size_bytes: d.size_bytes,
+          created_at: d.created_at,
+          signedUrl: urlByPath.get(d.storage_path) ?? null,
+        });
+        woReceipts.set(d.work_order_id, list);
       }
     }
   }
@@ -1496,6 +1548,83 @@ export default async function MaintenancePage({
                               pendingLabel="Adding…"
                             >
                               Add photo for the trade
+                            </SubmitButton>
+                          </form>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Receipt vault links: private documents filed to this work order + property. */}
+                    {(() => {
+                      const receipts = woReceipts.get(o.id) ?? [];
+                      return (
+                        <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50/70 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              Receipts
+                            </span>
+                            {o.property_id && (
+                              <Link
+                                href={`/dashboard/properties/${o.property_id}#documents`}
+                                className="text-xs font-medium text-brand hover:underline"
+                              >
+                                Property vault →
+                              </Link>
+                            )}
+                          </div>
+                          {receipts.length > 0 ? (
+                            <ul className="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+                              {receipts.map((r) => (
+                                <li
+                                  key={r.id}
+                                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="font-medium text-gray-800">{r.title}</span>
+                                    <span className="ml-2 text-gray-400">
+                                      {formatBytes(r.size_bytes)} · {fmtDate(r.created_at)}
+                                    </span>
+                                  </span>
+                                  {r.signedUrl ? (
+                                    <a
+                                      href={r.signedUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="rounded-md border border-gray-300 bg-white px-2 py-1 font-medium text-gray-700 hover:bg-gray-50"
+                                    >
+                                      Download
+                                    </a>
+                                  ) : (
+                                    <span className="text-gray-400">Unavailable</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-2 text-xs text-gray-500">No receipt filed yet.</p>
+                          )}
+                          <form
+                            action={uploadWorkOrderReceipt}
+                            className="mt-2 flex flex-wrap items-center gap-2"
+                          >
+                            <input type="hidden" name="work_order_id" value={o.id} />
+                            <input
+                              type="file"
+                              name="receipt"
+                              accept="application/pdf,image/jpeg,image/png,image/webp"
+                              required
+                              className="block max-w-[15rem] text-xs text-gray-600 file:mr-2 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-2 file:py-1 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-50"
+                            />
+                            <input
+                              name="receipt_title"
+                              placeholder="Title (optional)"
+                              className="min-w-[9rem] flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs"
+                            />
+                            <SubmitButton
+                              className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                              pendingLabel="Attaching…"
+                            >
+                              Attach receipt
                             </SubmitButton>
                           </form>
                         </div>
