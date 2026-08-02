@@ -11,6 +11,8 @@ import {
   buildLaunchChecklist,
   isReplyToConfigured,
 } from "@/lib/onboarding";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import { computeOnboardingState } from "@/lib/onboarding-wizard";
 import { isSubscriptionActive, pilotStatus } from "@/lib/billing";
 import {
   SectionHeading,
@@ -22,6 +24,7 @@ import {
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { LaunchChecklist } from "./launch-checklist";
+import { GettingStartedCard } from "./getting-started-card";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { RentIncreaseRow } from "@/components/rent-increase-card";
@@ -73,6 +76,9 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const supabase = createClient();
   const org = await getCurrentOrg();
   if (!org) return null;
+  const onboardingWizardEnabled = envFlagEnabled(
+    process.env.ONBOARDING_WIZARD_ENABLED,
+  );
   const timeZone = org.booking_timezone ?? "America/Toronto";
   const {
     data: { user },
@@ -139,6 +145,19 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       myAgentId,
     );
   }
+  const onboardingTenancyCountQuery = onboardingWizardEnabled
+    ? supabase
+        .from("tenancies")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id)
+    : Promise.resolve({ count: 0 });
+  const onboardingRowQuery = onboardingWizardEnabled
+    ? supabase
+        .from("organization_onboarding")
+        .select("dismissed_at, rail_step_done_at")
+        .eq("organization_id", org.id)
+        .maybeSingle()
+    : Promise.resolve({ data: null });
 
   // RLS admits every org the caller belongs to; selected-org filtering keeps the
   // dashboard anchored to the active client/org.
@@ -153,6 +172,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     { count: pendingMessageCount },
     { count: awaitingConfirmationCount },
     { count: listingOnlineCount },
+    { count: onboardingTenancyCount },
+    { data: onboardingRow },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -224,6 +245,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .select("id", { count: "exact", head: true })
       .eq("organization_id", org.id)
       .eq("status", "live"),
+    onboardingTenancyCountQuery,
+    onboardingRowQuery,
   ]);
 
   // Open + urgent work-order counts for the Overview tile.
@@ -353,7 +376,23 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // today rather than a setup checklist (Codex QA #1).
   const setupStarted = checklist.completedCount > 0 && !checklist.allComplete;
   const showFullChecklistOnTop =
-    !checklist.allComplete && checklist.completedCount === 0;
+    !onboardingWizardEnabled &&
+    !checklist.allComplete &&
+    checklist.completedCount === 0;
+  const showCompactChecklist =
+    !onboardingWizardEnabled && setupStarted;
+  const onboardingWizardState = onboardingWizardEnabled
+    ? computeOnboardingState({
+        hasProperty: (propertyCount ?? 0) > 0,
+        hasTenancy: (onboardingTenancyCount ?? 0) > 0,
+        railStepDoneAt:
+          (onboardingRow as { rail_step_done_at: string | null } | null)
+            ?.rail_step_done_at ?? null,
+        dismissedAt:
+          (onboardingRow as { dismissed_at: string | null } | null)
+            ?.dismissed_at ?? null,
+      })
+    : null;
 
   return (
     <div>
@@ -368,9 +407,13 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         subtitle="What needs your attention now, across rentals, renters, viewings, repairs, and money."
       />
 
+      {onboardingWizardState && (
+        <GettingStartedCard state={onboardingWizardState} />
+      )}
+
       <TodayLane items={todayItems} firstRun={showFullChecklistOnTop} />
 
-      {setupStarted && (
+      {showCompactChecklist && (
         <LaunchChecklist checklist={checklist} variant="compact" />
       )}
 
