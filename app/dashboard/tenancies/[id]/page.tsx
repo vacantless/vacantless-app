@@ -156,9 +156,15 @@ import {
 import { followupStatusFor } from "@/lib/lease-violations";
 import {
   TenancyInspectionSection,
+  type ChecklistItemRow,
   type InspectionView,
 } from "./inspection-section";
+import {
+  TenancyUtilitySection,
+  type UtilityTaskView,
+} from "./utility-tasks-section";
 import { dueStatusFor } from "@/lib/property-inspections";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { availableReceiptYears, defaultReceiptYear } from "@/lib/rent-receipt";
 import {
   shareLinkStatus,
@@ -402,6 +408,8 @@ export default async function TenancyDetailPage({
     insurance?: string;
     violation?: string;
     inspection?: string;
+    checklist?: string;
+    utility?: string;
     n4?: string;
   };
 }) {
@@ -422,6 +430,7 @@ export default async function TenancyDetailPage({
   const primary = tenants.find((x) => x.is_primary) ?? tenants[0] ?? null;
   const org = await getCurrentOrg();
   if (!org) return null;
+  const checklistEnabled = envFlagEnabled(process.env.MOVE_IN_CHECKLIST_ENABLED);
 
   // The selected org's Rotessa connection state. We surface whether rent
   // collection is connected so the Rent-collection card below can show the
@@ -1181,12 +1190,54 @@ export default async function TenancyDetailPage({
       : searchParams.inspection === "notfound"
         ? "That inspection could not be found."
         : null;
+  const checklistFlash =
+    checklistEnabled && searchParams.checklist === "added"
+      ? "Checklist item added."
+      : checklistEnabled && searchParams.checklist === "updated"
+        ? "Checklist item updated."
+        : checklistEnabled && searchParams.checklist === "removed"
+          ? "Checklist item removed."
+          : checklistEnabled && searchParams.checklist === "seeded"
+            ? "Default checklist added."
+            : checklistEnabled && searchParams.checklist === "exists"
+              ? "This inspection already has checklist items."
+              : null;
+  const checklistError =
+    checklistEnabled && searchParams.checklist === "forbidden"
+      ? "You don't have permission to manage this inspection checklist."
+      : checklistEnabled && searchParams.checklist === "notfound"
+        ? "That inspection or checklist item could not be found."
+        : checklistEnabled && searchParams.checklist === "invalid"
+          ? "Add an item name before saving a checklist row."
+          : null;
+  const utilityFlash =
+    checklistEnabled && searchParams.utility === "added"
+      ? "Utility task added."
+      : checklistEnabled && searchParams.utility === "updated"
+        ? "Utility task updated."
+        : checklistEnabled && searchParams.utility === "removed"
+          ? "Utility task removed."
+          : checklistEnabled && searchParams.utility === "seeded"
+            ? "Standard utility tasks added."
+            : checklistEnabled && searchParams.utility === "exists"
+              ? "This tenancy already has utility tasks."
+              : null;
+  const utilityError =
+    checklistEnabled && searchParams.utility === "forbidden"
+      ? "You don't have permission to manage utility tasks."
+      : checklistEnabled && searchParams.utility === "notfound"
+        ? "That utility task could not be found."
+        : checklistEnabled && searchParams.utility === "invalid"
+          ? "Add a task label before saving a utility task."
+          : null;
 
   const flash =
     docsFlash ||
     insuranceFlash ||
     violationFlash ||
     inspectionFlash ||
+    checklistFlash ||
+    utilityFlash ||
     increaseFlash ||
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created &&
@@ -1225,6 +1276,8 @@ export default async function TenancyDetailPage({
     insuranceError ||
     violationError ||
     inspectionError ||
+    checklistError ||
+    utilityError ||
     msgError;
 
   // Section status lines (S283) — shown on each collapsed header so the
@@ -1388,6 +1441,69 @@ export default async function TenancyDetailPage({
         : scheduledInspections > 0
           ? `${scheduledInspections} scheduled`
           : "All done";
+  let checklistByInspection: Record<string, ChecklistItemRow[]> = {};
+  let utilityViews: UtilityTaskView[] = [];
+
+  if (checklistEnabled) {
+    const inspectionIds = inspectionViews.map((inspection) => inspection.id);
+    if (inspectionIds.length > 0) {
+      const { data: checklistRows } = await supabase
+        .from("inspection_checklist_items")
+        .select("id, inspection_id, area, item, condition, note, sort_order")
+        .eq("organization_id", org.id)
+        .in("inspection_id", inspectionIds)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      checklistByInspection = ((checklistRows ?? []) as any[]).reduce(
+        (acc: Record<string, ChecklistItemRow[]>, row) => {
+          const inspectionId = String(row.inspection_id ?? "");
+          if (!inspectionId) return acc;
+          acc[inspectionId] ??= [];
+          acc[inspectionId].push({
+            id: row.id,
+            inspection_id: inspectionId,
+            area: row.area ?? null,
+            item: row.item ?? "",
+            condition: row.condition ?? null,
+            note: row.note ?? null,
+            sort_order: row.sort_order ?? null,
+          });
+          return acc;
+        },
+        {},
+      );
+    }
+
+    const { data: utilityRows } = await supabase
+      .from("tenancy_utility_tasks")
+      .select(
+        "id, label, responsible_party, target_date, status, confirmation_note, sort_order",
+      )
+      .eq("organization_id", org.id)
+      .eq("tenancy_id", t.id)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    utilityViews = ((utilityRows ?? []) as any[]).map((row) => ({
+      id: row.id,
+      label: row.label ?? "",
+      responsible_party: row.responsible_party ?? null,
+      target_date: row.target_date ?? null,
+      status: row.status ?? null,
+      confirmation_note: row.confirmation_note ?? null,
+      sort_order: row.sort_order ?? null,
+    }));
+  }
+
+  const openUtilityTasks = utilityViews.filter((task) => {
+    const status = (task.status ?? "todo").trim();
+    return status !== "done" && status !== "na";
+  }).length;
+  const utilityStatusLabel =
+    utilityViews.length === 0
+      ? "None tracked"
+      : openUtilityTasks > 0
+        ? `${openUtilityTasks} open`
+        : "All done";
 
   const RENT_INCREASE_STATUS_LABEL: Record<string, string> = {
     scheduled: "Scheduled",
@@ -1667,8 +1783,27 @@ export default async function TenancyDetailPage({
         title="Inspections"
         status={inspectionStatusLabel}
       >
-        <TenancyInspectionSection tenancyId={t.id} inspections={inspectionViews} />
+        {checklistEnabled ? (
+          <TenancyInspectionSection
+            tenancyId={t.id}
+            inspections={inspectionViews}
+            checklistEnabled
+            checklistByInspection={checklistByInspection}
+          />
+        ) : (
+          <TenancyInspectionSection tenancyId={t.id} inspections={inspectionViews} />
+        )}
       </CollapsibleSection>
+
+      {checklistEnabled ? (
+        <CollapsibleSection
+          id="utilities"
+          title="Utilities"
+          status={utilityStatusLabel}
+        >
+          <TenancyUtilitySection tenancyId={t.id} utilities={utilityViews} />
+        </CollapsibleSection>
+      ) : null}
 
       {/* Renewal check-in (autopilot Slice A, S460) --------------------- */}
       {renewalCheckin && (

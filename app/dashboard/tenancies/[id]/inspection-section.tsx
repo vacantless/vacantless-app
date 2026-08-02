@@ -1,5 +1,16 @@
 import { addInspection, updateInspection, removeInspection } from "./inspection-actions";
 import {
+  addChecklistItem,
+  removeChecklistItem,
+  seedDefaultChecklist,
+  updateChecklistItem,
+} from "./checklist-actions";
+import {
+  CHECKLIST_CONDITIONS,
+  checklistConditionLabel,
+  type ChecklistCondition,
+} from "@/lib/inspection-checklist";
+import {
   INSPECTION_TYPES,
   INSPECTION_STATUSES,
   inspectionTypeLabel,
@@ -26,6 +37,16 @@ export type InspectionView = {
   due: InspectionDueStatus; // computed planned-date band
 };
 
+export type ChecklistItemRow = {
+  id: string;
+  inspection_id: string;
+  area: string | null;
+  item: string;
+  condition: string | null;
+  note: string | null;
+  sort_order: number | null;
+};
+
 const LIFECYCLE_META: Record<InspectionLifecycle, { cls: string }> = {
   scheduled: { cls: "bg-amber-100 text-amber-800" },
   completed: { cls: "bg-green-100 text-green-800" },
@@ -36,6 +57,14 @@ const LIFECYCLE_META: Record<InspectionLifecycle, { cls: string }> = {
 const DUE_META: Partial<Record<InspectionDueStatus, { label: string; cls: string }>> = {
   overdue: { label: "Overdue", cls: "bg-red-100 text-red-800" },
   approaching: { label: "Due soon", cls: "bg-amber-100 text-amber-800" },
+};
+
+const CHECKLIST_META: Record<ChecklistCondition, { cls: string }> = {
+  good: { cls: "bg-green-100 text-green-800" },
+  fair: { cls: "bg-amber-100 text-amber-800" },
+  poor: { cls: "bg-orange-100 text-orange-800" },
+  damaged: { cls: "bg-red-100 text-red-800" },
+  na: { cls: "bg-gray-100 text-gray-600" },
 };
 
 const INPUT_CLS =
@@ -123,12 +152,196 @@ function metaLine(d: InspectionView): string {
   return parts.join(" · ");
 }
 
+function ChecklistConditionBadge({ condition }: { condition: string | null }) {
+  const clean = (condition ?? "").trim();
+  const meta = CHECKLIST_CONDITIONS.includes(clean as ChecklistCondition)
+    ? CHECKLIST_META[clean as ChecklistCondition]
+    : { cls: "bg-gray-100 text-gray-600" };
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.cls}`}>
+      {checklistConditionLabel(clean)}
+    </span>
+  );
+}
+
+function ChecklistFields({
+  item,
+  sortOrder,
+}: {
+  item?: ChecklistItemRow;
+  sortOrder: number;
+}) {
+  const currentCondition = item?.condition ?? "";
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <input type="hidden" name="sort_order" value={String(item?.sort_order ?? sortOrder)} />
+      <div>
+        <label className={LABEL_CLS}>Area</label>
+        <input
+          name="area"
+          defaultValue={item?.area ?? ""}
+          placeholder="Kitchen"
+          className={INPUT_CLS}
+        />
+      </div>
+      <div>
+        <label className={LABEL_CLS}>Item</label>
+        <input
+          name="item"
+          required
+          defaultValue={item?.item ?? ""}
+          placeholder="Countertops"
+          className={INPUT_CLS}
+        />
+      </div>
+      <div>
+        <label className={LABEL_CLS}>Condition</label>
+        <select name="condition" defaultValue={currentCondition} className={INPUT_CLS}>
+          <option value="">Not rated</option>
+          {CHECKLIST_CONDITIONS.map((condition) => (
+            <option key={condition} value={condition}>
+              {checklistConditionLabel(condition)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className={LABEL_CLS}>Note</label>
+        <input
+          name="note"
+          defaultValue={item?.note ?? ""}
+          placeholder="Small chip near sink"
+          className={INPUT_CLS}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChecklistBlock({
+  tenancyId,
+  inspectionId,
+  items,
+}: {
+  tenancyId: string;
+  inspectionId: string;
+  items: ChecklistItemRow[];
+}) {
+  return (
+    <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-gray-900">Itemized checklist</p>
+        {items.length === 0 ? (
+          <form action={seedDefaultChecklist}>
+            <input type="hidden" name="tenancy_id" value={tenancyId} />
+            <input type="hidden" name="inspection_id" value={inspectionId} />
+            <button
+              type="submit"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+            >
+              Seed default checklist
+            </button>
+          </form>
+        ) : null}
+      </div>
+
+      {items.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-500">
+          No itemized rows yet. Keep the freeform condition notes above, or seed the
+          default checklist.
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+          {items.map((item) => (
+            <li key={item.id} className="px-3 py-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.area?.trim() ? (
+                      <span className="text-xs font-medium uppercase text-gray-500">
+                        {item.area.trim()}
+                      </span>
+                    ) : null}
+                    <span className="font-medium text-gray-900">{item.item}</span>
+                    <ChecklistConditionBadge condition={item.condition} />
+                  </div>
+                  {item.note?.trim() ? (
+                    <p className="mt-1 text-sm text-gray-600">{item.note.trim()}</p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-3">
+                  <details className="group">
+                    <summary className="cursor-pointer list-none text-sm font-medium text-brand hover:underline [&::-webkit-details-marker]:hidden">
+                      Edit
+                    </summary>
+                    <form
+                      action={updateChecklistItem}
+                      className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 p-4"
+                    >
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="tenancy_id" value={tenancyId} />
+                      <input type="hidden" name="inspection_id" value={inspectionId} />
+                      <ChecklistFields item={item} sortOrder={items.length} />
+                      <div className="mt-3">
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                        >
+                          Save item
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+                  <form action={removeChecklistItem}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <input type="hidden" name="tenancy_id" value={tenancyId} />
+                    <input type="hidden" name="inspection_id" value={inspectionId} />
+                    <button
+                      type="submit"
+                      className="text-sm font-medium text-gray-400 hover:text-red-600"
+                    >
+                      Remove
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <details className="group mt-3 rounded-lg border border-gray-200 bg-white p-3">
+        <summary className="cursor-pointer list-none text-sm font-semibold text-gray-900 [&::-webkit-details-marker]:hidden">
+          + Add checklist item
+        </summary>
+        <form action={addChecklistItem} className="mt-3">
+          <input type="hidden" name="tenancy_id" value={tenancyId} />
+          <input type="hidden" name="inspection_id" value={inspectionId} />
+          <ChecklistFields sortOrder={items.length} />
+          <div className="mt-3">
+            <button
+              type="submit"
+              className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              Add item
+            </button>
+          </div>
+        </form>
+      </details>
+    </div>
+  );
+}
+
 export function TenancyInspectionSection({
   tenancyId,
   inspections,
+  checklistEnabled = false,
+  checklistByInspection = {},
 }: {
   tenancyId: string;
   inspections: InspectionView[];
+  checklistEnabled?: boolean;
+  checklistByInspection?: Record<string, ChecklistItemRow[]>;
 }) {
   return (
     <div className="space-y-5">
@@ -215,6 +428,13 @@ export function TenancyInspectionSection({
                     </form>
                   </div>
                 </div>
+                {checklistEnabled ? (
+                  <ChecklistBlock
+                    tenancyId={tenancyId}
+                    inspectionId={d.id}
+                    items={checklistByInspection[d.id] ?? []}
+                  />
+                ) : null}
               </li>
             );
           })}
