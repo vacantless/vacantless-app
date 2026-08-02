@@ -71,6 +71,12 @@ import {
   deterministicAutoDescription,
   envFlagEnabled,
 } from "@/lib/auto-listing-copy";
+import {
+  getGeocodeProvider,
+  parseLatLng,
+  type GeocodeResult,
+  type GeocodeSuggestion,
+} from "@/lib/geocode";
 import { draftAutoListingDescriptionWithAi } from "@/lib/auto-listing-copy-ai";
 import type { DraftFacts } from "@/lib/listing-description";
 import {
@@ -617,6 +623,47 @@ export async function prefillAddPropertyV2(
   };
 }
 
+export type GeocodeSuggestResult =
+  | { ok: true; suggestions: GeocodeSuggestion[] }
+  | { ok: false };
+
+function geocodeQueryFromInput(input: FormData | string): string {
+  return typeof input === "string"
+    ? input.trim()
+    : String(input.get("query") ?? input.get("address") ?? "").trim();
+}
+
+export async function geocodeSuggest(
+  input: FormData | string,
+): Promise<GeocodeSuggestResult> {
+  if (!envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)) {
+    return { ok: true, suggestions: [] };
+  }
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const query = geocodeQueryFromInput(input);
+  if (query.length < 3) return { ok: true, suggestions: [] };
+  try {
+    return {
+      ok: true,
+      suggestions: await getGeocodeProvider().autocomplete(query),
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function geocodeResolve(query: string): Promise<GeocodeResult | null> {
+  if (!envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)) return null;
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const address = query.trim();
+  if (address.length < 3) return null;
+  try {
+    return await getGeocodeProvider().geocode(address);
+  } catch {
+    return null;
+  }
+}
+
 export async function draftAddPropertyV2Description(
   formData: FormData,
 ): Promise<AddPropertyV2DescriptionResult> {
@@ -669,6 +716,9 @@ export async function createPropertyV2(formData: FormData) {
   const virtualTourUrl = tourRaw ? normalizeVirtualTourUrl(tourRaw) : null;
   const videoUrl = videoRaw ? normalizeVirtualTourUrl(videoRaw) : null;
   const amenities = normalizeAmenities(formData.getAll("amenities"));
+  const coords =
+    parseLatLng(formData.get("latitude"), formData.get("longitude")) ??
+    (await geocodeResolve(address));
 
   const supabase = createClient();
   const { data: inserted } = await supabase
@@ -717,8 +767,8 @@ export async function createPropertyV2(formData: FormData) {
       virtual_tour_url: virtualTourUrl,
       video_url: videoUrl,
       description: textOrNull(formData.get("description")),
-      latitude: null,
-      longitude: null,
+      latitude: coords?.latitude ?? null,
+      longitude: coords?.longitude ?? null,
     })
     .select("id")
     .single();

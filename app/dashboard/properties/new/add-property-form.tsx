@@ -1,6 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { SubmitButton } from "@/components/submit-button";
 import {
   PRIMARY_ACTION_CLASS,
@@ -41,8 +49,10 @@ import {
 import {
   createPropertyV2,
   draftAddPropertyV2Description,
+  geocodeSuggest,
   prefillAddPropertyV2,
 } from "../actions";
+import type { GeocodeSuggestion } from "@/lib/geocode";
 
 const PDF_WORKER_SRC = "/pdf.worker.min.mjs";
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
@@ -203,11 +213,22 @@ export function AddPropertyV2Form({
   const [descriptionMessage, setDescriptionMessage] = useState<string | null>(
     null,
   );
+  const [addressCoords, setAddressCoords] = useState({
+    latitude: "",
+    longitude: "",
+  });
+  const [addressSuggestions, setAddressSuggestions] = useState<
+    GeocodeSuggestion[]
+  >([]);
+  const [activeAddressIndex, setActiveAddressIndex] = useState(-1);
   const [isImportPending, startImportTransition] = useTransition();
   const [isDescriptionPending, startDescriptionTransition] = useTransition();
+  const [isAddressPending, startAddressTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addressQueryRef = useRef("");
 
   const readiness = useMemo(
     () =>
@@ -229,6 +250,78 @@ export function AddPropertyV2Form({
     setDraft((current) => setValue(current, key, value));
   }
 
+  useEffect(() => {
+    return () => {
+      if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    };
+  }, []);
+
+  function clearAddressSuggestions() {
+    setAddressSuggestions([]);
+    setActiveAddressIndex(-1);
+  }
+
+  function queueAddressSuggestions(value: string) {
+    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    const query = value.trim();
+    addressQueryRef.current = query;
+    if (query.length < 3) {
+      clearAddressSuggestions();
+      return;
+    }
+    addressDebounceRef.current = setTimeout(() => {
+      const requested = query;
+      startAddressTransition(async () => {
+        const result = await geocodeSuggest(requested);
+        if (addressQueryRef.current !== requested) return;
+        if (!result.ok || result.suggestions.length === 0) {
+          clearAddressSuggestions();
+          return;
+        }
+        setAddressSuggestions(result.suggestions.slice(0, 6));
+        setActiveAddressIndex(-1);
+      });
+    }, 250);
+  }
+
+  function updateAddress(value: string) {
+    setAddressCoords({ latitude: "", longitude: "" });
+    update("address", value);
+    queueAddressSuggestions(value);
+  }
+
+  function selectAddressSuggestion(suggestion: GeocodeSuggestion) {
+    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    update("address", suggestion.label);
+    setAddressCoords({
+      latitude: suggestion.latitude == null ? "" : String(suggestion.latitude),
+      longitude: suggestion.longitude == null ? "" : String(suggestion.longitude),
+    });
+    addressQueryRef.current = suggestion.label;
+    clearAddressSuggestions();
+  }
+
+  function handleAddressKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (addressSuggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveAddressIndex((current) =>
+        current + 1 >= addressSuggestions.length ? 0 : current + 1,
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveAddressIndex((current) =>
+        current <= 0 ? addressSuggestions.length - 1 : current - 1,
+      );
+    } else if (e.key === "Enter" && activeAddressIndex >= 0) {
+      e.preventDefault();
+      selectAddressSuggestion(addressSuggestions[activeAddressIndex]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      clearAddressSuggestions();
+    }
+  }
+
   function applyPrefill(formData: FormData) {
     setImportMessage(null);
     startImportTransition(async () => {
@@ -242,6 +335,8 @@ export function AddPropertyV2Form({
         ...result.draft,
         amenities: result.draft.amenities,
       }));
+      setAddressCoords({ latitude: "", longitude: "" });
+      clearAddressSuggestions();
       setMode("fresh");
       setImportMessage(
         `Prefilled ${result.filledFields.length} fields from ${
@@ -480,14 +575,69 @@ export function AddPropertyV2Form({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
             <div className="sm:col-span-6">
               <Field label="Address" htmlFor="address">
-                <input
-                  id="address"
-                  name="address"
-                  required
-                  value={draft.address}
-                  onChange={(e) => update("address", e.target.value)}
-                  className={inputClass()}
-                />
+                <div className="relative">
+                  <input
+                    id="address"
+                    name="address"
+                    required
+                    value={draft.address}
+                    onChange={(e) => updateAddress(e.target.value)}
+                    onKeyDown={handleAddressKeyDown}
+                    onBlur={() => {
+                      setTimeout(clearAddressSuggestions, 120);
+                    }}
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={addressSuggestions.length > 0}
+                    aria-controls="address-suggestions"
+                    aria-activedescendant={
+                      activeAddressIndex >= 0
+                        ? `address-suggestion-${activeAddressIndex}`
+                        : undefined
+                    }
+                    aria-busy={isAddressPending}
+                    className={inputClass()}
+                  />
+                  <input
+                    type="hidden"
+                    name="latitude"
+                    value={addressCoords.latitude}
+                    readOnly
+                  />
+                  <input
+                    type="hidden"
+                    name="longitude"
+                    value={addressCoords.longitude}
+                    readOnly
+                  />
+                  {addressSuggestions.length > 0 && (
+                    <ul
+                      id="address-suggestions"
+                      role="listbox"
+                      className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg"
+                    >
+                      {addressSuggestions.map((suggestion, index) => (
+                        <li
+                          key={`${suggestion.label}-${index}`}
+                          id={`address-suggestion-${index}`}
+                          role="option"
+                          aria-selected={activeAddressIndex === index}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            selectAddressSuggestion(suggestion);
+                          }}
+                          className={
+                            activeAddressIndex === index
+                              ? "cursor-pointer bg-gray-100 px-3 py-2 text-gray-900"
+                              : "cursor-pointer px-3 py-2 text-gray-700 hover:bg-gray-50"
+                          }
+                        >
+                          {suggestion.label}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </Field>
             </div>
             <Field label="Rent ($/mo)" htmlFor="rent">
