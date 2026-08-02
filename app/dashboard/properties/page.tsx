@@ -15,6 +15,7 @@ import { Icons } from "@/components/icons";
 import { rentalRowReadiness } from "@/lib/rental-readiness";
 import { getCurrentOrg } from "@/lib/org";
 import { canUseListingAiImport } from "@/lib/billing";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { addProperty, importPropertyFromMls, importListingFromImages } from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
 import { MlsPdfImport } from "./mls-pdf-import";
@@ -76,6 +77,9 @@ export default async function PropertiesPage({
   // before. The server action re-checks this gate.
   const aiImageImportEnabled =
     !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org.plan);
+  const addPropertyV2Enabled = envFlagEnabled(
+    process.env.ADD_PROPERTY_V2_ENABLED,
+  );
 
   // Per-property inquiry counts for the selected org.
   const leadCounts = new Map<string, number>();
@@ -108,6 +112,17 @@ export default async function PropertiesPage({
         eyebrow="Portfolio"
         title="Rentals"
         subtitle="Your rentals and their marketing status."
+        action={
+          addPropertyV2Enabled ? (
+            <Link
+              href="/dashboard/properties/new"
+              className={PRIMARY_ACTION_CLASS}
+              style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+            >
+              Add rental
+            </Link>
+          ) : undefined
+        }
       />
 
       {searchParams.added && (
@@ -294,11 +309,16 @@ export default async function PropertiesPage({
             icon={<Icons.building />}
             title="No properties yet"
             description="Add your first property to create its public inquiry page and start collecting inquiries - it takes a couple of minutes."
-            cta={{ href: "#add-rental", label: "Add your first property" }}
+            cta={{
+              href: addPropertyV2Enabled ? "/dashboard/properties/new" : "#add-rental",
+              label: "Add your first property",
+            }}
           />
         </div>
       )}
 
+      {!addPropertyV2Enabled && (
+      <>
       {/* Scroll target for the empty-state CTA. Keep the id stable for existing
           links while the product language says property. */}
       <div id="add-rental" className="scroll-mt-4" />
@@ -465,6 +485,8 @@ export default async function PropertiesPage({
           )}
         </div>
       </details>
+      </>
+      )}
     </div>
   );
 }

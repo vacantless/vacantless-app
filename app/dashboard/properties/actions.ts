@@ -18,12 +18,20 @@ import {
   normalizeUnitType,
   normalizeForRentBy,
   normalizeStructureType,
+  normalizeAmenities,
+  isParkingType,
+  isHeatingType,
 } from "@/lib/property-features";
 import { parseMlsListing, emptyParsedListing, type ParsedListing } from "@/lib/mls-import";
-import { applyAiListing } from "@/lib/listing-extract";
+import { applyAiListing, type ListingDraft } from "@/lib/listing-extract";
 import { parseListing, selectListingImages, type ListingImage } from "@/lib/listing-extract-vision";
 import type { VisionImageType } from "@/lib/lease-extract-vision";
 import { normalizeVirtualTourUrl } from "@/lib/virtual-tour";
+import {
+  addPropertyV2DraftFromListing,
+  draftFactsFromAddPropertyV2,
+  type AddPropertyV2Draft,
+} from "@/lib/add-property-v2";
 import {
   isPortalKey,
   normalizePortal,
@@ -181,6 +189,91 @@ function parseDateOrNull(raw: string): string | null {
   const v = raw.trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
+
+function parseNonNegativeInt(raw: string): number | null {
+  const n = parseIntOrNull(raw);
+  return n != null && n >= 0 ? n : null;
+}
+
+function textOrNull(raw: FormDataEntryValue | null): string | null {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  return v || null;
+}
+
+function normalizeParkingType(raw: FormDataEntryValue | null): string | null {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  return isParkingType(v) ? v : null;
+}
+
+function normalizeHeatingType(raw: FormDataEntryValue | null): string | null {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  return isHeatingType(v) ? v : null;
+}
+
+function addPropertyV2DraftFromFormData(formData: FormData): AddPropertyV2Draft {
+  return {
+    address: String(formData.get("address") ?? ""),
+    rent: String(formData.get("rent") ?? ""),
+    beds: String(formData.get("beds") ?? ""),
+    baths: String(formData.get("baths") ?? ""),
+    unit_type: String(formData.get("unit_type") ?? ""),
+    structure_type: String(formData.get("structure_type") ?? ""),
+    available_date: String(formData.get("available_date") ?? ""),
+    address_display_mode: String(formData.get("address_display_mode") ?? "full"),
+    sqft: String(formData.get("sqft") ?? ""),
+    floor: String(formData.get("floor") ?? ""),
+    furnished: parseCheckbox(formData, "furnished"),
+    lease_term: String(formData.get("lease_term") ?? ""),
+    amenities: formData
+      .getAll("amenities")
+      .map((v) => String(v))
+      .filter(Boolean),
+    parking: String(formData.get("parking") ?? ""),
+    parking_type: String(formData.get("parking_type") ?? ""),
+    parking_count: String(formData.get("parking_count") ?? ""),
+    heating_type: String(formData.get("heating_type") ?? ""),
+    laundry: String(formData.get("laundry") ?? ""),
+    air_conditioning: parseCheckbox(formData, "air_conditioning"),
+    ac_type: String(formData.get("ac_type") ?? ""),
+    balcony: parseCheckbox(formData, "balcony"),
+    heat_included: String(formData.get("heat_included") ?? ""),
+    hydro_included: String(formData.get("hydro_included") ?? ""),
+    water_included: String(formData.get("water_included") ?? ""),
+    internet_included: String(formData.get("internet_included") ?? ""),
+    cable_included: String(formData.get("cable_included") ?? ""),
+    pets_cats: String(formData.get("pets_cats") ?? ""),
+    pets_dogs: String(formData.get("pets_dogs") ?? ""),
+    pets_dog_size: String(formData.get("pets_dog_size") ?? ""),
+    pets_notes: String(formData.get("pets_notes") ?? ""),
+    smoking: String(formData.get("smoking") ?? ""),
+    security_deposit: String(formData.get("security_deposit") ?? ""),
+    income_requirement: String(formData.get("income_requirement") ?? ""),
+    virtual_tour_url: String(formData.get("virtual_tour_url") ?? ""),
+    video_url: String(formData.get("video_url") ?? ""),
+    description: String(formData.get("description") ?? ""),
+  };
+}
+
+function mapImageFailure(reason: "unconfigured" | "failed" | "empty" | "locked" | "limit") {
+  if (reason === "unconfigured") return "Image prefill is not configured yet.";
+  if (reason === "empty") return "Couldn't read listing details from those images.";
+  if (reason === "locked") return "Image prefill is temporarily locked.";
+  if (reason === "limit") return "Those images are too large or too many to read.";
+  return "Reading the images didn't work just now.";
+}
+
+export type AddPropertyV2PrefillResult =
+  | {
+      ok: true;
+      draft: AddPropertyV2Draft;
+      filledFields: string[];
+      source: "text" | "images";
+    }
+  | { ok: false; message: string };
+
+export type AddPropertyV2DescriptionResult =
+  | { ok: true; description: string; source: "ai" | "deterministic" }
+  | { ok: false; message: string };
 
 export async function addProperty(formData: FormData) {
   // Property management is admin/operator only (locked seat model): a showing
@@ -433,6 +526,225 @@ export async function importListingFromImages(formData: FormData) {
   // insert, and review redirect. `added.length` == the fields the AI filled.
   const { merged, added } = applyAiListing(emptyParsedListing(), result.draft);
   await finishListingImport(org, merged, added.length);
+}
+
+export async function prefillAddPropertyV2(
+  formData: FormData,
+): Promise<AddPropertyV2PrefillResult> {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const imageFiles = formData
+    .getAll("listing_images")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  if (imageFiles.length > 0) {
+    if (!process.env.LISTING_AI_IMPORT_ENABLED || !canUseListingAiImport(org.plan)) {
+      return {
+        ok: false,
+        message: "Image prefill is not available for this company yet.",
+      };
+    }
+
+    const { keep } = selectListingImages(
+      imageFiles.map((f) => ({ mimeType: f.type, sizeBytes: f.size })),
+    );
+    if (keep.length === 0) {
+      return {
+        ok: false,
+        message: "Choose JPG, PNG, WebP, or GIF listing images up to 8 MB each.",
+      };
+    }
+
+    const images: ListingImage[] = [];
+    for (const i of keep) {
+      const f = imageFiles[i];
+      const bytes = Buffer.from(await f.arrayBuffer());
+      images.push({ base64: bytes.toString("base64"), mimeType: f.type as VisionImageType });
+    }
+    const result = await parseListing({ kind: "images", images });
+    if (!result.ok) {
+      return { ok: false, message: mapImageFailure(result.reason) };
+    }
+
+    const { merged } = applyAiListing(emptyParsedListing(), result.draft);
+    const prefill = addPropertyV2DraftFromListing(merged, result.draft);
+    if (prefill.filledFields.length === 0) {
+      return {
+        ok: false,
+        message: "Couldn't read listing details from those images.",
+      };
+    }
+    return {
+      ok: true,
+      ...prefill,
+      source: "images",
+    };
+  }
+
+  const pasted = String(
+    formData.get("listing_text") ?? formData.get("mls_text") ?? "",
+  );
+  if (!pasted.trim()) {
+    return {
+      ok: false,
+      message: "Paste a listing or choose listing images first.",
+    };
+  }
+
+  let parsed = parseMlsListing(pasted);
+  let aiDraft: ListingDraft | null = null;
+  if (process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org.plan)) {
+    const result = await parseListing({ kind: "text", text: pasted });
+    if (result.ok) {
+      aiDraft = result.draft;
+      parsed = applyAiListing(parsed, result.draft).merged;
+    }
+  }
+
+  const prefill = addPropertyV2DraftFromListing(parsed, aiDraft);
+  if (prefill.filledFields.length === 0) {
+    return {
+      ok: false,
+      message:
+        "Couldn't read any listing details from that text. Paste the full listing or start fresh.",
+    };
+  }
+  return {
+    ok: true,
+    ...prefill,
+    source: "text",
+  };
+}
+
+export async function draftAddPropertyV2Description(
+  formData: FormData,
+): Promise<AddPropertyV2DescriptionResult> {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const draft = addPropertyV2DraftFromFormData(formData);
+  const facts = draftFactsFromAddPropertyV2(draft);
+  const fallback = deterministicAutoDescription(facts);
+  const aiDescription = await draftAutoListingDescriptionWithAi(facts, fallback);
+  const decision = chooseAutoListingCopy({
+    enabled: true,
+    currentDescription: null,
+    facts,
+    aiDescription,
+  });
+  if (!decision.description) {
+    return {
+      ok: false,
+      message: "Add a few basics first - rent, beds, baths, and some feature details.",
+    };
+  }
+  return {
+    ok: true,
+    description: decision.description,
+    source: decision.source === "ai" ? "ai" : "deterministic",
+  };
+}
+
+export async function createPropertyV2(formData: FormData) {
+  if (!envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)) {
+    redirect("/dashboard/properties");
+  }
+
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const address = String(formData.get("address") ?? "").trim();
+  if (!address) redirect("/dashboard/properties/new?error=address");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const petsCats = parseTriStateBool(formData, "pets_cats");
+  const petsDogs = parseTriStateBool(formData, "pets_dogs");
+  const petFriendly =
+    petsCats === true || petsDogs === true
+      ? true
+      : petsCats === false && petsDogs === false
+        ? false
+        : null;
+  const tourRaw = String(formData.get("virtual_tour_url") ?? "").trim();
+  const videoRaw = String(formData.get("video_url") ?? "").trim();
+  const virtualTourUrl = tourRaw ? normalizeVirtualTourUrl(tourRaw) : null;
+  const videoUrl = videoRaw ? normalizeVirtualTourUrl(videoRaw) : null;
+  const amenities = normalizeAmenities(formData.getAll("amenities"));
+
+  const supabase = createClient();
+  const { data: inserted } = await supabase
+    .from("properties")
+    .insert({
+      organization_id: org.id,
+      status: "draft",
+      address,
+      rent_cents: parseRentCents(String(formData.get("rent") ?? "")),
+      beds: parseIntOrNull(String(formData.get("beds") ?? "")),
+      baths: parseFloatOrNull(String(formData.get("baths") ?? "")),
+      unit_type: normalizeUnitType(formData.get("unit_type")),
+      structure_type: normalizeStructureType(formData.get("structure_type")),
+      address_display_mode: normalizeAddressDisplayMode(
+        String(formData.get("address_display_mode") ?? ""),
+      ),
+      available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),
+      sqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
+      floor: textOrNull(formData.get("floor")),
+      furnished: parseCheckbox(formData, "furnished"),
+      lease_term: normalizeLeaseTerm(formData.get("lease_term")),
+      amenities: amenities.length > 0 ? amenities : null,
+      parking: textOrNull(formData.get("parking")),
+      parking_type: normalizeParkingType(formData.get("parking_type")),
+      parking_count: parseNonNegativeInt(String(formData.get("parking_count") ?? "")),
+      heating_type: normalizeHeatingType(formData.get("heating_type")),
+      laundry: normalizeLaundry(formData.get("laundry")),
+      air_conditioning: parseCheckbox(formData, "air_conditioning"),
+      ac_type: normalizeAcType(formData.get("ac_type")),
+      balcony: parseCheckbox(formData, "balcony"),
+      heat_included: parseTriStateBool(formData, "heat_included"),
+      hydro_included: parseTriStateBool(formData, "hydro_included"),
+      water_included: parseTriStateBool(formData, "water_included"),
+      internet_included: parseTriStateBool(formData, "internet_included"),
+      cable_included: parseTriStateBool(formData, "cable_included"),
+      pet_friendly: petFriendly,
+      pets_cats: petsCats,
+      pets_dogs: petsDogs,
+      pets_dog_size: normalizeDogSize(formData.get("pets_dog_size")),
+      pets_notes: textOrNull(formData.get("pets_notes")),
+      smoking: normalizeSmoking(formData.get("smoking")),
+      security_deposit_cents: parseRentCents(
+        String(formData.get("security_deposit") ?? ""),
+      ),
+      income_requirement: textOrNull(formData.get("income_requirement")),
+      virtual_tour_url: virtualTourUrl,
+      video_url: videoUrl,
+      description: textOrNull(formData.get("description")),
+      latitude: null,
+      longitude: null,
+    })
+    .select("id")
+    .single();
+
+  revalidatePath("/dashboard/properties");
+  revalidatePath("/dashboard");
+
+  const newId = (inserted as { id: string } | null)?.id ?? null;
+  if (!newId) redirect("/dashboard/properties?import=failed");
+
+  const files = photoFilesFromForm(formData);
+  if (files.length > 0) {
+    const result = await uploadPhotosForProperty(supabase, org, newId, files, []);
+    revalidatePath(`/dashboard/properties/${newId}`);
+    if (result.ok) {
+      redirect(
+        `/dashboard/properties/${newId}?created=1&photos=${result.uploaded}#rental-details`,
+      );
+    }
+    redirect(
+      `/dashboard/properties/${newId}?created=1&photoerr=${result.reason}#property-photos`,
+    );
+  }
+
+  revalidatePath(`/dashboard/properties/${newId}`);
+  redirect(`/dashboard/properties/${newId}?created=1#rental-details`);
 }
 
 export async function updateProperty(formData: FormData) {
