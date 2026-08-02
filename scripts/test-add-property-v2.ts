@@ -28,6 +28,7 @@ const parsed = {
   rentCents: 245000,
   beds: 3,
   baths: 1.5,
+  propertyType: "Condo Apartment",
   sqft: 1200,
   parking: "1 garage space",
   description:
@@ -69,6 +70,8 @@ const prefill = addPropertyV2DraftFromListing(parsed, ai);
 ok("prefill carries address", prefill.draft.address === "12 Donwoods Dr, Toronto ON");
 ok("prefill converts rent cents to dollars", prefill.draft.rent === "2450");
 ok("prefill carries fractional baths", prefill.draft.baths === "1.5");
+ok("prefill maps property type to unit type", prefill.draft.unit_type === "condo");
+ok("prefill lists property type", prefill.filledFields.includes("Property type"));
 ok("prefill carries existing tour URL", prefill.draft.virtual_tour_url?.includes("youtube"));
 ok("prefill carries AI internet true", prefill.draft.internet_included === "true");
 ok("prefill carries AI cable false", prefill.draft.cable_included === "false");

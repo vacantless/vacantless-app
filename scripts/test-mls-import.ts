@@ -55,6 +55,7 @@ ok("TRREB address", t.address === "833 Pillette Rd, Unit 20, Windsor, ON");
 ok("TRREB rent = $1,950 -> 195000 cents", t.rentCents === 195000);
 ok("TRREB beds 2+1 -> 3", t.beds === 3);
 ok("TRREB baths -> 1", t.baths === 1);
+ok("TRREB property type captured", t.propertyType === "Apartment");
 ok("TRREB sqft -> 950", t.sqft === 950);
 ok("TRREB parking text", t.parking === "1 surface spot");
 ok("TRREB available date -> 2026-07-01", t.availableDate === "2026-07-01");
@@ -124,6 +125,7 @@ ok("stacked baths 'Bathrooms / 2' -> 2", st.baths === 2);
 ok("stacked sqft 'Square Footage / 1,100' -> 1100", st.sqft === 1100);
 ok("stacked parking 'Parking Type / Underground'", st.parking === "Underground");
 ok("stacked available 'Available / August 1, 2026' -> 2026-08-01", st.availableDate === "2026-08-01");
+ok("stacked property type captured", st.propertyType === "Single Family");
 ok("stacked inclusions 'Inclusions / Heat, Water'", st.heatIncluded === true && st.waterIncluded === true);
 ok("stacked hydro NOT included", st.hydroIncluded === false);
 
@@ -142,6 +144,10 @@ ok(
 // inline form still works after enabling the lookahead (no regression).
 ok("inline 'Bedrooms: 2' still works", parseMlsListing("Bedrooms: 2").beds === 2);
 ok("inline 'Square Footage: 1200' still works", parseMlsListing("Square Footage: 1200").sqft === 1200);
+ok(
+  "inline 'Property Type: Condo Apartment' captured",
+  parseMlsListing("Property Type: Condo Apartment").propertyType === "Condo Apartment",
+);
 
 // --- negation / false-positive guards ---------------------------------------
 ok("'A/C: None' -> AC false", parseMlsListing("Air Conditioning: None").airConditioning === false);

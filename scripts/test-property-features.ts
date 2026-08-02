@@ -34,6 +34,7 @@ import {
   UNIT_TYPE_OPTIONS,
   isUnitType,
   normalizeUnitType,
+  mapUnitTypeFromRaw,
   unitTypeLabel,
   FOR_RENT_BY_OPTIONS,
   isForRentBy,
@@ -426,6 +427,22 @@ ok("normalizeUnitType: trims + accepts", normalizeUnitType(" condo ") === "condo
 ok("normalizeUnitType: blank -> null", normalizeUnitType("") === null);
 ok("normalizeUnitType: junk -> null", normalizeUnitType("mansion") === null);
 ok("normalizeUnitType: non-string -> null", normalizeUnitType(null) === null);
+ok("mapUnitType: condo apartment -> condo", mapUnitTypeFromRaw("Condo Apartment") === "condo");
+ok("mapUnitType: condo apt -> condo", mapUnitTypeFromRaw("Condo Apt") === "condo");
+ok("mapUnitType: comm element condo -> condo", mapUnitTypeFromRaw("Comm Element Condo") === "condo");
+ok("mapUnitType: bare apartment -> apartment", mapUnitTypeFromRaw("Apartment") === "apartment");
+ok("mapUnitType: apartment with condo context -> condo", mapUnitTypeFromRaw("Apartment Condo") === "condo");
+ok("mapUnitType: condo townhouse -> townhouse", mapUnitTypeFromRaw("Condo Townhouse") === "townhouse");
+ok("mapUnitType: att/row/townhouse -> townhouse", mapUnitTypeFromRaw("Att/Row/Townhouse") === "townhouse");
+ok("mapUnitType: freehold townhouse -> townhouse", mapUnitTypeFromRaw("Freehold Townhouse") === "townhouse");
+ok("mapUnitType: row -> townhouse", mapUnitTypeFromRaw("Row") === "townhouse");
+ok("mapUnitType: detached -> house", mapUnitTypeFromRaw("Detached") === "house");
+ok("mapUnitType: semi-detached -> house", mapUnitTypeFromRaw("Semi-Detached") === "house");
+ok("mapUnitType: duplex -> duplex-triplex", mapUnitTypeFromRaw("Duplex") === "duplex-triplex");
+ok("mapUnitType: multiplex -> duplex-triplex", mapUnitTypeFromRaw("Multiplex") === "duplex-triplex");
+ok("mapUnitType: basement -> basement-apartment", mapUnitTypeFromRaw("Basement Apartment") === "basement-apartment");
+ok("mapUnitType: lower level -> basement-apartment", mapUnitTypeFromRaw("Lower Level") === "basement-apartment");
+ok("mapUnitType: unknown -> null", mapUnitTypeFromRaw("Other") === null);
 ok("unitTypeLabel: apartment", unitTypeLabel("apartment") === "Apartment");
 ok(
   "unitTypeLabel: basement-apartment",

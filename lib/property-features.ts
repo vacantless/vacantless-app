@@ -201,6 +201,27 @@ export function normalizeUnitType(raw: unknown): UnitType | null {
   return isUnitType(v) ? v : null;
 }
 
+export function mapUnitTypeFromRaw(raw: string | null | undefined): UnitType | null {
+  if (typeof raw !== "string") return null;
+  const value = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!value) return null;
+
+  if (/\b(basement|lower level)\b/.test(value)) return "basement-apartment";
+  if (/\b(duplex|triplex|fourplex|multiplex)\b/.test(value)) {
+    return "duplex-triplex";
+  }
+  if (/\b(townhouse|townhome|row)\b/.test(value)) return "townhouse";
+  if (/\b(semi detached|detached)\b/.test(value)) return "house";
+  if (/\b(condo|condominium|comm element condo)\b/.test(value)) return "condo";
+  if (/\b(apartment|apt)\b/.test(value)) return "apartment";
+  return null;
+}
+
 const UNIT_TYPE_LABELS: Record<UnitType, string> = {
   apartment: "Apartment",
   condo: "Condo",

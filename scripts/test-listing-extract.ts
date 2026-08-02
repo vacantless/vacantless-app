@@ -77,6 +77,8 @@ ok("baths negative -> null", normalizeListingDraft({ baths: -1 })?.baths === nul
 ok("sqft integer", normalizeListingDraft({ sqft: "850" })?.sqft === 850);
 ok("beds alias bedrooms", normalizeListingDraft({ bedrooms: 2 })?.beds === 2);
 ok("sqft alias square_feet", normalizeListingDraft({ square_feet: 700 })?.sqft === 700);
+ok("property type kept", normalizeListingDraft({ propertyType: "Condo Apartment" })?.propertyType === "Condo Apartment");
+ok("property type alias kept", normalizeListingDraft({ property_type: "Townhouse" })?.propertyType === "Townhouse");
 
 // --- date -------------------------------------------------------------------
 // A fixed reference clock keeps the past-date guard deterministic (and the whole
@@ -168,6 +170,7 @@ ok("draft with only internet true is non-empty", isEmptyListingDraft({ ...emptyL
 ok("draft with only amenities is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), amenities: ["gym"] }) === false);
 ok("draft with only parking type none is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), parkingType: "none" }) === false);
 ok("draft with only video is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), videoUrl: "https://vimeo.com/123456" }) === false);
+ok("draft with only property type is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), propertyType: "Condo Apartment" }) === false);
 
 // --- applyAiListing: the merge ----------------------------------------------
 function baseWith(overrides: Partial<ParsedListing>): ParsedListing {
@@ -180,6 +183,7 @@ const fullAi: ListingDraft = {
   beds: 2,
   baths: 1,
   sqft: 800,
+  propertyType: "Condo Apartment",
   parking: "1 spot",
   description: "A lovely unit",
   availableDate: "2026-10-01",
@@ -198,8 +202,10 @@ const fullAi: ListingDraft = {
   ok("merge fills address on empty base", merged.address === "500 AI Ave");
   ok("merge fills rent", merged.rentCents === 200000);
   ok("merge fills booleans true", merged.airConditioning === true && merged.balcony === true);
+  ok("merge carries property type metadata", merged.propertyType === "Condo Apartment");
   ok("merge fills laundry", merged.laundry === "in_suite");
   ok("merge records added labels", added.includes("Address") && added.includes("Rent") && added.includes("Air conditioning"));
+  ok("property type metadata does not count as an added field", !added.includes("Property type"));
   ok("merge foundFields includes AI-added", merged.foundFields.includes("Laundry"));
 }
 
@@ -208,11 +214,13 @@ const fullAi: ListingDraft = {
   const base = baseWith({
     address: "1 Real St",
     rentCents: 150000,
+    propertyType: "Apartment",
     foundFields: ["Address", "Rent"],
   });
   const { merged, added } = applyAiListing(base, fullAi);
   ok("base address preserved", merged.address === "1 Real St");
   ok("base rent preserved", merged.rentCents === 150000);
+  ok("base property type preserved", merged.propertyType === "Apartment");
   ok("AI still fills the gaps base left", merged.beds === 2 && merged.sqft === 800);
   ok("added does not double-count base fields", !added.includes("Address") && !added.includes("Rent"));
   ok("beds label added once", added.filter((l) => l === "Beds").length === 1);
@@ -259,6 +267,7 @@ ok("extraction prompt names the keys", (() => {
     p.includes('"rentCents"') &&
     p.includes('"laundry"') &&
     p.includes('"internetIncluded"') &&
+    p.includes('"propertyType"') &&
     p.includes('"parkingType"') &&
     p.includes('"videoUrl"') &&
     !p.includes("pets")

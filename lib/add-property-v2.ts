@@ -2,7 +2,7 @@ import type { ChannelReadinessInput } from "./channel-readiness";
 import type { ListingDraft } from "./listing-extract";
 import type { DraftFacts } from "./listing-description";
 import type { ParsedListing } from "./mls-import";
-import { normalizeAmenities } from "./property-features";
+import { mapUnitTypeFromRaw, normalizeAmenities } from "./property-features";
 
 export type AddPropertyV2Draft = {
   address: string;
@@ -156,12 +156,16 @@ export function addPropertyV2DraftFromListing(
   parsed: ParsedListing,
   aiDraft?: ListingDraft | null,
 ): { draft: AddPropertyV2Draft; filledFields: string[] } {
+  const mappedUnitType = mapUnitTypeFromRaw(
+    parsed.propertyType ?? aiDraft?.propertyType ?? null,
+  );
   const draft: AddPropertyV2Draft = {
     ...EMPTY_ADD_PROPERTY_V2_DRAFT,
     address: parsed.address ?? "",
     rent: moneyInputFromCents(parsed.rentCents),
     beds: numberInput(parsed.beds),
     baths: numberInput(parsed.baths),
+    unit_type: mappedUnitType ?? "",
     available_date: parsed.availableDate ?? "",
     sqft: numberInput(parsed.sqft),
     parking: parsed.parking ?? "",
@@ -195,6 +199,7 @@ export function addPropertyV2DraftFromListing(
   };
 
   const filledFields = [...parsed.foundFields];
+  addField(filledFields, "Property type", draft.unit_type !== "");
   addField(filledFields, "Internet included", draft.internet_included !== "");
   addField(filledFields, "Cable included", draft.cable_included !== "");
   addField(filledFields, "Amenities", draft.amenities.length > 0);

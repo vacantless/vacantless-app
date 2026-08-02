@@ -108,6 +108,7 @@ export interface ListingDraft {
   beds: number | null;
   baths: number | null;
   sqft: number | null;
+  propertyType: string | null;
   parking: string | null;
   description: string | null;
   availableDate: string | null; // ISO YYYY-MM-DD
@@ -142,6 +143,7 @@ export function emptyListingDraft(): ListingDraft {
     beds: null,
     baths: null,
     sqft: null,
+    propertyType: null,
     parking: null,
     description: null,
     availableDate: null,
@@ -188,6 +190,7 @@ export function buildListingExtractionPrompt(): string {
     '"beds":<number of bedrooms, integer (a studio/bachelor is 0), or null>,',
     '"baths":<number of bathrooms (halves allowed, e.g. 1.5), or null>,',
     '"sqft":<interior square footage, integer, or null>,',
+    '"propertyType":<one of a condo/apartment/townhouse/house/duplex/basement descriptor exactly as stated, or null>,',
     '"parking":<short text describing parking, e.g. "1 surface spot", or null>,',
     '"description":<the listing description / marketing copy, or null>,',
     '"availableDate":<the date the unit is available, YYYY-MM-DD, or null>,',
@@ -392,6 +395,9 @@ export function normalizeListingDraft(raw: unknown, now: Date = new Date()): Lis
     beds: clampInt(o.beds ?? o.bedrooms, 0, MAX_ROOMS),
     baths: clampHalf(o.baths ?? o.bathrooms, MAX_ROOMS),
     sqft: clampInt(o.sqft ?? o.square_feet ?? o.size, 1, MAX_SQFT),
+    propertyType: cleanText(
+      o.propertyType ?? o.property_type ?? o.buildingType ?? o.building_type,
+    ),
     parking: cleanText(o.parking),
     description: cleanDescription(o.description ?? o.summary),
     availableDate: cleanIsoDate(o.availableDate ?? o.available_date ?? o.available, now),
@@ -432,6 +438,7 @@ export function isEmptyListingDraft(d: ListingDraft): boolean {
     d.beds == null &&
     d.baths == null &&
     d.sqft == null &&
+    d.propertyType == null &&
     d.parking == null &&
     d.description == null &&
     d.availableDate == null &&
@@ -489,6 +496,10 @@ export function applyAiListing(
   const merged: ParsedListing = { ...base, foundFields: [...base.foundFields] };
   const found = new Set(base.foundFields);
   const added: string[] = [];
+
+  if (base.propertyType == null && ai.propertyType != null) {
+    merged.propertyType = ai.propertyType;
+  }
 
   const fillScalar = <K extends "address" | "rentCents" | "beds" | "baths" | "sqft" | "parking" | "description" | "availableDate" | "laundry">(
     key: K,

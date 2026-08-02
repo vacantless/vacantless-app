@@ -48,6 +48,7 @@ export interface ParsedListing {
   beds: number | null;
   baths: number | null;
   sqft: number | null;
+  propertyType: string | null;
   parking: string | null;
   description: string | null;
   /** ISO "YYYY-MM-DD" or null. */
@@ -78,6 +79,7 @@ export function emptyParsedListing(): ParsedListing {
     beds: null,
     baths: null,
     sqft: null,
+    propertyType: null,
     parking: null,
     description: null,
     availableDate: null,
@@ -345,6 +347,18 @@ function extractSqft(lines: string[], rawText: string): number | null {
     if (Number.isFinite(n) && n >= 100 && n <= 20000) return n;
   }
   return null;
+}
+
+function extractPropertyType(lines: string[]): string | null {
+  const v = labelValue(
+    lines,
+    ["Property Type", "Building Type", "Type"],
+    { allowNextLine: true },
+  );
+  if (!v) return null;
+  const clean = v.trim().replace(/\s+/g, " ");
+  if (!clean || /^(none|n\/a|na|unknown|not stated|-)$/i.test(clean)) return null;
+  return clean.slice(0, 120).trim() || null;
 }
 
 // --- parking ----------------------------------------------------------------
@@ -727,7 +741,12 @@ function extractUtilities(lines: string[], rawText: string): {
 // Exported so the AI listing-import merge (lib/listing-extract.applyAiListing,
 // S428) can label the fields it backfills with the SAME human labels the
 // deterministic review banner uses.
-export const FIELD_LABELS: Record<keyof Omit<ParsedListing, "foundFields">, string> = {
+type ParsedListingFieldKey = keyof Omit<
+  ParsedListing,
+  "foundFields" | "propertyType"
+>;
+
+export const FIELD_LABELS: Record<ParsedListingFieldKey, string> = {
   address: "Address",
   rentCents: "Rent",
   beds: "Beds",
@@ -763,6 +782,7 @@ export function parseMlsListing(text: string): ParsedListing {
   out.beds = extractBeds(lines, raw);
   out.baths = extractBaths(lines, raw);
   out.sqft = extractSqft(lines, raw);
+  out.propertyType = extractPropertyType(lines);
   out.parking = extractParking(lines);
   out.description = extractDescription(lines);
   out.availableDate = extractAvailableDate(lines, raw);
@@ -797,7 +817,7 @@ export function parseMlsListing(text: string): ParsedListing {
   out.waterIncluded = util.water;
 
   // Build the found-fields list in a stable, display order.
-  const order: (keyof Omit<ParsedListing, "foundFields">)[] = [
+  const order: ParsedListingFieldKey[] = [
     "address", "rentCents", "beds", "baths", "sqft", "parking",
     "description", "availableDate", "virtualTourUrl", "airConditioning",
     "balcony", "furnished", "laundry", "heatIncluded", "hydroIncluded",
