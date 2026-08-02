@@ -111,7 +111,11 @@ const fullListing: FeedListingInput = {
   available_date: "2026-07-01",
   sqft: 800,
   floor: "2nd",
+  unit_type: "apartment",
+  structure_type: "rental_unit",
   parking: "1 spot",
+  parking_type: "underground",
+  parking_count: 1,
   laundry: "in_suite",
   air_conditioning: true,
   balcony: true,
@@ -122,6 +126,10 @@ const fullListing: FeedListingInput = {
   heat_included: true,
   hydro_included: false,
   water_included: true,
+  internet_included: true,
+  cable_included: false,
+  amenities: ["dishwasher", "gym"],
+  video_url: "https://youtu.be/dQw4w9WgXcQ",
 };
 
 ok("full listing is ready", listingFeedReadiness(fullListing).ready === true);
@@ -205,11 +213,47 @@ ok("item furnished false", item.includes("<furnished>false</furnished>"));
 ok("item utilities heat", item.includes("<utility>Heat</utility>"));
 ok("item utilities water", item.includes("<utility>Water</utility>"));
 ok("item no hydro utility (not included)", !item.includes("<utility>Hydro</utility>"));
+ok("item utilities internet", item.includes("<utility>Internet</utility>"));
+ok("item no cable utility (not included)", !item.includes("<utility>Cable</utility>"));
 ok("item amenity AC", item.includes("<amenity>Air conditioning</amenity>"));
 ok("item amenity balcony", item.includes("<amenity>Balcony</amenity>"));
+ok("item canonical amenity dishwasher", item.includes("<amenity>Dishwasher</amenity>"));
+ok("item canonical amenity gym", item.includes("<amenity>Gym</amenity>"));
+ok("item structured parking label", item.includes("<parking>1 underground parking space</parking>"));
+ok("item parking_type", item.includes("<parking_type>underground</parking_type>"));
+ok("item parking_count", item.includes("<parking_count>1</parking_count>"));
+ok(
+  "item emits canonical video_url",
+  item.includes("<video_url>https://www.youtube.com/watch?v=dQw4w9WgXcQ</video_url>"),
+);
 ok("item photos block", item.includes('<photo order="1">https://cdn/x/cover.jpg</photo>'));
 ok("item photo order 2", item.includes('<photo order="2">https://cdn/x/2.jpg</photo>'));
 ok("item country", item.includes("<country>CA</country>"));
+
+const houseItem = buildListingItemXml(
+  { ...fullListing, id: "house1", unit_type: "house", structure_type: "freehold" },
+  { baseUrl: "https://x.test", country: "CA" },
+);
+ok("item computes house property_type", houseItem.includes("<property_type>house</property_type>"));
+const fallbackTypeItem = buildListingItemXml(
+  { ...fullListing, id: "fallback1", unit_type: null, structure_type: null },
+  { baseUrl: "https://x.test", country: "CA" },
+);
+ok(
+  "item falls back to apartment property_type",
+  fallbackTypeItem.includes("<property_type>apartment</property_type>"),
+);
+const noStructuredParking = buildListingItemXml(
+  { ...fullListing, parking_type: null, parking_count: null, parking: "surface spot" },
+  { baseUrl: "https://x.test", country: "CA" },
+);
+ok("item keeps parking free-text fallback", noStructuredParking.includes("<parking>surface spot</parking>"));
+ok("item omits parking_type when unset", !noStructuredParking.includes("<parking_type>"));
+const noVideo = buildListingItemXml(
+  { ...fullListing, video_url: null },
+  { baseUrl: "https://x.test", country: "CA" },
+);
+ok("item omits video_url when unset", !noVideo.includes("<video_url>"));
 
 // Pets: no pets -> all false, no dog_size_limit element.
 const noPets = buildListingItemXml(

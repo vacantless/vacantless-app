@@ -281,6 +281,205 @@ export function structureTypeLabel(value: unknown): string | null {
   return isStructureType(value) ? STRUCTURE_TYPE_LABELS[value] : null;
 }
 
+// --- Channel-aware listing fields (S614 Lane A) ---------------------------
+// These helpers stay pure and vocabulary-only. Lane B can wire operator inputs
+// and persistence without rediscovering the channel/feed rules.
+
+export const AMENITY_KEYS = [
+  "dishwasher",
+  "gym",
+  "pool",
+  "elevator",
+  "storage_locker",
+  "outdoor_space",
+  "rooftop_deck",
+  "concierge",
+  "party_room",
+  "co_working",
+  "bike_storage",
+  "ev_charging",
+  "wheelchair_accessible",
+  "security_system",
+  "hardwood_floors",
+  "walk_in_closet",
+  "ensuite_bath",
+] as const;
+export type AmenityKey = (typeof AMENITY_KEYS)[number];
+
+export const AMENITY_LABELS: Record<AmenityKey, string> = {
+  dishwasher: "Dishwasher",
+  gym: "Gym",
+  pool: "Pool",
+  elevator: "Elevator",
+  storage_locker: "Storage locker",
+  outdoor_space: "Outdoor space",
+  rooftop_deck: "Rooftop deck",
+  concierge: "Concierge",
+  party_room: "Party room",
+  co_working: "Co-working space",
+  bike_storage: "Bike storage",
+  ev_charging: "EV charging",
+  wheelchair_accessible: "Wheelchair accessible",
+  security_system: "Security system",
+  hardwood_floors: "Hardwood floors",
+  walk_in_closet: "Walk-in closet",
+  ensuite_bath: "Ensuite bath",
+};
+
+export function isAmenityKey(value: unknown): value is AmenityKey {
+  return (
+    typeof value === "string" &&
+    (AMENITY_KEYS as readonly string[]).includes(value)
+  );
+}
+
+function normalizeKeyToken(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+const AMENITY_ALIASES: Record<string, AmenityKey> = {
+  coworking: "co_working",
+  co_working: "co_working",
+  co_working_space: "co_working",
+  ev: "ev_charging",
+  electric_vehicle_charging: "ev_charging",
+  storage: "storage_locker",
+  locker: "storage_locker",
+  accessible: "wheelchair_accessible",
+  wheelchair: "wheelchair_accessible",
+};
+
+export function normalizeAmenities(raw: unknown): AmenityKey[] {
+  const values =
+    typeof raw === "string"
+      ? raw.split(/[,;\n|]+/)
+      : Array.isArray(raw)
+        ? raw
+        : [];
+  const seen = new Set<AmenityKey>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const key = normalizeKeyToken(value);
+    const amenity = isAmenityKey(key) ? key : AMENITY_ALIASES[key];
+    if (amenity) seen.add(amenity);
+  }
+  return AMENITY_KEYS.filter((key) => seen.has(key));
+}
+
+export const PARKING_TYPE_OPTIONS = [
+  "none",
+  "street",
+  "outdoor",
+  "covered",
+  "garage",
+  "underground",
+  "ev_charging",
+] as const;
+export type ParkingType = (typeof PARKING_TYPE_OPTIONS)[number];
+
+export const PARKING_TYPE_LABELS: Record<ParkingType, string> = {
+  none: "No parking",
+  street: "Street parking",
+  outdoor: "Outdoor parking",
+  covered: "Covered parking",
+  garage: "Garage parking",
+  underground: "Underground parking",
+  ev_charging: "EV charging parking",
+};
+
+export function isParkingType(value: unknown): value is ParkingType {
+  return (
+    typeof value === "string" &&
+    (PARKING_TYPE_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+function positiveWholeNumber(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value) || value <= 0) return null;
+  return Math.round(value);
+}
+
+export function formatParking(
+  parkingType: unknown,
+  parkingCount: number | null | undefined,
+  fallback: string | null | undefined,
+): string | null {
+  if (isParkingType(parkingType)) {
+    if (parkingType === "none") return PARKING_TYPE_LABELS.none;
+    const count = positiveWholeNumber(parkingCount);
+    const label = PARKING_TYPE_LABELS[parkingType];
+    if (count != null) {
+      return `${count} ${label.toLowerCase()} ${count === 1 ? "space" : "spaces"}`;
+    }
+    return label;
+  }
+  const fallbackText = typeof fallback === "string" ? fallback.trim() : "";
+  return fallbackText || null;
+}
+
+export const HEATING_TYPE_OPTIONS = [
+  "forced_air",
+  "baseboard",
+  "radiant",
+  "heat_pump",
+  "electric",
+  "boiler",
+  "other",
+] as const;
+export type HeatingType = (typeof HEATING_TYPE_OPTIONS)[number];
+
+export const HEATING_TYPE_LABELS: Record<HeatingType, string> = {
+  forced_air: "Forced air",
+  baseboard: "Baseboard",
+  radiant: "Radiant",
+  heat_pump: "Heat pump",
+  electric: "Electric heat",
+  boiler: "Boiler",
+  other: "Other",
+};
+
+export function isHeatingType(value: unknown): value is HeatingType {
+  return (
+    typeof value === "string" &&
+    (HEATING_TYPE_OPTIONS as readonly string[]).includes(value)
+  );
+}
+
+export type FeedPropertyType =
+  | "apartment"
+  | "condo"
+  | "house"
+  | "townhouse"
+  | "basement"
+  | "duplex"
+  | "room"
+  | "loft";
+
+export function feedPropertyType(
+  unitType: unknown,
+  structureType: unknown,
+): FeedPropertyType {
+  const rawUnit =
+    typeof unitType === "string" ? unitType.trim().toLowerCase().replace(/_/g, "-") : "";
+  if (isUnitType(rawUnit)) {
+    if (rawUnit === "condo") return "condo";
+    if (rawUnit === "house") return "house";
+    if (rawUnit === "townhouse") return "townhouse";
+    if (rawUnit === "basement-apartment") return "basement";
+    if (rawUnit === "duplex-triplex") return "duplex";
+    return "apartment";
+  }
+  if (rawUnit === "room" || rawUnit === "loft") return rawUnit;
+
+  const rawStructure =
+    typeof structureType === "string" ? structureType.trim().toLowerCase() : "";
+  if (isStructureType(rawStructure)) {
+    if (rawStructure === "condo") return "condo";
+    if (rawStructure === "freehold") return "house";
+  }
+  return "apartment";
+}
+
 /**
  * The renter-facing unit fields. All optional/nullable so a partially-filled
  * property still renders cleanly.
@@ -308,6 +507,17 @@ export type UnitFeatures = {
   heat_included?: boolean | null;
   hydro_included?: boolean | null;
   water_included?: boolean | null;
+  internet_included?: boolean | null;
+  cable_included?: boolean | null;
+  amenities?: ReadonlyArray<string> | null;
+  parking_type?: ParkingType | string | null;
+  parking_count?: number | null;
+  heating_type?: HeatingType | string | null;
+  security_deposit_cents?: number | null;
+  income_requirement?: string | null;
+  video_url?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   // Operator-only: powers the smart-lock battery reminder; not renter-facing.
   has_smart_lock?: boolean | null;
   // Standard-policy fields (0048). On a UnitFeatures these are the RESOLVED
@@ -402,7 +612,8 @@ export function buildSpecLine(
     // value does not already name a floor/level.
     out.push(/\b(?:floor|level)\b/i.test(floor) ? floor : `${floor} floor`);
   }
-  if (f.parking && f.parking.trim()) out.push(`Parking: ${f.parking.trim()}`);
+  const parking = formatParking(f.parking_type, f.parking_count, f.parking);
+  if (parking) out.push(`Parking: ${parking}`);
   return out;
 }
 
@@ -468,6 +679,15 @@ export function buildAmenityChips(f: UnitFeatures): string[] {
   // as an amenity (absence is the norm, advertising it adds no value).
   if (f.smoking === "non_smoking") chips.push("Non-smoking");
   if (f.on_site_management) chips.push("On-site management");
+  const seen = new Set(chips.map((chip) => chip.toLowerCase()));
+  for (const amenity of normalizeAmenities(f.amenities)) {
+    const label = AMENITY_LABELS[amenity];
+    const key = label.toLowerCase();
+    if (!seen.has(key)) {
+      chips.push(label);
+      seen.add(key);
+    }
+  }
   const pets = petPolicyLabel(f);
   if (pets) chips.push(pets);
   return chips;
@@ -479,6 +699,8 @@ export function buildUtilitiesIncluded(f: UnitFeatures): string[] {
   if (f.heat_included) out.push("Heat");
   if (f.hydro_included) out.push("Hydro");
   if (f.water_included) out.push("Water");
+  if (f.internet_included) out.push("Internet");
+  if (f.cable_included) out.push("Cable");
   return out;
 }
 

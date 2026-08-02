@@ -29,7 +29,17 @@
 // ============================================================================
 
 import { type ParsedListing, emptyParsedListing, FIELD_LABELS } from "./mls-import";
-import { type Laundry, isLaundry } from "./property-features";
+import {
+  type AmenityKey,
+  type HeatingType,
+  type Laundry,
+  type ParkingType,
+  isHeatingType,
+  isLaundry,
+  isParkingType,
+  normalizeAmenities,
+} from "./property-features";
+import { normalizeVirtualTourUrl } from "./virtual-tour";
 // The tolerant JSON extractor and the ASCII-key guard are generic (no lease/PII
 // coupling) and already unit-tested; reuse them rather than duplicate.
 import { extractJsonObject, isAsciiApiKey } from "./lease-extract";
@@ -81,11 +91,13 @@ export const AVAILABILITY_PAST_GRACE_DAYS = 90;
 
 /**
  * The structured listing fields read off an arbitrary source. Everything is
- * nullable - the model must null what it cannot clearly read. This is a SUBSET
- * of `ParsedListing`: it deliberately omits `virtualTourUrl` (a URL is recovered
- * more reliably by the deterministic allow-listed host scan than by a model),
- * `foundFields` (the merge recomputes it), and any PET field (operator decision,
- * never inferred). The booleans are TRI-STATE (`true` / `false` / `null`): the
+ * nullable - the model must null what it cannot clearly read. The base fields
+ * mirror `ParsedListing`, while Lane A channel fields stay on the draft until a
+ * later UI/write slice consumes them. It deliberately omits `virtualTourUrl`
+ * (a URL is recovered more reliably by the deterministic allow-listed host scan
+ * than by a model), `foundFields` (the merge recomputes it), and any PET field
+ * (operator decision, never inferred). The booleans are TRI-STATE (`true` /
+ * `false` / `null`): the
  * merge only ever backfills a `true` the deterministic parse missed, so an
  * explicit `false` and an unknown `null` are treated the same (leave the base's
  * default), and the model saying "no A/C" never demotes a regex-found A/C.
@@ -106,6 +118,14 @@ export interface ListingDraft {
   heatIncluded: boolean | null;
   hydroIncluded: boolean | null;
   waterIncluded: boolean | null;
+  internetIncluded: boolean | null;
+  cableIncluded: boolean | null;
+  amenities: AmenityKey[];
+  parkingType: ParkingType | null;
+  parkingCount: number | null;
+  heatingType: HeatingType | null;
+  securityDepositCents: number | null;
+  videoUrl: string | null;
 }
 
 /** The outcome the vision adapter returns. `empty` = parsed but nothing useful
@@ -132,6 +152,14 @@ export function emptyListingDraft(): ListingDraft {
     heatIncluded: null,
     hydroIncluded: null,
     waterIncluded: null,
+    internetIncluded: null,
+    cableIncluded: null,
+    amenities: [],
+    parkingType: null,
+    parkingCount: null,
+    heatingType: null,
+    securityDepositCents: null,
+    videoUrl: null,
   };
 }
 
@@ -169,11 +197,20 @@ export function buildListingExtractionPrompt(): string {
     '"laundry":<one of "in_suite","in_building","ensuite","shared","none", or null>,',
     '"heatIncluded":<true if heat is included in rent, false if the tenant pays it, else null>,',
     '"hydroIncluded":<true if hydro/electricity is included, false if the tenant pays it, else null>,',
-    '"waterIncluded":<true if water is included, false if the tenant pays it, else null>}',
+    '"waterIncluded":<true if water is included, false if the tenant pays it, else null>,',
+    '"internetIncluded":<true if internet is included in rent, false if the tenant pays it, else null>,',
+    '"cableIncluded":<true if cable TV is included in rent, false if the tenant pays it, else null>,',
+    '"amenities":<array of amenity keys clearly stated, e.g. ["dishwasher","gym"], or []>,',
+    '"parkingType":<one of "none","street","outdoor","covered","garage","underground","ev_charging", or null>,',
+    '"parkingCount":<number of parking spaces, integer, or null>,',
+    '"heatingType":<one of "forced_air","baseboard","radiant","heat_pump","electric","boiler","other", or null>,',
+    '"securityDepositCents":<security deposit in integer cents, or null>,',
+    '"videoUrl":<a YouTube, Vimeo, iGUIDE, or Matterport video/tour URL clearly shown, or null>}',
     "",
     "Rules: money as INTEGER CENTS. Dates as YYYY-MM-DD. A boolean field is null " +
       "unless the listing clearly states it either way. laundry must be exactly one " +
-      "of the listed words or null. Do NOT output a pet field. Output the JSON " +
+      "of the listed words or null. amenities and enum fields must use exactly " +
+      "the listed keys. Do NOT output a pet field. Output the JSON " +
       "object only.",
   ].join("\n");
 }
@@ -304,6 +341,37 @@ function cleanLaundry(v: unknown): Laundry | null {
   return isLaundry(t) ? t : null;
 }
 
+function cleanParkingType(v: unknown): ParkingType | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const aliases: Record<string, ParkingType> = {
+    no: "none",
+    no_parking: "none",
+    surface: "outdoor",
+    driveway: "outdoor",
+    ev: "ev_charging",
+    ev_parking: "ev_charging",
+    electric_vehicle: "ev_charging",
+    electric_vehicle_charging: "ev_charging",
+  };
+  const value = isParkingType(t) ? t : aliases[t];
+  return value ?? null;
+}
+
+function cleanHeatingType(v: unknown): HeatingType | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const aliases: Record<string, HeatingType> = {
+    forced: "forced_air",
+    furnace: "forced_air",
+    central: "forced_air",
+    electric_baseboard: "baseboard",
+    heatpump: "heat_pump",
+  };
+  const value = isHeatingType(t) ? t : aliases[t];
+  return value ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // The normalizer - raw model JSON -> a safe, typed ListingDraft (or null)
 // ---------------------------------------------------------------------------
@@ -334,6 +402,24 @@ export function normalizeListingDraft(raw: unknown, now: Date = new Date()): Lis
     heatIncluded: cleanTriBool(o.heatIncluded ?? o.heat_included ?? o.heat),
     hydroIncluded: cleanTriBool(o.hydroIncluded ?? o.hydro_included ?? o.hydro),
     waterIncluded: cleanTriBool(o.waterIncluded ?? o.water_included ?? o.water),
+    internetIncluded: cleanTriBool(
+      o.internetIncluded ?? o.internet_included ?? o.internet,
+    ),
+    cableIncluded: cleanTriBool(o.cableIncluded ?? o.cable_included ?? o.cable),
+    amenities: normalizeAmenities(o.amenities ?? o.amenity_keys ?? o.amenityKeys),
+    parkingType: cleanParkingType(o.parkingType ?? o.parking_type),
+    parkingCount: clampInt(o.parkingCount ?? o.parking_count, 0, 20),
+    heatingType: cleanHeatingType(o.heatingType ?? o.heating_type),
+    securityDepositCents: clampRentCents(
+      o.securityDepositCents ??
+        o.security_deposit_cents ??
+        o.securityDeposit ??
+        o.security_deposit ??
+        o.deposit,
+    ),
+    videoUrl: normalizeVirtualTourUrl(
+      (o.videoUrl ?? o.video_url ?? o.listing_video_url) as string | null | undefined,
+    ),
   };
 }
 
@@ -355,7 +441,15 @@ export function isEmptyListingDraft(d: ListingDraft): boolean {
     d.furnished !== true &&
     d.heatIncluded !== true &&
     d.hydroIncluded !== true &&
-    d.waterIncluded !== true
+    d.waterIncluded !== true &&
+    d.internetIncluded !== true &&
+    d.cableIncluded !== true &&
+    d.amenities.length === 0 &&
+    d.parkingType == null &&
+    d.parkingCount == null &&
+    d.heatingType == null &&
+    d.securityDepositCents == null &&
+    d.videoUrl == null
   );
 }
 

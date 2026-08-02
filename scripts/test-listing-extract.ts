@@ -108,11 +108,36 @@ ok("ac string yes -> true", normalizeListingDraft({ ac: "yes" })?.airConditionin
 ok("heat included alias", normalizeListingDraft({ heat_included: true })?.heatIncluded === true);
 ok("hydro string no -> false", normalizeListingDraft({ hydro: "no" })?.hydroIncluded === false);
 ok("furnished garbage -> null", normalizeListingDraft({ furnished: "maybe" })?.furnished === null);
+ok("internet included alias", normalizeListingDraft({ internet_included: "yes" })?.internetIncluded === true);
+ok("cable string no -> false", normalizeListingDraft({ cable: "no" })?.cableIncluded === false);
 
 // --- laundry enum -----------------------------------------------------------
 ok("laundry in_suite", normalizeListingDraft({ laundry: "in_suite" })?.laundry === "in_suite");
 ok("laundry normalizes spaces/dashes", normalizeListingDraft({ laundry: "in building" })?.laundry === "in_building");
 ok("laundry invalid -> null", normalizeListingDraft({ laundry: "coin-op-basement" })?.laundry === null);
+
+// --- Lane A channel-aware fields -------------------------------------------
+ok(
+  "amenities normalize + de-dupe",
+  JSON.stringify(normalizeListingDraft({ amenities: ["Gym", "dishwasher", "Gym", "bad"] })?.amenities) ===
+    JSON.stringify(["dishwasher", "gym"]),
+);
+ok("parking type normalized", normalizeListingDraft({ parking_type: "underground" })?.parkingType === "underground");
+ok("parking type alias", normalizeListingDraft({ parkingType: "no parking" })?.parkingType === "none");
+ok("parking count kept", normalizeListingDraft({ parking_count: "1" })?.parkingCount === 1);
+ok("parking count over cap -> null", normalizeListingDraft({ parking_count: 50 })?.parkingCount === null);
+ok("heating type normalized", normalizeListingDraft({ heating_type: "forced air" })?.heatingType === "forced_air");
+ok("heating type invalid -> null", normalizeListingDraft({ heating_type: "wood stove" })?.heatingType === null);
+ok(
+  "security deposit dollars -> cents",
+  normalizeListingDraft({ securityDeposit: "$1,850" })?.securityDepositCents === 185000,
+);
+ok(
+  "video url canonicalized",
+  normalizeListingDraft({ video_url: "https://youtu.be/dQw4w9WgXcQ" })?.videoUrl ===
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+);
+ok("video url rejects unsupported host", normalizeListingDraft({ video_url: "https://evil.test/x" })?.videoUrl === null);
 
 // --- text fields ------------------------------------------------------------
 ok("parking text kept", normalizeListingDraft({ parking: "1 surface spot" })?.parking === "1 surface spot");
@@ -138,6 +163,11 @@ ok("draft with rent is non-empty", isEmptyListingDraft({ ...emptyListingDraft(),
 ok("draft with only a true bool is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), balcony: true }) === false);
 ok("draft with only a false bool is empty", isEmptyListingDraft({ ...emptyListingDraft(), balcony: false }) === true);
 ok("draft with only laundry is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), laundry: "none" }) === false);
+ok("draft with only internet false is empty", isEmptyListingDraft({ ...emptyListingDraft(), internetIncluded: false }) === true);
+ok("draft with only internet true is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), internetIncluded: true }) === false);
+ok("draft with only amenities is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), amenities: ["gym"] }) === false);
+ok("draft with only parking type none is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), parkingType: "none" }) === false);
+ok("draft with only video is non-empty", isEmptyListingDraft({ ...emptyListingDraft(), videoUrl: "https://vimeo.com/123456" }) === false);
 
 // --- applyAiListing: the merge ----------------------------------------------
 function baseWith(overrides: Partial<ParsedListing>): ParsedListing {
@@ -225,7 +255,14 @@ ok("system prompt mentions listing", /listing/i.test(LISTING_SYSTEM_PROMPT));
 ok("system prompt forbids pet inference", /pet/i.test(LISTING_SYSTEM_PROMPT));
 ok("extraction prompt names the keys", (() => {
   const p = buildListingExtractionPrompt();
-  return p.includes('"rentCents"') && p.includes('"laundry"') && !p.includes("pets");
+  return (
+    p.includes('"rentCents"') &&
+    p.includes('"laundry"') &&
+    p.includes('"internetIncluded"') &&
+    p.includes('"parkingType"') &&
+    p.includes('"videoUrl"') &&
+    !p.includes("pets")
+  );
 })());
 
 // --- selectListingImages (Slice 2, pure) ------------------------------------

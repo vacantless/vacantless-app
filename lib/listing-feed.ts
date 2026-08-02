@@ -22,8 +22,11 @@ import {
   buildAmenityChips,
   buildUtilitiesIncluded,
   derivePetFriendly,
+  feedPropertyType,
+  formatParking,
   isAvailableNow,
   isDogSize,
+  isParkingType,
   type UnitFeatures,
 } from "./property-features";
 import { virtualTourFor } from "./virtual-tour";
@@ -32,9 +35,8 @@ import { virtualTourFor } from "./virtual-tour";
 // off_market never appear in the feed. Mirrors the WHERE in get_org_listing_feed.
 export const FEED_LISTABLE_STATUS = "available" as const;
 
-// All Agile/Vacantless units are residential apartment units today. A future
-// per-property "property_type" column can override this; for now it is the
-// sane default the aggregators expect for the Required "Property Type" field.
+// Fallback property type when a listing has no unit/structure signal. Real
+// listing items compute their type from unit_type + structure_type below.
 export const DEFAULT_PROPERTY_TYPE = "apartment" as const;
 
 // Aggregator limits (Rentsync/Zumper requirements).
@@ -66,6 +68,7 @@ export type FeedListingInput = UnitFeatures & {
   description: string | null;
   photos: string[] | null;
   virtual_tour_url?: string | null;
+  video_url?: string | null;
 };
 
 export type FeedOrgInput = {
@@ -283,11 +286,13 @@ export type BuildFeedOptions = {
 /** Build the <listing> element for one (already-ready) listing. */
 export function buildListingItemXml(
   listing: FeedListingInput,
-  opts: { baseUrl: string; propertyType: string; country: string },
+  opts: { baseUrl: string; propertyType?: string; country: string },
 ): string {
   const url = `${opts.baseUrl.replace(/\/+$/, "")}/r/${encodeURIComponent(listing.id)}`;
   const address = (listing.address ?? "").trim();
   const photos = (listing.photos ?? []).slice(0, MAX_PHOTOS);
+  const propertyType =
+    opts.propertyType ?? feedPropertyType(listing.unit_type, listing.structure_type);
 
   const features: UnitFeatures = listing;
   const amenities = buildAmenityChips(features);
@@ -297,7 +302,7 @@ export function buildListingItemXml(
   parts.push(`    ${tag("external_id", listing.id)}`);
   parts.push(`    ${tag("url", url)}`);
   parts.push(`    ${tag("title", address)}`);
-  parts.push(`    ${tag("property_type", opts.propertyType)}`);
+  parts.push(`    ${tag("property_type", propertyType)}`);
   parts.push(`    <status>active</status>`);
   parts.push(
     `    <address>\n      ${tag("full", address)}\n      ${tag("country", opts.country)}\n    </address>`,
@@ -325,8 +330,18 @@ export function buildListingItemXml(
   parts.push(`    <dogs_allowed>${listing.pets_dogs ? "true" : "false"}</dogs_allowed>`);
   if (listing.pets_dogs && isDogSize(listing.pets_dog_size) && listing.pets_dog_size !== "any")
     parts.push(`    ${tag("dog_size_limit", listing.pets_dog_size)}`);
-  if (listing.parking && String(listing.parking).trim())
-    parts.push(`    ${tag("parking", String(listing.parking).trim())}`);
+  const parking = formatParking(listing.parking_type, listing.parking_count, listing.parking);
+  if (parking) parts.push(`    ${tag("parking", parking)}`);
+  if (isParkingType(listing.parking_type)) {
+    parts.push(`    ${tag("parking_type", listing.parking_type)}`);
+    if (
+      typeof listing.parking_count === "number" &&
+      Number.isFinite(listing.parking_count) &&
+      listing.parking_count >= 0
+    ) {
+      parts.push(`    ${tag("parking_count", String(Math.round(listing.parking_count)))}`);
+    }
+  }
 
   const util = listEl("utilities_included", "utility", utilities);
   if (util) parts.push(util);
@@ -342,6 +357,8 @@ export function buildListingItemXml(
   // ignore the unknown element).
   const tour = virtualTourFor(listing.virtual_tour_url);
   if (tour) parts.push(`    ${tag("virtual_tour", tour.href)}`);
+  const video = virtualTourFor(listing.video_url);
+  if (video && video.href !== tour?.href) parts.push(`    ${tag("video_url", video.href)}`);
 
   const photoEls = photos
     .filter((u) => typeof u === "string" && u.trim())
@@ -361,12 +378,18 @@ export function buildListingItemXml(
  * Returns a complete XML string with the declaration.
  */
 export function buildListingFeedXml(opts: BuildFeedOptions): string {
-  const propertyType = opts.propertyType ?? DEFAULT_PROPERTY_TYPE;
+  const propertyType = opts.propertyType;
   const country = opts.country ?? DEFAULT_COUNTRY;
   const summary = summarizeFeed(opts.org, opts.listings);
 
   const items = summary.ready
-    .map((l) => buildListingItemXml(l, { baseUrl: opts.baseUrl, propertyType, country }))
+    .map((l) =>
+      buildListingItemXml(l, {
+        baseUrl: opts.baseUrl,
+        ...(propertyType ? { propertyType } : {}),
+        country,
+      }),
+    )
     .join("\n");
 
   const provider = opts.org.name ?? "";
@@ -427,7 +450,7 @@ export type BuildNetworkFeedOptions = {
  */
 export function buildProviderBlockXml(
   entry: NetworkFeedProvider,
-  opts: { baseUrl: string; propertyType: string; country: string },
+  opts: { baseUrl: string; propertyType?: string; country: string },
 ): string {
   const summary = summarizeFeed(entry.org, entry.listings);
   if (summary.readyCount === 0) return "";
@@ -459,7 +482,7 @@ export function buildProviderBlockXml(
  * total ready-listing counts so a partner can sanity-check volume at a glance.
  */
 export function buildNetworkFeedXml(opts: BuildNetworkFeedOptions): string {
-  const propertyType = opts.propertyType ?? DEFAULT_PROPERTY_TYPE;
+  const propertyType = opts.propertyType;
   const country = opts.country ?? DEFAULT_COUNTRY;
 
   const blocks: string[] = [];
@@ -468,7 +491,7 @@ export function buildNetworkFeedXml(opts: BuildNetworkFeedOptions): string {
   for (const entry of opts.providers) {
     const block = buildProviderBlockXml(entry, {
       baseUrl: opts.baseUrl,
-      propertyType,
+      ...(propertyType ? { propertyType } : {}),
       country,
     });
     if (!block) continue;

@@ -40,6 +40,17 @@ import {
   normalizeForRentBy,
   forRentByLabel,
   smartLockLabel,
+  AMENITY_KEYS,
+  isAmenityKey,
+  normalizeAmenities,
+  AMENITY_LABELS,
+  PARKING_TYPE_OPTIONS,
+  isParkingType,
+  formatParking,
+  HEATING_TYPE_OPTIONS,
+  isHeatingType,
+  HEATING_TYPE_LABELS,
+  feedPropertyType,
 } from "../lib/property-features";
 
 let passed = 0;
@@ -240,11 +251,80 @@ ok(
   }) === "Heat, hydro & water included",
 );
 ok("utils summary: none -> null", utilitiesSummary({}) === null);
+ok(
+  "utils: internet + cable append after water",
+  JSON.stringify(
+    buildUtilitiesIncluded({
+      heat_included: true,
+      water_included: true,
+      internet_included: true,
+      cable_included: true,
+    }),
+  ) === JSON.stringify(["Heat", "Water", "Internet", "Cable"]),
+);
+ok(
+  "utils summary: internet + cable",
+  utilitiesSummary({ internet_included: true, cable_included: true }) ===
+    "Internet & cable included",
+);
+
+// --- channel-aware amenities / parking / heating ---------------------------
+ok("AMENITY_KEYS includes dishwasher", AMENITY_KEYS.includes("dishwasher"));
+ok("isAmenityKey: gym", isAmenityKey("gym"));
+ok("isAmenityKey: rejects junk", !isAmenityKey("bowling_alley"));
+ok(
+  "normalizeAmenities: string aliases, de-dupes, stable order",
+  JSON.stringify(normalizeAmenities("Gym, dishwasher, EV charging, gym, nope")) ===
+    JSON.stringify(["dishwasher", "gym", "ev_charging"]),
+);
+ok(
+  "normalizeAmenities: array trims + drops unknown",
+  JSON.stringify(normalizeAmenities([" outdoor space ", "pool", "random"])) ===
+    JSON.stringify(["pool", "outdoor_space"]),
+);
+ok("amenity label exported", AMENITY_LABELS.dishwasher === "Dishwasher");
+ok(
+  "chips: canonical amenities append before pets",
+  JSON.stringify(
+    buildAmenityChips({
+      amenities: ["dishwasher", "gym"],
+      pets_cats: true,
+    }),
+  ) === JSON.stringify(["Dishwasher", "Gym", "Cats welcome"]),
+);
+
+ok("PARKING_TYPE_OPTIONS has 7", PARKING_TYPE_OPTIONS.length === 7);
+ok("isParkingType: underground", isParkingType("underground"));
+ok("isParkingType: rejects driveway", !isParkingType("driveway"));
+ok(
+  "formatParking: structured type + count wins",
+  formatParking("underground", 1, "free text") === "1 underground parking space",
+);
+ok(
+  "formatParking: plural count",
+  formatParking("garage", 2, null) === "2 garage parking spaces",
+);
+ok(
+  "formatParking: none wins over free text",
+  formatParking("none", 1, "1 spot") === "No parking",
+);
+ok(
+  "formatParking: fallback free text",
+  formatParking(null, null, "  tandem driveway  ") === "tandem driveway",
+);
+ok("formatParking: empty -> null", formatParking(null, null, " ") === null);
+
+ok("HEATING_TYPE_OPTIONS has 7", HEATING_TYPE_OPTIONS.length === 7);
+ok("isHeatingType: forced_air", isHeatingType("forced_air"));
+ok("isHeatingType: rejects gas", !isHeatingType("gas"));
+ok("heating label", HEATING_TYPE_LABELS.heat_pump === "Heat pump");
 
 // --- hasAnyFeature ---------------------------------------------------------
 ok("hasAnyFeature: bare -> false", !hasAnyFeature({}));
 ok("hasAnyFeature: amenity -> true", hasAnyFeature({ balcony: true }));
 ok("hasAnyFeature: utility -> true", hasAnyFeature({ heat_included: true }));
+ok("hasAnyFeature: internet utility -> true", hasAnyFeature({ internet_included: true }));
+ok("hasAnyFeature: canonical amenity -> true", hasAnyFeature({ amenities: ["gym"] }));
 ok("hasAnyFeature: sqft -> true", hasAnyFeature({ sqft: 800 }));
 ok("hasAnyFeature: floor -> true", hasAnyFeature({ floor: "3rd" }));
 ok("hasAnyFeature: blank floor -> false", !hasAnyFeature({ floor: "  " }));
@@ -356,6 +436,28 @@ ok(
   unitTypeLabel("duplex-triplex") === "Duplex / triplex",
 );
 ok("unitTypeLabel: junk -> null", unitTypeLabel("x") === null);
+ok("feedPropertyType: apartment", feedPropertyType("apartment", null) === "apartment");
+ok("feedPropertyType: condo", feedPropertyType("condo", null) === "condo");
+ok("feedPropertyType: house", feedPropertyType("house", null) === "house");
+ok("feedPropertyType: townhouse", feedPropertyType("townhouse", null) === "townhouse");
+ok(
+  "feedPropertyType: basement-apartment -> basement",
+  feedPropertyType("basement-apartment", null) === "basement",
+);
+ok(
+  "feedPropertyType: duplex-triplex -> duplex",
+  feedPropertyType("duplex-triplex", null) === "duplex",
+);
+ok("feedPropertyType: room pass-through", feedPropertyType("room", null) === "room");
+ok(
+  "feedPropertyType: structure fallback condo",
+  feedPropertyType(null, "condo") === "condo",
+);
+ok(
+  "feedPropertyType: structure fallback freehold",
+  feedPropertyType(null, "freehold") === "house",
+);
+ok("feedPropertyType: unknown -> apartment", feedPropertyType("mansion", null) === "apartment");
 
 // --- for_rent_by (NOT NULL default 'owner') --------------------------------
 ok("FOR_RENT_BY_OPTIONS has 2", FOR_RENT_BY_OPTIONS.length === 2);
