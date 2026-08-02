@@ -2,6 +2,8 @@
 import {
   getGeocodeProvider,
   isValidLatLng,
+  normalizeGeoapifyAutocomplete,
+  normalizeGeoapifyGeocode,
   normalizeRadarAutocomplete,
   normalizeRadarGeocode,
   parseLatLng,
@@ -47,6 +49,18 @@ eq(
   resolveGeocodeProviderName(env({ GEOCODE_PROVIDER: "mapbox" })),
   "none",
 );
+eq(
+  "provider geoapify without key -> none",
+  resolveGeocodeProviderName(env({ GEOCODE_PROVIDER: "geoapify" })),
+  "none",
+);
+eq(
+  "provider geoapify with key -> geoapify",
+  resolveGeocodeProviderName(
+    env({ GEOCODE_PROVIDER: "geoapify", GEOAPIFY_API_KEY: "geo_test" }),
+  ),
+  "geoapify",
+);
 
 const originalFetch = globalThis.fetch;
 let fetchCalled = false;
@@ -69,6 +83,13 @@ async function main() {
   } finally {
     globalThis.fetch = originalFetch;
   }
+  eq(
+    "Geoapify provider name",
+    getGeocodeProvider(
+      env({ GEOCODE_PROVIDER: "geoapify", GEOAPIFY_API_KEY: "geo_test" }),
+    ).name,
+    "geoapify",
+  );
 
   ok("valid Toronto lat/lng accepted", isValidLatLng(43.65, -79.38));
   ok("string lat/lng accepted", isValidLatLng("43.65", "-79.38"));
@@ -146,6 +167,97 @@ async function main() {
     "Radar geocode returns null without valid coordinates",
     normalizeRadarGeocode({
       addresses: [{ formattedAddress: "Bad", latitude: 0, longitude: 0 }],
+    }),
+    null,
+  );
+
+  const geoapifySample = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {
+          formatted: "123 Main Street, Toronto, ON M5V 1A1, Canada",
+          lat: 43.65,
+          lon: -79.38,
+          place_id: "geo-1",
+          country_code: "ca",
+        },
+        geometry: { type: "Point", coordinates: [-79.38, 43.65] },
+      },
+      {
+        type: "Feature",
+        properties: {
+          formatted: "456 Missing Coords, Toronto, ON, Canada",
+          country_code: "ca",
+        },
+        geometry: { type: "Point", coordinates: [] },
+      },
+      {
+        type: "Feature",
+        properties: {
+          address_line1: "789 Queen St W",
+          city: "Toronto",
+          state: "ON",
+          postcode: "M6J 1G5",
+          place_id: "geo-2",
+          country_code: "ca",
+        },
+        geometry: { type: "Point", coordinates: [-79.43, 43.641] },
+      },
+      {
+        type: "Feature",
+        properties: {
+          formatted: "Null Island",
+          lat: 0,
+          lon: 0,
+          place_id: "bad",
+        },
+        geometry: { type: "Point", coordinates: [0, 0] },
+      },
+    ],
+  };
+
+  const geoapifySuggestions = normalizeGeoapifyAutocomplete(geoapifySample);
+  eq("Geoapify autocomplete drops invalid rows", geoapifySuggestions.length, 2);
+  eq(
+    "Geoapify autocomplete maps formatted label",
+    geoapifySuggestions[0]?.label,
+    "123 Main Street, Toronto, ON M5V 1A1, Canada",
+  );
+  eq(
+    "Geoapify autocomplete maps provider id",
+    geoapifySuggestions[0]?.providerId,
+    "geo-1",
+  );
+  eq(
+    "Geoapify autocomplete builds fallback label",
+    geoapifySuggestions[1]?.label,
+    "789 Queen St W, Toronto, ON, M6J 1G5",
+  );
+  ok(
+    "Geoapify autocomplete maps geometry coords",
+    geoapifySuggestions[1]?.latitude === 43.641 &&
+      geoapifySuggestions[1]?.longitude === -79.43,
+  );
+
+  const geoapifyGeocode = normalizeGeoapifyGeocode(geoapifySample);
+  ok(
+    "Geoapify geocode maps first valid coordinates",
+    geoapifyGeocode?.latitude === 43.65 &&
+      geoapifyGeocode.longitude === -79.38 &&
+      geoapifyGeocode.formattedAddress ===
+        "123 Main Street, Toronto, ON M5V 1A1, Canada",
+  );
+  eq(
+    "Geoapify geocode returns null without valid coordinates",
+    normalizeGeoapifyGeocode({
+      features: [
+        {
+          properties: { formatted: "Bad", lat: 0, lon: 0 },
+          geometry: { coordinates: [0, 0] },
+        },
+      ],
     }),
     null,
   );
