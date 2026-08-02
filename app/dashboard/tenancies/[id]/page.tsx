@@ -72,7 +72,7 @@ import {
   reconcilePayments,
   type PaymentRow,
 } from "@/lib/payments";
-import { channelLabel, commsErrorMessage } from "@/lib/tenant-comms";
+import { channelLabel, commsErrorMessage, formatCommsDateTime } from "@/lib/tenant-comms";
 import {
   UNDO_WINDOW_SECONDS,
   tenantCommsOutboxEnabled,
@@ -2634,7 +2634,7 @@ export default async function TenancyDetailPage({
                         {m.subject || (m.channel === "sms" ? "Text message" : "(no subject)")}
                       </span>
                       <span className="ml-2 text-xs text-gray-400">
-                        {channelLabel(m.channel)} · {new Date(m.scheduled_send_at).toLocaleString()}
+                        {channelLabel(m.channel)} · {formatCommsDateTime(m.scheduled_send_at, org?.booking_timezone ?? "America/Toronto")}
                       </span>
                     </span>
                     <form
@@ -2670,7 +2670,7 @@ export default async function TenancyDetailPage({
                         {m.subject || (m.channel === "sms" ? "Text message" : "(no subject)")}
                       </span>
                       <span className="ml-2 text-xs text-gray-400">
-                        {channelLabel(m.channel)} · {new Date(m.created_at).toLocaleString()}
+                        {channelLabel(m.channel)} · {formatCommsDateTime(m.created_at, org?.booking_timezone ?? "America/Toronto")}
                       </span>
                     </span>
                     <span className="shrink-0 text-xs text-gray-500">

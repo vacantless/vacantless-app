@@ -31,6 +31,25 @@ export function channelLabel(channel: string): string {
   return (CHANNEL_LABELS as Record<string, string>)[channel] ?? channel;
 }
 
+/**
+ * Format a UTC timestamp for display in the operator's org timezone.
+ *
+ * The tenancy page is a Server Component, so a bare
+ * `new Date(iso).toLocaleString()` renders in the SERVER's zone (UTC) and shows
+ * the wrong wall-clock time — e.g. a message the operator scheduled for 12:00 PM
+ * (entered in a browser-local datetime-local input) appeared as "4:00 PM" (16:00
+ * UTC). Formatting with the org's booking_timezone reconciles the displayed time
+ * with what the operator actually entered. Falls back to America/Toronto (the
+ * app-wide default org timezone). Pure.
+ */
+export function formatCommsDateTime(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleString("en-CA", {
+    timeZone: timeZone || "America/Toronto",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 export function isMessageChannel(value: string): value is MessageChannel {
   return (MESSAGE_CHANNELS as readonly string[]).includes(value);
 }
