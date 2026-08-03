@@ -25,6 +25,7 @@ export type AiReplyDraft = {
   subject: string;
   body: string;
   slotOffer: string;
+  suggestedQuestion: string | null;
 };
 
 export function aiReplyEnabled(value: string | null | undefined): boolean {
@@ -116,6 +117,37 @@ function inquiryCue(inquiryText: string | null): string | null {
   return "I read your note and can answer your questions before we book.";
 }
 
+export function suggestedCaptureQuestion(
+  inquiryText: string | null | undefined,
+): string | null {
+  const text = cleanText(inquiryText);
+  if (!text) return null;
+
+  const lower = text.toLowerCase();
+  if (/\bparking\b|\bspot\b|\bgarage\b/.test(lower)) {
+    return "Is parking available?";
+  }
+  if (/\blaundry\b|\bwasher\b|\bdryer\b/.test(lower)) {
+    return "Is laundry available?";
+  }
+  if (/\b(pet|pets|cat|cats|dog|dogs)\b/.test(lower)) {
+    return "What is the pet policy?";
+  }
+  if (/\b(utilities|utility|heat|hydro|water)\b/.test(lower)) {
+    return "Which utilities are included?";
+  }
+  if (/\bapply\b|\bapplication\b/.test(lower)) {
+    return "How do I apply?";
+  }
+  if (
+    /\b(view|viewing|showing|tour|see it|come by)\b/.test(lower) ||
+    /\bmove.?in\b|\bavailable\b|\bavailability\b/.test(lower)
+  ) {
+    return null;
+  }
+  return null;
+}
+
 function sentence(value: string | null): string | null {
   const clean = cleanText(value);
   if (!clean) return null;
@@ -150,6 +182,9 @@ export function buildAiReplyDraft(input: AiReplyDraftInput): AiReplyDraft {
   const cue = knowledgeMatch
     ? sentence(knowledgeMatch.answerText)
     : inquiryCue(input.inquiryText);
+  const suggestedQuestion = knowledgeMatch
+    ? null
+    : suggestedCaptureQuestion(input.inquiryText);
   const offer = slotOffer(input);
 
   const body = [
@@ -172,5 +207,6 @@ export function buildAiReplyDraft(input: AiReplyDraftInput): AiReplyDraft {
     subject: `Re: your inquiry about ${place}`,
     body,
     slotOffer: offer,
+    suggestedQuestion,
   };
 }

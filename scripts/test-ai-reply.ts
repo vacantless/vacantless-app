@@ -3,6 +3,7 @@
 import {
   aiReplyEnabled,
   buildAiReplyDraft,
+  suggestedCaptureQuestion,
 } from "../lib/ai-reply";
 
 let passed = 0;
@@ -22,6 +23,39 @@ ok("flag: 1 enables", aiReplyEnabled("1") === true);
 ok("flag: yes enables", aiReplyEnabled("YES") === true);
 ok("flag: false disables", aiReplyEnabled("false") === false);
 ok("flag: blank disables", aiReplyEnabled("") === false);
+
+ok(
+  "capture question: parking maps to canonical question",
+  suggestedCaptureQuestion("Is there a garage spot?") ===
+    "Is parking available?",
+);
+ok(
+  "capture question: laundry maps to canonical question",
+  suggestedCaptureQuestion("Does it have a washer and dryer?") ===
+    "Is laundry available?",
+);
+ok(
+  "capture question: pets maps to canonical question",
+  suggestedCaptureQuestion("Can I bring my dog?") ===
+    "What is the pet policy?",
+);
+ok(
+  "capture question: utilities maps to canonical question",
+  suggestedCaptureQuestion("Are heat, hydro, and water included?") ===
+    "Which utilities are included?",
+);
+ok(
+  "capture question: application maps to canonical question",
+  suggestedCaptureQuestion("How do I apply?") === "How do I apply?",
+);
+ok(
+  "capture question: viewing-only is not reusable",
+  suggestedCaptureQuestion("Can I book a showing tomorrow?") === null,
+);
+ok(
+  "capture question: unknown is null",
+  suggestedCaptureQuestion("Hello, I am interested.") === null,
+);
 
 const draft = buildAiReplyDraft({
   renterName: "Aaliyah Chen",
@@ -49,6 +83,10 @@ ok("draft: includes inquiry cue", draft.body.includes("I noticed your parking qu
 ok("draft: includes move-in", draft.body.includes("desired move-in date: 2026-09-01"));
 ok("draft: includes slot offer", draft.slotOffer.includes("viewing slot"));
 ok("draft: signs org name", draft.body.endsWith("Thanks,\nNorth Star Rentals"));
+ok(
+  "draft: suggests capture question",
+  draft.suggestedQuestion === "Is parking available?",
+);
 
 const fallback = buildAiReplyDraft({
   renterName: null,
@@ -61,6 +99,7 @@ ok("fallback: greets there", fallback.body.includes("Hi there,"));
 ok("fallback: rental fallback", fallback.subject === "Re: your inquiry about the rental");
 ok("fallback: no fabricated facts", !fallback.body.includes("parking:"));
 ok("fallback: default signer", fallback.body.endsWith("Thanks,\nVacantless"));
+ok("fallback: no capture question", fallback.suggestedQuestion === null);
 
 const noSuitable = buildAiReplyDraft({
   renterName: "Sam",

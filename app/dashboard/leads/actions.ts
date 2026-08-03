@@ -134,12 +134,14 @@ export async function addLeadPropertyQa(formData: FormData) {
   const { supabase, org, leadId, propertyId } =
     await requireQaCurationContext(formData);
   const scope = formString(formData, "scope") === "org" ? "org" : "property";
+  const source =
+    formString(formData, "source") === "auto" ? "auto" : "operator";
   const ok = await savePropertyQaEntry(supabase, {
     organizationId: org.id,
     propertyId: scope === "org" ? null : propertyId,
     questionText: formString(formData, "question_text"),
     answerText: formString(formData, "answer_text"),
-    source: "operator",
+    source,
   });
   redirect(qaAnchor(leadId, ok ? "saved" : "invalid"));
 }

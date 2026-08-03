@@ -618,11 +618,15 @@ export default async function LeadDetailPage({
       )}
 
       <InquiryReplyPanel
+        leadId={l.id}
+        propertyId={l.property?.id ?? null}
         email={l.email}
         phone={l.phone}
         subject={replyDraft.subject}
         body={replyDraft.body}
         aiDraft={aiReplyDraft}
+        suggestedQuestion={aiReplyDraft?.suggestedQuestion ?? null}
+        canCapture={canUseAiReply}
       />
 
       <div className="mt-8">

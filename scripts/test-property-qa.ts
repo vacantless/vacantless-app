@@ -1,6 +1,6 @@
 // Unit tests for the pure property Q&A knowledge seam.
 // Run: npx tsx scripts/test-property-qa.ts
-import { buildAiReplyDraft } from "../lib/ai-reply";
+import { buildAiReplyDraft, suggestedCaptureQuestion } from "../lib/ai-reply";
 import {
   buildQaUpsert,
   matchKnowledge,
@@ -128,6 +128,42 @@ same(
   null,
 );
 
+same(
+  "suggestedCaptureQuestion maps parking",
+  suggestedCaptureQuestion("Is there parking with the rental?"),
+  "Is parking available?",
+);
+same(
+  "suggestedCaptureQuestion maps laundry",
+  suggestedCaptureQuestion("Is laundry in the unit?"),
+  "Is laundry available?",
+);
+same(
+  "suggestedCaptureQuestion maps pets",
+  suggestedCaptureQuestion("Are cats allowed?"),
+  "What is the pet policy?",
+);
+same(
+  "suggestedCaptureQuestion maps utilities",
+  suggestedCaptureQuestion("Does rent include heat and water?"),
+  "Which utilities are included?",
+);
+same(
+  "suggestedCaptureQuestion maps application",
+  suggestedCaptureQuestion("What is the application process?"),
+  "How do I apply?",
+);
+same(
+  "suggestedCaptureQuestion skips timing-only asks",
+  suggestedCaptureQuestion("Can I view it after work?"),
+  null,
+);
+same(
+  "suggestedCaptureQuestion skips unknown asks",
+  suggestedCaptureQuestion("Hello, is this still listed?"),
+  null,
+);
+
 const draftInput = {
   renterName: "Aaliyah Chen",
   orgName: "North Star Rentals",
@@ -156,6 +192,21 @@ same(
   emptyKnowledge.body,
   noKnowledge.body,
 );
+same(
+  "buildAiReplyDraft no-knowledge subject is unchanged",
+  emptyKnowledge.subject,
+  noKnowledge.subject,
+);
+same(
+  "buildAiReplyDraft no-knowledge slot offer is unchanged",
+  emptyKnowledge.slotOffer,
+  noKnowledge.slotOffer,
+);
+same(
+  "buildAiReplyDraft suggests a capture question without a knowledge match",
+  noKnowledge.suggestedQuestion,
+  "Is parking available?",
+);
 ok(
   "buildAiReplyDraft knowledge hit injects stored answer",
   withKnowledge.body.includes("Yes, one underground parking spot is included."),
@@ -163,6 +214,11 @@ ok(
 ok(
   "buildAiReplyDraft knowledge hit replaces generic cue",
   !withKnowledge.body.includes("I noticed your parking question"),
+);
+same(
+  "buildAiReplyDraft knowledge hit suppresses capture question",
+  withKnowledge.suggestedQuestion,
+  null,
 );
 
 if (failed > 0) {
