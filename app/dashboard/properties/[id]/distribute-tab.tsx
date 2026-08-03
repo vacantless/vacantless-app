@@ -18,6 +18,9 @@ import { CopyLink } from "./copy-link";
 import { CopyTextButton } from "@/components/copy-text-button";
 import {
   addListingPost,
+  updateProperty,
+  publishProperty,
+  uploadPropertyPhotos,
   updateListingPost,
   removeListingPost,
   upsertPartnerAccount,
@@ -78,6 +81,7 @@ import {
   type FairHousingFlag,
 } from "@/lib/listing-quality";
 import type { FillSheet } from "@/lib/listing-fill-sheet";
+import { GetOnlineView } from "./get-online-view";
 
 export type QualityView = {
   listing: ListingQuality;
@@ -105,6 +109,43 @@ export type ReplyInputs = {
   address: string;
   bookingUrl: string | null;
   rentLabel: string | null;
+};
+
+export type GetOnlineBasics = {
+  address: string;
+  addressDisplayMode: string | null;
+  rentCents: number | null;
+  beds: number | null;
+  baths: number | null;
+  parking: string | null;
+  description: string | null;
+  showingInstructions: string | null;
+  showingArrivalPhone: string | null;
+  status: string;
+  availableDate: string | null;
+  virtualTourUrl: string | null;
+  sqft: number | null;
+  floor: string | null;
+  unitType: string | null;
+  forRentBy: string | null;
+  structureType: string | null;
+  laundry: string | null;
+  airConditioning: boolean;
+  balcony: boolean;
+  furnished: boolean;
+  petsCats: boolean | null;
+  petsDogs: boolean | null;
+  petsDogSize: string | null;
+  petsNotes: string | null;
+  heatIncluded: boolean | null;
+  hydroIncluded: boolean | null;
+  waterIncluded: boolean | null;
+  hasSmartLock: boolean;
+  photosReady: boolean;
+  leaseTerm: string | null;
+  smoking: string | null;
+  acType: string | null;
+  onSiteManagement: boolean | null;
 };
 
 // One channel's tracked ad (a listing_posts row shaped for the card).
@@ -332,6 +373,7 @@ function distributionHealth({
 
 export function DistributeTab({
   propertyId,
+  basics,
   linkIsLive,
   addFormKey,
   today,
@@ -350,8 +392,10 @@ export function DistributeTab({
   qaExpected,
   reservedTrackedLinksByChannel,
   runNotice,
+  totalInquiryCount,
 }: {
   propertyId: string;
+  basics: GetOnlineBasics;
   linkIsLive: boolean;
   addFormKey: string;
   today: string;
@@ -370,6 +414,7 @@ export function DistributeTab({
   qaExpected: QaExpected;
   reservedTrackedLinksByChannel: Record<string, string>;
   runNotice: DistributeRunNotice | null;
+  totalInquiryCount: number;
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -495,6 +540,24 @@ export function DistributeTab({
         )}
       </div>
 
+      <GetOnlineView
+        simple={
+          <SimpleGetOnline
+            propertyId={propertyId}
+            basics={basics}
+            linkIsLive={linkIsLive}
+            setupOutstanding={setupOutstanding}
+            hasPhotos={hasPhotos}
+            canSetLive={canSetLive}
+            launchRun={launchRun}
+            liveChannels={liveChannels}
+            replyInputs={replyInputs}
+            totalInquiryCount={totalInquiryCount}
+            selectedChannelCount={selectedChannelCount}
+          />
+        }
+        advanced={
+          <>
       <SimplePostingPlan
         linkIsLive={linkIsLive}
         setupOutstanding={setupOutstanding}
@@ -686,6 +749,9 @@ export function DistributeTab({
           <AnalyticsPanel rows={analytics} />
         </div>
       </details>
+          </>
+        }
+      />
     </div>
   );
 }
@@ -795,6 +861,528 @@ function conciergeRequestedDate(value: string | null | undefined): string | null
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
   return new Date(time).toISOString().slice(0, 10);
+}
+
+function centsToDollars(value: number | null): string {
+  return value == null ? "" : String(value / 100);
+}
+
+function numberValue(value: number | null): string {
+  return value == null ? "" : String(value);
+}
+
+function textValue(value: string | null): string {
+  return value ?? "";
+}
+
+function triBoolValue(value: boolean | null): string {
+  return value == null ? "" : value ? "true" : "false";
+}
+
+function HiddenPreservedPropertyFields({ basics }: { basics: GetOnlineBasics }) {
+  return (
+    <>
+      <input type="hidden" name="status" value={basics.status} />
+      <input type="hidden" name="parking" value={textValue(basics.parking)} />
+      <input
+        type="hidden"
+        name="description"
+        value={textValue(basics.description)}
+      />
+      <input
+        type="hidden"
+        name="showing_instructions"
+        value={textValue(basics.showingInstructions)}
+      />
+      <input
+        type="hidden"
+        name="showing_arrival_phone"
+        value={textValue(basics.showingArrivalPhone)}
+      />
+      <input
+        type="hidden"
+        name="address_display_mode"
+        value={textValue(basics.addressDisplayMode)}
+      />
+      <input
+        type="hidden"
+        name="available_date"
+        value={textValue(basics.availableDate)}
+      />
+      <input
+        type="hidden"
+        name="virtual_tour_url"
+        value={textValue(basics.virtualTourUrl)}
+      />
+      <input type="hidden" name="sqft" value={numberValue(basics.sqft)} />
+      <input type="hidden" name="floor" value={textValue(basics.floor)} />
+      <input type="hidden" name="unit_type" value={textValue(basics.unitType)} />
+      <input
+        type="hidden"
+        name="for_rent_by"
+        value={textValue(basics.forRentBy)}
+      />
+      <input
+        type="hidden"
+        name="structure_type"
+        value={textValue(basics.structureType)}
+      />
+      <input type="hidden" name="laundry" value={textValue(basics.laundry)} />
+      {basics.airConditioning && (
+        <input type="hidden" name="air_conditioning" value="on" />
+      )}
+      {basics.balcony && <input type="hidden" name="balcony" value="on" />}
+      {basics.furnished && <input type="hidden" name="furnished" value="on" />}
+      <input
+        type="hidden"
+        name="pets_cats"
+        value={triBoolValue(basics.petsCats)}
+      />
+      <input
+        type="hidden"
+        name="pets_dogs"
+        value={triBoolValue(basics.petsDogs)}
+      />
+      <input
+        type="hidden"
+        name="pets_dog_size"
+        value={textValue(basics.petsDogSize)}
+      />
+      <input
+        type="hidden"
+        name="pets_notes"
+        value={textValue(basics.petsNotes)}
+      />
+      <input
+        type="hidden"
+        name="heat_included"
+        value={triBoolValue(basics.heatIncluded)}
+      />
+      <input
+        type="hidden"
+        name="hydro_included"
+        value={triBoolValue(basics.hydroIncluded)}
+      />
+      <input
+        type="hidden"
+        name="water_included"
+        value={triBoolValue(basics.waterIncluded)}
+      />
+      {basics.hasSmartLock && (
+        <input type="hidden" name="has_smart_lock" value="on" />
+      )}
+      {basics.photosReady && (
+        <input type="hidden" name="photos_ready" value="on" />
+      )}
+      <input
+        type="hidden"
+        name="lease_term"
+        value={textValue(basics.leaseTerm)}
+      />
+      <input type="hidden" name="smoking" value={textValue(basics.smoking)} />
+      <input type="hidden" name="ac_type" value={textValue(basics.acType)} />
+      <input
+        type="hidden"
+        name="on_site_management"
+        value={triBoolValue(basics.onSiteManagement)}
+      />
+    </>
+  );
+}
+
+function SimpleStep({
+  id,
+  number,
+  title,
+  detail,
+  done,
+  children,
+}: {
+  id: string;
+  number: number;
+  title: string;
+  detail: string;
+  done: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      className={`scroll-mt-6 rounded-2xl border bg-white p-5 shadow-sm ${
+        done ? "border-green-200" : "border-gray-200"
+      }`}
+    >
+      <div className="mb-4 flex flex-wrap items-start gap-3">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+            done ? "bg-green-600 text-white" : "bg-amber-50 text-amber-700"
+          }`}
+        >
+          {done ? <Icons.check className="h-5 w-5" /> : number}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+          <p className="mt-1 text-sm leading-relaxed text-gray-600">{detail}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function selectedSimpleChannels(launchRun: LaunchRunData) {
+  if (launchRun.run) {
+    const runKeys = new Set(launchRun.items.map((item) => item.channel));
+    return launchRun.startChannels.filter((channel) => runKeys.has(channel.key));
+  }
+  return launchRun.startChannels.filter((channel) => channel.defaultSelected);
+}
+
+function SimpleGetOnline({
+  propertyId,
+  basics,
+  linkIsLive,
+  setupOutstanding,
+  hasPhotos,
+  canSetLive,
+  launchRun,
+  liveChannels,
+  replyInputs,
+  totalInquiryCount,
+  selectedChannelCount,
+}: {
+  propertyId: string;
+  basics: GetOnlineBasics;
+  linkIsLive: boolean;
+  setupOutstanding: number;
+  hasPhotos: boolean;
+  canSetLive: boolean;
+  launchRun: LaunchRunData;
+  liveChannels: number;
+  replyInputs: ReplyInputs;
+  totalInquiryCount: number;
+  selectedChannelCount: number;
+}) {
+  const selectedChannels = selectedSimpleChannels(launchRun);
+  const accountNeeds = selectedChannels.filter(
+    (channel) => channel.readinessTone !== "positive",
+  );
+  const accountsReady = accountNeeds.length === 0;
+  const hasRun = Boolean(launchRun.run);
+  const postedWithProof = linkIsLive && liveChannels > 0;
+  const firstOpen =
+    setupOutstanding > 0
+      ? { href: "#simple-basics", label: "Finish listing details" }
+      : !hasPhotos
+        ? { href: "#simple-photos", label: "Add photos" }
+        : !linkIsLive && canSetLive
+          ? { href: "#simple-set-live", label: "Set Live" }
+          : !hasRun
+            ? { href: "#publish-checklist", label: "Choose rental sites" }
+            : !accountsReady
+              ? { href: "#get-online-accounts", label: "Connect accounts" }
+              : liveChannels === 0
+                ? { href: "#publish-checklist", label: "Post and paste link" }
+                : { href: "#simple-live", label: "Review live listing" };
+
+  if (postedWithProof) {
+    return (
+      <section
+        id="simple-live"
+        className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm"
+      >
+        <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+          You&apos;re live
+        </span>
+        <h3 className="mt-3 text-xl font-semibold text-green-950">
+          This listing is online and has saved ad proof.
+        </h3>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
+          {liveChannels} {liveChannels === 1 ? "site has" : "sites have"} a
+          live ad link saved. {totalInquiryCount}{" "}
+          {totalInquiryCount === 1 ? "inquiry" : "inquiries"} are tied to this
+          rental.
+        </p>
+        {replyInputs.bookingUrl && (
+          <div className="mt-4 max-w-xl">
+            <p className="mb-1 text-xs font-semibold text-green-900">
+              Public renter link
+            </p>
+            <CopyLink url={replyInputs.bookingUrl} />
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-2xl border border-brand/20 bg-brand/[0.04] p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand">
+              Next step
+            </p>
+            <h3 className="mt-1 text-lg font-semibold text-gray-950">
+              {firstOpen.label}
+            </h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Work down the steps below. Nothing posts automatically.
+            </p>
+          </div>
+          <a
+            href={firstOpen.href}
+            className={PRIMARY_BTN}
+            style={{ backgroundColor: "var(--brand-color)" }}
+          >
+            {firstOpen.label}
+          </a>
+        </div>
+      </section>
+
+      <SimpleStep
+        id="simple-basics"
+        number={1}
+        title="Finish the listing details"
+        detail={
+          setupOutstanding === 0
+            ? "Rent, beds, baths, and address are ready."
+            : `${setupOutstanding} ${
+                setupOutstanding === 1 ? "detail" : "details"
+              } still needs review.`
+        }
+        done={setupOutstanding === 0}
+      >
+        <form action={updateProperty} className="grid gap-3 sm:grid-cols-6">
+          <input type="hidden" name="id" value={propertyId} />
+          <HiddenPreservedPropertyFields basics={basics} />
+          <label className="sm:col-span-6">
+            <span className="mb-1 block text-xs font-medium text-gray-600">
+              Address
+            </span>
+            <input
+              name="address"
+              defaultValue={basics.address}
+              required
+              className={FIELD_CLASS}
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="mb-1 block text-xs font-medium text-gray-600">
+              Rent ($/mo)
+            </span>
+            <input
+              name="rent"
+              type="number"
+              step="0.01"
+              defaultValue={centsToDollars(basics.rentCents)}
+              className={FIELD_CLASS}
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="mb-1 block text-xs font-medium text-gray-600">
+              Beds
+            </span>
+            <input
+              name="beds"
+              type="number"
+              step="1"
+              defaultValue={numberValue(basics.beds)}
+              className={FIELD_CLASS}
+            />
+          </label>
+          <label className="sm:col-span-2">
+            <span className="mb-1 block text-xs font-medium text-gray-600">
+              Baths
+            </span>
+            <input
+              name="baths"
+              type="number"
+              step="0.5"
+              defaultValue={numberValue(basics.baths)}
+              className={FIELD_CLASS}
+            />
+          </label>
+          <div className="sm:col-span-6">
+            <button
+              type="submit"
+              className={PRIMARY_BTN}
+              style={{ backgroundColor: "var(--brand-color)" }}
+            >
+              Save listing details
+            </button>
+          </div>
+        </form>
+      </SimpleStep>
+
+      <SimpleStep
+        id="simple-photos"
+        number={2}
+        title="Add photos"
+        detail={
+          hasPhotos
+            ? "Photos are already added."
+            : "Photos are not required, but they make the ad much stronger."
+        }
+        done={hasPhotos}
+      >
+        <form
+          action={uploadPropertyPhotos}
+          encType="multipart/form-data"
+          className="flex flex-wrap items-end gap-3"
+        >
+          <input type="hidden" name="property_id" value={propertyId} />
+          <label className="min-w-[16rem] flex-1">
+            <span className="mb-1 block text-xs font-medium text-gray-600">
+              Photos
+            </span>
+            <input
+              name="photos"
+              type="file"
+              accept="image/*"
+              multiple
+              className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+            />
+          </label>
+          <button
+            type="submit"
+            className={SECONDARY_BTN}
+          >
+            Upload photos
+          </button>
+        </form>
+      </SimpleStep>
+
+      <SimpleStep
+        id="simple-set-live"
+        number={3}
+        title="Set Live"
+        detail={
+          linkIsLive
+            ? "Renters can open the Vacantless listing page."
+            : canSetLive
+              ? "Make the public page work before you post it anywhere."
+              : "Review the listing status before it can be posted again."
+        }
+        done={linkIsLive}
+      >
+        {linkIsLive ? (
+          replyInputs.bookingUrl ? (
+            <CopyLink url={replyInputs.bookingUrl} />
+          ) : (
+            <p className="text-sm text-gray-600">The renter page is live.</p>
+          )
+        ) : canSetLive ? (
+          <form action={publishProperty}>
+            <input type="hidden" name="id" value={propertyId} />
+            <button
+              type="submit"
+              className={PRIMARY_BTN}
+              style={{ backgroundColor: "var(--brand-color)" }}
+            >
+              Set Live
+            </button>
+          </form>
+        ) : (
+          <p className="text-sm text-gray-600">
+            This status cannot be set Live from the simple view.
+          </p>
+        )}
+      </SimpleStep>
+
+      <SimpleStep
+        id="simple-sites"
+        number={4}
+        title="Choose rental sites"
+        detail={
+          hasRun
+            ? "Your posting checklist is started."
+            : `${selectedChannelCount} suggested ${
+                selectedChannelCount === 1 ? "site is" : "sites are"
+              } selected for you.`
+        }
+        done={hasRun}
+      >
+        <LaunchRunPanel
+          propertyId={propertyId}
+          run={launchRun.run}
+          items={launchRun.items}
+          progress={launchRun.progress}
+          selectable={launchRun.selectable}
+          startChannels={launchRun.startChannels}
+          realtorReferralEnabled={launchRun.realtorReferralEnabled}
+          leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
+        />
+      </SimpleStep>
+
+      <SimpleStep
+        id="get-online-accounts"
+        number={5}
+        title="Connect the accounts those sites need"
+        detail={
+          accountsReady
+            ? "The selected sites do not need more account setup right now."
+            : `${accountNeeds.length} ${
+                accountNeeds.length === 1 ? "site needs" : "sites need"
+              } account access before posting.`
+        }
+        done={accountsReady}
+      >
+        {accountsReady ? (
+          <p className="text-sm text-gray-600">
+            Continue to posting and paste each live ad link when it exists.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {accountNeeds.map((channel) => (
+              <li
+                key={channel.key}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-950">
+                    {channel.label}
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    {channel.setupBlockers.length > 0
+                      ? channel.setupBlockers.join(" · ")
+                      : channel.readinessLabel}
+                  </p>
+                </div>
+                <a
+                  href="/dashboard/settings?tab=distribution"
+                  className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                >
+                  Connect accounts
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SimpleStep>
+
+      <SimpleStep
+        id="simple-proof"
+        number={6}
+        title="Post, then paste the live ad link"
+        detail={
+          liveChannels > 0
+            ? `${liveChannels} ${
+                liveChannels === 1 ? "site has" : "sites have"
+              } a saved live ad link.`
+            : "After you post on an outside site, paste the public ad link in the checklist above."
+        }
+        done={liveChannels > 0}
+      >
+        <a
+          href="#publish-checklist"
+          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          Open posting checklist
+        </a>
+      </SimpleStep>
+    </div>
+  );
 }
 
 function SimplePostingPlan({
