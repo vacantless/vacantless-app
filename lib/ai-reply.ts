@@ -1,3 +1,5 @@
+import { matchKnowledge, type PropertyQaEntry } from "./property-qa";
+
 export type AiReplyListing = {
   address: string | null;
   rentCents: number | null;
@@ -16,6 +18,7 @@ export type AiReplyDraftInput = {
   moveInDate?: string | null;
   noSuitableTime?: boolean | null;
   listing: AiReplyListing | null;
+  knowledge?: readonly PropertyQaEntry[] | null;
 };
 
 export type AiReplyDraft = {
@@ -113,6 +116,12 @@ function inquiryCue(inquiryText: string | null): string | null {
   return "I read your note and can answer your questions before we book.";
 }
 
+function sentence(value: string | null): string | null {
+  const clean = cleanText(value);
+  if (!clean) return null;
+  return /[.!?]$/.test(clean) ? clean : `${clean}.`;
+}
+
 function slotOffer(input: AiReplyDraftInput): string {
   if (input.noSuitableTime) {
     return "I can offer another viewing slot. Would a weekday evening, weekend, or daytime window work better for you?";
@@ -137,7 +146,10 @@ export function buildAiReplyDraft(input: AiReplyDraftInput): AiReplyDraft {
   const moveIn = cleanText(input.moveInDate)
     ? `I also saw your desired move-in date: ${cleanText(input.moveInDate)}.`
     : null;
-  const cue = inquiryCue(input.inquiryText);
+  const knowledgeMatch = matchKnowledge(input.inquiryText, input.knowledge);
+  const cue = knowledgeMatch
+    ? sentence(knowledgeMatch.answerText)
+    : inquiryCue(input.inquiryText);
   const offer = slotOffer(input);
 
   const body = [

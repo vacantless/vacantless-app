@@ -36,6 +36,8 @@ import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
 import { InquiryReplyPanel } from "../inquiry-reply-panel";
 import { buildAiReplyDraft } from "@/lib/ai-reply";
+import { loadPropertyKnowledge } from "@/lib/property-qa";
+import { PropertyQaPanel } from "../property-qa-panel";
 import {
   isFeatureEnabledForOrg,
   loadOrganizationFeatureFlags,
@@ -111,7 +113,7 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { apply?: string };
+  searchParams: { apply?: string; qa?: string };
 }) {
   const supabase = createClient();
   const { data: lead } = await supabase
@@ -216,6 +218,10 @@ export default async function LeadDetailPage({
       { ...org, featureFlags: aiReplyFeatureFlags },
       { env: process.env },
     );
+  const propertyKnowledge =
+    canUseAiReply && org && l.property?.id
+      ? await loadPropertyKnowledge(supabase, org.id, l.property.id)
+      : [];
   const aiReplyDraft = canUseAiReply
     ? buildAiReplyDraft({
         renterName: l.name,
@@ -235,6 +241,7 @@ export default async function LeadDetailPage({
               petFriendly: l.property.pet_friendly,
             }
           : null,
+        knowledge: propertyKnowledge,
       })
     : null;
 
@@ -599,6 +606,15 @@ export default async function LeadDetailPage({
             ))}
           </ul>
         </>
+      )}
+
+      {canUseAiReply && l.property?.id && (
+        <PropertyQaPanel
+          leadId={l.id}
+          propertyId={l.property.id}
+          entries={propertyKnowledge}
+          flash={searchParams.qa ?? null}
+        />
       )}
 
       <InquiryReplyPanel

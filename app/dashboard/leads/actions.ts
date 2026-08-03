@@ -17,6 +17,14 @@ import { createHash } from "crypto";
 import { DOCUMENTS_BUCKET } from "@/lib/documents-server";
 import { documentStoragePath, validateDocumentUpload } from "@/lib/documents";
 import { applicationSummaryTitle } from "@/lib/rental-application-summary";
+import {
+  isFeatureEnabledForOrg,
+  loadOrganizationFeatureFlags,
+} from "@/lib/feature-entitlements";
+import {
+  buildQaUpsert,
+  savePropertyQaEntry,
+} from "@/lib/property-qa";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -37,6 +45,180 @@ async function leadInOrg(
     .eq("id", id)
     .limit(1);
   return (data?.length ?? 0) > 0;
+}
+
+function formString(formData: FormData, name: string): string {
+  return String(formData.get(name) ?? "").trim();
+}
+
+function leadPath(leadId: string): string {
+  return `/dashboard/leads/${leadId}`;
+}
+
+function qaAnchor(leadId: string, status: string): string {
+  return `${leadPath(leadId)}?qa=${status}#property-qa`;
+}
+
+async function aiReplyEnabledForCurrentOrg(
+  supabase: ReturnType<typeof createClient>,
+  org: NonNullable<Awaited<ReturnType<typeof getCurrentOrg>>>,
+): Promise<boolean> {
+  const flags = await loadOrganizationFeatureFlags(supabase, org.id, ["ai_reply"]);
+  return isFeatureEnabledForOrg(
+    "ai_reply",
+    { ...org, featureFlags: flags },
+    { env: process.env },
+  );
+}
+
+async function propertyInOrg(
+  supabase: ReturnType<typeof createClient>,
+  propertyId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  return !!data;
+}
+
+async function requireQaCurationContext(formData: FormData) {
+  const leadId = formString(formData, "lead_id");
+  const propertyId = formString(formData, "property_id");
+  if (!leadId) redirect("/dashboard/leads");
+  if (!propertyId) redirect(qaAnchor(leadId, "missing-property"));
+
+  await requireCapability("manage_properties", qaAnchor(leadId, "forbidden"));
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  if (!(await leadInOrg(supabase, leadId))) {
+    redirect("/dashboard/leads");
+  }
+  if (!(await aiReplyEnabledForCurrentOrg(supabase, org))) {
+    redirect(qaAnchor(leadId, "disabled"));
+  }
+  if (!(await propertyInOrg(supabase, propertyId, org.id))) {
+    redirect(qaAnchor(leadId, "missing-property"));
+  }
+
+  return { supabase, org, leadId, propertyId };
+}
+
+async function qaRowInScope(
+  supabase: ReturnType<typeof createClient>,
+  qaId: string,
+  organizationId: string,
+  propertyId: string,
+) {
+  const { data } = await supabase
+    .from("property_qa")
+    .select("id, property_id, question_text, answer_text")
+    .eq("id", qaId)
+    .eq("organization_id", organizationId)
+    .or(`property_id.eq.${propertyId},property_id.is.null`)
+    .maybeSingle();
+  return data as {
+    id: string;
+    property_id: string | null;
+    question_text: string;
+    answer_text: string;
+  } | null;
+}
+
+export async function addLeadPropertyQa(formData: FormData) {
+  const { supabase, org, leadId, propertyId } =
+    await requireQaCurationContext(formData);
+  const scope = formString(formData, "scope") === "org" ? "org" : "property";
+  const ok = await savePropertyQaEntry(supabase, {
+    organizationId: org.id,
+    propertyId: scope === "org" ? null : propertyId,
+    questionText: formString(formData, "question_text"),
+    answerText: formString(formData, "answer_text"),
+    source: "operator",
+  });
+  redirect(qaAnchor(leadId, ok ? "saved" : "invalid"));
+}
+
+export async function updateLeadPropertyQa(formData: FormData) {
+  const { supabase, org, leadId, propertyId } =
+    await requireQaCurationContext(formData);
+  const qaId = formString(formData, "qa_id");
+  const existing = qaId
+    ? await qaRowInScope(supabase, qaId, org.id, propertyId)
+    : null;
+  if (!existing) redirect(qaAnchor(leadId, "missing"));
+
+  const row = buildQaUpsert({
+    organizationId: org.id,
+    propertyId: existing.property_id,
+    questionText: formString(formData, "question_text"),
+    answerText: formString(formData, "answer_text"),
+    source: "operator",
+  });
+  if (!row) redirect(qaAnchor(leadId, "invalid"));
+
+  const { error } = await supabase
+    .from("property_qa")
+    .update({
+      question_key: row.question_key,
+      question_text: row.question_text,
+      answer_text: row.answer_text,
+      source: row.source,
+      updated_at: row.updated_at,
+    })
+    .eq("id", existing.id)
+    .eq("organization_id", org.id);
+  redirect(qaAnchor(leadId, error ? "error" : "saved"));
+}
+
+export async function deleteLeadPropertyQa(formData: FormData) {
+  const { supabase, org, leadId, propertyId } =
+    await requireQaCurationContext(formData);
+  const qaId = formString(formData, "qa_id");
+  const existing = qaId
+    ? await qaRowInScope(supabase, qaId, org.id, propertyId)
+    : null;
+  if (!existing) redirect(qaAnchor(leadId, "missing"));
+
+  const { error } = await supabase
+    .from("property_qa")
+    .delete()
+    .eq("id", existing.id)
+    .eq("organization_id", org.id);
+  redirect(qaAnchor(leadId, error ? "error" : "deleted"));
+}
+
+export async function promoteLeadPropertyQa(formData: FormData) {
+  const { supabase, org, leadId, propertyId } =
+    await requireQaCurationContext(formData);
+  const qaId = formString(formData, "qa_id");
+  const existing = qaId
+    ? await qaRowInScope(supabase, qaId, org.id, propertyId)
+    : null;
+  if (!existing || existing.property_id == null) {
+    redirect(qaAnchor(leadId, "missing"));
+  }
+
+  const saved = await savePropertyQaEntry(supabase, {
+    organizationId: org.id,
+    propertyId: null,
+    questionText: existing.question_text,
+    answerText: existing.answer_text,
+    source: "operator",
+  });
+  if (!saved) redirect(qaAnchor(leadId, "error"));
+
+  await supabase
+    .from("property_qa")
+    .delete()
+    .eq("id", existing.id)
+    .eq("organization_id", org.id);
+  redirect(qaAnchor(leadId, "promoted"));
 }
 
 export async function updateLeadStatus(formData: FormData) {
