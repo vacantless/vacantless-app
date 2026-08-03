@@ -287,7 +287,7 @@ export default async function PropertiesPage({
                   </>
                 )}
                 <Link
-                  href={`/dashboard/properties/${p.id}`}
+                  href={`/dashboard/properties/${p.id}#rental-details`}
                   className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Edit

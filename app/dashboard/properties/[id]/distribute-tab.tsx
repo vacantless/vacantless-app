@@ -337,6 +337,9 @@ export function DistributeTab({
   today,
   readyToShare,
   requiredOutstanding,
+  setupOutstanding,
+  hasPhotos,
+  canSetLive,
   channelCards,
   otherPosts,
   promotionNote,
@@ -354,6 +357,9 @@ export function DistributeTab({
   today: string;
   readyToShare: boolean;
   requiredOutstanding: number;
+  setupOutstanding: number;
+  hasPhotos: boolean;
+  canSetLive: boolean;
   channelCards: DistributeChannelCard[];
   otherPosts: DistributePostRow[];
   promotionNote: string | null;
@@ -400,6 +406,17 @@ export function DistributeTab({
   const accountReadyCount = launchRun.startChannels.filter(
     (channel) => channel.readinessTone === "positive",
   ).length;
+  const readinessLabel = readyToShare
+    ? "Ready to post"
+    : setupOutstanding > 0
+      ? `${setupOutstanding} ${
+          setupOutstanding === 1 ? "listing detail" : "listing details"
+        } to finish`
+      : !linkIsLive
+        ? "Set Live before posting"
+        : `${requiredOutstanding} ${
+            requiredOutstanding === 1 ? "thing" : "things"
+          } to finish`;
 
   return (
     <div>
@@ -415,7 +432,8 @@ export function DistributeTab({
           </h3>
         </div>
         <p className="mb-3 max-w-2xl text-sm text-slate-300">
-          Choose where to post, connect your accounts, and post it yourself, or have Vacantless post for you.
+          Follow the steps below. Nothing is posted automatically; a site counts
+          as Live only after the real ad link is saved here.
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
@@ -425,18 +443,22 @@ export function DistributeTab({
                 : "bg-amber-300 text-slate-950"
             }`}
           >
-            {readyToShare
-              ? "Ready to post"
-              : `${requiredOutstanding} ${
-                  requiredOutstanding === 1 ? "thing" : "things"
-                } to finish first`}
+            {readinessLabel}
           </span>
           <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
             {liveChannels} {liveChannels === 1 ? "site" : "sites"} posted
           </span>
-          {!readyToShare && (
+          {!readyToShare && setupOutstanding > 0 && (
             <a href="#rental-details" className="font-medium text-white underline">
-              Finish setup in Unit details →
+              Finish listing details →
+            </a>
+          )}
+          {!readyToShare && setupOutstanding === 0 && !linkIsLive && (
+            <a
+              href={canSetLive ? "#publish-action" : "#rental-details"}
+              className="font-medium text-white underline"
+            >
+              {canSetLive ? "Set Live →" : "Review listing status →"}
             </a>
           )}
         </div>
@@ -473,9 +495,20 @@ export function DistributeTab({
         )}
       </div>
 
+      <SimplePostingPlan
+        linkIsLive={linkIsLive}
+        setupOutstanding={setupOutstanding}
+        hasPhotos={hasPhotos}
+        canSetLive={canSetLive}
+        hasRun={Boolean(launchRun.run)}
+        selectedChannelCount={selectedChannelCount}
+        liveChannels={liveChannels}
+      />
+
       <DistributionBasicsPanel
-        readyToShare={readyToShare}
-        requiredOutstanding={requiredOutstanding}
+        linkIsLive={linkIsLive}
+        setupOutstanding={setupOutstanding}
+        canSetLive={canSetLive}
         selectedChannelCount={selectedChannelCount}
         liveChannels={liveChannels}
         accountReadyCount={accountReadyCount}
@@ -764,30 +797,184 @@ function conciergeRequestedDate(value: string | null | undefined): string | null
   return new Date(time).toISOString().slice(0, 10);
 }
 
+function SimplePostingPlan({
+  linkIsLive,
+  setupOutstanding,
+  hasPhotos,
+  canSetLive,
+  hasRun,
+  selectedChannelCount,
+  liveChannels,
+}: {
+  linkIsLive: boolean;
+  setupOutstanding: number;
+  hasPhotos: boolean;
+  canSetLive: boolean;
+  hasRun: boolean;
+  selectedChannelCount: number;
+  liveChannels: number;
+}) {
+  const steps = [
+    {
+      label: "Finish the listing details",
+      detail:
+        setupOutstanding === 0
+          ? "Rent, beds, baths, and address are ready."
+          : `${setupOutstanding} ${
+              setupOutstanding === 1 ? "detail" : "details"
+            } still needs review.`,
+      href: "#rental-details",
+      action: setupOutstanding === 0 ? "Review" : "Finish",
+      done: setupOutstanding === 0,
+    },
+    {
+      label: "Add photos",
+      detail: hasPhotos
+        ? "Photos are ready."
+        : "Photos are not required, but they make the ad much stronger.",
+      href: "#property-photos",
+      action: hasPhotos ? "Review" : "Add photos",
+      done: hasPhotos,
+    },
+    {
+      label: "Set Live",
+      detail: linkIsLive
+        ? "Renters can open the Vacantless listing page."
+        : canSetLive
+          ? "Make the public page work before you post it anywhere."
+          : "Review the listing status before it can be posted again.",
+      href: linkIsLive ? "#share" : canSetLive ? "#publish-action" : "#rental-details",
+      action: linkIsLive ? "Open link" : canSetLive ? "Set Live" : "Review",
+      done: linkIsLive,
+    },
+    {
+      label: "Choose rental sites",
+      detail: hasRun
+        ? "Your posting checklist is started."
+        : `${selectedChannelCount} suggested ${
+            selectedChannelCount === 1 ? "site is" : "sites are"
+          } selected for you.`,
+      href: "#publish-checklist",
+      action: hasRun ? "Open checklist" : "Choose sites",
+      done: hasRun,
+    },
+    {
+      label: "Post, then paste the live ad link",
+      detail:
+        liveChannels > 0
+          ? `${liveChannels} ${
+              liveChannels === 1 ? "site has" : "sites have"
+            } a saved live ad link.`
+          : "After you post on an outside site, paste the public ad link here.",
+      href: "#publish-checklist",
+      action: liveChannels > 0 ? "Review links" : "Start posting",
+      done: liveChannels > 0,
+    },
+  ];
+
+  return (
+    <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Simple posting plan
+          </h3>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-gray-600">
+            Work top to bottom. Each step opens the right place on this page.
+          </p>
+        </div>
+        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+          No automatic posting
+        </span>
+      </div>
+      <ol className="divide-y divide-gray-100">
+        {steps.map((step, index) => (
+          <li
+            key={step.label}
+            className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+          >
+            <span
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                step.done
+                  ? "bg-green-600 text-white"
+                  : "bg-amber-50 text-amber-700"
+              }`}
+            >
+              {step.done ? <Icons.check className="h-4 w-4" /> : index + 1}
+            </span>
+            <div className="min-w-[14rem] flex-1">
+              <p className="text-sm font-semibold text-gray-900">{step.label}</p>
+              <p className="text-xs text-gray-600">{step.detail}</p>
+            </div>
+            <a
+              href={step.href}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              {step.action}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 function DistributionBasicsPanel({
-  readyToShare,
-  requiredOutstanding,
+  linkIsLive,
+  setupOutstanding,
+  canSetLive,
   selectedChannelCount,
   liveChannels,
   accountReadyCount,
   accountTotalCount,
   hasRun,
 }: {
-  readyToShare: boolean;
-  requiredOutstanding: number;
+  linkIsLive: boolean;
+  setupOutstanding: number;
+  canSetLive: boolean;
   selectedChannelCount: number;
   liveChannels: number;
   accountReadyCount: number;
   accountTotalCount: number;
   hasRun: boolean;
 }) {
+  const propertyValue =
+    setupOutstanding > 0
+      ? `${setupOutstanding} left`
+      : linkIsLive
+        ? "Live"
+        : "Ready";
+  const propertyDetail =
+    setupOutstanding > 0
+      ? "Finish details"
+      : linkIsLive
+        ? "Public page works"
+        : canSetLive
+          ? "Set Live next"
+          : "Review status";
+  const propertyHref =
+    setupOutstanding > 0
+      ? "#rental-details"
+      : linkIsLive
+        ? "#publish-checklist"
+        : canSetLive
+          ? "#publish-action"
+          : "#rental-details";
+  const propertyAction =
+    setupOutstanding > 0
+      ? "Finish"
+      : linkIsLive
+        ? "Use listing"
+        : canSetLive
+          ? "Set Live"
+          : "Review";
   const cards = [
     {
       title: "Property",
-      value: readyToShare ? "Ready" : `${requiredOutstanding} left`,
-      detail: readyToShare ? "Ready to market" : "Needs setup",
-      href: readyToShare ? "#publish-checklist" : "#rental-details",
-      action: readyToShare ? "Use property" : "Finish setup",
+      value: propertyValue,
+      detail: propertyDetail,
+      href: propertyHref,
+      action: propertyAction,
     },
     {
       title: "Sites",

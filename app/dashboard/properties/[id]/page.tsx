@@ -1936,6 +1936,11 @@ export default async function PropertyDetailPage({
       : inquiriesOpen
         ? "inquiries"
         : "market";
+  const setupOutstandingCount = readiness.checks.filter(
+    (check) => check.required && check.key !== "live" && !check.ok,
+  ).length;
+  const setupReady = setupOutstandingCount === 0;
+  const hasListingPhotos = photoRows.length > 0;
   const vacancyModel = vacancyStripModel(
     [
       {
@@ -2234,7 +2239,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="setup"
-        label="Setup"
+        label="Edit listing"
         anchorId="rental-details"
         done={setUpStep?.state === "done"}
       >
@@ -2244,6 +2249,72 @@ export default async function PropertyDetailPage({
         className="mb-8 space-y-5"
       >
         <input type="hidden" name="id" value={p.id} />
+
+        <section className="rounded-2xl border border-brand/20 bg-brand/[0.03] p-5 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Finish the simple listing first
+              </h3>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-gray-600">
+                To get online, this rental only needs the basics below. The
+                longer optional sections stay available when you want a richer ad.
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                setupReady
+                  ? "bg-green-50 text-green-700"
+                  : "bg-amber-50 text-amber-700"
+              }`}
+            >
+              {setupReady
+                ? "Basics ready"
+                : `${setupOutstandingCount} ${
+                    setupOutstandingCount === 1 ? "detail" : "details"
+                  } left`}
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <a
+              href="#property-rent"
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:border-gray-300"
+            >
+              <p className="text-sm font-semibold text-gray-900">
+                1. Rent, beds, baths
+              </p>
+              <p className="mt-1 text-xs text-gray-600">
+                {setupReady
+                  ? "The renter facts are filled in."
+                  : "Fill the missing renter facts in The unit."}
+              </p>
+            </a>
+            <a
+              href="#listing-description"
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:border-gray-300"
+            >
+              <p className="text-sm font-semibold text-gray-900">
+                2. Listing description
+              </p>
+              <p className="mt-1 text-xs text-gray-600">
+                Review the ad text in plain English before posting.
+              </p>
+            </a>
+            <a
+              href="#property-photos"
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:border-gray-300"
+            >
+              <p className="text-sm font-semibold text-gray-900">
+                3. Photos
+              </p>
+              <p className="mt-1 text-xs text-gray-600">
+                {hasListingPhotos
+                  ? "Photos are already added."
+                  : "Add photos next; they make the ad much stronger."}
+              </p>
+            </a>
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h3 className="mb-4 text-sm font-semibold text-gray-900">
@@ -2397,11 +2468,21 @@ export default async function PropertyDetailPage({
           />
         )}
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-semibold text-gray-900">
-            Showings
-          </h3>
-        <div>
+        <details className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Showing instructions
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Optional: access notes for the showing agent.
+              </p>
+            </div>
+            <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+              Open
+            </span>
+          </summary>
+        <div className="border-t border-gray-100 px-5 py-4">
           <label
             htmlFor="property-showing-instructions"
             className="mb-1 block text-xs font-medium text-gray-600"
@@ -2445,7 +2526,7 @@ export default async function PropertyDetailPage({
             arrival phone from Settings.
           </p>
         </div>
-        </section>
+        </details>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h3 className="mb-4 text-sm font-semibold text-gray-900">
@@ -2481,13 +2562,28 @@ export default async function PropertyDetailPage({
         </div>
         </section>
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-semibold text-gray-900">
-            More details
-          </h3>
+        <details
+          open={Boolean(searchParams.tourerr)}
+          className="rounded-2xl border border-gray-200 bg-white shadow-sm"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Optional details for stronger ads
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Add unit type, available date, pets, utilities, amenities, and
+                internal flags when they matter.
+              </p>
+            </div>
+            <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+              Open
+            </span>
+          </summary>
+          <div className="space-y-4 border-t border-gray-100 px-5 py-4">
 
         {/* --- Virtual tour / video link (item S) --- */}
-        <div className="border-t border-gray-100 pt-4">
+        <div>
           <label
             htmlFor="virtual_tour_url"
             className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500"
@@ -2963,7 +3059,8 @@ export default async function PropertyDetailPage({
           </label>
         </fieldset>
 
-        </section>
+          </div>
+        </details>
 
         <button
           type="submit"
@@ -3244,7 +3341,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="distribute"
-        label="Post online"
+        label="Get online"
         anchorId="distribute"
         done={distributeChannelCards.some(
           (c) =>
@@ -3258,6 +3355,9 @@ export default async function PropertyDetailPage({
           today={distributeToday}
           readyToShare={readiness.readyToShare}
           requiredOutstanding={readiness.requiredOutstanding}
+          setupOutstanding={setupOutstandingCount}
+          hasPhotos={hasListingPhotos}
+          canSetLive={normalizedStatus !== "leased"}
           channelCards={distributeChannelCards}
           otherPosts={distributeOtherPosts}
           promotionNote={promotionGuard?.postingBody ?? null}
