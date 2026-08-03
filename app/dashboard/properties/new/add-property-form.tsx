@@ -763,7 +763,32 @@ export function AddPropertyV2Form({
           </div>
         </section>
 
-        <details open className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-1 text-sm font-semibold text-gray-900">
+            Photos <span className="font-normal text-gray-400">(optional but recommended)</span>
+          </h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Add photos now so the listing is ready to share, or add them later.
+          </p>
+          <Field label="Photos" htmlFor="photos">
+            <input
+              id="photos"
+              name="photos"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => setPhotoCount(e.target.files?.length ?? 0)}
+              className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+            />
+          </Field>
+        </section>
+
+        <p className="text-xs text-gray-500">
+          Optional — you don&apos;t need any of these to get online. Add them now
+          or anytime later.
+        </p>
+
+        <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <summary className="cursor-pointer text-sm font-semibold text-gray-900">
             Size, layout, and amenities
           </summary>
@@ -1100,19 +1125,6 @@ export function AddPropertyV2Form({
                   value={draft.video_url}
                   onChange={(e) => update("video_url", e.target.value)}
                   className={inputClass()}
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-6">
-              <Field label="Photos" htmlFor="photos">
-                <input
-                  id="photos"
-                  name="photos"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => setPhotoCount(e.target.files?.length ?? 0)}
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
                 />
               </Field>
             </div>
