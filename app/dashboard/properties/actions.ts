@@ -83,6 +83,7 @@ import {
   isPublicBookable,
   normalizePropertyStatus,
 } from "@/lib/listing-state";
+import { hardDeletable } from "@/lib/property-archive";
 import {
   validatePhotoUpload,
   extForType,
@@ -204,6 +205,27 @@ function parseNonNegativeInt(raw: string): number | null {
 function textOrNull(raw: FormDataEntryValue | null): string | null {
   const v = typeof raw === "string" ? raw.trim() : "";
   return v || null;
+}
+
+type PropertyReferenceTable = "leads" | "tenancies" | "listing_posts";
+
+async function countPropertyReferences(
+  supabase: ReturnType<typeof createClient>,
+  table: PropertyReferenceTable,
+  orgId: string,
+  propertyId: string,
+): Promise<number> {
+  const { count } = await supabase
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .eq("property_id", propertyId);
+  return count ?? 0;
+}
+
+function revalidatePropertyList() {
+  revalidatePath("/dashboard/properties");
+  revalidatePath("/dashboard");
 }
 
 function normalizeParkingType(raw: FormDataEntryValue | null): string | null {
@@ -1257,6 +1279,104 @@ export async function duplicateProperty(formData: FormData) {
   // Land the operator on the clone's edit page so they fix the address + rent;
   // the count drives the banner ("…including N photos").
   redirect(`/dashboard/properties/${newId}?duplicated=${clonedCount}`);
+}
+
+export async function deleteProperty(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+
+  // RLS scopes this read to the caller's org; organization_id keeps the write
+  // target explicit too. Never trust the row's client-rendered delete label.
+  const { data: property } = await supabase
+    .from("properties")
+    .select("status")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+
+  const p = property as { status: string | null } | null;
+  if (!p) redirect("/dashboard/properties");
+
+  const [leadCount, tenancyCount, postCount] = await Promise.all([
+    countPropertyReferences(supabase, "leads", org.id, id),
+    countPropertyReferences(supabase, "tenancies", org.id, id),
+    countPropertyReferences(supabase, "listing_posts", org.id, id),
+  ]);
+
+  if (!hardDeletable(p.status ?? "", leadCount, tenancyCount, postCount)) {
+    redirect("/dashboard/properties?delete_blocked=1");
+  }
+
+  const { error } = await supabase
+    .from("properties")
+    .delete()
+    .eq("id", id)
+    .eq("organization_id", org.id);
+
+  revalidatePropertyList();
+  if (error) redirect("/dashboard/properties?delete_blocked=1");
+  redirect("/dashboard/properties?deleted=1");
+}
+
+export async function archiveProperty(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+  const { data: property } = await supabase
+    .from("properties")
+    .select("status")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+
+  const p = property as { status: string | null } | null;
+  if (!p) redirect("/dashboard/properties");
+
+  const next: { archived_at: string; status?: string } = {
+    archived_at: new Date().toISOString(),
+  };
+  if (p.status === "available" || p.status === "paused") {
+    next.status = "off_market";
+  }
+
+  await supabase
+    .from("properties")
+    .update(next)
+    .eq("id", id)
+    .eq("organization_id", org.id);
+
+  revalidatePropertyList();
+  redirect("/dashboard/properties?archived=1");
+}
+
+export async function unarchiveProperty(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+  await supabase
+    .from("properties")
+    .update({ archived_at: null })
+    .eq("id", id)
+    .eq("organization_id", org.id);
+
+  revalidatePropertyList();
+  redirect("/dashboard/properties?restored=1");
 }
 
 /**
