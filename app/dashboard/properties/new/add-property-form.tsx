@@ -220,6 +220,7 @@ export function AddPropertyV2Form({
   const [addressSuggestions, setAddressSuggestions] = useState<
     GeocodeSuggestion[]
   >([]);
+  const [geocodeActive, setGeocodeActive] = useState(false);
   const [activeAddressIndex, setActiveAddressIndex] = useState(-1);
   const [isImportPending, startImportTransition] = useTransition();
   const [isDescriptionPending, startDescriptionTransition] = useTransition();
@@ -279,6 +280,7 @@ export function AddPropertyV2Form({
           return;
         }
         setAddressSuggestions(result.suggestions.slice(0, 6));
+        setGeocodeActive(true);
         setActiveAddressIndex(-1);
       });
     }, 250);
@@ -639,6 +641,28 @@ export function AddPropertyV2Form({
                   )}
                 </div>
               </Field>
+              {geocodeActive && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Address search powered by{" "}
+                  <a
+                    href="https://www.geoapify.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-gray-600 underline decoration-gray-300 underline-offset-2 hover:text-gray-900"
+                  >
+                    Geoapify
+                  </a>{" "}
+                  &middot; &copy;{" "}
+                  <a
+                    href="https://www.openstreetmap.org/copyright"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-gray-600 underline decoration-gray-300 underline-offset-2 hover:text-gray-900"
+                  >
+                    OpenStreetMap contributors
+                  </a>
+                </p>
+              )}
             </div>
             <Field label="Rent ($/mo)" htmlFor="rent">
               <input
