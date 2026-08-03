@@ -495,19 +495,6 @@ export function DistributeTab({
           <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
             {liveChannels} {liveChannels === 1 ? "site" : "sites"} posted
           </span>
-          {!readyToShare && setupOutstanding > 0 && (
-            <a href="#rental-details" className="font-medium text-white underline">
-              Finish listing details →
-            </a>
-          )}
-          {!readyToShare && setupOutstanding === 0 && !linkIsLive && (
-            <a
-              href={canSetLive ? "#publish-action" : "#rental-details"}
-              className="font-medium text-white underline"
-            >
-              {canSetLive ? "Set Live →" : "Review listing status →"}
-            </a>
-          )}
         </div>
         {!linkIsLive && promotionNote && (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -1324,7 +1311,7 @@ function SimpleGetOnline({
         title="Connect the accounts those sites need"
         detail={
           accountsReady
-            ? "The selected sites do not need more account setup right now."
+            ? "No accounts to connect here."
             : `${accountNeeds.length} ${
                 accountNeeds.length === 1 ? "site needs" : "sites need"
               } account access before posting.`
@@ -1333,7 +1320,9 @@ function SimpleGetOnline({
       >
         {accountsReady ? (
           <p className="text-sm text-gray-600">
-            Continue to posting and paste each live ad link when it exists.
+            Sites like Facebook and Kijiji ask you to sign in while you post -
+            that happens during guided posting, not here. Continue to posting
+            and paste each live ad link when it exists.
           </p>
         ) : (
           <ul className="space-y-2">
