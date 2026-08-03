@@ -16,11 +16,13 @@ import { rentalRowReadiness } from "@/lib/rental-readiness";
 import { getCurrentOrg } from "@/lib/org";
 import { canUseListingAiImport } from "@/lib/billing";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import { hardDeletable } from "@/lib/property-archive";
 import { addProperty, importPropertyFromMls, importListingFromImages } from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
 import { MlsPdfImport } from "./mls-pdf-import";
 import { ListingImageImport } from "./listing-image-import";
 import { ReadinessChips } from "./readiness-chips";
+import { DeleteOrArchiveControl } from "./row-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +34,21 @@ type PropertyRow = {
   baths: number | null;
   status: string;
   description: string | null;
+  archived_at: string | null;
 };
 
 export default async function PropertiesPage({
   searchParams,
 }: {
-  searchParams: { added?: string; import?: string };
+  searchParams: {
+    added?: string;
+    import?: string;
+    view?: string;
+    deleted?: string;
+    archived?: string;
+    restored?: string;
+    delete_blocked?: string;
+  };
 }) {
   const supabase = createClient();
   const org = await getCurrentOrg();
@@ -47,16 +58,23 @@ export default async function PropertiesPage({
     { data: properties },
     { data: leadRefs },
     { data: photoRefs },
+    { data: tenancyRefs },
+    { data: postRefs },
     { count: availabilityCount },
   ] = await Promise.all([
     supabase
       .from("properties")
-      .select("id, address, rent_cents, beds, baths, status, description")
+      .select("id, address, rent_cents, beds, baths, status, description, archived_at")
       .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
     supabase.from("leads").select("property_id").eq("organization_id", org.id),
     supabase
       .from("property_photos")
+      .select("property_id")
+      .eq("organization_id", org.id),
+    supabase.from("tenancies").select("property_id").eq("organization_id", org.id),
+    supabase
+      .from("listing_posts")
       .select("property_id")
       .eq("organization_id", org.id),
     // Org-wide weekly viewing windows — the same signal the property-detail
@@ -69,7 +87,11 @@ export default async function PropertiesPage({
       .eq("organization_id", org.id),
   ]);
 
-  const rows = (properties ?? []) as PropertyRow[];
+  const allRows = (properties ?? []) as PropertyRow[];
+  const activeRows = allRows.filter((row) => !row.archived_at);
+  const archivedRows = allRows.filter((row) => !!row.archived_at);
+  const archivedView = searchParams.view === "archived";
+  const rows = archivedView ? archivedRows : activeRows;
 
   // AI image import (Feature B Slice 2) is DARK: only surface the image-drop
   // path when the env flag is set AND the org's plan carries the entitlement
@@ -89,6 +111,23 @@ export default async function PropertiesPage({
     }
   }
 
+  const tenancyCounts = new Map<string, number>();
+  for (const r of (tenancyRefs ?? []) as { property_id: string | null }[]) {
+    if (r.property_id) {
+      tenancyCounts.set(
+        r.property_id,
+        (tenancyCounts.get(r.property_id) ?? 0) + 1,
+      );
+    }
+  }
+
+  const postCounts = new Map<string, number>();
+  for (const r of (postRefs ?? []) as { property_id: string | null }[]) {
+    if (r.property_id) {
+      postCounts.set(r.property_id, (postCounts.get(r.property_id) ?? 0) + 1);
+    }
+  }
+
   // Per-property photo counts — so a shareable-but-photo-poor rental can be
   // labelled at the list level (Codex QA: don't offer a bare "Copy link" with no
   // signal that the listing has no photos).
@@ -104,6 +143,36 @@ export default async function PropertiesPage({
   const proto = h.get("x-forwarded-proto") ?? "https";
   const intakeUrl = (id: string) =>
     host ? `${proto}://${host}/r/${id}` : `/r/${id}`;
+  const noticeDismissHref = archivedView
+    ? "/dashboard/properties?view=archived"
+    : "/dashboard/properties";
+  const notice =
+    searchParams.deleted
+      ? {
+          tone: "green",
+          text: "Listing deleted.",
+        }
+      : searchParams.archived
+        ? {
+            tone: "green",
+            text: "Listing archived. You can restore it from the Archived view.",
+          }
+        : searchParams.restored
+          ? {
+              tone: "green",
+              text: "Listing restored to Active as Off market.",
+            }
+          : searchParams.delete_blocked
+            ? {
+                tone: "amber",
+                text:
+                  "That listing now has inquiries or history — we archived nothing; use Archive instead.",
+              }
+            : null;
+  const noticeClass =
+    notice?.tone === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-green-200 bg-green-50 text-green-700";
 
   return (
     <div>
@@ -169,13 +238,26 @@ export default async function PropertiesPage({
           realtor.ca.
         </p>
       )}
+      {notice && (
+        <p
+          className={`mb-4 flex items-center justify-between gap-3 rounded-lg border px-4 py-2 text-sm ${noticeClass}`}
+        >
+          <span>{notice.text}</span>
+          <Link
+            href={noticeDismissHref}
+            className="shrink-0 text-xs font-medium underline"
+          >
+            Dismiss
+          </Link>
+        </p>
+      )}
 
       {/* Building standard policy entry point (S275 IA Step 3): the org-level
           defaults every unit inherits live here, with the portfolio they
           govern — relocated from Settings (G6/G7). Fresh-org audit P3: only
           surface it once there's at least one unit to govern; a zero-property
           org shouldn't be fronted with org-wide config before its first add. */}
-      {rows.length > 0 && (
+      {allRows.length > 0 && (
         <Link
           href="/dashboard/properties/standard-policy"
           className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
@@ -194,9 +276,46 @@ export default async function PropertiesPage({
         </Link>
       )}
 
+      {allRows.length > 0 && (
+        <nav
+          aria-label="Rental list view"
+          className="mb-4 inline-flex rounded-lg border border-gray-200 bg-white p-1 text-sm shadow-sm"
+        >
+          <Link
+            href="/dashboard/properties"
+            className={`rounded-md px-3 py-1.5 font-medium ${
+              archivedView
+                ? "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                : "bg-gray-900 text-white"
+            }`}
+          >
+            Active
+          </Link>
+          <Link
+            href="/dashboard/properties?view=archived"
+            className={`rounded-md px-3 py-1.5 font-medium ${
+              archivedView
+                ? "bg-gray-900 text-white"
+                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            }`}
+          >
+            Archived ({archivedRows.length})
+          </Link>
+        </nav>
+      )}
+
       {rows.length > 0 ? (
         <ul className="mb-8 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {rows.map((p) => {
+            const leadCount = leadCounts.get(p.id) ?? 0;
+            const tenancyCount = tenancyCounts.get(p.id) ?? 0;
+            const postCount = postCounts.get(p.id) ?? 0;
+            const canHardDelete = hardDeletable(
+              p.status,
+              leadCount,
+              tenancyCount,
+              postCount,
+            );
             const readiness = rentalRowReadiness({
               status: p.status,
               rentCents: p.rent_cents,
@@ -229,10 +348,9 @@ export default async function PropertiesPage({
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
-                {(leadCounts.get(p.id) ?? 0) > 0 && (
+                {leadCount > 0 && (
                   <span className="ml-2 text-xs font-medium text-gray-500">
-                    · {leadCounts.get(p.id)}{" "}
-                    {leadCounts.get(p.id) === 1 ? "inquiry" : "inquiries"}
+                    · {leadCount} {leadCount === 1 ? "inquiry" : "inquiries"}
                   </span>
                 )}
               </Link>
@@ -292,6 +410,11 @@ export default async function PropertiesPage({
                 >
                   Edit
                 </Link>
+                <DeleteOrArchiveControl
+                  propertyId={p.id}
+                  hardDelete={canHardDelete}
+                  archived={archivedView}
+                />
               </span>
               </div>
               {/* Readiness strip (Codex design audit #5): the four signals that
@@ -303,6 +426,10 @@ export default async function PropertiesPage({
             );
           })}
         </ul>
+      ) : archivedView ? (
+        <p className="mb-8 rounded-2xl border border-dashed border-gray-200 bg-white px-5 py-8 text-sm text-gray-500">
+          No archived listings.
+        </p>
       ) : (
         <div className="mb-8">
           <EmptyState
