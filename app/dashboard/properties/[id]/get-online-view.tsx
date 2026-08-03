@@ -10,15 +10,20 @@ type Mode = "simple" | "advanced";
 export function GetOnlineView({
   simple,
   advanced,
+  orgDefaultMode,
 }: {
   simple: ReactNode;
   advanced: ReactNode;
+  orgDefaultMode?: Mode | null;
 }) {
-  const [mode, setMode] = useState<Mode>("simple");
+  const [mode, setMode] = useState<Mode>(
+    orgDefaultMode === "advanced" ? "advanced" : "simple",
+  );
 
   useEffect(() => {
     const saved = window.localStorage.getItem(MODE_KEY);
     if (saved === "advanced") setMode("advanced");
+    else if (saved === "simple") setMode("simple");
   }, []);
 
   function setAndStore(next: Mode) {

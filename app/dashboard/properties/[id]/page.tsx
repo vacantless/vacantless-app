@@ -526,6 +526,24 @@ export default async function PropertyDetailPage({
   // never embeds a dead or unavailable URL; closed statuses get a safe fallback
   // line that does not invite bookings.
   const org = await getCurrentOrg();
+  const loadedOrgMode = (org as { distribution_view_mode?: unknown } | null)
+    ?.distribution_view_mode;
+  let orgDefaultMode: "simple" | "advanced" | null =
+    loadedOrgMode === "simple" || loadedOrgMode === "advanced"
+      ? loadedOrgMode
+      : null;
+  if (!orgDefaultMode && org?.id) {
+    const { data: viewModeOrg } = await supabase
+      .from("organizations")
+      .select("distribution_view_mode")
+      .eq("id", org.id)
+      .maybeSingle();
+    const viewMode = (
+      viewModeOrg as { distribution_view_mode?: unknown } | null
+    )?.distribution_view_mode;
+    orgDefaultMode =
+      viewMode === "simple" || viewMode === "advanced" ? viewMode : null;
+  }
   const orgFeedUrl =
     org?.slug && host
       ? `${proto}://${host}/api/feed/${org.slug}`
@@ -3388,6 +3406,7 @@ export default async function PropertyDetailPage({
         <DistributeTab
           propertyId={p.id}
           basics={getOnlineBasics}
+          orgDefaultMode={orgDefaultMode}
           linkIsLive={linkIsLive}
           addFormKey={String(searchParams.pn ?? "new")}
           today={distributeToday}

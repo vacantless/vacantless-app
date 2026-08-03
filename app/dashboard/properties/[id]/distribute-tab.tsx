@@ -374,6 +374,7 @@ function distributionHealth({
 export function DistributeTab({
   propertyId,
   basics,
+  orgDefaultMode,
   linkIsLive,
   addFormKey,
   today,
@@ -396,6 +397,7 @@ export function DistributeTab({
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
+  orgDefaultMode?: "simple" | "advanced" | null;
   linkIsLive: boolean;
   addFormKey: string;
   today: string;
@@ -541,6 +543,7 @@ export function DistributeTab({
       </div>
 
       <GetOnlineView
+        orgDefaultMode={orgDefaultMode}
         simple={
           <SimpleGetOnline
             propertyId={propertyId}
