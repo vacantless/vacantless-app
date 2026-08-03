@@ -174,6 +174,7 @@ import {
   type DistributeChannelCard,
   type DistributePostRow,
   type DistributeRunNotice,
+  type GetOnlineBasics,
   type LaunchRunData,
   type ReplyInputs,
   type PartnerAccountView,
@@ -1769,6 +1770,42 @@ export default async function PropertyDetailPage({
     bookingUrl: linkIsLive ? publicUrl : null,
     rentLabel: formatRentLabel(p.rent_cents),
   };
+  const getOnlineBasics: GetOnlineBasics = {
+    address: p.address,
+    addressDisplayMode: p.address_display_mode,
+    rentCents: p.rent_cents,
+    beds: p.beds,
+    baths: p.baths,
+    parking: p.parking,
+    description: p.description,
+    showingInstructions: p.showing_instructions,
+    showingArrivalPhone: p.showing_arrival_phone,
+    status: p.status,
+    availableDate: p.available_date,
+    virtualTourUrl: p.virtual_tour_url,
+    sqft: p.sqft,
+    floor: p.floor,
+    unitType: p.unit_type,
+    forRentBy: p.for_rent_by,
+    structureType: p.structure_type,
+    laundry: p.laundry,
+    airConditioning: p.air_conditioning,
+    balcony: p.balcony,
+    furnished: p.furnished,
+    petsCats: p.pets_cats,
+    petsDogs: p.pets_dogs,
+    petsDogSize: p.pets_dog_size,
+    petsNotes: p.pets_notes,
+    heatIncluded: p.heat_included,
+    hydroIncluded: p.hydro_included,
+    waterIncluded: p.water_included,
+    hasSmartLock: p.has_smart_lock,
+    photosReady: p.photos_ready,
+    leaseTerm: p.lease_term,
+    smoking: p.smoking,
+    acType: p.ac_type,
+    onSiteManagement: p.on_site_management,
+  };
   // --- Listing quality (S412 Slice 5) -------------------------------------
   const hasFeatures = Object.values(
     (effectiveFeatures ?? {}) as Record<string, unknown>,
@@ -3350,6 +3387,7 @@ export default async function PropertyDetailPage({
       >
         <DistributeTab
           propertyId={p.id}
+          basics={getOnlineBasics}
           linkIsLive={linkIsLive}
           addFormKey={String(searchParams.pn ?? "new")}
           today={distributeToday}
@@ -3368,6 +3406,7 @@ export default async function PropertyDetailPage({
           qaExpected={qaExpected}
           reservedTrackedLinksByChannel={reservedTrackedLinksByChannel}
           runNotice={distributeRunNotice}
+          totalInquiryCount={leadRows.length}
         />
       </TabPanel>
 
