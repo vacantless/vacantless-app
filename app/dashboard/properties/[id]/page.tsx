@@ -193,6 +193,10 @@ import {
   type ChannelAccountStatus,
   type ChannelReadinessValue,
 } from "@/lib/distribution-capabilities";
+import {
+  facebookOAuthConfigured,
+  fbPageChannelEnabled,
+} from "@/lib/facebook-page-oauth";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
 import { EquipmentSection, type EquipmentView } from "./equipment-section";
@@ -1241,7 +1245,9 @@ export default async function PropertyDetailPage({
   // account is recorded.
   const { data: channelAccountRows } = await supabase
     .from("distribution_channel_accounts")
-    .select("channel, account_status, feed_url, external_account_label, transport, capabilities")
+    .select(
+      "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized",
+    )
     .eq("organization_id", propertyOrgId);
   const channelAccountByKey = new Map<
     string,
@@ -1251,6 +1257,7 @@ export default async function PropertyDetailPage({
       externalAccountLabel: string | null;
       transport: string | null;
       capabilities: Record<string, unknown>;
+      automationAuthorized: boolean;
     }
   >();
   for (const row of (channelAccountRows ?? []) as Array<{
@@ -1260,6 +1267,7 @@ export default async function PropertyDetailPage({
     external_account_label: string | null;
     transport: string | null;
     capabilities: Record<string, unknown> | null;
+    automation_authorized: boolean | null;
   }>) {
     channelAccountByKey.set(row.channel, {
       status: row.account_status,
@@ -1267,8 +1275,13 @@ export default async function PropertyDetailPage({
       externalAccountLabel: row.external_account_label,
       transport: row.transport,
       capabilities: row.capabilities ?? {},
+      automationAuthorized: row.automation_authorized === true,
     });
   }
+  const facebookPageEnabled =
+    facebookOAuthConfigured() && fbPageChannelEnabled();
+  const instagramGraphEnabled =
+    facebookPageEnabled && process.env.IG_CHANNEL_ENABLED === "true";
   const readinessToneFor = (
     v: ChannelReadinessValue,
   ): "positive" | "warning" | "danger" | "neutral" =>
@@ -1317,19 +1330,20 @@ export default async function PropertyDetailPage({
         facebookPage:
           channel.key === "facebook_feed"
             ? {
-                enabled: process.env.FB_PAGE_CHANNEL_ENABLED === "true",
+                enabled: facebookPageEnabled,
                 accountStatus:
                   (channelAccountByKey.get(channel.key)?.status as ChannelAccountStatus | undefined) ??
                   null,
                 pageName: channelAccountByKey.get(channel.key)?.externalAccountLabel ?? null,
+                automationAuthorized:
+                  channelAccountByKey.get(channel.key)?.automationAuthorized ??
+                  false,
               }
             : null,
         instagramAccount:
           channel.key === "instagram"
             ? {
-                enabled:
-                  process.env.FB_PAGE_CHANNEL_ENABLED === "true" &&
-                  process.env.IG_CHANNEL_ENABLED === "true",
+                enabled: instagramGraphEnabled,
                 accountStatus:
                   (channelAccountByKey.get(channel.key)?.status as ChannelAccountStatus | undefined) ??
                   null,
