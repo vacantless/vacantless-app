@@ -479,8 +479,8 @@ export function DistributeTab({
           </h3>
         </div>
         <p className="mb-3 max-w-2xl text-sm text-slate-300">
-          Follow the steps below. Nothing is posted automatically; a site counts
-          as Live only after the real ad link is saved here.
+          Put the Vacantless page and rental feed live first, then use the
+          proof-based posting tools below to reach more rental sites.
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
@@ -543,7 +543,6 @@ export function DistributeTab({
             liveChannels={liveChannels}
             replyInputs={replyInputs}
             totalInquiryCount={totalInquiryCount}
-            selectedChannelCount={selectedChannelCount}
           />
         }
         advanced={
@@ -980,54 +979,6 @@ function HiddenPreservedPropertyFields({ basics }: { basics: GetOnlineBasics }) 
   );
 }
 
-function SimpleStep({
-  id,
-  number,
-  title,
-  detail,
-  done,
-  children,
-}: {
-  id: string;
-  number: number;
-  title: string;
-  detail: string;
-  done: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      id={id}
-      className={`scroll-mt-6 rounded-2xl border bg-white p-5 shadow-sm ${
-        done ? "border-green-200" : "border-gray-200"
-      }`}
-    >
-      <div className="mb-4 flex flex-wrap items-start gap-3">
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-            done ? "bg-green-600 text-white" : "bg-amber-50 text-amber-700"
-          }`}
-        >
-          {done ? <Icons.check className="h-5 w-5" /> : number}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <p className="mt-1 text-sm leading-relaxed text-gray-600">{detail}</p>
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function selectedSimpleChannels(launchRun: LaunchRunData) {
-  if (launchRun.run) {
-    const runKeys = new Set(launchRun.items.map((item) => item.channel));
-    return launchRun.startChannels.filter((channel) => runKeys.has(channel.key));
-  }
-  return launchRun.startChannels.filter((channel) => channel.defaultSelected);
-}
-
 function SimpleGetOnline({
   propertyId,
   basics,
@@ -1039,7 +990,6 @@ function SimpleGetOnline({
   liveChannels,
   replyInputs,
   totalInquiryCount,
-  selectedChannelCount,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -1051,248 +1001,394 @@ function SimpleGetOnline({
   liveChannels: number;
   replyInputs: ReplyInputs;
   totalInquiryCount: number;
-  selectedChannelCount: number;
 }) {
-  const selectedChannels = selectedSimpleChannels(launchRun);
-  const accountNeeds = selectedChannels.filter(
-    (channel) => channel.readinessTone !== "positive",
+  const addressLabel = basics.address || replyInputs.address || "this rental";
+  const publicLink = replyInputs.bookingUrl;
+  const rentShareLabel = replyInputs.rentLabel
+    ? ` (${replyInputs.rentLabel})`
+    : "";
+  const shareBody = publicLink
+    ? `${addressLabel}${rentShareLabel} is online and taking inquiries: ${publicLink}`
+    : "";
+  const shareSubject = `${addressLabel} rental`;
+  const reachChannels = launchRun.items.filter(
+    (item) => item.channel === "facebook" || item.channel === "kijiji",
   );
-  const accountsReady = accountNeeds.length === 0;
-  const hasRun = Boolean(launchRun.run);
-  const postedWithProof = linkIsLive && liveChannels > 0;
-  const firstOpen =
-    setupOutstanding > 0
-      ? { href: "#simple-basics", label: "Finish listing details" }
-      : !hasPhotos
-        ? { href: "#simple-photos", label: "Add photos" }
-        : !linkIsLive && canSetLive
-          ? { href: "#simple-set-live", label: "Set Live" }
-          : !hasRun
-            ? { href: "#publish-checklist", label: "Choose rental sites" }
-            : !accountsReady
-              ? { href: "#get-online-accounts", label: "Connect accounts" }
-              : liveChannels === 0
-                ? { href: "#publish-checklist", label: "Post and paste link" }
-                : { href: "#simple-live", label: "Review live listing" };
+  const activeReachConcierge = reachChannels.find(
+    (item) =>
+      item.mode === "concierge" &&
+      CONCIERGE_OPEN_STATUSES.includes(item.publishStatus),
+  );
+  const conciergeTargets = reachChannels.filter((item) => item.canConcierge);
+  const hasReachRunItems = reachChannels.length > 0;
+  const publishBlockedByBasics = setupOutstanding > 0;
 
-  if (postedWithProof) {
-    return (
-      <section
-        id="simple-live"
-        className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm"
+  const photoNudge = !hasPhotos ? (
+    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+      <span className="font-semibold">Photo boost:</span>
+      <span>Photos are optional for publishing, but they help renters trust the ad.</span>
+      <a
+        href="#property-photos"
+        className="font-semibold text-blue-900 underline decoration-blue-300 underline-offset-2"
       >
-        <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
-          You&apos;re live
-        </span>
-        <h3 className="mt-3 text-xl font-semibold text-green-950">
-          This listing is online and has saved ad proof.
-        </h3>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-          {liveChannels} {liveChannels === 1 ? "site has" : "sites have"} a
-          live ad link saved. {totalInquiryCount}{" "}
-          {totalInquiryCount === 1 ? "inquiry" : "inquiries"} are tied to this
-          rental.
-        </p>
-        {replyInputs.bookingUrl && (
-          <div className="mt-4 max-w-xl">
-            <p className="mb-1 text-xs font-semibold text-green-900">
-              Public renter link
-            </p>
-            <CopyLink url={replyInputs.bookingUrl} />
-          </div>
-        )}
-      </section>
-    );
-  }
+        Add photos
+      </a>
+    </div>
+  ) : null;
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-brand/20 bg-brand/[0.04] p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand">
-              Next step
+      {linkIsLive ? (
+        <section
+          id="simple-live"
+          className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm"
+        >
+          <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+            You&apos;re online
+          </span>
+          <h3 className="mt-3 text-xl font-semibold text-green-950">
+            {addressLabel} is online and taking inquiries.
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
+            The Vacantless renter page is live and the listing feed can include
+            this rental. External posts are additive from here.
+          </p>
+          <div className="mt-4 rounded-xl border border-green-200 bg-white/80 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-green-900">
+                  Shareable renter link
+                </p>
+                <p className="mt-1 text-sm text-green-800">
+                  {totalInquiryCount}{" "}
+                  {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
+                  this rental.
+                </p>
+              </div>
+              {liveChannels > 0 && (
+                <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+                  {liveChannels} external{" "}
+                  {liveChannels === 1 ? "proof link" : "proof links"}
+                </span>
+              )}
+            </div>
+            {publicLink ? (
+              <div className="mt-3 space-y-3">
+                <CopyLink url={publicLink} />
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={`sms:?&body=${encodeURIComponent(shareBody)}`}
+                    className={SECONDARY_BTN}
+                  >
+                    <Icons.chat className="h-4 w-4" />
+                    Text
+                  </a>
+                  <a
+                    href={`mailto:?subject=${encodeURIComponent(
+                      shareSubject,
+                    )}&body=${encodeURIComponent(shareBody)}`}
+                    className={SECONDARY_BTN}
+                  >
+                    <Icons.mail className="h-4 w-4" />
+                    Email
+                  </a>
+                  <a
+                    href={publicLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={SECONDARY_BTN}
+                  >
+                    <Icons.link className="h-4 w-4" />
+                    Preview
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-green-800">
+                The renter page is live; refresh if the share link has not
+                appeared yet.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section
+          id="simple-publish"
+          className="rounded-2xl border border-brand/20 bg-brand/[0.04] p-5 shadow-sm"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand">
+            One-click online
+          </p>
+          <h3 className="mt-1 text-2xl font-semibold text-gray-950">
+            Put {addressLabel} online.
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
+            This turns on the Vacantless renter page and makes the rental
+            eligible for the listing feed. You can reach more sites after the
+            free link is live.
+          </p>
+
+          {publishBlockedByBasics ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-white p-4">
+              <p className="mb-3 text-sm font-semibold text-amber-950">
+                Finish {setupOutstanding}{" "}
+                {setupOutstanding === 1 ? "detail" : "details"} first.
+              </p>
+              <form action={updateProperty} className="grid gap-3 sm:grid-cols-6">
+                <input type="hidden" name="id" value={propertyId} />
+                <HiddenPreservedPropertyFields basics={basics} />
+                <label className="sm:col-span-6">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">
+                    Address
+                  </span>
+                  <input
+                    name="address"
+                    defaultValue={basics.address}
+                    required
+                    className={FIELD_CLASS}
+                  />
+                </label>
+                <label className="sm:col-span-2">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">
+                    Rent ($/mo)
+                  </span>
+                  <input
+                    name="rent"
+                    type="number"
+                    step="0.01"
+                    defaultValue={centsToDollars(basics.rentCents)}
+                    className={FIELD_CLASS}
+                  />
+                </label>
+                <label className="sm:col-span-2">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">
+                    Beds
+                  </span>
+                  <input
+                    name="beds"
+                    type="number"
+                    step="1"
+                    defaultValue={numberValue(basics.beds)}
+                    className={FIELD_CLASS}
+                  />
+                </label>
+                <label className="sm:col-span-2">
+                  <span className="mb-1 block text-xs font-medium text-gray-600">
+                    Baths
+                  </span>
+                  <input
+                    name="baths"
+                    type="number"
+                    step="0.5"
+                    defaultValue={numberValue(basics.baths)}
+                    className={FIELD_CLASS}
+                  />
+                </label>
+                <div className="sm:col-span-6">
+                  <button
+                    type="submit"
+                    className={PRIMARY_BTN}
+                    style={{ backgroundColor: "var(--brand-color)" }}
+                  >
+                    Save details
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : canSetLive ? (
+            <form action={publishProperty} className="mt-4">
+              <input type="hidden" name="id" value={propertyId} />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+                style={{ backgroundColor: "var(--brand-color)" }}
+              >
+                <Icons.bolt className="h-4 w-4" />
+                Put {addressLabel} online
+              </button>
+            </form>
+          ) : (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-950">
+                Review the listing status before this rental can go online.
+              </p>
+              <a
+                href="#rental-details"
+                className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+              >
+                Review listing
+              </a>
+            </div>
+          )}
+          {photoNudge}
+        </section>
+      )}
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Automation ladder
             </p>
             <h3 className="mt-1 text-lg font-semibold text-gray-950">
-              {firstOpen.label}
+              One click first, reach more after.
             </h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Work down the steps below. Nothing posts automatically.
-            </p>
           </div>
-          <a
-            href={firstOpen.href}
-            className={PRIMARY_BTN}
-            style={{ backgroundColor: "var(--brand-color)" }}
-          >
-            {firstOpen.label}
-          </a>
+          <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+            Vacantless page + feed
+          </span>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-600 text-white">
+                <Icons.check className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-green-950">
+                  Automatic
+                </p>
+                <p className="text-xs text-green-800">Included on every plan</p>
+              </div>
+            </div>
+            <ul className="space-y-2 text-sm text-green-900">
+              <li>Vacantless renter page turns on with Publish.</li>
+              <li>Rental feed eligibility follows the Live status.</li>
+              <li>No account connection needed.</li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-600">
+                <Icons.key className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">
+                  Connect once
+                </p>
+                <p className="text-xs text-slate-600">
+                  OAuth lane, not wired here yet
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-2 text-sm text-slate-700">
+              {["Instagram", "Facebook Page"].map((label) => (
+                <li
+                  key={label}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                >
+                  <span>{label}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                    Connect coming soon
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-slate-900 bg-slate-950 p-4 text-white">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-emerald-300">
+                <Icons.users className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  Reach more
+                </p>
+                <p className="text-xs text-slate-300">
+                  Facebook Marketplace + Kijiji
+                </p>
+              </div>
+            </div>
+
+            {launchRun.conciergeDeskEnabled ? (
+              <>
+                <p className="text-sm text-slate-200">
+                  We post Facebook & Kijiji for you - you approve one sign-in.
+                </p>
+                <p className="mt-2 text-xs font-medium text-emerald-300">
+                  {conciergeUsageLabel(launchRun.conciergeUsage)}
+                </p>
+                {activeReachConcierge ? (
+                  <a
+                    href={`#run-item-${activeReachConcierge.id}`}
+                    className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
+                  >
+                    View desk status
+                  </a>
+                ) : conciergeTargets.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {conciergeTargets.map((target) => (
+                      <form key={target.id} action={requestConciergePublish}>
+                        <input
+                          type="hidden"
+                          name="property_id"
+                          value={propertyId}
+                        />
+                        <input
+                          type="hidden"
+                          name="item_id"
+                          value={target.id}
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
+                        >
+                          Post {target.channelLabel} for me
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                ) : (
+                  <a
+                    href="#publish-checklist"
+                    className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
+                  >
+                    {hasReachRunItems
+                      ? "Open posting tools"
+                      : "Choose Facebook & Kijiji"}
+                  </a>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-slate-200">
+                  Want us to post Facebook & Kijiji for you? Upgrade to Growth.
+                </p>
+                {launchRun.conciergeDailyLostLabel && (
+                  <p className="mt-2 text-xs text-slate-300">
+                    Every day vacant costs about{" "}
+                    {launchRun.conciergeDailyLostLabel}.
+                  </p>
+                )}
+                <a
+                  href="/dashboard/billing"
+                  className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
+                >
+                  Upgrade to Growth
+                </a>
+              </>
+            )}
+          </div>
         </div>
       </section>
 
-      <SimpleStep
-        id="simple-basics"
-        number={1}
-        title="Finish the listing details"
-        detail={
-          setupOutstanding === 0
-            ? "Rent, beds, baths, and address are ready."
-            : `${setupOutstanding} ${
-                setupOutstanding === 1 ? "detail" : "details"
-              } still needs review.`
-        }
-        done={setupOutstanding === 0}
-      >
-        <form action={updateProperty} className="grid gap-3 sm:grid-cols-6">
-          <input type="hidden" name="id" value={propertyId} />
-          <HiddenPreservedPropertyFields basics={basics} />
-          <label className="sm:col-span-6">
-            <span className="mb-1 block text-xs font-medium text-gray-600">
-              Address
-            </span>
-            <input
-              name="address"
-              defaultValue={basics.address}
-              required
-              className={FIELD_CLASS}
-            />
-          </label>
-          <label className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-gray-600">
-              Rent ($/mo)
-            </span>
-            <input
-              name="rent"
-              type="number"
-              step="0.01"
-              defaultValue={centsToDollars(basics.rentCents)}
-              className={FIELD_CLASS}
-            />
-          </label>
-          <label className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-gray-600">
-              Beds
-            </span>
-            <input
-              name="beds"
-              type="number"
-              step="1"
-              defaultValue={numberValue(basics.beds)}
-              className={FIELD_CLASS}
-            />
-          </label>
-          <label className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-gray-600">
-              Baths
-            </span>
-            <input
-              name="baths"
-              type="number"
-              step="0.5"
-              defaultValue={numberValue(basics.baths)}
-              className={FIELD_CLASS}
-            />
-          </label>
-          <div className="sm:col-span-6">
-            <button
-              type="submit"
-              className={PRIMARY_BTN}
-              style={{ backgroundColor: "var(--brand-color)" }}
-            >
-              Save listing details
-            </button>
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Prefer to post it yourself?
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-gray-950">
+              Vacantless preps it, you post, then paste the live link.
+            </h3>
           </div>
-        </form>
-      </SimpleStep>
-
-      <SimpleStep
-        id="simple-photos"
-        number={2}
-        title="Add photos"
-        detail={
-          hasPhotos
-            ? "Photos are already added."
-            : "Photos are not required, but they make the ad much stronger."
-        }
-        done={hasPhotos}
-      >
-        <form
-          action={uploadPropertyPhotos}
-          encType="multipart/form-data"
-          className="flex flex-wrap items-end gap-3"
-        >
-          <input type="hidden" name="property_id" value={propertyId} />
-          <label className="min-w-[16rem] flex-1">
-            <span className="mb-1 block text-xs font-medium text-gray-600">
-              Photos
-            </span>
-            <input
-              name="photos"
-              type="file"
-              accept="image/*"
-              multiple
-              className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
-            />
-          </label>
-          <button
-            type="submit"
-            className={SECONDARY_BTN}
-          >
-            Upload photos
-          </button>
-        </form>
-      </SimpleStep>
-
-      <SimpleStep
-        id="simple-set-live"
-        number={3}
-        title="Set Live"
-        detail={
-          linkIsLive
-            ? "Renters can open the Vacantless listing page."
-            : canSetLive
-              ? "Make the public page work before you post it anywhere."
-              : "Review the listing status before it can be posted again."
-        }
-        done={linkIsLive}
-      >
-        {linkIsLive ? (
-          replyInputs.bookingUrl ? (
-            <CopyLink url={replyInputs.bookingUrl} />
-          ) : (
-            <p className="text-sm text-gray-600">The renter page is live.</p>
-          )
-        ) : canSetLive ? (
-          <form action={publishProperty}>
-            <input type="hidden" name="id" value={propertyId} />
-            <button
-              type="submit"
-              className={PRIMARY_BTN}
-              style={{ backgroundColor: "var(--brand-color)" }}
-            >
-              Set Live
-            </button>
-          </form>
-        ) : (
-          <p className="text-sm text-gray-600">
-            This status cannot be set Live from the simple view.
-          </p>
-        )}
-      </SimpleStep>
-
-      <SimpleStep
-        id="simple-sites"
-        number={4}
-        title="Choose rental sites"
-        detail={
-          hasRun
-            ? "Your posting checklist is started."
-            : `${selectedChannelCount} suggested ${
-                selectedChannelCount === 1 ? "site is" : "sites are"
-              } selected for you.`
-        }
-        done={hasRun}
-      >
+          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+            Free co-pilot path
+          </span>
+        </div>
         <LaunchRunPanel
           propertyId={propertyId}
           run={launchRun.run}
@@ -1303,76 +1399,7 @@ function SimpleGetOnline({
           realtorReferralEnabled={launchRun.realtorReferralEnabled}
           leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
         />
-      </SimpleStep>
-
-      <SimpleStep
-        id="get-online-accounts"
-        number={5}
-        title="Connect the accounts those sites need"
-        detail={
-          accountsReady
-            ? "No accounts to connect here."
-            : `${accountNeeds.length} ${
-                accountNeeds.length === 1 ? "site needs" : "sites need"
-              } account access before posting.`
-        }
-        done={accountsReady}
-      >
-        {accountsReady ? (
-          <p className="text-sm text-gray-600">
-            Sites like Facebook and Kijiji ask you to sign in while you post -
-            that happens during guided posting, not here. Continue to posting
-            and paste each live ad link when it exists.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {accountNeeds.map((channel) => (
-              <li
-                key={channel.key}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-amber-950">
-                    {channel.label}
-                  </p>
-                  <p className="text-xs text-amber-800">
-                    {channel.setupBlockers.length > 0
-                      ? channel.setupBlockers.join(" · ")
-                      : channel.readinessLabel}
-                  </p>
-                </div>
-                <a
-                  href="/dashboard/settings?tab=distribution"
-                  className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-                >
-                  Connect accounts
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </SimpleStep>
-
-      <SimpleStep
-        id="simple-proof"
-        number={6}
-        title="Post, then paste the live ad link"
-        detail={
-          liveChannels > 0
-            ? `${liveChannels} ${
-                liveChannels === 1 ? "site has" : "sites have"
-              } a saved live ad link.`
-            : "After you post on an outside site, paste the public ad link in the checklist above."
-        }
-        done={liveChannels > 0}
-      >
-        <a
-          href="#publish-checklist"
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          Open posting checklist
-        </a>
-      </SimpleStep>
+      </section>
     </div>
   );
 }
