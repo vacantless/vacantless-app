@@ -26,7 +26,10 @@ import {
   upsertPartnerAccount,
   requestConciergePublish,
 } from "../actions";
-import { disconnectFacebookPage } from "../distribution-actions";
+import {
+  disconnectFacebookPage,
+  postFacebookPageNow,
+} from "../distribution-actions";
 import { startConciergePackCheckout } from "../../billing/actions";
 import {
   PARTNER_STATUSES,
@@ -177,6 +180,7 @@ export type FacebookPageAccountView = {
   enabled: boolean;
   accountStatus: string | null;
   pageName: string | null;
+  automationAuthorized: boolean;
 };
 
 export type InstagramAccountView = {
@@ -441,6 +445,8 @@ export function DistributeTab({
     analytics,
   });
   const automationSummary = automationStatusSummary(launchRun.items);
+  const facebookPageCard =
+    channelCards.find((card) => card.channel.key === "facebook_feed") ?? null;
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
     otherPosts.length;
@@ -540,6 +546,7 @@ export function DistributeTab({
             hasPhotos={hasPhotos}
             canSetLive={canSetLive}
             launchRun={launchRun}
+            facebookPageCard={facebookPageCard}
             liveChannels={liveChannels}
             replyInputs={replyInputs}
             totalInquiryCount={totalInquiryCount}
@@ -987,6 +994,7 @@ function SimpleGetOnline({
   hasPhotos,
   canSetLive,
   launchRun,
+  facebookPageCard,
   liveChannels,
   replyInputs,
   totalInquiryCount,
@@ -998,6 +1006,7 @@ function SimpleGetOnline({
   hasPhotos: boolean;
   canSetLive: boolean;
   launchRun: LaunchRunData;
+  facebookPageCard: DistributeChannelCard | null;
   liveChannels: number;
   replyInputs: ReplyInputs;
   totalInquiryCount: number;
@@ -1022,6 +1031,24 @@ function SimpleGetOnline({
   const conciergeTargets = reachChannels.filter((item) => item.canConcierge);
   const hasReachRunItems = reachChannels.length > 0;
   const publishBlockedByBasics = setupOutstanding > 0;
+  const facebookPage = facebookPageCard?.facebookPage ?? null;
+  const facebookPageItem =
+    launchRun.items.find((item) => item.channel === "facebook_feed") ?? null;
+  const facebookPageProofUrl =
+    facebookPageItem?.proofUrl ??
+    facebookPageItem?.externalUrl ??
+    facebookPageCard?.posts.find((post) => post.status === "live" && post.url)
+      ?.url ??
+    null;
+  const facebookPageConnected = facebookPage?.accountStatus === "connected";
+  const facebookPageAuthorized = facebookPage?.automationAuthorized === true;
+  const facebookPageReadyToPost =
+    facebookPageConnected &&
+    facebookPageAuthorized &&
+    facebookPageItem?.publishStatus === "needs_operator";
+  const facebookPagePosting = facebookPageItem?.publishStatus === "submitting";
+  const facebookPagePosted =
+    facebookPageItem?.publishStatus === "live" || Boolean(facebookPageProofUrl);
 
   const photoNudge = !hasPhotos ? (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
@@ -1269,22 +1296,84 @@ function SimpleGetOnline({
                   Connect once
                 </p>
                 <p className="text-xs text-slate-600">
-                  OAuth lane, not wired here yet
+                  Facebook Page gated; Instagram later
                 </p>
               </div>
             </div>
             <ul className="space-y-2 text-sm text-slate-700">
-              {["Instagram", "Facebook Page"].map((label) => (
-                <li
-                  key={label}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
-                >
-                  <span>{label}</span>
+              <li className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <span>Instagram</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  Connect coming soon
+                </span>
+              </li>
+              <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <span>
+                  Facebook Page
+                  {facebookPageConnected && facebookPage?.pageName ? (
+                    <span className="ml-1 text-xs text-slate-500">
+                      {facebookPage.pageName}
+                    </span>
+                  ) : null}
+                </span>
+                {!facebookPage?.enabled ? (
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                     Connect coming soon
                   </span>
-                </li>
-              ))}
+                ) : facebookPagePosted && facebookPageProofUrl ? (
+                  <a
+                    href={facebookPageProofUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700 underline decoration-green-200 underline-offset-2"
+                  >
+                    Posted to your Page
+                  </a>
+                ) : !facebookPageConnected ? (
+                  <a
+                    href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
+                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                  >
+                    Connect
+                  </a>
+                ) : !facebookPageAuthorized ? (
+                  <a
+                    href={
+                      facebookPageItem
+                        ? `#run-item-${facebookPageItem.id}`
+                        : "#publish-checklist"
+                    }
+                    className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
+                  >
+                    Connected · Review &amp; authorize
+                  </a>
+                ) : facebookPageReadyToPost && facebookPageItem ? (
+                  <form action={postFacebookPageNow}>
+                    <input
+                      type="hidden"
+                      name="item_id"
+                      value={facebookPageItem.id}
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                    >
+                      Review &amp; post
+                    </button>
+                  </form>
+                ) : facebookPagePosting ? (
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                    Posting
+                  </span>
+                ) : (
+                  <a
+                    href="#publish-checklist"
+                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700"
+                  >
+                    Connected
+                  </a>
+                )}
+              </li>
             </ul>
           </div>
 

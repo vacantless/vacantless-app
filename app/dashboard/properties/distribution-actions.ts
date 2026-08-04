@@ -30,6 +30,7 @@ import {
 } from "@/lib/distribution-publish";
 import {
   isPortalKey,
+  buildTrackedLink,
   normalizePortal,
   normalizeUrl,
   validateListingPost,
@@ -54,7 +55,19 @@ import {
   buildAttemptRecord,
   type AttemptActorType,
 } from "@/lib/distribution-attempts";
-import { deleteChannelSession } from "@/lib/distribution-session-crypto";
+import {
+  deleteChannelSession,
+  readChannelSession,
+} from "@/lib/distribution-session-crypto";
+import {
+  buildPageFeedMessage,
+  postToFacebookPageFeed,
+} from "@/lib/facebook-page-graph";
+import {
+  facebookOAuthConfigured,
+  fbPageChannelEnabled,
+  FACEBOOK_FEED_CHANNEL,
+} from "@/lib/facebook-page-oauth";
 import { confirmLeaseupTakedownRemoved } from "@/lib/leaseup-takedown-confirm";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -93,6 +106,7 @@ async function recordVerificationAndAttempt(
     matchedFields: Record<string, boolean>;
     failureReason: string | null;
     actorType: AttemptActorType;
+    metadata?: Record<string, unknown>;
     nowISO: string;
   },
 ): Promise<string | null> {
@@ -142,7 +156,10 @@ async function recordVerificationAndAttempt(
       statusBefore: row?.verification_status ?? null,
       statusAfter: input.result,
       proofId: verId,
-      metadata: { verification_type: input.verificationType },
+      metadata: {
+        verification_type: input.verificationType,
+        ...(input.metadata ?? {}),
+      },
     });
     let lastAttemptId: string | null = null;
     if (input.runId) {
@@ -739,6 +756,317 @@ export async function disconnectFacebookPage(formData: FormData) {
     redirect(`/dashboard/properties/${propertyId}?fb=disconnected#distribute-header`);
   }
   redirect("/dashboard/properties?fb=disconnected");
+}
+
+// ---------------------------------------------------------------------------
+// postFacebookPageNow — one-tap, operator-triggered Facebook Page Graph POST.
+// The account must already be connected + automation_authorized, but this does
+// not auto-fire from Publish. The returned Graph post id is the proof source;
+// without it, this action releases its reservation and never marks the item Live.
+// ---------------------------------------------------------------------------
+export async function postFacebookPageNow(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const itemId = s(formData, "item_id");
+  if (!itemId) redirect("/dashboard/properties");
+  if (!facebookOAuthConfigured() || !fbPageChannelEnabled()) {
+    redirect("/dashboard/properties?fb=error&reason=disabled");
+  }
+
+  const supabase = createClient();
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select(
+      "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode",
+    )
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) redirect("/dashboard/properties");
+  const it = item as {
+    id: string;
+    run_id: string;
+    channel: string;
+    transport: string | null;
+    listing_post_id: string | null;
+    organization_id: string | null;
+    publish_status: string | null;
+    mode: string | null;
+  };
+
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("property_id, organization_id, status")
+    .eq("id", it.run_id)
+    .maybeSingle();
+  const propertyId = (run?.property_id as string | undefined) ?? null;
+  const runOrgId = (run?.organization_id as string | undefined) ?? null;
+  const runStatus = (run?.status as string | undefined) ?? null;
+  const orgId = runOrgId ?? it.organization_id;
+
+  if (it.channel !== FACEBOOK_FEED_CHANNEL) {
+    if (propertyId) backTo(propertyId, "fb_badchannel");
+    redirect("/dashboard/properties");
+  }
+  if (runStatus !== "active") {
+    if (propertyId) backTo(propertyId, "fb_run_closed");
+    redirect("/dashboard/properties");
+  }
+  if (it.mode === "concierge") {
+    if (propertyId) backTo(propertyId, "fb_concierge");
+    redirect("/dashboard/properties");
+  }
+  if (!propertyId || !orgId) redirect("/dashboard/properties?forbidden=1");
+
+  const { data: account } = await supabase
+    .from("distribution_channel_accounts")
+    .select("account_status, automation_authorized")
+    .eq("organization_id", orgId)
+    .eq("channel", FACEBOOK_FEED_CHANNEL)
+    .maybeSingle();
+  const acct = account as
+    | { account_status: string | null; automation_authorized: boolean | null }
+    | null;
+  if (!acct || acct.account_status !== "connected") {
+    backTo(propertyId, "fb_connectfirst");
+  }
+  if (acct.automation_authorized !== true) {
+    backTo(propertyId, "fb_authorizefirst");
+  }
+
+  const priorStatus = it.publish_status ?? "queued";
+  const reserveISO = new Date().toISOString();
+  const { data: reserved } = await supabase
+    .from("distribution_run_items")
+    .update({ publish_status: "submitting", updated_at: reserveISO })
+    .eq("id", it.id)
+    .eq("run_id", it.run_id)
+    .eq("channel", FACEBOOK_FEED_CHANNEL)
+    .neq("publish_status", "live")
+    .neq("publish_status", "submitting")
+    .select("id, listing_post_id");
+  if (!reserved || reserved.length === 0) {
+    backTo(propertyId, "fb_already");
+  }
+
+  async function releaseReservation(): Promise<void> {
+    await supabase
+      .from("distribution_run_items")
+      .update({
+        publish_status: priorStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", it.id)
+      .eq("publish_status", "submitting");
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    await releaseReservation();
+    backTo(propertyId, "fb_config");
+  }
+
+  type FacebookPageSession = {
+    page_id?: unknown;
+    page_access_token?: unknown;
+  };
+  let session: FacebookPageSession | null = null;
+  try {
+    session = await readChannelSession<FacebookPageSession>({
+      organizationId: orgId,
+      channel: FACEBOOK_FEED_CHANNEL,
+      admin,
+    });
+  } catch {
+    session = null;
+  }
+  const pageId = typeof session?.page_id === "string" ? session.page_id.trim() : "";
+  const pageAccessToken =
+    typeof session?.page_access_token === "string"
+      ? session.page_access_token.trim()
+      : "";
+  if (!pageId || !pageAccessToken) {
+    await releaseReservation();
+    backTo(propertyId, "fb_reconnect");
+  }
+
+  const { data: property } = await supabase
+    .from("properties")
+    .select("id, address, beds, baths, rent_cents")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!property) {
+    await releaseReservation();
+    redirect("/dashboard/properties?forbidden=1");
+  }
+  const p = property as {
+    address: string | null;
+    beds: number | null;
+    baths: number | null;
+    rent_cents: number | null;
+  };
+  let listingPostId =
+    (reserved[0]?.listing_post_id as string | null) ?? it.listing_post_id;
+  const portal = normalizePortal(FACEBOOK_FEED_CHANNEL);
+  if (!listingPostId) {
+    const { data: existingPost } = await supabase
+      .from("listing_posts")
+      .select("id")
+      .eq("property_id", propertyId)
+      .eq("portal", portal)
+      .neq("status", "removed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingPost?.id) listingPostId = existingPost.id as string;
+  }
+  const publicUrl = `${APP_URL.replace(/\/+$/, "")}/r/${propertyId}`;
+  const trackedUrl = listingPostId
+    ? buildTrackedLink(publicUrl, listingPostId)
+    : publicUrl;
+  const message = buildPageFeedMessage({
+    address: p.address,
+    beds: p.beds,
+    baths: p.baths,
+    rentCents: p.rent_cents,
+    publicUrl: trackedUrl,
+  });
+
+  const graph = await postToFacebookPageFeed({
+    pageId,
+    pageAccessToken,
+    message,
+    link: trackedUrl,
+  });
+  if (!graph.ok) {
+    await releaseReservation();
+    if (graph.isAuthError) {
+      const nowISO = new Date().toISOString();
+      await admin
+        .from("distribution_channel_accounts")
+        .update({
+          account_status: "needs_login",
+          automation_authorized: false,
+          automation_authorized_at: null,
+          automation_authorized_by: null,
+          last_setup_checked_at: nowISO,
+          updated_at: nowISO,
+        })
+        .eq("organization_id", orgId)
+        .eq("channel", FACEBOOK_FEED_CHANNEL);
+      backTo(propertyId, "fb_reconnect");
+    }
+    backTo(propertyId, "fb_postfail");
+  }
+
+  const uid = await userId(supabase);
+  const verId = await recordVerificationAndAttempt(supabase, {
+    orgId,
+    userId: uid,
+    channel: FACEBOOK_FEED_CHANNEL,
+    verificationType: "external_url",
+    result: "verified_live",
+    propertyId,
+    runId: it.run_id,
+    runItemId: it.id,
+    listingPostId: it.listing_post_id,
+    transport: it.transport ?? "automatic",
+    externalUrl: graph.permalink,
+    screenshotPath: null,
+    matchedFields: {
+      graphPostId: true,
+      operatorAuthorized: true,
+    },
+    failureReason: null,
+    actorType: "operator",
+    metadata: {
+      via: "graph_api_page",
+      post_id: graph.postId,
+    },
+    nowISO: new Date().toISOString(),
+  });
+  if (!verId) {
+    await releaseReservation();
+    backTo(propertyId, "fb_prooffail");
+  }
+
+  const check = validateListingPost({
+    portal,
+    status: "live",
+    url: graph.permalink,
+  });
+  if (!check.ok) {
+    await releaseReservation();
+    backTo(propertyId, "fb_trackerfail");
+  }
+  if (listingPostId) {
+    const { error: upErr } = await supabase
+      .from("listing_posts")
+      .update({ url: graph.permalink, status: "live" })
+      .eq("id", listingPostId);
+    if (upErr) {
+      await releaseReservation();
+      backTo(propertyId, "fb_trackerfail");
+    }
+  } else {
+    const { data: post, error: insErr } = await supabase
+      .from("listing_posts")
+      .insert({
+        organization_id: orgId,
+        property_id: propertyId,
+        portal,
+        url: graph.permalink,
+        status: "live",
+      })
+      .select("id")
+      .single();
+    if (insErr || !post?.id) {
+      await releaseReservation();
+      backTo(propertyId, "fb_trackerfail");
+    }
+    listingPostId = post.id as string;
+  }
+
+  const flipISO = new Date().toISOString();
+  const { data: flipped } = await supabase
+    .from("distribution_run_items")
+    .update({
+      status: "done",
+      publish_status: "live",
+      external_url: graph.permalink,
+      listing_post_id: listingPostId,
+      proof_url: graph.permalink,
+      last_verified_at: flipISO,
+      updated_at: flipISO,
+    })
+    .eq("id", it.id)
+    .eq("publish_status", "submitting")
+    .select("id");
+  if (!flipped || flipped.length === 0) {
+    backTo(propertyId, "fb_already");
+  }
+
+  const { data: siblings } = await supabase
+    .from("distribution_run_items")
+    .select("publish_status")
+    .eq("run_id", it.run_id);
+  const rows = (siblings ?? []) as { publish_status: string | null }[];
+  const allResolved =
+    rows.length > 0 &&
+    rows.every(
+      (r) =>
+        isPublishStatus(r.publish_status) &&
+        isResolvedPublishStatus(r.publish_status),
+    );
+  await supabase
+    .from("distribution_runs")
+    .update({
+      status: allResolved ? "completed" : "active",
+      completed_at: allResolved ? flipISO : null,
+    })
+    .eq("id", it.run_id)
+    .eq("status", "active");
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?fb=posted#distribute-header`);
 }
 
 // ---------------------------------------------------------------------------
