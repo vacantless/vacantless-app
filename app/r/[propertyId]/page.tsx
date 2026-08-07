@@ -76,6 +76,9 @@ type Listing = {
   screening_ask_movein?: boolean;
   screening_ask_pets?: boolean;
   screening_ask_occupants?: boolean;
+  // S629: org-scoped "require a phone number on inquiries". Older RPC payloads
+  // omit it -> undefined -> the form coalesces to false (phone optional).
+  inquiry_require_phone?: boolean;
   screening_questions: {
     id: string;
     prompt: string;
@@ -737,6 +740,7 @@ export default async function PublicListingPage({
               rentMonthly={rentMonthly}
               moveInPills={moveInPills}
               petFriendly={l.pet_friendly}
+              requirePhone={l.inquiry_require_phone ?? false}
             />
           )}
         </div>

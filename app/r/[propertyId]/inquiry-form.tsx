@@ -73,6 +73,10 @@ export type InquiryFormProps = {
   rentMonthly: number | null;
   moveInPills: MoveInPill[];
   petFriendly: boolean;
+  // S629: when true, this org requires a phone number before a renter can submit
+  // an inquiry/booking. Default false (surfaced from get_public_listing) so every
+  // org that never flips it behaves exactly as before.
+  requirePhone: boolean;
 };
 
 // Tap-first renter booking form (S409 BUILD 2). Core principle: tap choices
@@ -107,6 +111,7 @@ export function InquiryForm({
   rentMonthly,
   moveInPills,
   petFriendly,
+  requirePhone,
 }: InquiryFormProps) {
   const hasSlots = days.length > 0;
 
@@ -401,17 +406,23 @@ export function InquiryForm({
             <div>
               <label htmlFor="r_phone" className="mb-1 block text-sm font-medium text-gray-700">
                 Phone{" "}
-                <span className="font-normal text-gray-400">(optional)</span>
+                {requirePhone ? (
+                  <span className="font-normal text-gray-400">(required)</span>
+                ) : (
+                  <span className="font-normal text-gray-400">(optional)</span>
+                )}
               </label>
               <input
                 id="r_phone"
                 name="phone"
                 type="tel"
+                required={requirePhone}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <span className="mt-1 block text-xs text-gray-400">
-                If you share your number we may text you about this viewing (such
-                as a confirmation and reminders). Reply STOP anytime to opt out.
+                {requirePhone
+                  ? "We'll text you about this viewing (such as a confirmation and reminders). Reply STOP anytime to opt out."
+                  : "If you share your number we may text you about this viewing (such as a confirmation and reminders). Reply STOP anytime to opt out."}
               </span>
             </div>
           </div>
