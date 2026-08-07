@@ -371,16 +371,22 @@ export default async function ShowingsPage({
         subtitle="Viewings renters booked online, plus ones you scheduled. Mark the outcome after each one to keep your renter list accurate."
       />
 
-      {canManageAgents && (
-        <div className="mb-6 -mt-2">
+      <div className="mb-6 -mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <Link
+          href="/dashboard/availability"
+          className="text-sm font-medium text-brand hover:underline"
+        >
+          Set viewing times →
+        </Link>
+        {canManageAgents && (
           <Link
             href="/dashboard/showing-agents"
             className="text-sm font-medium text-brand hover:underline"
           >
             Manage showing agents →
           </Link>
-        </div>
-      )}
+        )}
+      </div>
 
       {proposalParam && (
         <div className="mb-6 -mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
