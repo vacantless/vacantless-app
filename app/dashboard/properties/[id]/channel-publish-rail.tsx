@@ -83,7 +83,7 @@ function bucketForChannel(input: {
   const capability = channelCapability(channel.key);
   const hasFeedRoute = account?.hasFeedRoute === true;
   const accountStatus = account?.accountStatus ?? null;
-  const chip =
+  const baseChip =
     channel.key === "instagram" && !instagramEnabled
       ? {
           state: "coming_soon",
@@ -98,6 +98,16 @@ function bucketForChannel(input: {
           accountStatus,
           hasFeedRoute,
         });
+  // Facebook Marketplace is a working guided-posting (browser_copilot) channel
+  // today even though it has no API integration (integrationStatus "planned").
+  // Don't let the shared "planned -> Coming soon" verdict mislabel it as
+  // unavailable; show the honest guided-posting chip so it matches its
+  // "1 tap to finish" placement. Scope: rail only — the Settings tile stays
+  // "not available yet", which is correct (there is no account to connect).
+  const chip: ConnectChip =
+    channel.key === "facebook" && baseChip.state === "coming_soon"
+      ? { state: "manual", label: "Guided posting", tone: "neutral", canConnect: false }
+      : baseChip;
   const tile = channelTileStatus(channel.key, {
     account_status: accountStatus,
     automation_authorized: account?.automationAuthorized === true,
@@ -257,11 +267,9 @@ function TierCard({
 
 export function ChannelPublishRail({
   buckets,
-  linkIsLive,
   oneTapFooter,
 }: {
   buckets: ChannelPublishRailBuckets;
-  linkIsLive: boolean;
   oneTapFooter?: ReactNode;
 }) {
   const ringLabel = `${buckets.liveCount}/${buckets.totalCount}`;
@@ -286,11 +294,7 @@ export function ChannelPublishRail({
 
       <div className="grid gap-3 xl:grid-cols-3">
         <TierCard title="Publishes instantly" rows={buckets.instant} />
-        <TierCard
-          title="1 tap to finish"
-          rows={buckets.oneTap}
-          defaultOpen={linkIsLive}
-        >
+        <TierCard title="1 tap to finish" rows={buckets.oneTap} defaultOpen>
           {oneTapFooter ? (
             <div className="mt-3 rounded-lg border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-gray-700">
               {oneTapFooter}

@@ -63,6 +63,11 @@ function buckets(opts: {
   const b = buckets();
   eq("default instant only has synthetic rows", keys(b.instant).join("|"), "vacantless_page|email_alerts");
   ok("facebook marketplace is one-tap, not instant", has(b.oneTap, "facebook"));
+  eq(
+    "facebook marketplace chip reads Guided posting, not Coming soon",
+    b.oneTap.find((r) => r.key === "facebook")?.chip.label ?? "",
+    "Guided posting",
+  );
   ok("kijiji live assisted-manual is one-tap", has(b.oneTap, "kijiji"));
   ok("rentals.ca without accepted feed is one-tap", has(b.oneTap, "rentals_ca"));
   ok("zumper without accepted feed is one-tap", has(b.oneTap, "zumper"));

@@ -1335,11 +1335,7 @@ function SimpleGetOnline({
         {photoNudge}
       </section>
 
-      <ChannelPublishRail
-        buckets={railBuckets}
-        linkIsLive={linkIsLive}
-        oneTapFooter={oneTapFooter}
-      />
+      <ChannelPublishRail buckets={railBuckets} oneTapFooter={oneTapFooter} />
 
       <section className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-3">
         {linkIsLive ? (
