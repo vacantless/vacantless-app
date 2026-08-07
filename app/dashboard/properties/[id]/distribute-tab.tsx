@@ -28,8 +28,6 @@ import {
 } from "../actions";
 import {
   disconnectFacebookPage,
-  postFacebookPageNow,
-  postInstagramNow,
 } from "../distribution-actions";
 import { startConciergePackCheckout } from "../../billing/actions";
 import {
@@ -86,6 +84,11 @@ import {
 } from "@/lib/listing-quality";
 import type { FillSheet } from "@/lib/listing-fill-sheet";
 import { GetOnlineView } from "./get-online-view";
+import {
+  ChannelPublishRail,
+  buildChannelPublishRailBuckets,
+  type ChannelPublishAccountRow,
+} from "./channel-publish-rail";
 
 export type QualityView = {
   listing: ListingQuality;
@@ -400,6 +403,7 @@ export function DistributeTab({
   reservedTrackedLinksByChannel,
   runNotice,
   totalInquiryCount,
+  channelAccounts,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -423,6 +427,7 @@ export function DistributeTab({
   reservedTrackedLinksByChannel: Record<string, string>;
   runNotice: DistributeRunNotice | null;
   totalInquiryCount: number;
+  channelAccounts: ChannelPublishAccountRow[];
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -447,8 +452,6 @@ export function DistributeTab({
     analytics,
   });
   const automationSummary = automationStatusSummary(launchRun.items);
-  const facebookPageCard =
-    channelCards.find((card) => card.channel.key === "facebook_feed") ?? null;
   const instagramCard =
     channelCards.find((card) => card.channel.key === "instagram") ?? null;
   const proofPostCount =
@@ -541,6 +544,7 @@ export function DistributeTab({
 
       <GetOnlineView
         orgDefaultMode={orgDefaultMode}
+        linkIsLive={linkIsLive}
         simple={
           <SimpleGetOnline
             propertyId={propertyId}
@@ -550,11 +554,12 @@ export function DistributeTab({
             hasPhotos={hasPhotos}
             canSetLive={canSetLive}
             launchRun={launchRun}
-            facebookPageCard={facebookPageCard}
             instagramCard={instagramCard}
-            liveChannels={liveChannels}
             replyInputs={replyInputs}
             totalInquiryCount={totalInquiryCount}
+            channelCards={channelCards}
+            channelAccounts={channelAccounts}
+            analytics={analytics}
           />
         }
         advanced={
@@ -999,11 +1004,12 @@ function SimpleGetOnline({
   hasPhotos,
   canSetLive,
   launchRun,
-  facebookPageCard,
   instagramCard,
-  liveChannels,
   replyInputs,
   totalInquiryCount,
+  channelCards,
+  channelAccounts,
+  analytics,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -1012,11 +1018,12 @@ function SimpleGetOnline({
   hasPhotos: boolean;
   canSetLive: boolean;
   launchRun: LaunchRunData;
-  facebookPageCard: DistributeChannelCard | null;
   instagramCard: DistributeChannelCard | null;
-  liveChannels: number;
   replyInputs: ReplyInputs;
   totalInquiryCount: number;
+  channelCards: DistributeChannelCard[];
+  channelAccounts: ChannelPublishAccountRow[];
+  analytics: ChannelAnalyticsRow[];
 }) {
   const addressLabel = basics.address || replyInputs.address || "this rental";
   const publicLink = replyInputs.bookingUrl;
@@ -1038,48 +1045,16 @@ function SimpleGetOnline({
   const conciergeTargets = reachChannels.filter((item) => item.canConcierge);
   const hasReachRunItems = reachChannels.length > 0;
   const publishBlockedByBasics = setupOutstanding > 0;
-  const facebookPage = facebookPageCard?.facebookPage ?? null;
-  const facebookPageItem =
-    launchRun.items.find((item) => item.channel === "facebook_feed") ?? null;
-  const facebookPageProofUrl =
-    facebookPageItem?.proofUrl ??
-    facebookPageItem?.externalUrl ??
-    facebookPageCard?.posts.find((post) => post.status === "live" && post.url)
-      ?.url ??
-    null;
-  const facebookPageConnected = facebookPage?.accountStatus === "connected";
-  const facebookPageAuthorized = facebookPage?.automationAuthorized === true;
-  const facebookPageReadyToPost =
-    facebookPageConnected &&
-    facebookPageAuthorized &&
-    facebookPageItem?.publishStatus === "needs_operator";
-  const facebookPagePosting = facebookPageItem?.publishStatus === "submitting";
-  const facebookPagePosted =
-    facebookPageItem?.publishStatus === "live" || Boolean(facebookPageProofUrl);
-  const instagramAccount = instagramCard?.instagramAccount ?? null;
-  const instagramItem =
-    launchRun.items.find((item) => item.channel === "instagram") ?? null;
-  const instagramProofUrl =
-    instagramItem?.proofUrl ??
-    instagramItem?.externalUrl ??
-    instagramCard?.posts.find((post) => post.status === "live" && post.url)
-      ?.url ??
-    null;
-  const instagramConnected = instagramAccount?.accountStatus === "connected";
-  const instagramAuthorized = instagramAccount?.automationAuthorized === true;
-  const instagramReadyToPost =
-    instagramConnected &&
-    instagramAuthorized &&
-    hasPhotos &&
-    instagramItem?.publishStatus === "needs_operator";
-  const instagramNeedsPhoto =
-    instagramConnected &&
-    instagramAuthorized &&
-    !hasPhotos &&
-    instagramItem?.publishStatus === "needs_operator";
-  const instagramPosting = instagramItem?.publishStatus === "submitting";
-  const instagramPosted =
-    instagramItem?.publishStatus === "live" || Boolean(instagramProofUrl);
+  const railBuckets = buildChannelPublishRailBuckets({
+    channels: channelCards.map((card) => card.channel),
+    accountRows: channelAccounts,
+    linkIsLive,
+    liveChannelKeys: channelCards
+      .filter((card) => card.status.value === "posted")
+      .map((card) => card.channel.key),
+    instagramEnabled: instagramCard?.instagramAccount?.enabled === true,
+  });
+  const analyticsSummary = analyticsTotals(analytics);
 
   const photoNudge = !hasPhotos ? (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
@@ -1093,25 +1068,121 @@ function SimpleGetOnline({
       </a>
     </div>
   ) : null;
+  const oneTapFooter = launchRun.conciergeDeskEnabled ? (
+    <>
+      <p>
+        Free co-pilot stays available; Growth concierge can take over eligible
+        manual posts after you approve access.
+      </p>
+      <p className="mt-1 font-semibold text-gray-900">
+        {conciergeUsageLabel(launchRun.conciergeUsage)}
+      </p>
+      {activeReachConcierge ? (
+        <a
+          href={`#run-item-${activeReachConcierge.id}`}
+          className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+        >
+          View desk status
+        </a>
+      ) : conciergeTargets.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {conciergeTargets.map((target) => (
+            <form key={target.id} action={requestConciergePublish}>
+              <input type="hidden" name="property_id" value={propertyId} />
+              <input type="hidden" name="item_id" value={target.id} />
+              <button
+                type="submit"
+                className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+              >
+                Post {target.channelLabel} for me
+              </button>
+            </form>
+          ))}
+        </div>
+      ) : (
+        <a
+          href="#publish-checklist"
+          className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+        >
+          {hasReachRunItems ? "Open 1-tap queue" : "Choose guided channels"}
+        </a>
+      )}
+    </>
+  ) : (
+    <>
+      <p>
+        Free co-pilot prepares the outside-site steps. Concierge posting is a
+        Growth upgrade when you want Vacantless to do those posts with approval.
+      </p>
+      {launchRun.conciergeDailyLostLabel && (
+        <p className="mt-1 text-gray-600">
+          Every day vacant costs about {launchRun.conciergeDailyLostLabel}.
+        </p>
+      )}
+      <a
+        href="/dashboard/billing"
+        className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+      >
+        Review Growth
+      </a>
+    </>
+  );
 
   return (
     <div className="space-y-4">
-      {linkIsLive ? (
-        <section
-          id="simple-live"
-          className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm"
-        >
-          <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
-            You&apos;re online
+      <section
+        id={linkIsLive ? "simple-live" : "simple-publish"}
+        className={`rounded-2xl border p-6 shadow-sm ${
+          linkIsLive
+            ? "border-green-200 bg-green-50"
+            : "border-brand/20 bg-brand/[0.04]"
+        }`}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                linkIsLive
+                  ? "bg-green-600 text-white"
+                  : "bg-brand text-white"
+              }`}
+            >
+              {linkIsLive ? "You're online" : "Ready to publish"}
+            </span>
+            <h3
+              className={`mt-3 text-2xl font-semibold ${
+                linkIsLive ? "text-green-950" : "text-gray-950"
+              }`}
+            >
+              {linkIsLive
+                ? `You're live on ${railBuckets.liveCount} ${
+                    railBuckets.liveCount === 1 ? "channel" : "channels"
+                  }.`
+                : `Publish ${addressLabel} everywhere renters are looking.`}
+            </h3>
+            <p
+              className={`mt-2 max-w-3xl text-sm leading-relaxed ${
+                linkIsLive ? "text-green-800" : "text-gray-600"
+              }`}
+            >
+              {linkIsLive
+                ? "The renter page is live. Connected instant channels can sync from here, and guided channels stay in the 1-tap queue."
+                : "Publish turns on the Vacantless renter page and email-alert reach first, then opens the guided queue for channels that need a login, payment, broker, or final human tap."}
+            </p>
+          </div>
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              linkIsLive
+                ? "bg-green-100 text-green-800"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            {railBuckets.liveCount}/{railBuckets.totalCount} reaching renters
           </span>
-          <h3 className="mt-3 text-xl font-semibold text-green-950">
-            {addressLabel} is online and taking inquiries.
-          </h3>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-            The Vacantless renter page is live and the listing feed can include
-            this rental. External posts are additive from here.
-          </p>
-          <div className="mt-4 rounded-xl border border-green-200 bg-white/80 p-4">
+        </div>
+
+        {linkIsLive ? (
+          <div className="mt-5 rounded-xl border border-green-200 bg-white/80 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-green-900">
@@ -1123,12 +1194,10 @@ function SimpleGetOnline({
                   this rental.
                 </p>
               </div>
-              {liveChannels > 0 && (
-                <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
-                  {liveChannels} external{" "}
-                  {liveChannels === 1 ? "proof link" : "proof links"}
-                </span>
-              )}
+              <a href="#publish-checklist" className={SECONDARY_BTN}>
+                <Icons.bolt className="h-4 w-4" />
+                Sync updates / re-publish
+              </a>
             </div>
             {publicLink ? (
               <div className="mt-3 space-y-3">
@@ -1168,26 +1237,8 @@ function SimpleGetOnline({
               </p>
             )}
           </div>
-        </section>
-      ) : (
-        <section
-          id="simple-publish"
-          className="rounded-2xl border border-brand/20 bg-brand/[0.04] p-5 shadow-sm"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand">
-            One-click online
-          </p>
-          <h3 className="mt-1 text-2xl font-semibold text-gray-950">
-            Put {addressLabel} online.
-          </h3>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-            This turns on the Vacantless renter page and makes the rental
-            eligible for the listing feed. You can reach more sites after the
-            free link is live.
-          </p>
-
-          {publishBlockedByBasics ? (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-white p-4">
+        ) : publishBlockedByBasics ? (
+          <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
               <p className="mb-3 text-sm font-semibold text-amber-950">
                 Finish {setupOutstanding}{" "}
                 {setupOutstanding === 1 ? "detail" : "details"} first.
@@ -1252,331 +1303,110 @@ function SimpleGetOnline({
                   </button>
                 </div>
               </form>
-            </div>
-          ) : canSetLive ? (
-            <form action={publishProperty} className="mt-4">
-              <input type="hidden" name="id" value={propertyId} />
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-                style={{ backgroundColor: "var(--brand-color)" }}
-              >
-                <Icons.bolt className="h-4 w-4" />
-                Put {addressLabel} online
-              </button>
-            </form>
-          ) : (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-semibold text-amber-950">
-                Review the listing status before this rental can go online.
-              </p>
-              <a
-                href="#rental-details"
-                className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-              >
-                Review listing
-              </a>
-            </div>
-          )}
-          {photoNudge}
-        </section>
-      )}
-
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Automation ladder
+          </div>
+        ) : canSetLive ? (
+          <form action={publishProperty} className="mt-5">
+            <input type="hidden" name="id" value={propertyId} />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+              style={{ backgroundColor: "var(--brand-color)" }}
+            >
+              <Icons.bolt className="h-4 w-4" />
+              Publish everywhere
+            </button>
+            <p className="mt-2 text-xs text-gray-600">
+              Publishes instantly where connected. Opens 1-tap finish for the rest.
             </p>
-            <h3 className="mt-1 text-lg font-semibold text-gray-950">
-              One click first, reach more after.
-            </h3>
+          </form>
+        ) : (
+          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-sm font-semibold text-amber-950">
+              Review the listing status before this rental can go online.
+            </p>
+            <a
+              href="#rental-details"
+              className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              Review listing
+            </a>
           </div>
-          <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-            Vacantless page + feed
-          </span>
-        </div>
+        )}
+        {photoNudge}
+      </section>
 
-        <div className="grid gap-3 lg:grid-cols-3">
-          <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-600 text-white">
-                <Icons.check className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-green-950">
-                  Automatic
-                </p>
-                <p className="text-xs text-green-800">Included on every plan</p>
-              </div>
+      <ChannelPublishRail
+        buckets={railBuckets}
+        linkIsLive={linkIsLive}
+        oneTapFooter={oneTapFooter}
+      />
+
+      <section className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-3">
+        {linkIsLive ? (
+          <>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Channel-attributed inquiries
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">
+                {analyticsSummary.leads}
+              </p>
             </div>
-            <ul className="space-y-2 text-sm text-green-900">
-              <li>Vacantless renter page turns on with Publish.</li>
-              <li>Rental feed eligibility follows the Live status.</li>
-              <li>No account connection needed.</li>
-            </ul>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-600">
-                <Icons.key className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-950">
-                  Connect once
-                </p>
-                <p className="text-xs text-slate-600">
-                  Facebook Page gated; Instagram later
-                </p>
-              </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Total inquiries
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">
+                {totalInquiryCount}
+              </p>
             </div>
-            <ul className="space-y-2 text-sm text-slate-700">
-              <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <span>
-                  Instagram
-                  {instagramConnected && instagramAccount?.pageName ? (
-                    <span className="ml-1 text-xs text-slate-500">
-                      {instagramAccount.pageName}
-                    </span>
-                  ) : null}
-                </span>
-                {!instagramAccount?.enabled ? (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                    Connect coming soon
-                  </span>
-                ) : instagramPosted && instagramProofUrl ? (
-                  <a
-                    href={instagramProofUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700 underline decoration-green-200 underline-offset-2"
-                  >
-                    Posted to Instagram
-                  </a>
-                ) : !instagramConnected ? (
-                  instagramAccount?.hasLinkedBusinessAccount === false ? (
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                      Link an Instagram account to your Page
-                    </span>
-                  ) : (
-                    <a
-                      href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
-                      className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                    >
-                      Connect
-                    </a>
-                  )
-                ) : !instagramAuthorized ? (
-                  <a
-                    href={
-                      instagramItem
-                        ? `#run-item-${instagramItem.id}`
-                        : "#publish-checklist"
-                    }
-                    className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
-                  >
-                    Connected &middot; Review &amp; authorize
-                  </a>
-                ) : instagramNeedsPhoto ? (
-                  <a
-                    href="#property-photos"
-                    className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
-                  >
-                    Add a photo to post
-                  </a>
-                ) : instagramReadyToPost && instagramItem ? (
-                  <form action={postInstagramNow}>
-                    <input
-                      type="hidden"
-                      name="item_id"
-                      value={instagramItem.id}
-                    />
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
-                    >
-                      Review &amp; post to Instagram
-                    </button>
-                  </form>
-                ) : instagramPosting ? (
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                    Posting
-                  </span>
-                ) : (
-                  <a
-                    href="#publish-checklist"
-                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700"
-                  >
-                    Connected
-                  </a>
-                )}
-              </li>
-              <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <span>
-                  Facebook Page
-                  {facebookPageConnected && facebookPage?.pageName ? (
-                    <span className="ml-1 text-xs text-slate-500">
-                      {facebookPage.pageName}
-                    </span>
-                  ) : null}
-                </span>
-                {!facebookPage?.enabled ? (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                    Connect coming soon
-                  </span>
-                ) : facebookPagePosted && facebookPageProofUrl ? (
-                  <a
-                    href={facebookPageProofUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700 underline decoration-green-200 underline-offset-2"
-                  >
-                    Posted to your Page
-                  </a>
-                ) : !facebookPageConnected ? (
-                  <a
-                    href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
-                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-                  >
-                    Connect
-                  </a>
-                ) : !facebookPageAuthorized ? (
-                  <a
-                    href={
-                      facebookPageItem
-                        ? `#run-item-${facebookPageItem.id}`
-                        : "#publish-checklist"
-                    }
-                    className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
-                  >
-                    Connected · Review &amp; authorize
-                  </a>
-                ) : facebookPageReadyToPost && facebookPageItem ? (
-                  <form action={postFacebookPageNow}>
-                    <input
-                      type="hidden"
-                      name="item_id"
-                      value={facebookPageItem.id}
-                    />
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
-                    >
-                      Review &amp; post
-                    </button>
-                  </form>
-                ) : facebookPagePosting ? (
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                    Posting
-                  </span>
-                ) : (
-                  <a
-                    href="#publish-checklist"
-                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700"
-                  >
-                    Connected
-                  </a>
-                )}
-              </li>
-            </ul>
-          </div>
-
-          <div className="rounded-xl border border-slate-900 bg-slate-950 p-4 text-white">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-emerald-300">
-                <Icons.users className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  Reach more
-                </p>
-                <p className="text-xs text-slate-300">
-                  Facebook Marketplace + Kijiji
-                </p>
-              </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Advanced leads
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">
+                {analyticsSummary.advanced}
+              </p>
             </div>
-
-            {launchRun.conciergeDeskEnabled ? (
-              <>
-                <p className="text-sm text-slate-200">
-                  We post Facebook & Kijiji for you - you approve one sign-in.
-                </p>
-                <p className="mt-2 text-xs font-medium text-emerald-300">
-                  {conciergeUsageLabel(launchRun.conciergeUsage)}
-                </p>
-                {activeReachConcierge ? (
-                  <a
-                    href={`#run-item-${activeReachConcierge.id}`}
-                    className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
-                  >
-                    View desk status
-                  </a>
-                ) : conciergeTargets.length > 0 ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {conciergeTargets.map((target) => (
-                      <form key={target.id} action={requestConciergePublish}>
-                        <input
-                          type="hidden"
-                          name="property_id"
-                          value={propertyId}
-                        />
-                        <input
-                          type="hidden"
-                          name="item_id"
-                          value={target.id}
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
-                        >
-                          Post {target.channelLabel} for me
-                        </button>
-                      </form>
-                    ))}
-                  </div>
-                ) : (
-                  <a
-                    href="#publish-checklist"
-                    className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
-                  >
-                    {hasReachRunItems
-                      ? "Open posting tools"
-                      : "Choose Facebook & Kijiji"}
-                  </a>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-slate-200">
-                  Want us to post Facebook & Kijiji for you? Upgrade to Growth.
-                </p>
-                {launchRun.conciergeDailyLostLabel && (
-                  <p className="mt-2 text-xs text-slate-300">
-                    Every day vacant costs about{" "}
-                    {launchRun.conciergeDailyLostLabel}.
-                  </p>
-                )}
-                <a
-                  href="/dashboard/billing"
-                  className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
-                >
-                  Upgrade to Growth
-                </a>
-              </>
-            )}
-          </div>
-        </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Reach
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Your reach shows here after you publish.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Inquiries
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Tracked channel links start attributing renters once live.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Follow-ups
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Viewings and applications surface from real lead progress.
+              </p>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Prefer to post it yourself?
+              1-tap queue
             </p>
             <h3 className="mt-1 text-base font-semibold text-gray-950">
-              Vacantless preps it, you post, then paste the live link.
+              Vacantless preps each outside step; you approve, post, or save proof.
             </h3>
           </div>
           <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">

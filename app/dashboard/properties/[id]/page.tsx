@@ -1365,6 +1365,19 @@ export default async function PropertyDetailPage({
   const distributeOtherPosts = (postsByPortal.get("other") ?? []).map(
     toDistributePost,
   );
+  const channelPublishAccounts = DISTRIBUTION_CHANNELS.map((channel) => {
+    const account = channelAccountByKey.get(channel.key);
+    const partner = partnerByChannel.get(channel.key);
+    return {
+      channel: channel.key,
+      accountStatus: account?.status ?? partner?.status ?? null,
+      transport: account?.transport ?? null,
+      automationAuthorized: account?.automationAuthorized ?? false,
+      hasFeedRoute: Boolean(
+        account?.feedUrl || (partner?.status === "accepted" && partner.feedUrl),
+      ),
+    };
+  });
   // Slice 1 (S488): fold the where-posted grid's per-channel status into the
   // command center so a run row shows ONE merged status. computeChannelStatus
   // already derives needs_refresh (a live ad gone stale/expired) and problem (a
@@ -3442,6 +3455,7 @@ export default async function PropertyDetailPage({
           reservedTrackedLinksByChannel={reservedTrackedLinksByChannel}
           runNotice={distributeRunNotice}
           totalInquiryCount={leadRows.length}
+          channelAccounts={channelPublishAccounts}
         />
       </TabPanel>
 

@@ -60,8 +60,17 @@ import {
   type PublishChannelKey,
   type PublishPartnerState,
 } from "@/lib/distribution-publish";
+import {
+  selectChannelPublishAutofireItems,
+  type ChannelPublishAutofireAccountRow,
+  type ChannelPublishAutofireRunItem,
+} from "@/lib/channel-publish-autofire";
 import type { ChannelAccountStatus } from "@/lib/distribution-capabilities";
 import { isCopilotChannel } from "@/lib/distribution-copilot";
+import {
+  postFacebookPageNow,
+  postInstagramNow,
+} from "./distribution-actions";
 import { buildShareReadiness, type ShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
 import { listingFeedReadiness } from "@/lib/listing-feed";
@@ -152,6 +161,12 @@ import {
 } from "@/lib/after-live-summary";
 
 const PHOTO_BUCKET = "property-photos";
+
+function isRedirectSignal(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const digest = (error as { digest?: unknown }).digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
+}
 
 function parseRentCents(raw: string): number | null {
   const v = raw.trim();
@@ -987,6 +1002,84 @@ export async function updateProperty(formData: FormData) {
   );
 }
 
+async function publishAuthorizedInstantChannelsAfterPageLive({
+  supabase,
+  orgId,
+  propertyId,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  orgId: string;
+  propertyId: string;
+}): Promise<void> {
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  const runId = (run?.id as string | undefined) ?? null;
+  if (!runId) return;
+
+  const [{ data: itemRows }, { data: accountRows }] = await Promise.all([
+    supabase
+      .from("distribution_run_items")
+      .select("id, channel, mode, publish_status")
+      .eq("run_id", runId),
+    supabase
+      .from("distribution_channel_accounts")
+      .select("channel, account_status, automation_authorized")
+      .eq("organization_id", orgId),
+  ]);
+  const selected = selectChannelPublishAutofireItems({
+    runItems: ((itemRows ?? []) as Array<{
+      id: string;
+      channel: string | null;
+      mode: string | null;
+      publish_status: string | null;
+    }>).map(
+      (item): ChannelPublishAutofireRunItem => ({
+        id: item.id,
+        channel: item.channel,
+        mode: item.mode,
+        publishStatus: item.publish_status,
+      }),
+    ),
+    accountRows: ((accountRows ?? []) as Array<{
+      channel: string | null;
+      account_status: string | null;
+      automation_authorized: boolean | null;
+    }>).map(
+      (account): ChannelPublishAutofireAccountRow => ({
+        channel: account.channel,
+        accountStatus: account.account_status,
+        automationAuthorized: account.automation_authorized,
+      }),
+    ),
+    instagramEnabled: process.env.IG_CHANNEL_ENABLED === "true",
+  });
+
+  for (const item of selected) {
+    const formData = new FormData();
+    formData.set("item_id", item.id);
+    try {
+      if (item.channel === "facebook_feed") {
+        await postFacebookPageNow(formData);
+      } else if (item.channel === "instagram") {
+        await postInstagramNow(formData);
+      }
+    } catch (error) {
+      if (!isRedirectSignal(error)) {
+        console.error("publishProperty: instant channel autofire failed", {
+          propertyId,
+          channel: item.channel,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+}
+
 /**
  * One-click PUBLISH (B1, first-paid-pilot friction pass S402): flip a rental to
  * Live (`available`) in a single action instead of hunting for the small Status
@@ -1063,7 +1156,14 @@ export async function publishProperty(formData: FormData) {
     .update({ status: "available" })
     .eq("id", id);
 
-  if (org) await maybePrepareAvailableListing(supabase, org, id);
+  if (org) {
+    await maybePrepareAvailableListing(supabase, org, id);
+    await publishAuthorizedInstantChannelsAfterPageLive({
+      supabase,
+      orgId: org.id,
+      propertyId: id,
+    });
+  }
 
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");

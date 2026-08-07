@@ -11,10 +11,12 @@ export function GetOnlineView({
   simple,
   advanced,
   orgDefaultMode,
+  linkIsLive = false,
 }: {
   simple: ReactNode;
   advanced: ReactNode;
   orgDefaultMode?: Mode | null;
+  linkIsLive?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>(
     orgDefaultMode === "advanced" ? "advanced" : "simple",
@@ -48,7 +50,7 @@ export function GetOnlineView({
             onClick={() => setAndStore("advanced")}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
           >
-            Advanced tools &rarr;
+            {linkIsLive ? "Advanced performance tools" : "Advanced tools"} &rarr;
           </button>
         )}
       </div>
