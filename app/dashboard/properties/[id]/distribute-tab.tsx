@@ -29,6 +29,7 @@ import {
 import {
   disconnectFacebookPage,
   postFacebookPageNow,
+  postInstagramNow,
 } from "../distribution-actions";
 import { startConciergePackCheckout } from "../../billing/actions";
 import {
@@ -186,6 +187,7 @@ export type FacebookPageAccountView = {
 export type InstagramAccountView = {
   enabled: boolean;
   accountStatus: string | null;
+  automationAuthorized: boolean;
   label: string | null;
   pageName: string | null;
   hasLinkedBusinessAccount: boolean;
@@ -447,6 +449,8 @@ export function DistributeTab({
   const automationSummary = automationStatusSummary(launchRun.items);
   const facebookPageCard =
     channelCards.find((card) => card.channel.key === "facebook_feed") ?? null;
+  const instagramCard =
+    channelCards.find((card) => card.channel.key === "instagram") ?? null;
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
     otherPosts.length;
@@ -547,6 +551,7 @@ export function DistributeTab({
             canSetLive={canSetLive}
             launchRun={launchRun}
             facebookPageCard={facebookPageCard}
+            instagramCard={instagramCard}
             liveChannels={liveChannels}
             replyInputs={replyInputs}
             totalInquiryCount={totalInquiryCount}
@@ -995,6 +1000,7 @@ function SimpleGetOnline({
   canSetLive,
   launchRun,
   facebookPageCard,
+  instagramCard,
   liveChannels,
   replyInputs,
   totalInquiryCount,
@@ -1007,6 +1013,7 @@ function SimpleGetOnline({
   canSetLive: boolean;
   launchRun: LaunchRunData;
   facebookPageCard: DistributeChannelCard | null;
+  instagramCard: DistributeChannelCard | null;
   liveChannels: number;
   replyInputs: ReplyInputs;
   totalInquiryCount: number;
@@ -1049,6 +1056,30 @@ function SimpleGetOnline({
   const facebookPagePosting = facebookPageItem?.publishStatus === "submitting";
   const facebookPagePosted =
     facebookPageItem?.publishStatus === "live" || Boolean(facebookPageProofUrl);
+  const instagramAccount = instagramCard?.instagramAccount ?? null;
+  const instagramItem =
+    launchRun.items.find((item) => item.channel === "instagram") ?? null;
+  const instagramProofUrl =
+    instagramItem?.proofUrl ??
+    instagramItem?.externalUrl ??
+    instagramCard?.posts.find((post) => post.status === "live" && post.url)
+      ?.url ??
+    null;
+  const instagramConnected = instagramAccount?.accountStatus === "connected";
+  const instagramAuthorized = instagramAccount?.automationAuthorized === true;
+  const instagramReadyToPost =
+    instagramConnected &&
+    instagramAuthorized &&
+    hasPhotos &&
+    instagramItem?.publishStatus === "needs_operator";
+  const instagramNeedsPhoto =
+    instagramConnected &&
+    instagramAuthorized &&
+    !hasPhotos &&
+    instagramItem?.publishStatus === "needs_operator";
+  const instagramPosting = instagramItem?.publishStatus === "submitting";
+  const instagramPosted =
+    instagramItem?.publishStatus === "live" || Boolean(instagramProofUrl);
 
   const photoNudge = !hasPhotos ? (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
@@ -1301,11 +1332,85 @@ function SimpleGetOnline({
               </div>
             </div>
             <ul className="space-y-2 text-sm text-slate-700">
-              <li className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <span>Instagram</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                  Connect coming soon
+              <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <span>
+                  Instagram
+                  {instagramConnected && instagramAccount?.pageName ? (
+                    <span className="ml-1 text-xs text-slate-500">
+                      {instagramAccount.pageName}
+                    </span>
+                  ) : null}
                 </span>
+                {!instagramAccount?.enabled ? (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                    Connect coming soon
+                  </span>
+                ) : instagramPosted && instagramProofUrl ? (
+                  <a
+                    href={instagramProofUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700 underline decoration-green-200 underline-offset-2"
+                  >
+                    Posted to Instagram
+                  </a>
+                ) : !instagramConnected ? (
+                  instagramAccount?.hasLinkedBusinessAccount === false ? (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                      Link an Instagram account to your Page
+                    </span>
+                  ) : (
+                    <a
+                      href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
+                      className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                    >
+                      Connect
+                    </a>
+                  )
+                ) : !instagramAuthorized ? (
+                  <a
+                    href={
+                      instagramItem
+                        ? `#run-item-${instagramItem.id}`
+                        : "#publish-checklist"
+                    }
+                    className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
+                  >
+                    Connected &middot; Review &amp; authorize
+                  </a>
+                ) : instagramNeedsPhoto ? (
+                  <a
+                    href="#property-photos"
+                    className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
+                  >
+                    Add a photo to post
+                  </a>
+                ) : instagramReadyToPost && instagramItem ? (
+                  <form action={postInstagramNow}>
+                    <input
+                      type="hidden"
+                      name="item_id"
+                      value={instagramItem.id}
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                    >
+                      Review &amp; post to Instagram
+                    </button>
+                  </form>
+                ) : instagramPosting ? (
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                    Posting
+                  </span>
+                ) : (
+                  <a
+                    href="#publish-checklist"
+                    className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700"
+                  >
+                    Connected
+                  </a>
+                )}
               </li>
               <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <span>
