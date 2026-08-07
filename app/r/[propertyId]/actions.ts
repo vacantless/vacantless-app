@@ -668,6 +668,27 @@ export async function submitLead(formData: FormData) {
   if (sourceHint) leadParams.p_source_hint = sourceHint;
 
   const supabase = createClient();
+
+  // S629: authoritative server-side phone gate. When this org requires a phone
+  // number on inquiries and none was submitted, block the insert (mirrors the
+  // client-side `required`, and covers no-JS / programmatic submits + tampering).
+  // Only pay for the lookup when phone is actually missing; read the flag through
+  // the same SECURITY DEFINER RPC the public page uses (anon can't read
+  // organizations directly). Absent/false flag => behaves exactly as before.
+  if (!phone) {
+    const { data: gate } = await supabase.rpc("get_public_listing", {
+      p_property_id: propertyId,
+    });
+    const requirePhone =
+      (gate as { inquiry_require_phone?: boolean } | null)
+        ?.inquiry_require_phone === true;
+    if (requirePhone) {
+      redirect(
+        withTracking(`/r/${propertyId}?error=1`, listingPostId, sourceHint),
+      );
+    }
+  }
+
   const { data, error } = await supabase.rpc("submit_public_lead", leadParams);
 
   if (error) {
