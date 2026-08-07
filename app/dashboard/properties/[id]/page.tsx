@@ -1347,6 +1347,8 @@ export default async function PropertyDetailPage({
                 accountStatus:
                   (channelAccountByKey.get(channel.key)?.status as ChannelAccountStatus | undefined) ??
                   null,
+                automationAuthorized:
+                  channelAccountByKey.get(channel.key)?.automationAuthorized === true,
                 label: channelAccountByKey.get(channel.key)?.externalAccountLabel ?? null,
                 pageName:
                   typeof channelAccountByKey.get(channel.key)?.capabilities.page_name === "string"

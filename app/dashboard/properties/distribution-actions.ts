@@ -66,8 +66,14 @@ import {
 import {
   facebookOAuthConfigured,
   fbPageChannelEnabled,
+  igChannelEnabled,
   FACEBOOK_FEED_CHANNEL,
+  INSTAGRAM_CHANNEL,
 } from "@/lib/facebook-page-oauth";
+import {
+  buildInstagramCaption,
+  postToInstagram,
+} from "@/lib/instagram-graph";
 import { confirmLeaseupTakedownRemoved } from "@/lib/leaseup-takedown-confirm";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -1067,6 +1073,336 @@ export async function postFacebookPageNow(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?fb=posted#distribute-header`);
+}
+
+// ---------------------------------------------------------------------------
+// postInstagramNow — one-tap, operator-triggered Instagram Graph publish (S624).
+// Exact mirror of postFacebookPageNow's fail-closed spine, with three Instagram
+// deltas: (1) a public cover image is REQUIRED (fail-closed ig_needsphoto),
+// (2) postToInstagram is a two-step container->publish, (3) proof = the returned
+// permalink. actorType stays "operator" + metadata.via="graph_api_instagram".
+// ---------------------------------------------------------------------------
+export async function postInstagramNow(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const itemId = s(formData, "item_id");
+  if (!itemId) redirect("/dashboard/properties");
+  if (!facebookOAuthConfigured() || !igChannelEnabled()) {
+    redirect("/dashboard/properties?ig=error&reason=disabled");
+  }
+
+  const supabase = createClient();
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select(
+      "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode",
+    )
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) redirect("/dashboard/properties");
+  const it = item as {
+    id: string;
+    run_id: string;
+    channel: string;
+    transport: string | null;
+    listing_post_id: string | null;
+    organization_id: string | null;
+    publish_status: string | null;
+    mode: string | null;
+  };
+
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("property_id, organization_id, status")
+    .eq("id", it.run_id)
+    .maybeSingle();
+  const propertyId = (run?.property_id as string | undefined) ?? null;
+  const runOrgId = (run?.organization_id as string | undefined) ?? null;
+  const runStatus = (run?.status as string | undefined) ?? null;
+  const orgId = runOrgId ?? it.organization_id;
+
+  if (it.channel !== INSTAGRAM_CHANNEL) {
+    if (propertyId) backTo(propertyId, "ig_badchannel");
+    redirect("/dashboard/properties");
+  }
+  if (runStatus !== "active") {
+    if (propertyId) backTo(propertyId, "ig_run_closed");
+    redirect("/dashboard/properties");
+  }
+  if (it.mode === "concierge") {
+    if (propertyId) backTo(propertyId, "ig_concierge");
+    redirect("/dashboard/properties");
+  }
+  if (!propertyId || !orgId) redirect("/dashboard/properties?forbidden=1");
+
+  const { data: account } = await supabase
+    .from("distribution_channel_accounts")
+    .select("account_status, automation_authorized")
+    .eq("organization_id", orgId)
+    .eq("channel", INSTAGRAM_CHANNEL)
+    .maybeSingle();
+  const acct = account as
+    | { account_status: string | null; automation_authorized: boolean | null }
+    | null;
+  if (!acct || acct.account_status !== "connected") {
+    backTo(propertyId, "ig_connectfirst");
+  }
+  if (acct.automation_authorized !== true) {
+    backTo(propertyId, "ig_authorizefirst");
+  }
+
+  const priorStatus = it.publish_status ?? "queued";
+  const reserveISO = new Date().toISOString();
+  const { data: reserved } = await supabase
+    .from("distribution_run_items")
+    .update({ publish_status: "submitting", updated_at: reserveISO })
+    .eq("id", it.id)
+    .eq("run_id", it.run_id)
+    .eq("channel", INSTAGRAM_CHANNEL)
+    .neq("publish_status", "live")
+    .neq("publish_status", "submitting")
+    .select("id, listing_post_id");
+  if (!reserved || reserved.length === 0) {
+    backTo(propertyId, "ig_already");
+  }
+
+  async function releaseReservation(): Promise<void> {
+    await supabase
+      .from("distribution_run_items")
+      .update({
+        publish_status: priorStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", it.id)
+      .eq("publish_status", "submitting");
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    await releaseReservation();
+    backTo(propertyId, "ig_config");
+  }
+
+  type InstagramSession = {
+    ig_user_id?: unknown;
+    page_access_token?: unknown;
+  };
+  let session: InstagramSession | null = null;
+  try {
+    session = await readChannelSession<InstagramSession>({
+      organizationId: orgId,
+      channel: INSTAGRAM_CHANNEL,
+      admin,
+    });
+  } catch {
+    session = null;
+  }
+  const igUserId =
+    typeof session?.ig_user_id === "string" ? session.ig_user_id.trim() : "";
+  const pageAccessToken =
+    typeof session?.page_access_token === "string"
+      ? session.page_access_token.trim()
+      : "";
+  if (!igUserId || !pageAccessToken) {
+    await releaseReservation();
+    backTo(propertyId, "ig_reconnect");
+  }
+
+  const { data: property } = await supabase
+    .from("properties")
+    .select("id, address, beds, baths, rent_cents")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!property) {
+    await releaseReservation();
+    redirect("/dashboard/properties?forbidden=1");
+  }
+  const p = property as {
+    address: string | null;
+    beds: number | null;
+    baths: number | null;
+    rent_cents: number | null;
+  };
+
+  // Instagram REQUIRES a public image. Reuse the same canonical cover photo the
+  // public /r page shows (get_public_listing returns photos public + cover-first).
+  const { data: pub } = await supabase.rpc("get_public_listing", {
+    p_property_id: propertyId,
+  });
+  const pubPhotos = (pub as { photos?: unknown } | null)?.photos;
+  const imageUrl = Array.isArray(pubPhotos)
+    ? (pubPhotos.find((x) => typeof x === "string" && x.trim()) as
+        | string
+        | undefined) ?? ""
+    : "";
+  if (!imageUrl) {
+    await releaseReservation();
+    backTo(propertyId, "ig_needsphoto");
+  }
+
+  let listingPostId =
+    (reserved[0]?.listing_post_id as string | null) ?? it.listing_post_id;
+  const portal = normalizePortal(INSTAGRAM_CHANNEL);
+  if (!listingPostId) {
+    const { data: existingPost } = await supabase
+      .from("listing_posts")
+      .select("id")
+      .eq("property_id", propertyId)
+      .eq("portal", portal)
+      .neq("status", "removed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingPost?.id) listingPostId = existingPost.id as string;
+  }
+  const publicUrl = `${APP_URL.replace(/\/+$/, "")}/r/${propertyId}`;
+  const trackedUrl = listingPostId
+    ? buildTrackedLink(publicUrl, listingPostId)
+    : publicUrl;
+  const caption = buildInstagramCaption({
+    address: p.address,
+    beds: p.beds,
+    baths: p.baths,
+    rentCents: p.rent_cents,
+    publicUrl: trackedUrl,
+  });
+
+  const graph = await postToInstagram({
+    igUserId,
+    pageAccessToken,
+    imageUrl,
+    caption,
+  });
+  if (!graph.ok) {
+    await releaseReservation();
+    if (graph.isAuthError) {
+      const nowISO = new Date().toISOString();
+      await admin
+        .from("distribution_channel_accounts")
+        .update({
+          account_status: "needs_login",
+          automation_authorized: false,
+          automation_authorized_at: null,
+          automation_authorized_by: null,
+          last_setup_checked_at: nowISO,
+          updated_at: nowISO,
+        })
+        .eq("organization_id", orgId)
+        .eq("channel", INSTAGRAM_CHANNEL);
+      backTo(propertyId, "ig_reconnect");
+    }
+    backTo(propertyId, "ig_postfail");
+  }
+
+  const uid = await userId(supabase);
+  const verId = await recordVerificationAndAttempt(supabase, {
+    orgId,
+    userId: uid,
+    channel: INSTAGRAM_CHANNEL,
+    verificationType: "external_url",
+    result: "verified_live",
+    propertyId,
+    runId: it.run_id,
+    runItemId: it.id,
+    listingPostId: it.listing_post_id,
+    transport: it.transport ?? "automatic",
+    externalUrl: graph.permalink,
+    screenshotPath: null,
+    matchedFields: {
+      graphMediaId: true,
+      operatorAuthorized: true,
+    },
+    failureReason: null,
+    actorType: "operator",
+    metadata: {
+      via: "graph_api_instagram",
+      media_id: graph.mediaId,
+    },
+    nowISO: new Date().toISOString(),
+  });
+  if (!verId) {
+    await releaseReservation();
+    backTo(propertyId, "ig_prooffail");
+  }
+
+  const check = validateListingPost({
+    portal,
+    status: "live",
+    url: graph.permalink,
+  });
+  if (!check.ok) {
+    await releaseReservation();
+    backTo(propertyId, "ig_trackerfail");
+  }
+  if (listingPostId) {
+    const { error: upErr } = await supabase
+      .from("listing_posts")
+      .update({ url: graph.permalink, status: "live" })
+      .eq("id", listingPostId);
+    if (upErr) {
+      await releaseReservation();
+      backTo(propertyId, "ig_trackerfail");
+    }
+  } else {
+    const { data: post, error: insErr } = await supabase
+      .from("listing_posts")
+      .insert({
+        organization_id: orgId,
+        property_id: propertyId,
+        portal,
+        url: graph.permalink,
+        status: "live",
+      })
+      .select("id")
+      .single();
+    if (insErr || !post?.id) {
+      await releaseReservation();
+      backTo(propertyId, "ig_trackerfail");
+    }
+    listingPostId = post.id as string;
+  }
+
+  const flipISO = new Date().toISOString();
+  const { data: flipped } = await supabase
+    .from("distribution_run_items")
+    .update({
+      status: "done",
+      publish_status: "live",
+      external_url: graph.permalink,
+      listing_post_id: listingPostId,
+      proof_url: graph.permalink,
+      last_verified_at: flipISO,
+      updated_at: flipISO,
+    })
+    .eq("id", it.id)
+    .eq("publish_status", "submitting")
+    .select("id");
+  if (!flipped || flipped.length === 0) {
+    backTo(propertyId, "ig_already");
+  }
+
+  const { data: siblings } = await supabase
+    .from("distribution_run_items")
+    .select("publish_status")
+    .eq("run_id", it.run_id);
+  const rows = (siblings ?? []) as { publish_status: string | null }[];
+  const allResolved =
+    rows.length > 0 &&
+    rows.every(
+      (r) =>
+        isPublishStatus(r.publish_status) &&
+        isResolvedPublishStatus(r.publish_status),
+    );
+  await supabase
+    .from("distribution_runs")
+    .update({
+      status: allResolved ? "completed" : "active",
+      completed_at: allResolved ? flipISO : null,
+    })
+    .eq("id", it.run_id)
+    .eq("status", "active");
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?ig=posted#distribute-header`);
 }
 
 // ---------------------------------------------------------------------------
