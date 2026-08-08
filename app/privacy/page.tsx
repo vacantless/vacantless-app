@@ -12,7 +12,7 @@ export const metadata = {
 // when you have it).
 const LEGAL_ENTITY = "Vacantless";
 const MAILING_ADDRESS = "Ontario, Canada";
-const LAST_UPDATED = "July 3, 2026";
+const LAST_UPDATED = "August 8, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
 
 export default function PrivacyPage() {
@@ -73,6 +73,33 @@ export default function PrivacyPage() {
           processors you choose to use (Stripe and, where applicable, Rotessa).
           Some of these providers operate in the United States, so information may
           be processed outside Canada.
+        </P>
+
+        <H2>Connecting Facebook and Instagram</H2>
+        <P>
+          If you connect a Facebook Business Page (and its linked Instagram
+          Business account) to Vacantless, we access only the identity of that
+          Page and account &mdash; the Page ID and name, a Page access token, and
+          the linked Instagram Business account ID and username &mdash; so we can
+          publish the rental-listing posts you authorize. When you publish a
+          listing, we create a single post &mdash; the property address,
+          beds/baths, monthly rent, and a tracked link to the public listing
+          &mdash; on your own Page feed, and, for Instagram, the listing&apos;s
+          cover photo with the same caption on your linked Instagram Business
+          account. A post is created only after you review the prepared listing
+          and approve it (for example, by tapping &quot;Publish everywhere&quot;
+          and then &quot;Approve &amp; publish&quot;). We do not post silently, on
+          a schedule, or in bulk, and we never send tenant or renter personal
+          information to Meta. We store your Facebook and Instagram connection
+          (the access token and account identifiers) encrypted, and use it only to
+          publish the posts you authorize and only while the connection remains
+          active; removing the connection deletes it. To request deletion of this
+          data, disconnect the channel in Vacantless or email {emailLink()} (see
+          our{" "}
+          <Link href="/data-deletion" className="font-semibold text-[#16756a] hover:underline">
+            data deletion instructions
+          </Link>
+          ).
         </P>
 
         <H2>How long we keep information</H2>
