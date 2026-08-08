@@ -1,5 +1,6 @@
 // ============================================================================
-// Publish Everywhere — pure per-org channel mode resolver (S629, Slice 1).
+// Publish Everywhere — pure per-org channel mode resolver (S629, Slice 1;
+// S631 Slice 3 adds the co-pilot-capable signal).
 // No DOM / env / IO — fully unit-testable (scripts/test-publish-everywhere.ts).
 //
 // The one-click "Publish everywhere" surface renders every channel by resolving
@@ -61,13 +62,21 @@ export type PublishChannelInput = {
   connectedAuthorized?: boolean;
   // feed channel whose org XML feed route is accepted / the listing is in-feed.
   feedAccepted?: boolean;
+  // S631 Slice 3: this assisted_manual channel has a real co-pilot mechanism
+  // (the vacantless-extension fill sheet + the pop-out sidecar) — i.e. Kijiji and
+  // Facebook Marketplace. That mechanism IS how we post it for the landlord, so a
+  // co-pilot-capable channel is "we post it for you" even when it has no API and
+  // is catalog-"planned" (FB Marketplace). Channels WITHOUT a mechanism yet
+  // (LinkedIn/WhatsApp/Snapchat) leave this false and stay honestly "coming soon".
+  copilotSupported?: boolean;
 };
 
 /**
  * Resolve one channel's per-org publish mode + bucket. Precedence is deliberate:
- * broker/MLS and not-yet-built ("planned") are settled first so a planned paid
- * site never falsely reads as postable; then the live channels resolve by how
- * they publish and whether they are actually connected/accepted.
+ * broker/MLS is settled first (never a self-serve post); then a co-pilot-capable
+ * channel resolves to the for-you handoff (this is why FB Marketplace, catalog-
+ * "planned" but extension-fillable, is honestly "we post it for you"); then
+ * not-yet-built "planned" channels; then the connected/accepted live channels.
  */
 export function resolvePublishMode(input: PublishChannelInput): {
   mode: PublishMode;
@@ -81,6 +90,13 @@ function computeMode(input: PublishChannelInput): PublishMode {
   // Broker / MLS route — never a self-serve post.
   if (input.integrationStatus === "mls_gated" || input.mode === "broker") {
     return "brokerage_gated";
+  }
+  // A co-pilot-capable channel (Kijiji / FB Marketplace): the extension fill +
+  // sidecar IS the posting mechanism, so it is a for-you handoff even with no API
+  // and even when the catalog still marks it "planned". Paid self-serve sites
+  // additionally carry a listing fee (paid direct to the site).
+  if (input.mode === "assisted_manual" && input.copilotSupported) {
+    return input.hasFee ? "paid_optin" : "copilot_fill";
   }
   // Declared in the catalog but no live mechanism yet — honest "coming soon".
   if (input.integrationStatus === "planned") {
@@ -134,4 +150,15 @@ export function summarizeReach(
     else after_setup += 1;
   }
   return { included: instant + for_you, instant, for_you, after_setup };
+}
+
+// S631 Slice 3: the channels that have a real co-pilot mechanism today (the
+// vacantless-extension fill sheet + the no-install pop-out sidecar). Kept in
+// lockstep with EXTENSION_CHANNELS (lib/extension-kit.ts) and the extension's
+// config.js CHANNEL_BY_HOST. The surface only sets copilotSupported for these,
+// and only when the Slice-3 handoff flag is on.
+export const COPILOT_SUPPORTED_KEYS: readonly string[] = ["kijiji", "facebook"];
+
+export function isCopilotSupportedKey(key: string): boolean {
+  return COPILOT_SUPPORTED_KEYS.includes(key);
 }

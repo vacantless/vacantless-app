@@ -1,31 +1,47 @@
 "use client";
 
 // ============================================================================
-// Publish Everywhere — the one-click "Market it" surface (S630, Slice 1).
+// Publish Everywhere — the one-click "Market it" surface (S630 Slice 1;
+// S631 Slice 3 adds the real co-pilot handoff + concierge queue + fees).
 //
-// RENDER-ONLY. This is the approved v3 north-star ported to real per-org data:
-// it renders every channel by resolving it (lib/publish-everywhere.ts) to one
-// publish MODE, grouping modes into the three honest BUCKETS, showing the reach
-// summary + legend, and offering the dominant "Publish everywhere" CTA behind a
-// preflight confirm modal. The CTA runs the EXISTING publishProperty server
-// action (page-live + current authorized-instant autofire) — exactly what the
-// old Simple hero already did. No new posting path, no co-pilot handoff, no
-// charge, no migration. Those arrive in later slices; here they are display-only
-// or shown-but-disabled. Ships dark behind PUBLISH_EVERYWHERE_ENABLED.
+// Slice 1 was RENDER-ONLY: it resolved every channel to a MODE, grouped modes
+// into three honest BUCKETS, showed reach + legend, and offered the dominant
+// "Publish everywhere" CTA behind a preflight confirm modal that ran the EXISTING
+// publishProperty (page-live + authorized-instant autofire).
+//
+// Slice 3 (behind PUBLISH_EVERYWHERE_COPILOT_ENABLED) makes the "we post these
+// for you" bucket actionable, reusing the existing machinery — NO new posting
+// path, NO new server action, NO migration:
+//   • Co-pilot-capable channels (Kijiji + FB Marketplace, the extension-fillable
+//     ones) resolve into the for-you bucket and, once a distribution run exists,
+//     get a real "Start guided posting" deep-link to the existing co-pilot
+//     sidecar (the extension co-locates the fill on the portal page). The
+//     landlord signs in, covers any site fee, and taps post — we never post,
+//     log in, or pay for them.
+//   • "Have us post it" hands the same item to the publishing desk via the
+//     existing requestConciergePublish action (which consumes one done-for-you
+//     publish from the plan allowance when CONCIERGE_DESK_ENABLED).
+//   • Paid self-serve sites (paid_optin) show the paid-DIRECT fee disclosure:
+//     the fee is set by the site and paid with the landlord's own card at post
+//     time — Vacantless never charges it, fronts it, or is the merchant.
 //
 // Honesty invariants carried forward: nothing posts before the confirm modal
 // (KI999); "instant" is claimed ONLY for connected/authorized/accepted channels
-// (the resolver enforces this); reach "included" is instant + for-you, never the
-// raw channel count.
+// and "we post it for you" ONLY for channels with a real co-pilot mechanism (the
+// resolver enforces both); reach "included" is instant + for-you, never the raw
+// channel count; the extension/desk never posts, signs in, or pays for the
+// landlord (Meta App Review commitment). With the Slice-3 flag OFF the surface
+// renders exactly as Slice 1.
 // ============================================================================
 
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
-import { publishProperty } from "../actions";
+import { publishProperty, requestConciergePublish } from "../actions";
 import {
   resolvePublishMode,
   summarizeReach,
+  isCopilotSupportedKey,
   type PublishMode,
   type PublishBucket,
   type PublishChannelInput,
@@ -36,6 +52,18 @@ import type {
   GetOnlineBasics,
   ReplyInputs,
 } from "./distribute-tab";
+
+// A for-you channel's live distribution run item (once publishProperty has
+// created the run). Carries what an action row needs: the sidecar deep-link id,
+// the channel key, the live/queued state, whether the desk can take it over
+// (plan-gated, computed in page.tsx), and the recorded live-ad link.
+export type PublishEverywhereRunItem = {
+  id: string;
+  channel: string;
+  publishStatus: string;
+  canConcierge: boolean;
+  externalUrl: string | null;
+};
 
 // --- per-channel presentation (mode -> chip) -------------------------------
 // One place maps a resolved mode to its user-facing chip. No new color system:
@@ -90,13 +118,24 @@ const CHANNEL_GLYPH: Record<string, string> = {
 
 // Paid self-serve listing sites (a listing fee applies, paid direct to the
 // site). Only matters for LIVE assisted_manual channels — a planned one still
-// resolves to "planned" (the resolver settles that first).
+// resolves to "planned" unless it is also co-pilot-capable (the resolver
+// settles this). The label is display-only; the fee amount is set by the site.
 const PAID_SITE_KEYS = new Set(["viewit", "rentfaster"]);
+const PAID_SITE_LABEL: Record<string, string> = {
+  viewit: "Viewit",
+  rentfaster: "RentFaster",
+};
 
 // Adapt a fully-resolved channel card into the resolver's structural input.
 // Channel-agnostic: reads only the card's config + account state, never a
 // hard-coded channel name (adding a channel is a config row, no edit here).
-function toPublishInput(card: DistributeChannelCard): PublishChannelInput {
+// `copilotEnabled` is the Slice-3 flag: only then do we mark the extension-
+// fillable channels co-pilot-capable, so with the flag off the surface resolves
+// exactly as Slice 1 (FB Marketplace stays "coming soon").
+function toPublishInput(
+  card: DistributeChannelCard,
+  copilotEnabled: boolean,
+): PublishChannelInput {
   const ch = card.channel;
   return {
     key: ch.key,
@@ -109,6 +148,7 @@ function toPublishInput(card: DistributeChannelCard): PublishChannelInput {
       card.instagramAccount?.automationAuthorized === true,
     feedAccepted:
       card.feed?.inFeed === true || card.partner?.status === "accepted",
+    copilotSupported: copilotEnabled && isCopilotSupportedKey(ch.key),
   };
 }
 
@@ -147,6 +187,8 @@ export function PublishEverywhere({
   totalInquiryCount,
   conciergeDeskEnabled,
   conciergeUsage,
+  copilotEnabled = false,
+  runItems = [],
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -158,6 +200,8 @@ export function PublishEverywhere({
   totalInquiryCount: number;
   conciergeDeskEnabled: boolean;
   conciergeUsage: { used: number; included: number };
+  copilotEnabled?: boolean;
+  runItems?: PublishEverywhereRunItem[];
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -170,7 +214,9 @@ export function PublishEverywhere({
 
   // Resolve every channel once, then group + tally.
   const resolved: ResolvedRow[] = channelCards.map((card) => {
-    const { mode, bucket } = resolvePublishMode(toPublishInput(card));
+    const { mode, bucket } = resolvePublishMode(
+      toPublishInput(card, copilotEnabled),
+    );
     return { key: card.channel.key, label: card.channel.label, mode, bucket };
   });
   const reach = summarizeReach(resolved.map((r) => r.bucket), true);
@@ -314,6 +360,19 @@ export function PublishEverywhere({
             </p>
           </section>
         )}
+
+        {/* Slice 3: the real for-you handoff. Only with the flag on AND at least
+            one co-pilot channel resolved; reuses the existing sidecar +
+            requestConciergePublish, so with the flag off nothing new renders. */}
+        {copilotEnabled && forYou.length > 0 && (
+          <ForYouHandoff
+            propertyId={propertyId}
+            rows={forYou}
+            runItems={runItems}
+            linkIsLive={linkIsLive}
+            conciergeDeskEnabled={conciergeDeskEnabled}
+          />
+        )}
       </div>
 
       {/* Right: reach summary + the three buckets + legend. */}
@@ -405,6 +464,7 @@ export function PublishEverywhere({
           forYouRows={forYou}
           conciergeDeskEnabled={conciergeDeskEnabled}
           conciergeUsage={conciergeUsage}
+          copilotEnabled={copilotEnabled}
           onClose={() => setConfirmOpen(false)}
         />
       )}
@@ -427,9 +487,154 @@ function BucketLabel({ bucket }: { bucket: PublishBucket }) {
   );
 }
 
+// Slice 3 for-you handoff. Each co-pilot channel maps to its live distribution
+// run item (created by publishProperty). Ready -> the honest two-tier choice:
+//   • "Start guided posting" opens the EXISTING co-pilot sidecar; the extension
+//     co-locates the auto-fill on the portal page. The landlord signs in, covers
+//     any site fee, taps post — we never post, log in, or pay for them.
+//   • "Have us post it" hands the SAME item to the publishing desk via the
+//     EXISTING requestConciergePublish (which spends one plan allowance when the
+//     desk is enabled and records real live-ad proof before marking it live).
+// Paid sites additionally disclose the paid-DIRECT fee. No run yet -> a hint to
+// publish first. Live/queued -> reflect the recorded state.
+function ForYouHandoff({
+  propertyId,
+  rows,
+  runItems,
+  linkIsLive,
+  conciergeDeskEnabled,
+}: {
+  propertyId: string;
+  rows: ResolvedRow[];
+  runItems: PublishEverywhereRunItem[];
+  linkIsLive: boolean;
+  conciergeDeskEnabled: boolean;
+}) {
+  const itemByChannel = new Map(runItems.map((it) => [it.channel, it]));
+  return (
+    <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🤝</span>
+        <h3 className="text-base font-semibold tracking-tight text-indigo-950">
+          We post these for you
+        </h3>
+      </div>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
+        These sites have no API, so we auto-fill the whole post for you. You sign
+        in, cover any site fee, and tap post — we never post, sign in, or pay on
+        your behalf.
+      </p>
+      <ul className="mt-3 space-y-2.5">
+        {rows.map((row) => {
+          const item = itemByChannel.get(row.key) ?? null;
+          const paid = row.mode === "paid_optin";
+          const isLive =
+            item != null &&
+            (item.publishStatus === "live" || Boolean(item.externalUrl));
+          const isQueued =
+            item != null &&
+            (item.publishStatus === "queued" ||
+              item.publishStatus === "in_progress");
+          const stateChip = isLive
+            ? { label: "Live", cls: "bg-green-50 text-green-700" }
+            : isQueued
+              ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
+              : paid
+                ? { label: "We'll fill it · fee", cls: "bg-indigo-50 text-indigo-700" }
+                : { label: "We'll fill it", cls: "bg-indigo-50 text-indigo-700" };
+          return (
+            <li
+              key={row.key}
+              className="rounded-xl border border-indigo-100 bg-white p-3"
+            >
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs">
+                  {CHANNEL_GLYPH[row.key] ?? "🏠"}
+                </span>
+                <span className="text-sm font-semibold text-gray-800">
+                  {row.label}
+                </span>
+                <span
+                  className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${stateChip.cls}`}
+                >
+                  {stateChip.label}
+                </span>
+              </div>
+
+              {paid && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+                  {PAID_SITE_LABEL[row.key] ?? "This site"} charges a listing fee
+                  set by the site. You pay it directly with your own card at post
+                  time — Vacantless never charges, fronts, or handles that fee.
+                </p>
+              )}
+
+              {item == null ? (
+                <p className="mt-2 text-[12px] text-gray-500">
+                  {linkIsLive
+                    ? "Preparing the guided post…"
+                    : "Publish first, then start the guided post here."}
+                </p>
+              ) : isLive ? (
+                item.externalUrl ? (
+                  <a
+                    href={item.externalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
+                  >
+                    View live ad ↗
+                  </a>
+                ) : (
+                  <p className="mt-2 text-[12px] font-semibold text-green-700">
+                    Live.
+                  </p>
+                )
+              ) : isQueued ? (
+                <p className="mt-2 text-[12px] text-amber-800">
+                  Our publishing desk is posting this and will record the live
+                  link here.
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <a
+                    href={`/dashboard/properties/${propertyId}/copilot/${item.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+                  >
+                    Start guided posting →
+                  </a>
+                  {conciergeDeskEnabled && item.canConcierge && (
+                    <form action={requestConciergePublish}>
+                      <input type="hidden" name="property_id" value={propertyId} />
+                      <input type="hidden" name="item_id" value={item.id} />
+                      <button
+                        type="submit"
+                        className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50"
+                      >
+                        Have us post it
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {conciergeDeskEnabled && (
+        <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
+          “Have us post it” uses one done-for-you publish from your plan. The desk
+          records a real live-ad link before it is marked live.
+        </p>
+      )}
+    </section>
+  );
+}
+
 // The mandatory preflight gate: nothing posts before the operator sees this.
 // The primary action is the EXISTING publishProperty server action (page-live +
-// current authorized-instant autofire) — identical to the old Simple hero.
+// current authorized-instant autofire) — identical to the old Simple hero. The
+// for-you handoff itself happens after publish, in ForYouHandoff above.
 function ConfirmModal({
   propertyId,
   addressLabel,
@@ -437,6 +642,7 @@ function ConfirmModal({
   forYouRows,
   conciergeDeskEnabled,
   conciergeUsage,
+  copilotEnabled,
   onClose,
 }: {
   propertyId: string;
@@ -445,9 +651,11 @@ function ConfirmModal({
   forYouRows: ResolvedRow[];
   conciergeDeskEnabled: boolean;
   conciergeUsage: { used: number; included: number };
+  copilotEnabled: boolean;
   onClose: () => void;
 }) {
   const forYouLabels = forYouRows.map((r) => r.label).join(", ");
+  const paidForYou = forYouRows.filter((r) => r.mode === "paid_optin");
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -497,11 +705,17 @@ function ConfirmModal({
           )}
         </div>
 
-        <div className="my-3.5 flex justify-between rounded-xl border border-gray-200 px-3.5 py-2.5 text-[12.5px] text-gray-700">
+        <div className="my-3.5 flex justify-between gap-3 rounded-xl border border-gray-200 px-3.5 py-2.5 text-[12.5px] text-gray-700">
           <span>Third-party listing fees today</span>
-          <span>
-            <b>$0.00</b> — always shown first
-          </span>
+          {paidForYou.length > 0 ? (
+            <span className="text-right">
+              <b>Set by the site</b> — paid directly with your card, opted-in
+            </span>
+          ) : (
+            <span>
+              <b>$0.00</b> — always shown first
+            </span>
+          )}
         </div>
 
         {conciergeDeskEnabled && (
@@ -529,9 +743,9 @@ function ConfirmModal({
         </form>
 
         <p className="mt-3 text-center text-[11px] text-gray-400">
-          For the for-you sites we auto-fill everything; you sign in, cover any
-          fee, and tap post. One-tap auto-fill handoff arrives in a later update
-          for this org; live links are tracked back here.
+          {copilotEnabled
+            ? "For the for-you sites we auto-fill everything. After you publish, tap “Start guided posting”, sign in, cover any site fee, and post — we record the live link back here."
+            : "For the for-you sites we auto-fill everything; you sign in, cover any fee, and tap post. One-tap auto-fill handoff arrives in a later update for this org; live links are tracked back here."}
         </p>
       </div>
     </div>

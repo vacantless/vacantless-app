@@ -50,6 +50,16 @@ eq("live paid site -> paid_optin", mode({ mode: "assisted_manual", integrationSt
 eq("planned assisted_manual -> planned", mode({ mode: "assisted_manual", integrationStatus: "planned" }), "planned");
 eq("planned paid -> planned (not paid_optin)", mode({ mode: "assisted_manual", integrationStatus: "planned", hasFee: true }), "planned");
 
+// S631 Slice 3 — a co-pilot-capable channel (Kijiji / FB Marketplace) is a
+// for-you handoff even with no API and even when the catalog marks it "planned",
+// because the extension fill + sidecar IS the mechanism. Channels WITHOUT a
+// mechanism (copilotSupported false) still resolve as before.
+eq("copilot-capable Kijiji (live) -> copilot_fill", mode({ mode: "assisted_manual", integrationStatus: "live", connectKind: "account_login", copilotSupported: true }), "copilot_fill");
+eq("copilot-capable FB Marketplace (planned) -> copilot_fill", mode({ mode: "assisted_manual", integrationStatus: "planned", copilotSupported: true }), "copilot_fill");
+eq("copilot-capable + paid -> paid_optin", mode({ mode: "assisted_manual", integrationStatus: "planned", hasFee: true, copilotSupported: true }), "paid_optin");
+eq("copilot flag off keeps planned -> planned", mode({ mode: "assisted_manual", integrationStatus: "planned", copilotSupported: false }), "planned");
+eq("broker wins over copilot-capable -> brokerage_gated", mode({ mode: "assisted_manual", integrationStatus: "mls_gated", copilotSupported: true }), "brokerage_gated");
+
 // Realtor.ca — broker / mls_gated -> brokerage_gated.
 eq("broker -> brokerage_gated", mode({ mode: "broker", integrationStatus: "mls_gated" }), "brokerage_gated");
 eq("mls_gated wins over api -> brokerage_gated", mode({ mode: "api_automatic", integrationStatus: "mls_gated" }), "brokerage_gated");
