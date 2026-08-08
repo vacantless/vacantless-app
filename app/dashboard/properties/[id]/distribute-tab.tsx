@@ -568,6 +568,7 @@ export function DistributeTab({
                 id: it.id,
                 channel: it.channel,
                 publishStatus: it.publishStatus,
+                mode: it.mode,
                 canConcierge: it.canConcierge,
                 externalUrl: it.externalUrl,
               }))}
