@@ -89,6 +89,7 @@ import {
   buildChannelPublishRailBuckets,
   type ChannelPublishAccountRow,
 } from "./channel-publish-rail";
+import { PublishEverywhere } from "./publish-everywhere";
 
 export type QualityView = {
   listing: ListingQuality;
@@ -404,6 +405,7 @@ export function DistributeTab({
   runNotice,
   totalInquiryCount,
   channelAccounts,
+  publishEverywhereEnabled,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -428,6 +430,7 @@ export function DistributeTab({
   runNotice: DistributeRunNotice | null;
   totalInquiryCount: number;
   channelAccounts: ChannelPublishAccountRow[];
+  publishEverywhereEnabled: boolean;
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -546,6 +549,20 @@ export function DistributeTab({
         orgDefaultMode={orgDefaultMode}
         linkIsLive={linkIsLive}
         simple={
+          publishEverywhereEnabled ? (
+            <PublishEverywhere
+              propertyId={propertyId}
+              basics={basics}
+              linkIsLive={linkIsLive}
+              setupOutstanding={setupOutstanding}
+              canSetLive={canSetLive}
+              channelCards={channelCards}
+              replyInputs={replyInputs}
+              totalInquiryCount={totalInquiryCount}
+              conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
+              conciergeUsage={launchRun.conciergeUsage}
+            />
+          ) : (
           <SimpleGetOnline
             propertyId={propertyId}
             basics={basics}
@@ -561,6 +578,7 @@ export function DistributeTab({
             channelAccounts={channelAccounts}
             analytics={analytics}
           />
+          )
         }
         advanced={
           <>
