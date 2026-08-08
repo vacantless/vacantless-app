@@ -3457,6 +3457,7 @@ export default async function PropertyDetailPage({
           totalInquiryCount={leadRows.length}
           channelAccounts={channelPublishAccounts}
           publishEverywhereEnabled={process.env.PUBLISH_EVERYWHERE_ENABLED === "true"}
+          publishEverywhereCopilotEnabled={process.env.PUBLISH_EVERYWHERE_COPILOT_ENABLED === "true"}
         />
       </TabPanel>
 

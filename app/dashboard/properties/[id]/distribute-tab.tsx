@@ -406,6 +406,7 @@ export function DistributeTab({
   totalInquiryCount,
   channelAccounts,
   publishEverywhereEnabled,
+  publishEverywhereCopilotEnabled,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -431,6 +432,7 @@ export function DistributeTab({
   totalInquiryCount: number;
   channelAccounts: ChannelPublishAccountRow[];
   publishEverywhereEnabled: boolean;
+  publishEverywhereCopilotEnabled: boolean;
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -561,6 +563,14 @@ export function DistributeTab({
               totalInquiryCount={totalInquiryCount}
               conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
               conciergeUsage={launchRun.conciergeUsage}
+              copilotEnabled={publishEverywhereCopilotEnabled}
+              runItems={launchRun.items.map((it) => ({
+                id: it.id,
+                channel: it.channel,
+                publishStatus: it.publishStatus,
+                canConcierge: it.canConcierge,
+                externalUrl: it.externalUrl,
+              }))}
             />
           ) : (
           <SimpleGetOnline
