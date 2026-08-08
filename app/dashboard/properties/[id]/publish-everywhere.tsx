@@ -37,7 +37,8 @@
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
-import { publishProperty, requestConciergePublish } from "../actions";
+import { publishProperty, requestConciergePublish, openGuidedPosting } from "../actions";
+import { authorizeAutopilotSubmit } from "../distribution-actions";
 import {
   resolvePublishMode,
   summarizeReach,
@@ -61,6 +62,7 @@ export type PublishEverywhereRunItem = {
   id: string;
   channel: string;
   publishStatus: string;
+  mode: string;
   canConcierge: boolean;
   externalUrl: string | null;
 };
@@ -367,6 +369,7 @@ export function PublishEverywhere({
         {copilotEnabled && forYou.length > 0 && (
           <ForYouHandoff
             propertyId={propertyId}
+            addressLabel={addressLabel}
             rows={forYou}
             runItems={runItems}
             linkIsLive={linkIsLive}
@@ -499,12 +502,14 @@ function BucketLabel({ bucket }: { bucket: PublishBucket }) {
 // publish first. Live/queued -> reflect the recorded state.
 function ForYouHandoff({
   propertyId,
+  addressLabel,
   rows,
   runItems,
   linkIsLive,
   conciergeDeskEnabled,
 }: {
   propertyId: string;
+  addressLabel: string;
   rows: ResolvedRow[];
   runItems: PublishEverywhereRunItem[];
   linkIsLive: boolean;
@@ -520,114 +525,283 @@ function ForYouHandoff({
         </h3>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
-        These sites have no API, so we auto-fill the whole post for you. You sign
-        in, cover any site fee, and tap post — we never post, sign in, or pay on
-        your behalf.
+        These sites have no API, so we auto-fill the whole post for you. When it is
+        ready we bring it back here for one tap — we never post, sign in, or pay on
+        your behalf without you.
       </p>
       <ul className="mt-3 space-y-2.5">
-        {rows.map((row) => {
-          const item = itemByChannel.get(row.key) ?? null;
-          const paid = row.mode === "paid_optin";
-          const isLive =
-            item != null &&
-            (item.publishStatus === "live" || Boolean(item.externalUrl));
-          const isQueued =
-            item != null &&
-            (item.publishStatus === "queued" ||
-              item.publishStatus === "in_progress");
-          const stateChip = isLive
-            ? { label: "Live", cls: "bg-green-50 text-green-700" }
-            : isQueued
-              ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
-              : paid
-                ? { label: "We'll fill it · fee", cls: "bg-indigo-50 text-indigo-700" }
-                : { label: "We'll fill it", cls: "bg-indigo-50 text-indigo-700" };
-          return (
-            <li
-              key={row.key}
-              className="rounded-xl border border-indigo-100 bg-white p-3"
-            >
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs">
-                  {CHANNEL_GLYPH[row.key] ?? "🏠"}
-                </span>
-                <span className="text-sm font-semibold text-gray-800">
-                  {row.label}
-                </span>
-                <span
-                  className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${stateChip.cls}`}
-                >
-                  {stateChip.label}
-                </span>
-              </div>
-
-              {paid && (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
-                  {PAID_SITE_LABEL[row.key] ?? "This site"} charges a listing fee
-                  set by the site. You pay it directly with your own card at post
-                  time — Vacantless never charges, fronts, or handles that fee.
-                </p>
-              )}
-
-              {item == null ? (
-                <p className="mt-2 text-[12px] text-gray-500">
-                  {linkIsLive
-                    ? "Preparing the guided post…"
-                    : "Publish first, then start the guided post here."}
-                </p>
-              ) : isLive ? (
-                item.externalUrl ? (
-                  <a
-                    href={item.externalUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
-                  >
-                    View live ad ↗
-                  </a>
-                ) : (
-                  <p className="mt-2 text-[12px] font-semibold text-green-700">
-                    Live.
-                  </p>
-                )
-              ) : isQueued ? (
-                <p className="mt-2 text-[12px] text-amber-800">
-                  Our publishing desk is posting this and will record the live
-                  link here.
-                </p>
-              ) : (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <a
-                    href={`/dashboard/properties/${propertyId}/copilot/${item.id}`}
-                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
-                  >
-                    Start guided posting →
-                  </a>
-                  {conciergeDeskEnabled && item.canConcierge && (
-                    <form action={requestConciergePublish}>
-                      <input type="hidden" name="property_id" value={propertyId} />
-                      <input type="hidden" name="item_id" value={item.id} />
-                      <button
-                        type="submit"
-                        className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50"
-                      >
-                        Have us post it
-                      </button>
-                    </form>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
+        {rows.map((row) => (
+          <ForYouRow
+            key={row.key}
+            row={row}
+            item={itemByChannel.get(row.key) ?? null}
+            propertyId={propertyId}
+            addressLabel={addressLabel}
+            linkIsLive={linkIsLive}
+            conciergeDeskEnabled={conciergeDeskEnabled}
+          />
+        ))}
       </ul>
       {conciergeDeskEnabled && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
-          “Have us post it” uses one done-for-you publish from your plan. The desk
-          records a real live-ad link before it is marked live.
+          “Have us post it” uses one done-for-you publish from your plan. We record
+          a real live-ad link before it is marked live.
         </p>
       )}
     </section>
+  );
+}
+
+// One for-you channel row. Owns the approval-modal open state. Its render adapts
+// to the run item's live/gate state: the worker (S553/S631) moves a handed-off
+// concierge item to a gate, and this row surfaces that gate as the right action —
+// a branded one-tap "Approve & publish" for the ready/payment gates, a re-connect
+// for the login gate, and "we're posting it" while the worker is mid-flight. No
+// gate is ever a dead end.
+function ForYouRow({
+  row,
+  item,
+  propertyId,
+  addressLabel,
+  linkIsLive,
+  conciergeDeskEnabled,
+}: {
+  row: ResolvedRow;
+  item: PublishEverywhereRunItem | null;
+  propertyId: string;
+  addressLabel: string;
+  linkIsLive: boolean;
+  conciergeDeskEnabled: boolean;
+}) {
+  const [approveOpen, setApproveOpen] = useState(false);
+  const paid = row.mode === "paid_optin";
+  const isLive =
+    item != null && (item.publishStatus === "live" || Boolean(item.externalUrl));
+  const gate =
+    item != null && item.mode === "concierge" ? item.publishStatus : null;
+  // needs_operator (free channel, prepared) + needs_payment (paid site, prepared
+  // pending the fee) both collapse to one branded "Approve & publish" tap.
+  const needsApproval =
+    !isLive && (gate === "needs_operator" || gate === "needs_payment");
+  // needs_login can't be approved — it needs a re-connect, so route to guided posting.
+  const needsConnect = !isLive && gate === "needs_login";
+  const working =
+    !isLive &&
+    (gate === "queued" || gate === "submitting" || gate === "submitted");
+
+  const stateChip = isLive
+    ? { label: "Live", cls: "bg-green-50 text-green-700" }
+    : needsApproval
+      ? { label: "Ready — approve", cls: "bg-emerald-50 text-emerald-700" }
+      : needsConnect
+        ? { label: "Sign-in needed", cls: "bg-amber-50 text-amber-700" }
+        : working
+          ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
+          : paid
+            ? { label: "We'll fill it · fee", cls: "bg-indigo-50 text-indigo-700" }
+            : { label: "We'll fill it", cls: "bg-indigo-50 text-indigo-700" };
+
+  return (
+    <li className="rounded-xl border border-indigo-100 bg-white p-3">
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs">
+          {CHANNEL_GLYPH[row.key] ?? "🏠"}
+        </span>
+        <span className="text-sm font-semibold text-gray-800">{row.label}</span>
+        <span
+          className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${stateChip.cls}`}
+        >
+          {stateChip.label}
+        </span>
+      </div>
+
+      {paid && !isLive && (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+          {PAID_SITE_LABEL[row.key] ?? "This site"} charges a listing fee set by
+          the site. You approve it here and it is paid to them with your own card —
+          Vacantless never charges, fronts, or handles that fee.
+        </p>
+      )}
+
+      {item == null ? (
+        linkIsLive ? (
+          <form
+            action={openGuidedPosting}
+            className="mt-2 flex flex-wrap items-center gap-2"
+          >
+            <input type="hidden" name="property_id" value={propertyId} />
+            <input type="hidden" name="channel" value={row.key} />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+            >
+              Start guided posting →
+            </button>
+          </form>
+        ) : (
+          <p className="mt-2 text-[12px] text-gray-500">
+            Publish first, then start the guided post here.
+          </p>
+        )
+      ) : isLive ? (
+        item.externalUrl ? (
+          <a
+            href={item.externalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
+          >
+            View live ad ↗
+          </a>
+        ) : (
+          <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
+        )
+      ) : needsApproval ? (
+        <div className="mt-2">
+          <p className="text-[12px] text-emerald-800">
+            We prepared your ad — approve to publish
+            {paid ? " and cover the fee" : ""}.
+          </p>
+          <button
+            type="button"
+            onClick={() => setApproveOpen(true)}
+            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-700"
+          >
+            Approve &amp; publish →
+          </button>
+        </div>
+      ) : needsConnect ? (
+        <form
+          action={openGuidedPosting}
+          className="mt-2 flex flex-wrap items-center gap-2"
+        >
+          <input type="hidden" name="property_id" value={propertyId} />
+          <input type="hidden" name="channel" value={row.key} />
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+          >
+            Sign in &amp; continue →
+          </button>
+          <span className="text-[11px] text-gray-500">
+            A quick one-time sign-in, then we finish it.
+          </span>
+        </form>
+      ) : working ? (
+        <p className="mt-2 text-[12px] text-amber-800">
+          We&apos;re posting this now and will bring back the live link here.
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <a
+            href={`/dashboard/properties/${propertyId}/copilot/${item.id}`}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+          >
+            Start guided posting →
+          </a>
+          {conciergeDeskEnabled && item.canConcierge && (
+            <form action={requestConciergePublish}>
+              <input type="hidden" name="property_id" value={propertyId} />
+              <input type="hidden" name="item_id" value={item.id} />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50"
+              >
+                Have us post it
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {approveOpen && item != null && (
+        <ApprovalModal
+          propertyId={propertyId}
+          itemId={item.id}
+          channelLabel={row.label}
+          addressLabel={addressLabel}
+          paid={paid}
+          siteLabel={PAID_SITE_LABEL[row.key] ?? row.label}
+          onClose={() => setApproveOpen(false)}
+        />
+      )}
+    </li>
+  );
+}
+
+// The branded one-tap consent that turns a prepared concierge post into a live
+// ad. Free channel -> authorizes the post; paid site -> authorizes the site's
+// listing fee (paid to the site with the landlord's own on-file method;
+// Vacantless never sees or stores the card). Posts through the EXISTING
+// authorizeAutopilotSubmit; nothing is posted or charged before this tap, and a
+// real live-ad link is recorded before Live.
+function ApprovalModal({
+  propertyId,
+  itemId,
+  channelLabel,
+  addressLabel,
+  paid,
+  siteLabel,
+  onClose,
+}: {
+  propertyId: string;
+  itemId: string;
+  channelLabel: string;
+  addressLabel: string;
+  paid: boolean;
+  siteLabel: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+          Ready to publish
+        </span>
+        <h3 className="mt-2 text-lg font-semibold tracking-tight text-gray-950">
+          Publish to {channelLabel}
+        </h3>
+        <p className="mt-1 text-sm text-gray-600">
+          We prepared your {addressLabel} ad for {channelLabel}. One tap and we
+          post it — the live link comes back to this page.
+        </p>
+
+        {paid && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-950">
+            {siteLabel} charges its own listing fee, paid directly to {siteLabel}{" "}
+            with your card on file there. Approving authorizes that charge —
+            Vacantless never sees, stores, or handles your card.
+          </div>
+        )}
+
+        <form action={authorizeAutopilotSubmit} className="mt-4 flex gap-2.5">
+          <input type="hidden" name="property_id" value={propertyId} />
+          <input type="hidden" name="item_id" value={itemId} />
+          <button
+            type="submit"
+            className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+          >
+            {paid ? "Approve fee & publish" : "Approve & publish"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+        </form>
+        <p className="mt-3 text-center text-[11px] text-gray-400">
+          Nothing is posted or charged until you approve. We record a real live-ad
+          link before marking it live.
+        </p>
+      </div>
+    </div>
   );
 }
 

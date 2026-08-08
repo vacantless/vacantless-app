@@ -2532,6 +2532,81 @@ export async function addRunChannel(formData: FormData) {
   redirect(`/dashboard/properties/${propertyId}?run=saved#distribute-header`);
 }
 
+/**
+ * S631 Slice 3 polish: open the guided-posting co-pilot for a for-you channel
+ * straight from the Publish Everywhere surface, creating the distribution run +
+ * run item ON DEMAND when none exists yet (a live rental whose run never included
+ * this co-pilot channel — e.g. Facebook Marketplace). Ensures the run/item via the
+ * same stageDistributionRunForProperty the launcher uses (scoped to this one
+ * channel), then routes to the EXISTING co-pilot sidecar. No new posting behaviour:
+ * the sidecar still stops at every human gate (login/payment/review), and the
+ * extension only auto-fills. Restricted to channels with a real co-pilot mechanism.
+ */
+export async function openGuidedPosting(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) redirect("/dashboard/properties?forbidden=1");
+  const channel = normalizePublishChannel(formData.get("channel"));
+  // Only channels the co-pilot can actually fill (Kijiji / Facebook Marketplace).
+  if (!channel || !isCopilotChannel(channel)) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=copilotchannel#distribute-header`);
+  }
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const supabase = createClient();
+  // RLS-scoped: a foreign property id returns nothing.
+  const { data: propRow } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!propRow) redirect("/dashboard/properties?forbidden=1");
+
+  // Ensure an active run exists AND carries an item for this channel. Reuses the
+  // launcher's staging (builds copy + tracked link + plan and upserts the item),
+  // scoped to just this channel so nothing else is added to the run.
+  try {
+    await stageDistributionRunForProperty({
+      supabase,
+      org,
+      propertyId,
+      channels: [channel],
+    });
+  } catch (err) {
+    console.error("openGuidedPosting: staging failed", {
+      propertyId,
+      channel,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    redirect(`/dashboard/properties/${propertyId}?runerr=claimfailed#distribute-header`);
+  }
+
+  // Resolve the run item id for the sidecar deep-link.
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  const runId = (run?.id as string | undefined) ?? null;
+  let itemId: string | null = null;
+  if (runId) {
+    const { data: item } = await supabase
+      .from("distribution_run_items")
+      .select("id")
+      .eq("run_id", runId)
+      .eq("channel", channel)
+      .maybeSingle();
+    itemId = (item?.id as string | undefined) ?? null;
+  }
+  if (!itemId) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=notfound#distribute-header`);
+  }
+  redirect(`/dashboard/properties/${propertyId}/copilot/${itemId}`);
+}
+
 export async function cancelDistributionRun(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const runId = String(formData.get("run_id") ?? "");

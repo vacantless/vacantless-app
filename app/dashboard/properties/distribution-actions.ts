@@ -279,9 +279,14 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
     .eq("id", itemId)
     .eq("organization_id", org.id)
     .eq("mode", "concierge")
-    .eq("publish_status", "needs_operator")
+    // S631: approval consent covers both the free-channel operator gate and the
+    // paid-site payment gate. Approving a needs_payment item is the landlord's
+    // consent to the site's listing fee (charged to their own on-file method);
+    // Vacantless never sees or stores the card. needs_login is NOT approvable —
+    // it needs a re-connect, not consent.
+    .in("publish_status", ["needs_operator", "needs_payment"])
     .is("operator_submit_approved_at", null)
-    .select("id, run_id, organization_id, channel, attempt_count")
+    .select("id, run_id, organization_id, channel, attempt_count, publish_status")
     .maybeSingle();
   if (!approved) {
     if (propertyId) backTo(propertyId, "autopilot_stale");
@@ -298,8 +303,8 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
     currentAttemptCount: priorAttempts,
     actorType: "operator",
     actorUserId: uid,
-    statusBefore: "needs_operator",
-    statusAfter: "needs_operator",
+    statusBefore: (approved.publish_status as string) ?? "needs_operator",
+    statusAfter: (approved.publish_status as string) ?? "needs_operator",
     proofId: null,
     metadata: { source: "operator_authorized_autopilot" },
   });
