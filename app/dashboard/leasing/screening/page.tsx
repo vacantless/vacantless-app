@@ -9,6 +9,7 @@ import {
 } from "@/lib/screening-questions";
 import {
   updateScreeningQuestions,
+  updateInquiryRequirePhone,
   updateScreeningFlags,
   updateScreeningPreferredAnswer,
   setScreeningQuestionActive,
@@ -229,6 +230,52 @@ export default async function ScreeningSettingsPage({
 
           <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
             Save questions
+          </button>
+        </form>
+
+        {/* --- Contact requirements: require a phone on inquiries (S629) ------ */}
+        <form
+          action={updateInquiryRequirePhone}
+          className="rounded-2xl border border-gray-200 bg-white p-5"
+        >
+          <div className="flex items-center gap-2.5">
+            <IconTile size="sm"><Icons.chat className="h-4 w-4" /></IconTile>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+              Contact requirements
+            </h3>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Require renters to enter a phone number when they inquire. Independent
+            of pre-screening &mdash; it applies whether or not the questions above
+            are on.
+          </p>
+
+          {sp === "phone_saved" && (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+              Saved.
+            </div>
+          )}
+
+          <label className="mt-5 flex items-start gap-3 rounded-lg border border-gray-200 p-3">
+            <input
+              name="inquiry_require_phone"
+              type="checkbox"
+              defaultChecked={org.inquiry_require_phone}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+            />
+            <span className="text-sm">
+              <span className="block font-medium text-gray-700">
+                Require a phone number on the renter form
+              </span>
+              <span className="block text-xs text-gray-400">
+                When on, the public inquiry form marks phone as required and blocks
+                a submission without one. Off by default.
+              </span>
+            </span>
+          </label>
+
+          <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+            Save
           </button>
         </form>
 
