@@ -810,29 +810,6 @@ function ApprovalModal({
 // The primary action is the EXISTING publishProperty server action (page-live +
 // current authorized-instant autofire) — identical to the old Simple hero. The
 // for-you handoff itself happens after publish, in ForYouHandoff above.
-function formatFeeCents(cents: number): string {
-  return `$${(cents / 100).toLocaleString("en-CA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function checkedFeeTotalLabel(
-  checkedFees: Array<{ feeCents: number | null }>,
-): string {
-  if (checkedFees.length === 0) return "$0.00";
-  const knownTotal = checkedFees.reduce(
-    (sum, fee) => sum + (fee.feeCents ?? 0),
-    0,
-  );
-  const hasUnknown = checkedFees.some((fee) => fee.feeCents == null);
-  if (hasUnknown && knownTotal > 0) {
-    return `${formatFeeCents(knownTotal)} fixed + site fee may apply`;
-  }
-  if (hasUnknown) return "a site fee may apply";
-  return formatFeeCents(knownTotal);
-}
-
 function ConfirmModal({
   propertyId,
   addressLabel,
@@ -854,20 +831,8 @@ function ConfirmModal({
 }) {
   const preflight = derivePublishPreflight(forYouRows);
   const instantCount = instantRows.length + 2;
-  const [selectedFeeKeys, setSelectedFeeKeys] = useState<string[]>([]);
-  const checkedFees = preflight.feeChannels.filter((row) =>
-    selectedFeeKeys.includes(row.key),
-  );
-  const checkedFeeTotal = checkedFeeTotalLabel(checkedFees);
   const signInVerb = preflight.signInNeeded.length === 1 ? "needs" : "need";
   const feeVerb = preflight.feeChannels.length === 1 ? "costs" : "cost";
-  function toggleFee(key: string, checked: boolean) {
-    setSelectedFeeKeys((current) =>
-      checked
-        ? Array.from(new Set([...current, key]))
-        : current.filter((item) => item !== key),
-    );
-  }
 
   return (
     <div
@@ -943,48 +908,36 @@ function ConfirmModal({
         <div className="my-3.5 rounded-xl border border-gray-200 px-3.5 py-3">
           <div className="flex items-center justify-between gap-3 text-[12.5px] text-gray-700">
             <span>Third-party listing fees today</span>
-            <span className="text-right font-semibold text-gray-950">
-              {checkedFeeTotal}
-            </span>
+            <span className="text-right font-semibold text-gray-950">$0.00</span>
           </div>
           {preflight.feeChannels.length > 0 ? (
             <div className="mt-3 space-y-2">
-              {preflight.feeChannels.map((row) => {
-                const checked = selectedFeeKeys.includes(row.key);
-                return (
-                  <label
-                    key={row.key}
-                    className="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-[12.5px] text-gray-700"
-                  >
-                    <input
-                      type="checkbox"
-                      name="paid_channels"
-                      value={row.key}
-                      checked={checked}
-                      onChange={(event) =>
-                        toggleFee(row.key, event.currentTarget.checked)
-                      }
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold text-gray-900">
-                        {row.label}
-                      </span>
-                      <span className="block text-xs text-gray-500">
-                        {row.feeLabel}
-                      </span>
+              {preflight.feeChannels.map((row) => (
+                <div
+                  key={row.key}
+                  className="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-[12.5px] text-gray-700"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-50 text-xs">
+                    {CHANNEL_GLYPH[row.key] ?? "🏠"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-gray-900">
+                      {row.label}
                     </span>
-                  </label>
-                );
-              })}
+                    <span className="block text-xs text-gray-500">
+                      {row.feeLabel} · added after you publish
+                    </span>
+                  </span>
+                </div>
+              ))}
               <p className="text-[11.5px] leading-relaxed text-gray-500">
-                Paid sites are off unless checked. Unchecked means no charge;
-                you can add the site later.
+                Nothing is charged now. You add and pay these sites with your own
+                card after this publish; we never store your card.
               </p>
             </div>
           ) : (
             <p className="mt-2 text-[12.5px] text-gray-500">
-              <b>$0.00</b> — no paid sites are included in this publish.
+              <b>$0.00</b> - no paid sites are included in this publish.
             </p>
           )}
         </div>
