@@ -152,6 +152,28 @@ export async function updateScreeningQuestions(formData: FormData) {
   redirect("/dashboard/leasing/screening?screening=questions_saved");
 }
 
+// S629: independent partial update of the "require a phone on inquiries" flag. It
+// governs the SAME public inquiry form as the screening card but is INDEPENDENT of
+// the screening master switch (an org can require a phone without turning screening
+// on), so it is its own setter writing only its own column - the established
+// partial-update pattern in this file (updateScreeningQuestions vs Flags).
+export async function updateInquiryRequirePhone(formData: FormData) {
+  const org = await requireSettingsOrg();
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({
+      inquiry_require_phone: formData.get("inquiry_require_phone") != null,
+    })
+    .eq("id", org.id);
+  if (error) {
+    redirect("/dashboard/leasing/screening?screening=error");
+  }
+
+  redirect("/dashboard/leasing/screening?screening=phone_saved");
+}
+
 // Card 2 (lower): the auto-flag thresholds + operator-custom reason copy. Reuses
 // validateScreeningSettings for the numeric validation; enabled/ask are not this
 // action's concern (dummy true), and only the flag + reason columns are written.
