@@ -3458,6 +3458,7 @@ export default async function PropertyDetailPage({
           channelAccounts={channelPublishAccounts}
           publishEverywhereEnabled={process.env.PUBLISH_EVERYWHERE_ENABLED === "true"}
           publishEverywhereCopilotEnabled={process.env.PUBLISH_EVERYWHERE_COPILOT_ENABLED === "true"}
+          publishSimpleDefaultEnabled={process.env.PUBLISH_SIMPLE_DEFAULT_ENABLED === "true"}
         />
       </TabPanel>
 

@@ -5,6 +5,7 @@ import {
   resolvePublishMode,
   summarizeReach,
   bucketForMode,
+  derivePublishPreflight,
   ALWAYS_ON_INSTANT_COUNT,
   type PublishChannelInput,
   type PublishMode,
@@ -80,6 +81,55 @@ eq("reach.for_you", reach.for_you, 2);
 eq("reach.after_setup", reach.after_setup, 2);
 eq("reach.included = instant + for_you", reach.included, 3 + ALWAYS_ON_INSTANT_COUNT + 2);
 eq("reach without always-on", summarizeReach(["instant"], false).instant, 1);
+
+// Front-loaded preflight: sign-in rows are exactly the for-you modes; paid rows
+// carry honest fee labels and are never checked by default.
+const preflight = derivePublishPreflight([
+  { key: "site", label: "Vacantless page", mode: "instant_auto" },
+  { key: "kijiji", label: "Kijiji", mode: "copilot_fill" },
+  {
+    key: "viewit",
+    label: "Viewit.ca",
+    mode: "paid_optin",
+    feeLabel: "$54.95/mo",
+    feeCents: 5495,
+  },
+  { key: "linkedin", label: "LinkedIn", mode: "planned" },
+]);
+eq(
+  "preflight sign-in needed = copilot + paid",
+  preflight.signInNeeded.map((row) => row.key),
+  ["kijiji", "viewit"],
+);
+eq(
+  "preflight fee channels",
+  preflight.feeChannels.map((row) => ({
+    key: row.key,
+    feeLabel: row.feeLabel,
+    feeCents: row.feeCents,
+    selectedByDefault: row.selectedByDefault,
+  })),
+  [
+    {
+      key: "viewit",
+      feeLabel: "$54.95/mo",
+      feeCents: 5495,
+      selectedByDefault: false,
+    },
+  ],
+);
+eq(
+  "preflight unknown paid fee stays honest",
+  derivePublishPreflight([
+    { key: "rentfaster", label: "RentFaster.ca", mode: "paid_optin" },
+  ]).feeChannels[0]?.feeLabel,
+  "a site fee may apply",
+);
+eq(
+  "preflight paid default off",
+  preflight.feeChannels.every((row) => row.selectedByDefault === false),
+  true,
+);
 
 if (failures > 0) {
   console.error(`\n${failures} test(s) failed`);

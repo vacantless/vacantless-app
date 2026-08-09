@@ -407,6 +407,7 @@ export function DistributeTab({
   channelAccounts,
   publishEverywhereEnabled,
   publishEverywhereCopilotEnabled,
+  publishSimpleDefaultEnabled,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -433,6 +434,7 @@ export function DistributeTab({
   channelAccounts: ChannelPublishAccountRow[];
   publishEverywhereEnabled: boolean;
   publishEverywhereCopilotEnabled: boolean;
+  publishSimpleDefaultEnabled: boolean;
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -482,117 +484,66 @@ export function DistributeTab({
         : `${requiredOutstanding} ${
             requiredOutstanding === 1 ? "thing" : "things"
           } to finish`;
-
-  return (
-    <div>
-      {/* Header — what this tab is + a one-line readiness signal. */}
-      <div
-        id="distribute-header"
-        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm"
-      >
-        <div className="mb-2 flex items-center gap-2.5">
-          <IconTile><Icons.link className="h-4 w-4" /></IconTile>
-          <h3 className="text-sm font-semibold text-white">
-            Get this listing online
-          </h3>
-        </div>
-        <p className="mb-3 max-w-2xl text-sm text-slate-300">
-          Put the Vacantless page and rental feed live first, then use the
-          proof-based posting tools below to reach more rental sites.
-        </p>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span
-            className={`rounded-full px-2.5 py-0.5 font-medium ${
-              readyToShare
-                ? "bg-emerald-400 text-slate-950"
-                : "bg-amber-300 text-slate-950"
-            }`}
-          >
-            {readinessLabel}
-          </span>
-          <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
-            {liveChannels} {liveChannels === 1 ? "site" : "sites"} posted
-          </span>
-        </div>
-        {!linkIsLive && promotionNote && (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            {promotionNote}
-          </p>
-        )}
-        {runNotice && (
-          <div
-            className={`mt-3 rounded-lg border px-3 py-2 text-xs ${RUN_NOTICE_CLASS[runNotice.tone]}`}
-          >
-            <p>
-              <strong>{runNotice.title}</strong> {runNotice.body}
-            </p>
-            {runNotice.showConciergeActions && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <form action={startConciergePackCheckout}>
-                  <input type="hidden" name="property_id" value={propertyId} />
-                  <button className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
-                    Add a {CONCIERGE_PACK_QUANTITY}-pack -{" "}
-                    {formatAmount(CONCIERGE_PACK_PRICE_CENTS)}
-                  </button>
-                </form>
-                <a
-                  href="/dashboard/billing"
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Upgrade to Managed
-                </a>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <GetOnlineView
-        orgDefaultMode={orgDefaultMode}
-        linkIsLive={linkIsLive}
-        simple={
-          publishEverywhereEnabled ? (
-            <PublishEverywhere
-              propertyId={propertyId}
-              basics={basics}
-              linkIsLive={linkIsLive}
-              setupOutstanding={setupOutstanding}
-              canSetLive={canSetLive}
-              channelCards={channelCards}
-              replyInputs={replyInputs}
-              totalInquiryCount={totalInquiryCount}
-              conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
-              conciergeUsage={launchRun.conciergeUsage}
-              copilotEnabled={publishEverywhereCopilotEnabled}
-              runItems={launchRun.items.map((it) => ({
-                id: it.id,
-                channel: it.channel,
-                publishStatus: it.publishStatus,
-                mode: it.mode,
-                canConcierge: it.canConcierge,
-                externalUrl: it.externalUrl,
-              }))}
-            />
-          ) : (
-          <SimpleGetOnline
-            propertyId={propertyId}
-            basics={basics}
-            linkIsLive={linkIsLive}
-            setupOutstanding={setupOutstanding}
-            hasPhotos={hasPhotos}
-            canSetLive={canSetLive}
-            launchRun={launchRun}
-            instagramCard={instagramCard}
-            replyInputs={replyInputs}
-            totalInquiryCount={totalInquiryCount}
-            channelCards={channelCards}
-            channelAccounts={channelAccounts}
-            analytics={analytics}
-          />
-          )
-        }
-        advanced={
-          <>
+  const publishEverywhereSurface = (
+    <PublishEverywhere
+      propertyId={propertyId}
+      basics={basics}
+      linkIsLive={linkIsLive}
+      setupOutstanding={setupOutstanding}
+      canSetLive={canSetLive}
+      channelCards={channelCards}
+      replyInputs={replyInputs}
+      totalInquiryCount={totalInquiryCount}
+      conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
+      conciergeUsage={launchRun.conciergeUsage}
+      copilotEnabled={publishEverywhereCopilotEnabled}
+      runItems={launchRun.items.map((it) => ({
+        id: it.id,
+        channel: it.channel,
+        publishStatus: it.publishStatus,
+        mode: it.mode,
+        canConcierge: it.canConcierge,
+        externalUrl: it.externalUrl,
+      }))}
+    />
+  );
+  const simpleGetOnlineSurface = (
+    <SimpleGetOnline
+      propertyId={propertyId}
+      basics={basics}
+      linkIsLive={linkIsLive}
+      setupOutstanding={setupOutstanding}
+      hasPhotos={hasPhotos}
+      canSetLive={canSetLive}
+      launchRun={launchRun}
+      instagramCard={instagramCard}
+      replyInputs={replyInputs}
+      totalInquiryCount={totalInquiryCount}
+      channelCards={channelCards}
+      channelAccounts={channelAccounts}
+      analytics={analytics}
+    />
+  );
+  const advancedSimpleToolsSurface = (
+    <SimpleGetOnline
+      propertyId={propertyId}
+      basics={basics}
+      linkIsLive={linkIsLive}
+      setupOutstanding={setupOutstanding}
+      hasPhotos={hasPhotos}
+      canSetLive={canSetLive}
+      launchRun={launchRun}
+      instagramCard={instagramCard}
+      replyInputs={replyInputs}
+      totalInquiryCount={totalInquiryCount}
+      channelCards={channelCards}
+      channelAccounts={channelAccounts}
+      analytics={analytics}
+      showLaunchRunPanel={false}
+    />
+  );
+  const advancedTools = (
+    <>
       <SimplePostingPlan
         linkIsLive={linkIsLive}
         setupOutstanding={setupOutstanding}
@@ -639,8 +590,8 @@ export function DistributeTab({
             </div>
             <p className="text-xs text-gray-600">
               Vacantless prepares the copy, links, and checks. You still approve
-              any outside-site post or payment, and a site counts as Live
-              only after the real ad link is saved.
+              any outside-site post or payment, and a site counts as Live only
+              after the real ad link is saved.
             </p>
           </div>
           <a
@@ -666,7 +617,6 @@ export function DistributeTab({
           readyToShare={readyToShare}
           linkIsLive={linkIsLive}
         />
-
       </DistributionStatusStrip>
 
       {/* THE command center — one guided surface: pick channels, follow one next
@@ -736,7 +686,6 @@ export function DistributeTab({
               <span className="text-xs font-semibold text-brand">Open</span>
             </summary>
             <div className="border-t border-gray-100 px-4 py-3">
-
               {otherPosts.length > 0 && (
                 <ul className="mb-4 space-y-3">
                   {otherPosts.map((post) => (
@@ -784,9 +733,101 @@ export function DistributeTab({
           <AnalyticsPanel rows={analytics} />
         </div>
       </details>
-          </>
-        }
-      />
+    </>
+  );
+
+  return (
+    <div>
+      {/* Header — what this tab is + a one-line readiness signal. */}
+      <div
+        id="distribute-header"
+        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm"
+      >
+        <div className="mb-2 flex items-center gap-2.5">
+          <IconTile><Icons.link className="h-4 w-4" /></IconTile>
+          <h3 className="text-sm font-semibold text-white">
+            Get this listing online
+          </h3>
+        </div>
+        <p className="mb-3 max-w-2xl text-sm text-slate-300">
+          Put the Vacantless page and rental feed live first, then use the
+          proof-based posting tools below to reach more rental sites.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span
+            className={`rounded-full px-2.5 py-0.5 font-medium ${
+              readyToShare
+                ? "bg-emerald-400 text-slate-950"
+                : "bg-amber-300 text-slate-950"
+            }`}
+          >
+            {readinessLabel}
+          </span>
+          <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
+            {liveChannels} {liveChannels === 1 ? "site" : "sites"} posted
+          </span>
+        </div>
+        {!linkIsLive && promotionNote && (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {promotionNote}
+          </p>
+        )}
+        {runNotice && (
+          <div
+            className={`mt-3 rounded-lg border px-3 py-2 text-xs ${RUN_NOTICE_CLASS[runNotice.tone]}`}
+          >
+            <p>
+              <strong>{runNotice.title}</strong> {runNotice.body}
+            </p>
+            {runNotice.showConciergeActions && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <form action={startConciergePackCheckout}>
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <button className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                    Add a {CONCIERGE_PACK_QUANTITY}-pack -{" "}
+                    {formatAmount(CONCIERGE_PACK_PRICE_CENTS)}
+                  </button>
+                </form>
+                <a
+                  href="/dashboard/billing"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Upgrade to Managed
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {publishSimpleDefaultEnabled ? (
+        <>
+          {publishEverywhereSurface}
+          <details className="mt-5 border-t border-gray-200 pt-4">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+              <span>Advanced / More options</span>
+              <span className="text-xs font-semibold text-brand">Open</span>
+            </summary>
+            <div className="mt-4 space-y-4">
+              {advancedSimpleToolsSurface}
+              <div className="border-t border-gray-200 pt-4">
+                {advancedTools}
+              </div>
+            </div>
+          </details>
+        </>
+      ) : (
+        <GetOnlineView
+          orgDefaultMode={orgDefaultMode}
+          linkIsLive={linkIsLive}
+          simple={
+            publishEverywhereEnabled
+              ? publishEverywhereSurface
+              : simpleGetOnlineSurface
+          }
+          advanced={advancedTools}
+        />
+      )}
     </div>
   );
 }
@@ -1039,6 +1080,7 @@ function SimpleGetOnline({
   channelCards,
   channelAccounts,
   analytics,
+  showLaunchRunPanel = true,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -1053,6 +1095,7 @@ function SimpleGetOnline({
   channelCards: DistributeChannelCard[];
   channelAccounts: ChannelPublishAccountRow[];
   analytics: ChannelAnalyticsRow[];
+  showLaunchRunPanel?: boolean;
 }) {
   const addressLabel = basics.address || replyInputs.address || "this rental";
   const publicLink = replyInputs.bookingUrl;
@@ -1424,31 +1467,33 @@ function SimpleGetOnline({
         )}
       </section>
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              1-tap queue
-            </p>
-            <h3 className="mt-1 text-base font-semibold text-gray-950">
-              Vacantless preps each outside step; you approve, post, or save proof.
-            </h3>
+      {showLaunchRunPanel && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                1-tap queue
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-gray-950">
+                Vacantless preps each outside step; you approve, post, or save proof.
+              </h3>
+            </div>
+            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+              Free co-pilot path
+            </span>
           </div>
-          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
-            Free co-pilot path
-          </span>
-        </div>
-        <LaunchRunPanel
-          propertyId={propertyId}
-          run={launchRun.run}
-          items={launchRun.items}
-          progress={launchRun.progress}
-          selectable={launchRun.selectable}
-          startChannels={launchRun.startChannels}
-          realtorReferralEnabled={launchRun.realtorReferralEnabled}
-          leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
-        />
-      </section>
+          <LaunchRunPanel
+            propertyId={propertyId}
+            run={launchRun.run}
+            items={launchRun.items}
+            progress={launchRun.progress}
+            selectable={launchRun.selectable}
+            startChannels={launchRun.startChannels}
+            realtorReferralEnabled={launchRun.realtorReferralEnabled}
+            leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
+          />
+        </section>
+      )}
     </div>
   );
 }
