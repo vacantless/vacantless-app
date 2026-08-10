@@ -141,6 +141,23 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   ok("market: policy fact appears when inherited", findFact(a, "policy")?.inherited === true);
   ok("market: no gaps when live + photos", (a?.gaps.length ?? -1) === 0);
 }
+{
+  const a = deriveNextAction(inp({ currentStep: "market", hasRent: true, photoCount: 0, isLive: true }));
+  ok("market: flag-off live listing keeps old title", a?.title === "Set this property Live");
+}
+{
+  const a = deriveNextAction(inp({
+    currentStep: "market",
+    hasRent: true,
+    photoCount: 0,
+    isLive: true,
+    stepClarityLiveEnabled: true,
+  }));
+  ok("market: flag-on live listing reframes title", a?.title === "Strengthen your live ad");
+  ok("market: flag-on live listing keeps photo nudge", findGap(a, "photos"));
+  ok("market: flag-on live listing has no live gap", !findGap(a, "live"));
+  ok("market: flag-on live listing cta -> photos", a?.cta.href === `/dashboard/properties/${PID}#property-photos`);
+}
 
 // --- inquiries --------------------------------------------------------------
 {

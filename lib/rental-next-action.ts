@@ -85,6 +85,8 @@ export type NextActionInput = {
 
   // --- market -------------------------------------------------------------
   isLive: boolean;
+  /** Dark S639 flag: reframe live listings that still need polish work. */
+  stepClarityLiveEnabled?: boolean;
   photoCount: number;
   /** Number of ready-to-paste channel copies built from this unit. */
   channelCount: number;
@@ -220,6 +222,23 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
           )} from your building defaults`,
           inherited: true,
         });
+      if (input.isLive && input.stepClarityLiveEnabled) {
+        return {
+          step,
+          title:
+            input.photoCount === 0 ? "Strengthen your live ad" : "You're online",
+          blurb:
+            input.photoCount === 0
+              ? "Your listing is already live. Add one photo so the ad looks stronger wherever renters find it."
+              : "Your listing is already live. Re-publish only when you change the listing.",
+          derived,
+          gaps,
+          cta:
+            input.photoCount === 0
+              ? { label: "Add photos", href: `${self}#property-photos` }
+              : { label: "Review live listing", href: `${self}#distribute-header` },
+        };
+      }
       return {
         step,
         title: "Set this property Live",

@@ -1964,6 +1964,8 @@ export default async function PropertyDetailPage({
     effectiveFeatures.pets_dogs != null;
   if (catsInherited || dogsInherited) inheritedNext.add("pets");
 
+  const stepClarityLiveEnabled =
+    process.env.STEP_CLARITY_LIVE_ENABLED === "true";
   const nextAction = deriveNextAction({
     propertyId: p.id,
     currentStep: lifecycle.currentStep,
@@ -1983,6 +1985,7 @@ export default async function PropertyDetailPage({
     },
     inherited: inheritedNext,
     isLive: publicPageIsBookable,
+    stepClarityLiveEnabled,
     photoCount: photoRows.length,
     channelCount: copyTabs.length,
     linkIsLive: publicPageIsBookable,
@@ -3459,6 +3462,7 @@ export default async function PropertyDetailPage({
           publishEverywhereEnabled={process.env.PUBLISH_EVERYWHERE_ENABLED === "true"}
           publishEverywhereCopilotEnabled={process.env.PUBLISH_EVERYWHERE_COPILOT_ENABLED === "true"}
           publishSimpleDefaultEnabled={process.env.PUBLISH_SIMPLE_DEFAULT_ENABLED === "true"}
+          stepClarityLiveEnabled={stepClarityLiveEnabled}
         />
       </TabPanel>
 
