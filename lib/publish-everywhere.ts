@@ -152,6 +152,55 @@ export function summarizeReach(
   return { included: instant + for_you, instant, for_you, after_setup };
 }
 
+export type PublishPreflightRow = {
+  key: string;
+  label: string;
+  mode: PublishMode;
+  feeLabel?: string | null;
+  feeCents?: number | null;
+};
+
+export type PublishPreflightFeeChannel = {
+  key: string;
+  label: string;
+  feeLabel: string;
+  feeCents: number | null;
+  selectedByDefault: false;
+};
+
+export type PublishPreflightSummary = {
+  signInNeeded: PublishPreflightRow[];
+  feeChannels: PublishPreflightFeeChannel[];
+};
+
+const UNKNOWN_SITE_FEE_LABEL = "a site fee may apply";
+
+/**
+ * Build the front-loaded human-decision list from already-resolved publish rows.
+ * Sign-in is required only for for-you modes; paid sites are always default-off
+ * because outside-site fees need explicit opt-in before a landlord pays them.
+ */
+export function derivePublishPreflight(
+  rows: readonly PublishPreflightRow[],
+): PublishPreflightSummary {
+  const signInNeeded = rows.filter(
+    (row) => row.mode === "copilot_fill" || row.mode === "paid_optin",
+  );
+  const feeChannels = rows
+    .filter((row) => row.mode === "paid_optin")
+    .map((row) => ({
+      key: row.key,
+      label: row.label,
+      feeLabel: row.feeLabel?.trim() || UNKNOWN_SITE_FEE_LABEL,
+      feeCents:
+        typeof row.feeCents === "number" && Number.isFinite(row.feeCents)
+          ? row.feeCents
+          : null,
+      selectedByDefault: false as const,
+    }));
+  return { signInNeeded, feeChannels };
+}
+
 // S631 Slice 3: the channels that have a real co-pilot mechanism today (the
 // vacantless-extension fill sheet + the no-install pop-out sidecar). Kept in
 // lockstep with EXTENSION_CHANNELS (lib/extension-kit.ts) and the extension's

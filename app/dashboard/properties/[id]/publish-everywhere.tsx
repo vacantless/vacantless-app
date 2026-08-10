@@ -40,6 +40,7 @@ import { CopyLink } from "./copy-link";
 import { publishProperty, requestConciergePublish, openGuidedPosting } from "../actions";
 import { authorizeAutopilotSubmit } from "../distribution-actions";
 import {
+  derivePublishPreflight,
   resolvePublishMode,
   summarizeReach,
   isCopilotSupportedKey,
@@ -828,8 +829,11 @@ function ConfirmModal({
   copilotEnabled: boolean;
   onClose: () => void;
 }) {
-  const forYouLabels = forYouRows.map((r) => r.label).join(", ");
-  const paidForYou = forYouRows.filter((r) => r.mode === "paid_optin");
+  const preflight = derivePublishPreflight(forYouRows);
+  const instantCount = instantRows.length + 2;
+  const signInVerb = preflight.signInNeeded.length === 1 ? "needs" : "need";
+  const feeVerb = preflight.feeChannels.length === 1 ? "costs" : "cost";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -842,7 +846,12 @@ function ConfirmModal({
           Publish {addressLabel}
         </h3>
         <p className="mt-1 text-sm text-gray-500">
-          Exactly what happens when you tap — nothing posts before you see this.
+          {instantCount} sites go live instantly ·{" "}
+          {preflight.signInNeeded.length} {signInVerb} a quick sign-in ·{" "}
+          {preflight.feeChannels.length} {feeVerb} a fee.
+        </p>
+        <p className="mt-1 text-xs text-gray-400">
+          Nothing posts until you tap Publish everywhere.
         </p>
 
         <div className="my-3.5 rounded-xl border border-gray-200 px-3">
@@ -869,26 +878,67 @@ function ConfirmModal({
               </span>
             </div>
           ))}
-          {forYouRows.length > 0 && (
-            <div className="flex items-center gap-2 py-2.5 text-[13px]">
-              🤝 {forYouLabels}
-              <span className="ml-auto shrink-0 text-[10px] font-black tracking-wide text-indigo-600">
-                WE FILL · YOU POST
-              </span>
-            </div>
-          )}
         </div>
 
-        <div className="my-3.5 flex justify-between gap-3 rounded-xl border border-gray-200 px-3.5 py-2.5 text-[12.5px] text-gray-700">
-          <span>Third-party listing fees today</span>
-          {paidForYou.length > 0 ? (
-            <span className="text-right">
-              <b>Set by the site</b> — paid directly with your card, opted-in
-            </span>
+        {preflight.signInNeeded.length > 0 && (
+          <div className="my-3.5 rounded-xl border border-indigo-100 bg-indigo-50 px-3.5 py-3">
+            <p className="text-[12.5px] font-semibold text-indigo-950">
+              Quick sign-in
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {preflight.signInNeeded.map((row) => (
+                <div
+                  key={row.key}
+                  className="flex items-center gap-2 text-[13px] text-indigo-950"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white text-xs">
+                    {CHANNEL_GLYPH[row.key] ?? "🏠"}
+                  </span>
+                  <span className="font-semibold">{row.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11.5px] leading-relaxed text-indigo-900/80">
+              We fill the post; you sign in and tap post. We never see your
+              password.
+            </p>
+          </div>
+        )}
+
+        <div className="my-3.5 rounded-xl border border-gray-200 px-3.5 py-3">
+          <div className="flex items-center justify-between gap-3 text-[12.5px] text-gray-700">
+            <span>Third-party listing fees today</span>
+            <span className="text-right font-semibold text-gray-950">$0.00</span>
+          </div>
+          {preflight.feeChannels.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {preflight.feeChannels.map((row) => (
+                <div
+                  key={row.key}
+                  className="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-[12.5px] text-gray-700"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-50 text-xs">
+                    {CHANNEL_GLYPH[row.key] ?? "🏠"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-gray-900">
+                      {row.label}
+                    </span>
+                    <span className="block text-xs text-gray-500">
+                      {row.feeLabel} · added after you publish
+                    </span>
+                  </span>
+                </div>
+              ))}
+              <p className="text-[11.5px] leading-relaxed text-gray-500">
+                Nothing is charged now. You add and pay these sites with your own
+                card after this publish; we never store your card.
+              </p>
+            </div>
           ) : (
-            <span>
-              <b>$0.00</b> — always shown first
-            </span>
+            <p className="mt-2 text-[12.5px] text-gray-500">
+              <b>$0.00</b> - no paid sites are included in this publish.
+            </p>
           )}
         </div>
 
