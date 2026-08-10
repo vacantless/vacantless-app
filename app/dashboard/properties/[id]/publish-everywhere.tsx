@@ -74,8 +74,8 @@ export type PublishEverywhereRunItem = {
 // north-star and the rest of the tab already use).
 const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
   instant_auto: { label: "Instant", cls: "bg-green-50 text-green-700" },
-  copilot_fill: { label: "We'll fill it", cls: "bg-indigo-50 text-indigo-700" },
-  paid_optin: { label: "We'll fill it · fee", cls: "bg-indigo-50 text-indigo-700" },
+  copilot_fill: { label: "Sign in + post", cls: "bg-indigo-50 text-indigo-700" },
+  paid_optin: { label: "Sign in + fee", cls: "bg-indigo-50 text-indigo-700" },
   needs_connection: { label: "Connect once", cls: "bg-gray-100 text-gray-600" },
   brokerage_gated: { label: "Via brokerage", cls: "bg-gray-100 text-gray-600" },
   planned: { label: "Coming soon", cls: "bg-gray-100 text-gray-600" },
@@ -86,17 +86,17 @@ const BUCKET_META: Record<
   { title: string; note: string; dot: string }
 > = {
   instant: {
-    title: "Goes live instantly",
-    note: "— the moment you tap",
+    title: "Connected now",
+    note: "",
     dot: "bg-green-500",
   },
   for_you: {
-    title: "We post these for you",
-    note: "— no API, so we auto-fill; you sign in & post",
+    title: "Needs your sign-in",
+    note: "",
     dot: "bg-indigo-500",
   },
   after_setup: {
-    title: "Available after a one-time setup",
+    title: "Needs setup",
     note: "",
     dot: "bg-gray-400",
   },
@@ -224,7 +224,12 @@ export function PublishEverywhere({
   });
   const reach = summarizeReach(resolved.map((r) => r.bucket), true);
   const byBucket = (b: PublishBucket) => resolved.filter((r) => r.bucket === b);
+  const instantRows = byBucket("instant");
   const forYou = byBucket("for_you");
+  const setupRows = resolved.filter(
+    (r) => r.mode === "needs_connection" || r.mode === "brokerage_gated",
+  );
+  const comingSoonRows = resolved.filter((r) => r.mode === "planned");
 
   const publishBlockedByBasics = setupOutstanding > 0;
   const canPublish = !publishBlockedByBasics && canSetLive;
@@ -265,8 +270,9 @@ export function PublishEverywhere({
               Live on {reach.instant} {reach.instant === 1 ? "channel" : "channels"}.
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-              The renter page is live. Connected channels stay in sync; the
-              for-you channels stay ready in the guided queue.{" "}
+              The renter page is live. Connected channels stay in sync, and any
+              outside site that needs a sign-in or payment shows its next step
+              below.{" "}
               {totalInquiryCount}{" "}
               {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to this
               rental so far.
@@ -287,32 +293,38 @@ export function PublishEverywhere({
           </section>
         ) : (
           <section className="relative overflow-hidden rounded-2xl border border-emerald-900 bg-gradient-to-b from-emerald-900 to-emerald-950 p-7 text-center text-white shadow-sm">
-            <div className="mx-auto mb-5 flex max-w-md flex-wrap justify-center gap-5 text-left">
-              <div className="max-w-[150px]">
-                <div className="text-lg">⚡</div>
+            <div className="mx-auto mb-5 grid max-w-2xl gap-2 text-left sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                <span className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300 text-xs font-black text-emerald-950">
+                  1
+                </span>
                 <b className="block text-[12.5px] text-emerald-50">
-                  Instant where connected
+                  Tap Publish
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  Page, email, and any connected sites
+                  Renter page and connected channels go live.
                 </small>
               </div>
-              <div className="max-w-[150px]">
-                <div className="text-lg">🤝</div>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                <span className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300 text-xs font-black text-emerald-950">
+                  2
+                </span>
                 <b className="block text-[12.5px] text-emerald-50">
-                  We post the rest
+                  Sign in if asked
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  Marketplace, Kijiji &amp; paid sites
+                  We fill the ad; you only handle login or site fees.
                 </small>
               </div>
-              <div className="max-w-[150px]">
-                <div className="text-lg">🔄</div>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                <span className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300 text-xs font-black text-emerald-950">
+                  3
+                </span>
                 <b className="block text-[12.5px] text-emerald-50">
-                  Connected stays synced
+                  Confirm the live link
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  Edits auto-update connected channels
+                  A site counts as Live after the real ad link is saved.
                 </small>
               </div>
             </div>
@@ -328,7 +340,7 @@ export function PublishEverywhere({
                   Publish everywhere
                 </span>
                 <small className="text-[12.5px] font-semibold opacity-80">
-                  One tap — we handle the rest
+                  Then follow the short sign-in or fee list
                 </small>
               </button>
             ) : publishBlockedByBasics ? (
@@ -359,7 +371,7 @@ export function PublishEverywhere({
               </div>
             )}
             <p className="mt-3 text-[12.5px] text-emerald-200">
-              🔒 You&apos;ll see exactly what happens before anything posts
+              Nothing posts or charges until you approve it.
             </p>
           </section>
         )}
@@ -379,7 +391,7 @@ export function PublishEverywhere({
         )}
       </div>
 
-      {/* Right: reach summary + the three buckets + legend. */}
+      {/* Right: connected channels first, unavailable channels last. */}
       <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center gap-4 border-b border-gray-100 pb-4">
           <div className="text-3xl font-black leading-none tracking-tight text-green-700">
@@ -390,17 +402,17 @@ export function PublishEverywhere({
           </div>
           <div>
             <div className="mb-1.5 text-[13px] font-bold text-gray-800">
-              Reach for this publish
+              What happens
             </div>
             <div className="flex flex-wrap gap-1.5">
               <span className="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-bold text-green-700">
-                {reach.instant} instant
+                {reach.instant} connected
               </span>
               <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                {reach.for_you} for you
+                {reach.for_you} need sign-in
               </span>
               <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                {reach.after_setup} after setup
+                {setupRows.length + comingSoonRows.length} later
               </span>
             </div>
           </div>
@@ -425,7 +437,7 @@ export function PublishEverywhere({
               bucket: "instant",
             }}
           />
-          {byBucket("instant").map((r) => (
+          {instantRows.map((r) => (
             <ChannelRow key={r.key} row={r} />
           ))}
         </div>
@@ -439,24 +451,36 @@ export function PublishEverywhere({
           </div>
         )}
 
-        {byBucket("after_setup").length > 0 && (
+        {setupRows.length > 0 && (
           <div className="mb-3.5">
             <BucketLabel bucket="after_setup" />
-            {byBucket("after_setup").map((r) => (
+            {setupRows.map((r) => (
+              <ChannelRow key={r.key} row={r} />
+            ))}
+          </div>
+        )}
+
+        {comingSoonRows.length > 0 && (
+          <div className="mb-3.5">
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-700">
+              <span className="h-2 w-2 rounded-full bg-gray-300" />
+              Coming soon
+            </div>
+            {comingSoonRows.map((r) => (
               <ChannelRow key={r.key} row={r} />
             ))}
           </div>
         )}
 
         <div className="mt-2 border-t border-gray-100 pt-3 text-[11.5px] leading-relaxed text-gray-500">
-          <b className="text-gray-700">Instant</b> — published and kept in sync
-          automatically.
+          <b className="text-gray-700">Connected now</b> means the channel can go
+          live from this publish.
           <br />
-          <b className="text-gray-700">We&apos;ll fill it</b> — we auto-fill the whole
-          post; you sign in, cover any site fee, and tap post.
+          <b className="text-gray-700">Needs your sign-in</b> means Vacantless
+          fills the ad, then you sign in, cover any site fee, and tap post.
           <br />
-          <b className="text-gray-700">After setup</b> — a one-time sign-in (or
-          your brokerage) adds it to every future publish.
+          <b className="text-gray-700">Coming soon</b> is not included in this
+          publish yet.
         </div>
       </aside>
 
@@ -464,11 +488,10 @@ export function PublishEverywhere({
         <ConfirmModal
           propertyId={propertyId}
           addressLabel={addressLabel}
-          instantRows={byBucket("instant")}
+          instantRows={instantRows}
           forYouRows={forYou}
           conciergeDeskEnabled={conciergeDeskEnabled}
           conciergeUsage={conciergeUsage}
-          copilotEnabled={copilotEnabled}
           onClose={() => setConfirmOpen(false)}
         />
       )}
@@ -522,13 +545,12 @@ function ForYouHandoff({
       <div className="flex items-center gap-2">
         <span className="text-lg">🤝</span>
         <h3 className="text-base font-semibold tracking-tight text-indigo-950">
-          We post these for you
+          Finish these sites
         </h3>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
-        These sites have no API, so we auto-fill the whole post for you. When it is
-        ready we bring it back here for one tap — we never post, sign in, or pay on
-        your behalf without you.
+        Vacantless fills the ad. You sign in if the site asks, pay the site only
+        if it asks, then save the real live-ad link here.
       </p>
       <ul className="mt-3 space-y-2.5">
         {rows.map((row) => (
@@ -599,8 +621,8 @@ function ForYouRow({
         : working
           ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
           : paid
-            ? { label: "We'll fill it · fee", cls: "bg-indigo-50 text-indigo-700" }
-            : { label: "We'll fill it", cls: "bg-indigo-50 text-indigo-700" };
+            ? { label: "Sign in + fee", cls: "bg-indigo-50 text-indigo-700" }
+            : { label: "Sign in + post", cls: "bg-indigo-50 text-indigo-700" };
 
   return (
     <li className="rounded-xl border border-indigo-100 bg-white p-3">
@@ -636,7 +658,7 @@ function ForYouRow({
               type="submit"
               className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
             >
-              Start guided posting →
+              Start this site →
             </button>
           </form>
         ) : (
@@ -698,7 +720,7 @@ function ForYouRow({
             href={`/dashboard/properties/${propertyId}/copilot/${item.id}`}
             className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
           >
-            Start guided posting →
+            Start this site →
           </a>
           {conciergeDeskEnabled && item.canConcierge && (
             <form action={requestConciergePublish}>
@@ -768,8 +790,8 @@ function ApprovalModal({
           Publish to {channelLabel}
         </h3>
         <p className="mt-1 text-sm text-gray-600">
-          We prepared your {addressLabel} ad for {channelLabel}. One tap and we
-          post it — the live link comes back to this page.
+          We prepared your {addressLabel} ad for {channelLabel}. Approve once to
+          publish it; the live link comes back to this page.
         </p>
 
         {paid && (
@@ -817,7 +839,6 @@ function ConfirmModal({
   forYouRows,
   conciergeDeskEnabled,
   conciergeUsage,
-  copilotEnabled,
   onClose,
 }: {
   propertyId: string;
@@ -826,13 +847,20 @@ function ConfirmModal({
   forYouRows: ResolvedRow[];
   conciergeDeskEnabled: boolean;
   conciergeUsage: { used: number; included: number };
-  copilotEnabled: boolean;
   onClose: () => void;
 }) {
   const preflight = derivePublishPreflight(forYouRows);
   const instantCount = instantRows.length + 2;
-  const signInVerb = preflight.signInNeeded.length === 1 ? "needs" : "need";
-  const feeVerb = preflight.feeChannels.length === 1 ? "costs" : "cost";
+  const signInText =
+    preflight.signInNeeded.length === 1
+      ? "1 site needs sign-in"
+      : `${preflight.signInNeeded.length} sites need sign-in`;
+  const feeText =
+    preflight.feeChannels.length === 0
+      ? "no site fees now"
+      : preflight.feeChannels.length === 1
+        ? "1 site may ask for a fee"
+        : `${preflight.feeChannels.length} sites may ask for a fee`;
 
   return (
     <div
@@ -846,12 +874,10 @@ function ConfirmModal({
           Publish {addressLabel}
         </h3>
         <p className="mt-1 text-sm text-gray-500">
-          {instantCount} sites go live instantly ·{" "}
-          {preflight.signInNeeded.length} {signInVerb} a quick sign-in ·{" "}
-          {preflight.feeChannels.length} {feeVerb} a fee.
+          {instantCount} connected sites go live now · {signInText} · {feeText}.
         </p>
         <p className="mt-1 text-xs text-gray-400">
-          Nothing posts until you tap Publish everywhere.
+          Nothing posts or charges until you approve it.
         </p>
 
         <div className="my-3.5 rounded-xl border border-gray-200 px-3">
@@ -905,12 +931,14 @@ function ConfirmModal({
           </div>
         )}
 
-        <div className="my-3.5 rounded-xl border border-gray-200 px-3.5 py-3">
-          <div className="flex items-center justify-between gap-3 text-[12.5px] text-gray-700">
-            <span>Third-party listing fees today</span>
-            <span className="text-right font-semibold text-gray-950">$0.00</span>
-          </div>
-          {preflight.feeChannels.length > 0 ? (
+        {preflight.feeChannels.length > 0 && (
+          <div className="my-3.5 rounded-xl border border-gray-200 px-3.5 py-3">
+            <div className="flex items-center justify-between gap-3 text-[12.5px] text-gray-700">
+              <span>Site fees</span>
+              <span className="text-right font-semibold text-gray-950">
+                Paid on the site
+              </span>
+            </div>
             <div className="mt-3 space-y-2">
               {preflight.feeChannels.map((row) => (
                 <div
@@ -935,12 +963,8 @@ function ConfirmModal({
                 card after this publish; we never store your card.
               </p>
             </div>
-          ) : (
-            <p className="mt-2 text-[12.5px] text-gray-500">
-              <b>$0.00</b> - no paid sites are included in this publish.
-            </p>
-          )}
-        </div>
+          </div>
+        )}
 
         {conciergeDeskEnabled && (
           <div className="my-3.5 flex items-center gap-2.5 rounded-xl bg-green-50 px-3.5 py-3 text-[13px] text-gray-700">
@@ -967,9 +991,8 @@ function ConfirmModal({
         </form>
 
         <p className="mt-3 text-center text-[11px] text-gray-400">
-          {copilotEnabled
-            ? "For the for-you sites we auto-fill everything. After you publish, tap “Start guided posting”, sign in, cover any site fee, and post — we record the live link back here."
-            : "For the for-you sites we auto-fill everything; you sign in, cover any fee, and tap post. One-tap auto-fill handoff arrives in a later update for this org; live links are tracked back here."}
+          After this, any site that still needs work shows one button: sign in,
+          pay the site if needed, then save the live link.
         </p>
       </div>
     </div>
