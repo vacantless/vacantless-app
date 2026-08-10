@@ -524,24 +524,6 @@ export function DistributeTab({
       analytics={analytics}
     />
   );
-  const advancedSimpleToolsSurface = (
-    <SimpleGetOnline
-      propertyId={propertyId}
-      basics={basics}
-      linkIsLive={linkIsLive}
-      setupOutstanding={setupOutstanding}
-      hasPhotos={hasPhotos}
-      canSetLive={canSetLive}
-      launchRun={launchRun}
-      instagramCard={instagramCard}
-      replyInputs={replyInputs}
-      totalInquiryCount={totalInquiryCount}
-      channelCards={channelCards}
-      channelAccounts={channelAccounts}
-      analytics={analytics}
-      showLaunchRunPanel={false}
-    />
-  );
   const advancedTools = (
     <>
       <SimplePostingPlan
@@ -750,8 +732,8 @@ export function DistributeTab({
           </h3>
         </div>
         <p className="mb-3 max-w-2xl text-sm text-slate-300">
-          Put the Vacantless page and rental feed live first, then use the
-          proof-based posting tools below to reach more rental sites.
+          Click Publish everywhere. We turn on the connected channels and show
+          only the sign-in or payment steps needed for the rest.
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
@@ -801,21 +783,7 @@ export function DistributeTab({
       </div>
 
       {publishSimpleDefaultEnabled ? (
-        <>
-          {publishEverywhereSurface}
-          <details className="mt-5 border-t border-gray-200 pt-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-              <span>Advanced / More options</span>
-              <span className="text-xs font-semibold text-brand">Open</span>
-            </summary>
-            <div className="mt-4 space-y-4">
-              {advancedSimpleToolsSurface}
-              <div className="border-t border-gray-200 pt-4">
-                {advancedTools}
-              </div>
-            </div>
-          </details>
-        </>
+        publishEverywhereSurface
       ) : (
         <GetOnlineView
           orgDefaultMode={orgDefaultMode}
