@@ -194,6 +194,11 @@ import {
   type ChannelReadinessValue,
 } from "@/lib/distribution-capabilities";
 import {
+  isCopilotSupportedKey,
+  resolvePublishMode,
+  type PublishChannelInput,
+} from "@/lib/publish-everywhere";
+import {
   facebookOAuthConfigured,
   fbPageChannelEnabled,
 } from "@/lib/facebook-page-oauth";
@@ -332,6 +337,90 @@ function currentUtcMonthWindow(now: Date): { startIso: string; endIso: string } 
     startIso: new Date(Date.UTC(year, month - 1, 1)).toISOString(),
     endIso: new Date(Date.UTC(year, month, 1)).toISOString(),
   };
+}
+
+const RELIST_ONE_TAP_FALLBACK_ANCHOR = "publish-checklist";
+const RELIST_PAID_SITE_KEYS = new Set(["viewit", "rentfaster"]);
+
+function relistDistributeHref(propertyId: string, anchor: string): string {
+  return `/dashboard/properties/${encodeURIComponent(
+    propertyId,
+  )}?tab=distribute#${anchor}`;
+}
+
+function relistConfirmHref(propertyId: string): string {
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}?relist=confirm`;
+}
+
+function relistPublishInputForCard(
+  card: DistributeChannelCard,
+  copilotEnabled: boolean,
+): PublishChannelInput {
+  const channel = card.channel;
+  return {
+    key: channel.key,
+    integrationStatus: channel.integrationStatus,
+    connectKind: channel.connectKind,
+    mode: channel.mode,
+    hasFee: RELIST_PAID_SITE_KEYS.has(channel.key),
+    connectedAuthorized:
+      card.facebookPage?.automationAuthorized === true ||
+      card.instagramAccount?.automationAuthorized === true,
+    feedAccepted:
+      card.feed?.inFeed === true || card.partner?.status === "accepted",
+    copilotSupported: copilotEnabled && isCopilotSupportedKey(channel.key),
+  };
+}
+
+function relistNeedsOperatorStep(
+  channelKey: string,
+  runItemByChannel: Map<string, RunItemView>,
+): boolean {
+  const item = runItemByChannel.get(channelKey);
+  if (item == null) return true;
+  if (item.publishStatus === "live" || item.externalUrl) return false;
+  return !(
+    item.mode === "concierge" &&
+    (item.publishStatus === "queued" ||
+      item.publishStatus === "submitting" ||
+      item.publishStatus === "submitted")
+  );
+}
+
+function relistFocusAnchor({
+  channelCards,
+  runItems,
+  copilotEnabled,
+}: {
+  channelCards: DistributeChannelCard[];
+  runItems: RunItemView[];
+  copilotEnabled: boolean;
+}): string {
+  const runItemByChannel = new Map(runItems.map((item) => [item.channel, item]));
+  const forYouRows = channelCards
+    .map((card) => {
+      const { bucket } = resolvePublishMode(
+        relistPublishInputForCard(card, copilotEnabled),
+      );
+      return {
+        key: card.channel.key,
+        bucket,
+        stale:
+          card.status.value === "needs_refresh" ||
+          runItemByChannel.get(card.channel.key)?.staleRefresh === true,
+      };
+    })
+    .filter((row) => row.bucket === "for_you");
+
+  const staleRows = forYouRows.filter((row) => row.stale);
+  if (staleRows.length === 1) return `for-you-${staleRows[0].key}`;
+
+  const outstandingRows = forYouRows.filter((row) =>
+    relistNeedsOperatorStep(row.key, runItemByChannel),
+  );
+  if (outstandingRows.length === 1) return `for-you-${outstandingRows[0].key}`;
+
+  return RELIST_ONE_TAP_FALLBACK_ANCHOR;
 }
 
 export default async function PropertyDetailPage({
@@ -1966,6 +2055,28 @@ export default async function PropertyDetailPage({
 
   const stepClarityLiveEnabled =
     process.env.STEP_CLARITY_LIVE_ENABLED === "true";
+  const publishEverywhereEnabled =
+    process.env.PUBLISH_EVERYWHERE_ENABLED === "true";
+  const publishEverywhereCopilotEnabled =
+    process.env.PUBLISH_EVERYWHERE_COPILOT_ENABLED === "true";
+  const publishSimpleDefaultEnabled =
+    process.env.PUBLISH_SIMPLE_DEFAULT_ENABLED === "true";
+  const relistOneTapEnabled =
+    process.env.RELIST_ONE_TAP_ENABLED === "true";
+  const relistAnchor = publishEverywhereEnabled
+    ? relistFocusAnchor({
+        channelCards: distributeChannelCards,
+        runItems,
+        copilotEnabled: publishEverywhereCopilotEnabled,
+      })
+    : RELIST_ONE_TAP_FALLBACK_ANCHOR;
+  const relistCtaHref =
+    normalizedStatus === "leased"
+      ? relistConfirmHref(p.id)
+      : relistDistributeHref(p.id, relistAnchor);
+  const showRelistOneTap =
+    relistOneTapEnabled &&
+    (publicPageIsBookable || normalizedStatus === "leased");
   const nextAction = deriveNextAction({
     propertyId: p.id,
     currentStep: lifecycle.currentStep,
@@ -2280,6 +2391,11 @@ export default async function PropertyDetailPage({
                     : "Set Live"}
                 </button>
               </form>
+            )}
+            {showRelistOneTap && (
+              <Link href={relistCtaHref} className={PRIMARY_ACTION_CLASS}>
+                Relist / refresh this ad
+              </Link>
             )}
             <form action={duplicateProperty}>
               <input type="hidden" name="id" value={p.id} />
@@ -3459,9 +3575,9 @@ export default async function PropertyDetailPage({
           runNotice={distributeRunNotice}
           totalInquiryCount={leadRows.length}
           channelAccounts={channelPublishAccounts}
-          publishEverywhereEnabled={process.env.PUBLISH_EVERYWHERE_ENABLED === "true"}
-          publishEverywhereCopilotEnabled={process.env.PUBLISH_EVERYWHERE_COPILOT_ENABLED === "true"}
-          publishSimpleDefaultEnabled={process.env.PUBLISH_SIMPLE_DEFAULT_ENABLED === "true"}
+          publishEverywhereEnabled={publishEverywhereEnabled}
+          publishEverywhereCopilotEnabled={publishEverywhereCopilotEnabled}
+          publishSimpleDefaultEnabled={publishSimpleDefaultEnabled}
           stepClarityLiveEnabled={stepClarityLiveEnabled}
         />
       </TabPanel>
