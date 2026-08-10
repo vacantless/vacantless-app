@@ -147,9 +147,9 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
   ok("digest counts ads/channels", digest.adCount === 2);
   ok("digest counts units", digest.unitCount === 2);
   ok(
-    "digest has first Distribute checklist URL",
+    "digest has first Distribute anchor URL",
     digest.firstDistributeUrl?.includes(
-      "/dashboard/properties/property-2?tab=distribute#publish-checklist",
+      "/dashboard/properties/property-2?tab=distribute#distribute",
     ) === true,
   );
   ok("digest details include unit and channel", digest.detailsText.includes("12 Donwoods Dr: RentFaster.ca"));
@@ -167,8 +167,8 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
   const line = buildListingHealthSnapshotLine(summary);
   ok("snapshot line counts ads", line?.includes("1 ad needs a refresh across 1 unit") === true);
   ok(
-    "snapshot line links Distribute checklist",
-    line?.includes("?tab=distribute#publish-checklist") === true,
+    "snapshot line links Distribute anchor",
+    line?.includes("?tab=distribute#distribute") === true,
   );
 }
 
