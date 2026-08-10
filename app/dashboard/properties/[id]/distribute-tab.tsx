@@ -408,6 +408,7 @@ export function DistributeTab({
   publishEverywhereEnabled,
   publishEverywhereCopilotEnabled,
   publishSimpleDefaultEnabled,
+  stepClarityLiveEnabled,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -435,6 +436,7 @@ export function DistributeTab({
   publishEverywhereEnabled: boolean;
   publishEverywhereCopilotEnabled: boolean;
   publishSimpleDefaultEnabled: boolean;
+  stepClarityLiveEnabled: boolean;
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -475,15 +477,25 @@ export function DistributeTab({
   ).length;
   const readinessLabel = readyToShare
     ? "Ready to post"
-    : setupOutstanding > 0
-      ? `${setupOutstanding} ${
-          setupOutstanding === 1 ? "listing detail" : "listing details"
-        } to finish`
+      : setupOutstanding > 0
+        ? `${setupOutstanding} ${
+            setupOutstanding === 1 ? "listing detail" : "listing details"
+          } to finish`
       : !linkIsLive
         ? "Set Live before posting"
         : `${requiredOutstanding} ${
             requiredOutstanding === 1 ? "thing" : "things"
           } to finish`;
+  const headerBody =
+    stepClarityLiveEnabled && linkIsLive
+      ? "Your listing is live. Finish any site that still needs your sign-in - then you're done."
+      : "Click Publish everywhere. We turn on the connected channels and show only the sign-in or payment steps needed for the rest.";
+  const liveChipLabel =
+    stepClarityLiveEnabled && linkIsLive
+      ? liveChannels > 0
+        ? `Live on ${liveChannels} ${liveChannels === 1 ? "site" : "sites"}`
+        : "Public page live"
+      : `${liveChannels} ${liveChannels === 1 ? "site" : "sites"} posted`;
   const publishEverywhereSurface = (
     <PublishEverywhere
       propertyId={propertyId}
@@ -497,6 +509,7 @@ export function DistributeTab({
       conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
       conciergeUsage={launchRun.conciergeUsage}
       copilotEnabled={publishEverywhereCopilotEnabled}
+      stepClarityLiveEnabled={stepClarityLiveEnabled}
       runItems={launchRun.items.map((it) => ({
         id: it.id,
         channel: it.channel,
@@ -732,8 +745,7 @@ export function DistributeTab({
           </h3>
         </div>
         <p className="mb-3 max-w-2xl text-sm text-slate-300">
-          Click Publish everywhere. We turn on the connected channels and show
-          only the sign-in or payment steps needed for the rest.
+          {headerBody}
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
@@ -746,7 +758,7 @@ export function DistributeTab({
             {readinessLabel}
           </span>
           <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
-            {liveChannels} {liveChannels === 1 ? "site" : "sites"} posted
+            {liveChipLabel}
           </span>
         </div>
         {!linkIsLive && promotionNote && (

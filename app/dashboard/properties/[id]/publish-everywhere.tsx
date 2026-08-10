@@ -191,6 +191,7 @@ export function PublishEverywhere({
   conciergeDeskEnabled,
   conciergeUsage,
   copilotEnabled = false,
+  stepClarityLiveEnabled = false,
   runItems = [],
 }: {
   propertyId: string;
@@ -204,6 +205,7 @@ export function PublishEverywhere({
   conciergeDeskEnabled: boolean;
   conciergeUsage: { used: number; included: number };
   copilotEnabled?: boolean;
+  stepClarityLiveEnabled?: boolean;
   runItems?: PublishEverywhereRunItem[];
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -230,6 +232,26 @@ export function PublishEverywhere({
     (r) => r.mode === "needs_connection" || r.mode === "brokerage_gated",
   );
   const comingSoonRows = resolved.filter((r) => r.mode === "planned");
+  const runItemByChannel = new Map(runItems.map((item) => [item.channel, item]));
+  const forYouIsLive = (row: ResolvedRow) => {
+    const item = runItemByChannel.get(row.key);
+    return item != null && (item.publishStatus === "live" || Boolean(item.externalUrl));
+  };
+  const forYouNeedsOperatorStep = (row: ResolvedRow) => {
+    const item = runItemByChannel.get(row.key);
+    if (item == null) return true;
+    if (forYouIsLive(row)) return false;
+    return !(
+      item.mode === "concierge" &&
+      (item.publishStatus === "queued" ||
+        item.publishStatus === "submitting" ||
+        item.publishStatus === "submitted")
+    );
+  };
+  const firstOutstandingForYou =
+    forYou.find((row) => forYouNeedsOperatorStep(row)) ?? null;
+  const liveForYouAllSet =
+    stepClarityLiveEnabled && linkIsLive && firstOutstandingForYou == null;
 
   const publishBlockedByBasics = setupOutstanding > 0;
   const canPublish = !publishBlockedByBasics && canSetLive;
@@ -262,6 +284,71 @@ export function PublishEverywhere({
         </div>
 
         {linkIsLive ? (
+          stepClarityLiveEnabled ? (
+            <section className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm">
+              <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                You&apos;re online
+              </span>
+              <h3 className="mt-3 text-2xl font-semibold text-green-950">
+                Live on {reach.instant}{" "}
+                {reach.instant === 1 ? "channel" : "channels"}.
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
+                The renter page is live. Finish any outside site that still asks
+                for sign-in or payment, then leave it alone until the listing
+                changes.{" "}
+                {totalInquiryCount}{" "}
+                {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
+                this rental so far.
+              </p>
+
+              <div className="mt-4 rounded-2xl border border-green-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-extrabold uppercase tracking-wide text-green-700">
+                  Your next step
+                </p>
+                {firstOutstandingForYou ? (
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-base font-semibold text-green-950">
+                        Finish {firstOutstandingForYou.label}
+                      </h4>
+                      <p className="mt-0.5 text-sm text-green-800">
+                        Sign in and post. Vacantless fills the ad; you handle
+                        only the site&apos;s sign-in or fee step.
+                      </p>
+                    </div>
+                    <a
+                      href={`#for-you-${firstOutstandingForYou.key}`}
+                      className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                    >
+                      Finish {firstOutstandingForYou.label} →
+                    </a>
+                  </div>
+                ) : (
+                  <div className="mt-1">
+                    <h4 className="text-base font-semibold text-green-950">
+                      You&apos;re all set
+                    </h4>
+                    <p className="mt-0.5 text-sm text-green-800">
+                      Re-publish only when you change the listing.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {publicLink && <CopyLink url={publicLink} />}
+                <button
+                  type="button"
+                  onClick={() => setConfirmOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
+                >
+                  <Icons.bolt className="h-4 w-4" />
+                  Sync updates / re-publish
+                </button>
+              </div>
+            </section>
+          ) : (
           <section className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm">
             <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
               You&apos;re online
@@ -291,6 +378,7 @@ export function PublishEverywhere({
               Sync updates / re-publish
             </button>
           </section>
+          )
         ) : (
           <section className="relative overflow-hidden rounded-2xl border border-emerald-900 bg-gradient-to-b from-emerald-900 to-emerald-950 p-7 text-center text-white shadow-sm">
             <div className="mx-auto mb-5 grid max-w-2xl gap-2 text-left sm:grid-cols-3">
@@ -387,6 +475,7 @@ export function PublishEverywhere({
             runItems={runItems}
             linkIsLive={linkIsLive}
             conciergeDeskEnabled={conciergeDeskEnabled}
+            allSetSummary={liveForYouAllSet}
           />
         )}
       </div>
@@ -445,6 +534,13 @@ export function PublishEverywhere({
         {forYou.length > 0 && (
           <div className="mb-3.5">
             <BucketLabel bucket="for_you" />
+            {stepClarityLiveEnabled && linkIsLive && (
+              <p className="mb-1.5 text-[11px] leading-relaxed text-gray-500">
+                {firstOutstandingForYou
+                  ? "Same sites as Finish these sites; actions stay on the left."
+                  : "Guided sites are summarized here; no extra action is needed."}
+              </p>
+            )}
             {forYou.map((r) => (
               <ChannelRow key={r.key} row={r} />
             ))}
@@ -531,6 +627,7 @@ function ForYouHandoff({
   runItems,
   linkIsLive,
   conciergeDeskEnabled,
+  allSetSummary,
 }: {
   propertyId: string;
   addressLabel: string;
@@ -538,6 +635,7 @@ function ForYouHandoff({
   runItems: PublishEverywhereRunItem[];
   linkIsLive: boolean;
   conciergeDeskEnabled: boolean;
+  allSetSummary: boolean;
 }) {
   const itemByChannel = new Map(runItems.map((it) => [it.channel, it]));
   return (
@@ -545,12 +643,13 @@ function ForYouHandoff({
       <div className="flex items-center gap-2">
         <span className="text-lg">🤝</span>
         <h3 className="text-base font-semibold tracking-tight text-indigo-950">
-          Finish these sites
+          {allSetSummary ? "Guided sites saved" : "Finish these sites"}
         </h3>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
-        Vacantless fills the ad. You sign in if the site asks, pay the site only
-        if it asks, then save the real live-ad link here.
+        {allSetSummary
+          ? "Live-ad proof is saved here. Reopen a site only when you change the listing."
+          : "Vacantless fills the ad. You sign in if the site asks, pay the site only if it asks, then save the real live-ad link here."}
       </p>
       <ul className="mt-3 space-y-2.5">
         {rows.map((row) => (
@@ -625,7 +724,10 @@ function ForYouRow({
             : { label: "Sign in + post", cls: "bg-indigo-50 text-indigo-700" };
 
   return (
-    <li className="rounded-xl border border-indigo-100 bg-white p-3">
+    <li
+      id={`for-you-${row.key}`}
+      className="rounded-xl border border-indigo-100 bg-white p-3"
+    >
       <div className="flex items-center gap-2">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs">
           {CHANNEL_GLYPH[row.key] ?? "🏠"}

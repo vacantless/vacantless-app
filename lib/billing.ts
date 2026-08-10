@@ -372,8 +372,10 @@ export function leaseOcrMonthlyCap(plan: string | null | undefined): number {
     : LEASE_OCR_CAP_GROWTH;
 }
 
-// Soft included monthly concierge posting allowance. This is DISPLAY ONLY for
-// S538: no cap, Stripe hook, overage charge, or claim function reads this value.
+// Included monthly concierge posting allowance. Enforced server-side by
+// requestConciergePublish through claim_concierge_leaseup: cap = plan included
+// + purchased packs + optional admin override; used = distinct properties with
+// distribution_run_items.concierge_requested_at in the UTC calendar month.
 export const CONCIERGE_INCLUDED_GROWTH = 2;
 export const CONCIERGE_INCLUDED_PREMIUM = 6;
 export const CONCIERGE_INCLUDED_MANAGED = 20;
