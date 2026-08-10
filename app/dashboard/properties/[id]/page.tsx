@@ -339,7 +339,7 @@ function currentUtcMonthWindow(now: Date): { startIso: string; endIso: string } 
   };
 }
 
-const RELIST_ONE_TAP_FALLBACK_ANCHOR = "publish-checklist";
+const RELIST_ONE_TAP_FALLBACK_ANCHOR = "distribute";
 const RELIST_PAID_SITE_KEYS = new Set(["viewit", "rentfaster"]);
 
 function relistDistributeHref(propertyId: string, anchor: string): string {
@@ -2385,6 +2385,7 @@ export default async function PropertyDetailPage({
                 <button
                   type="submit"
                   className={PRIMARY_ACTION_CLASS}
+                  style={{ backgroundColor: "var(--brand-color)" }}
                 >
                   {normalizedStatus === "paused"
                     ? "Set Live again"
@@ -2393,7 +2394,11 @@ export default async function PropertyDetailPage({
               </form>
             )}
             {showRelistOneTap && (
-              <Link href={relistCtaHref} className={PRIMARY_ACTION_CLASS}>
+              <Link
+                href={relistCtaHref}
+                className={PRIMARY_ACTION_CLASS}
+                style={{ backgroundColor: "var(--brand-color)" }}
+              >
                 Relist / refresh this ad
               </Link>
             )}

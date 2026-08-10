@@ -179,7 +179,7 @@ function plural(count: number, one: string, many: string): string {
 function distributeUrl(appUrl: string, propertyId: string): string {
   return `${appUrl.replace(/\/+$/, "")}/dashboard/properties/${encodeURIComponent(
     propertyId,
-  )}?tab=distribute#publish-checklist`;
+  )}?tab=distribute#distribute`;
 }
 
 function reasonLabel(reason: ListingHealthReason): string {
