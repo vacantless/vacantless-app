@@ -1335,7 +1335,7 @@ export default async function PropertyDetailPage({
   const { data: channelAccountRows } = await supabase
     .from("distribution_channel_accounts")
     .select(
-      "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized",
+      "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized, auto_submit_allowed",
     )
     .eq("organization_id", propertyOrgId);
   const channelAccountByKey = new Map<
@@ -1347,6 +1347,7 @@ export default async function PropertyDetailPage({
       transport: string | null;
       capabilities: Record<string, unknown>;
       automationAuthorized: boolean;
+      autoSubmitAllowed: boolean;
     }
   >();
   for (const row of (channelAccountRows ?? []) as Array<{
@@ -1357,6 +1358,7 @@ export default async function PropertyDetailPage({
     transport: string | null;
     capabilities: Record<string, unknown> | null;
     automation_authorized: boolean | null;
+    auto_submit_allowed: boolean | null;
   }>) {
     channelAccountByKey.set(row.channel, {
       status: row.account_status,
@@ -1365,6 +1367,7 @@ export default async function PropertyDetailPage({
       transport: row.transport,
       capabilities: row.capabilities ?? {},
       automationAuthorized: row.automation_authorized === true,
+      autoSubmitAllowed: row.auto_submit_allowed === true,
     });
   }
   const facebookPageEnabled =
@@ -1462,6 +1465,7 @@ export default async function PropertyDetailPage({
       accountStatus: account?.status ?? partner?.status ?? null,
       transport: account?.transport ?? null,
       automationAuthorized: account?.automationAuthorized ?? false,
+      autoSubmitAllowed: account?.autoSubmitAllowed ?? false,
       hasFeedRoute: Boolean(
         account?.feedUrl || (partner?.status === "accepted" && partner.feedUrl),
       ),
@@ -1672,6 +1676,7 @@ export default async function PropertyDetailPage({
   const runItems: RunItemView[] = runItemRows.map((r) => {
     const publishKey = normalizePublishChannel(r.channel);
     const meta = publishKey ? publishChannelMeta(publishKey) : null;
+    const channelAccount = channelAccountByKey.get(r.channel) ?? null;
     const publishStatus = normalizePublishStatus(
       r.publish_status ?? publishStatusFromLegacyStatus(r.status),
     );
@@ -1731,6 +1736,11 @@ export default async function PropertyDetailPage({
         autopilotChannels.has(r.channel) &&
         publishStatus === "needs_operator",
       autopilotApproved: r.operator_submit_approved_at != null,
+      canRelistRadarAutoRefresh:
+        r.channel === "kijiji" &&
+        channelAccount?.status === "connected" &&
+        channelAccount.automationAuthorized === true,
+      relistRadarAutoRefreshOn: channelAccount?.autoSubmitAllowed === true,
       copilotScript,
       // S543: explicit item freshness state wins; only older rows without it
       // fall back to the where-posted tracker's coarse posted_on age.
@@ -1824,7 +1834,41 @@ export default async function PropertyDetailPage({
                   : null;
   const distributeRunNotice: DistributeRunNotice | null =
     copilotNotice ??
-    (searchParams.dist === "takedown_removed"
+    (searchParams.dist === "radar_auto_on"
+      ? {
+          tone: "success",
+          title: "Hands-off refreshes are on.",
+          body:
+            "Kijiji refreshes can run with the free worker path. Paid channels still need a separate approval.",
+        }
+      : searchParams.dist === "radar_auto_off"
+        ? {
+            tone: "info",
+            title: "Hands-off refreshes are off.",
+            body:
+              "Relist Radar will email before the next free Kijiji refresh cycle.",
+          }
+        : searchParams.dist === "radar_setup"
+          ? {
+              tone: "warning",
+              title: "Kijiji needs setup first.",
+              body:
+                "Connect and authorize the Kijiji worker account before turning on hands-off refreshes.",
+            }
+          : searchParams.dist === "radar_toggle_error"
+            ? {
+                tone: "danger",
+                title: "Refresh setting was not saved.",
+                body: "Try again from the Kijiji channel row.",
+              }
+            : searchParams.dist === "radar_badchannel"
+              ? {
+                  tone: "warning",
+                  title: "Hands-off refresh is free Kijiji only.",
+                  body:
+                    "Paid portals and unsupported channels still use the normal approval flow.",
+                }
+              : searchParams.dist === "takedown_removed"
       ? {
           tone: "success",
           title: "Ad removal recorded.",

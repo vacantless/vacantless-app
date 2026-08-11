@@ -19,6 +19,7 @@ import {
   recordItemProof,
   authorizeAutopilotSubmit,
   confirmLeaseupTakedownRemovedAction,
+  setRelistRadarStandingAutoRefresh,
 } from "../distribution-actions";
 import {
   verificationResultLabel,
@@ -66,6 +67,8 @@ export type RunItemView = {
   // canConcierge because concierge-mode items cannot request concierge again.
   canAutopilot?: boolean;
   autopilotApproved?: boolean;
+  canRelistRadarAutoRefresh?: boolean;
+  relistRadarAutoRefreshOn?: boolean;
   // S480: honest transport + durable verification state + latest proof link.
   transport: string | null;
   verificationStatus: string | null;
@@ -704,6 +707,49 @@ export function LaunchRunPanel({
                 Autopilot authorized — the worker will post {item.channelLabel}{" "}
                 and report back.
               </p>
+            )}
+            {item.canRelistRadarAutoRefresh && (
+              <form
+                action={setRelistRadarStandingAutoRefresh}
+                className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2"
+              >
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="channel" value={item.channel} />
+                <input
+                  type="hidden"
+                  name="enabled"
+                  value={item.relistRadarAutoRefreshOn ? "0" : "1"}
+                />
+                <button
+                  type="submit"
+                  aria-pressed={item.relistRadarAutoRefreshOn === true}
+                  className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-900"
+                >
+                  <span
+                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition ${
+                      item.relistRadarAutoRefreshOn
+                        ? "bg-emerald-600"
+                        : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                        item.relistRadarAutoRefreshOn
+                          ? "left-4"
+                          : "left-0.5"
+                      }`}
+                    />
+                  </span>
+                  {item.relistRadarAutoRefreshOn
+                    ? "Hands-off refreshes on"
+                    : "Turn on hands-off refreshes"}
+                </button>
+                <span className="text-[11px] text-emerald-900/70">
+                  {item.relistRadarAutoRefreshOn
+                    ? "Monthly recap, no pre-expiry email."
+                    : "Free Kijiji only."}
+                </span>
+              </form>
             )}
 
             {(item.channel === "vacantless" || item.channel === "org_feed") && (

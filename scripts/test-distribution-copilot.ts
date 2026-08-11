@@ -98,7 +98,7 @@ ok(!fb.stopGates.includes("payment"), "facebook has NO payment gate");
 // --- blockers when the public page is not live -----------------------------
 const kjDark = buildCopilotScript({ channel: "kijiji", copy: BASE, trackedUrl: null, publicPageLive: false }) as CopilotScript;
 ok(kjDark.blockers.length === 1, "kijiji surfaces a blocker when page not live / no tracked link");
-ok(kjDark.blockers[0].includes("public page first"), "blocker names the public page prerequisite");
+ok(kjDark.blockers[0].includes("public page Live first"), "blocker names the public page prerequisite");
 ok(!kjDark.fields.some((f) => f.key === "tracked_link"), "no tracked_link field when there is no tracked url");
 
 // --- canMarkCopilotLive: never live without a real, channel-matching PUBLIC LISTING URL ---

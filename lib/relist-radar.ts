@@ -10,6 +10,8 @@ export const RELIST_RADAR_LAST_CHANCE_EVENT_KEY =
   "leasing.relist_radar_last_chance";
 export const RELIST_RADAR_PAID_LAPSE_EVENT_KEY =
   "leasing.relist_radar_paid_lapse";
+export const RELIST_RADAR_AUTOPILOT_RECAP_EVENT_KEY =
+  "leasing.relist_radar_autopilot_recap";
 export const RELIST_RADAR_DECISION_TOKEN_TTL_MS = 7 * 86_400_000;
 
 export const RELIST_RADAR_DECISION_ACTIONS = [
@@ -347,6 +349,86 @@ export function relistRadarStandingAutoRefreshConsent(
   );
 }
 
+export type RelistRadarFreeExecutionGateInput = {
+  channelKey: string | null | undefined;
+  paid: boolean;
+  decision: string | null | undefined;
+  propertyStatus: string | null | undefined;
+  cycleDate: string | null | undefined;
+  today: string;
+  automationAuthorized: boolean;
+  accountStatus: string | null | undefined;
+  standingConsent: boolean;
+  alreadyEnqueued: boolean;
+};
+
+export type RelistRadarFreeExecutionGate = {
+  shouldEnqueue: boolean;
+  reason: string;
+  standingConsent: boolean;
+};
+
+export function relistRadarFreeExecutionGate({
+  channelKey,
+  paid,
+  decision,
+  propertyStatus,
+  cycleDate,
+  today,
+  automationAuthorized,
+  accountStatus,
+  standingConsent,
+  alreadyEnqueued,
+}: RelistRadarFreeExecutionGateInput): RelistRadarFreeExecutionGate {
+  const channel = channelByKey(channelKey);
+  const normalizedDecision = clean(decision);
+  const status = clean(propertyStatus)?.toLowerCase() ?? null;
+  const cycle = clean(cycleDate);
+  const todayDate = clean(today);
+
+  if (alreadyEnqueued) {
+    return { shouldEnqueue: false, reason: "already_enqueued", standingConsent };
+  }
+  if (!channel || channel.key !== "kijiji") {
+    return {
+      shouldEnqueue: false,
+      reason: "unsupported_free_worker_channel",
+      standingConsent,
+    };
+  }
+  if (paid || channel.paid) {
+    return { shouldEnqueue: false, reason: "paid_out_of_scope", standingConsent };
+  }
+  if (status !== "available") {
+    return { shouldEnqueue: false, reason: "property_not_available", standingConsent };
+  }
+  if (!cycle || !todayDate || cycle > todayDate) {
+    return { shouldEnqueue: false, reason: "not_expiry_day", standingConsent };
+  }
+  if (normalizedDecision === "skipped" || normalizedDecision === "let_expire") {
+    return { shouldEnqueue: false, reason: "owner_vetoed", standingConsent };
+  }
+  if (!automationAuthorized) {
+    return { shouldEnqueue: false, reason: "automation_not_authorized", standingConsent };
+  }
+  if (clean(accountStatus) !== "connected") {
+    return { shouldEnqueue: false, reason: "account_not_connected", standingConsent };
+  }
+  if (
+    standingConsent ||
+    normalizedDecision == null ||
+    normalizedDecision === "no_response" ||
+    normalizedDecision === "kept_live"
+  ) {
+    return {
+      shouldEnqueue: true,
+      reason: standingConsent ? "standing_autopilot" : "free_auto_with_veto",
+      standingConsent,
+    };
+  }
+  return { shouldEnqueue: false, reason: "decision_not_executable", standingConsent };
+}
+
 export type RelistRadarEmailItem = {
   runItemId: string;
   channel: string;
@@ -378,6 +460,15 @@ export type RelistRadarBuiltEmail = {
   summaryText: string;
   detailsText: string;
   actions: RelistRadarEmailButton[];
+};
+
+export type RelistRadarAutopilotRecapItem = {
+  propertyAddress: string;
+  propertyId: string;
+  channelLabel: string;
+  cycleDate: string;
+  enqueuedAt: string;
+  dashboardUrl: string;
 };
 
 function plural(count: number, one: string, many: string): string {
@@ -612,6 +703,51 @@ export function buildRelistRadarEmail({
     .join("\n\n");
 
   return { subject, body, dashboardUrl, summaryText, detailsText, actions };
+}
+
+export function buildRelistRadarAutopilotRecap({
+  appUrl,
+  monthLabel,
+  items,
+}: {
+  appUrl: string;
+  monthLabel: string;
+  items: readonly RelistRadarAutopilotRecapItem[];
+}): RelistRadarBuiltEmail {
+  const count = items.length;
+  const dashboardUrl =
+    items.find((item) => clean(item.dashboardUrl))?.dashboardUrl ??
+    `${appUrl.replace(/\/+$/, "")}/dashboard/leasing`;
+  const detailsText = items
+    .map((item) => {
+      const date = dateLabel(item.cycleDate, "en");
+      return `- ${item.channelLabel} at ${item.propertyAddress} reached its refresh date on ${date}.`;
+    })
+    .join("\n");
+  const summaryText = `Relist Radar queued ${count} free ${plural(
+    count,
+    "refresh",
+    "refreshes",
+  )} in ${monthLabel}.`;
+  const safetyNote =
+    "No paid listings were refreshed. Successful worker posts still wait for live-link confirmation before Vacantless marks a channel Live.";
+  const body = [summaryText, detailsText, safetyNote, `Open Distribute: ${dashboardUrl}`]
+    .filter((part) => part.trim())
+    .join("\n\n");
+  return {
+    subject: `Relist Radar monthly recap: ${monthLabel}`,
+    body,
+    dashboardUrl,
+    summaryText,
+    detailsText,
+    actions: [
+      {
+        label: "Open Distribute",
+        url: dashboardUrl,
+        variant: "primary",
+      },
+    ],
+  };
 }
 
 export function addDaysISO(nowISO: string, days: number): string | null {
