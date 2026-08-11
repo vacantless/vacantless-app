@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import { channelByKey } from "../lib/distribution-channels";
 import {
+  RELIST_RADAR_DEFAULT_SETTINGS,
   RELIST_RADAR_TEST_ORG_ID,
   addDaysISO,
   buildRelistRadarClockUpdate,
@@ -137,6 +138,52 @@ ok(
   );
 }
 
+{
+  const settings = resolveRelistRadarSettings({
+    notify_lead_days: 7,
+    refresh_now_semantics: "confirm_run_on_scheduled_day",
+    free_skip_behavior: "last_chance_then_lapse",
+    paid_lapse_followup: "nudge",
+    execution_time: "expiry_day_morning",
+    email_grouping: "combined_per_property",
+    autopilot_receipt: "monthly",
+  });
+  ok("settings valid string refresh read", settings.refresh_now_semantics === "confirm_run_on_scheduled_day");
+  ok("settings valid string skip read", settings.free_skip_behavior === "last_chance_then_lapse");
+  ok("settings valid string paid followup read", settings.paid_lapse_followup === "nudge");
+  ok("settings valid string execution read", settings.execution_time === "expiry_day_morning");
+  ok("settings valid string grouping read", settings.email_grouping === "combined_per_property");
+  ok("settings valid string receipt read", settings.autopilot_receipt === "monthly");
+}
+
+{
+  const settings = resolveRelistRadarSettings({
+    notify_lead_days: 0,
+    refresh_now_semantics: "run_now",
+    free_skip_behavior: "skip_forever",
+    paid_lapse_followup: "charge_anyway",
+    execution_time: "now",
+    email_grouping: "one_per_item",
+    autopilot_receipt: "never",
+  });
+  ok("settings invalid notify defaults", settings.notify_lead_days === RELIST_RADAR_DEFAULT_SETTINGS.notify_lead_days);
+  ok("settings invalid refresh defaults", settings.refresh_now_semantics === RELIST_RADAR_DEFAULT_SETTINGS.refresh_now_semantics);
+  ok("settings invalid skip defaults", settings.free_skip_behavior === RELIST_RADAR_DEFAULT_SETTINGS.free_skip_behavior);
+  ok("settings invalid paid defaults", settings.paid_lapse_followup === RELIST_RADAR_DEFAULT_SETTINGS.paid_lapse_followup);
+  ok("settings invalid execution defaults", settings.execution_time === RELIST_RADAR_DEFAULT_SETTINGS.execution_time);
+  ok("settings invalid grouping defaults", settings.email_grouping === RELIST_RADAR_DEFAULT_SETTINGS.email_grouping);
+  ok("settings invalid receipt defaults", settings.autopilot_receipt === RELIST_RADAR_DEFAULT_SETTINGS.autopilot_receipt);
+}
+
+ok(
+  "settings negative notify defaults",
+  resolveRelistRadarSettings({ notify_lead_days: -2 }).notify_lead_days === 3,
+);
+ok(
+  "settings non-number notify defaults",
+  resolveRelistRadarSettings({ notify_lead_days: "5" }).notify_lead_days === 3,
+);
+
 ok("test org allowed", relistRadarOrgAllowed(RELIST_RADAR_TEST_ORG_ID));
 ok(
   "Agile org blocked",
@@ -155,7 +202,8 @@ ok("cron uses radar flag", routeSource.includes("process.env.RELIST_RADAR_CLOCK_
 ok("cron reads radar settings", routeSource.includes('.from("relist_radar_settings")'));
 ok("cron writes radar events", routeSource.includes('.from("relist_radar_events")'));
 ok("cron is test-org scoped", routeSource.includes("RELIST_RADAR_TEST_ORG_ID"));
-ok("cron does not write radar email", !routeSource.includes("RELIST_RADAR_EMAIL_ENABLED"));
+ok("clock detection remains separately gated", routeSource.includes("RELIST_RADAR_CLOCK_ENABLED"));
+ok("email send is separately gated", routeSource.includes("RELIST_RADAR_EMAIL_ENABLED"));
 
 const conciergeSource = readFileSync("app/dashboard/admin/concierge-actions.ts", "utf8");
 const distributionActionsSource = readFileSync("app/dashboard/properties/distribution-actions.ts", "utf8");
