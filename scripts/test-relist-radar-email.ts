@@ -12,6 +12,7 @@ import {
   relistRadarDecisionForAction,
   relistRadarDecisionTokenHash,
   relistRadarEmailChannelIncluded,
+  relistRadarStandingAutoRefreshConsent,
   verifyRelistRadarDecisionToken,
   type RelistRadarEmailItem,
 } from "../lib/relist-radar";
@@ -66,6 +67,20 @@ ok("let expire maps to let expire", relistRadarDecisionForAction("let_expire") =
 ok("kijiji email included", relistRadarEmailChannelIncluded(channelByKey("kijiji")));
 ok("free api autopilot omitted", !relistRadarEmailChannelIncluded(channelByKey("facebook_feed")));
 ok("paid channel included", relistRadarEmailChannelIncluded({ mode: "assisted_manual", paid: true }));
+ok(
+  "standing auto-refresh consent needs both flags",
+  relistRadarStandingAutoRefreshConsent({
+    automation_authorized: true,
+    auto_submit_allowed: true,
+  }),
+);
+ok(
+  "partial automation consent is not hands-off",
+  !relistRadarStandingAutoRefreshConsent({
+    automation_authorized: true,
+    auto_submit_allowed: false,
+  }),
+);
 
 function emailItem(overrides: Partial<RelistRadarEmailItem> = {}): RelistRadarEmailItem {
   return {
@@ -137,7 +152,8 @@ function emailItem(overrides: Partial<RelistRadarEmailItem> = {}): RelistRadarEm
   });
   ok("paid lapse subject", email.subject.startsWith("Paid listing expired"));
   ok("paid lapse no-response copy", email.body.includes("No paid-refresh consent was recorded"));
-  ok("paid lapse only manage action", email.actions.length === 1 && email.actions[0].label === "Manage in Distribute");
+  ok("paid lapse has paid consent action", email.actions.some((a) => a.label === "Refresh for the site fee"));
+  ok("paid lapse keeps manage action", email.actions.some((a) => a.label === "Manage in Distribute"));
 }
 
 {
@@ -177,9 +193,17 @@ ok("decision route burns token", route.includes("used_at"));
 ok("decision route rejects reused token", route.includes("Already used"));
 ok("decision route records no execution copy", route.includes("No charge or repost was made"));
 ok("decision route race guards skipped last chance", route.includes("decision.eq.skipped"));
+ok("decision route allows paid lapse consent", route.includes("decision.eq.no_response"));
 
 const cron = readFileSync("app/api/cron/distribution-freshness/route.ts", "utf8");
-ok("cron email send remains unwired pending approval", !cron.includes("RELIST_RADAR_EMAIL_ENABLED"));
+ok("cron email send is flag gated", cron.includes("RELIST_RADAR_EMAIL_ENABLED"));
+ok("cron reuses notification substrate", cron.includes("sendOrgNotification"));
+ok("cron mints radar decision tokens", cron.includes("createRelistRadarDecisionToken"));
+ok("cron stores token hashes only", cron.includes('.from("relist_radar_decision_tokens")'));
+ok("cron omits standing hands-off free portals", cron.includes("relistRadarStandingAutoRefreshConsent"));
+ok("cron stamps notice only after send path", cron.includes("notice_sent_at: nowISO"));
+ok("cron stamps paid lapse no response", cron.includes('decision: "no_response"'));
+ok("cron stays test-org scoped", cron.includes("RELIST_RADAR_TEST_ORG_ID"));
 
 console.log(`relist-radar-email: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -106,6 +106,9 @@ function actionAllowed(
   action: RelistRadarDecisionAction,
   currentDecision: string | null,
 ): boolean {
+  if (action === "consent") {
+    return currentDecision == null || currentDecision === "no_response";
+  }
   if (action === "keep_live" || action === "let_expire") {
     return currentDecision == null || currentDecision === "skipped";
   }
@@ -242,7 +245,9 @@ export async function GET(
     verified.payload.action === "keep_live" ||
     verified.payload.action === "let_expire"
       ? updateQuery.or("decision.is.null,decision.eq.skipped")
-      : updateQuery.is("decision", null);
+      : verified.payload.action === "consent"
+        ? updateQuery.or("decision.is.null,decision.eq.no_response")
+        : updateQuery.is("decision", null);
   const { data: updated, error: updateErr } = await updateQuery
     .select("id")
     .maybeSingle();

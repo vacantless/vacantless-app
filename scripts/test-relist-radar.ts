@@ -202,7 +202,8 @@ ok("cron uses radar flag", routeSource.includes("process.env.RELIST_RADAR_CLOCK_
 ok("cron reads radar settings", routeSource.includes('.from("relist_radar_settings")'));
 ok("cron writes radar events", routeSource.includes('.from("relist_radar_events")'));
 ok("cron is test-org scoped", routeSource.includes("RELIST_RADAR_TEST_ORG_ID"));
-ok("cron does not write radar email", !routeSource.includes("RELIST_RADAR_EMAIL_ENABLED"));
+ok("clock detection remains separately gated", routeSource.includes("RELIST_RADAR_CLOCK_ENABLED"));
+ok("email send is separately gated", routeSource.includes("RELIST_RADAR_EMAIL_ENABLED"));
 
 const conciergeSource = readFileSync("app/dashboard/admin/concierge-actions.ts", "utf8");
 const distributionActionsSource = readFileSync("app/dashboard/properties/distribution-actions.ts", "utf8");

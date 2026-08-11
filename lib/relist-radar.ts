@@ -333,6 +333,20 @@ export function relistRadarEmailChannelIncluded(
   return channel.paid || channel.mode !== "api_automatic";
 }
 
+export type RelistRadarChannelAccountConsent = {
+  automation_authorized?: boolean | null;
+  auto_submit_allowed?: boolean | null;
+};
+
+export function relistRadarStandingAutoRefreshConsent(
+  account: RelistRadarChannelAccountConsent | null | undefined,
+): boolean {
+  return (
+    account?.automation_authorized === true &&
+    account.auto_submit_allowed === true
+  );
+}
+
 export type RelistRadarEmailItem = {
   runItemId: string;
   channel: string;
@@ -521,11 +535,24 @@ export function buildRelistRadarEmail({
         });
       }
     }
+  } else if (kind === "paid_lapse") {
+    for (const item of activeItems) {
+      const consent = actionUrl(item.actionUrls.consent);
+      if (!consent) continue;
+      actions.push({
+        label:
+          lang === "fr"
+            ? `Rafraichir pour ${feeLabel(item, lang)}`
+            : `Refresh for ${feeLabel(item, lang)}`,
+        url: consent,
+        variant: "primary",
+      });
+    }
   }
   actions.push({
     label: lang === "fr" ? "Gerer dans Distribute" : "Manage in Distribute",
     url: dashboardUrl,
-    variant: kind === "paid_lapse" ? "primary" : "secondary",
+    variant: "secondary",
   });
 
   const summaryText =
