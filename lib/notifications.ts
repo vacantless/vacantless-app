@@ -317,6 +317,65 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // Relist Radar email consent surface (S642 Slice 2). Audience operator,
+  // listing lane. The cron builds grouped per-property copy and secure action
+  // links, then passes the rendered subject/body through these tokens. Env gated
+  // by RELIST_RADAR_EMAIL_ENABLED and test-org scoped in the cron. Links record
+  // intent only. No charge, repost, edit, submit, or portal login happens here.
+  {
+    key: "leasing.relist_radar",
+    family: "leasing",
+    audience: "operator",
+    label: "Relist Radar refresh decision",
+    description:
+      "When tracked ads are close to expiry, your listing team gets one per-property note with safe links to record skip or paid-refresh consent. Vacantless does not repost or charge from this email.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "relist_radar_subject",
+      "relist_radar_body",
+      "dashboard_url",
+    ],
+    defaultSubject: "{{relist_radar_subject}}",
+    defaultBody: "{{relist_radar_body}}",
+    defaultAccent: "#0f766e",
+    active: true,
+  },
+  {
+    key: "leasing.relist_radar_last_chance",
+    family: "leasing",
+    audience: "operator",
+    label: "Relist Radar last chance",
+    description:
+      "When a free relist was skipped and expiry is tomorrow, your listing team gets one last chance to record keep-live or let-expire intent. No portal action runs from the link.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "relist_radar_subject",
+      "relist_radar_body",
+      "dashboard_url",
+    ],
+    defaultSubject: "{{relist_radar_subject}}",
+    defaultBody: "{{relist_radar_body}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
+  {
+    key: "leasing.relist_radar_paid_lapse",
+    family: "leasing",
+    audience: "operator",
+    label: "Relist Radar paid listing lapse",
+    description:
+      "When a paid listing reaches expiry with no recorded consent, your listing team gets a post-expiry nudge and the cycle is stamped no-response. No money is spent.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "relist_radar_subject",
+      "relist_radar_body",
+      "dashboard_url",
+    ],
+    defaultSubject: "{{relist_radar_subject}}",
+    defaultBody: "{{relist_radar_body}}",
+    defaultAccent: "#dc2626",
+    active: true,
+  },
   // Done-for-you posting worker gate (S553). Audience operator. When the worker
   // has PREPARED an authorized concierge post and stopped at a human gate
   // (needs login / needs payment / needs review + submit), this event pulls the
@@ -1071,6 +1130,9 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.viewing_availability_dropped": "showing",
   // listing — ad / syndication / distribution / done-for-you posting
   "leasing.listing_health": "listing",
+  "leasing.relist_radar": "listing",
+  "leasing.relist_radar_last_chance": "listing",
+  "leasing.relist_radar_paid_lapse": "listing",
   "leasing.distribution_job_needs_action": "listing",
   "leasing.distribution_takedown_needed": "listing",
   // owner — landlord / property-owner compliance, assets, rent increases
