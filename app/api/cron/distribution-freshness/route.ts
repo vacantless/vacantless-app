@@ -40,6 +40,14 @@ import {
   listingHealthChannels,
   type ListingHealthPost,
 } from "@/lib/listing-health";
+import { channelByKey } from "@/lib/distribution-channels";
+import {
+  RELIST_RADAR_TEST_ORG_ID,
+  classifyRelistRadarCandidate,
+  relistRadarOrgAllowed,
+  resolveRelistRadarSettings,
+  type RelistRadarSettings,
+} from "@/lib/relist-radar";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,6 +67,7 @@ type Summary = {
   verified: number;
   flagged: number;
   alerts: number;
+  radar_candidates?: number;
   skipped: number;
   errors: number;
   details: Array<Record<string, unknown>>;
@@ -96,6 +105,20 @@ type ListingPostRow = {
   url: string | null;
   status: string;
   posted_on: string | null;
+};
+
+type RelistRadarItemRow = {
+  id: string;
+  organization_id: string;
+  run_id: string;
+  channel: string;
+  publish_status: string | null;
+  listing_post_id: string | null;
+  external_expires_at: string | null;
+};
+
+type RelistRadarSettingsRow = {
+  settings: unknown;
 };
 
 type ListingHealthOrgRow = {
@@ -377,6 +400,216 @@ async function loadListingPost(
     .maybeSingle();
   if (error) throw new Error(`post_query:${error.message}`);
   return (data as ListingPostRow | null) ?? null;
+}
+
+async function loadRelistRadarItems(
+  admin: AdminClient,
+  summary: Summary,
+): Promise<RelistRadarItemRow[]> {
+  const { data, error } = await admin
+    .from("distribution_run_items")
+    .select(
+      "id, organization_id, run_id, channel, publish_status, listing_post_id, external_expires_at",
+    )
+    .eq("organization_id", RELIST_RADAR_TEST_ORG_ID)
+    .eq("publish_status", "live")
+    .not("external_expires_at", "is", null)
+    .order("external_expires_at", { ascending: true })
+    .limit(MAX_ITEMS_PER_SWEEP);
+
+  if (error) {
+    summary.errors++;
+    pushDetail(summary, { relist_radar: `item_query:${error.message}` });
+    return [];
+  }
+  return (data ?? []) as RelistRadarItemRow[];
+}
+
+async function loadRelistRadarSettingsForOrg(
+  admin: AdminClient,
+  orgId: string,
+  cache: Map<string, RelistRadarSettings>,
+): Promise<RelistRadarSettings> {
+  const cached = cache.get(orgId);
+  if (cached) return cached;
+
+  const { data, error } = await admin
+    .from("relist_radar_settings")
+    .select("settings")
+    .eq("organization_id", orgId)
+    .maybeSingle();
+  if (error) throw new Error(`radar_settings:${error.message}`);
+
+  const settings = resolveRelistRadarSettings(
+    (data as RelistRadarSettingsRow | null)?.settings,
+  );
+  cache.set(orgId, settings);
+  return settings;
+}
+
+async function loadPropertyStatus(
+  admin: AdminClient,
+  propertyId: string,
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from("properties")
+    .select("status")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (error) throw new Error(`radar_property:${error.message}`);
+  return ((data as { status?: string | null } | null)?.status ?? null) as
+    | string
+    | null;
+}
+
+async function recordRelistRadarCandidate({
+  admin,
+  item,
+  run,
+  paid,
+  expiresAt,
+  cycleDate,
+  daysToExpiry,
+  notifyLeadDays,
+  nowISO,
+  summary,
+}: {
+  admin: AdminClient;
+  item: RelistRadarItemRow;
+  run: DistributionRunRow;
+  paid: boolean;
+  expiresAt: string;
+  cycleDate: string;
+  daysToExpiry: number;
+  notifyLeadDays: number;
+  nowISO: string;
+  summary: Summary;
+}): Promise<void> {
+  const { data, error } = await admin
+    .from("relist_radar_events")
+    .upsert(
+      {
+        organization_id: run.organization_id,
+        property_id: run.property_id,
+        run_id: item.run_id,
+        run_item_id: item.id,
+        listing_post_id: item.listing_post_id,
+        channel: item.channel,
+        event_type: "radar_candidate",
+        cycle_date: cycleDate,
+        external_expires_at: expiresAt,
+        paid,
+        detected_at: nowISO,
+        metadata: {
+          source: "distribution_freshness_cron",
+          days_to_expiry: daysToExpiry,
+          notify_lead_days: notifyLeadDays,
+        },
+      },
+      {
+        onConflict: "run_item_id,event_type,cycle_date",
+        ignoreDuplicates: true,
+      },
+    )
+    .select("id");
+  if (error) throw new Error(`radar_event:${error.message}`);
+
+  const inserted = Array.isArray(data) && data.length > 0;
+  if (inserted) {
+    summary.radar_candidates = (summary.radar_candidates ?? 0) + 1;
+    console.log(
+      "[relist-radar]",
+      JSON.stringify({
+        event: "radar_candidate",
+        organization_id: run.organization_id,
+        property_id: run.property_id,
+        run_item_id: item.id,
+        channel: item.channel,
+        cycle_date: cycleDate,
+        days_to_expiry: daysToExpiry,
+        paid,
+      }),
+    );
+  }
+  pushDetail(summary, {
+    relist_radar: inserted ? "candidate" : "candidate_existing",
+    item: item.id,
+    channel: item.channel,
+    cycle_date: cycleDate,
+  });
+}
+
+async function detectRelistRadarCandidates({
+  admin,
+  nowISO,
+  summary,
+}: {
+  admin: AdminClient;
+  nowISO: string;
+  summary: Summary;
+}): Promise<void> {
+  const items = await loadRelistRadarItems(admin, summary);
+  const settingsCache = new Map<string, RelistRadarSettings>();
+
+  for (const item of items) {
+    try {
+      if (!relistRadarOrgAllowed(item.organization_id)) {
+        summary.skipped++;
+        continue;
+      }
+      const channel = channelByKey(item.channel);
+      if (!channel) {
+        summary.skipped++;
+        continue;
+      }
+      const run = await loadRun(admin, item.run_id);
+      if (!run || run.status === "cancelled") {
+        summary.skipped++;
+        continue;
+      }
+      const propertyStatus = await loadPropertyStatus(admin, run.property_id);
+      const settings = await loadRelistRadarSettingsForOrg(
+        admin,
+        item.organization_id,
+        settingsCache,
+      );
+      const classification = classifyRelistRadarCandidate({
+        nowISO,
+        propertyStatus,
+        externalExpiresAt: item.external_expires_at,
+        channelTtlDays: channel.ttlDays,
+        notifyLeadDays: settings.notify_lead_days,
+      });
+      if (classification.kind !== "radar_candidate") {
+        summary.skipped++;
+        continue;
+      }
+      await recordRelistRadarCandidate({
+        admin,
+        item,
+        run,
+        paid: channel.paid,
+        expiresAt: item.external_expires_at as string,
+        cycleDate: classification.cycleDate,
+        daysToExpiry: classification.daysToExpiry,
+        notifyLeadDays: settings.notify_lead_days,
+        nowISO,
+        summary,
+      });
+    } catch (err) {
+      summary.errors++;
+      pushDetail(summary, {
+        item: item.id,
+        channel: item.channel,
+        relist_radar_error: err instanceof Error ? err.message : String(err),
+      });
+      console.error("[relist-radar] item failed", {
+        itemId: item.id,
+        channel: item.channel,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 }
 
 async function verifyPublicPageForCron(
@@ -920,6 +1153,10 @@ export async function GET(req: NextRequest) {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  if (envFlagEnabled(process.env.RELIST_RADAR_CLOCK_ENABLED)) {
+    await detectRelistRadarCandidates({ admin, nowISO, summary });
   }
 
   await sendListingHealthAlerts({ admin, nowISO, summary });

@@ -23,6 +23,8 @@ import {
 } from "@/lib/distribution-publish";
 import { scheduleNextVerification } from "@/lib/distribution-verification";
 import { buildAttemptRecord } from "@/lib/distribution-attempts";
+import { buildRelistRadarClockUpdate } from "@/lib/relist-radar";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const DESK = "/dashboard/admin/concierge";
@@ -110,7 +112,11 @@ export async function completeConciergeItem(formData: FormData) {
   const takeoverCutoff = new Date(Date.now() - CONCIERGE_CLAIM_TAKEOVER_MS)
     .toISOString()
     .replace(/\.\d{3}Z$/, "Z");
-  const { data: item } = await admin
+  const radarClockEnabled = envFlagEnabled(process.env.RELIST_RADAR_CLOCK_ENABLED);
+  const itemSelect: string = radarClockEnabled
+    ? "id, run_id, channel, listing_post_id, external_url, external_posted_at"
+    : "id, run_id, channel, listing_post_id";
+  const { data: itemRaw } = await admin
     .from("distribution_run_items")
     .update({
       concierge_claimed_by: ctx.userId,
@@ -126,8 +132,16 @@ export async function completeConciergeItem(formData: FormData) {
     .or(
       `concierge_claimed_by.is.null,concierge_claimed_by.eq.${ctx.userId},concierge_claimed_at.lt.${takeoverCutoff}`,
     )
-    .select("id, run_id, channel, listing_post_id")
+    .select(itemSelect)
     .maybeSingle();
+  const item = itemRaw as unknown as {
+    id: string;
+    run_id: string;
+    channel: string;
+    listing_post_id: string | null;
+    external_url?: string | null;
+    external_posted_at?: string | null;
+  } | null;
   if (!item) redirect(`${DESK}?err=stale`);
   const { data: run } = await admin
     .from("distribution_runs")
@@ -214,6 +228,14 @@ export async function completeConciergeItem(formData: FormData) {
   if (isPortalKey(channel) && !listingPostId) redirect(`${DESK}?err=trackfail`);
 
   const now = new Date().toISOString();
+  const clockUpdate = buildRelistRadarClockUpdate({
+    enabled: radarClockEnabled,
+    channel,
+    nowISO: now,
+    existingExternalPostedAt: item.external_posted_at as string | null,
+    existingExternalUrl: item.external_url as string | null,
+    nextExternalUrl: url,
+  });
   // Atomic completion guard: only flip an item that is still an OPEN concierge
   // item AND still held by this staffer's reservation lock. If another staff
   // member completed/rejected it (or took over an abandoned claim), this matches
@@ -224,6 +246,7 @@ export async function completeConciergeItem(formData: FormData) {
       publish_status: "live",
       status: "done",
       external_url: url,
+      ...clockUpdate,
       listing_post_id: listingPostId,
       audit_message: conciergeLiveAuditForChannel(channel),
       error_code: null,

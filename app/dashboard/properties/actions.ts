@@ -71,6 +71,7 @@ import {
   postFacebookPageNow,
   postInstagramNow,
 } from "./distribution-actions";
+import { buildRelistRadarClockUpdate } from "@/lib/relist-radar";
 import { buildShareReadiness, type ShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
 import { listingFeedReadiness } from "@/lib/listing-feed";
@@ -2284,12 +2285,24 @@ export async function updateRunItem(formData: FormData) {
   const notes = normalizeText(formData.get("notes"));
 
   const supabase = createClient();
+  const radarClockEnabled = envFlagEnabled(process.env.RELIST_RADAR_CLOCK_ENABLED);
+  const itemSelect: string = radarClockEnabled
+    ? "id, run_id, channel, listing_post_id, external_url, external_posted_at"
+    : "id, run_id, channel, listing_post_id";
   // RLS scopes this to the caller's org.
-  const { data: item } = await supabase
+  const { data: itemRaw } = await supabase
     .from("distribution_run_items")
-    .select("id, run_id, channel, listing_post_id")
+    .select(itemSelect)
     .eq("id", itemId)
     .maybeSingle();
+  const item = itemRaw as unknown as {
+    id: string;
+    run_id: string;
+    channel: string;
+    listing_post_id: string | null;
+    external_url?: string | null;
+    external_posted_at?: string | null;
+  } | null;
   if (!item) {
     redirect(`/dashboard/properties/${propertyIdForm}?runerr=notfound#distribute-header`);
   }
@@ -2384,15 +2397,29 @@ export async function updateRunItem(formData: FormData) {
     }
   }
 
+  const now = new Date().toISOString();
+  const clockUpdate =
+    publishStatus === "live"
+      ? buildRelistRadarClockUpdate({
+          enabled: radarClockEnabled,
+          channel: item.channel as string,
+          nowISO: now,
+          existingExternalPostedAt: item.external_posted_at as string | null,
+          existingExternalUrl: item.external_url as string | null,
+          nextExternalUrl: url,
+        })
+      : {};
+
   await supabase
     .from("distribution_run_items")
     .update({
       status,
       publish_status: publishStatus,
       external_url: url,
+      ...clockUpdate,
       notes,
       listing_post_id: listingPostId,
-      last_verified_at: publishStatus === "live" ? new Date().toISOString() : null,
+      last_verified_at: publishStatus === "live" ? now : null,
       error_code:
         publishStatus === "blocked" || publishStatus === "rejected"
           ? publishStatus
@@ -2401,7 +2428,7 @@ export async function updateRunItem(formData: FormData) {
         publishStatus === "blocked" || publishStatus === "rejected"
           ? notes
           : null,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
     .eq("id", itemId);
 
