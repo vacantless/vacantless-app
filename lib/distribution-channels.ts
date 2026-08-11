@@ -105,6 +105,10 @@ export type DistributionChannel = {
   // Whether this channel is a candidate for the org XML feed (informational in
   // Slice 1; partner onboarding is a later slice).
   feedEligible: boolean;
+  // Relist Radar clock metadata. Unknown TTLs stay null so the dark detector
+  // skips them until a portal-specific expiry rule is proven.
+  ttlDays: number | null;
+  paid: boolean;
   // Where "Open portal" points (the posting / manager entry page).
   portalUrl: string;
 };
@@ -127,6 +131,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://www.facebook.com/marketplace/create/rental",
   },
   {
@@ -142,6 +148,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: 60,
+    paid: false,
     portalUrl: "https://www.kijiji.ca/p-post-ad.html",
   },
   {
@@ -159,6 +167,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://www.linkedin.com/feed/",
   },
   {
@@ -174,6 +184,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://www.instagram.com/",
   },
   {
@@ -189,6 +201,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://www.facebook.com/",
   },
   {
@@ -206,6 +220,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://web.whatsapp.com/",
   },
   {
@@ -223,6 +239,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://www.snapchat.com/",
   },
   {
@@ -238,6 +256,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: true,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://rentals.ca/",
   },
   {
@@ -255,6 +275,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: true,
+    ttlDays: null,
+    paid: true,
     portalUrl: "https://www.rentfaster.ca/admin/add-listing/",
   },
   {
@@ -270,6 +292,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: true,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://www.zumper.com/manage",
   },
   {
@@ -287,6 +311,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: true,
     portalUrl: "https://www.viewit.ca/",
   },
   {
@@ -304,6 +330,8 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
+    ttlDays: null,
+    paid: false,
     portalUrl: "https://www.realtor.ca/",
   },
 ];

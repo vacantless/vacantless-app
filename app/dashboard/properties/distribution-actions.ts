@@ -75,6 +75,8 @@ import {
   postToInstagram,
 } from "@/lib/instagram-graph";
 import { confirmLeaseupTakedownRemoved } from "@/lib/leaseup-takedown-confirm";
+import { buildRelistRadarClockUpdate } from "@/lib/relist-radar";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
@@ -535,7 +537,7 @@ export async function recordItemProof(formData: FormData) {
     .eq("id", itemId)
     .maybeSingle();
   if (!item) redirect("/dashboard/properties");
-  const it = item as {
+  const it = item as unknown as {
     id: string;
     run_id: string;
     channel: string;
@@ -784,15 +786,17 @@ export async function postFacebookPageNow(formData: FormData) {
   }
 
   const supabase = createClient();
+  const radarClockEnabled = envFlagEnabled(process.env.RELIST_RADAR_CLOCK_ENABLED);
+  const itemSelect: string = radarClockEnabled
+    ? "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode, external_url, external_posted_at"
+    : "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode";
   const { data: item } = await supabase
     .from("distribution_run_items")
-    .select(
-      "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode",
-    )
+    .select(itemSelect)
     .eq("id", itemId)
     .maybeSingle();
   if (!item) redirect("/dashboard/properties");
-  const it = item as {
+  const it = item as unknown as {
     id: string;
     run_id: string;
     channel: string;
@@ -801,6 +805,8 @@ export async function postFacebookPageNow(formData: FormData) {
     organization_id: string | null;
     publish_status: string | null;
     mode: string | null;
+    external_url?: string | null;
+    external_posted_at?: string | null;
   };
 
   const { data: run } = await supabase
@@ -1037,12 +1043,21 @@ export async function postFacebookPageNow(formData: FormData) {
   }
 
   const flipISO = new Date().toISOString();
+  const clockUpdate = buildRelistRadarClockUpdate({
+    enabled: radarClockEnabled,
+    channel: it.channel,
+    nowISO: flipISO,
+    existingExternalPostedAt: it.external_posted_at,
+    existingExternalUrl: it.external_url,
+    nextExternalUrl: graph.permalink,
+  });
   const { data: flipped } = await supabase
     .from("distribution_run_items")
     .update({
       status: "done",
       publish_status: "live",
       external_url: graph.permalink,
+      ...clockUpdate,
       listing_post_id: listingPostId,
       proof_url: graph.permalink,
       last_verified_at: flipISO,
@@ -1096,15 +1111,17 @@ export async function postInstagramNow(formData: FormData) {
   }
 
   const supabase = createClient();
+  const radarClockEnabled = envFlagEnabled(process.env.RELIST_RADAR_CLOCK_ENABLED);
+  const itemSelect: string = radarClockEnabled
+    ? "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode, external_url, external_posted_at"
+    : "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode";
   const { data: item } = await supabase
     .from("distribution_run_items")
-    .select(
-      "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode",
-    )
+    .select(itemSelect)
     .eq("id", itemId)
     .maybeSingle();
   if (!item) redirect("/dashboard/properties");
-  const it = item as {
+  const it = item as unknown as {
     id: string;
     run_id: string;
     channel: string;
@@ -1113,6 +1130,8 @@ export async function postInstagramNow(formData: FormData) {
     organization_id: string | null;
     publish_status: string | null;
     mode: string | null;
+    external_url?: string | null;
+    external_posted_at?: string | null;
   };
 
   const { data: run } = await supabase
@@ -1367,12 +1386,21 @@ export async function postInstagramNow(formData: FormData) {
   }
 
   const flipISO = new Date().toISOString();
+  const clockUpdate = buildRelistRadarClockUpdate({
+    enabled: radarClockEnabled,
+    channel: it.channel,
+    nowISO: flipISO,
+    existingExternalPostedAt: it.external_posted_at,
+    existingExternalUrl: it.external_url,
+    nextExternalUrl: graph.permalink,
+  });
   const { data: flipped } = await supabase
     .from("distribution_run_items")
     .update({
       status: "done",
       publish_status: "live",
       external_url: graph.permalink,
+      ...clockUpdate,
       listing_post_id: listingPostId,
       proof_url: graph.permalink,
       last_verified_at: flipISO,
@@ -1431,15 +1459,17 @@ export async function completeCopilotPost(formData: FormData) {
   if (!itemId) redirect("/dashboard/properties");
 
   const supabase = createClient();
+  const radarClockEnabled = envFlagEnabled(process.env.RELIST_RADAR_CLOCK_ENABLED);
+  const itemSelect: string = radarClockEnabled
+    ? "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode, external_url, external_posted_at"
+    : "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode";
   const { data: item } = await supabase
     .from("distribution_run_items")
-    .select(
-      "id, run_id, channel, transport, listing_post_id, organization_id, publish_status, mode",
-    )
+    .select(itemSelect)
     .eq("id", itemId)
     .maybeSingle();
   if (!item) redirect("/dashboard/properties");
-  const it = item as {
+  const it = item as unknown as {
     id: string;
     run_id: string;
     channel: string;
@@ -1448,6 +1478,8 @@ export async function completeCopilotPost(formData: FormData) {
     organization_id: string;
     publish_status: string | null;
     mode: string | null;
+    external_url?: string | null;
+    external_posted_at?: string | null;
   };
 
   // Authoritative property + org + run status come from the RUN (RLS).
@@ -1607,12 +1639,21 @@ export async function completeCopilotPost(formData: FormData) {
 
   // 3) Terminal flip LAST, gated on still holding the reservation.
   const flipISO = new Date().toISOString();
+  const clockUpdate = buildRelistRadarClockUpdate({
+    enabled: radarClockEnabled,
+    channel: it.channel,
+    nowISO: flipISO,
+    existingExternalPostedAt: it.external_posted_at,
+    existingExternalUrl: it.external_url,
+    nextExternalUrl: liveUrl,
+  });
   const { data: flipped } = await supabase
     .from("distribution_run_items")
     .update({
       status: "done",
       publish_status: "live",
       external_url: liveUrl,
+      ...clockUpdate,
       listing_post_id: listingPostId,
       notes: note,
       last_verified_at: flipISO,

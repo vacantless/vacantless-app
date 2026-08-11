@@ -72,6 +72,8 @@ for (const c of DISTRIBUTION_CHANNELS) {
   ok(`${c.key}: portalUrl is https`, /^https:\/\//.test(c.portalUrl));
   ok(`${c.key}: has a blurb`, c.blurb.length > 20);
   ok(`${c.key}: no em dashes in blurb`, !/[—–]/.test(c.blurb));
+  ok(`${c.key}: ttl is number or null`, c.ttlDays === null || Number.isFinite(c.ttlDays));
+  ok(`${c.key}: paid class is boolean`, typeof c.paid === "boolean");
 }
 
 const keysForIntegration = (status: string) =>
@@ -154,6 +156,11 @@ ok("zumper is feed-eligible", channelByKey("zumper")?.feedEligible === true);
 ok("zumper label carries PadMapper", channelByKey("zumper")?.label === "Zumper + PadMapper");
 ok("facebook is NOT feed-eligible", channelByKey("facebook")?.feedEligible === false);
 ok("kijiji is NOT feed-eligible", channelByKey("kijiji")?.feedEligible === false);
+ok("kijiji TTL is 60 days", channelByKey("kijiji")?.ttlDays === 60);
+ok("kijiji is free", channelByKey("kijiji")?.paid === false);
+ok("rentfaster is paid", channelByKey("rentfaster")?.paid === true);
+ok("viewit is paid", channelByKey("viewit")?.paid === true);
+ok("facebook unknown TTL stays null", channelByKey("facebook")?.ttlDays === null);
 ok(
   "all matrix channels have a fill sheet",
   DISTRIBUTION_CHANNELS.every((c) => c.hasFillSheet),
@@ -195,8 +202,8 @@ const launchRunPanelSource = readFileSync(
   "utf8",
 );
 ok(
-  "first-run CTA says add selected channels",
-  launchRunPanelSource.includes("Add selected channels"),
+  "launch run panel exposes guided posting rows",
+  launchRunPanelSource.includes("Start guided posting for"),
 );
 
 // --- labels ----------------------------------------------------------------
