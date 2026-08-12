@@ -113,28 +113,9 @@ export type DistributionChannel = {
   portalUrl: string;
 };
 
-// Order = highest real demand first (Facebook, Kijiji), then structured feed
-// candidates, then the paid/manual and broker routes.
+// Order = ranked display order for Distribute/Get online. Publish execution
+// stays decoupled in lib/distribution-publish.
 export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
-  {
-    key: "facebook",
-    label: "Facebook Marketplace",
-    category: "classifieds",
-    integrationStatus: "planned",
-    connectKind: "none",
-    notes:
-      "Marketplace is not a connected Vacantless channel yet. Use the guided posting tools until a real account connection exists.",
-    mode: "assisted_manual",
-    blurb:
-      "Vacantless prepares Facebook-safe wording, photo order, and renter replies. You review the Facebook post, then paste the live ad link back here.",
-    copyKey: "facebook",
-    hasFillSheet: true,
-    hasGuardrails: true,
-    feedEligible: false,
-    ttlDays: null,
-    paid: false,
-    portalUrl: "https://www.facebook.com/marketplace/create/rental",
-  },
   {
     key: "kijiji",
     label: "Kijiji",
@@ -153,95 +134,23 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     portalUrl: "https://www.kijiji.ca/p-post-ad.html",
   },
   {
-    key: "linkedin",
-    label: "LinkedIn",
-    category: "social",
+    key: "facebook",
+    label: "Facebook Marketplace",
+    category: "classifieds",
     integrationStatus: "planned",
     connectKind: "none",
     notes:
-      "LinkedIn is listed for the roadmap, but Vacantless does not have a real connected posting path for it yet.",
+      "Marketplace is not a connected Vacantless channel yet. Use the guided posting tools until a real account connection exists.",
     mode: "assisted_manual",
     blurb:
-      "Vacantless prepares a polished social caption and tracked inquiry link. Post from the connected LinkedIn account, then save the post URL as proof.",
-    copyKey: "linkedin",
+      "Vacantless prepares Facebook-safe wording, photo order, and renter replies. You review the Facebook post, then paste the live ad link back here.",
+    copyKey: "facebook",
     hasFillSheet: true,
     hasGuardrails: true,
     feedEligible: false,
     ttlDays: null,
     paid: false,
-    portalUrl: "https://www.linkedin.com/feed/",
-  },
-  {
-    key: "instagram",
-    label: "Instagram",
-    category: "social",
-    integrationStatus: "live",
-    connectKind: "oauth",
-    mode: "api_automatic",
-    blurb:
-      "Vacantless can publish a single-image post to a linked Instagram Business account after you approve that item. Captions include the tracked inquiry link; Stories, Reels, and carousels stay separate.",
-    copyKey: "instagram",
-    hasFillSheet: true,
-    hasGuardrails: true,
-    feedEligible: false,
-    ttlDays: null,
-    paid: false,
-    portalUrl: "https://www.instagram.com/",
-  },
-  {
-    key: "facebook_feed",
-    label: "Facebook Page feed",
-    category: "social",
-    integrationStatus: "live",
-    connectKind: "oauth",
-    mode: "api_automatic",
-    blurb:
-      "Vacantless can post a tracked listing link to a connected Facebook Business Page after you approve that item. Organic Page posts reach Page followers; Marketplace and ads are separate channels.",
-    copyKey: "facebook_feed",
-    hasFillSheet: true,
-    hasGuardrails: true,
-    feedEligible: false,
-    ttlDays: null,
-    paid: false,
-    portalUrl: "https://www.facebook.com/",
-  },
-  {
-    key: "whatsapp",
-    label: "WhatsApp",
-    category: "chat",
-    integrationStatus: "planned",
-    connectKind: "none",
-    notes:
-      "WhatsApp Business is in the target channel list, but there is no connected Vacantless posting or send path for this tile yet.",
-    mode: "assisted_manual",
-    blurb:
-      "Vacantless prepares a compact share message with the tracked inquiry link. Send it through WhatsApp or a broadcast list, then save a proof link or note.",
-    copyKey: "whatsapp",
-    hasFillSheet: true,
-    hasGuardrails: true,
-    feedEligible: false,
-    ttlDays: null,
-    paid: false,
-    portalUrl: "https://web.whatsapp.com/",
-  },
-  {
-    key: "snapchat",
-    label: "Snapchat",
-    category: "social",
-    integrationStatus: "planned",
-    connectKind: "none",
-    notes:
-      "Snapchat is in the target channel list, but Vacantless does not have a real connected posting path for it yet.",
-    mode: "assisted_manual",
-    blurb:
-      "Vacantless prepares short social copy and the tracked inquiry link. Post from the connected Snapchat account, then save the post or story proof.",
-    copyKey: "snapchat",
-    hasFillSheet: true,
-    hasGuardrails: true,
-    feedEligible: false,
-    ttlDays: null,
-    paid: false,
-    portalUrl: "https://www.snapchat.com/",
+    portalUrl: "https://www.facebook.com/marketplace/create/rental",
   },
   {
     key: "rentals_ca",
@@ -334,7 +243,162 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     paid: false,
     portalUrl: "https://www.realtor.ca/",
   },
+  {
+    key: "facebook_feed",
+    label: "Facebook Page feed",
+    category: "social",
+    integrationStatus: "live",
+    connectKind: "oauth",
+    mode: "api_automatic",
+    blurb:
+      "Vacantless can post a tracked listing link to a connected Facebook Business Page after you approve that item. Organic Page posts reach Page followers; Marketplace and ads are separate channels.",
+    copyKey: "facebook_feed",
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: false,
+    ttlDays: null,
+    paid: false,
+    portalUrl: "https://www.facebook.com/",
+  },
+  {
+    key: "instagram",
+    label: "Instagram",
+    category: "social",
+    integrationStatus: "live",
+    connectKind: "oauth",
+    mode: "api_automatic",
+    blurb:
+      "Vacantless can publish a single-image post to a linked Instagram Business account after you approve that item. Captions include the tracked inquiry link; Stories, Reels, and carousels stay separate.",
+    copyKey: "instagram",
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: false,
+    ttlDays: null,
+    paid: false,
+    portalUrl: "https://www.instagram.com/",
+  },
+  {
+    key: "whatsapp",
+    label: "WhatsApp",
+    category: "chat",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "WhatsApp Business is in the target channel list, but there is no connected Vacantless posting or send path for this tile yet.",
+    mode: "assisted_manual",
+    blurb:
+      "Vacantless prepares a compact share message with the tracked inquiry link. Send it through WhatsApp or a broadcast list, then save a proof link or note.",
+    copyKey: "whatsapp",
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: false,
+    ttlDays: null,
+    paid: false,
+    portalUrl: "https://web.whatsapp.com/",
+  },
+  {
+    key: "linkedin",
+    label: "LinkedIn",
+    category: "social",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "LinkedIn is listed for the roadmap, but Vacantless does not have a real connected posting path for it yet.",
+    mode: "assisted_manual",
+    blurb:
+      "Vacantless prepares a polished social caption and tracked inquiry link. Post from the connected LinkedIn account, then save the post URL as proof.",
+    copyKey: "linkedin",
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: false,
+    ttlDays: null,
+    paid: false,
+    portalUrl: "https://www.linkedin.com/feed/",
+  },
+  {
+    key: "snapchat",
+    label: "Snapchat",
+    category: "social",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "Snapchat is in the target channel list, but Vacantless does not have a real connected posting path for it yet.",
+    mode: "assisted_manual",
+    blurb:
+      "Vacantless prepares short social copy and the tracked inquiry link. Post from the connected Snapchat account, then save the post or story proof.",
+    copyKey: "snapchat",
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: false,
+    ttlDays: null,
+    paid: false,
+    portalUrl: "https://www.snapchat.com/",
+  },
 ];
+
+export const DISTRIBUTION_CHANNEL_DISPLAY_GROUPS = [
+  {
+    id: "listing_sites",
+    title: "Listing sites",
+    categories: ["portal", "classifieds"],
+  },
+  {
+    id: "share_social",
+    title: "Share & social",
+    categories: ["social", "chat"],
+  },
+] as const;
+export type DistributionChannelDisplayGroup =
+  (typeof DISTRIBUTION_CHANNEL_DISPLAY_GROUPS)[number];
+export type DistributionChannelDisplayGroupId =
+  DistributionChannelDisplayGroup["id"];
+
+const DISTRIBUTION_CHANNEL_DISPLAY_GROUP_BY_CATEGORY: Record<
+  ChannelCategory,
+  DistributionChannelDisplayGroupId
+> = {
+  portal: "listing_sites",
+  classifieds: "listing_sites",
+  social: "share_social",
+  chat: "share_social",
+};
+
+export function distributionChannelDisplayGroupFor(
+  category: ChannelCategory,
+): DistributionChannelDisplayGroup {
+  const groupId = DISTRIBUTION_CHANNEL_DISPLAY_GROUP_BY_CATEGORY[category];
+  return DISTRIBUTION_CHANNEL_DISPLAY_GROUPS.find((group) => group.id === groupId)!;
+}
+
+export function groupByDistributionChannelDisplayGroup<T>(
+  items: readonly T[],
+  categoryFor: (item: T) => ChannelCategory | null | undefined,
+): Array<{ group: DistributionChannelDisplayGroup; items: T[] }> {
+  const grouped = new Map<DistributionChannelDisplayGroupId, T[]>(
+    DISTRIBUTION_CHANNEL_DISPLAY_GROUPS.map((group) => [group.id, []]),
+  );
+
+  for (const item of items) {
+    const category = categoryFor(item);
+    if (!category) continue;
+    const group = distributionChannelDisplayGroupFor(category);
+    grouped.get(group.id)?.push(item);
+  }
+
+  return DISTRIBUTION_CHANNEL_DISPLAY_GROUPS.map((group) => ({
+    group,
+    items: grouped.get(group.id) ?? [],
+  })).filter(({ items }) => items.length > 0);
+}
+
+export function groupDistributionChannelsForDisplay(
+  channels: readonly DistributionChannel[] = DISTRIBUTION_CHANNELS,
+): Array<{ group: DistributionChannelDisplayGroup; channels: DistributionChannel[] }> {
+  return groupByDistributionChannelDisplayGroup(
+    channels,
+    (channel) => channel.category,
+  ).map(({ group, items }) => ({ group, channels: items }));
+}
 
 export function channelByKey(
   key: unknown,

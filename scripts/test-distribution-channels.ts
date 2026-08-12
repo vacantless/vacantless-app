@@ -8,6 +8,7 @@ import {
   CHANNEL_INTEGRATION_STATUSES,
   CHANNEL_MODES,
   DISTRIBUTION_CHANNELS,
+  DISTRIBUTION_CHANNEL_DISPLAY_GROUPS,
   channelByKey,
   channelModeLabel,
   channelTileStatus,
@@ -17,6 +18,8 @@ import {
   DEFAULT_REFRESH_DAYS,
   daysBetween,
   computeChannelStatus,
+  distributionChannelDisplayGroupFor,
+  groupDistributionChannelsForDisplay,
   type ChannelPost,
 } from "../lib/distribution-channels";
 import { PORTAL_KEYS } from "../lib/listing-distribution";
@@ -38,10 +41,6 @@ ok(
   "matrix excludes 'other'",
   !DISTRIBUTION_CHANNELS.some((c) => (c.key as string) === "other"),
 );
-ok(
-  "facebook is first (highest demand)",
-  DISTRIBUTION_CHANNELS[0].key === "facebook",
-);
 ok("channelByKey resolves kijiji", channelByKey("kijiji")?.label === "Kijiji");
 ok("channelByKey junk -> null", channelByKey("nope") === null);
 ok("channelByKey other -> null (not a matrix row)", channelByKey("other") === null);
@@ -51,11 +50,76 @@ ok(
 );
 
 const registryKeys = DISTRIBUTION_CHANNELS.map((c) => c.key);
+const expectedDisplayOrder = [
+  "kijiji",
+  "facebook",
+  "rentals_ca",
+  "rentfaster",
+  "zumper",
+  "viewit",
+  "realtor_ca",
+  "facebook_feed",
+  "instagram",
+  "whatsapp",
+  "linkedin",
+  "snapchat",
+];
+ok(
+  "channel matrix follows ranked display order",
+  registryKeys.join("|") === expectedDisplayOrder.join("|"),
+);
 const registryKeySet = new Set(registryKeys);
 ok("registry has no duplicate keys", registryKeySet.size === registryKeys.length);
 for (const key of PORTAL_KEYS.filter((key) => key !== "other")) {
   ok(`registry covers listing_posts portal ${key}`, registryKeySet.has(key));
 }
+
+const displayGroups = groupDistributionChannelsForDisplay(DISTRIBUTION_CHANNELS);
+const displayGroupKeys = displayGroups.flatMap((group) =>
+  group.channels.map((channel) => channel.key),
+);
+ok("two channel display groups", DISTRIBUTION_CHANNEL_DISPLAY_GROUPS.length === 2);
+ok(
+  "listing sites folds portal and classifieds",
+  DISTRIBUTION_CHANNEL_DISPLAY_GROUPS[0]?.categories.join("|") ===
+    "portal|classifieds",
+);
+ok(
+  "share and social folds social and chat",
+  DISTRIBUTION_CHANNEL_DISPLAY_GROUPS[1]?.categories.join("|") ===
+    "social|chat",
+);
+ok(
+  "display grouping keeps every channel exactly once",
+  displayGroupKeys.join("|") === registryKeys.join("|") &&
+    new Set(displayGroupKeys).size === DISTRIBUTION_CHANNELS.length,
+);
+ok(
+  "listing sites group order",
+  displayGroups[0]?.group.title === "Listing sites" &&
+    displayGroups[0]?.channels.map((channel) => channel.key).join("|") ===
+      "kijiji|facebook|rentals_ca|rentfaster|zumper|viewit|realtor_ca",
+);
+ok(
+  "share and social group order",
+  displayGroups[1]?.group.title === "Share & social" &&
+    displayGroups[1]?.channels.map((channel) => channel.key).join("|") ===
+      "facebook_feed|instagram|whatsapp|linkedin|snapchat",
+);
+for (const c of DISTRIBUTION_CHANNELS) {
+  const group = distributionChannelDisplayGroupFor(c.category);
+  ok(`${c.key}: display group is assigned`, Boolean(group));
+}
+ok(
+  "facebook marketplace lands in listing sites",
+  distributionChannelDisplayGroupFor(channelByKey("facebook")!.category).title ===
+    "Listing sites",
+);
+ok(
+  "whatsapp lands in share and social",
+  distributionChannelDisplayGroupFor(channelByKey("whatsapp")!.category).title ===
+    "Share & social",
+);
 
 // Every channel keeps its wiring coherent.
 for (const c of DISTRIBUTION_CHANNELS) {

@@ -41,6 +41,10 @@ import {
   type PublishStatus,
   type PublishTone,
 } from "@/lib/distribution-publish";
+import {
+  groupByDistributionChannelDisplayGroup,
+  type ChannelCategory,
+} from "@/lib/distribution-channels";
 
 export type RunItemView = {
   id: string;
@@ -89,6 +93,8 @@ export type RunItemView = {
 export type PublishChannelChoiceView = {
   key: string;
   label: string;
+  category: ChannelCategory | null;
+  displayOrder: number | null;
   modeLabel: string;
   statusLabel: string;
   statusTone: PublishTone;
@@ -120,6 +126,29 @@ const AUTOMATION_DOT_CLASS: Record<AutomationStatusState, string> = {
   blocked: "bg-red-500",
   idle: "bg-gray-400",
 };
+
+function hasDisplayCategory(
+  choice: PublishChannelChoiceView,
+): choice is PublishChannelChoiceView & { category: ChannelCategory } {
+  return choice.category != null;
+}
+
+function sortedDisplayChoices(channels: PublishChannelChoiceView[]) {
+  return channels
+    .filter(hasDisplayCategory)
+    .sort(
+      (a, b) =>
+        (a.displayOrder ?? Number.MAX_SAFE_INTEGER) -
+        (b.displayOrder ?? Number.MAX_SAFE_INTEGER),
+    );
+}
+
+function groupedDisplayChoices(channels: PublishChannelChoiceView[]) {
+  return groupByDistributionChannelDisplayGroup(
+    sortedDisplayChoices(channels),
+    (channel) => channel.category,
+  );
+}
 
 function AutomationDot({ state }: { state: AutomationStatusState }) {
   return (
@@ -328,51 +357,98 @@ export function LaunchRunPanel({
   const guidedHref = `/dashboard/link-portals?property=${encodeURIComponent(
     propertyId,
   )}`;
-  const suggestedStartChannels = startChannels.filter(
-    (channel) => channel.defaultSelected,
+  const coreStartChannels = startChannels.filter(
+    (channel) => channel.category == null && channel.defaultSelected,
   );
-  const optionalStartChannels = startChannels.filter(
-    (channel) => !channel.defaultSelected,
+  const extraCoreStartChannels = startChannels.filter(
+    (channel) => channel.category == null && !channel.defaultSelected,
   );
+  const startChannelGroups = groupedDisplayChoices(startChannels);
+  const selectableCoreChannels = selectable.filter(
+    (channel) => channel.category == null,
+  );
+  const selectableChannelGroups = groupedDisplayChoices(selectable);
+  const firstSelectableChoice =
+    selectableCoreChannels[0] ?? selectableChannelGroups[0]?.items[0] ?? selectable[0];
   const renderStartChannelRows = (channels: PublishChannelChoiceView[]) =>
-    channels.map((c) => (
-      <label
-        key={c.key}
-        className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-sm text-gray-700 last:border-b-0 hover:bg-slate-50"
-        title={c.description}
-      >
-        <input
-          type="checkbox"
-          name="channels"
-          value={c.key}
-          defaultChecked={c.defaultSelected}
-          className="shrink-0"
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium text-gray-900">
-            {c.label}
+    channels.map((c) => {
+      const brokerRail = c.key === "realtor_ca" || c.modeLabel === "Broker / MLS";
+      return (
+        <label
+          key={c.key}
+          className={`flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0 ${
+            brokerRail
+              ? "border-l-4 border-l-slate-400 bg-slate-50 text-slate-800 hover:bg-slate-100"
+              : "text-gray-700 hover:bg-slate-50"
+          }`}
+          title={c.description}
+        >
+          <input
+            type="checkbox"
+            name="channels"
+            value={c.key}
+            defaultChecked={c.defaultSelected}
+            className="shrink-0"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium text-gray-900">
+              {c.label}
+            </span>
+            {(c.blockers.length > 0 || c.setupBlockers.length > 0) && (
+              <span className="block truncate text-[11px] text-amber-700">
+                {c.blockers[0] ?? c.setupBlockers[0]}
+              </span>
+            )}
           </span>
-          {(c.blockers.length > 0 || c.setupBlockers.length > 0) && (
-            <span className="block truncate text-[11px] text-amber-700">
-              {c.blockers[0] ?? c.setupBlockers[0]}
+          <span
+            className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline-flex ${
+              brokerRail ? "bg-slate-900 text-white" : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {c.modeLabel}
+          </span>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[c.readinessTone]}`}
+          >
+            {c.readinessLabel}
+          </span>
+          {c.defaultSelected && (
+            <span className="hidden shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand sm:inline-flex">
+              Suggested
             </span>
           )}
-        </span>
-        <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 sm:inline-flex">
-          {c.modeLabel}
-        </span>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[c.readinessTone]}`}
-        >
-          {c.readinessLabel}
-        </span>
-        {c.defaultSelected && (
-          <span className="hidden shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand sm:inline-flex">
-            Suggested
-          </span>
-        )}
-      </label>
+        </label>
+      );
+    });
+  const renderStartChannelGroups = (
+    groups: ReturnType<typeof groupedDisplayChoices>,
+  ) =>
+    groups.map(({ group, items }) => (
+      <section key={group.id} className="border-t border-slate-100">
+        <h4 className="bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {group.title}
+        </h4>
+        <div>{renderStartChannelRows(items)}</div>
+      </section>
     ));
+  const renderSelectableOptions = () => (
+    <>
+      {selectableCoreChannels.map((c) => (
+        <option key={c.key} value={c.key}>
+          {c.label} - {c.modeLabel}
+        </option>
+      ))}
+      {selectableChannelGroups.map(({ group, items }) => (
+        <optgroup key={group.id} label={group.title}>
+          {items.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.label} - {c.modeLabel}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  );
 
   // No active run: offer to start one.
   if (!run) {
@@ -406,17 +482,18 @@ export function LaunchRunPanel({
         <form action={startDistributionRun}>
           <input type="hidden" name="property_id" value={propertyId} />
           <div className="mb-3 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-inner">
-            {renderStartChannelRows(suggestedStartChannels)}
-            {optionalStartChannels.length > 0 && (
+            {renderStartChannelRows(coreStartChannels)}
+            {renderStartChannelGroups(startChannelGroups)}
+            {extraCoreStartChannels.length > 0 && (
               <details className="border-t border-slate-100">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-                  <span>More sites</span>
+                  <span>Other tracking</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                    {optionalStartChannels.length}
+                    {extraCoreStartChannels.length}
                   </span>
                 </summary>
                 <div className="border-t border-slate-100">
-                  {renderStartChannelRows(optionalStartChannels)}
+                  {renderStartChannelRows(extraCoreStartChannels)}
                 </div>
               </details>
             )}
@@ -955,13 +1032,9 @@ export function LaunchRunPanel({
                 id="run-add-channel"
                 name="channel"
                 className={FIELD_CLASS}
-                defaultValue={selectable[0].key}
+                defaultValue={firstSelectableChoice?.key ?? ""}
               >
-                {selectable.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.label} - {c.modeLabel}
-                  </option>
-                ))}
+                {renderSelectableOptions()}
               </select>
             </div>
             <button
