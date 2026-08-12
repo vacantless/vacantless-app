@@ -1515,6 +1515,15 @@ export default async function PropertyDetailPage({
       existingListingPostId: livePost?.id ?? null,
     };
   };
+  const distributionChannelDisplayMeta = new Map<
+    string,
+    { category: (typeof DISTRIBUTION_CHANNELS)[number]["category"]; displayOrder: number }
+  >(
+    DISTRIBUTION_CHANNELS.map((channel, displayOrder) => [
+      channel.key,
+      { category: channel.category, displayOrder },
+    ]),
+  );
   const publishStartChannels = publishChannelChoices({
     includeNetworkFeed: networkFeedEnabled,
   }).map((meta) => {
@@ -1522,6 +1531,7 @@ export default async function PropertyDetailPage({
       meta.key,
       publishContextForChannel(meta.key),
     );
+    const displayMeta = distributionChannelDisplayMeta.get(plan.key) ?? null;
     const readiness = channelAccountReadiness({
       capability: channelCapability(meta.key),
       accountStatus: accountStatusForChannel(meta.key),
@@ -1530,6 +1540,8 @@ export default async function PropertyDetailPage({
     return {
       key: plan.key,
       label: plan.label,
+      category: displayMeta?.category ?? null,
+      displayOrder: displayMeta?.displayOrder ?? null,
       modeLabel: publishModeLabel(plan.mode),
       statusLabel: publishStatusLabel(plan.status),
       statusTone: publishStatusTone(plan.status),

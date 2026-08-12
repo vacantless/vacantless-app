@@ -42,6 +42,7 @@ import {
   channelStatusLabel,
   channelStatusTone,
   daysBetween,
+  groupByDistributionChannelDisplayGroup,
   type DistributionChannel,
   type ChannelStatus,
   type StatusTone,
@@ -469,6 +470,10 @@ export function DistributeTab({
   const proofIssueCount = channelCards.filter(
     (card) => card.status.value === "problem",
   ).length;
+  const channelCardGroups = groupByDistributionChannelDisplayGroup(
+    channelCards,
+    (card) => card.channel.category,
+  );
   const selectedChannelCount = launchRun.run
     ? launchRun.items.length
     : launchRun.startChannels.filter((channel) => channel.defaultSelected).length;
@@ -650,21 +655,30 @@ export function DistributeTab({
           </div>
         </summary>
         <div className="border-t border-gray-100 px-5 py-4">
-          <div className="space-y-3">
-            {channelCards.map((card) => (
-              <ChannelCard
-                key={card.channel.key}
-                card={card}
-                propertyId={propertyId}
-                linkIsLive={linkIsLive}
-                addFormKey={addFormKey}
-                today={today}
-                replyInputs={replyInputs}
-                qaExpected={qaExpected}
-                reservedTrackedUrl={
-                  reservedTrackedLinksByChannel[card.channel.key] ?? null
-                }
-              />
+          <div className="space-y-4">
+            {channelCardGroups.map(({ group, items }) => (
+              <section key={group.id} className="space-y-3">
+                <h4 className="px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  {group.title}
+                </h4>
+                <div className="space-y-3">
+                  {items.map((card) => (
+                    <ChannelCard
+                      key={card.channel.key}
+                      card={card}
+                      propertyId={propertyId}
+                      linkIsLive={linkIsLive}
+                      addFormKey={addFormKey}
+                      today={today}
+                      replyInputs={replyInputs}
+                      qaExpected={qaExpected}
+                      reservedTrackedUrl={
+                        reservedTrackedLinksByChannel[card.channel.key] ?? null
+                      }
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
 
@@ -2196,6 +2210,8 @@ function ChannelCard({
   const facebookPage = card.facebookPage;
   const instagramAccount = card.instagramAccount;
   const tone = channelStatusTone(status.value);
+  const brokerRail =
+    channel.mode === "broker" || channel.integrationStatus === "mls_gated";
   const combinedCopy = copy ? `${copy.title}\n\n${copy.body}` : null;
   // Reply snippets for the assisted-manual + feed channels (a renter messages
   // the operator; these route them to the branded booking page). Broker
@@ -2219,14 +2235,26 @@ function ChannelCard({
       : "No proof link saved";
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div
+      className={`rounded-xl border p-4 ${
+        brokerRail
+          ? "border-slate-300 bg-slate-50 ring-1 ring-slate-200"
+          : "border-gray-200 bg-white"
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1.5 flex flex-wrap items-center gap-2">
             <h4 className="text-sm font-semibold text-gray-900">
               {channel.label}
             </h4>
-            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                brokerRail
+                  ? "bg-slate-900 text-white"
+                  : "bg-brand/10 text-brand"
+              }`}
+            >
               {channelModeLabel(channel.mode)}
             </span>
             <span
