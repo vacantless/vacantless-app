@@ -39,6 +39,7 @@ import {
   isCopilotChannel,
   canMarkCopilotLive,
 } from "@/lib/distribution-copilot";
+import { channelByKey } from "@/lib/distribution-channels";
 import {
   channelCapability,
   isChannelAccountStatus,
@@ -327,6 +328,63 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?autopilot=authorized#distribute-header`);
+}
+
+export async function setRelistRadarStandingAutoRefresh(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = s(formData, "property_id");
+  const channel = s(formData, "channel");
+  const enabled = s(formData, "enabled") === "1";
+  if (!propertyId || !channel) redirect("/dashboard/properties");
+
+  const channelMeta = channelByKey(channel);
+  if (!channelMeta || channelMeta.key !== "kijiji" || channelMeta.paid) {
+    backTo(propertyId, "radar_badchannel");
+  }
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const { data: property } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!property) redirect(FORBIDDEN);
+
+  const { data: account } = await supabase
+    .from("distribution_channel_accounts")
+    .select("account_status, automation_authorized")
+    .eq("organization_id", org.id)
+    .eq("channel", channel)
+    .maybeSingle();
+  const acct = account as
+    | { account_status: string | null; automation_authorized: boolean | null }
+    | null;
+  if (
+    !acct ||
+    acct.account_status !== "connected" ||
+    acct.automation_authorized !== true
+  ) {
+    backTo(propertyId, "radar_setup");
+  }
+
+  const { data: saved, error } = await supabase
+    .from("distribution_channel_accounts")
+    .update({
+      auto_submit_allowed: enabled,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("organization_id", org.id)
+    .eq("channel", channel)
+    .eq("automation_authorized", true)
+    .select("channel")
+    .maybeSingle();
+  if (error || !saved) backTo(propertyId, "radar_toggle_error");
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  backTo(propertyId, enabled ? "radar_auto_on" : "radar_auto_off");
 }
 
 export async function confirmLeaseupTakedownRemovedAction(formData: FormData) {

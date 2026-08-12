@@ -244,7 +244,8 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "next banner explains outside-site approval",
     distributeSource.includes("You still approve") &&
-      distributeSource.includes("only after the real ad link is saved"),
+      distributeSource.includes("a site counts as Live") &&
+      distributeSource.includes("after the real ad link is saved"),
   );
   ok(
     "done-for-you posting is front of the collapsed status strip",

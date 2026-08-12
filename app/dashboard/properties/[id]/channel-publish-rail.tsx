@@ -13,6 +13,7 @@ export type ChannelPublishAccountRow = {
   accountStatus: string | null;
   transport: string | null;
   automationAuthorized: boolean;
+  autoSubmitAllowed?: boolean;
   hasFeedRoute: boolean;
 };
 

@@ -42,19 +42,23 @@ import {
 } from "@/lib/listing-health";
 import { channelByKey } from "@/lib/distribution-channels";
 import {
+  RELIST_RADAR_AUTOPILOT_RECAP_EVENT_KEY,
   RELIST_RADAR_EMAIL_EVENT_KEY,
   RELIST_RADAR_LAST_CHANCE_EVENT_KEY,
   RELIST_RADAR_PAID_LAPSE_EVENT_KEY,
   RELIST_RADAR_TEST_ORG_ID,
+  buildRelistRadarAutopilotRecap,
   buildRelistRadarEmail,
   classifyRelistRadarCandidate,
   createRelistRadarDecisionToken,
   relistRadarDecisionTokenSecret,
   relistRadarEmailChannelIncluded,
+  relistRadarFreeExecutionGate,
   relistRadarManageUrl,
   relistRadarOrgAllowed,
   relistRadarStandingAutoRefreshConsent,
   resolveRelistRadarSettings,
+  type RelistRadarAutopilotRecapItem,
   type RelistRadarDecisionAction,
   type RelistRadarEmailItem,
   type RelistRadarEmailKind,
@@ -81,6 +85,8 @@ type Summary = {
   alerts: number;
   radar_candidates?: number;
   radar_emails?: number;
+  radar_refreshes?: number;
+  radar_recaps?: number;
   skipped: number;
   errors: number;
   details: Array<Record<string, unknown>>;
@@ -146,6 +152,7 @@ type RelistRadarEventRow = {
   external_expires_at: string;
   paid: boolean;
   decision: string | null;
+  metadata: unknown;
 };
 
 type RelistRadarPropertyRow = {
@@ -157,8 +164,64 @@ type RelistRadarPropertyRow = {
 
 type RelistRadarChannelAccountRow = {
   channel: string;
+  account_status: string | null;
   automation_authorized: boolean | null;
   auto_submit_allowed: boolean | null;
+};
+
+type RelistRadarExecutionItemRow = {
+  id: string;
+  organization_id: string;
+  run_id: string;
+  channel: string;
+  mode: string | null;
+  transport: string | null;
+  publish_status: string | null;
+  listing_post_id: string | null;
+  external_url: string | null;
+  proof_url: string | null;
+  attempt_count: number | null;
+  external_posted_at: string | null;
+  external_expires_at: string | null;
+  concierge_claimed_by: string | null;
+};
+
+type RelistRadarBackupPropertyRow = {
+  id: string;
+  organization_id: string;
+  status: string | null;
+  address: string | null;
+  rent_cents: number | string | null;
+  beds: number | string | null;
+  baths: number | string | null;
+  sqft: number | string | null;
+  description: string | null;
+  virtual_tour_url: string | null;
+  available_date: string | null;
+  furnished: boolean | null;
+  parking: string | null;
+  postal_code: string | null;
+  lease_term: string | null;
+  pet_friendly: boolean | null;
+  pets_cats: boolean | null;
+  pets_dogs: boolean | null;
+  air_conditioning: boolean | null;
+  smoking: string | null;
+  unit_type: string | null;
+  for_rent_by: string | null;
+  balcony: boolean | null;
+  laundry: string | null;
+  heat_included: boolean | null;
+  hydro_included: boolean | null;
+  water_included: boolean | null;
+};
+
+type RelistRadarBackupPhotoRow = {
+  id: string;
+  storage_path: string;
+  url: string;
+  sort_order: number;
+  is_cover: boolean;
 };
 
 type ListingHealthOrgRow = {
@@ -435,6 +498,28 @@ function eventCycleDate(event: RelistRadarEventRow): string {
   return event.cycle_date.slice(0, 10);
 }
 
+function radarMetadata(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function metadataString(
+  metadata: Record<string, unknown>,
+  key: string,
+): string | null {
+  return typeof metadata[key] === "string" && metadata[key]
+    ? (metadata[key] as string)
+    : null;
+}
+
+function metadataBoolean(
+  metadata: Record<string, unknown>,
+  key: string,
+): boolean {
+  return metadata[key] === true;
+}
+
 function groupRadarEventsByProperty(
   events: readonly RelistRadarEventRow[],
 ): Map<string, RelistRadarEventRow[]> {
@@ -445,6 +530,25 @@ function groupRadarEventsByProperty(
     groups.set(event.property_id, rows);
   }
   return groups;
+}
+
+function previousUtcMonthWindow(today: string):
+  | { start: string; end: string; label: string }
+  | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today) || today.slice(8, 10) !== "01") {
+    return null;
+  }
+  const end = new Date(`${today}T00:00:00.000Z`);
+  const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 1, 1));
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: today,
+    label: new Intl.DateTimeFormat("en-CA", {
+      timeZone: "UTC",
+      month: "long",
+      year: "numeric",
+    }).format(start),
+  };
 }
 
 async function loadRelistRadarOrg(
@@ -484,7 +588,7 @@ async function loadRelistRadarChannelAccounts(
   if (channelKeys.length === 0) return new Map();
   const { data, error } = await admin
     .from("distribution_channel_accounts")
-    .select("channel, automation_authorized, auto_submit_allowed")
+    .select("channel, account_status, automation_authorized, auto_submit_allowed")
     .eq("organization_id", orgId)
     .in("channel", channelKeys);
   if (error) throw new Error(`radar_accounts:${error.message}`);
@@ -703,7 +807,7 @@ function relistRadarBaseEventQuery(admin: AdminClient) {
   return admin
     .from("relist_radar_events")
     .select(
-      "id, organization_id, property_id, run_id, run_item_id, listing_post_id, channel, cycle_date, external_expires_at, paid, decision",
+      "id, organization_id, property_id, run_id, run_item_id, listing_post_id, channel, cycle_date, external_expires_at, paid, decision, metadata",
     )
     .eq("organization_id", RELIST_RADAR_TEST_ORG_ID)
     .eq("event_type", "radar_candidate");
@@ -996,6 +1100,498 @@ async function sendRelistRadarEmails({
   await sendRelistRadarNotices({ admin, org, nowISO, today, secret, summary });
   await sendRelistRadarLastChance({ admin, org, nowISO, today, secret, summary });
   await sendRelistRadarPaidLapses({ admin, org, nowISO, today, secret, summary });
+}
+
+async function loadRelistRadarExecutionItem(
+  admin: AdminClient,
+  itemId: string,
+): Promise<RelistRadarExecutionItemRow | null> {
+  const { data, error } = await admin
+    .from("distribution_run_items")
+    .select(
+      "id, organization_id, run_id, channel, mode, transport, publish_status, listing_post_id, external_url, proof_url, attempt_count, external_posted_at, external_expires_at, concierge_claimed_by",
+    )
+    .eq("id", itemId)
+    .maybeSingle();
+  if (error) throw new Error(`radar_execute_item:${error.message}`);
+  return (data as RelistRadarExecutionItemRow | null) ?? null;
+}
+
+async function buildRelistRadarRefreshBackup({
+  admin,
+  event,
+  item,
+  run,
+  property,
+  nowISO,
+}: {
+  admin: AdminClient;
+  event: RelistRadarEventRow;
+  item: RelistRadarExecutionItemRow;
+  run: DistributionRunRow;
+  property: RelistRadarPropertyRow;
+  nowISO: string;
+}): Promise<Record<string, unknown>> {
+  const { data: propertyRow, error: propertyErr } = await admin
+    .from("properties")
+    .select(
+      "id, organization_id, status, address, rent_cents, beds, baths, sqft, description, virtual_tour_url, available_date, furnished, parking, postal_code, lease_term, pet_friendly, pets_cats, pets_dogs, air_conditioning, smoking, unit_type, for_rent_by, balcony, laundry, heat_included, hydro_included, water_included",
+    )
+    .eq("id", run.property_id)
+    .eq("organization_id", run.organization_id)
+    .maybeSingle();
+  if (propertyErr) throw new Error(`radar_backup_property:${propertyErr.message}`);
+  if (!propertyRow) throw new Error("radar_backup_property:missing");
+
+  const { data: photoRows, error: photoErr } = await admin
+    .from("property_photos")
+    .select("id, storage_path, url, sort_order, is_cover")
+    .eq("property_id", run.property_id)
+    .eq("organization_id", run.organization_id)
+    .order("is_cover", { ascending: false })
+    .order("sort_order", { ascending: true });
+  if (photoErr) throw new Error(`radar_backup_photos:${photoErr.message}`);
+
+  let listingPost: Record<string, unknown> | null = null;
+  if (item.listing_post_id) {
+    const { data: postRow, error: postErr } = await admin
+      .from("listing_posts")
+      .select("id, portal, label, url, status, posted_on, notes")
+      .eq("id", item.listing_post_id)
+      .eq("organization_id", run.organization_id)
+      .eq("property_id", run.property_id)
+      .maybeSingle();
+    if (postErr) throw new Error(`radar_backup_post:${postErr.message}`);
+    listingPost = (postRow as Record<string, unknown> | null) ?? null;
+  }
+
+  return {
+    v: 1,
+    source: "relist_radar_autorefresh",
+    backed_up_at: nowISO,
+    organization_id: run.organization_id,
+    property_id: run.property_id,
+    run_id: item.run_id,
+    run_item_id: item.id,
+    channel: item.channel,
+    cycle_date: eventCycleDate(event),
+    previous: {
+      external_url: item.external_url,
+      proof_url: item.proof_url,
+      external_posted_at: item.external_posted_at,
+      external_expires_at: item.external_expires_at,
+      listing_post_id: item.listing_post_id,
+      listing_post: listingPost,
+    },
+    property: propertyRow as RelistRadarBackupPropertyRow,
+    property_label: property.address,
+    photos: (photoRows ?? []) as RelistRadarBackupPhotoRow[],
+  };
+}
+
+async function enqueueRelistRadarFreeRefresh({
+  admin,
+  event,
+  item,
+  run,
+  property,
+  metadata,
+  gateReason,
+  standingConsent,
+  nowISO,
+  summary,
+}: {
+  admin: AdminClient;
+  event: RelistRadarEventRow;
+  item: RelistRadarExecutionItemRow;
+  run: DistributionRunRow;
+  property: RelistRadarPropertyRow;
+  metadata: Record<string, unknown>;
+  gateReason: string;
+  standingConsent: boolean;
+  nowISO: string;
+  summary: Summary;
+}): Promise<void> {
+  const backup = await buildRelistRadarRefreshBackup({
+    admin,
+    event,
+    item,
+    run,
+    property,
+    nowISO,
+  });
+  const priorAttempts = item.attempt_count ?? 0;
+  const attempt = buildAttemptRecord({
+    organizationId: item.organization_id,
+    runId: item.run_id,
+    runItemId: item.id,
+    channel: item.channel,
+    transport: "concierge",
+    currentAttemptCount: priorAttempts,
+    actorType: "system",
+    actorUserId: null,
+    statusBefore: item.publish_status ?? "live",
+    statusAfter: "needs_operator",
+    proofId: null,
+    metadata: {
+      source: "relist_radar_autorefresh",
+      gate_reason: gateReason,
+      cycle_date: eventCycleDate(event),
+      event_id: event.id,
+      standing_autopilot: standingConsent,
+      backup_captured: true,
+      no_concierge_credit: true,
+      worker_lane: "phase_b_submit_free_plan",
+    },
+  });
+  const { data: att, error: attErr } = await admin
+    .from("distribution_publish_attempts")
+    .insert({
+      organization_id: attempt.organization_id,
+      run_id: attempt.run_id,
+      run_item_id: attempt.run_item_id,
+      channel: attempt.channel,
+      transport: attempt.transport,
+      attempt_no: attempt.attempt_no,
+      actor_type: attempt.actor_type,
+      actor_user_id: attempt.actor_user_id,
+      status_before: attempt.status_before,
+      status_after: attempt.status_after,
+      error_code: attempt.error_code,
+      error_message: attempt.error_message,
+      proof_id: attempt.proof_id,
+      metadata: attempt.metadata,
+    })
+    .select("id")
+    .single();
+  if (attErr || !att?.id) {
+    throw new Error(`radar_execute_attempt:${attErr?.message ?? "missing_id"}`);
+  }
+
+  // Free auto-refresh is the org's own authorized account and free Kijiji slot.
+  // Do not call claim_concierge_leaseup or stamp concierge_requested_at here:
+  // no staffed concierge-pack credit is consumed for this worker enqueue.
+  const { data: queued, error: queueErr } = await admin
+    .from("distribution_run_items")
+    .update({
+      mode: "concierge",
+      transport: "concierge",
+      publish_status: "needs_operator",
+      status: "in_progress",
+      operator_submit_approved_at: nowISO,
+      operator_submit_approved_by: null,
+      concierge_claimed_by: null,
+      concierge_claimed_at: null,
+      error_code: null,
+      error_message: null,
+      audit_message:
+        "Relist Radar queued a free Kijiji refresh. The worker may post only with the $0 plan; Live still needs real URL proof.",
+      relist_radar_backup: backup,
+      last_attempt_id: att.id as string,
+      attempt_count: priorAttempts + 1,
+      updated_at: nowISO,
+    })
+    .eq("id", item.id)
+    .eq("organization_id", item.organization_id)
+    .eq("run_id", item.run_id)
+    .eq("channel", item.channel)
+    .eq("publish_status", "live")
+    .is("concierge_claimed_by", null)
+    .select("id")
+    .maybeSingle();
+  if (queueErr) throw new Error(`radar_execute_queue:${queueErr.message}`);
+  if (!queued) {
+    summary.skipped++;
+    pushDetail(summary, {
+      relist_radar_execute: "queue_lost",
+      item: item.id,
+      event: event.id,
+    });
+    return;
+  }
+
+  const nextMetadata = {
+    ...metadata,
+    auto_refresh_enqueued_at: nowISO,
+    auto_refresh_attempt_id: att.id as string,
+    auto_refresh_gate: gateReason,
+    standing_autopilot: standingConsent,
+    backup_captured_at: nowISO,
+    no_concierge_credit: true,
+    worker_lane: "phase_b_submit_free_plan",
+  };
+  const { error: eventErr } = await admin
+    .from("relist_radar_events")
+    .update({ metadata: nextMetadata })
+    .eq("id", event.id);
+  if (eventErr) throw new Error(`radar_execute_event:${eventErr.message}`);
+
+  summary.radar_refreshes = (summary.radar_refreshes ?? 0) + 1;
+  pushDetail(summary, {
+    relist_radar_execute: "free_refresh_enqueued",
+    property: run.property_id,
+    item: item.id,
+    channel: item.channel,
+    cycle_date: eventCycleDate(event),
+    standing_autopilot: standingConsent,
+  });
+}
+
+async function executeRelistRadarFreeRefreshes({
+  admin,
+  nowISO,
+  summary,
+}: {
+  admin: AdminClient;
+  nowISO: string;
+  summary: Summary;
+}): Promise<void> {
+  const today = nowISO.slice(0, 10);
+  const { data, error } = await relistRadarBaseEventQuery(admin)
+    .eq("paid", false)
+    .lte("cycle_date", today)
+    .order("cycle_date", { ascending: true })
+    .limit(RELIST_RADAR_MAX_EMAIL_EVENTS);
+  if (error) throw new Error(`radar_execute_query:${error.message}`);
+  const events = (data ?? []) as RelistRadarEventRow[];
+  if (events.length === 0) return;
+
+  const [properties, accounts] = await Promise.all([
+    loadRelistRadarProperties(admin, events.map((event) => event.property_id)),
+    loadRelistRadarChannelAccounts(
+      admin,
+      RELIST_RADAR_TEST_ORG_ID,
+      events.map((event) => event.channel),
+    ),
+  ]);
+
+  for (const event of events) {
+    try {
+      const metadata = radarMetadata(event.metadata);
+      const property = properties.get(event.property_id) ?? null;
+      const account = accounts.get(event.channel) ?? null;
+      const standingConsent = relistRadarStandingAutoRefreshConsent(account);
+      const gate = relistRadarFreeExecutionGate({
+        channelKey: event.channel,
+        paid: event.paid,
+        decision: event.decision,
+        propertyStatus: property?.status ?? null,
+        cycleDate: eventCycleDate(event),
+        today,
+        automationAuthorized: account?.automation_authorized === true,
+        accountStatus: account?.account_status ?? null,
+        standingConsent,
+        alreadyEnqueued: Boolean(metadataString(metadata, "auto_refresh_enqueued_at")),
+      });
+      if (!gate.shouldEnqueue) {
+        summary.skipped++;
+        pushDetail(summary, {
+          relist_radar_execute: "skipped",
+          event: event.id,
+          item: event.run_item_id,
+          reason: gate.reason,
+        });
+        continue;
+      }
+      if (!property) {
+        summary.skipped++;
+        pushDetail(summary, {
+          relist_radar_execute: "skipped",
+          event: event.id,
+          reason: "property_missing",
+        });
+        continue;
+      }
+
+      const item = await loadRelistRadarExecutionItem(admin, event.run_item_id);
+      if (!item) {
+        summary.skipped++;
+        pushDetail(summary, {
+          relist_radar_execute: "skipped",
+          event: event.id,
+          reason: "item_missing",
+        });
+        continue;
+      }
+      if (
+        item.publish_status !== "live" ||
+        item.external_expires_at?.slice(0, 10) !== eventCycleDate(event)
+      ) {
+        summary.skipped++;
+        pushDetail(summary, {
+          relist_radar_execute: "skipped",
+          event: event.id,
+          item: item.id,
+          reason: "item_not_current_live_cycle",
+        });
+        continue;
+      }
+
+      const run = await loadRun(admin, item.run_id);
+      if (!run || run.status === "cancelled") {
+        summary.skipped++;
+        pushDetail(summary, {
+          relist_radar_execute: "skipped",
+          event: event.id,
+          item: item.id,
+          reason: "run_inactive",
+        });
+        continue;
+      }
+      if (run.organization_id !== event.organization_id || run.property_id !== property.id) {
+        summary.skipped++;
+        pushDetail(summary, {
+          relist_radar_execute: "skipped",
+          event: event.id,
+          item: item.id,
+          reason: "run_event_mismatch",
+        });
+        continue;
+      }
+
+      await enqueueRelistRadarFreeRefresh({
+        admin,
+        event,
+        item,
+        run,
+        property,
+        metadata,
+        gateReason: gate.reason,
+        standingConsent: gate.standingConsent,
+        nowISO,
+        summary,
+      });
+    } catch (err) {
+      summary.errors++;
+      pushDetail(summary, {
+        relist_radar_execute_error:
+          err instanceof Error ? err.message : String(err),
+        event: event.id,
+        item: event.run_item_id,
+      });
+      console.error("[relist-radar] execute failed", {
+        eventId: event.id,
+        itemId: event.run_item_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+}
+
+async function sendRelistRadarAutopilotRecaps({
+  admin,
+  nowISO,
+  summary,
+}: {
+  admin: AdminClient;
+  nowISO: string;
+  summary: Summary;
+}): Promise<void> {
+  const today = nowISO.slice(0, 10);
+  const window = previousUtcMonthWindow(today);
+  if (!window) return;
+  const org = await loadRelistRadarOrg(admin);
+  if (!org || !relistRadarOrgAllowed(org.id)) {
+    summary.skipped++;
+    pushDetail(summary, { relist_radar_recap: "test_org_unavailable" });
+    return;
+  }
+  const settings = await loadRelistRadarSettingsForOrg(
+    admin,
+    org.id,
+    new Map<string, RelistRadarSettings>(),
+  );
+  if (settings.autopilot_receipt !== "monthly") return;
+
+  const { data, error } = await relistRadarBaseEventQuery(admin)
+    .eq("paid", false)
+    .gte("cycle_date", window.start)
+    .lt("cycle_date", window.end)
+    .order("cycle_date", { ascending: true })
+    .limit(RELIST_RADAR_MAX_EMAIL_EVENTS);
+  if (error) throw new Error(`radar_recap_query:${error.message}`);
+  const due = ((data ?? []) as RelistRadarEventRow[]).filter((event) => {
+    const meta = radarMetadata(event.metadata);
+    return (
+      Boolean(metadataString(meta, "auto_refresh_enqueued_at")) &&
+      metadataBoolean(meta, "standing_autopilot") &&
+      !metadataString(meta, "autopilot_recap_sent_at")
+    );
+  });
+  if (due.length === 0) return;
+
+  const properties = await loadRelistRadarProperties(
+    admin,
+    due.map((event) => event.property_id),
+  );
+  const items: RelistRadarAutopilotRecapItem[] = due.map((event) => {
+    const property = properties.get(event.property_id) ?? null;
+    const channel = channelByKey(event.channel);
+    const meta = radarMetadata(event.metadata);
+    return {
+      propertyAddress: property?.address ?? "this property",
+      propertyId: event.property_id,
+      channelLabel: channel?.label ?? event.channel,
+      cycleDate: eventCycleDate(event),
+      enqueuedAt: metadataString(meta, "auto_refresh_enqueued_at") ?? "",
+      dashboardUrl: relistRadarManageUrl(APP_URL, event.property_id),
+    };
+  });
+
+  const built = buildRelistRadarAutopilotRecap({
+    appUrl: APP_URL,
+    monthLabel: window.label,
+    items,
+  });
+  const fallback = await operatorFallbackForOrg(admin, org);
+  const result = await sendOrgNotification({
+    client: admin,
+    org: {
+      id: org.id,
+      name: org.name,
+      brand_color: org.brand_color,
+      logo_url: org.logo_url,
+      reply_to_email: org.reply_to_email,
+    },
+    eventKey: RELIST_RADAR_AUTOPILOT_RECAP_EVENT_KEY,
+    vars: {
+      org_name: org.name ?? "",
+      property_address: "",
+      relist_radar_subject: built.subject,
+      relist_radar_body: built.body,
+      dashboard_url: built.dashboardUrl,
+    },
+    operatorFallback: fallback,
+    actions: built.actions,
+  });
+  if (!result.delivered) {
+    summary.skipped++;
+    pushDetail(summary, {
+      relist_radar_recap: "send_skipped",
+      reason: result.skipped ?? "send_failed",
+    });
+    return;
+  }
+
+  for (const event of due) {
+    const { error: stampErr } = await admin
+      .from("relist_radar_events")
+      .update({
+        metadata: {
+          ...radarMetadata(event.metadata),
+          autopilot_recap_sent_at: nowISO,
+        },
+      })
+      .eq("id", event.id);
+    if (stampErr) throw new Error(`radar_recap_stamp:${stampErr.message}`);
+  }
+
+  summary.radar_recaps = (summary.radar_recaps ?? 0) + 1;
+  pushDetail(summary, {
+    relist_radar_recap: "sent",
+    events: due.length,
+    month: window.label,
+  });
 }
 
 async function loadRun(
@@ -1793,6 +2389,24 @@ export async function GET(req: NextRequest) {
       console.error("[relist-radar] email failed", {
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+  }
+
+  if (envFlagEnabled(process.env.RELIST_RADAR_EXECUTE_FREE_ENABLED)) {
+    await executeRelistRadarFreeRefreshes({ admin, nowISO, summary });
+    if (envFlagEnabled(process.env.RELIST_RADAR_EMAIL_ENABLED)) {
+      try {
+        await sendRelistRadarAutopilotRecaps({ admin, nowISO, summary });
+      } catch (err) {
+        summary.errors++;
+        pushDetail(summary, {
+          relist_radar_recap_error:
+            err instanceof Error ? err.message : String(err),
+        });
+        console.error("[relist-radar] recap failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

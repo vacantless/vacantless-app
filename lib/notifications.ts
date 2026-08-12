@@ -376,6 +376,24 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#dc2626",
     active: true,
   },
+  {
+    key: "leasing.relist_radar_autopilot_recap",
+    family: "leasing",
+    audience: "operator",
+    label: "Relist Radar monthly recap",
+    description:
+      "When hands-off Kijiji refresh is enabled, your listing team gets a monthly recap of the free refreshes Relist Radar queued. Paid channels stay separate.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "relist_radar_subject",
+      "relist_radar_body",
+      "dashboard_url",
+    ],
+    defaultSubject: "{{relist_radar_subject}}",
+    defaultBody: "{{relist_radar_body}}",
+    defaultAccent: "#0f766e",
+    active: true,
+  },
   // Done-for-you posting worker gate (S553). Audience operator. When the worker
   // has PREPARED an authorized concierge post and stopped at a human gate
   // (needs login / needs payment / needs review + submit), this event pulls the
@@ -1133,6 +1151,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.relist_radar": "listing",
   "leasing.relist_radar_last_chance": "listing",
   "leasing.relist_radar_paid_lapse": "listing",
+  "leasing.relist_radar_autopilot_recap": "listing",
   "leasing.distribution_job_needs_action": "listing",
   "leasing.distribution_takedown_needed": "listing",
   // owner — landlord / property-owner compliance, assets, rent increases
