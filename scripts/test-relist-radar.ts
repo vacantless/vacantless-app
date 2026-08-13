@@ -4,10 +4,11 @@ import { readFileSync } from "node:fs";
 import { channelByKey } from "../lib/distribution-channels";
 import {
   RELIST_RADAR_DEFAULT_SETTINGS,
-  RELIST_RADAR_TEST_ORG_ID,
   addDaysISO,
   buildRelistRadarClockUpdate,
   classifyRelistRadarCandidate,
+  parseRelistRadarOrgAllowlist,
+  relistRadarAllowedOrgFilter,
   relistRadarOrgAllowed,
   resolveRelistRadarSettings,
 } from "../lib/relist-radar";
@@ -25,6 +26,10 @@ function ok(name: string, cond: boolean) {
 }
 
 const NOW = "2026-08-11T14:00:00.000Z";
+const TEST_ORG_ID = "8ea1da48-0cd2-45a4-bfba-023b31a67884";
+const AGILE_ORG_ID = "921f7c08-98af-428f-a238-36f4a781b0de";
+const SECOND_ORG_ID = "11111111-2222-4333-8444-555555555555";
+const ALL_ORGS = new Set<string>();
 
 ok("kijiji ttl is 60 days", channelByKey("kijiji")?.ttlDays === 60);
 ok("kijiji is free", channelByKey("kijiji")?.paid === false);
@@ -37,11 +42,13 @@ ok("addDaysISO +60", addDaysISO(NOW, 60) === "2026-10-10T14:00:00.000Z");
 {
   const update = buildRelistRadarClockUpdate({
     enabled: false,
+    organizationId: TEST_ORG_ID,
     channel: "kijiji",
     nowISO: NOW,
     existingExternalPostedAt: null,
     existingExternalUrl: null,
     nextExternalUrl: "https://www.kijiji.ca/v-test/123",
+    allowlist: ALL_ORGS,
   });
   ok("flag off makes no clock update", Object.keys(update).length === 0);
 }
@@ -49,11 +56,13 @@ ok("addDaysISO +60", addDaysISO(NOW, 60) === "2026-10-10T14:00:00.000Z");
 {
   const update = buildRelistRadarClockUpdate({
     enabled: true,
+    organizationId: TEST_ORG_ID,
     channel: "kijiji",
     nowISO: NOW,
     existingExternalPostedAt: null,
     existingExternalUrl: null,
     nextExternalUrl: "https://www.kijiji.ca/v-test/123",
+    allowlist: ALL_ORGS,
   });
   ok("fresh kijiji stamps posted_at", update.external_posted_at === NOW);
   ok("fresh kijiji stamps +60 expiry", update.external_expires_at === "2026-10-10T14:00:00.000Z");
@@ -62,11 +71,13 @@ ok("addDaysISO +60", addDaysISO(NOW, 60) === "2026-10-10T14:00:00.000Z");
 {
   const update = buildRelistRadarClockUpdate({
     enabled: true,
+    organizationId: TEST_ORG_ID,
     channel: "kijiji",
     nowISO: NOW,
     existingExternalPostedAt: "2026-08-01T14:00:00.000Z",
     existingExternalUrl: "https://www.kijiji.ca/v-test/123",
     nextExternalUrl: "https://www.kijiji.ca/v-test/123",
+    allowlist: ALL_ORGS,
   });
   ok("same URL remark preserves old clock", Object.keys(update).length === 0);
 }
@@ -74,11 +85,13 @@ ok("addDaysISO +60", addDaysISO(NOW, 60) === "2026-10-10T14:00:00.000Z");
 {
   const update = buildRelistRadarClockUpdate({
     enabled: true,
+    organizationId: TEST_ORG_ID,
     channel: "kijiji",
     nowISO: NOW,
     existingExternalPostedAt: "2026-08-01T14:00:00.000Z",
     existingExternalUrl: "https://www.kijiji.ca/v-test/old",
     nextExternalUrl: "https://www.kijiji.ca/v-test/new",
+    allowlist: ALL_ORGS,
   });
   ok("changed URL is a fresh post", update.external_posted_at === NOW);
 }
@@ -86,11 +99,13 @@ ok("addDaysISO +60", addDaysISO(NOW, 60) === "2026-10-10T14:00:00.000Z");
 {
   const update = buildRelistRadarClockUpdate({
     enabled: true,
+    organizationId: TEST_ORG_ID,
     channel: "viewit",
     nowISO: NOW,
     existingExternalPostedAt: null,
     existingExternalUrl: null,
     nextExternalUrl: "https://www.viewit.ca/3015SandwichSt-Windsor-1bdrm-VIT%3D22134",
+    allowlist: ALL_ORGS,
   });
   ok("unknown TTL still records post time", update.external_posted_at === NOW);
   ok("unknown TTL has no computed expiry", update.external_expires_at === null);
@@ -184,11 +199,38 @@ ok(
   resolveRelistRadarSettings({ notify_lead_days: "5" }).notify_lead_days === 3,
 );
 
-ok("test org allowed", relistRadarOrgAllowed(RELIST_RADAR_TEST_ORG_ID));
-ok(
-  "Agile org blocked",
-  !relistRadarOrgAllowed("921f7c08-98af-428f-a238-36f4a781b0de"),
-);
+{
+  const parsed = parseRelistRadarOrgAllowlist("");
+  ok("empty allowlist parses to empty set", parsed.size === 0);
+  ok("empty allowlist filter means all orgs", relistRadarAllowedOrgFilter(parsed) === null);
+  ok("empty allowlist allows test org", relistRadarOrgAllowed(TEST_ORG_ID, parsed));
+  ok("empty allowlist allows Agile org", relistRadarOrgAllowed(AGILE_ORG_ID, parsed));
+}
+
+{
+  const parsed = parseRelistRadarOrgAllowlist(` ${TEST_ORG_ID.toUpperCase()} `);
+  ok("single allowlist parses normalized id", parsed.has(TEST_ORG_ID));
+  ok("single allowlist blocks second org", !relistRadarOrgAllowed(SECOND_ORG_ID, parsed));
+  ok("single allowlist filter returns id", relistRadarAllowedOrgFilter(parsed)?.join("|") === TEST_ORG_ID);
+  const update = buildRelistRadarClockUpdate({
+    enabled: true,
+    organizationId: SECOND_ORG_ID,
+    channel: "kijiji",
+    nowISO: NOW,
+    existingExternalPostedAt: null,
+    existingExternalUrl: null,
+    nextExternalUrl: "https://www.kijiji.ca/v-test/123",
+    allowlist: parsed,
+  });
+  ok("clock helper blocks disallowed org", Object.keys(update).length === 0);
+}
+
+{
+  const parsed = parseRelistRadarOrgAllowlist(`garbage, ${SECOND_ORG_ID}, ${TEST_ORG_ID}`);
+  ok("multiple allowlist drops garbage", parsed.size === 2 && !parsed.has("garbage"));
+  ok("multiple allowlist allows member", relistRadarOrgAllowed(SECOND_ORG_ID, parsed));
+  ok("malformed org id is never allowed", !relistRadarOrgAllowed("garbage", parsed));
+}
 
 const migration = readFileSync("supabase/migrations/0211_relist_radar_clock.sql", "utf8");
 ok("migration adds external_posted_at", migration.includes("external_posted_at timestamptz"));
@@ -201,7 +243,8 @@ const routeSource = readFileSync("app/api/cron/distribution-freshness/route.ts",
 ok("cron uses radar flag", routeSource.includes("process.env.RELIST_RADAR_CLOCK_ENABLED"));
 ok("cron reads radar settings", routeSource.includes('.from("relist_radar_settings")'));
 ok("cron writes radar events", routeSource.includes('.from("relist_radar_events")'));
-ok("cron is test-org scoped", routeSource.includes("RELIST_RADAR_TEST_ORG_ID"));
+ok("cron uses allowlist org filter", routeSource.includes("relistRadarAllowedOrgFilter"));
+ok("cron removed hard test-org constant", !routeSource.includes("RELIST_RADAR_TEST_ORG_ID"));
 ok("clock detection remains separately gated", routeSource.includes("RELIST_RADAR_CLOCK_ENABLED"));
 ok("email send is separately gated", routeSource.includes("RELIST_RADAR_EMAIL_ENABLED"));
 

@@ -1,10 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { channelByKey, type DistributionChannel } from "./distribution-channels";
 
-export const RELIST_RADAR_TEST_ORG_ID = "8ea1da48-0cd2-45a4-bfba-023b31a67884";
-export const RELIST_RADAR_BLOCKED_ORG_IDS = new Set([
-  "921f7c08-98af-428f-a238-36f4a781b0de",
-]);
 export const RELIST_RADAR_EMAIL_EVENT_KEY = "leasing.relist_radar";
 export const RELIST_RADAR_LAST_CHANCE_EVENT_KEY =
   "leasing.relist_radar_last_chance";
@@ -94,10 +90,30 @@ export type RelistRadarClassification =
       cycleDate: string | null;
     };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 function clean(value: string | null | undefined): string | null {
   const v = String(value ?? "").trim();
   return v || null;
 }
+
+function normalizeOrgId(value: string | null | undefined): string | null {
+  const orgId = clean(value)?.toLowerCase() ?? null;
+  return orgId && UUID_RE.test(orgId) ? orgId : null;
+}
+
+export function parseRelistRadarOrgAllowlist(value: string | null | undefined): Set<string> {
+  const ids = new Set<string>();
+  for (const raw of String(value ?? "").split(",")) {
+    const orgId = normalizeOrgId(raw);
+    if (orgId) ids.add(orgId);
+  }
+  return ids;
+}
+
+const RELIST_RADAR_ORG_ALLOWLIST = parseRelistRadarOrgAllowlist(
+  process.env.RELIST_RADAR_ORG_ALLOWLIST,
+);
 
 function positiveInteger(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
@@ -148,9 +164,19 @@ export function resolveRelistRadarSettings(
   };
 }
 
-export function relistRadarOrgAllowed(organizationId: string | null | undefined): boolean {
-  const orgId = clean(organizationId);
-  return orgId === RELIST_RADAR_TEST_ORG_ID && !RELIST_RADAR_BLOCKED_ORG_IDS.has(orgId);
+export function relistRadarAllowedOrgFilter(
+  allowlist: ReadonlySet<string> = RELIST_RADAR_ORG_ALLOWLIST,
+): string[] | null {
+  return allowlist.size === 0 ? null : Array.from(allowlist).sort();
+}
+
+export function relistRadarOrgAllowed(
+  organizationId: string | null | undefined,
+  allowlist: ReadonlySet<string> = RELIST_RADAR_ORG_ALLOWLIST,
+): boolean {
+  const orgId = normalizeOrgId(organizationId);
+  if (!orgId) return false;
+  return allowlist.size === 0 || allowlist.has(orgId);
 }
 
 export function relistRadarDecisionForAction(
@@ -777,20 +803,25 @@ export function daysToExpiry({
 
 export function buildRelistRadarClockUpdate({
   enabled,
+  organizationId,
   channel,
   nowISO,
   existingExternalPostedAt,
   existingExternalUrl,
   nextExternalUrl,
+  allowlist = RELIST_RADAR_ORG_ALLOWLIST,
 }: {
   enabled: boolean;
+  organizationId: string | null | undefined;
   channel: string | null | undefined;
   nowISO: string;
   existingExternalPostedAt: string | null | undefined;
   existingExternalUrl: string | null | undefined;
   nextExternalUrl: string | null | undefined;
+  allowlist?: ReadonlySet<string>;
 }): RelistRadarClockUpdate {
   if (!enabled) return {};
+  if (!relistRadarOrgAllowed(organizationId, allowlist)) return {};
   const channelMeta = channelByKey(channel);
   const liveUrl = clean(nextExternalUrl);
   if (!channelMeta || !liveUrl) return {};

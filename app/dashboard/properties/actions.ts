@@ -2402,6 +2402,7 @@ export async function updateRunItem(formData: FormData) {
     publishStatus === "live"
       ? buildRelistRadarClockUpdate({
           enabled: radarClockEnabled,
+          organizationId: orgId,
           channel: item.channel as string,
           nowISO: now,
           existingExternalPostedAt: item.external_posted_at as string | null,

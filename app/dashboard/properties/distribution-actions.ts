@@ -1103,6 +1103,7 @@ export async function postFacebookPageNow(formData: FormData) {
   const flipISO = new Date().toISOString();
   const clockUpdate = buildRelistRadarClockUpdate({
     enabled: radarClockEnabled,
+    organizationId: orgId,
     channel: it.channel,
     nowISO: flipISO,
     existingExternalPostedAt: it.external_posted_at,
@@ -1446,6 +1447,7 @@ export async function postInstagramNow(formData: FormData) {
   const flipISO = new Date().toISOString();
   const clockUpdate = buildRelistRadarClockUpdate({
     enabled: radarClockEnabled,
+    organizationId: orgId,
     channel: it.channel,
     nowISO: flipISO,
     existingExternalPostedAt: it.external_posted_at,
@@ -1699,6 +1701,7 @@ export async function completeCopilotPost(formData: FormData) {
   const flipISO = new Date().toISOString();
   const clockUpdate = buildRelistRadarClockUpdate({
     enabled: radarClockEnabled,
+    organizationId: orgId,
     channel: it.channel,
     nowISO: flipISO,
     existingExternalPostedAt: it.external_posted_at,

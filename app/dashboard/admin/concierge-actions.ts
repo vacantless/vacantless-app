@@ -230,6 +230,7 @@ export async function completeConciergeItem(formData: FormData) {
   const now = new Date().toISOString();
   const clockUpdate = buildRelistRadarClockUpdate({
     enabled: radarClockEnabled,
+    organizationId: orgId,
     channel,
     nowISO: now,
     existingExternalPostedAt: item.external_posted_at as string | null,

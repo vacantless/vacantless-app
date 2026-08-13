@@ -203,7 +203,8 @@ ok("cron stores token hashes only", cron.includes('.from("relist_radar_decision_
 ok("cron omits standing hands-off free portals", cron.includes("relistRadarStandingAutoRefreshConsent"));
 ok("cron stamps notice only after send path", cron.includes("notice_sent_at: nowISO"));
 ok("cron stamps paid lapse no response", cron.includes('decision: "no_response"'));
-ok("cron stays test-org scoped", cron.includes("RELIST_RADAR_TEST_ORG_ID"));
+ok("cron email uses allowlist org filter", cron.includes("relistRadarAllowedOrgFilter"));
+ok("cron email removed hard test-org constant", !cron.includes("RELIST_RADAR_TEST_ORG_ID"));
 
 console.log(`relist-radar-email: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
