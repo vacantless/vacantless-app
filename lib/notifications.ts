@@ -320,7 +320,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
   // Relist Radar email consent surface (S642 Slice 2). Audience operator,
   // listing lane. The cron builds grouped per-property copy and secure action
   // links, then passes the rendered subject/body through these tokens. Env gated
-  // by RELIST_RADAR_EMAIL_ENABLED and test-org scoped in the cron. Links record
+  // by RELIST_RADAR_EMAIL_ENABLED and the optional org allowlist in the cron. Links record
   // intent only. No charge, repost, edit, submit, or portal login happens here.
   {
     key: "leasing.relist_radar",
