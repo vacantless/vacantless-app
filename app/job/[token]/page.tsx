@@ -179,8 +179,8 @@ export default async function TradeJobPage({
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {photoUrls.map((url, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={url}
                       alt={`Job photo ${i + 1}`}
