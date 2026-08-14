@@ -29,6 +29,10 @@ import {
   publicAddressLabel,
   type AddressDisplayMode,
 } from "@/lib/address-privacy";
+import {
+  leadAttributionReferrerEnabled,
+  normalizeLeadUtmSource,
+} from "@/lib/lead-attribution";
 
 export const dynamic = "force-dynamic";
 
@@ -224,12 +228,17 @@ export default async function PublicListingPage({
     p?: string;
     waitlist?: string;
     src?: string | string[];
+    utm_source?: string | string[];
   };
 }) {
   // Per-post tracking id carried by a tracked inquiry link (/r/<id>?p=<postId>).
   const trackedPostId =
     typeof searchParams.p === "string" ? searchParams.p : "";
   const sourceHint = leadSourceHintFromParam(searchParams.src);
+  const attributionEnabled = leadAttributionReferrerEnabled();
+  const utmSource = attributionEnabled
+    ? normalizeLeadUtmSource(searchParams.utm_source)
+    : null;
   const supabase = createClient();
   const [listing, { data: avData }, { data: siblingData }] = await Promise.all([
     loadPublicListing(params.propertyId),
@@ -280,6 +289,7 @@ export default async function PublicListingPage({
   const listingHrefParams = new URLSearchParams();
   if (trackedPostId) listingHrefParams.set("p", trackedPostId);
   if (sourceHint) listingHrefParams.set("src", sourceHint);
+  if (utmSource) listingHrefParams.set("utm_source", utmSource);
   const listingHrefQuery = listingHrefParams.toString();
   const listingHref = `/r/${l.id}${listingHrefQuery ? `?${listingHrefQuery}` : ""}`;
 
@@ -520,6 +530,7 @@ export default async function PublicListingPage({
                       {displayOpenSiblings.map((sibling) => {
                         const hrefParams = new URLSearchParams();
                         if (sourceHint) hrefParams.set("src", sourceHint);
+                        if (utmSource) hrefParams.set("utm_source", utmSource);
                         const siblingQuery = hrefParams.toString();
                         const href = `/r/${sibling.id}${siblingQuery ? `?${siblingQuery}` : ""}`;
                         return (
@@ -639,6 +650,9 @@ export default async function PublicListingPage({
                   {sourceHint && (
                     <input type="hidden" name="src" value={sourceHint} />
                   )}
+                  {utmSource && (
+                    <input type="hidden" name="utm_source" value={utmSource} />
+                  )}
                   <fieldset className="rounded-lg border border-gray-200 p-4">
                     <legend className="px-1 text-sm font-medium text-gray-700">
                       Choose another viewing time
@@ -723,6 +737,8 @@ export default async function PublicListingPage({
               propertyId={l.id}
               trackedPostId={trackedPostId}
               sourceHint={sourceHint}
+              utmSource={utmSource}
+              leadAttributionReferrerEnabled={attributionEnabled}
               orgName={l.org_name}
               brandBg={brandBg}
               brandColor={brand}

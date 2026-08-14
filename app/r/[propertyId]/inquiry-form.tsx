@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useFormStatus } from "react-dom";
 import {
   type DaySlots,
@@ -53,6 +59,8 @@ export type InquiryFormProps = {
   propertyId: string;
   trackedPostId: string | null;
   sourceHint?: string | null;
+  utmSource?: string | null;
+  leadAttributionReferrerEnabled?: boolean;
   orgName: string;
   brandBg: string;
   brandColor: string;
@@ -94,6 +102,8 @@ export function InquiryForm({
   propertyId,
   trackedPostId,
   sourceHint,
+  utmSource,
+  leadAttributionReferrerEnabled = false,
   orgName,
   brandBg,
   brandColor,
@@ -145,6 +155,19 @@ export function InquiryForm({
   const [email, setEmail] = useState("");
   const [skipTime, setSkipTime] = useState(false);
   const [submitStarted, setSubmitStarted] = useState(false);
+  const [refHost, setRefHost] = useState("");
+
+  useEffect(() => {
+    if (!leadAttributionReferrerEnabled || !document.referrer) {
+      setRefHost("");
+      return;
+    }
+    try {
+      setRefHost(new URL(document.referrer).hostname.toLowerCase().replace(/^www\./, ""));
+    } catch {
+      setRefHost("");
+    }
+  }, [leadAttributionReferrerEnabled]);
 
   // Pets pill -> the two fields the action already reads. "No pets" must submit
   // an EMPTY pets_detail (a non-empty detail is what the action treats as
@@ -278,6 +301,12 @@ export function InquiryForm({
           <input type="hidden" name="listing_post_id" value={trackedPostId} />
         )}
         {sourceHint && <input type="hidden" name="src" value={sourceHint} />}
+        {leadAttributionReferrerEnabled && (
+          <input type="hidden" name="ref_host" value={refHost} />
+        )}
+        {leadAttributionReferrerEnabled && utmSource && (
+          <input type="hidden" name="utm_source" value={utmSource} />
+        )}
         {/* Client-state values ride hidden inputs so the field NAMES the submit
             action reads are unchanged. */}
         <input type="hidden" name="move_in" value={moveIn} />
