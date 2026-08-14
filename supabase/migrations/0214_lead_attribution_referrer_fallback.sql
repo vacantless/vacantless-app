@@ -1,3 +1,7 @@
+drop function if exists public.submit_public_lead(
+  uuid, text, text, text, date, text, uuid, integer, integer,
+  boolean, text, jsonb, boolean, text);
+
 create or replace function public.submit_public_lead(
   p_property_id      uuid,
   p_name             text,
@@ -40,6 +44,8 @@ declare
   v_source       text := 'website';
   v_source_det   text := null;
   v_ref_host     text := null;
+  v_app_host     text := null;
+  v_app_apex     text := null;
   v_utm          text := null;
   v_optout       boolean := false;
   v_scr_on       boolean;
@@ -119,6 +125,32 @@ begin
     end if;
   end if;
 
+  if v_ref_host is not null then
+    v_app_host := lower(coalesce(
+      nullif(current_setting('app.settings.app_url', true), ''),
+      'https://vacantless-app.vercel.app'
+    ));
+    v_app_host := regexp_replace(v_app_host, '^https?://', '');
+    v_app_host := split_part(v_app_host, '/', 1);
+    v_app_host := split_part(v_app_host, '?', 1);
+    v_app_host := split_part(v_app_host, '#', 1);
+    v_app_host := regexp_replace(v_app_host, '^www\.', '');
+    v_app_host := regexp_replace(v_app_host, '\.$', '');
+    if v_app_host = '' then
+      v_app_host := 'vacantless-app.vercel.app';
+    end if;
+    if v_app_host !~ '\.vercel\.app$'
+       and array_length(regexp_split_to_array(v_app_host, '\.'), 1) > 2 then
+      v_app_apex := regexp_replace(v_app_host, '^[^.]+\.', '');
+    end if;
+    if v_ref_host = v_app_host
+       or v_ref_host = v_app_apex
+       or v_ref_host in ('app.vacantless.com', 'vacantless.com', 'vacantless-app.vercel.app')
+       or (v_ref_host like 'vacantless-app-%.vercel.app') then
+      v_ref_host := null;
+    end if;
+  end if;
+
   if p_utm_source is not null and p_utm_source !~ '[[:space:]/?#]' then
     v_utm := regexp_replace(lower(btrim(p_utm_source)), '^www\.', '');
     if v_utm = '' or length(v_utm) > 120 or v_utm ~ '[[:space:]/?#]' then
@@ -127,7 +159,9 @@ begin
   end if;
 
   if v_post is null then
-    if v_utm is not null then
+    if p_source_hint = 'network' then
+      v_source := 'vacantless_network';
+    elsif v_utm is not null then
       v_source_det := 'utm:' || v_utm;
       v_source := case
         when v_utm in ('facebook', 'facebook_marketplace', 'facebook-marketplace', 'facebook.com')
@@ -162,8 +196,6 @@ begin
           then 'Search'
         else 'website'
       end;
-    elsif p_source_hint = 'network' then
-      v_source := 'vacantless_network';
     end if;
   end if;
 

@@ -4,10 +4,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
+  isOwnLeadReferrerHost,
   leadAttributionReferrerEnabled,
   leadAttributionTrackedCopyEnabled,
   leadFallbackAttributionFromSignals,
   leadSourceLabelForReferrerHost,
+  normalizeLeadAttributionReferrerHost,
   normalizeLeadReferrerHost,
   normalizeLeadUtmSource,
 } from "../lib/lead-attribution";
@@ -34,6 +36,30 @@ assert.equal(normalizeLeadReferrerHost("facebook .com"), null);
 assert.equal(normalizeLeadReferrerHost("facebook.com/marketplace"), null);
 assert.equal(normalizeLeadReferrerHost("a".repeat(121)), null);
 assert.equal(normalizeLeadReferrerHost(null), null);
+assert.equal(
+  normalizeLeadAttributionReferrerHost("https://app.vacantless.com/r/abc", {
+    NEXT_PUBLIC_APP_URL: "https://app.vacantless.com",
+  }),
+  null,
+);
+assert.equal(
+  normalizeLeadAttributionReferrerHost("https://vacantless.com/rentals", {
+    NEXT_PUBLIC_APP_URL: "https://app.vacantless.com",
+  }),
+  null,
+);
+assert.equal(
+  normalizeLeadAttributionReferrerHost("https://vacantless-app-git-s654.vercel.app/r/abc", {
+    NEXT_PUBLIC_APP_URL: "https://app.vacantless.com",
+  }),
+  null,
+);
+assert.equal(
+  isOwnLeadReferrerHost("https://facebook.com/marketplace/item/1", {
+    NEXT_PUBLIC_APP_URL: "https://app.vacantless.com",
+  }),
+  false,
+);
 
 assert.equal(normalizeLeadUtmSource(" Kijiji "), "kijiji");
 assert.equal(normalizeLeadUtmSource("rentals.ca"), "rentals.ca");
@@ -68,9 +94,24 @@ assert.deepEqual(leadFallbackAttributionFromSignals({}), {
 assert.deepEqual(
   leadFallbackAttributionFromSignals({
     referrerHost: "facebook.com",
+    sourceHint: "network",
+    utmSource: "kijiji",
+  }),
+  { source: "vacantless_network", sourceDetail: null },
+);
+assert.deepEqual(
+  leadFallbackAttributionFromSignals({
+    referrerHost: "facebook.com",
     utmSource: "kijiji",
   }),
   { source: "Kijiji", sourceDetail: "utm:kijiji" },
+);
+assert.deepEqual(
+  leadFallbackAttributionFromSignals({
+    referrerHost: "app.vacantless.com",
+    env: { NEXT_PUBLIC_APP_URL: "https://app.vacantless.com" },
+  }),
+  { source: "website", sourceDetail: null },
 );
 assert.deepEqual(
   leadFallbackAttributionFromSignals({ referrerHost: "unknown.example" }),
@@ -82,7 +123,14 @@ assert.deepEqual(
 );
 
 const migration = read("supabase/migrations/0214_lead_attribution_referrer_fallback.sql");
-assert.equal(/drop\s+function/i.test(migration), false);
+assert.match(
+  migration,
+  /drop function if exists public\.submit_public_lead\(\s*uuid,\s*text,\s*text,\s*text,\s*date,\s*text,\s*uuid,\s*integer,\s*integer,\s*boolean,\s*text,\s*jsonb,\s*boolean,\s*text\s*\);/i,
+);
+assert.equal(
+  (migration.match(/create or replace function public\.submit_public_lead/g) ?? []).length,
+  1,
+);
 assert.match(
   migration,
   /p_source_hint\s+text\s+default\s+null,\s*p_referrer_host\s+text\s+default\s+null,\s*p_utm_source\s+text\s+default\s+null\s*\)/i,
@@ -90,7 +138,19 @@ assert.match(
 assert.equal(migration.includes("if v_post is null then"), true);
 assert.equal(migration.includes("v_source_det := 'utm:' || v_utm"), true);
 assert.equal(migration.includes("v_source_det := 'ref:' || v_ref_host"), true);
-assert.equal(migration.includes("elsif p_source_hint = 'network' then"), true);
+assert.equal(migration.includes("if p_source_hint = 'network' then"), true);
+assert.equal(
+  migration.indexOf("if p_source_hint = 'network' then") <
+    migration.indexOf("elsif v_utm is not null then"),
+  true,
+);
+assert.equal(
+  migration.indexOf("elsif v_utm is not null then") <
+    migration.indexOf("elsif v_ref_host is not null then"),
+  true,
+);
+assert.equal(migration.includes("current_setting('app.settings.app_url', true)"), true);
+assert.equal(migration.includes("vacantless-app-%.vercel.app"), true);
 assert.equal(migration.includes("when 'snapchat'      then 'Snapchat'"), true);
 
 const actions = read("app/r/[propertyId]/actions.ts");

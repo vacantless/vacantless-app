@@ -23,7 +23,7 @@ import { buildTrackedLink } from "@/lib/listing-distribution";
 import { leadSourceHintFromParam } from "@/lib/listing-seo";
 import {
   leadAttributionReferrerEnabled,
-  normalizeLeadReferrerHost,
+  normalizeLeadAttributionReferrerHost,
   normalizeLeadUtmSource,
 } from "@/lib/lead-attribution";
 import type { NotifyMember } from "@/lib/incident-reports";
@@ -629,7 +629,7 @@ export async function submitLead(formData: FormData) {
   const sourceHint = leadSourceHintFromParam(formData.get("src"));
   const attributionEnabled = leadAttributionReferrerEnabled();
   const referrerHost = attributionEnabled
-    ? normalizeLeadReferrerHost(formData.get("ref_host"))
+    ? normalizeLeadAttributionReferrerHost(formData.get("ref_host"))
     : null;
   const utmSource = attributionEnabled
     ? normalizeLeadUtmSource(formData.get("utm_source"))

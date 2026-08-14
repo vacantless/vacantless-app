@@ -1,6 +1,7 @@
 import { sourceLabelForPost } from "./listing-distribution";
 
 type Env = Record<string, string | undefined>;
+const DEFAULT_APP_URL = "https://vacantless-app.vercel.app";
 
 export type LeadFallbackAttribution = {
   source: string;
@@ -37,6 +38,28 @@ export function normalizeLeadReferrerHost(value: unknown): string | null {
 
   host = host.replace(/^www\./, "").replace(/\.$/, "");
   if (!host || host.length > 120 || /[\s/?#]/.test(host)) return null;
+  return host;
+}
+
+export function isOwnLeadReferrerHost(
+  value: unknown,
+  env: Env = process.env,
+): boolean {
+  const host = normalizeLeadReferrerHost(value);
+  if (!host) return false;
+  if (ownLeadReferrerHosts(env).has(host)) return true;
+  return (
+    host === "vacantless-app.vercel.app" ||
+    (host.startsWith("vacantless-app-") && host.endsWith(".vercel.app"))
+  );
+}
+
+export function normalizeLeadAttributionReferrerHost(
+  value: unknown,
+  env: Env = process.env,
+): string | null {
+  const host = normalizeLeadReferrerHost(value);
+  if (!host || isOwnLeadReferrerHost(host, env)) return null;
   return host;
 }
 
@@ -127,8 +150,14 @@ export function leadSourceLabelForUtmSource(source: unknown): string | null {
 
 export function leadFallbackAttributionFromSignals(input: {
   referrerHost?: unknown;
+  sourceHint?: unknown;
   utmSource?: unknown;
+  env?: Env;
 }): LeadFallbackAttribution {
+  if (input.sourceHint === "network") {
+    return { source: "vacantless_network", sourceDetail: null };
+  }
+
   const utmSource = normalizeLeadUtmSource(input.utmSource);
   if (utmSource) {
     return {
@@ -137,7 +166,10 @@ export function leadFallbackAttributionFromSignals(input: {
     };
   }
 
-  const referrerHost = normalizeLeadReferrerHost(input.referrerHost);
+  const referrerHost = normalizeLeadAttributionReferrerHost(
+    input.referrerHost,
+    input.env,
+  );
   if (referrerHost) {
     return {
       source: leadSourceLabelForReferrerHost(referrerHost) ?? "website",
@@ -146,4 +178,25 @@ export function leadFallbackAttributionFromSignals(input: {
   }
 
   return { source: "website", sourceDetail: null };
+}
+
+function ownLeadReferrerHosts(env: Env): Set<string> {
+  const hosts = new Set<string>();
+  const appHost = normalizeLeadReferrerHost(
+    env.NEXT_PUBLIC_APP_URL ?? DEFAULT_APP_URL,
+  );
+  addOwnHost(hosts, appHost);
+  addOwnHost(hosts, "app.vacantless.com");
+  addOwnHost(hosts, "vacantless.com");
+  addOwnHost(hosts, "vacantless-app.vercel.app");
+  return hosts;
+}
+
+function addOwnHost(hosts: Set<string>, host: string | null): void {
+  if (!host) return;
+  hosts.add(host);
+  if (!host.endsWith(".vercel.app")) {
+    const parts = host.split(".");
+    if (parts.length > 2) hosts.add(parts.slice(-2).join("."));
+  }
 }
