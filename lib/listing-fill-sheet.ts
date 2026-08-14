@@ -28,6 +28,7 @@ import {
 import {
   buildListingCopy,
   isCopyPortalKey,
+  listingCopyUrlForPortal,
   type CopyPortalKey,
   type ListingCopyInput,
 } from "./listing-copy";
@@ -1166,7 +1167,7 @@ function socialFields(
   body: string,
 ): FillField[] {
   const idPrefix = portal.replace("_", "-");
-  const link = textOrNull(input.publicUrl);
+  const link = textOrNull(listingCopyUrlForPortal(input, portal));
   const isMessageChannel = portal === "whatsapp";
   const isStoryChannel = portal === "instagram" || portal === "snapchat";
   return [

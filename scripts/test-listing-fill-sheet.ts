@@ -348,6 +348,39 @@ ok(
     new Set(all.map((s) => s.portal)).size === FILL_SHEET_PORTALS.length,
 );
 
+const trackedSheets = buildAllFillSheets({
+  ...FULL,
+  trackedUrlByPortal: {
+    linkedin: "https://app.example.com/r/abc?p=linkedin-post",
+    whatsapp: "https://app.example.com/r/abc?p=whatsapp-post",
+    facebook: "https://app.example.com/r/abc?p=facebook-post",
+  },
+});
+const trackedLinkedin = trackedSheets.find((s) => s.portal === "linkedin");
+const trackedLinkedinLink = trackedLinkedin?.fields.find(
+  (f) => f.id === "linkedin-tracked-link",
+);
+const trackedLinkedinCaption = trackedLinkedin?.fields.find(
+  (f) => f.id === "linkedin-caption",
+);
+ok(
+  "buildAll: trackedUrlByPortal fills the social link field",
+  trackedLinkedinLink?.value === "https://app.example.com/r/abc?p=linkedin-post",
+);
+ok(
+  "buildAll: trackedUrlByPortal also feeds the social caption body",
+  trackedLinkedinCaption?.value?.includes("?p=linkedin-post") === true,
+);
+const trackedFacebook = trackedSheets.find((s) => s.portal === "facebook");
+const trackedFacebookDescription = trackedFacebook?.fields.find(
+  (f) => f.id === "facebook-description",
+);
+ok(
+  "buildAll: facebook fill sheet keeps the bare link even if a tracked URL is passed",
+  trackedFacebookDescription?.value?.includes("https://app.example.com/r/abc") === true &&
+    trackedFacebookDescription?.value?.includes("?p=facebook-post") === false,
+);
+
 // --- taxonomy is a subset of the canonical PortalKey list ------------------
 ok(
   "fill-sheet portals are all valid PortalKeys",

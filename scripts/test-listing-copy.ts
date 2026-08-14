@@ -235,6 +235,32 @@ ok(
   /copy this link into your browser/i.test(fb.body),
 );
 
+const trackedInput: ListingCopyInput = {
+  ...fullInput,
+  trackedUrlByPortal: {
+    kijiji: "https://vacantless-app.vercel.app/r/abc123?p=kijiji-post",
+    rentals_ca: "https://vacantless-app.vercel.app/r/abc123?p=rentals-post",
+    facebook: "https://vacantless-app.vercel.app/r/abc123?p=facebook-post",
+  },
+};
+ok(
+  "copy: trackedUrlByPortal overrides the CTA link for that portal",
+  buildListingCopy(trackedInput, "kijiji").body.includes("?p=kijiji-post"),
+);
+ok(
+  "copy: trackedUrlByPortal falls back to publicUrl when portal key absent",
+  buildListingCopy(trackedInput, "rentfaster").body.includes(
+    "https://vacantless-app.vercel.app/r/abc123",
+  ) &&
+    !buildListingCopy(trackedInput, "rentfaster").body.includes("?p="),
+);
+const trackedFacebook = buildListingCopy(trackedInput, "facebook");
+ok(
+  "copy: facebook ignores trackedUrlByPortal and keeps the bare link",
+  trackedFacebook.body.includes("https://vacantless-app.vercel.app/r/abc123") &&
+    !trackedFacebook.body.includes("?p=facebook-post"),
+);
+
 const instagram = buildListingCopy(fullInput, "instagram");
 ok("copy: instagram link on own line", instagram.body.includes("link:\n\nhttps://"));
 ok("copy: instagram remains classified/self-contained", instagram.body.includes("850 sq ft"));

@@ -36,7 +36,9 @@ import {
 } from "../actions";
 import {
   buildAllListingCopy,
+  COPY_PORTAL_KEYS,
   copyPortalLabel,
+  type CopyPortalKey,
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
 import { MarketingKitCard } from "./marketing-kit-card";
@@ -118,9 +120,11 @@ import {
   listingPostErrorMessage,
   buildTrackedLink,
   countLeadsByPost,
+  reservableTrackerId,
   type PortalKey,
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
+import { leadAttributionTrackedCopyEnabled } from "@/lib/lead-attribution";
 import {
   deriveRentalLifecycle,
   LIFECYCLE_STEPS,
@@ -320,6 +324,7 @@ type ListingPostRow = {
   url: string | null;
   status: ListingPostStatus;
   posted_on: string | null;
+  created_at: string;
   notes: string | null;
 };
 
@@ -500,7 +505,7 @@ export default async function PropertyDetailPage({
 
   const { data: posts } = await supabase
     .from("listing_posts")
-    .select("id, portal, label, url, status, posted_on, notes")
+    .select("id, portal, label, url, status, posted_on, created_at, notes")
     .eq("property_id", p.id)
     .order("created_at", { ascending: true });
   const postRows = (posts ?? []) as ListingPostRow[];
@@ -1024,6 +1029,22 @@ export default async function PropertyDetailPage({
   // upsell note drives the soft "more room on a higher plan" badge.
   const photoCap = photoCapForPlan(org?.plan ?? null);
   const storageUpsell = storageUpsellNote(org?.plan ?? null, photoRows.length);
+  const trackedUrlByPortal =
+    leadAttributionTrackedCopyEnabled() && linkIsLive
+      ? (Object.fromEntries(
+          COPY_PORTAL_KEYS.flatMap((portal): Array<[CopyPortalKey, string]> => {
+            if (portal === "generic") return [];
+            if (portal === "facebook") {
+              // Marketplace renters usually retype the link, so keep Facebook copy on
+              // the short bare URL. Slice A covers its referrer signal.
+              return [];
+            }
+            if (!isPortalKey(portal)) return [];
+            const id = reservableTrackerId(postRows, portal);
+            return id ? [[portal, buildTrackedLink(publicUrl, id)]] : [];
+          }),
+        ) as Partial<Record<CopyPortalKey, string>>)
+      : undefined;
   const copyTabs = buildAllListingCopy({
     businessName: org?.name ?? null,
     address: p.address,
@@ -1032,6 +1053,7 @@ export default async function PropertyDetailPage({
     baths: p.baths,
     description: p.description,
     publicUrl: linkIsLive ? publicUrl : null,
+    trackedUrlByPortal,
     fallbackCta: promotionGuard?.copyFallbackCta,
     features: effectiveFeatures,
   }).map((c) => ({
@@ -1181,6 +1203,7 @@ export default async function PropertyDetailPage({
     baths: p.baths,
     description: p.description,
     publicUrl: linkIsLive ? publicUrl : null,
+    trackedUrlByPortal,
     leadContactEmail: org?.public_contact_email ?? org?.reply_to_email ?? null,
     leadContactPhone: org?.public_contact_phone ?? null,
     virtualTourUrl: p.virtual_tour_url,

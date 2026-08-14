@@ -121,6 +121,7 @@ export type ListingCopyInput = {
   baths?: number | null;
   description?: string | null;
   publicUrl?: string | null;
+  trackedUrlByPortal?: Partial<Record<CopyPortalKey, string>>;
   fallbackCta?: string | null;
   features?: UnitFeatures;
   now?: Date;
@@ -315,6 +316,15 @@ export function buildHeadline(input: ListingCopyInput): string {
   return stripEmDashes(headline.replace(/\s+/g, " ").trim());
 }
 
+export function listingCopyUrlForPortal(
+  input: ListingCopyInput,
+  portal: CopyPortalKey,
+): string {
+  const fallback = (input.publicUrl ?? "").trim();
+  if (portal === "facebook") return fallback;
+  return (input.trackedUrlByPortal?.[portal] ?? fallback).trim();
+}
+
 /**
  * Build ready-to-paste copy for a given portal. Returns a title (length-capped
  * for the portal) and a plain-text body assembled from the unit's real fields.
@@ -376,7 +386,7 @@ export function buildListingCopy(
 
   // Call to action + inquiry link. The CTA is portal-specific (Facebook gets a
   // message/paste-the-link variant because Marketplace breaks tappable links).
-  const url = (input.publicUrl ?? "").trim();
+  const url = listingCopyUrlForPortal(input, portal);
   if (url) {
     const cta = profile.cta;
     if (profile.linkOnOwnLine) {

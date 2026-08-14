@@ -99,6 +99,14 @@ assert.equal(actions.includes("if (attributionEnabled)"), true);
 assert.equal(actions.includes("leadParams.p_referrer_host"), true);
 assert.equal(actions.includes("leadParams.p_utm_source"), true);
 
+const propertyPage = read("app/dashboard/properties/[id]/page.tsx");
+assert.equal(propertyPage.includes("leadAttributionTrackedCopyEnabled()"), true);
+assert.equal(propertyPage.includes("reservableTrackerId(postRows, portal)"), true);
+assert.equal(propertyPage.includes("buildTrackedLink(publicUrl, id)"), true);
+assert.equal(propertyPage.includes('portal === "facebook"'), true);
+assert.equal(propertyPage.includes("Slice A covers its referrer signal"), true);
+assert.equal(propertyPage.includes("created_at, notes"), true);
+
 const seo = read("lib/listing-seo.ts");
 assert.equal(
   seo.includes('return value === "network" ? "network" : null;'),
