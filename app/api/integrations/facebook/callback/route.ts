@@ -13,7 +13,7 @@ import {
   fbPageChannelEnabled,
   facebookPageScopes,
   finalizeFacebookPageConnection,
-  igChannelEnabled,
+  igChannelEnabledForOrg,
   normalizeInstagramBusinessAccount,
   signCookiePayload,
   verifyOAuthState,
@@ -152,8 +152,9 @@ async function collectBusinessPageCandidates(
 
 async function attachInstagramBusinessAccounts(
   pages: FacebookPageCandidate[],
+  orgId: string | null | undefined,
 ): Promise<FacebookPageCandidate[]> {
-  if (!igChannelEnabled()) return pages;
+  if (!igChannelEnabledForOrg(orgId)) return pages;
   const enriched: FacebookPageCandidate[] = [];
   for (const page of pages) {
     const node = await graphGet<PageNodeResponse>(`/${page.id}`, {
@@ -229,7 +230,8 @@ export async function GET(req: NextRequest) {
   if (candidates.length === 0) {
     return redirectBack(req, state.propertyId, "error", "nopages");
   }
-  candidates = await attachInstagramBusinessAccounts(candidates);
+  const instagramEnabled = igChannelEnabledForOrg(state.orgId);
+  candidates = await attachInstagramBusinessAccounts(candidates, state.orgId);
 
   const supabase = createClient();
   const {
@@ -244,7 +246,7 @@ export async function GET(req: NextRequest) {
         propertyId: state.propertyId,
         page: candidates[0],
         connectedBy,
-        scopes: facebookPageScopes(),
+        scopes: facebookPageScopes({ instagramEnabled }),
       });
     } catch {
       return redirectBack(req, state.propertyId, "error", "store");

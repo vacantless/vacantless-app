@@ -71,6 +71,7 @@ import {
   postFacebookPageNow,
   postInstagramNow,
 } from "./distribution-actions";
+import { igChannelEnabledForOrg } from "@/lib/facebook-page-oauth";
 import { buildRelistRadarClockUpdate } from "@/lib/relist-radar";
 import { buildShareReadiness, type ShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
@@ -1057,7 +1058,7 @@ async function publishAuthorizedInstantChannelsAfterPageLive({
         automationAuthorized: account.automation_authorized,
       }),
     ),
-    instagramEnabled: process.env.IG_CHANNEL_ENABLED === "true",
+    instagramEnabled: igChannelEnabledForOrg(orgId),
   });
 
   for (const item of selected) {

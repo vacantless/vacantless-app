@@ -4,11 +4,14 @@
 import { Buffer } from "node:buffer";
 import { encryptSessionState } from "../lib/distribution-session-crypto";
 import {
+  FACEBOOK_PAGE_BASE_SCOPES,
   createOAuthState,
   facebookPageScopes,
   facebookReturnPath,
+  igChannelEnabledForOrg,
   instagramAccountLabel,
   normalizeInstagramBusinessAccount,
+  parseIgChannelOrgAllowlist,
   signCookiePayload,
   verifyCookiePayload,
   verifyOAuthState,
@@ -24,6 +27,10 @@ function ok(name: string, cond: boolean) {
     failed++;
     console.error(`FAIL: ${name}`);
   }
+}
+
+function sameArray(a: readonly string[], b: readonly string[]) {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 const signed = signCookiePayload({ orgId: "org1", exp: Date.now() + 60_000 });
@@ -71,6 +78,36 @@ ok(
   "instagram scopes are opt-in",
   facebookPageScopes({ instagramEnabled: true }).includes("instagram_content_publish"),
 );
+
+const originalIgFlag = process.env.IG_CHANNEL_ENABLED;
+const growthTestOrg = "8ea1da48-0cd2-45a4-bfba-023b31a67884";
+const agileOrg = "921f7c08-98af-428f-a238-36f4a781b0de";
+const allowlist = parseIgChannelOrgAllowlist(
+  ` ${growthTestOrg.toUpperCase()} , , not-a-uuid,${growthTestOrg}`,
+);
+ok("IG allowlist keeps normalized UUIDs only", allowlist.size === 1);
+ok("IG allowlist lowercases entries", allowlist.has(growthTestOrg));
+
+delete process.env.IG_CHANNEL_ENABLED;
+ok("IG org gate is off when global flag is unset", !igChannelEnabledForOrg(growthTestOrg, allowlist));
+
+process.env.IG_CHANNEL_ENABLED = "true";
+ok("IG org gate allows all orgs with empty allowlist", igChannelEnabledForOrg(agileOrg, new Set()));
+ok("IG org gate preserves global semantics for unresolved org with empty allowlist", igChannelEnabledForOrg(null, new Set()));
+ok("IG org gate allows allowlisted org", igChannelEnabledForOrg(growthTestOrg.toUpperCase(), allowlist));
+ok("IG org gate blocks non-allowlisted org", !igChannelEnabledForOrg(agileOrg, allowlist));
+ok("IG org gate fails closed for null org with non-empty allowlist", !igChannelEnabledForOrg(null, allowlist));
+ok("IG org gate fails closed for blank org with non-empty allowlist", !igChannelEnabledForOrg("   ", allowlist));
+ok(
+  "facebook scopes stay exactly base for non-allowlisted org",
+  sameArray(
+    facebookPageScopes({ instagramEnabled: igChannelEnabledForOrg(agileOrg, allowlist) }),
+    FACEBOOK_PAGE_BASE_SCOPES,
+  ),
+);
+if (originalIgFlag == null) delete process.env.IG_CHANNEL_ENABLED;
+else process.env.IG_CHANNEL_ENABLED = originalIgFlag;
+
 ok(
   "normalizes linked Instagram account",
   normalizeInstagramBusinessAccount({ id: " ig1 ", username: "@vacantless" })?.username === "vacantless",

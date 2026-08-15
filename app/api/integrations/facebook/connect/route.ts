@@ -12,6 +12,7 @@ import {
   fbGraphVersion,
   fbPageChannelEnabled,
   facebookPageScopes,
+  igChannelEnabledForOrg,
 } from "@/lib/facebook-page-oauth";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +59,10 @@ export async function GET(req: NextRequest) {
   fb.searchParams.set("client_id", fbAppId());
   fb.searchParams.set("redirect_uri", redirectUri);
   fb.searchParams.set("state", token);
-  fb.searchParams.set("scope", facebookPageScopes().join(","));
+  fb.searchParams.set(
+    "scope",
+    facebookPageScopes({ instagramEnabled: igChannelEnabledForOrg(org.id) }).join(","),
+  );
   fb.searchParams.set("response_type", "code");
 
   const res = NextResponse.redirect(fb);
