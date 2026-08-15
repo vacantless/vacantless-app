@@ -62,6 +62,43 @@ export function igChannelEnabled(): boolean {
   return process.env.IG_CHANNEL_ENABLED === "true";
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function clean(value: string | null | undefined): string | null {
+  const v = String(value ?? "").trim();
+  return v || null;
+}
+
+function normalizeOrgId(value: string | null | undefined): string | null {
+  const orgId = clean(value)?.toLowerCase() ?? null;
+  return orgId && UUID_RE.test(orgId) ? orgId : null;
+}
+
+export function parseIgChannelOrgAllowlist(
+  value: string | null | undefined,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const raw of String(value ?? "").split(",")) {
+    const orgId = normalizeOrgId(raw);
+    if (orgId) ids.add(orgId);
+  }
+  return ids;
+}
+
+const IG_CHANNEL_ORG_ALLOWLIST = parseIgChannelOrgAllowlist(
+  process.env.IG_CHANNEL_ORG_ALLOWLIST,
+);
+
+export function igChannelEnabledForOrg(
+  organizationId: string | null | undefined,
+  allowlist: ReadonlySet<string> = IG_CHANNEL_ORG_ALLOWLIST,
+): boolean {
+  if (!igChannelEnabled()) return false;
+  if (allowlist.size === 0) return true;
+  const orgId = normalizeOrgId(organizationId);
+  return orgId ? allowlist.has(orgId) : false;
+}
+
 export function facebookPageScopes(opts?: {
   instagramEnabled?: boolean;
 }): string[] {
@@ -212,7 +249,8 @@ export async function finalizeFacebookPageConnection(args: {
   const admin = args.admin ?? createAdminClient();
   if (!admin) throw new Error("Supabase service role client is not configured");
   const nowISO = new Date().toISOString();
-  const scopes = args.scopes ?? facebookPageScopes();
+  const instagramEnabled = igChannelEnabledForOrg(args.organizationId);
+  const scopes = args.scopes ?? facebookPageScopes({ instagramEnabled });
   const tokenBlob = {
     page_id: args.page.id,
     page_name: args.page.name,
@@ -254,7 +292,7 @@ export async function finalizeFacebookPageConnection(args: {
   );
   if (error) throw new Error(`facebook account upsert failed: ${error.message}`);
 
-  if (!igChannelEnabled()) return;
+  if (!instagramEnabled) return;
 
   const igAccount = args.page.instagram_business_account ?? null;
   if (!igAccount) {

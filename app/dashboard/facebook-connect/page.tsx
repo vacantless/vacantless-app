@@ -6,7 +6,7 @@ import {
   facebookPageScopes,
   facebookReturnPath,
   finalizeFacebookPageConnection,
-  igChannelEnabled,
+  igChannelEnabledForOrg,
   instagramAccountLabel,
   verifyPagesCookie,
 } from "@/lib/facebook-page-oauth";
@@ -22,6 +22,7 @@ async function selectFacebookPage(formData: FormData) {
   const pageId = String(formData.get("page_id") ?? "");
   const page = payload.pages.find((p) => p.id === pageId);
   if (!page) redirect(facebookReturnPath(payload.propertyId, "error", "page"));
+  const instagramEnabled = igChannelEnabledForOrg(payload.orgId);
 
   try {
     await finalizeFacebookPageConnection({
@@ -29,7 +30,7 @@ async function selectFacebookPage(formData: FormData) {
       propertyId: payload.propertyId,
       page,
       connectedBy: payload.connectedBy,
-      scopes: facebookPageScopes(),
+      scopes: facebookPageScopes({ instagramEnabled }),
     });
   } catch {
     redirect(facebookReturnPath(payload.propertyId, "error", "store"));
@@ -42,7 +43,7 @@ export default async function FacebookConnectPage() {
   await requireCapability("manage_properties", FORBIDDEN);
   const payload = verifyPagesCookie(cookies().get(FB_PAGES_COOKIE)?.value);
   if (!payload) redirect("/dashboard/properties?fb=error&reason=state");
-  const instagramEnabled = igChannelEnabled();
+  const instagramEnabled = igChannelEnabledForOrg(payload.orgId);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">

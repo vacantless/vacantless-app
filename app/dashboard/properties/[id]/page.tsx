@@ -205,6 +205,7 @@ import {
 import {
   facebookOAuthConfigured,
   fbPageChannelEnabled,
+  igChannelEnabledForOrg,
 } from "@/lib/facebook-page-oauth";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
@@ -1396,7 +1397,7 @@ export default async function PropertyDetailPage({
   const facebookPageEnabled =
     facebookOAuthConfigured() && fbPageChannelEnabled();
   const instagramGraphEnabled =
-    facebookPageEnabled && process.env.IG_CHANNEL_ENABLED === "true";
+    facebookPageEnabled && igChannelEnabledForOrg(propertyOrgId);
   const readinessToneFor = (
     v: ChannelReadinessValue,
   ): "positive" | "warning" | "danger" | "neutral" =>

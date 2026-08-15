@@ -68,6 +68,7 @@ import {
   facebookOAuthConfigured,
   fbPageChannelEnabled,
   igChannelEnabled,
+  igChannelEnabledForOrg,
   FACEBOOK_FEED_CHANNEL,
   INSTAGRAM_CHANNEL,
 } from "@/lib/facebook-page-oauth";
@@ -766,7 +767,7 @@ export async function disconnectFacebookPage(formData: FormData) {
     channel: "facebook_feed",
     admin,
   });
-  if (process.env.IG_CHANNEL_ENABLED === "true") {
+  if (igChannelEnabledForOrg(orgId)) {
     await deleteChannelSession({
       organizationId: orgId,
       channel: "instagram",
@@ -797,7 +798,7 @@ export async function disconnectFacebookPage(formData: FormData) {
     },
     { onConflict: "organization_id,channel" },
   );
-  if (process.env.IG_CHANNEL_ENABLED === "true") {
+  if (igChannelEnabledForOrg(orgId)) {
     await admin.from("distribution_channel_accounts").upsert(
       {
         organization_id: orgId,
@@ -1216,6 +1217,9 @@ export async function postInstagramNow(formData: FormData) {
     redirect("/dashboard/properties");
   }
   if (!propertyId || !orgId) redirect("/dashboard/properties?forbidden=1");
+  if (!igChannelEnabledForOrg(orgId)) {
+    backTo(propertyId, "ig_disabled");
+  }
 
   const { data: account } = await supabase
     .from("distribution_channel_accounts")
