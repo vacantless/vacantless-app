@@ -373,6 +373,7 @@ function LeasingProof() {
     <section id="leasing" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="It starts by filling the unit - usually on its own.">
+          You publish the listing to your own Facebook Page and Instagram.
           Renters find your page, book their own viewing time, and land in one
           list. Here is how that plays out across our own rentals.
         </SectionHead>
@@ -554,6 +555,7 @@ const PRODUCT_GROUPS: { n: string; title: string; items: string[] }[] = [
       "A branded rental page for each unit",
       "Listing copy to post with",
       "A listing hub that prepares your listing for more rental sites",
+      "Post straight to your own Facebook Page, and to Instagram once connected",
     ],
   },
   {
