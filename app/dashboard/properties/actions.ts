@@ -1136,7 +1136,7 @@ export async function publishProperty(formData: FormData) {
 
   // Enforce the plan's live-listing allowance (P3, post-S402). Free advertises
   // one live rental; without this, publish silently ignored the cap. Count the
-  // org's OTHER currently-live listings (RLS scopes the count to the org) and,
+  // org's OTHER non-archived live listings (RLS scopes the count to the org) and,
   // if publishing this one would exceed the cap, bounce with ?publish=plan and
   // explain the choice. Paid/pilot plans return a null cap (unlimited) so this
   // never fires for them — e.g. Agile (premium) with several live units.
@@ -1147,6 +1147,7 @@ export async function publishProperty(formData: FormData) {
       .from("properties")
       .select("id", { count: "exact", head: true })
       .eq("status", "available")
+      .is("archived_at", null)
       .neq("id", id);
     if ((liveCount ?? 0) >= cap) {
       redirect(`/dashboard/properties/${id}?publish=plan`);
@@ -2031,6 +2032,7 @@ async function stageDistributionRunForProperty({
         .from("properties")
         .select("id", { count: "exact", head: true })
         .eq("status", "available")
+        .is("archived_at", null)
         .neq("id", propertyId);
       if ((liveCount ?? 0) >= cap) {
         publicPageBlockers.push(

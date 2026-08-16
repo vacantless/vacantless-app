@@ -1103,6 +1103,7 @@ export default async function PropertyDetailPage({
         .select("address, rent_cents, beds, sqft, status")
         .eq("organization_id", propertyOrgId)
         .eq("status", "available")
+        .is("archived_at", null)
         .neq("id", p.id)
         .limit(100);
       activeRows = (activeData ?? []) as ActiveListingComp[];
@@ -1235,6 +1236,7 @@ export default async function PropertyDetailPage({
       .from("properties")
       .select("id", { count: "exact", head: true })
       .eq("status", "available")
+      .is("archived_at", null)
       .neq("id", p.id);
     otherLiveListingCount = count ?? 0;
   }
