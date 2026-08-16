@@ -52,7 +52,6 @@ import {
   isPublishChannelKey,
   normalizePublishStatus,
   normalizePublishMode,
-  publishChannelChoices,
   canRequestConcierge,
   conciergeRequestAuditForChannel,
   preparePublishChannel,
@@ -82,6 +81,11 @@ import {
   deterministicAutoDescription,
   envFlagEnabled,
 } from "@/lib/auto-listing-copy";
+import {
+  autoDistributionChannels,
+  autoDistributionEnabledForOrg,
+  type AutoDistributionAccountRow,
+} from "@/lib/auto-distribution";
 import {
   getGeocodeProvider,
   parseLatLng,
@@ -1864,23 +1868,13 @@ async function propertyPhotoCount(
   return count ?? 0;
 }
 
-function autoDistributionChannels(): PublishChannelKey[] {
-  return publishChannelChoices({
-    includeNetworkFeed: Boolean(process.env.NETWORK_FEED_TOKEN?.trim()),
-  })
-    .filter((channel) => channel.defaultSelected)
-    .map((channel) => channel.key);
-}
-
 async function maybePrepareAvailableListing(
   supabase: ReturnType<typeof createClient>,
   org: Org,
   propertyId: string,
 ): Promise<void> {
   const autoCopyEnabled = envFlagEnabled(process.env.AUTO_LISTING_COPY_ENABLED);
-  const autoDistributionEnabled = envFlagEnabled(
-    process.env.AUTO_DISTRIBUTION_ENABLED,
-  );
+  const autoDistributionEnabled = autoDistributionEnabledForOrg(org.id);
   if (!autoCopyEnabled && !autoDistributionEnabled) return;
 
   const { data: propRow } = await supabase
@@ -1910,7 +1904,14 @@ async function maybePrepareAvailableListing(
   });
   if (!readiness.ready) return;
 
-  const channels = autoDistributionChannels();
+  const { data: accountRows } = await supabase
+    .from("distribution_channel_accounts")
+    .select("channel, account_status, automation_authorized")
+    .eq("organization_id", org.id);
+  const channels = autoDistributionChannels({
+    organizationId: org.id,
+    accountRows: (accountRows ?? []) as AutoDistributionAccountRow[],
+  });
   if (channels.length === 0) return;
   try {
     await stageDistributionRunForProperty({
