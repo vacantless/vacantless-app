@@ -72,6 +72,7 @@ export default async function ScreeningSettingsPage({
     .select("id")
     .eq("organization_id", org.id)
     .eq("status", "available")
+    .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

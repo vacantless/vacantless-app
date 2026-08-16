@@ -287,6 +287,7 @@ export async function handleLeaseupAdLifecycle(args: {
       .select("id, beds, unit_type")
       .eq("organization_id", org.id)
       .eq("status", "available")
+      .is("archived_at", null)
       .neq("id", propertyId),
     supabase
       .from("distribution_channel_accounts")

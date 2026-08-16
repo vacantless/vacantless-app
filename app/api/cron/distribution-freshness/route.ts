@@ -309,10 +309,11 @@ async function loadListingHealthPosts(
   const { data, error } = await admin
     .from("listing_posts")
     .select(
-      "id, property_id, portal, label, url, status, posted_on, last_health_alerted_at, properties!inner(id, address, status)",
+      "id, property_id, portal, label, url, status, posted_on, last_health_alerted_at, properties!inner(id, address, status, archived_at)",
     )
     .eq("organization_id", orgId)
-    .eq("properties.status", "available");
+    .eq("properties.status", "available")
+    .is("properties.archived_at", null);
 
   if (error) {
     const msg = error.message ?? "";

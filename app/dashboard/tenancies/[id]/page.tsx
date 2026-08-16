@@ -705,6 +705,7 @@ export default async function TenancyDetailPage({
         .select("address, rent_cents, beds, sqft, status")
         .eq("organization_id", org.id)
         .eq("status", "available")
+        .is("archived_at", null)
         .neq("id", t.property.id)
         .limit(100);
       activeRows = (activeData ?? []) as ActiveListingComp[];

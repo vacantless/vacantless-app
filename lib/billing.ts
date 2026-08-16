@@ -586,7 +586,7 @@ export function isTierPurchasable(tier: TierInfo): boolean {
 
 // The published-listing allowance for a stored plan (the Free funnel cap; null =
 // unlimited). The publish path (publishProperty) enforces this by counting the
-// org's other live listings before it makes a rental public. Unknown/missing
+// org's other non-archived live listings before it makes a rental public. Unknown/missing
 // plan -> the Free cap (never more).
 export function listingCapForPlan(plan: string | null | undefined): number | null {
   // Any paid plan (live growth/premium/managed or legacy core/plus) + pilot = unlimited.

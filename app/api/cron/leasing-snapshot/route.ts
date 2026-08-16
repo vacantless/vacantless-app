@@ -187,10 +187,11 @@ async function loadListingHealthSummary({
   const { data, error } = await admin
     .from("listing_posts")
     .select(
-      "id, property_id, portal, label, url, status, posted_on, properties!inner(id, address, status)",
+      "id, property_id, portal, label, url, status, posted_on, properties!inner(id, address, status, archived_at)",
     )
     .eq("organization_id", orgId)
-    .eq("properties.status", "available");
+    .eq("properties.status", "available")
+    .is("properties.archived_at", null);
   if (error) return null;
 
   const posts: ListingHealthPost[] = ((data ?? []) as ListingHealthPostRow[]).map((row) => {
@@ -380,7 +381,8 @@ export async function GET(req: NextRequest) {
           .from("properties")
           .select("id, address, status, created_at")
           .eq("organization_id", org.id)
-          .eq("status", "available"),
+          .eq("status", "available")
+          .is("archived_at", null),
         admin
           .from("showings")
           .select("property_id, scheduled_at")
