@@ -19,7 +19,6 @@ import { CopyTextButton } from "@/components/copy-text-button";
 import {
   addListingPost,
   updateProperty,
-  publishProperty,
   uploadPropertyPhotos,
   updateListingPost,
   removeListingPost,
@@ -94,6 +93,10 @@ import {
   type ChannelPublishRailRow,
 } from "./channel-publish-rail";
 import { PublishEverywhere } from "./publish-everywhere";
+import {
+  ConfirmPublishButton,
+  type InstantDestination,
+} from "./confirm-publish-button";
 
 export type QualityView = {
   listing: ListingQuality;
@@ -409,6 +412,7 @@ export function DistributeTab({
   runNotice,
   totalInquiryCount,
   channelAccounts,
+  instantPublishDestinations,
   publishEverywhereEnabled,
   publishEverywhereCopilotEnabled,
   publishSimpleDefaultEnabled,
@@ -437,6 +441,7 @@ export function DistributeTab({
   runNotice: DistributeRunNotice | null;
   totalInquiryCount: number;
   channelAccounts: ChannelPublishAccountRow[];
+  instantPublishDestinations: InstantDestination[];
   publishEverywhereEnabled: boolean;
   publishEverywhereCopilotEnabled: boolean;
   publishSimpleDefaultEnabled: boolean;
@@ -542,6 +547,7 @@ export function DistributeTab({
       totalInquiryCount={totalInquiryCount}
       channelCards={channelCards}
       channelAccounts={channelAccounts}
+      instantPublishDestinations={instantPublishDestinations}
       analytics={analytics}
     />
   );
@@ -1076,6 +1082,7 @@ function SimpleGetOnline({
   totalInquiryCount,
   channelCards,
   channelAccounts,
+  instantPublishDestinations,
   analytics,
   showLaunchRunPanel = true,
 }: {
@@ -1091,6 +1098,7 @@ function SimpleGetOnline({
   totalInquiryCount: number;
   channelCards: DistributeChannelCard[];
   channelAccounts: ChannelPublishAccountRow[];
+  instantPublishDestinations: InstantDestination[];
   analytics: ChannelAnalyticsRow[];
   showLaunchRunPanel?: boolean;
 }) {
@@ -1407,20 +1415,22 @@ function SimpleGetOnline({
               </form>
           </div>
         ) : canSetLive ? (
-          <form action={publishProperty} className="mt-5">
-            <input type="hidden" name="id" value={propertyId} />
-            <button
-              type="submit"
+          <>
+            <ConfirmPublishButton
+              propertyId={propertyId}
+              label="Publish everywhere"
+              formClassName="mt-5"
               className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
               style={{ backgroundColor: "var(--brand-color)" }}
+              destinations={instantPublishDestinations}
+              address={addressLabel}
             >
               <Icons.bolt className="h-4 w-4" />
-              Publish everywhere
-            </button>
+            </ConfirmPublishButton>
             <p className="mt-2 text-xs text-gray-600">
               Publishes instantly where connected. Opens 1-tap finish for the rest.
             </p>
-          </form>
+          </>
         ) : (
           <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-sm font-semibold text-amber-950">
