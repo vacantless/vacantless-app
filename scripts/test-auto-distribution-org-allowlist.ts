@@ -74,22 +74,22 @@ ok(
 );
 
 sameArray(
-  "no connected accounts preserves default auto channels",
+  "no connected accounts preserves the full default-selected baseline",
   autoDistributionChannels({
     organizationId: growthTestOrg,
     accountRows: [],
     includeNetworkFeed: false,
   }),
-  ["facebook", "kijiji"],
+  ["vacantless", "org_feed", "facebook", "kijiji"],
 );
 sameArray(
-  "network feed joins default auto channels only when configured",
+  "network feed stays absent from the default baseline when choices include it",
   autoDistributionChannels({
     organizationId: growthTestOrg,
     accountRows: [],
     includeNetworkFeed: true,
   }),
-  ["network_feed", "facebook", "kijiji"],
+  ["vacantless", "org_feed", "facebook", "kijiji"],
 );
 
 function account(
@@ -109,7 +109,7 @@ sameArray(
     includeNetworkFeed: false,
     instagramAllowlist: new Set([growthTestOrg]),
   }),
-  ["facebook", "kijiji", "instagram"],
+  ["vacantless", "org_feed", "facebook", "kijiji", "instagram"],
 );
 sameArray(
   "instagram connected but not authorized stays absent",
@@ -119,7 +119,7 @@ sameArray(
     includeNetworkFeed: false,
     instagramAllowlist: new Set([growthTestOrg]),
   }),
-  ["facebook", "kijiji"],
+  ["vacantless", "org_feed", "facebook", "kijiji"],
 );
 sameArray(
   "instagram connected and authorized stays absent when IG org gate blocks",
@@ -129,7 +129,7 @@ sameArray(
     includeNetworkFeed: false,
     instagramAllowlist: new Set([growthTestOrg]),
   }),
-  ["facebook", "kijiji"],
+  ["vacantless", "org_feed", "facebook", "kijiji"],
 );
 
 sameArray(
@@ -139,7 +139,7 @@ sameArray(
     accountRows: [account("facebook_feed")],
     includeNetworkFeed: false,
   }),
-  ["facebook", "kijiji", "facebook_feed"],
+  ["vacantless", "org_feed", "facebook", "kijiji", "facebook_feed"],
 );
 sameArray(
   "facebook feed connected but not authorized stays absent",
@@ -148,7 +148,7 @@ sameArray(
     accountRows: [account("facebook_feed", "connected", false)],
     includeNetworkFeed: false,
   }),
-  ["facebook", "kijiji"],
+  ["vacantless", "org_feed", "facebook", "kijiji"],
 );
 sameArray(
   "facebook feed authorized but not connected stays absent",
@@ -157,7 +157,7 @@ sameArray(
     accountRows: [account("facebook_feed", "needs_setup", true)],
     includeNetworkFeed: false,
   }),
-  ["facebook", "kijiji"],
+  ["vacantless", "org_feed", "facebook", "kijiji"],
 );
 sameArray(
   "connected authorized concierge or copilot channels stay absent",
@@ -166,7 +166,7 @@ sameArray(
     accountRows: [account("zumper"), account("rentfaster")],
     includeNetworkFeed: false,
   }),
-  ["facebook", "kijiji"],
+  ["vacantless", "org_feed", "facebook", "kijiji"],
 );
 
 const actionSource = readFileSync("app/dashboard/properties/actions.ts", "utf8");

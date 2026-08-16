@@ -58,17 +58,7 @@ function defaultAutoDistributionChannelKeys(
 ): Set<PublishChannelKey> {
   const keys = new Set<PublishChannelKey>();
   for (const channel of publishChannelChoices({ includeNetworkFeed })) {
-    if (channel.key === "network_feed") {
-      if (includeNetworkFeed) keys.add(channel.key);
-      continue;
-    }
-    if (
-      channel.defaultSelected &&
-      channel.key !== "vacantless" &&
-      channel.key !== "org_feed"
-    ) {
-      keys.add(channel.key);
-    }
+    if (channel.defaultSelected) keys.add(channel.key);
   }
   return keys;
 }
