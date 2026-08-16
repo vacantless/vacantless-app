@@ -1870,7 +1870,41 @@ export default async function PropertyDetailPage({
                   : null;
   const distributeRunNotice: DistributeRunNotice | null =
     copilotNotice ??
-    (searchParams.dist === "radar_auto_on"
+    (searchParams.dist === "channel_auto_on"
+      ? {
+          tone: "success",
+          title: "Auto-posting authorized.",
+          body:
+            "Vacantless can publish this listing to that connected account automatically without another click.",
+        }
+      : searchParams.dist === "channel_auto_off"
+        ? {
+            tone: "info",
+            title: "Auto-posting turned off.",
+            body:
+              "The connected account stays connected, but Vacantless will not publish there automatically.",
+          }
+        : searchParams.dist === "channel_auto_connectfirst"
+          ? {
+              tone: "warning",
+              title: "Connect the account first.",
+              body:
+                "Auto-posting can only be authorized after the Facebook Page or Instagram account is connected.",
+            }
+          : searchParams.dist === "channel_auto_badchannel"
+            ? {
+                tone: "warning",
+                title: "This channel cannot be auto-posted.",
+                body:
+                  "Only Facebook Page feed and Instagram can use this authorization.",
+              }
+            : searchParams.dist === "channel_auto_error"
+              ? {
+                  tone: "danger",
+                  title: "Auto-posting was not saved.",
+                  body: "Refresh the channel row and try the authorization again.",
+                }
+              : searchParams.dist === "radar_auto_on"
       ? {
           tone: "success",
           title: "Hands-off refreshes are on.",

@@ -38,7 +38,11 @@ import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import { publishProperty, requestConciergePublish, openGuidedPosting } from "../actions";
-import { authorizeAutopilotSubmit } from "../distribution-actions";
+import {
+  authorizeAutopilotSubmit,
+  authorizeChannelAutomation,
+  revokeChannelAutomation,
+} from "../distribution-actions";
 import {
   derivePublishPreflight,
   resolvePublishMode,
@@ -160,23 +164,100 @@ type ResolvedRow = {
   label: string;
   mode: PublishMode;
   bucket: PublishBucket;
+  automationAction?: "authorize" | "revoke" | null;
 };
 
-function ChannelRow({ row }: { row: ResolvedRow }) {
-  const chip = MODE_CHIP[row.mode];
+function ChannelAutomationAction({
+  propertyId,
+  row,
+}: {
+  propertyId: string;
+  row: ResolvedRow;
+}) {
+  if (row.automationAction === "authorize") {
+    return (
+      <form action={authorizeChannelAutomation} className="mt-1.5">
+        <input type="hidden" name="property_id" value={propertyId} />
+        <input type="hidden" name="channel" value={row.key} />
+        <p className="mb-1 text-[11px] leading-relaxed text-amber-800">
+          Authorize Vacantless to publish this listing to this account
+          automatically without another click.
+        </p>
+        <button
+          type="submit"
+          className="rounded-lg bg-amber-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-700"
+        >
+          Authorize auto-post
+        </button>
+      </form>
+    );
+  }
+  if (row.automationAction === "revoke") {
+    return (
+      <form action={revokeChannelAutomation} className="mt-1.5">
+        <input type="hidden" name="property_id" value={propertyId} />
+        <input type="hidden" name="channel" value={row.key} />
+        <p className="mb-1 text-[11px] leading-relaxed text-gray-500">
+          Auto-posting is authorized. Turn it off without disconnecting the
+          account.
+        </p>
+        <button
+          type="submit"
+          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          Turn off auto-post
+        </button>
+      </form>
+    );
+  }
+  return null;
+}
+
+function ChannelRow({
+  row,
+  propertyId,
+}: {
+  row: ResolvedRow;
+  propertyId?: string;
+}) {
+  const chip =
+    row.automationAction === "authorize"
+      ? { label: "Needs authorization", cls: "bg-amber-50 text-amber-700" }
+      : MODE_CHIP[row.mode];
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-sm">
-        {CHANNEL_GLYPH[row.key] ?? "🏠"}
-      </span>
-      <span className="text-sm font-semibold text-gray-800">{row.label}</span>
-      <span
-        className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${chip.cls}`}
-      >
-        {chip.label}
-      </span>
+    <div className="py-1.5">
+      <div className="flex items-center gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-sm">
+          {CHANNEL_GLYPH[row.key] ?? "🏠"}
+        </span>
+        <span className="text-sm font-semibold text-gray-800">{row.label}</span>
+        <span
+          className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${chip.cls}`}
+        >
+          {chip.label}
+        </span>
+      </div>
+      {propertyId && row.automationAction ? (
+        <div className="ml-10">
+          <ChannelAutomationAction propertyId={propertyId} row={row} />
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function automationActionForCard(
+  card: DistributeChannelCard,
+): ResolvedRow["automationAction"] {
+  if (card.channel.mode !== "api_automatic") return null;
+  const account =
+    card.channel.key === "facebook_feed"
+      ? card.facebookPage
+      : card.channel.key === "instagram"
+        ? card.instagramAccount
+        : null;
+  if (!account?.enabled || account.accountStatus !== "connected") return null;
+  return account.automationAuthorized === true ? "revoke" : "authorize";
 }
 
 export function PublishEverywhere({
@@ -222,7 +303,13 @@ export function PublishEverywhere({
     const { mode, bucket } = resolvePublishMode(
       toPublishInput(card, copilotEnabled),
     );
-    return { key: card.channel.key, label: card.channel.label, mode, bucket };
+    return {
+      key: card.channel.key,
+      label: card.channel.label,
+      mode,
+      bucket,
+      automationAction: automationActionForCard(card),
+    };
   });
   const reach = summarizeReach(resolved.map((r) => r.bucket), true);
   const byBucket = (b: PublishBucket) => resolved.filter((r) => r.bucket === b);
@@ -527,7 +614,7 @@ export function PublishEverywhere({
             }}
           />
           {instantRows.map((r) => (
-            <ChannelRow key={r.key} row={r} />
+            <ChannelRow key={r.key} row={r} propertyId={propertyId} />
           ))}
         </div>
 
@@ -542,7 +629,7 @@ export function PublishEverywhere({
               </p>
             )}
             {forYou.map((r) => (
-              <ChannelRow key={r.key} row={r} />
+              <ChannelRow key={r.key} row={r} propertyId={propertyId} />
             ))}
           </div>
         )}
@@ -551,7 +638,7 @@ export function PublishEverywhere({
           <div className="mb-3.5">
             <BucketLabel bucket="after_setup" />
             {setupRows.map((r) => (
-              <ChannelRow key={r.key} row={r} />
+              <ChannelRow key={r.key} row={r} propertyId={propertyId} />
             ))}
           </div>
         )}
@@ -563,7 +650,7 @@ export function PublishEverywhere({
               Coming soon
             </div>
             {comingSoonRows.map((r) => (
-              <ChannelRow key={r.key} row={r} />
+              <ChannelRow key={r.key} row={r} propertyId={propertyId} />
             ))}
           </div>
         )}
