@@ -29,7 +29,6 @@ import { DescriptionGuide } from "@/components/description-guide";
 import { BeforeYouPost } from "@/components/before-you-post";
 import {
   updateProperty,
-  publishProperty,
   relistLeasedProperty,
   duplicateProperty,
   blastPriceDrop,
@@ -207,6 +206,8 @@ import {
   fbPageChannelEnabled,
   igChannelEnabledForOrg,
 } from "@/lib/facebook-page-oauth";
+import { authorizedInstantPublishDestinations } from "@/lib/auto-distribution";
+import { ConfirmPublishButton } from "./confirm-publish-button";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
 import { computeEolDate, detectorStatus, type DetectorType } from "@/lib/detector-eol";
 import { EquipmentSection, type EquipmentView } from "./equipment-section";
@@ -1396,6 +1397,14 @@ export default async function PropertyDetailPage({
       autoSubmitAllowed: row.auto_submit_allowed === true,
     });
   }
+  const instantPublishDestinations = authorizedInstantPublishDestinations({
+    organizationId: propertyOrgId,
+    accountRows: (channelAccountRows ?? []) as Array<{
+      channel: string | null;
+      account_status: string | null;
+      automation_authorized: boolean | null;
+    }>,
+  });
   const facebookPageEnabled =
     facebookOAuthConfigured() && fbPageChannelEnabled();
   const instagramGraphEnabled =
@@ -2496,18 +2505,17 @@ export default async function PropertyDetailPage({
                 hunt for the Status dropdown. Shown only when the rental isn't
                 already public and isn't leased. */}
             {!publicPageIsBookable && normalizedStatus !== "leased" && (
-              <form action={publishProperty} id="publish-action">
-                <input type="hidden" name="id" value={p.id} />
-                <button
-                  type="submit"
-                  className={PRIMARY_ACTION_CLASS}
-                  style={{ backgroundColor: "var(--brand-color)" }}
-                >
-                  {normalizedStatus === "paused"
-                    ? "Set Live again"
-                    : "Set Live"}
-                </button>
-              </form>
+              <ConfirmPublishButton
+                id="publish-action"
+                propertyId={p.id}
+                label={
+                  normalizedStatus === "paused" ? "Set Live again" : "Set Live"
+                }
+                className={PRIMARY_ACTION_CLASS}
+                style={{ backgroundColor: "var(--brand-color)" }}
+                destinations={instantPublishDestinations}
+                address={p.address}
+              />
             )}
             {showRelistOneTap && (
               <Link
@@ -3696,6 +3704,7 @@ export default async function PropertyDetailPage({
           runNotice={distributeRunNotice}
           totalInquiryCount={leadRows.length}
           channelAccounts={channelPublishAccounts}
+          instantPublishDestinations={instantPublishDestinations}
           publishEverywhereEnabled={publishEverywhereEnabled}
           publishEverywhereCopilotEnabled={publishEverywhereCopilotEnabled}
           publishSimpleDefaultEnabled={publishSimpleDefaultEnabled}

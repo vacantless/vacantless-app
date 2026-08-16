@@ -18,6 +18,11 @@ export type AutoDistributionAccountRow = {
   automation_authorized: boolean | null;
 };
 
+export type InstantPublishDestination = {
+  key: PublishChannelKey;
+  label: string;
+};
+
 function clean(value: string | null | undefined): string | null {
   const v = String(value ?? "").trim();
   return v || null;
@@ -74,18 +79,16 @@ function accountAuthorizedForAutomaticPublish(
   );
 }
 
-export function autoDistributionChannels({
+export function authorizedInstantPublishDestinations({
   organizationId,
   accountRows = [],
-  includeNetworkFeed = Boolean(process.env.NETWORK_FEED_TOKEN?.trim()),
   instagramAllowlist,
 }: {
   organizationId: string | null | undefined;
   accountRows?: readonly AutoDistributionAccountRow[];
-  includeNetworkFeed?: boolean;
   instagramAllowlist?: ReadonlySet<string>;
-}): PublishChannelKey[] {
-  const selected = defaultAutoDistributionChannelKeys(includeNetworkFeed);
+}): InstantPublishDestination[] {
+  const authorizedKeys = new Set<PublishChannelKey>();
 
   for (const account of accountRows) {
     const rawKey = String(account.channel ?? "").trim();
@@ -99,7 +102,35 @@ export function autoDistributionChannels({
     ) {
       continue;
     }
-    selected.add(channel.key);
+    authorizedKeys.add(channel.key);
+  }
+
+  return PUBLISH_CHANNEL_KEYS.flatMap((key) => {
+    if (!authorizedKeys.has(key)) return [];
+    const channel = channelByKey(key);
+    return channel ? [{ key, label: channel.label }] : [];
+  });
+}
+
+export function autoDistributionChannels({
+  organizationId,
+  accountRows = [],
+  includeNetworkFeed = Boolean(process.env.NETWORK_FEED_TOKEN?.trim()),
+  instagramAllowlist,
+}: {
+  organizationId: string | null | undefined;
+  accountRows?: readonly AutoDistributionAccountRow[];
+  includeNetworkFeed?: boolean;
+  instagramAllowlist?: ReadonlySet<string>;
+}): PublishChannelKey[] {
+  const selected = defaultAutoDistributionChannelKeys(includeNetworkFeed);
+
+  for (const destination of authorizedInstantPublishDestinations({
+    organizationId,
+    accountRows,
+    instagramAllowlist,
+  })) {
+    selected.add(destination.key);
   }
 
   return PUBLISH_CHANNEL_KEYS.filter((key) => selected.has(key));
