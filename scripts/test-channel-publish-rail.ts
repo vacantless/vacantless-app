@@ -1,5 +1,6 @@
 // Pure tests for the Simple Get-online three-tier channel rail.
 // Run: npx tsx scripts/test-channel-publish-rail.ts
+import { readFileSync } from "node:fs";
 import {
   buildChannelPublishRailBuckets,
   type ChannelPublishAccountRow,
@@ -95,7 +96,13 @@ function buckets(opts: {
       }),
     ],
   });
+  const facebook = b.instant.find((r) => r.key === "facebook_feed");
   ok("authorized facebook page graduates to instant", has(b.instant, "facebook_feed"));
+  eq("authorized facebook page can be revoked", facebook?.automationAction ?? null, "revoke");
+  ok(
+    "authorized facebook page copy states automatic publishing",
+    (facebook?.headline ?? "").includes("without another click"),
+  );
   eq("authorized live facebook page adds to live count", b.liveCount, 3);
 }
 
@@ -108,7 +115,26 @@ function buckets(opts: {
       }),
     ],
   });
+  const facebook = b.gated.find((r) => r.key === "facebook_feed");
   ok("connected but unauthorized facebook page stays gated", has(b.gated, "facebook_feed"));
+  eq(
+    "connected but unauthorized facebook page chip asks for authorization",
+    facebook?.chip.label ?? "",
+    "Needs authorization",
+  );
+  eq(
+    "connected but unauthorized facebook page exposes authorize action",
+    facebook?.automationAction ?? null,
+    "authorize",
+  );
+  ok(
+    "connected but unauthorized facebook page does not ask to connect",
+    !(facebook?.headline ?? "").includes("Link Facebook Page feed"),
+  );
+  ok(
+    "connected but unauthorized facebook page copy states consent plainly",
+    (facebook?.headline ?? "").includes("automatically without another click"),
+  );
 }
 
 {
@@ -147,6 +173,49 @@ function buckets(opts: {
   ok("enabled authorized instagram can graduate to instant", has(enabled.instant, "instagram"));
   eq("enabled live instagram counts only when explicit", enabled.liveCount, 3);
 }
+
+{
+  const b = buckets({
+    instagramEnabled: true,
+    accounts: [
+      row("instagram", {
+        accountStatus: "connected",
+        automationAuthorized: false,
+      }),
+    ],
+  });
+  const instagram = b.gated.find((r) => r.key === "instagram");
+  ok("connected but unauthorized instagram stays gated", has(b.gated, "instagram"));
+  eq(
+    "connected but unauthorized instagram chip asks for authorization",
+    instagram?.chip.label ?? "",
+    "Needs authorization",
+  );
+  eq(
+    "connected but unauthorized instagram exposes authorize action",
+    instagram?.automationAction ?? null,
+    "authorize",
+  );
+  ok(
+    "connected but unauthorized instagram does not ask to connect",
+    !(instagram?.headline ?? "").includes("Link Instagram"),
+  );
+}
+
+const publishEverywhereSource = readFileSync(
+  "app/dashboard/properties/[id]/publish-everywhere.tsx",
+  "utf8",
+);
+ok(
+  "Publish Everywhere renders channel authorization consent copy",
+  publishEverywhereSource.includes(
+    "Authorize Vacantless to publish this listing to this account",
+  ),
+);
+ok(
+  "Publish Everywhere can revoke channel automation",
+  publishEverywhereSource.includes("revokeChannelAutomation"),
+);
 
 console.log(`\nchannel-publish-rail: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

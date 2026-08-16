@@ -25,6 +25,7 @@ export type ChannelPublishRailRow = {
   tier: ChannelPublishTierId;
   chip: ConnectChip;
   headline: string;
+  automationAction: "authorize" | "revoke" | null;
   reachesRenters: boolean;
   live: boolean;
   synthetic: boolean;
@@ -68,6 +69,7 @@ function syntheticRow(
     tier: "instant",
     chip: SYNTHETIC_CHIP,
     headline: live ? "Live with the renter page." : "Turns on with Publish.",
+    automationAction: null,
     reachesRenters: live,
     live,
     synthetic: true,
@@ -99,6 +101,11 @@ function bucketForChannel(input: {
           accountStatus,
           hasFeedRoute,
         });
+  const needsAutomationAuthorization =
+    accountStatus === "connected" &&
+    account?.automationAuthorized !== true &&
+    channel.mode === "api_automatic" &&
+    !(channel.key === "instagram" && !instagramEnabled);
   // Facebook Marketplace is a working guided-posting (browser_copilot) channel
   // today even though it has no API integration (integrationStatus "planned").
   // Don't let the shared "planned -> Coming soon" verdict mislabel it as
@@ -106,13 +113,28 @@ function bucketForChannel(input: {
   // "1 tap to finish" placement. Scope: rail only — the Settings tile stays
   // "not available yet", which is correct (there is no account to connect).
   const chip: ConnectChip =
-    channel.key === "facebook" && baseChip.state === "coming_soon"
+    needsAutomationAuthorization
+      ? {
+          state: "connected",
+          label: "Needs authorization",
+          tone: "warning",
+          canConnect: false,
+        }
+      : channel.key === "facebook" && baseChip.state === "coming_soon"
       ? { state: "manual", label: "Guided posting", tone: "neutral", canConnect: false }
       : baseChip;
   const tile = channelTileStatus(channel.key, {
     account_status: accountStatus,
     automation_authorized: account?.automationAuthorized === true,
   });
+  const automationAction: ChannelPublishRailRow["automationAction"] =
+    needsAutomationAuthorization
+      ? "authorize"
+      : accountStatus === "connected" &&
+          account?.automationAuthorized === true &&
+          channel.mode === "api_automatic"
+        ? "revoke"
+        : null;
   const apiReady =
     channel.mode === "api_automatic" &&
     chip.state === "connected" &&
@@ -146,20 +168,22 @@ function bucketForChannel(input: {
     tier = "one_tap";
   }
   const live = liveChannelKeys.has(channel.key);
+  const headline =
+    channel.key === "instagram" && !instagramEnabled
+      ? "Dark until Instagram publishing is enabled."
+      : needsAutomationAuthorization
+        ? "Connected; authorize Vacantless to publish this listing automatically without another click."
+        : automationAction === "revoke"
+          ? "Authorized; Vacantless can publish this listing automatically without another click."
+          : tile.headline;
 
   return {
     key: channel.key,
     label: channel.label,
     tier,
     chip,
-    headline:
-      channel.key === "instagram" && !instagramEnabled
-        ? "Dark until Instagram publishing is enabled."
-        : accountStatus === "connected" &&
-            account?.automationAuthorized !== true &&
-            channel.mode === "api_automatic"
-          ? "Connected; review and authorize before posting."
-        : tile.headline,
+    headline,
+    automationAction,
     reachesRenters: tier === "instant" && live,
     live,
     synthetic: false,
@@ -239,11 +263,13 @@ function TierCard({
   rows,
   children,
   defaultOpen = true,
+  actionForRow,
 }: {
   title: string;
   rows: ChannelPublishRailRow[];
   children?: ReactNode;
   defaultOpen?: boolean;
+  actionForRow?: (row: ChannelPublishRailRow) => ReactNode;
 }) {
   return (
     <details
@@ -258,7 +284,7 @@ function TierCard({
       </summary>
       <ul className="mt-3">
         {rows.map((row) => (
-          <ChannelRow key={row.key} row={row} />
+          <ChannelRow key={row.key} row={row} action={actionForRow?.(row)} />
         ))}
       </ul>
       {children}
@@ -269,9 +295,11 @@ function TierCard({
 export function ChannelPublishRail({
   buckets,
   oneTapFooter,
+  actionForRow,
 }: {
   buckets: ChannelPublishRailBuckets;
   oneTapFooter?: ReactNode;
+  actionForRow?: (row: ChannelPublishRailRow) => ReactNode;
 }) {
   const ringLabel = `${buckets.liveCount}/${buckets.totalCount}`;
   return (
@@ -294,7 +322,11 @@ export function ChannelPublishRail({
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
-        <TierCard title="Publishes instantly" rows={buckets.instant} />
+        <TierCard
+          title="Publishes instantly"
+          rows={buckets.instant}
+          actionForRow={actionForRow}
+        />
         <TierCard title="1 tap to finish" rows={buckets.oneTap} defaultOpen>
           {oneTapFooter ? (
             <div className="mt-3 rounded-lg border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-gray-700">
@@ -302,7 +334,11 @@ export function ChannelPublishRail({
             </div>
           ) : null}
         </TierCard>
-        <TierCard title="Connect / gated" rows={buckets.gated} />
+        <TierCard
+          title="Connect / gated"
+          rows={buckets.gated}
+          actionForRow={actionForRow}
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-800">

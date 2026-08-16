@@ -27,7 +27,9 @@ import {
   requestConciergePublish,
 } from "../actions";
 import {
+  authorizeChannelAutomation,
   disconnectFacebookPage,
+  revokeChannelAutomation,
 } from "../distribution-actions";
 import { startConciergePackCheckout } from "../../billing/actions";
 import {
@@ -89,6 +91,7 @@ import {
   ChannelPublishRail,
   buildChannelPublishRailBuckets,
   type ChannelPublishAccountRow,
+  type ChannelPublishRailRow,
 } from "./channel-publish-rail";
 import { PublishEverywhere } from "./publish-everywhere";
 
@@ -1193,6 +1196,39 @@ function SimpleGetOnline({
       </a>
     </>
   );
+  const railActionForRow = (row: ChannelPublishRailRow): ReactNode => {
+    if (row.automationAction === "authorize") {
+      return (
+        <form action={authorizeChannelAutomation}>
+          <input type="hidden" name="property_id" value={propertyId} />
+          <input type="hidden" name="channel" value={row.key} />
+          <button
+            type="submit"
+            aria-label={`Authorize Vacantless to publish this listing to ${row.label} automatically without another click`}
+            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+          >
+            Authorize auto-post
+          </button>
+        </form>
+      );
+    }
+    if (row.automationAction === "revoke") {
+      return (
+        <form action={revokeChannelAutomation}>
+          <input type="hidden" name="property_id" value={propertyId} />
+          <input type="hidden" name="channel" value={row.key} />
+          <button
+            type="submit"
+            aria-label={`Stop Vacantless from publishing this listing to ${row.label} automatically`}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Turn off auto-post
+          </button>
+        </form>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-4">
@@ -1401,7 +1437,11 @@ function SimpleGetOnline({
         {photoNudge}
       </section>
 
-      <ChannelPublishRail buckets={railBuckets} oneTapFooter={oneTapFooter} />
+      <ChannelPublishRail
+        buckets={railBuckets}
+        oneTapFooter={oneTapFooter}
+        actionForRow={railActionForRow}
+      />
 
       <section className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-3">
         {linkIsLive ? (

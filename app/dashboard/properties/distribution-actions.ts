@@ -254,6 +254,210 @@ async function userId(supabase: SupabaseClient): Promise<string | null> {
   return user?.id ?? null;
 }
 
+function channelAutomationBackTo(propertyId: string, msg: string): never {
+  if (propertyId) backTo(propertyId, msg);
+  redirect(`/dashboard/settings?tab=distribution&dist=${msg}`);
+}
+
+function apiAutomaticChannelFromForm(
+  formData: FormData,
+  propertyId: string,
+): string {
+  const channelRaw = normalizePublishChannel(s(formData, "channel"));
+  if (!channelRaw || !isPublishChannelKey(channelRaw)) {
+    channelAutomationBackTo(propertyId, "channel_auto_badchannel");
+  }
+  const channel = channelByKey(channelRaw);
+  if (!channel || channel.mode !== "api_automatic") {
+    channelAutomationBackTo(propertyId, "channel_auto_badchannel");
+  }
+  return channelRaw;
+}
+
+async function requireCurrentOrgProperty(
+  supabase: SupabaseClient,
+  propertyId: string,
+  orgId: string,
+): Promise<void> {
+  if (!propertyId) return;
+  const { data: property } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .eq("organization_id", orgId)
+    .maybeSingle();
+  if (!property) redirect(FORBIDDEN);
+}
+
+async function recordChannelAutomationConsentAttempt(
+  supabase: SupabaseClient,
+  input: {
+    orgId: string;
+    propertyId: string;
+    channel: string;
+    userId: string;
+    authorized: boolean;
+  },
+): Promise<void> {
+  if (!input.propertyId) return;
+  const loc = await activeRunItemFor(supabase, input.propertyId, input.channel);
+  if (!loc.runId || !loc.runItemId) return;
+
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("attempt_count, publish_status, transport")
+    .eq("id", loc.runItemId)
+    .eq("organization_id", input.orgId)
+    .maybeSingle();
+  const row = item as
+    | {
+        attempt_count: number | null;
+        publish_status: string | null;
+        transport: string | null;
+      }
+    | null;
+  if (!row) return;
+
+  const publishStatus = row.publish_status ?? "queued";
+  const attempt = buildAttemptRecord({
+    organizationId: input.orgId,
+    runId: loc.runId,
+    runItemId: loc.runItemId,
+    channel: input.channel,
+    transport: row.transport ?? loc.transport ?? "automatic",
+    currentAttemptCount: row.attempt_count,
+    actorType: "operator",
+    actorUserId: input.userId,
+    statusBefore: publishStatus,
+    statusAfter: publishStatus,
+    proofId: null,
+    metadata: {
+      source: input.authorized
+        ? "operator_authorized_channel_automation"
+        : "operator_revoked_channel_automation",
+      automation_authorized: input.authorized,
+    },
+  });
+  await supabase.from("distribution_publish_attempts").insert({
+    organization_id: attempt.organization_id,
+    run_id: attempt.run_id,
+    run_item_id: attempt.run_item_id,
+    channel: attempt.channel,
+    transport: attempt.transport,
+    attempt_no: attempt.attempt_no,
+    actor_type: attempt.actor_type,
+    actor_user_id: attempt.actor_user_id,
+    status_before: attempt.status_before,
+    status_after: attempt.status_after,
+    proof_id: attempt.proof_id,
+    metadata: attempt.metadata,
+  });
+}
+
+export async function authorizeChannelAutomation(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = s(formData, "property_id");
+  const channel = apiAutomaticChannelFromForm(formData, propertyId);
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  await requireCurrentOrgProperty(supabase, propertyId, org.id);
+
+  const uid = await userId(supabase);
+  if (!uid) redirect(FORBIDDEN);
+
+  const { data: account } = await supabase
+    .from("distribution_channel_accounts")
+    .select("account_status")
+    .eq("organization_id", org.id)
+    .eq("channel", channel)
+    .maybeSingle();
+  const acct = account as { account_status: string | null } | null;
+  if (!acct || acct.account_status !== "connected") {
+    channelAutomationBackTo(propertyId, "channel_auto_connectfirst");
+  }
+
+  const nowISO = new Date().toISOString();
+  const { data: saved, error } = await supabase
+    .from("distribution_channel_accounts")
+    .update({
+      automation_authorized: true,
+      automation_authorized_at: nowISO,
+      automation_authorized_by: uid,
+      updated_at: nowISO,
+    })
+    .eq("organization_id", org.id)
+    .eq("channel", channel)
+    .eq("account_status", "connected")
+    .select("channel")
+    .maybeSingle();
+  if (error || !saved) {
+    channelAutomationBackTo(propertyId, "channel_auto_error");
+  }
+
+  await recordChannelAutomationConsentAttempt(supabase, {
+    orgId: org.id,
+    propertyId,
+    channel,
+    userId: uid,
+    authorized: true,
+  });
+
+  if (propertyId) {
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    backTo(propertyId, "channel_auto_on");
+  }
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings?tab=distribution&dist=channel_auto_on");
+}
+
+export async function revokeChannelAutomation(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = s(formData, "property_id");
+  const channel = apiAutomaticChannelFromForm(formData, propertyId);
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  await requireCurrentOrgProperty(supabase, propertyId, org.id);
+
+  const uid = await userId(supabase);
+  if (!uid) redirect(FORBIDDEN);
+
+  const nowISO = new Date().toISOString();
+  const { data: saved, error } = await supabase
+    .from("distribution_channel_accounts")
+    .update({
+      automation_authorized: false,
+      automation_authorized_at: null,
+      automation_authorized_by: null,
+      updated_at: nowISO,
+    })
+    .eq("organization_id", org.id)
+    .eq("channel", channel)
+    .select("channel")
+    .maybeSingle();
+  if (error || !saved) {
+    channelAutomationBackTo(propertyId, "channel_auto_error");
+  }
+
+  await recordChannelAutomationConsentAttempt(supabase, {
+    orgId: org.id,
+    propertyId,
+    channel,
+    userId: uid,
+    authorized: false,
+  });
+
+  if (propertyId) {
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    backTo(propertyId, "channel_auto_off");
+  }
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings?tab=distribution&dist=channel_auto_off");
+}
+
 // S570: the operator authorizes autopilot to post a prepared concierge item
 // from their own Distribute tab. This sets only the approval signal; the
 // standalone worker's own gates still decide whether anything posts.
