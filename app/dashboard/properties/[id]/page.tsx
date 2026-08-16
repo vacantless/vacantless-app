@@ -1886,7 +1886,7 @@ export default async function PropertyDetailPage({
           tone: "success",
           title: "Auto-posting authorized.",
           body:
-            "Vacantless can publish this listing to that connected account automatically without another click.",
+            "This account will receive a post when you publish this listing and approve the destinations.",
         }
       : searchParams.dist === "channel_auto_off"
         ? {

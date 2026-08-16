@@ -172,9 +172,9 @@ function bucketForChannel(input: {
     channel.key === "instagram" && !instagramEnabled
       ? "Dark until Instagram publishing is enabled."
       : needsAutomationAuthorization
-        ? "Connected; authorize Vacantless to publish this listing automatically without another click."
+        ? "Connected; authorize Vacantless to post this listing to this account when you publish."
         : automationAction === "revoke"
-          ? "Authorized; Vacantless can publish this listing automatically without another click."
+          ? "Authorized; this account receives a post when you publish and approve."
           : tile.headline;
 
   return {
