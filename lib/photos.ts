@@ -381,6 +381,8 @@ export type ClonedPhotoPlan = {
   is_cover: boolean; // preserved from the source
 };
 
+export type PhotoCloneResultParam = null | "copy0" | "copypartial";
+
 /**
  * Plan the clone of a property's photos into a NEW property. Pure: it allocates
  * a fresh id + destination path for each source photo and PRESERVES display
@@ -405,4 +407,18 @@ export function planPhotoClone(
       is_cover: src.is_cover,
     };
   });
+}
+
+/**
+ * Redirect signal for duplicate-a-listing photo clone outcomes. A listing with
+ * zero source photos is not an error, but a listing WITH photos cloning zero is.
+ */
+export function photoCloneResultParam(
+  sourceCount: number,
+  clonedCount: number,
+): PhotoCloneResultParam {
+  if (sourceCount <= 0) return null;
+  if (clonedCount <= 0) return "copy0";
+  if (clonedCount < sourceCount) return "copypartial";
+  return null;
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg, type Org } from "@/lib/org";
 import { requireCapability, getRoleForOrg } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
@@ -110,6 +111,7 @@ import {
   reorder,
   coverAfterDelete,
   planPhotoClone,
+  photoCloneResultParam,
   MAX_PHOTO_BYTES,
   type PhotoLike,
   type SourcePhoto,
@@ -1320,7 +1322,9 @@ export async function duplicateProperty(formData: FormData) {
   // almost always a near-identical unit in the same building (the realtor ICP's
   // common case), so re-uploading the same photo set is pure friction. We COPY
   // the storage objects server-side (no download) and re-insert rows, preserving
-  // display order and the cover. RLS scopes the read to the caller's org.
+  // display order and the cover. RLS scopes the property + row reads to the
+  // caller's org; the service-role storage client is used only after that
+  // ownership check so legacy rows stored under another org prefix can still copy.
   const { data: srcPhotos } = await supabase
     .from("property_photos")
     .select("id, storage_path, sort_order, is_cover")
@@ -1335,11 +1339,27 @@ export async function duplicateProperty(formData: FormData) {
       newId,
       () => crypto.randomUUID(),
     );
+    const adminForCopy = createAdminClient();
+    const storageClients = adminForCopy ? [adminForCopy, supabase] : [supabase];
     for (const c of plan) {
-      const { error: copyErr } = await supabase.storage
-        .from(PHOTO_BUCKET)
-        .copy(c.fromPath, c.toPath);
-      if (copyErr) continue; // best-effort: skip a failed copy, keep going
+      let copyErr: { message: string } | null = null;
+      for (const storageClient of storageClients) {
+        const { error } = await storageClient.storage
+          .from(PHOTO_BUCKET)
+          .copy(c.fromPath, c.toPath);
+        copyErr = error ? { message: error.message } : null;
+        if (!copyErr) break;
+      }
+      if (copyErr) {
+        console.error("duplicateProperty: photo copy failed", {
+          sourcePropertyId: id,
+          targetPropertyId: newId,
+          fromPath: c.fromPath,
+          toPath: c.toPath,
+          error: copyErr.message,
+        });
+        continue; // best-effort: skip a failed copy, keep going
+      }
 
       const {
         data: { publicUrl },
@@ -1385,7 +1405,13 @@ export async function duplicateProperty(formData: FormData) {
 
   // Land the operator on the clone's edit page so they fix the address + rent;
   // the count drives the banner ("…including N photos").
-  redirect(`/dashboard/properties/${newId}?duplicated=${clonedCount}`);
+  const clonePhotoError = photoCloneResultParam(sourcePhotos.length, clonedCount);
+  const cloneParams = new URLSearchParams({ duplicated: String(clonedCount) });
+  if (clonePhotoError) {
+    cloneParams.set("photoerr", clonePhotoError);
+    cloneParams.set("photosource", String(sourcePhotos.length));
+  }
+  redirect(`/dashboard/properties/${newId}?${cloneParams.toString()}`);
 }
 
 export async function deleteProperty(formData: FormData) {

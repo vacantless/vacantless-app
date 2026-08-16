@@ -450,6 +450,7 @@ export default async function PropertyDetailPage({
     waitlist?: string;
     photoskipped?: string;
     photoerr?: string;
+    photosource?: string;
     duplicated?: string;
     imported?: string;
     dist?: string;
@@ -2392,6 +2393,23 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {(searchParams.photoerr === "copy0" ||
+        searchParams.photoerr === "copypartial") && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          {searchParams.photoerr === "copy0"
+            ? `No photos copied from the source rental${
+                Number(searchParams.photosource) > 0
+                  ? `, which had ${searchParams.photosource} ${
+                      searchParams.photosource === "1" ? "photo" : "photos"
+                    }`
+                  : ""
+              }. Add or repair photos before publishing.`
+            : `Only ${searchParams.duplicated ?? "some"} of ${
+                searchParams.photosource ?? "the source"
+              } photos copied. Review the photo set before publishing.`}
+        </p>
+      )}
+
       {searchParams.imported && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Prefilled{" "}
@@ -2466,7 +2484,9 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
-      {searchParams.photoerr && (
+      {searchParams.photoerr &&
+        searchParams.photoerr !== "copy0" &&
+        searchParams.photoerr !== "copypartial" && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {searchParams.photoerr === "type" ||
           searchParams.photoerr === "size" ||

@@ -113,9 +113,9 @@ VALUES
 -- photo-free on purpose so the empty-gallery / "No photos" label is also testable.
 INSERT INTO property_photos (id, organization_id, property_id, storage_path, url, sort_order, is_cover)
 VALUES
- ('77777777-7777-4777-8777-777777777701','b733a191-30fd-47fe-bd21-731404148026','11111111-1111-4111-8111-111111111101','seed/833-pillette/living.jpg','https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80',0,true),
- ('77777777-7777-4777-8777-777777777702','b733a191-30fd-47fe-bd21-731404148026','11111111-1111-4111-8111-111111111101','seed/833-pillette/bedroom.jpg','https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=80',1,false),
- ('77777777-7777-4777-8777-777777777703','b733a191-30fd-47fe-bd21-731404148026','11111111-1111-4111-8111-111111111101','seed/833-pillette/kitchen.jpg','https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1200&q=80',2,false);
+ ('77777777-7777-4777-8777-777777777701','b733a191-30fd-47fe-bd21-731404148026','11111111-1111-4111-8111-111111111101','b733a191-30fd-47fe-bd21-731404148026/11111111-1111-4111-8111-111111111101/living.jpg','https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80',0,true),
+ ('77777777-7777-4777-8777-777777777702','b733a191-30fd-47fe-bd21-731404148026','11111111-1111-4111-8111-111111111101','b733a191-30fd-47fe-bd21-731404148026/11111111-1111-4111-8111-111111111101/bedroom.jpg','https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=80',1,false),
+ ('77777777-7777-4777-8777-777777777703','b733a191-30fd-47fe-bd21-731404148026','11111111-1111-4111-8111-111111111101','b733a191-30fd-47fe-bd21-731404148026/11111111-1111-4111-8111-111111111101/kitchen.jpg','https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1200&q=80',2,false);
 UPDATE properties SET photos_ready=true WHERE id='11111111-1111-4111-8111-111111111101';
 
 COMMIT;

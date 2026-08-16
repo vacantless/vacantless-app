@@ -12,6 +12,7 @@ import {
   extFromStoragePath,
   photoStoragePath,
   planPhotoClone,
+  photoCloneResultParam,
   sortPhotos,
   nextSortOrder,
   reorder,
@@ -239,6 +240,37 @@ ok(
     plan.filter((c) => c.is_cover).length === 1,
   );
   ok("planPhotoClone: empty source -> empty plan", planPhotoClone([], "o", "d", () => "x").length === 0);
+}
+
+{
+  const plan = planPhotoClone(
+    [
+      {
+        id: "legacy",
+        storage_path: "other-org/source-property/legacy.jpg",
+        sort_order: 0,
+        is_cover: true,
+      },
+    ],
+    "owning-org",
+    "new-property",
+    () => "new-photo",
+  );
+  ok(
+    "planPhotoClone: cross-prefix source path is preserved",
+    plan[0]?.fromPath === "other-org/source-property/legacy.jpg",
+  );
+  ok(
+    "planPhotoClone: cross-prefix clone writes under owning org",
+    plan[0]?.toPath === "owning-org/new-property/new-photo.jpg",
+  );
+}
+
+{
+  ok("photoCloneResultParam: no source photos is clean", photoCloneResultParam(0, 0) === null);
+  ok("photoCloneResultParam: all copied is clean", photoCloneResultParam(3, 3) === null);
+  ok("photoCloneResultParam: zero copied from photo source warns", photoCloneResultParam(3, 0) === "copy0");
+  ok("photoCloneResultParam: partial copy warns", photoCloneResultParam(3, 2) === "copypartial");
 }
 
 // --- summary ---------------------------------------------------------------
