@@ -1212,7 +1212,7 @@ function SimpleGetOnline({
           <input type="hidden" name="channel" value={row.key} />
           <button
             type="submit"
-            aria-label={`Authorize Vacantless to publish this listing to ${row.label} automatically without another click`}
+            aria-label={`Authorize Vacantless to post this listing to ${row.label} when you publish`}
             className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
           >
             Authorize auto-post

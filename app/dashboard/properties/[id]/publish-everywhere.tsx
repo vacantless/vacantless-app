@@ -180,8 +180,8 @@ function ChannelAutomationAction({
         <input type="hidden" name="property_id" value={propertyId} />
         <input type="hidden" name="channel" value={row.key} />
         <p className="mb-1 text-[11px] leading-relaxed text-amber-800">
-          Authorize Vacantless to publish this listing to this account
-          automatically without another click.
+          Authorize Vacantless to post this listing to this account when you
+          publish. You still approve the destinations before anything goes out.
         </p>
         <button
           type="submit"
