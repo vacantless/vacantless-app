@@ -41,6 +41,7 @@ import { publishProperty, requestConciergePublish, openGuidedPosting } from "../
 import {
   authorizeAutopilotSubmit,
   authorizeChannelAutomation,
+  readInstantPublishDestinations,
   revokeChannelAutomation,
 } from "../distribution-actions";
 import {
@@ -167,6 +168,11 @@ type ResolvedRow = {
   automationAction?: "authorize" | "revoke" | null;
 };
 
+type InstantDestination = {
+  key: string;
+  label: string;
+};
+
 function ChannelAutomationAction({
   propertyId,
   row,
@@ -290,6 +296,14 @@ export function PublishEverywhere({
   runItems?: PublishEverywhereRunItem[];
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmDestinations, setConfirmDestinations] = useState<
+    InstantDestination[]
+  >([]);
+  const [confirmDestinationsLoading, setConfirmDestinationsLoading] =
+    useState(false);
+  const [confirmDestinationsError, setConfirmDestinationsError] = useState<
+    string | null
+  >(null);
 
   const addressLabel = basics.address || replyInputs.address || "this rental";
   const rentLabel =
@@ -314,6 +328,10 @@ export function PublishEverywhere({
   const reach = summarizeReach(resolved.map((r) => r.bucket), true);
   const byBucket = (b: PublishBucket) => resolved.filter((r) => r.bucket === b);
   const instantRows = byBucket("instant");
+  const instantDestinationsFromRows = instantRows.map(({ key, label }) => ({
+    key,
+    label,
+  }));
   const forYou = byBucket("for_you");
   const setupRows = resolved.filter(
     (r) => r.mode === "needs_connection" || r.mode === "brokerage_gated",
@@ -342,6 +360,22 @@ export function PublishEverywhere({
 
   const publishBlockedByBasics = setupOutstanding > 0;
   const canPublish = !publishBlockedByBasics && canSetLive;
+
+  async function openConfirm() {
+    setConfirmDestinations(instantDestinationsFromRows);
+    setConfirmDestinationsError(null);
+    setConfirmOpen(true);
+    setConfirmDestinationsLoading(true);
+    try {
+      setConfirmDestinations(await readInstantPublishDestinations(propertyId));
+    } catch {
+      setConfirmDestinationsError(
+        "We could not refresh the connected account list. Close this and try again before publishing.",
+      );
+    } finally {
+      setConfirmDestinationsLoading(false);
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
@@ -427,7 +461,7 @@ export function PublishEverywhere({
                 {publicLink && <CopyLink url={publicLink} />}
                 <button
                   type="button"
-                  onClick={() => setConfirmOpen(true)}
+                  onClick={openConfirm}
                   className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
                 >
                   <Icons.bolt className="h-4 w-4" />
@@ -458,7 +492,7 @@ export function PublishEverywhere({
             )}
             <button
               type="button"
-              onClick={() => setConfirmOpen(true)}
+              onClick={openConfirm}
               className="mt-4 inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
             >
               <Icons.bolt className="h-4 w-4" />
@@ -507,7 +541,7 @@ export function PublishEverywhere({
             {canPublish ? (
               <button
                 type="button"
-                onClick={() => setConfirmOpen(true)}
+                onClick={openConfirm}
                 className="mx-auto flex w-full max-w-md flex-col items-center gap-0.5 rounded-2xl bg-gradient-to-b from-green-400 to-green-600 px-6 py-4 text-lg font-black text-emerald-950 shadow-lg transition hover:-translate-y-0.5"
               >
                 <span className="inline-flex items-center gap-2">
@@ -668,12 +702,14 @@ export function PublishEverywhere({
       </aside>
 
       {confirmOpen && (
-        <ConfirmModal
-          propertyId={propertyId}
-          addressLabel={addressLabel}
-          instantRows={instantRows}
-          forYouRows={forYou}
-          conciergeDeskEnabled={conciergeDeskEnabled}
+          <ConfirmModal
+            propertyId={propertyId}
+            addressLabel={addressLabel}
+            instantDestinations={confirmDestinations}
+            instantDestinationsLoading={confirmDestinationsLoading}
+            instantDestinationsError={confirmDestinationsError}
+            forYouRows={forYou}
+            conciergeDeskEnabled={conciergeDeskEnabled}
           conciergeUsage={conciergeUsage}
           onClose={() => setConfirmOpen(false)}
         />
@@ -1024,7 +1060,9 @@ function ApprovalModal({
 function ConfirmModal({
   propertyId,
   addressLabel,
-  instantRows,
+  instantDestinations,
+  instantDestinationsLoading,
+  instantDestinationsError,
   forYouRows,
   conciergeDeskEnabled,
   conciergeUsage,
@@ -1032,14 +1070,16 @@ function ConfirmModal({
 }: {
   propertyId: string;
   addressLabel: string;
-  instantRows: ResolvedRow[];
+  instantDestinations: InstantDestination[];
+  instantDestinationsLoading: boolean;
+  instantDestinationsError: string | null;
   forYouRows: ResolvedRow[];
   conciergeDeskEnabled: boolean;
   conciergeUsage: { used: number; included: number };
   onClose: () => void;
 }) {
   const preflight = derivePublishPreflight(forYouRows);
-  const instantCount = instantRows.length + 2;
+  const instantCount = instantDestinations.length + 2;
   const signInText =
     preflight.signInNeeded.length === 1
       ? "1 site needs sign-in"
@@ -1082,18 +1122,34 @@ function ConfirmModal({
               INSTANT
             </span>
           </div>
-          {instantRows.map((r) => (
-            <div
-              key={r.key}
-              className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]"
-            >
-              {CHANNEL_GLYPH[r.key] ?? "🏠"} {r.label}
-              <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
-                INSTANT
-              </span>
+          {instantDestinationsLoading ? (
+            <div className="border-b border-gray-100 py-2.5 text-[13px] text-gray-600">
+              Refreshing connected accounts...
             </div>
-          ))}
+          ) : instantDestinations.length > 0 ? (
+            instantDestinations.map((r) => (
+              <div
+                key={r.key}
+                className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]"
+              >
+                {CHANNEL_GLYPH[r.key] ?? "🏠"} {r.label}
+                <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
+                  INSTANT
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="border-b border-gray-100 py-2.5 text-[13px] text-gray-600">
+              No connected account posts are authorized right now.
+            </div>
+          )}
         </div>
+
+        {instantDestinationsError && (
+          <p className="my-3.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-950">
+            {instantDestinationsError}
+          </p>
+        )}
 
         {preflight.signInNeeded.length > 0 && (
           <div className="my-3.5 rounded-xl border border-indigo-100 bg-indigo-50 px-3.5 py-3">
@@ -1166,7 +1222,10 @@ function ConfirmModal({
           <input type="hidden" name="id" value={propertyId} />
           <button
             type="submit"
-            className="flex-1 rounded-xl bg-gradient-to-b from-green-400 to-green-600 px-4 py-3 text-sm font-black text-emerald-950 hover:opacity-95"
+            disabled={
+              instantDestinationsLoading || Boolean(instantDestinationsError)
+            }
+            className="flex-1 rounded-xl bg-gradient-to-b from-green-400 to-green-600 px-4 py-3 text-sm font-black text-emerald-950 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Publish everywhere
           </button>

@@ -79,6 +79,15 @@ import {
 import { confirmLeaseupTakedownRemoved } from "@/lib/leaseup-takedown-confirm";
 import { buildRelistRadarClockUpdate } from "@/lib/relist-radar";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import {
+  authorizedInstantPublishDestinations,
+  type AutoDistributionAccountRow,
+  type InstantPublishDestination,
+} from "@/lib/auto-distribution";
+import {
+  propertyChannelAutomationRedirectPath,
+  settingsChannelAutomationRedirectPath,
+} from "@/lib/channel-automation-navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
@@ -89,8 +98,8 @@ function s(formData: FormData, key: string): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-function backTo(propertyId: string, msg: string): never {
-  redirect(`/dashboard/properties/${propertyId}?dist=${msg}#distribute`);
+function backTo(propertyId: string, msg: string, channel?: string): never {
+  redirect(propertyChannelAutomationRedirectPath(propertyId, msg, channel));
 }
 
 type OrgCtx = { id: string; reply_to_email: string | null; public_contact_phone: string | null };
@@ -254,9 +263,13 @@ async function userId(supabase: SupabaseClient): Promise<string | null> {
   return user?.id ?? null;
 }
 
-function channelAutomationBackTo(propertyId: string, msg: string): never {
-  if (propertyId) backTo(propertyId, msg);
-  redirect(`/dashboard/settings?tab=distribution&dist=${msg}`);
+function channelAutomationBackTo(
+  propertyId: string,
+  msg: string,
+  channel?: string,
+): never {
+  if (propertyId) backTo(propertyId, msg, channel);
+  redirect(settingsChannelAutomationRedirectPath(msg, channel));
 }
 
 function apiAutomaticChannelFromForm(
@@ -269,7 +282,7 @@ function apiAutomaticChannelFromForm(
   }
   const channel = channelByKey(channelRaw);
   if (!channel || channel.mode !== "api_automatic") {
-    channelAutomationBackTo(propertyId, "channel_auto_badchannel");
+    channelAutomationBackTo(propertyId, "channel_auto_badchannel", channelRaw);
   }
   return channelRaw;
 }
@@ -287,6 +300,33 @@ async function requireCurrentOrgProperty(
     .eq("organization_id", orgId)
     .maybeSingle();
   if (!property) redirect(FORBIDDEN);
+}
+
+export async function readInstantPublishDestinations(
+  propertyId: string,
+): Promise<InstantPublishDestination[]> {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const id = String(propertyId ?? "").trim();
+  if (!id) return [];
+
+  const supabase = createClient();
+  const { data: property } = await supabase
+    .from("properties")
+    .select("id, organization_id")
+    .eq("id", id)
+    .maybeSingle();
+  const row = property as { id: string; organization_id: string | null } | null;
+  if (!row?.organization_id) redirect(FORBIDDEN);
+
+  const { data: accountRows } = await supabase
+    .from("distribution_channel_accounts")
+    .select("channel, account_status, automation_authorized")
+    .eq("organization_id", row.organization_id);
+
+  return authorizedInstantPublishDestinations({
+    organizationId: row.organization_id,
+    accountRows: (accountRows ?? []) as AutoDistributionAccountRow[],
+  });
 }
 
 async function recordChannelAutomationConsentAttempt(
@@ -375,7 +415,7 @@ export async function authorizeChannelAutomation(formData: FormData) {
     .maybeSingle();
   const acct = account as { account_status: string | null } | null;
   if (!acct || acct.account_status !== "connected") {
-    channelAutomationBackTo(propertyId, "channel_auto_connectfirst");
+    channelAutomationBackTo(propertyId, "channel_auto_connectfirst", channel);
   }
 
   const nowISO = new Date().toISOString();
@@ -393,7 +433,7 @@ export async function authorizeChannelAutomation(formData: FormData) {
     .select("channel")
     .maybeSingle();
   if (error || !saved) {
-    channelAutomationBackTo(propertyId, "channel_auto_error");
+    channelAutomationBackTo(propertyId, "channel_auto_error", channel);
   }
 
   await recordChannelAutomationConsentAttempt(supabase, {
@@ -406,10 +446,10 @@ export async function authorizeChannelAutomation(formData: FormData) {
 
   if (propertyId) {
     revalidatePath(`/dashboard/properties/${propertyId}`);
-    backTo(propertyId, "channel_auto_on");
+    backTo(propertyId, "channel_auto_on", channel);
   }
   revalidatePath("/dashboard/settings");
-  redirect("/dashboard/settings?tab=distribution&dist=channel_auto_on");
+  redirect(settingsChannelAutomationRedirectPath("channel_auto_on", channel));
 }
 
 export async function revokeChannelAutomation(formData: FormData) {
@@ -439,7 +479,7 @@ export async function revokeChannelAutomation(formData: FormData) {
     .select("channel")
     .maybeSingle();
   if (error || !saved) {
-    channelAutomationBackTo(propertyId, "channel_auto_error");
+    channelAutomationBackTo(propertyId, "channel_auto_error", channel);
   }
 
   await recordChannelAutomationConsentAttempt(supabase, {
@@ -452,10 +492,10 @@ export async function revokeChannelAutomation(formData: FormData) {
 
   if (propertyId) {
     revalidatePath(`/dashboard/properties/${propertyId}`);
-    backTo(propertyId, "channel_auto_off");
+    backTo(propertyId, "channel_auto_off", channel);
   }
   revalidatePath("/dashboard/settings");
-  redirect("/dashboard/settings?tab=distribution&dist=channel_auto_off");
+  redirect(settingsChannelAutomationRedirectPath("channel_auto_off", channel));
 }
 
 // S570: the operator authorizes autopilot to post a prepared concierge item
