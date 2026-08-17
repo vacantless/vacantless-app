@@ -22,7 +22,7 @@ const migration = fs.readFileSync(
   "utf8",
 );
 const qaSeed = fs.readFileSync("scripts/seed-codex-qa-northstar.sql", "utf8");
-const rehomeScript = fs.readFileSync("scripts/rehome-property-photo-prefixes.mjs", "utf8");
+const rehomeScriptPath = "scripts/rehome-property-photo-prefixes.mjs";
 
 ok(
   "duplicate copy imports the admin client",
@@ -94,12 +94,7 @@ ok(
       "'b733a191-30fd-47fe-bd21-731404148026/11111111-1111-4111-8111-111111111101/living.jpg'",
     ),
 );
-ok(
-  "rehome script preflights table update before storage copy",
-  rehomeScript.includes("update privilege preflight failed before storage copy") &&
-    rehomeScript.indexOf("await preflightUpdatePrivilege(row)") <
-      rehomeScript.indexOf("await ensureCopied(row, toPath)"),
-);
+ok("dead rehome script is deleted", !fs.existsSync(rehomeScriptPath));
 
 console.log(`\nduplicate-photo-copy: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

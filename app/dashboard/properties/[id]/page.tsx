@@ -2393,6 +2393,7 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {/* photoerr also carries duplicate-copy outcomes; render them as scoped warnings, not upload failures. */}
       {(searchParams.photoerr === "copy0" ||
         searchParams.photoerr === "copypartial") && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
@@ -2484,6 +2485,7 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
+      {/* Upload/import photoerr values stay here; duplicate-copy outcomes render in the amber banner above. */}
       {searchParams.photoerr &&
         searchParams.photoerr !== "copy0" &&
         searchParams.photoerr !== "copypartial" && (
