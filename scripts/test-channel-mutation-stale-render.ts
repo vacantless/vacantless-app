@@ -287,19 +287,22 @@ ok(
     ),
 );
 ok(
-  "fresh confirm read uses property org account rows and the shared predicate",
-  freshRead.includes('.from("properties")') &&
-    freshRead.includes('.select("id, organization_id")') &&
+  "fresh confirm read uses the current-org property helper and shared predicate",
+  freshRead.includes("const org = await getCurrentOrg();") &&
+    freshRead.includes('if (!org) redirect("/onboarding");') &&
+    freshRead.includes("await requireCurrentOrgProperty(supabase, id, org.id);") &&
     freshRead.includes('.from("distribution_channel_accounts")') &&
     freshRead.includes(
       '.select("channel, account_status, automation_authorized")',
     ) &&
+    freshRead.includes('.eq("organization_id", org.id)') &&
     freshRead.includes("authorizedInstantPublishDestinations"),
 );
 ok(
-  "plain no-destination button form remains for empty initial destination list",
-  confirmButton.includes("if (destinations.length === 0)") &&
-    confirmButton.includes("<form action={publishProperty}"),
+  "top publish button does not bypass the fresh read for an empty initial destination list",
+  !confirmButton.includes("if (destinations.length === 0)") &&
+    !confirmButton.includes("<form action={publishProperty} id={id}") &&
+    confirmButton.includes("onClick={openConfirm}"),
 );
 ok(
   "top publish confirm refreshes destinations on open and fails closed",

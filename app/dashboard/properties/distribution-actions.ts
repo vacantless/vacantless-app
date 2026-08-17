@@ -309,22 +309,18 @@ export async function readInstantPublishDestinations(
   const id = String(propertyId ?? "").trim();
   if (!id) return [];
 
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
   const supabase = createClient();
-  const { data: property } = await supabase
-    .from("properties")
-    .select("id, organization_id")
-    .eq("id", id)
-    .maybeSingle();
-  const row = property as { id: string; organization_id: string | null } | null;
-  if (!row?.organization_id) redirect(FORBIDDEN);
+  await requireCurrentOrgProperty(supabase, id, org.id);
 
   const { data: accountRows } = await supabase
     .from("distribution_channel_accounts")
     .select("channel, account_status, automation_authorized")
-    .eq("organization_id", row.organization_id);
+    .eq("organization_id", org.id);
 
   return authorizedInstantPublishDestinations({
-    organizationId: row.organization_id,
+    organizationId: org.id,
     accountRows: (accountRows ?? []) as AutoDistributionAccountRow[],
   });
 }

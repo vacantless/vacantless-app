@@ -56,6 +56,8 @@ export function ConfirmPublishButton({
   const [destinationError, setDestinationError] = useState<string | null>(null);
   const autoId = useId();
   const titleId = `${id ?? autoId}-publish-confirm-title`;
+  const hasFreshDestinations = freshDestinations.length > 0;
+  const showingInstantCommitment = loadingDestinations || hasFreshDestinations;
 
   async function openConfirm() {
     setFreshDestinations(destinations);
@@ -71,17 +73,6 @@ export function ConfirmPublishButton({
     } finally {
       setLoadingDestinations(false);
     }
-  }
-
-  if (destinations.length === 0) {
-    return (
-      <form action={publishProperty} id={id} className={formClassName}>
-        <input type="hidden" name="id" value={propertyId} />
-        <button type="submit" className={className} style={style}>
-          <ButtonContent label={label}>{children}</ButtonContent>
-        </button>
-      </form>
-    );
   }
 
   return (
@@ -112,11 +103,14 @@ export function ConfirmPublishButton({
               id={titleId}
               className="mt-2 text-lg font-semibold text-gray-950"
             >
-              Approve connected account posts
+              {showingInstantCommitment
+                ? "Approve connected account posts"
+                : "Publish rental"}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              These operator-owned connected accounts will receive a public post
-              as soon as you approve publishing.
+              {showingInstantCommitment
+                ? "These operator-owned connected accounts will receive a public post as soon as you approve publishing."
+                : "This makes the public renter page live. No connected account posts are authorized right now."}
             </p>
 
             <div className="mt-4 rounded-lg border border-gray-200">
@@ -128,7 +122,7 @@ export function ConfirmPublishButton({
                   <li className="px-3 py-2.5 text-sm text-gray-600">
                     Refreshing connected accounts...
                   </li>
-                ) : freshDestinations.length > 0 ? (
+                ) : hasFreshDestinations ? (
                   freshDestinations.map((destination) => (
                     <li
                       key={destination.key}
@@ -162,7 +156,7 @@ export function ConfirmPublishButton({
                 disabled={loadingDestinations || Boolean(destinationError)}
                 className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {freshDestinations.length > 0 ? "Approve & publish" : "Publish"}
+                {hasFreshDestinations ? "Approve & publish" : "Publish"}
               </button>
               <button
                 type="button"
