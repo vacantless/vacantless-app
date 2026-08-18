@@ -97,6 +97,7 @@ import {
   ConfirmPublishButton,
   type InstantDestination,
 } from "./confirm-publish-button";
+import { PhotoUploadLink } from "./photo-upload-modal";
 
 export type QualityView = {
   listing: ListingQuality;
@@ -1137,12 +1138,11 @@ function SimpleGetOnline({
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
       <span className="font-semibold">Photo boost:</span>
       <span>Photos are optional for publishing, but they help renters trust the ad.</span>
-      <a
-        href="#property-photos"
+      <PhotoUploadLink
         className="font-semibold text-blue-900 underline decoration-blue-300 underline-offset-2"
       >
         Add photos
-      </a>
+      </PhotoUploadLink>
     </div>
   ) : null;
   const oneTapFooter = launchRun.conciergeDeskEnabled ? (
@@ -1651,12 +1651,18 @@ function SimplePostingPlan({
               <p className="text-sm font-semibold text-gray-900">{step.label}</p>
               <p className="text-xs text-gray-600">{step.detail}</p>
             </div>
-            <a
-              href={step.href}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-            >
-              {step.action}
-            </a>
+            {step.href === "#property-photos" ? (
+              <PhotoUploadLink className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                {step.action}
+              </PhotoUploadLink>
+            ) : (
+              <a
+                href={step.href}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                {step.action}
+              </a>
+            )}
           </li>
         ))}
       </ol>

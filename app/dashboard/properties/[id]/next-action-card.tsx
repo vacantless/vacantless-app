@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { PRIMARY_ACTION_CLASS } from "@/components/ui";
 import type { NextAction } from "@/lib/rental-next-action";
+import { PhotoUploadLink } from "./photo-upload-modal";
 
 // The rental lifecycle "next action" card (IA Step 4 slice 3, S279). Sits under
 // the read-only rail and turns the current step into a guided, PRE-FILLED prompt:
@@ -78,10 +79,20 @@ export function NextActionCard({ action }: { action: NextAction }) {
       )}
 
       <div className="mt-4">
-        <Link href={cta.href} className={`${PRIMARY_ACTION_CLASS} bg-brand`}>
-          {cta.label}
-          <span aria-hidden>→</span>
-        </Link>
+        {cta.href.endsWith("#property-photos") ? (
+          <PhotoUploadLink
+            href={cta.href}
+            className={`${PRIMARY_ACTION_CLASS} bg-brand`}
+          >
+            {cta.label}
+            <span aria-hidden>→</span>
+          </PhotoUploadLink>
+        ) : (
+          <Link href={cta.href} className={`${PRIMARY_ACTION_CLASS} bg-brand`}>
+            {cta.label}
+            <span aria-hidden>→</span>
+          </Link>
+        )}
       </div>
     </div>
   );

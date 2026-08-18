@@ -139,6 +139,9 @@ export function TabbedSections({
       const target = e.target as HTMLElement | null;
       const anchor = target?.closest?.("a");
       if (!anchor) return;
+      if (anchor.getAttribute("data-photo-upload-modal-trigger") === "true") {
+        return;
+      }
       const href = anchor.getAttribute("href");
       if (!href) return;
       const hashIdx = href.indexOf("#");

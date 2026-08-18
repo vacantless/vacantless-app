@@ -111,17 +111,33 @@ function uploadToSignedUrl({
   });
 }
 
-export function PhotoManager({
-  propertyId,
-  initialPhotos,
-  photoCap,
-  storageUpsell,
-}: {
+type PhotoUploadWorkspaceProps = {
   propertyId: string;
   initialPhotos: PropertyPhotoView[];
   photoCap: number;
   storageUpsell: StorageUpsell;
-}) {
+  sectionId?: string;
+  className?: string;
+  fileInputId?: string;
+  showHeader?: boolean;
+  showImportTools?: boolean;
+  showStorageUpsell?: boolean;
+  onUploadSuccess?: () => void;
+};
+
+export function PhotoUploadWorkspace({
+  propertyId,
+  initialPhotos,
+  photoCap,
+  storageUpsell,
+  sectionId,
+  className = "mb-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm",
+  fileInputId = "photo-upload",
+  showHeader = true,
+  showImportTools = true,
+  showStorageUpsell = true,
+  onUploadSuccess,
+}: PhotoUploadWorkspaceProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [photos, setPhotos] = useState<PropertyPhotoView[]>(initialPhotos);
@@ -280,6 +296,7 @@ export function PhotoManager({
         : `${confirmed.added} photos added.`,
     );
     router.refresh();
+    onUploadSuccess?.();
   }
 
   function formDataForPhoto(photoId: string, direction?: "up" | "down") {
@@ -375,17 +392,19 @@ export function PhotoManager({
 
   return (
     <div
-      id="property-photos"
-      className="mb-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+      id={sectionId}
+      className={className}
     >
-      <div className="mb-3 flex items-center gap-2.5">
-        <IconTile size="sm">
-          <Icons.page className="h-4 w-4" />
-        </IconTile>
-        <h3 className="text-sm font-semibold text-gray-900">
-          Photos for this rental
-        </h3>
-      </div>
+      {showHeader && (
+        <div className="mb-3 flex items-center gap-2.5">
+          <IconTile size="sm">
+            <Icons.page className="h-4 w-4" />
+          </IconTile>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Photos for this rental
+          </h3>
+        </div>
+      )}
       <p className="mb-4 text-xs text-gray-500">
         Add photos renters will see on your listing page. The{" "}
         <strong>cover photo</strong> shows first. Drag isn&apos;t needed, just
@@ -480,7 +499,7 @@ export function PhotoManager({
         </ul>
       )}
 
-      {currentUpsell.showUpsell && (
+      {showStorageUpsell && currentUpsell.showUpsell && (
         <p className="mb-3 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-xs text-gray-600">
           {currentUpsell.atCap
             ? `You're at your plan's ${currentUpsell.cap}-photo limit for this rental.`
@@ -501,7 +520,7 @@ export function PhotoManager({
           <div className="flex flex-wrap items-center gap-3">
             <input
               ref={fileInputRef}
-              id="photo-upload"
+              id={fileInputId}
               type="file"
               aria-label="Add photos to this rental"
               accept={ALLOWED_PHOTO_TYPES.join(",")}
@@ -565,43 +584,63 @@ export function PhotoManager({
             </ul>
           )}
 
-          <details className="mt-3">
-            <summary className="cursor-pointer text-xs font-medium text-brand">
-              Or import from image links
-            </summary>
-            <form action={importPropertyPhotosFromUrls} className="mt-2">
-              <input type="hidden" name="property_id" value={propertyId} />
-              <p className="mb-2 text-xs text-gray-500">
-                Paste one <strong>direct image link</strong> per line (each
-                should open the image itself — ending in .jpg, .png, .webp, or
-                .gif). Gallery pages and login-protected links won&apos;t work.
-              </p>
-              <textarea
-                name="photo_urls"
-                rows={4}
-                required
-                placeholder={
-                  "https://example.com/photos/living-room.jpg\nhttps://example.com/photos/kitchen.jpg"
-                }
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
-              />
-              <button
-                type="submit"
-                className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Import from links
-              </button>
-            </form>
-          </details>
+          {showImportTools && (
+            <>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-medium text-brand">
+                  Or import from image links
+                </summary>
+                <form action={importPropertyPhotosFromUrls} className="mt-2">
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <p className="mb-2 text-xs text-gray-500">
+                    Paste one <strong>direct image link</strong> per line (each
+                    should open the image itself — ending in .jpg, .png, .webp,
+                    or .gif). Gallery pages and login-protected links won&apos;t
+                    work.
+                  </p>
+                  <textarea
+                    name="photo_urls"
+                    rows={4}
+                    required
+                    placeholder={
+                      "https://example.com/photos/living-room.jpg\nhttps://example.com/photos/kitchen.jpg"
+                    }
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                  />
+                  <button
+                    type="submit"
+                    className="mt-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Import from links
+                  </button>
+                </form>
+              </details>
 
-          <details className="mt-3">
-            <summary className="cursor-pointer text-xs font-medium text-brand">
-              Or import from a Dropbox folder
-            </summary>
-            <DropboxFolderImport propertyId={propertyId} />
-          </details>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-medium text-brand">
+                  Or import from a Dropbox folder
+                </summary>
+                <DropboxFolderImport propertyId={propertyId} />
+              </details>
+            </>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+export function PhotoManager(
+  props: Omit<
+    PhotoUploadWorkspaceProps,
+    | "sectionId"
+    | "className"
+    | "fileInputId"
+    | "showHeader"
+    | "showImportTools"
+    | "showStorageUpsell"
+    | "onUploadSuccess"
+  >,
+) {
+  return <PhotoUploadWorkspace {...props} sectionId="property-photos" />;
 }

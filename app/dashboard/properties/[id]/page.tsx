@@ -46,6 +46,7 @@ import { qrSvg } from "@/lib/qr-svg";
 import { buildAllFillSheets } from "@/lib/listing-fill-sheet";
 import { FillSheetCard } from "./fill-sheet-card";
 import { PhotoManager } from "./photo-manager";
+import { PhotoUploadLink, PhotoUploadModal } from "./photo-upload-modal";
 import { buildShareReadiness } from "@/lib/share-readiness";
 import { feedSignal } from "@/lib/rental-readiness";
 import {
@@ -2434,9 +2435,9 @@ export default async function PropertyDetailPage({
           <strong>Next: add photos.</strong> Your pasted listing didn&apos;t
           include any — and listings with photos get far more inquiries on
           Kijiji, Facebook, and Zumper.{" "}
-          <a href="#property-photos" className="font-medium underline">
+          <PhotoUploadLink className="font-medium underline">
             Add photos →
-          </a>
+          </PhotoUploadLink>
         </p>
       )}
 
@@ -2589,6 +2590,13 @@ export default async function PropertyDetailPage({
 
       {nextAction && <NextActionCard action={nextAction} />}
 
+      <PhotoUploadModal
+        propertyId={p.id}
+        initialPhotos={photoRows}
+        photoCap={photoCap}
+        storageUpsell={storageUpsell}
+      />
+
       <TabbedSections initialTab={defaultTab}>
 
       <TabPanel
@@ -2654,8 +2662,7 @@ export default async function PropertyDetailPage({
                 Review the ad text in plain English before posting.
               </p>
             </a>
-            <a
-              href="#property-photos"
+            <PhotoUploadLink
               className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:border-gray-300"
             >
               <p className="text-sm font-semibold text-gray-900">
@@ -2666,7 +2673,7 @@ export default async function PropertyDetailPage({
                   ? "Photos are already added."
                   : "Add photos next; they make the ad much stronger."}
               </p>
-            </a>
+            </PhotoUploadLink>
           </div>
         </section>
 
@@ -3541,12 +3548,11 @@ export default async function PropertyDetailPage({
                         {c.key === "photos" && (
                           <>
                             {" "}
-                            <a
-                              href="#property-photos"
+                            <PhotoUploadLink
                               className="font-medium text-brand underline"
                             >
                               Add photos →
-                            </a>
+                            </PhotoUploadLink>
                           </>
                         )}
                       </span>
