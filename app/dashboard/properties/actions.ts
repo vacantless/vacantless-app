@@ -98,8 +98,13 @@ import type { DraftFacts } from "@/lib/listing-description";
 import {
   isPublicBookable,
   normalizePropertyStatus,
+  type PropertyStatus,
 } from "@/lib/listing-state";
-import { hardDeletable } from "@/lib/property-archive";
+import {
+  archivePropertyStatusUpdate,
+  hardDeletable,
+  unarchivePropertyStatusUpdate,
+} from "@/lib/property-archive";
 import {
   validatePhotoUpload,
   extForType,
@@ -1476,12 +1481,10 @@ export async function archiveProperty(formData: FormData) {
   const p = property as { status: string | null } | null;
   if (!p) redirect("/dashboard/properties");
 
-  const next: { archived_at: string; status?: string } = {
-    archived_at: new Date().toISOString(),
-  };
-  if (p.status === "available" || p.status === "paused") {
-    next.status = "off_market";
-  }
+  const next = archivePropertyStatusUpdate(
+    p.status as PropertyStatus | null,
+    new Date().toISOString(),
+  );
 
   await supabase
     .from("properties")
@@ -1502,9 +1505,22 @@ export async function unarchiveProperty(formData: FormData) {
   if (!org) redirect("/onboarding");
 
   const supabase = createClient();
+  const { data: property } = await supabase
+    .from("properties")
+    .select("status, status_before_archive")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+
+  const p = property as {
+    status: PropertyStatus | null;
+    status_before_archive: PropertyStatus | null;
+  } | null;
+  if (!p) redirect("/dashboard/properties");
+
   await supabase
     .from("properties")
-    .update({ archived_at: null })
+    .update(unarchivePropertyStatusUpdate(p))
     .eq("id", id)
     .eq("organization_id", org.id);
 
