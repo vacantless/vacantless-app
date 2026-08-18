@@ -11,19 +11,25 @@ import {
 import { createPortal } from "react-dom";
 import { Icons } from "@/components/icons";
 import type { StorageUpsell } from "@/lib/billing";
+import {
+  PHOTO_UPLOAD_MODAL_FOCUSABLE_SELECTOR,
+  isPhotoUploadModalFocusableCandidate,
+  photoUploadModalTabTarget,
+} from "@/lib/photo-upload-modal-focus";
 import type { PropertyPhotoView } from "../actions";
 import { PhotoUploadWorkspace } from "./photo-manager";
 
 export const PHOTO_UPLOAD_MODAL_EVENT = "vacantless:open-photo-upload";
-export const PHOTO_UPLOAD_MODAL_FOCUSABLE_SELECTOR =
-  'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-type PhotoUploadModalFocusTarget = "first" | "last" | null;
 
 type PhotoUploadLinkProps = {
   href?: string;
   className?: string;
   children: ReactNode;
+};
+
+type InertedElement = {
+  element: HTMLElement;
+  hadInert: boolean;
 };
 
 function isPlainPrimaryClick(event: MouseEvent<HTMLAnchorElement>): boolean {
@@ -38,23 +44,23 @@ function isPlainPrimaryClick(event: MouseEvent<HTMLAnchorElement>): boolean {
 
 function isFocusableModalElement(element: Element): element is HTMLElement {
   if (!(element instanceof HTMLElement)) return false;
-  if (element.closest("[hidden]")) return false;
-  if (element.matches(":disabled")) return false;
-  if (element instanceof HTMLInputElement && element.type === "hidden") {
-    return false;
-  }
-
   const style = window.getComputedStyle(element);
-  if (style.display === "none" || style.visibility === "hidden") return false;
 
-  return Boolean(
-    element.offsetWidth ||
-      element.offsetHeight ||
-      element.getClientRects().length,
-  );
+  return isPhotoUploadModalFocusableCandidate({
+    hiddenAncestor: Boolean(element.closest("[hidden]")),
+    disabled: element.matches(":disabled"),
+    hiddenInput: element instanceof HTMLInputElement && element.type === "hidden",
+    display: style.display,
+    visibility: style.visibility,
+    hasLayout: Boolean(
+      element.offsetWidth ||
+        element.offsetHeight ||
+        element.getClientRects().length,
+    ),
+  });
 }
 
-export function getPhotoUploadModalFocusableElements(
+function getPhotoUploadModalFocusableElements(
   root: HTMLElement,
 ): HTMLElement[] {
   return Array.from(
@@ -62,20 +68,26 @@ export function getPhotoUploadModalFocusableElements(
   ).filter(isFocusableModalElement);
 }
 
-export function photoUploadModalTabTarget({
-  focusableCount,
-  activeIndex,
-  shiftKey,
-}: {
-  focusableCount: number;
-  activeIndex: number;
-  shiftKey: boolean;
-}): PhotoUploadModalFocusTarget {
-  if (focusableCount <= 0) return null;
-  if (activeIndex < 0) return shiftKey ? "last" : "first";
-  if (shiftKey && activeIndex === 0) return "last";
-  if (!shiftKey && activeIndex === focusableCount - 1) return "first";
-  return null;
+function inertBodySiblingsExcept(modalRoot: HTMLElement | null): InertedElement[] {
+  if (!modalRoot) return [];
+
+  const targets = Array.from(document.body.children).filter(
+    (element): element is HTMLElement =>
+      element instanceof HTMLElement && element !== modalRoot,
+  );
+
+  const inertedElements = targets.map((element) => ({
+    element,
+    hadInert: element.hasAttribute("inert"),
+  }));
+  inertedElements.forEach(({ element }) => element.setAttribute("inert", ""));
+  return inertedElements;
+}
+
+function restoreInertedElements(inertedElements: InertedElement[]) {
+  inertedElements.forEach(({ element, hadInert }) => {
+    if (!hadInert) element.removeAttribute("inert");
+  });
 }
 
 export function PhotoUploadLink({
@@ -113,6 +125,7 @@ export function PhotoUploadModal({
 }) {
   const [open, setOpen] = useState(false);
   const titleId = useId();
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -132,11 +145,9 @@ export function PhotoUploadModal({
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
-    const appShell = document.querySelector("main");
-    const appShellHadInert = appShell?.hasAttribute("inert") ?? false;
+    const inertedElements = inertBodySiblingsExcept(overlayRef.current);
 
     document.body.style.overflow = "hidden";
-    appShell?.setAttribute("inert", "");
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Tab") {
@@ -170,7 +181,7 @@ export function PhotoUploadModal({
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      if (!appShellHadInert) appShell?.removeAttribute("inert");
+      restoreInertedElements(inertedElements);
       window.removeEventListener("keydown", onKeyDown);
       window.clearTimeout(focusTimer);
       const opener = openerRef.current;
@@ -183,6 +194,7 @@ export function PhotoUploadModal({
 
   return createPortal(
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) setOpen(false);

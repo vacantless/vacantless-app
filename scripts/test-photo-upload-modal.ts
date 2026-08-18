@@ -2,6 +2,12 @@
 // Run: npx tsx scripts/test-photo-upload-modal.ts
 
 import { readFileSync } from "fs";
+import {
+  PHOTO_UPLOAD_MODAL_FOCUSABLE_SELECTOR,
+  isPhotoUploadModalFocusableCandidate,
+  photoUploadModalTabTarget,
+  type PhotoUploadModalFocusableCandidate,
+} from "../lib/photo-upload-modal-focus";
 
 let passed = 0;
 let failed = 0;
@@ -19,83 +25,36 @@ function count(source: string, pattern: RegExp): number {
   return source.match(pattern)?.length ?? 0;
 }
 
-type FocusTarget = "first" | "last" | null;
-
-function modalTabTarget({
-  focusableCount,
-  activeIndex,
-  shiftKey,
-}: {
-  focusableCount: number;
-  activeIndex: number;
-  shiftKey: boolean;
-}): FocusTarget {
-  if (focusableCount <= 0) return null;
-  if (activeIndex < 0) return shiftKey ? "last" : "first";
-  if (shiftKey && activeIndex === 0) return "last";
-  if (!shiftKey && activeIndex === focusableCount - 1) return "first";
-  return null;
+function focusCandidate(
+  overrides: Partial<PhotoUploadModalFocusableCandidate> = {},
+): PhotoUploadModalFocusableCandidate {
+  return {
+    hiddenAncestor: false,
+    disabled: false,
+    hiddenInput: false,
+    display: "block",
+    visibility: "visible",
+    hasLayout: true,
+    ...overrides,
+  };
 }
 
-type FocusCandidate = {
-  label: string;
-  tag:
-    | "a"
-    | "button"
-    | "input"
-    | "select"
-    | "textarea"
-    | "div"
-    | "span";
-  href?: string;
-  tabindex?: string;
-  type?: string;
-  disabled?: boolean;
-  hidden?: boolean;
-  ancestorHidden?: boolean;
-  display?: "block" | "none";
-  visibility?: "visible" | "hidden";
-  offsetWidth?: number;
-  offsetHeight?: number;
-  rectCount?: number;
-};
-
-function matchesFocusableSelector(candidate: FocusCandidate): boolean {
-  if (candidate.tag === "a") return Boolean(candidate.href);
-  if (
-    candidate.tag === "button" ||
-    candidate.tag === "input" ||
-    candidate.tag === "select" ||
-    candidate.tag === "textarea"
-  ) {
-    return true;
-  }
-  return Boolean(candidate.tabindex && candidate.tabindex !== "-1");
-}
-
-function isVisibleFocusableCandidate(candidate: FocusCandidate): boolean {
-  if (candidate.hidden || candidate.ancestorHidden) return false;
-  if (candidate.disabled) return false;
-  if (candidate.tag === "input" && candidate.type === "hidden") return false;
-  if (candidate.display === "none" || candidate.visibility === "hidden") {
-    return false;
-  }
-  return Boolean(
-    candidate.offsetWidth || candidate.offsetHeight || candidate.rectCount,
-  );
-}
-
-function selectedFocusableLabels(candidates: FocusCandidate[]): string[] {
+function selectedFocusableLabels(
+  candidates: Array<{
+    label: string;
+    candidate: PhotoUploadModalFocusableCandidate;
+  }>,
+): string[] {
   return candidates
-    .filter(matchesFocusableSelector)
-    .filter(isVisibleFocusableCandidate)
-    .map((candidate) => candidate.label);
+    .filter(({ candidate }) => isPhotoUploadModalFocusableCandidate(candidate))
+    .map(({ label }) => label);
 }
 
 const modalSource = readFileSync(
   "app/dashboard/properties/[id]/photo-upload-modal.tsx",
   "utf8",
 );
+const focusTrapSource = readFileSync("lib/photo-upload-modal-focus.ts", "utf8");
 const managerSource = readFileSync(
   "app/dashboard/properties/[id]/photo-manager.tsx",
   "utf8",
@@ -120,6 +79,9 @@ const deeplinkSource = readFileSync(
   "app/dashboard/properties/[id]/section-deeplink-opener.tsx",
   "utf8",
 );
+const openModalBlock =
+  modalSource.match(/const openModal = \(\) => \{([\s\S]*?)\n    \};/)?.[1] ??
+  "";
 
 ok(
   "photo modal is a client component",
@@ -154,9 +116,8 @@ ok(
 ok(
   "photo modal captures the opener before opening",
   /openerRef = useRef<HTMLElement \| null>\(null\)/.test(modalSource) &&
-    /document\.activeElement instanceof HTMLElement[\s\S]*setOpen\(true\)/.test(
-      modalSource,
-    ),
+    /document\.activeElement instanceof HTMLElement/.test(openModalBlock) &&
+    /setOpen\(true\)/.test(openModalBlock),
 );
 ok(
   "photo modal renders a dialog",
@@ -167,16 +128,26 @@ ok(
   /document\.body\.style\.overflow = "hidden";/.test(modalSource),
 );
 ok(
+  "photo modal imports shared focus helpers from a plain module",
+  /from "@\/lib\/photo-upload-modal-focus"/.test(modalSource) &&
+    /import \{[\s\S]*PHOTO_UPLOAD_MODAL_FOCUSABLE_SELECTOR[\s\S]*isPhotoUploadModalFocusableCandidate[\s\S]*photoUploadModalTabTarget[\s\S]*\}/.test(
+      modalSource,
+    ),
+);
+ok(
   "photo modal portals outside the app shell",
   /import \{ createPortal \} from "react-dom";/.test(modalSource) &&
     /return createPortal\(/.test(modalSource) &&
     /document\.body/.test(modalSource),
 );
 ok(
-  "photo modal makes the page shell inert while open",
-  /document\.querySelector\("main"\)/.test(modalSource) &&
+  "photo modal makes background body siblings inert while open",
+  /inertBodySiblingsExcept/.test(modalSource) &&
+    /document\.body\.children/.test(modalSource) &&
+    /element !== modalRoot/.test(modalSource) &&
     /setAttribute\("inert", ""\)/.test(modalSource) &&
-    /removeAttribute\("inert"\)/.test(modalSource),
+    /restoreInertedElements\(inertedElements\)/.test(modalSource) &&
+    !/document\.querySelector\("main"\)/.test(modalSource),
 );
 ok(
   "photo modal traps Tab with a fresh focusable query",
@@ -298,7 +269,7 @@ ok(
 
 ok(
   "focus trap wraps first to last on Shift+Tab",
-  modalTabTarget({
+  photoUploadModalTabTarget({
     focusableCount: 3,
     activeIndex: 0,
     shiftKey: true,
@@ -306,7 +277,7 @@ ok(
 );
 ok(
   "focus trap wraps last to first on Tab",
-  modalTabTarget({
+  photoUploadModalTabTarget({
     focusableCount: 3,
     activeIndex: 2,
     shiftKey: false,
@@ -314,7 +285,7 @@ ok(
 );
 ok(
   "focus trap keeps middle focus in normal flow",
-  modalTabTarget({
+  photoUploadModalTabTarget({
     focusableCount: 3,
     activeIndex: 1,
     shiftKey: false,
@@ -322,12 +293,12 @@ ok(
 );
 ok(
   "focus trap handles focus outside the dialog",
-  modalTabTarget({
+  photoUploadModalTabTarget({
     focusableCount: 3,
     activeIndex: -1,
     shiftKey: false,
   }) === "first" &&
-    modalTabTarget({
+    photoUploadModalTabTarget({
       focusableCount: 3,
       activeIndex: -1,
       shiftKey: true,
@@ -335,7 +306,7 @@ ok(
 );
 ok(
   "focus trap empty list is a no-op",
-  modalTabTarget({
+  photoUploadModalTabTarget({
     focusableCount: 0,
     activeIndex: -1,
     shiftKey: true,
@@ -344,21 +315,28 @@ ok(
 ok(
   "focusable selection excludes hidden and disabled controls",
   selectedFocusableLabels([
-    { label: "link", tag: "a", href: "#x", rectCount: 1 },
-    { label: "disabled", tag: "button", disabled: true, rectCount: 1 },
-    { label: "hidden-input", tag: "input", type: "hidden", rectCount: 1 },
-    { label: "hidden-ancestor", tag: "button", ancestorHidden: true, rectCount: 1 },
-    { label: "display-none", tag: "button", display: "none", rectCount: 1 },
-    { label: "visibility-hidden", tag: "button", visibility: "hidden", rectCount: 1 },
-    { label: "tab-minus-one", tag: "div", tabindex: "-1", rectCount: 1 },
-    { label: "custom-tab", tag: "div", tabindex: "0", offsetWidth: 10 },
-  ]).join(",") === "link,custom-tab",
+    { label: "visible", candidate: focusCandidate() },
+    { label: "disabled", candidate: focusCandidate({ disabled: true }) },
+    { label: "hidden-input", candidate: focusCandidate({ hiddenInput: true }) },
+    {
+      label: "hidden-ancestor",
+      candidate: focusCandidate({ hiddenAncestor: true }),
+    },
+    { label: "display-none", candidate: focusCandidate({ display: "none" }) },
+    {
+      label: "visibility-hidden",
+      candidate: focusCandidate({ visibility: "hidden" }),
+    },
+    { label: "no-layout", candidate: focusCandidate({ hasLayout: false }) },
+  ]).join(",") === "visible",
 );
 ok(
   "focusable selector includes anchors buttons fields and non-negative tabindex",
-  modalSource.includes(
-    'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
-  ),
+  PHOTO_UPLOAD_MODAL_FOCUSABLE_SELECTOR ===
+    'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])' &&
+    focusTrapSource.includes(
+      'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ),
 );
 
 console.log(`photo-upload-modal: ${passed} passed, ${failed} failed`);
