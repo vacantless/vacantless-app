@@ -8,12 +8,17 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Icons } from "@/components/icons";
 import type { StorageUpsell } from "@/lib/billing";
 import type { PropertyPhotoView } from "../actions";
 import { PhotoUploadWorkspace } from "./photo-manager";
 
 export const PHOTO_UPLOAD_MODAL_EVENT = "vacantless:open-photo-upload";
+export const PHOTO_UPLOAD_MODAL_FOCUSABLE_SELECTOR =
+  'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+type PhotoUploadModalFocusTarget = "first" | "last" | null;
 
 type PhotoUploadLinkProps = {
   href?: string;
@@ -29,6 +34,48 @@ function isPlainPrimaryClick(event: MouseEvent<HTMLAnchorElement>): boolean {
     !event.ctrlKey &&
     !event.shiftKey
   );
+}
+
+function isFocusableModalElement(element: Element): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.closest("[hidden]")) return false;
+  if (element.matches(":disabled")) return false;
+  if (element instanceof HTMLInputElement && element.type === "hidden") {
+    return false;
+  }
+
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+
+  return Boolean(
+    element.offsetWidth ||
+      element.offsetHeight ||
+      element.getClientRects().length,
+  );
+}
+
+export function getPhotoUploadModalFocusableElements(
+  root: HTMLElement,
+): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll(PHOTO_UPLOAD_MODAL_FOCUSABLE_SELECTOR),
+  ).filter(isFocusableModalElement);
+}
+
+export function photoUploadModalTabTarget({
+  focusableCount,
+  activeIndex,
+  shiftKey,
+}: {
+  focusableCount: number;
+  activeIndex: number;
+  shiftKey: boolean;
+}): PhotoUploadModalFocusTarget {
+  if (focusableCount <= 0) return null;
+  if (activeIndex < 0) return shiftKey ? "last" : "first";
+  if (shiftKey && activeIndex === 0) return "last";
+  if (!shiftKey && activeIndex === focusableCount - 1) return "first";
+  return null;
 }
 
 export function PhotoUploadLink({
@@ -66,10 +113,18 @@ export function PhotoUploadModal({
 }) {
   const [open, setOpen] = useState(false);
   const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const openModal = () => setOpen(true);
+    const openModal = () => {
+      openerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      setOpen(true);
+    };
     window.addEventListener(PHOTO_UPLOAD_MODAL_EVENT, openModal);
     return () => window.removeEventListener(PHOTO_UPLOAD_MODAL_EVENT, openModal);
   }, []);
@@ -77,21 +132,56 @@ export function PhotoUploadModal({
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
+    const appShell = document.querySelector("main");
+    const appShellHadInert = appShell?.hasAttribute("inert") ?? false;
+
     document.body.style.overflow = "hidden";
+    appShell?.setAttribute("inert", "");
+
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Tab") {
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        const focusableElements = getPhotoUploadModalFocusableElements(dialog);
+        const activeIndex = focusableElements.findIndex(
+          (element) => element === document.activeElement,
+        );
+        const target = photoUploadModalTabTarget({
+          focusableCount: focusableElements.length,
+          activeIndex,
+          shiftKey: event.shiftKey,
+        });
+        if (!target) return;
+
+        event.preventDefault();
+        focusableElements[
+          target === "first" ? 0 : focusableElements.length - 1
+        ]?.focus();
+        return;
+      }
+
       if (event.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
-    window.setTimeout(() => closeButtonRef.current?.focus(), 0);
+    const focusTimer = window.setTimeout(
+      () => closeButtonRef.current?.focus(),
+      0,
+    );
+
     return () => {
       document.body.style.overflow = previousOverflow;
+      if (!appShellHadInert) appShell?.removeAttribute("inert");
       window.removeEventListener("keydown", onKeyDown);
+      window.clearTimeout(focusTimer);
+      const opener = openerRef.current;
+      if (opener && document.contains(opener)) opener.focus();
+      openerRef.current = null;
     };
   }, [open]);
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
       onClick={(event) => {
@@ -99,6 +189,7 @@ export function PhotoUploadModal({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -141,6 +232,7 @@ export function PhotoUploadModal({
           className="p-0"
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
