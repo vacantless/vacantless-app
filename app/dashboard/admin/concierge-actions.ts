@@ -385,9 +385,22 @@ export async function approveConciergeSubmit(formData: FormData) {
     .eq("mode", "concierge")
     .eq("publish_status", "needs_operator")
     .is("operator_submit_approved_at", null)
+    .is("external_url", null)
     .select("id, run_id, organization_id, channel, attempt_count")
     .maybeSingle();
-  if (!approved) redirect(`${DESK}?err=stale`);
+  if (!approved) {
+    const { data: alreadyPosted } = await admin
+      .from("distribution_run_items")
+      .select("id")
+      .eq("id", itemId)
+      .eq("mode", "concierge")
+      .eq("publish_status", "needs_operator")
+      .is("operator_submit_approved_at", null)
+      .not("external_url", "is", null)
+      .maybeSingle();
+    if (alreadyPosted) redirect(`${DESK}?err=already_posted`);
+    redirect(`${DESK}?err=stale`);
+  }
 
   // Append-only audit of the human approval (actor = the operator). Status is
   // unchanged (needs_operator -> needs_operator); the metadata records the
@@ -424,6 +437,36 @@ export async function approveConciergeSubmit(formData: FormData) {
 
   revalidatePath(DESK);
   redirect(`${DESK}?done=approved`);
+}
+
+export async function clearConciergeExternalUrl(formData: FormData) {
+  const itemId = String(formData.get("item_id") ?? "");
+  const ctx = await requireConciergeAdmin();
+  if (!ctx) redirect("/dashboard");
+  if (!itemId) redirect(DESK);
+  const now = new Date().toISOString();
+
+  // Clearing a captured URL is the explicit escape hatch for the rare case
+  // where the posted ad is wrong or already gone. It does not approve submit.
+  const { data: cleared } = await ctx.admin
+    .from("distribution_run_items")
+    .update({
+      external_url: null,
+      external_posted_at: null,
+      audit_message:
+        "Captured live ad URL cleared by the concierge desk; submit approval must be given again.",
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("mode", "concierge")
+    .eq("publish_status", "needs_operator")
+    .is("operator_submit_approved_at", null)
+    .not("external_url", "is", null)
+    .select("id");
+  if (!cleared || cleared.length === 0) redirect(`${DESK}?err=stale`);
+
+  revalidatePath(DESK);
+  redirect(`${DESK}?done=url_cleared`);
 }
 
 // Staff couldn't post it (channel blocked, listing pulled, etc.). Records the

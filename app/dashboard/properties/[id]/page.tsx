@@ -1917,6 +1917,13 @@ export default async function PropertyDetailPage({
                   title: "Auto-posting was not saved.",
                   body: "Refresh the channel row and try the authorization again.",
                 }
+              : searchParams.dist === "already_posted"
+                ? {
+                    tone: "warning",
+                    title: "Already posted, awaiting confirmation.",
+                    body:
+                      "An ad from a previous submit is already live for this listing. Confirm it or take it down before submitting again.",
+                  }
               : searchParams.dist === "radar_auto_on"
       ? {
           tone: "success",

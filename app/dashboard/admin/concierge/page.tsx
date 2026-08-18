@@ -13,6 +13,7 @@ import {
 import {
   approveConciergeSubmit,
   claimConciergeItem,
+  clearConciergeExternalUrl,
   completeConciergeItem,
   rejectConciergeItem,
 } from "../concierge-actions";
@@ -64,7 +65,11 @@ function conciergeQueueAge(
 // anyone not on the PROVISIONING_ADMIN_EMAILS allowlist. Lists every concierge
 // run item across all orgs that a staff member still has to post, with the
 // prepared listing and one-tap claim / mark-live / reject.
-export default async function ConciergeDeskPage() {
+export default async function ConciergeDeskPage({
+  searchParams,
+}: {
+  searchParams?: { err?: string; done?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -217,6 +222,17 @@ export default async function ConciergeDeskPage() {
     if (item.concierge_claimed_by) return false;
     return conciergeQueueAge(item.concierge_requested_at, nowMs)?.stale === true;
   }).length;
+  const postedAwaitingConfirmationCount = items.filter(
+    (item) =>
+      Boolean(item.external_url) &&
+      normalizePublishStatus(item.publish_status) === "needs_operator",
+  ).length;
+  const deskError =
+    searchParams?.err === "already_posted"
+      ? "An ad from a previous submit is already live for this listing. Confirm it or take it down before submitting again."
+      : searchParams?.err === "stale"
+        ? "That desk item changed before this action completed. Refresh and use the current controls."
+        : null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-6">
@@ -237,7 +253,20 @@ export default async function ConciergeDeskPage() {
             {staleUnclaimedCount} unclaimed for more than 24 hours
           </p>
         )}
+        {postedAwaitingConfirmationCount > 0 && (
+          <p className="text-xs font-medium text-emerald-700">
+            {postedAwaitingConfirmationCount} posted, awaiting confirmation
+          </p>
+        )}
       </header>
+      {deskError && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          {deskError}
+        </p>
+      )}
 
       {items.length === 0 ? (
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
@@ -256,6 +285,8 @@ export default async function ConciergeDeskPage() {
             const status = normalizePublishStatus(item.publish_status);
             const blockers = blockersOf(item.blockers);
             const prep = agentPrepByItem.get(item.id);
+            const hasCapturedUnconfirmedAd =
+              Boolean(item.external_url) && status === "needs_operator";
             const requestAge = conciergeQueueAge(
               item.concierge_requested_at,
               nowMs,
@@ -272,6 +303,11 @@ export default async function ConciergeDeskPage() {
                       <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                         {publishStatusLabel(status)}
                       </span>
+                      {hasCapturedUnconfirmedAd && (
+                        <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          Posted, awaiting confirmation
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-slate-500">
                       {orgNameById.get(item.organization_id) ?? "Unknown org"} ·{" "}
@@ -323,6 +359,34 @@ export default async function ConciergeDeskPage() {
                     ))}
                   </ul>
                 )}
+                {hasCapturedUnconfirmedAd && item.external_url && (
+                  <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                    <p className="text-xs font-semibold text-emerald-800">
+                      Posted, awaiting confirmation
+                    </p>
+                    <p className="text-xs text-emerald-800">
+                      An ad from a previous submit is already live for this
+                      listing. Confirm it or take it down before submitting again.
+                    </p>
+                    <a
+                      href={item.external_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all text-xs font-medium text-emerald-900 underline"
+                    >
+                      Open captured ad
+                    </a>
+                    <form action={clearConciergeExternalUrl}>
+                      <input type="hidden" name="item_id" value={item.id} />
+                      <button
+                        type="submit"
+                        className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                      >
+                        This ad is gone - clear it
+                      </button>
+                    </form>
+                  </div>
+                )}
 
                 {/* S555 Slice 2 (Phase B): the done-for-you worker prepared this
                     post (filled the form, screenshotted, stopped at the gate).
@@ -370,6 +434,12 @@ export default async function ConciergeDeskPage() {
                       <p className="text-[11px] font-medium text-emerald-700">
                         Approved for submit{" "}
                         {new Date(item.operator_submit_approved_at).toLocaleString()}
+                      </p>
+                    ) : hasCapturedUnconfirmedAd ? (
+                      <p className="text-[11px] font-medium text-emerald-700">
+                        Submit approval is locked because the worker already
+                        captured a live ad. Mark it live, or clear the captured
+                        URL if the ad is gone.
                       </p>
                     ) : prep.reachedForm && (prep.filledCount ?? 0) > 0 ? (
                       <form action={approveConciergeSubmit}>
@@ -446,7 +516,7 @@ export default async function ConciergeDeskPage() {
                       type="submit"
                       className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700"
                     >
-                      Mark live
+                      {hasCapturedUnconfirmedAd ? "Mark captured ad live" : "Mark live"}
                     </button>
                   </form>
 

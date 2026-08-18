@@ -530,9 +530,21 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
     // it needs a re-connect, not consent.
     .in("publish_status", ["needs_operator", "needs_payment"])
     .is("operator_submit_approved_at", null)
+    .is("external_url", null)
     .select("id, run_id, organization_id, channel, attempt_count, publish_status")
     .maybeSingle();
   if (!approved) {
+    const { data: alreadyPosted } = await supabase
+      .from("distribution_run_items")
+      .select("id")
+      .eq("id", itemId)
+      .eq("organization_id", org.id)
+      .eq("mode", "concierge")
+      .eq("publish_status", "needs_operator")
+      .is("operator_submit_approved_at", null)
+      .not("external_url", "is", null)
+      .maybeSingle();
+    if (alreadyPosted && propertyId) backTo(propertyId, "already_posted");
     if (propertyId) backTo(propertyId, "autopilot_stale");
     redirect("/dashboard/properties");
   }
