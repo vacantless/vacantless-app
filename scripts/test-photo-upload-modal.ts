@@ -171,6 +171,13 @@ ok(
   /<PhotoUploadWorkspace/.test(modalSource),
 );
 ok(
+  "photo modal keeps Add Photos compact for one-click publishing",
+  /Add the photos, then keep publishing\./.test(modalSource) &&
+    /showExistingPhotos=\{false\}/.test(modalSource) &&
+    /compactPickedList/.test(modalSource) &&
+    /showImportTools=\{false\}/.test(modalSource),
+);
+ok(
   "photo modal keeps URL and Dropbox importers out of the focused dialog",
   /showImportTools=\{false\}/.test(modalSource),
 );
@@ -182,6 +189,23 @@ ok(
 ok(
   "photo manager exports the shared upload workspace",
   /export function PhotoUploadWorkspace/.test(managerSource),
+);
+ok(
+  "shared photo workspace defaults to the full inline manager",
+  /showExistingPhotos = true/.test(managerSource) &&
+    /compactPickedList = false/.test(managerSource) &&
+    /showExistingPhotos \?/.test(managerSource) &&
+    /!compactPickedList/.test(managerSource),
+);
+ok(
+  "shared photo workspace supports compact modal summaries",
+  /No photos added yet\./.test(managerSource) &&
+    /already on this listing/.test(managerSource) &&
+    /Add more here; reorder or delete them in Edit listing\./.test(
+      managerSource,
+    ) &&
+    /selected/.test(managerSource) &&
+    /Clear/.test(managerSource),
 );
 ok(
   "inline photo manager keeps property-photos anchor id",

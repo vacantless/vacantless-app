@@ -220,6 +220,9 @@ export function PhotoUploadModal({
             <h2 id={titleId} className="text-lg font-semibold text-gray-950">
               Add photos
             </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Add the photos, then keep publishing.
+            </p>
           </div>
           <button
             ref={closeButtonRef}
@@ -237,9 +240,12 @@ export function PhotoUploadModal({
           photoCap={photoCap}
           storageUpsell={storageUpsell}
           fileInputId="photo-upload-modal-input"
+          introCopy="Choose photos from your computer. We will save them to this listing and bring you back to the publish flow."
           showHeader={false}
+          showExistingPhotos={false}
           showImportTools={false}
           showStorageUpsell={false}
+          compactPickedList
           onUploadSuccess={() => setOpen(false)}
           className="p-0"
         />

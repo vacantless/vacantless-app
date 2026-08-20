@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icons } from "@/components/icons";
@@ -119,9 +119,12 @@ type PhotoUploadWorkspaceProps = {
   sectionId?: string;
   className?: string;
   fileInputId?: string;
+  introCopy?: ReactNode;
   showHeader?: boolean;
+  showExistingPhotos?: boolean;
   showImportTools?: boolean;
   showStorageUpsell?: boolean;
+  compactPickedList?: boolean;
   onUploadSuccess?: () => void;
 };
 
@@ -133,9 +136,12 @@ export function PhotoUploadWorkspace({
   sectionId,
   className = "mb-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm",
   fileInputId = "photo-upload",
+  introCopy,
   showHeader = true,
+  showExistingPhotos = true,
   showImportTools = true,
   showStorageUpsell = true,
+  compactPickedList = false,
   onUploadSuccess,
 }: PhotoUploadWorkspaceProps) {
   const router = useRouter();
@@ -159,6 +165,17 @@ export function PhotoUploadWorkspace({
     remaining,
     atCap: atPhotoLimit,
   };
+  const pickedErrors = picked.filter((item) => item.error);
+  const compactPickedProgress =
+    picked.length > 0
+      ? Math.round(
+          picked.reduce((total, item) => total + item.progress, 0) /
+            picked.length,
+        )
+      : 0;
+  const compactPickedStatus = uploading
+    ? `${Math.max(0, compactPickedProgress)}% uploaded`
+    : "Ready to upload";
 
   function updatePicked(localId: string, patch: Partial<PickedPhoto>) {
     setPicked((items) =>
@@ -406,10 +423,14 @@ export function PhotoUploadWorkspace({
         </div>
       )}
       <p className="mb-4 text-xs text-gray-500">
-        Add photos renters will see on your listing page. The{" "}
-        <strong>cover photo</strong> shows first. Drag isn&apos;t needed, just
-        use the arrows to reorder. JPG, PNG, WebP, or GIF, up to 10&nbsp;MB each
-        ({photos.length}/{photoCap}).
+        {introCopy ?? (
+          <>
+            Add photos renters will see on your listing page. The{" "}
+            <strong>cover photo</strong> shows first. Drag isn&apos;t needed,
+            just use the arrows to reorder. JPG, PNG, WebP, or GIF, up to
+            10&nbsp;MB each ({photos.length}/{photoCap}).
+          </>
+        )}
       </p>
 
       {success ? (
@@ -423,80 +444,93 @@ export function PhotoUploadWorkspace({
         </p>
       ) : null}
 
-      {photos.length === 0 ? (
-        <div className="mb-4">
-          <EmptyState
-            icon={<Icons.page />}
-            title="No photos yet"
-            description="A listing with photos gets far more inquiries, so add a few below."
-          />
-        </div>
-      ) : (
-        <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {photos.map((photo, i) => (
-            <li
-              key={photo.id}
-              className="overflow-hidden rounded-xl border border-gray-200"
-            >
-              <div className="relative aspect-[4/3] bg-gray-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-                {photo.is_cover && (
-                  <span className="absolute left-1.5 top-1.5 rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">
-                    Cover
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleMovePhoto(photo.id, "up")}
-                    disabled={i === 0 || photoAction !== null}
-                    aria-label="Move earlier"
-                    className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMovePhoto(photo.id, "down")}
-                    disabled={i === photos.length - 1 || photoAction !== null}
-                    aria-label="Move later"
-                    className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    →
-                  </button>
+      {showExistingPhotos ? (
+        photos.length === 0 ? (
+          <div className="mb-4">
+            <EmptyState
+              icon={<Icons.page />}
+              title="No photos yet"
+              description="A listing with photos gets far more inquiries, so add a few below."
+            />
+          </div>
+        ) : (
+          <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {photos.map((photo, i) => (
+              <li
+                key={photo.id}
+                className="overflow-hidden rounded-xl border border-gray-200"
+              >
+                <div className="relative aspect-[4/3] bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                  {photo.is_cover && (
+                    <span className="absolute left-1.5 top-1.5 rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">
+                      Cover
+                    </span>
+                  )}
                 </div>
-                <div className="flex items-center gap-1">
-                  {!photo.is_cover && (
+                <div className="flex items-center justify-between gap-1 px-2 py-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => handleSetCoverPhoto(photo.id)}
-                      disabled={photoAction !== null}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      onClick={() => handleMovePhoto(photo.id, "up")}
+                      disabled={i === 0 || photoAction !== null}
+                      aria-label="Move earlier"
+                      className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      Set cover
+                      ←
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePhoto(photo.id)}
-                    disabled={photoAction !== null}
-                    aria-label="Delete photo"
-                    className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    Delete
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMovePhoto(photo.id, "down")}
+                      disabled={i === photos.length - 1 || photoAction !== null}
+                      aria-label="Move later"
+                      className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      →
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!photo.is_cover && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetCoverPhoto(photo.id)}
+                        disabled={photoAction !== null}
+                        className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        Set cover
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePhoto(photo.id)}
+                      disabled={photoAction !== null}
+                      aria-label="Delete photo"
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          <span className="font-semibold text-gray-900">
+            {photos.length === 0
+              ? "No photos added yet."
+              : `${photos.length} ${
+                  photos.length === 1 ? "photo is" : "photos are"
+                } already on this listing.`}
+          </span>{" "}
+          Add more here; reorder or delete them in Edit listing.
+        </div>
       )}
 
       {showStorageUpsell && currentUpsell.showUpsell && (
@@ -540,7 +574,48 @@ export function PhotoUploadWorkspace({
             </button>
           </div>
 
-          {picked.length > 0 && (
+          {picked.length > 0 && compactPickedList && (
+            <div className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-600">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium text-gray-900">
+                  {picked.length} {picked.length === 1 ? "photo" : "photos"}{" "}
+                  selected
+                </span>
+                {!uploading ? (
+                  <button
+                    type="button"
+                    onClick={() => setPicked([])}
+                    className="shrink-0 font-medium text-gray-500 hover:text-red-600"
+                  >
+                    Clear
+                  </button>
+                ) : (
+                  <span className="shrink-0 text-gray-500">
+                    {compactPickedStatus}
+                  </span>
+                )}
+              </div>
+              {uploading && (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-brand"
+                    style={{ width: `${compactPickedProgress}%` }}
+                  />
+                </div>
+              )}
+              {pickedErrors.length > 0 && (
+                <ul className="mt-2 space-y-1 text-red-600">
+                  {pickedErrors.map((item) => (
+                    <li key={item.localId}>
+                      {item.file.name}: {item.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {picked.length > 0 && !compactPickedList && (
             <ul className="mt-3 space-y-2">
               {picked.map((item) => (
                 <li
