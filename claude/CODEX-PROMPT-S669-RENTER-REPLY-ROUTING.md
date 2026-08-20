@@ -197,3 +197,68 @@ renter a working path even when their client ignores Reply-To, and it costs noth
 Branch pushed, flag still off, and a report stating the migration number used, which tests you
 EXECUTED versus reasoned about, and an explicit line confirming you did not enable
 `RENTER_FROM_ORG_ALIAS` anywhere.
+
+---
+
+## ANCHOR RE-DERIVATION AT THE BUILD SHA (added S669, standing rule 100)
+
+Every anchor below was re-read from `main` at **`0ff62d1`** ("S668b: harden spend authorization
+migration", 2026-08-20), which is the exact sha `WORKTREE-S669-REPLY-ROUTING.sh` cuts the worktree
+from. **All anchors above are CORRECT at that sha.** Do not re-derive them; do correct for the
+three items in the next section.
+
+| Anchor as cited | Confirmed at `0ff62d1` |
+|---|---|
+| `lib/email.ts:20-23` | Comment at 20-22, `DEFAULT_SENDER_EMAIL` at 23. Exact. |
+| `lib/portal-lead-ingest-server.ts:326` | `for (const key of ["To", "Cc", "OriginalRecipient"])`. Exact. |
+| `lib/portal-lead-ingest-server.ts:439-440` | 439 `htmlBody`, 440 `textBody`. Exact. See correction 1. |
+| `app/api/inbound/asset/route.ts:164` | Same recipient loop. Exact. |
+| `lib/notifications-server.ts:87` | `export async function sendOrgNotification(`. Exact. |
+| `lib/notifications-server.ts:98` | `.from("notification_settings")`. Exact. |
+| `app/api/inbound/lead/route.ts` "8 lines" | Exactly 8 lines. |
+| `lib/email-ingest.ts` named exports | All present: `INGEST_LOCALPART_PREFIX`:44, `DEFAULT_INGEST_DOMAIN`:48, `parseIngestToken`:100, `isAllowedSenderEmail`:187, `isAutoReplyOrLoop`:411, `verifyIngestSecret`:435, `readIngestSecretFromAuth`:454, `ingestDedupeKey`:479. |
+| `parseIngestToken` strictness | Confirmed at 100-114: hard-requires the `u-` prefix and `^[a-z0-9]{24,64}$`. A slug address returns null. |
+| The 13 renter-facing senders | All 13 exist in `lib/email.ts`. None missing, none renamed. |
+| `replyToOf` | `lib/email.ts:34`. Leave it alone as instructed. |
+| `organizations.slug` exists, `mail_alias` does not | Confirmed live via Supabase `information_schema`: `slug` text NOT NULL present, **`mail_alias` absent**. |
+| `submit_public_lead` returned keys | Confirmed live: **one overload**, returns exactly the 14 keys listed above, in that order, and contains no `mail_alias`. |
+| The `o.name, o.brand_color, o.logo_url, o.reply_to_email` select site | Confirmed: those four appear on one contiguous line of a `select ... into`. Add `o.mail_alias` there. |
+
+### Correction 1 (IMPORTANT, the prompt contradicts itself)
+
+The prompt says both "Copy that route/lib split exactly" and "**Prefer `StrippedTextReply`**". The
+sibling at `portal-lead-ingest-server.ts:440` actually reads:
+
+```
+textBody: str(payload.TextBody) || str(payload.StrippedTextReply) || null,
+```
+
+so in the sibling **`TextBody` WINS**, which is the opposite of the stated preference. Copying it
+exactly would defeat the instruction. For the renter-reply route, deliberately **invert it**:
+
+```
+str(payload.StrippedTextReply) || str(payload.TextBody) || null
+```
+
+Reason: Postmark has already removed the quoted history from `StrippedTextReply`. Taking `TextBody`
+first would relay the renter's entire quoted thread back to the operator on every reply. Copy the
+route/lib SPLIT exactly; do not copy this one line.
+
+### Correction 2 (A3 scope is a known number, do not guess it)
+
+`grep -rn "reply_to_email" app lib --include=*.ts | grep select` returns **14 sites** at `0ff62d1`.
+Treat 14 as the completeness target. The `--include=*.ts` restriction is safe: the same grep over
+`*.tsx` returns **zero** select sites, so nothing is hidden by it. (58 files mention
+`reply_to_email` in total; most are not selects. Do not widen to all 58.)
+
+### Correction 3 (minor, the claim is stronger than stated)
+
+"No existing rate-limit helper in `lib/`" is true and also true of `app/`: a case-insensitive
+`rate.?limit` search across both trees returns nothing at `0ff62d1`. Write your own.
+
+### Still true and still blocking the FLIP, not the BUILD
+
+The ImprovMX alias `agile@vacantless.com` forwarding to BOTH `rentals@agileonline.ca` AND
+`agile@in.vacantless.com` **does not exist yet** [confirmed with Noam 2026-08-20]. Ship dark as
+instructed. **Do not set `RENTER_FROM_ORG_ALIAS` anywhere**, and state in your report that you did
+not.
