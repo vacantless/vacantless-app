@@ -203,9 +203,17 @@ EXECUTED versus reasoned about, and an explicit line confirming you did not enab
 ## ANCHOR RE-DERIVATION AT THE BUILD SHA (added S669, standing rule 100)
 
 Every anchor below was re-read from `main` at **`0ff62d1`** ("S668b: harden spend authorization
-migration", 2026-08-20), which is the exact sha `WORKTREE-S669-REPLY-ROUTING.sh` cuts the worktree
-from. **All anchors above are CORRECT at that sha.** Do not re-derive them; do correct for the
-three items in the next section.
+migration", 2026-08-20). **All anchors above are CORRECT at that sha.**
+
+**SHA UPDATE, read this.** `main` then advanced to **`e24ad95`** (this verification block plus the
+0218 migration file), and `WORKTREE-S669-REPLY-ROUTING.sh` cut the worktree at `e24ad95`, so
+**`e24ad95` is the sha you are actually starting from, not `0ff62d1`.** The anchors were re-checked
+across that gap: `git diff 0ff62d1..e24ad95` touches exactly two files, this markdown doc and
+`supabase/migrations/0218_spend_ledger_revoke_truncate.sql`, and every anchored source file
+(`lib/email.ts`, `lib/portal-lead-ingest-server.ts`, `app/api/inbound/asset/route.ts`,
+`app/api/inbound/lead/route.ts`, `lib/notifications-server.ts`, `lib/email-ingest.ts`) is
+**byte-identical** between the two. **Every anchor below therefore holds at `e24ad95` as written.**
+Do not re-derive them; do correct for the three items in the next section.
 
 | Anchor as cited | Confirmed at `0ff62d1` |
 |---|---|
