@@ -84,9 +84,17 @@ $function$;
 grant execute on function public.get_booking_confirmation_extras(uuid)
   to anon, authenticated;
 
-drop function if exists public.submit_public_lead(
-  uuid, text, text, text, date, text, uuid, integer, integer,
-  boolean, text, jsonb, boolean, text);
+-- NO DROP HERE, DELIBERATELY. The argument list is UNCHANGED by this migration,
+-- so `create or replace` replaces the function in place, keeps its grants, and
+-- leaves no window in which the public inquiry form has no RPC to call.
+--
+-- S669 review caught a dead `drop function if exists ... (14 arg types)` here. The
+-- live signature has SIXTEEN args: `p_referrer_host` and `p_utm_source` were added
+-- by 0214 (lead attribution). That drop matched nothing and silently no-opped. It
+-- was harmless only because the create below happens to declare all sixteen; had it
+-- declared fourteen, the no-op drop would have left a SECOND OVERLOAD behind and
+-- made every public lead submission ambiguous. Do not reintroduce a drop unless the
+-- argument list actually changes, and if it does, name the real signature.
 
 create or replace function public.submit_public_lead(
   p_property_id      uuid,
