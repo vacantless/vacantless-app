@@ -81,7 +81,7 @@ function AboutHero() {
         <div className="mt-11 flex items-center gap-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/founder.jpg"
+            src="/founder-2026-08.jpg"
             alt="Noam Muscovitch, founder of Vacantless"
             className="h-[104px] w-[104px] flex-none rounded-full object-cover shadow-[0_12px_32px_rgba(28,43,36,0.1)]"
           />
