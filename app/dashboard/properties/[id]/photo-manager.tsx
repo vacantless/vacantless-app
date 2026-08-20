@@ -711,9 +711,12 @@ export function PhotoManager(
     | "sectionId"
     | "className"
     | "fileInputId"
+    | "introCopy"
     | "showHeader"
+    | "showExistingPhotos"
     | "showImportTools"
     | "showStorageUpsell"
+    | "compactPickedList"
     | "onUploadSuccess"
   >,
 ) {

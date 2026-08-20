@@ -212,6 +212,12 @@ ok(
   /sectionId="property-photos"/.test(managerSource),
 );
 ok(
+  "inline photo manager keeps modal-only presentation props out of its public type",
+  /"introCopy"/.test(managerSource) &&
+    /"showExistingPhotos"/.test(managerSource) &&
+    /"compactPickedList"/.test(managerSource),
+);
+ok(
   "photo manager file input keeps browser-automation label",
   /aria-label="Add photos to this rental"/.test(managerSource),
 );
