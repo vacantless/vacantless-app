@@ -64,6 +64,21 @@ function optionalHttpUrl(
   }
 }
 
+function optionalCadCents(
+  formData: FormData,
+  key: string,
+): { ok: true; value: number | null } | { ok: false } {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return { ok: true, value: null };
+  const normalized = raw.replace(/[$,\s]/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return { ok: false };
+  const [dollarsPart, centsPart = ""] = normalized.split(".");
+  const dollars = Number(dollarsPart);
+  const cents = Number((centsPart + "00").slice(0, 2));
+  if (!Number.isSafeInteger(dollars) || !Number.isInteger(cents)) return { ok: false };
+  return { ok: true, value: dollars * 100 + cents };
+}
+
 // ===========================================================================
 // Per-tab settings saves (S227 Settings restructure). The old single
 // `updateBranding` form was split into four focused actions, each owning one
@@ -426,32 +441,57 @@ export async function updateDistributionChannelAccount(formData: FormData) {
     redirect(`/dashboard/settings?tab=distribution&distribution=contact#channel-${channel}`);
   }
 
+  const spendAuthorized = String(formData.get("spend_authorized") ?? "") === "1";
+  const spendMaxCents = optionalCadCents(formData, "spend_max_cad");
+  const spendPeriodMaxCents = optionalCadCents(formData, "spend_period_max_cad");
+  if (!spendMaxCents.ok || !spendPeriodMaxCents.ok) {
+    redirect(`/dashboard/settings?tab=distribution&distribution=spend#channel-${channel}`);
+  }
+  if (spendAuthorized && (!cap.requiresPayment || !spendMaxCents.value || spendMaxCents.value <= 0)) {
+    redirect(`/dashboard/settings?tab=distribution&distribution=spend#channel-${channel}`);
+  }
+
   const nowISO = new Date().toISOString();
   const supabase = createClient();
-  const { error } = await supabase.from("distribution_channel_accounts").upsert(
-    {
-      organization_id: org.id,
-      channel,
-      transport: cap.transport,
-      account_status: accountStatus,
-      feed_url: feedUrl.value,
-      manager_url: managerUrl.value,
-      external_account_label: optionalText(formData, "external_account_label", 160),
-      contact_name: optionalText(formData, "contact_name", 160),
-      contact_email: contactEmail.value,
-      requires_login: cap.requiresLogin,
-      requires_payment: cap.requiresPayment,
-      supports_feed: cap.supportsFeed,
-      supports_copilot: cap.supportsCopilot,
-      supports_concierge: cap.supportsConcierge,
-      supports_live_verification: cap.supportsLiveVerification,
-      posting_policy: cap.postingPolicy,
-      notes: optionalText(formData, "notes", 2000),
-      last_setup_checked_at: nowISO,
-      updated_at: nowISO,
-    },
-    { onConflict: "organization_id,channel" },
-  );
+  const userResult = await supabase.auth.getUser();
+  const uid = userResult.data.user?.id ?? null;
+  const payload: Record<string, unknown> = {
+    organization_id: org.id,
+    channel,
+    transport: cap.transport,
+    account_status: accountStatus,
+    feed_url: feedUrl.value,
+    manager_url: managerUrl.value,
+    external_account_label: optionalText(formData, "external_account_label", 160),
+    contact_name: optionalText(formData, "contact_name", 160),
+    contact_email: contactEmail.value,
+    requires_login: cap.requiresLogin,
+    requires_payment: cap.requiresPayment,
+    supports_feed: cap.supportsFeed,
+    supports_copilot: cap.supportsCopilot,
+    supports_concierge: cap.supportsConcierge,
+    supports_live_verification: cap.supportsLiveVerification,
+    posting_policy: cap.postingPolicy,
+    notes: optionalText(formData, "notes", 2000),
+    last_setup_checked_at: nowISO,
+    updated_at: nowISO,
+  };
+  if (cap.requiresPayment && spendAuthorized) {
+    payload.spend_authorized = true;
+    payload.spend_max_cents = spendMaxCents.value;
+    payload.spend_period_max_cents = spendPeriodMaxCents.value;
+    payload.spend_authorized_at = nowISO;
+    payload.spend_authorized_by = uid;
+    payload.spend_revoked_at = null;
+  } else {
+    payload.spend_authorized = false;
+    payload.spend_max_cents = null;
+    payload.spend_period_max_cents = null;
+    payload.spend_revoked_at = cap.requiresPayment ? nowISO : null;
+  }
+  const { error } = await supabase
+    .from("distribution_channel_accounts")
+    .upsert(payload, { onConflict: "organization_id,channel" });
   if (error) {
     redirect(`/dashboard/settings?tab=distribution&distribution=error#channel-${channel}`);
   }

@@ -512,27 +512,64 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
   const uid = await userId(supabase);
   const now = new Date().toISOString();
 
-  // Approve exactly once, only while the item is still waiting for the operator.
-  const { data: approved } = await supabase
+  const { data: pending } = await supabase
     .from("distribution_run_items")
-    .update({
-      operator_submit_approved_at: now,
-      operator_submit_approved_by: uid,
-      updated_at: now,
-    })
+    .select("id, publish_status, channel")
     .eq("id", itemId)
     .eq("organization_id", org.id)
     .eq("mode", "concierge")
-    // S631: approval consent covers both the free-channel operator gate and the
-    // paid-site payment gate. Approving a needs_payment item is the landlord's
-    // consent to the site's listing fee (charged to their own on-file method);
-    // Vacantless never sees or stores the card. needs_login is NOT approvable —
-    // it needs a re-connect, not consent.
     .in("publish_status", ["needs_operator", "needs_payment"])
     .is("operator_submit_approved_at", null)
     .is("external_url", null)
-    .select("id, run_id, organization_id, channel, attempt_count, publish_status")
     .maybeSingle();
+
+  const pendingItem = pending as
+    | { id: string; publish_status: string | null; channel: string | null }
+    | null;
+  if (pendingItem?.publish_status === "needs_payment") {
+    const { data: spendAccount } = await supabase
+      .from("distribution_channel_accounts")
+      .select("spend_authorized, spend_max_cents, spend_revoked_at")
+      .eq("organization_id", org.id)
+      .eq("channel", pendingItem.channel)
+      .maybeSingle();
+    const acct = spendAccount as
+      | {
+          spend_authorized: boolean | null;
+          spend_max_cents: number | null;
+          spend_revoked_at: string | null;
+        }
+      | null;
+    if (
+      !acct ||
+      acct.spend_authorized !== true ||
+      acct.spend_revoked_at != null ||
+      (acct.spend_max_cents ?? 0) <= 0
+    ) {
+      if (propertyId) backTo(propertyId, "autopilot_spend_auth", pendingItem.channel ?? undefined);
+      redirect("/dashboard/properties");
+    }
+  }
+
+  // Approve exactly once. Paid rows require standing spend authorization; this
+  // tap only approves the prepared post, not a one-off blank-cheque fee consent.
+  const { data: approved } = pendingItem
+    ? await supabase
+        .from("distribution_run_items")
+        .update({
+          operator_submit_approved_at: now,
+          operator_submit_approved_by: uid,
+          updated_at: now,
+        })
+        .eq("id", itemId)
+        .eq("organization_id", org.id)
+        .eq("mode", "concierge")
+        .eq("publish_status", pendingItem.publish_status)
+        .is("operator_submit_approved_at", null)
+        .is("external_url", null)
+        .select("id, run_id, organization_id, channel, attempt_count, publish_status")
+        .maybeSingle()
+    : { data: null };
   if (!approved) {
     const { data: alreadyPosted } = await supabase
       .from("distribution_run_items")

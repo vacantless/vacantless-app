@@ -123,6 +123,10 @@ const STATUS_CHIP: Record<ConnectChipTone, string> = {
   accent: "bg-blue-50 text-blue-700",
 };
 
+function cadInputValue(cents: number | null | undefined): string {
+  return typeof cents === "number" && cents > 0 ? (cents / 100).toFixed(2) : "";
+}
+
 export default async function SettingsPage({
   searchParams,
 }: {
@@ -293,7 +297,7 @@ export default async function SettingsPage({
   const { data: distributionAccountRows } = await supabase
     .from("distribution_channel_accounts")
     .select(
-      "channel, account_status, feed_url, manager_url, external_account_label, contact_name, contact_email, notes, last_setup_checked_at, last_successful_publish_at, last_verification_at",
+      "channel, account_status, feed_url, manager_url, external_account_label, contact_name, contact_email, notes, last_setup_checked_at, last_successful_publish_at, last_verification_at, spend_authorized, spend_max_cents, spend_period_max_cents, spend_authorized_at, spend_authorized_by, spend_revoked_at",
     )
     .eq("organization_id", org.id)
     .order("channel", { ascending: true });
@@ -309,6 +313,12 @@ export default async function SettingsPage({
     last_setup_checked_at: string | null;
     last_successful_publish_at: string | null;
     last_verification_at: string | null;
+    spend_authorized: boolean | null;
+    spend_max_cents: number | null;
+    spend_period_max_cents: number | null;
+    spend_authorized_at: string | null;
+    spend_authorized_by: string | null;
+    spend_revoked_at: string | null;
   };
   const distributionAccountByChannel = new Map<string, DistributionAccountRow>();
   for (const row of (distributionAccountRows ?? []) as DistributionAccountRow[]) {
@@ -824,6 +834,11 @@ export default async function SettingsPage({
               Partner contact email must be a single valid email address, or left blank.
             </div>
           )}
+          {searchParams.distribution === "spend" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Paid-channel authorization needs a positive per-ad CAD ceiling.
+            </div>
+          )}
           {searchParams.distribution === "error" && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               Something went wrong saving the channel setup. Please try again.
@@ -965,6 +980,10 @@ export default async function SettingsPage({
               const contactNameId = `dist-${cap.channel}-contact-name`;
               const contactEmailId = `dist-${cap.channel}-contact-email`;
               const notesId = `dist-${cap.channel}-notes`;
+              const spendAuthorized =
+                account?.spend_authorized === true &&
+                account.spend_revoked_at == null &&
+                (account.spend_max_cents ?? 0) > 0;
               const showFeedField = cap.supportsFeed || cap.needsOrgAccount;
               const showPortalFields = cap.transport !== "automatic";
               return (
@@ -1126,6 +1145,65 @@ export default async function SettingsPage({
                       />
                     </label>
                   </div>
+
+                  {cap.requiresPayment && (
+                    <div className="mt-4 border-t border-gray-100 pt-4">
+                      <label className="flex items-start gap-3">
+                        <input
+                          name="spend_authorized"
+                          type="checkbox"
+                          value="1"
+                          defaultChecked={spendAuthorized}
+                          className="mt-1 h-4 w-4 rounded border-gray-300"
+                        />
+                        <span className="min-w-0 text-sm">
+                          <span className="block font-medium text-gray-800">
+                            Authorize paid {meta.label} postings
+                          </span>
+                          <span className="block text-xs text-gray-500">
+                            Worker claims require this standing authorization before any paid {meta.label} submit.
+                          </span>
+                        </span>
+                      </label>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-medium text-gray-600">
+                            Per-ad ceiling (CAD)
+                          </span>
+                          <input
+                            name="spend_max_cad"
+                            type="number"
+                            inputMode="decimal"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="29.95"
+                            defaultValue={cadInputValue(account?.spend_max_cents)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-medium text-gray-600">
+                            Calendar-month cap (CAD)
+                          </span>
+                          <input
+                            name="spend_period_max_cad"
+                            type="number"
+                            inputMode="decimal"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="No cap"
+                            defaultValue={cadInputValue(account?.spend_period_max_cents)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                      </div>
+                      {account?.spend_revoked_at && !spendAuthorized && (
+                        <p className="mt-2 text-xs text-gray-400">
+                          Revoked {new Date(account.spend_revoked_at).toLocaleDateString("en-CA")}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <label className="mt-3 block">
                     <span className="mb-1 block text-xs font-medium text-gray-600">

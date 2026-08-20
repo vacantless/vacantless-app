@@ -977,12 +977,11 @@ function ForYouRow({
   );
 }
 
-// The branded one-tap consent that turns a prepared concierge post into a live
-// ad. Free channel -> authorizes the post; paid site -> authorizes the site's
-// listing fee (paid to the site with the landlord's own on-file method;
-// Vacantless never sees or stores the card). Posts through the EXISTING
-// authorizeAutopilotSubmit; nothing is posted or charged before this tap, and a
-// real live-ad link is recorded before Live.
+// The branded one-tap approval that turns a prepared concierge post into a live
+// ad. Paid sites require standing spend authorization on the org/channel account
+// row before this action will approve the prepared post. Posts through the
+// EXISTING authorizeAutopilotSubmit; nothing is posted or charged before this
+// tap, and a real live-ad link is recorded before Live.
 function ApprovalModal({
   propertyId,
   itemId,
@@ -1022,8 +1021,9 @@ function ApprovalModal({
         {paid && (
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-950">
             {siteLabel} charges its own listing fee, paid directly to {siteLabel}{" "}
-            with your card on file there. Approving authorizes that charge —
-            Vacantless never sees, stores, or handles your card.
+            with your card on file there. Standing spend authorization and the
+            saved ceiling are checked before the worker can claim it. Vacantless
+            never sees, stores, or handles your card.
           </div>
         )}
 
@@ -1034,7 +1034,7 @@ function ApprovalModal({
             type="submit"
             className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
           >
-            {paid ? "Approve fee & publish" : "Approve & publish"}
+            {paid ? "Approve prepared post" : "Approve & publish"}
           </button>
           <button
             type="button"

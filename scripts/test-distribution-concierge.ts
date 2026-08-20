@@ -121,8 +121,14 @@ const authorizeBlock = sourceBlock(
 );
 ok(
   authorizeBlock.includes('.in("publish_status", ["needs_operator", "needs_payment"])') &&
+    authorizeBlock.includes('.select("spend_authorized, spend_max_cents, spend_revoked_at")') &&
+    authorizeBlock.includes('backTo(propertyId, "autopilot_spend_auth"'),
+  "property approve preflights needs_payment items against standing spend authorization",
+);
+ok(
+  authorizeBlock.includes('.eq("publish_status", pendingItem.publish_status)') &&
     authorizeBlock.includes('.is("external_url", null)'),
-  "property approve still allows needs_payment items while requiring no captured URL",
+  "property approve updates the exact pending status while requiring no captured URL",
 );
 ok(
   authorizeBlock.includes('.not("external_url", "is", null)') &&

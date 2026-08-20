@@ -1917,6 +1917,13 @@ export default async function PropertyDetailPage({
                   title: "Auto-posting was not saved.",
                   body: "Refresh the channel row and try the authorization again.",
                 }
+              : searchParams.dist === "autopilot_spend_auth"
+                ? {
+                    tone: "warning",
+                    title: "Spend authorization needed.",
+                    body:
+                      "Authorize a standing paid-channel ceiling in Settings, then approve this prepared post again.",
+                  }
               : searchParams.dist === "already_posted"
                 ? {
                     tone: "warning",

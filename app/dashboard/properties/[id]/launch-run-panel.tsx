@@ -775,7 +775,7 @@ export function LaunchRunPanel({
                 <span className="ml-2 text-[11px] text-gray-500">
                   {item.channel === "facebook_feed"
                     ? "Vacantless posts one organic Page-feed link through Graph API and reports back with the post proof. Marketplace and paid ads stay separate."
-                    : `Vacantless posts this prepared ad to ${item.channelLabel} automatically and reports back. You approve once; a card is never entered and only the free plan is used.`}
+                    : `Vacantless posts this prepared ad to ${item.channelLabel} automatically and reports back. Paid channels require standing spend authorization before the worker can claim them.`}
                 </span>
               </form>
             )}
