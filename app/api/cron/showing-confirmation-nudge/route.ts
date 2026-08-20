@@ -132,7 +132,7 @@ export async function GET(req: NextRequest) {
 
   let orgQuery = admin
     .from("organizations")
-    .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone");
+    .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, booking_timezone");
   if (onlyOrg) orgQuery = orgQuery.eq("id", onlyOrg);
   const { data: orgs, error: orgErr } = await orgQuery;
 

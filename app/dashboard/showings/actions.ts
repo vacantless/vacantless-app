@@ -203,6 +203,7 @@ export async function proposeShowingTimes(formData: FormData) {
     org_name: org.name,
     brand_color: org.brand_color,
     logo_url: org.logo_url,
+    mail_alias: org.mail_alias,
     reply_to_email: org.reply_to_email,
     property_address: showing.property.address ?? null,
     current_when_label: showing.scheduled_at
@@ -756,6 +757,7 @@ export async function nudgeRenterForConfirmation(formData: FormData) {
     org_name: org.name,
     brand_color: org.brand_color,
     logo_url: org.logo_url,
+    mail_alias: org.mail_alias,
     reply_to_email: org.reply_to_email,
     property_address: property?.address ?? null,
     leasing_phone: resolveArrivalPhone(
@@ -917,6 +919,7 @@ export async function rescheduleShowing(formData: FormData) {
       org_name: org.name,
       brand_color: org.brand_color,
       logo_url: org.logo_url,
+      mail_alias: org.mail_alias,
       reply_to_email: org.reply_to_email,
       property_address: showing.property?.address ?? null,
       when_label: newLabel,

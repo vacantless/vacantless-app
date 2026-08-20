@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
       "id, created_at, organization_id, property_id, name, email, status, " +
         "no_suitable_time, reopen_notified_at, " +
         "properties(status, address, rent_cents), " +
-        "organizations(id, name, brand_color, logo_url, reply_to_email, " +
+        "organizations(id, name, brand_color, logo_url, mail_alias, reply_to_email, " +
         "availability_reopened_at, availability_tripwire_lookahead_days, " +
         "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days)",
     )
@@ -376,6 +376,7 @@ export async function GET(req: NextRequest) {
             org_name: org.name ?? null,
             brand_color: org.brand_color ?? null,
             logo_url: org.logo_url ?? null,
+            mail_alias: org.mail_alias ?? null,
             reply_to_email: org.reply_to_email ?? null,
             property_address: property.address ?? null,
             rent_cents: property.rent_cents ?? null,

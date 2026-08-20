@@ -113,6 +113,65 @@ export function parseIngestToken(
   return isValidIngestToken(token) ? token : null;
 }
 
+export const MAIL_ALIAS_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
+
+export const RESERVED_MAIL_ALIASES = [
+  "leads",
+  "admin",
+  "info",
+  "support",
+  "noreply",
+  "no-reply",
+  "postmaster",
+  "abuse",
+] as const;
+
+const RESERVED_MAIL_ALIAS_SET = new Set<string>(RESERVED_MAIL_ALIASES);
+
+export type MailAliasValidation =
+  | { ok: true; value: string | null }
+  | { ok: false; reason: "shape" | "reserved" };
+
+export function isReservedMailAlias(alias: string): boolean {
+  return RESERVED_MAIL_ALIAS_SET.has(alias);
+}
+
+export function isValidMailAlias(alias: unknown): alias is string {
+  if (typeof alias !== "string") return false;
+  if (!MAIL_ALIAS_RE.test(alias)) return false;
+  if (alias.startsWith(INGEST_LOCALPART_PREFIX)) return false;
+  return !isReservedMailAlias(alias);
+}
+
+export function validateMailAlias(input: unknown): MailAliasValidation {
+  const value = typeof input === "string" ? input.trim() : "";
+  if (!value) return { ok: true, value: null };
+  if (!MAIL_ALIAS_RE.test(value)) return { ok: false, reason: "shape" };
+  if (value.startsWith(INGEST_LOCALPART_PREFIX) || isReservedMailAlias(value)) {
+    return { ok: false, reason: "reserved" };
+  }
+  return { ok: true, value };
+}
+
+/**
+ * Given ONE recipient address, return a per-org mail alias iff it is exactly
+ * <alias>@<domain>. This is a sibling to parseIngestToken: token addresses keep
+ * their strict u-<token> parser, while reply routing resolves explicit aliases.
+ */
+export function parseIngestAlias(
+  recipient: unknown,
+  ingestDomain: string = DEFAULT_INGEST_DOMAIN,
+): string | null {
+  const addr = extractAddress(recipient);
+  if (!addr) return null;
+  const at = addr.lastIndexOf("@");
+  if (at <= 0) return null;
+  const local = addr.slice(0, at);
+  const domain = addr.slice(at + 1);
+  if (domain !== ingestDomain.trim().toLowerCase()) return null;
+  return isValidMailAlias(local) ? local : null;
+}
+
 /**
  * Scan a list of recipient addresses (To + Cc, a provider gives several) and
  * return the FIRST valid ingest token. Accepts a string[] or a single

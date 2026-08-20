@@ -107,6 +107,7 @@ async function attemptBooking(
           org_name: string | null;
           brand_color: string | null;
           logo_url: string | null;
+          mail_alias?: string | null;
           reply_to_email: string | null;
           property_address: string | null;
           renter_name: string | null;
@@ -130,6 +131,7 @@ async function attemptBooking(
         // extras RPC (migration 0126) surfaces it alongside the access notes.
         let orgPlan: string | null = null;
         let bookingRequiresConfirmation = false;
+        let mailAlias: string | null = b.mail_alias ?? null;
         {
           const { data: extras } = await supabase.rpc(
             "get_booking_confirmation_extras",
@@ -139,12 +141,14 @@ async function attemptBooking(
             | {
                 leasing_phone?: string | null;
                 plan?: string | null;
+                mail_alias?: string | null;
                 booking_requires_confirmation?: boolean | null;
               }
             | null;
           if (e) {
             leasingPhone = e.leasing_phone ?? null;
             orgPlan = e.plan ?? null;
+            mailAlias = e.mail_alias ?? mailAlias;
             bookingRequiresConfirmation = e.booking_requires_confirmation === true;
           }
         }
@@ -156,6 +160,7 @@ async function attemptBooking(
           org_name: b.org_name,
           brand_color: b.brand_color,
           logo_url: b.logo_url,
+          mail_alias: mailAlias,
           reply_to_email: b.reply_to_email,
           property_address: b.property_address,
           when_label: whenLabel,
@@ -224,7 +229,7 @@ async function notifyOperatorsOfNewLead(
 
     const { data: org } = await admin
       .from("organizations")
-      .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+      .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email")
       .eq("id", payload.org_id)
       .maybeSingle();
     if (!org) return;
@@ -327,7 +332,7 @@ async function notifyOperatorsOfViewingBooked(showingId: string): Promise<void> 
     const { data: orgRow } = await admin
       .from("organizations")
       .select(
-        "id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone",
+        "id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, booking_timezone",
       )
       .eq("id", showing.organization_id)
       .maybeSingle();
@@ -339,6 +344,7 @@ async function notifyOperatorsOfViewingBooked(showingId: string): Promise<void> 
       logo_url: string | null;
       reply_to_email: string | null;
       public_contact_email: string | null;
+      mail_alias: string | null;
       booking_timezone: string | null;
     };
 
@@ -440,7 +446,7 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
     const { data: orgRow } = await admin
       .from("organizations")
       .select(
-        "id, name, brand_color, logo_url, reply_to_email, booking_timezone, auto_assign_agents",
+        "id, name, brand_color, logo_url, mail_alias, reply_to_email, booking_timezone, auto_assign_agents",
       )
       .eq("id", showing.organization_id)
       .maybeSingle();
@@ -450,6 +456,7 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
       name: string | null;
       brand_color: string | null;
       logo_url: string | null;
+      mail_alias: string | null;
       reply_to_email: string | null;
       booking_timezone: string | null;
       auto_assign_agents: boolean | null;

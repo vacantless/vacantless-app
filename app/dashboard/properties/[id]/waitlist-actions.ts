@@ -161,7 +161,7 @@ export async function notifyWaitlist(formData: FormData) {
 
   const { data: orgRow } = await supabase
     .from("organizations")
-    .select("name, brand_color, logo_url, reply_to_email, sms_enabled")
+    .select("name, brand_color, logo_url, mail_alias, reply_to_email, sms_enabled")
     .eq("id", org.id)
     .maybeSingle();
 
@@ -214,6 +214,7 @@ export async function notifyWaitlist(formData: FormData) {
         org_name: orgRow?.name ?? null,
         brand_color: orgRow?.brand_color ?? null,
         logo_url: orgRow?.logo_url ?? null,
+        mail_alias: orgRow?.mail_alias ?? null,
         reply_to_email: orgRow?.reply_to_email ?? null,
         property_address: (prop.address as string | null) ?? null,
         rent_cents: vacancy.rent_cents,

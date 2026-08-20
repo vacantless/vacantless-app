@@ -130,6 +130,7 @@ type OrganizationRow = {
   name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias: string | null;
   reply_to_email: string | null;
   booking_timezone: string | null;
   reschedule_nudge_enabled: boolean | null;
@@ -197,7 +198,7 @@ export async function GET(req: NextRequest) {
   if (orgIds.length > 0) {
     const { data: orgRows, error: orgErr } = await admin
       .from("organizations")
-      .select("id, name, brand_color, logo_url, reply_to_email, booking_timezone, reschedule_nudge_enabled")
+      .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, booking_timezone, reschedule_nudge_enabled")
       .in("id", orgIds);
     if (orgErr) {
       return NextResponse.json(
@@ -308,6 +309,7 @@ export async function GET(req: NextRequest) {
         org_name: org.name,
         brand_color: org.brand_color,
         logo_url: org.logo_url,
+        mail_alias: org.mail_alias,
         reply_to_email: org.reply_to_email,
         property_address: property?.address ?? null,
         current_when_label: showing.scheduled_at

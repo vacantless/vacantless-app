@@ -14,6 +14,7 @@ import { nurtureCopy, type NurtureCopy } from "@/lib/nurture";
 import { TEST_SAMPLE, TEST_SUBJECT_PREFIX } from "@/lib/test-email";
 import { DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { telDialString } from "@/lib/showing-contact";
+import { isValidMailAlias } from "@/lib/email-ingest";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
@@ -38,6 +39,19 @@ function replyToOf(replyToEmail: string | null | undefined, orgName: string | nu
   };
 }
 
+export function senderOf(mailAlias: string | null | undefined, orgName: string | null) {
+  if (process.env.RENTER_FROM_ORG_ALIAS === "1" && isValidMailAlias(mailAlias)) {
+    return {
+      name: orgName || "Vacantless",
+      email: `${mailAlias}@vacantless.com`,
+    };
+  }
+  return {
+    name: orgName || "Vacantless",
+    email: DEFAULT_SENDER_EMAIL,
+  };
+}
+
 export type AutoReplyPayload = {
   lead_id: string;
   lead_reused?: boolean | null;
@@ -48,6 +62,7 @@ export type AutoReplyPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   rent_cents: number | null;
@@ -97,6 +112,12 @@ function defaultHtml(p: AutoReplyPayload): string {
   const hi = escapeHtml(firstName(p.renter_name));
   const addr = p.property_address ? escapeHtml(p.property_address) : null;
   const rent = formatRent(p.rent_cents);
+  const directEmail = p.reply_to_email?.trim();
+  const directReplyCopy = directEmail
+    ? `, or write to us directly at <a href="mailto:${escapeHtml(directEmail)}" style="color:${escapeHtml(
+        brand,
+      )};font-weight:600;">${escapeHtml(directEmail)}</a>`
+    : "";
 
   const propLine = addr
     ? `<p style="margin:0 0 16px;">We received your inquiry about <strong>${addr}</strong>${
@@ -117,7 +138,7 @@ function defaultHtml(p: AutoReplyPayload): string {
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
       ${propLine}
-      <p style="margin:0 0 16px;">In the meantime, feel free to reply to this email with any questions. We look forward to helping you find your next home.</p>
+      <p style="margin:0 0 16px;">In the meantime, feel free to reply to this email with any questions${directReplyCopy}. We look forward to helping you find your next home.</p>
       <p style="margin:24px 0 0;color:#52525b;">Warm regards,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
@@ -139,6 +160,7 @@ export type BookingPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   when_label: string; // already formatted in the org timezone
@@ -266,7 +288,7 @@ export async function sendBookingConfirmation(
         : "Your viewing is confirmed";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -318,6 +340,7 @@ export type RentalApplicationInvitePayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   apply_url: string; // absolute /apply/<token> link
@@ -374,7 +397,7 @@ export async function sendRentalApplicationInvite(
     : "Complete your rental application";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.applicant_email,
@@ -421,6 +444,7 @@ export type RescheduleProposalPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   current_when_label: string | null;
@@ -500,7 +524,7 @@ export async function sendRescheduleProposal(
     : "Time change suggestion";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -585,7 +609,7 @@ export async function sendRescheduleAcceptedConfirmation(
     : "Showing confirmed";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -693,7 +717,7 @@ export async function sendShowingRescheduled(
     : "Your viewing has a new time";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -740,6 +764,7 @@ export type ReminderPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   // S471: arrival logistics threaded into the reminder (previously confirmation-
@@ -831,7 +856,7 @@ export async function sendShowingReminder(p: ReminderPayload): Promise<SendResul
     : "Reminder: your upcoming viewing";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -875,6 +900,7 @@ export type ShowingAutoReleasedPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   when_label: string;
@@ -931,7 +957,7 @@ export async function sendShowingAutoReleased(
     : "Viewing time released";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -978,6 +1004,7 @@ export type FeedbackPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
 };
@@ -1035,7 +1062,7 @@ export async function sendFeedbackRequest(p: FeedbackPayload): Promise<SendResul
     : "How was your viewing?";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -1082,6 +1109,7 @@ export type PriceDropPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   new_rent_cents: number | null;
@@ -1170,7 +1198,7 @@ export async function sendPriceDropAlert(p: PriceDropPayload): Promise<SendResul
     : "A home you were interested in just dropped in price";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -1218,6 +1246,7 @@ export type WaitlistAlertPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   rent_cents: number | null;
@@ -1291,7 +1320,7 @@ export async function sendWaitlistVacancyAlert(
     : "A rental you were waiting for is now available";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -1338,6 +1367,7 @@ export type ViewingTimesOpenedPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   rent_cents: number | null;
@@ -1413,7 +1443,7 @@ export async function sendViewingTimesOpenedEmail(
     : "New viewing times just opened";
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -1463,6 +1493,7 @@ export type NurturePayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
   rent_cents: number | null;
@@ -1544,7 +1575,7 @@ export async function sendNurtureEmail(p: NurturePayload): Promise<SendResult> {
     : copy.subject;
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,
@@ -1590,6 +1621,7 @@ export type TestEmailPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
 };
 
@@ -1772,6 +1804,7 @@ export type LeaseSignaturePayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   property_address: string | null;
 };
@@ -1994,6 +2027,7 @@ export type SenderConfirmationPayload = {
   org_name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
 };
 
@@ -2104,7 +2138,7 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
     : defaultHtml(p);
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [
       {
         email: p.renter_email,

@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       "id, created_at, organization_id, property_id, name, email, status, " +
         "no_suitable_time, nurture_step_sent, nurture_last_sent_at, " +
         "properties(address, rent_cents, status), " +
-        "organizations(name, brand_color, logo_url, reply_to_email, nurture_enabled)",
+        "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, nurture_enabled)",
     )
     .in("status", NURTURABLE_STATUSES as unknown as string[])
     .lt("nurture_step_sent", NURTURE_STEPS)
@@ -123,6 +123,7 @@ export async function GET(req: NextRequest) {
       org_name: org?.name ?? null,
       brand_color: org?.brand_color ?? null,
       logo_url: org?.logo_url ?? null,
+      mail_alias: org?.mail_alias ?? null,
       reply_to_email: org?.reply_to_email ?? null,
       property_address: property?.address ?? null,
       rent_cents: property?.rent_cents ?? null,

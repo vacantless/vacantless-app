@@ -67,7 +67,7 @@ async function notifyOperatorsOfCancellation(r: CancelResult): Promise<void> {
 
     const { data: org } = await admin
       .from("organizations")
-      .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+      .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email")
       .eq("id", r.organization_id)
       .maybeSingle();
     if (!org) return;

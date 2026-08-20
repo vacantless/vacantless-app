@@ -158,7 +158,7 @@ async function runAutoReleasePass(
     .from("showings")
     .select(
       "id, scheduled_at, outcome, confirmed_at, organization_id, " +
-        "organizations!inner(id, name, brand_color, logo_url, reply_to_email, public_contact_email, booking_timezone, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours)",
+        "organizations!inner(id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, booking_timezone, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours)",
     )
     .eq("outcome", "scheduled")
     .is("confirmed_at", null)
@@ -181,6 +181,7 @@ async function runAutoReleasePass(
         name: string | null;
         brand_color: string | null;
         logo_url: string | null;
+        mail_alias: string | null;
         reply_to_email: string | null;
         public_contact_email: string | null;
         booking_timezone: string | null;
@@ -272,7 +273,7 @@ export async function GET(req: NextRequest) {
       "id, cancel_token, scheduled_at, reminder_24h_sent_at, reminder_sameday_sent_at, reminder_2h_sent_at, " +
         "reminder_24h_sms_sent_at, reminder_sameday_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
         "leads:leads!showings_lead_id_fkey(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone), " +
-        "organizations(name, brand_color, logo_url, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
+        "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
     )
     .eq("outcome", "scheduled")
     .gt("scheduled_at", now.toISOString())
@@ -448,6 +449,7 @@ export async function GET(req: NextRequest) {
         org_name: orgName,
         brand_color: org?.brand_color ?? null,
         logo_url: org?.logo_url ?? null,
+        mail_alias: org?.mail_alias ?? null,
         reply_to_email: org?.reply_to_email ?? null,
         property_address: addr,
         leasing_phone: leasingPhone,

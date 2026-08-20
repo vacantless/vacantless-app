@@ -449,6 +449,7 @@ export async function requestRentalApplication(formData: FormData) {
         org_name: org.name,
         brand_color: org.brand_color,
         logo_url: org.logo_url,
+        mail_alias: org.mail_alias,
         reply_to_email: org.reply_to_email,
         property_address: lead.property?.address ?? null,
         apply_url: applyUrl,

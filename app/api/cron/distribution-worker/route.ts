@@ -376,7 +376,7 @@ export async function GET(req: NextRequest) {
     // Notify the operator that a prepared post needs a human at the gate.
     const { data: org } = await admin
       .from("organizations")
-      .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+      .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email")
       .eq("id", job.organization_id)
       .maybeSingle();
     if (org) {

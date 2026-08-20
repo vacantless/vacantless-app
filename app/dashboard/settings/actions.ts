@@ -24,6 +24,7 @@ import {
   validateBuildingPolicySettings,
 } from "@/lib/policy-profile";
 import { sendTestEmail } from "@/lib/email";
+import { validateMailAlias } from "@/lib/email-ingest";
 import { canUseRenterSms } from "@/lib/billing";
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import {
@@ -601,11 +602,15 @@ export async function updateEmailSender(formData: FormData) {
   if (!replyTo.ok) {
     redirect("/dashboard/settings?tab=comms&sender=invalid");
   }
+  const mailAlias = validateMailAlias(formData.get("mail_alias"));
+  if (!mailAlias.ok) {
+    redirect("/dashboard/settings?tab=comms&sender=alias_invalid");
+  }
 
   const supabase = createClient();
   const { error } = await supabase
     .from("organizations")
-    .update({ reply_to_email: replyTo.value })
+    .update({ reply_to_email: replyTo.value, mail_alias: mailAlias.value })
     .eq("id", org.id);
   if (error) {
     redirect("/dashboard/settings?tab=comms&sender=error");

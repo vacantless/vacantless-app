@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, scheduled_at, organization_id, lead_id, " +
         "leads(name, email), properties(address), " +
-        "organizations(name, brand_color, logo_url, reply_to_email, feedback_enabled, feedback_delay_hours)",
+        "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, feedback_enabled, feedback_delay_hours)",
     )
     .eq("outcome", "attended")
     .is("feedback_request_sent_at", null)
@@ -119,6 +119,7 @@ export async function GET(req: NextRequest) {
       org_name: org?.name ?? null,
       brand_color: org?.brand_color ?? null,
       logo_url: org?.logo_url ?? null,
+      mail_alias: org?.mail_alias ?? null,
       reply_to_email: org?.reply_to_email ?? null,
       property_address: property?.address ?? null,
     });

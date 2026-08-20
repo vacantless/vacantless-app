@@ -383,7 +383,7 @@ async function sendListingHealthAlerts({
 
   const { data: orgRows, error: orgErr } = await admin
     .from("organizations")
-    .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+    .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email")
     .in("id", Array.from(settingsByOrg.keys()));
   if (orgErr) {
     summary.errors++;
@@ -565,7 +565,7 @@ async function loadRelistRadarOrgs(
   if (ids.length === 0) return new Map();
   const { data, error } = await admin
     .from("organizations")
-    .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+    .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email")
     .in("id", ids);
   if (error) throw new Error(`radar_orgs:${error.message}`);
   return new Map(

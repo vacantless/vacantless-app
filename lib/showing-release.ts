@@ -8,6 +8,7 @@ export type ReleaseShowingOrg = {
   name: string | null;
   brand_color: string | null;
   logo_url: string | null;
+  mail_alias?: string | null;
   reply_to_email: string | null;
   public_contact_email?: string | null;
   booking_timezone?: string | null;
@@ -111,6 +112,7 @@ export async function releaseUnconfirmedShowing(
     org_name: args.org.name,
     brand_color: args.org.brand_color,
     logo_url: args.org.logo_url,
+    mail_alias: args.org.mail_alias ?? null,
     reply_to_email: args.org.reply_to_email,
     property_address: property?.address ?? null,
     when_label: whenLabel,

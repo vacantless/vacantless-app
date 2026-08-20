@@ -69,6 +69,9 @@ export type SendOrgNotificationArgs = {
   // Optional CTA row for events with several scoped actions, such as the
   // post-showing outcome nudge.
   actions?: NotificationEmailAction[] | null;
+  // Optional rendered copy for one-off relays that must use this event's
+  // recipient resolution but should not reuse its default subject/body.
+  renderedOverride?: { subject: string; body: string } | null;
 };
 
 // Best-effort delivery report. `delivered` is the signal a caller acts on when
@@ -82,6 +85,8 @@ export type SendOrgNotificationResult = {
   attempted: number;
   /** Why nothing was attempted (when attempted === 0). */
   skipped?: "event_inactive" | "event_disabled" | "no_recipients" | "threw";
+  /** Exact recipients resolved for this send. Stored by inbound relays as metadata. */
+  recipients: string[];
 };
 
 export async function sendOrgNotification(
@@ -90,7 +95,7 @@ export async function sendOrgNotification(
   try {
     const event = getNotificationEvent(args.eventKey);
     if (!event || !event.active)
-      return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_inactive" };
+      return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_inactive", recipients: [] };
 
     // The per-org override (absent == defaults). RLS scopes this for the
     // operator client; the explicit org filter scopes it for the admin client.
@@ -103,7 +108,7 @@ export async function sendOrgNotification(
     const setting = (data as NotificationSettingRow | null) ?? null;
 
     if (!isEventEnabled(setting))
-      return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_disabled" };
+      return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_disabled", recipients: [] };
 
     // S554: the operator lane tier. Only operator `leasing` events carry a lane;
     // for everything else this stays empty and resolution is unchanged. Guarded
@@ -136,9 +141,9 @@ export async function sendOrgNotification(
       laneRecipients,
     });
     if (recipients.length === 0)
-      return { delivered: false, sentCount: 0, attempted: 0, skipped: "no_recipients" };
+      return { delivered: false, sentCount: 0, attempted: 0, skipped: "no_recipients", recipients: [] };
 
-    const rendered = renderNotification(event, setting, args.vars);
+    const rendered = args.renderedOverride ?? renderNotification(event, setting, args.vars);
     const accent = resolveNotificationAccent(event, setting);
 
     const results = await Promise.allSettled(
@@ -162,9 +167,9 @@ export async function sendOrgNotification(
     const sentCount = results.filter(
       (r) => r.status === "fulfilled" && r.value?.sent === true,
     ).length;
-    return { delivered: sentCount > 0, sentCount, attempted: recipients.length };
+    return { delivered: sentCount > 0, sentCount, attempted: recipients.length, recipients };
   } catch {
     // Swallow — the transition already happened; a notification is best-effort.
-    return { delivered: false, sentCount: 0, attempted: 0, skipped: "threw" };
+    return { delivered: false, sentCount: 0, attempted: 0, skipped: "threw", recipients: [] };
   }
 }

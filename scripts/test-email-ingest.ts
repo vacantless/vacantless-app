@@ -9,7 +9,9 @@ import {
   ingestAddressFromToken,
   normalizeIngestSender,
   parseIngestToken,
+  parseIngestAlias,
   pickIngestToken,
+  validateMailAlias,
   toRecipientList,
   extractAddress,
   normalizeSenderEmail,
@@ -107,6 +109,25 @@ ok(
   "custom domain rejects default",
   parseIngestToken(`u-${TOK}@in.vacantless.com`, "in.example.com") === null,
 );
+
+// parseIngestAlias keeps the slug/alias lane separate from strict u-token
+// parsing. It accepts explicit short aliases only and rejects reserved/u- names.
+ok("parse alias on ingest domain", parseIngestAlias("agile@in.vacantless.com") === "agile");
+ok("parse alias on main domain", parseIngestAlias("Agile <AGILE@VACANTLESS.COM>", "vacantless.com") === "agile");
+ok("parse alias wrong domain -> null", parseIngestAlias("agile@vacantless.com") === null);
+ok("parse alias rejects u-prefix", parseIngestAlias("u-agile@in.vacantless.com") === null);
+ok("parse alias rejects reserved", parseIngestAlias("leads@in.vacantless.com") === null);
+ok("parse alias rejects dot", parseIngestAlias("agile.team@in.vacantless.com") === null);
+ok("validate alias blank -> null", (() => {
+  const r = validateMailAlias("  ");
+  return r.ok === true && r.value === null;
+})());
+ok("validate alias accepts lowercase hyphen", (() => {
+  const r = validateMailAlias("agile-team");
+  return r.ok === true && r.value === "agile-team";
+})());
+ok("validate alias rejects uppercase", validateMailAlias("Agile").ok === false);
+ok("validate alias rejects reserved", validateMailAlias("admin").ok === false);
 
 // pickIngestToken across To+Cc
 ok(

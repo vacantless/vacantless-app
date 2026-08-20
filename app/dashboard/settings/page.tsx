@@ -1252,20 +1252,25 @@ export default async function SettingsPage({
               </h3>
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Emails always send from Vacantless&apos;s secure address, shown
-              under your business name with your reply-to, so they pass spam
-              checks and replies reach you. Renters never see a personal email
-              address.
+              Set where renter replies should go. A per-company Vacantless
+              address can be prepared here, but it is only used after the matching
+              ImprovMX forward exists and the sender flag is enabled.
             </p>
 
             {senderFlash === "saved" && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Reply-to saved. Renter replies will now be delivered there.
+                Email sender settings saved.
               </div>
             )}
             {senderFlash === "invalid" && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
                 Reply-to must be a valid email address, or left blank.
+              </div>
+            )}
+            {senderFlash === "alias_invalid" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Mail alias must be lowercase letters, numbers, or hyphens, 2-31 characters,
+                and cannot use a reserved Vacantless address.
               </div>
             )}
             {senderFlash === "error" && (
@@ -1274,7 +1279,7 @@ export default async function SettingsPage({
               </div>
             )}
 
-            <form action={updateEmailSender} className="mt-4">
+            <form action={updateEmailSender} className="mt-4 space-y-4">
               <label className="block max-w-md">
                 <span className="mb-1 block text-sm font-medium text-gray-700">
                   Reply-to email
@@ -1292,8 +1297,31 @@ export default async function SettingsPage({
                   Leave blank to use the shared Vacantless inbox.
                 </span>
               </label>
-              <button className="mt-3 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-                Save reply-to
+              <label className="block max-w-md">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Vacantless mail alias
+                </span>
+                <div className="flex items-stretch">
+                  <input
+                    name="mail_alias"
+                    type="text"
+                    inputMode="text"
+                    pattern="[a-z0-9][a-z0-9-]{1,30}"
+                    placeholder="agile"
+                    defaultValue={org.mail_alias ?? ""}
+                    className="min-w-0 flex-1 rounded-l-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <span className="inline-flex items-center rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500">
+                    @vacantless.com
+                  </span>
+                </div>
+                <span className="mt-1 block text-xs text-gray-400">
+                  Full address: {org.mail_alias ? `${org.mail_alias}@vacantless.com` : "set an alias to preview it"}.
+                  This alias must also exist as an ImprovMX forward before it is used.
+                </span>
+              </label>
+              <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+                Save email sender
               </button>
             </form>
 

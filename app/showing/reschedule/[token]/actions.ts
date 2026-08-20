@@ -27,6 +27,7 @@ type AcceptResult = {
   org_name?: string | null;
   brand_color?: string | null;
   logo_url?: string | null;
+  mail_alias?: string | null;
   reply_to_email?: string | null;
   property_address?: string | null;
   renter_name?: string | null;
@@ -55,7 +56,7 @@ async function notifyOperatorsOfAcceptedReschedule(r: AcceptResult): Promise<voi
 
     const { data: org } = await admin
       .from("organizations")
-      .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+      .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email")
       .eq("id", r.organization_id)
       .maybeSingle();
     if (!org) return;
@@ -116,14 +117,20 @@ async function sendRenterAcceptedConfirmation(
     const timeZone = r.timezone || "America/Toronto";
     let leasingPhone: string | null = null;
     let bookingRequiresConfirmation = false;
+    let mailAlias: string | null = r.mail_alias ?? null;
     if (r.property_id) {
       const { data: extras } = await supabase.rpc("get_booking_confirmation_extras", {
         p_property_id: r.property_id,
       });
       const e = extras as
-        | { leasing_phone?: string | null; booking_requires_confirmation?: boolean | null }
+        | {
+            leasing_phone?: string | null;
+            mail_alias?: string | null;
+            booking_requires_confirmation?: boolean | null;
+          }
         | null;
       leasingPhone = e?.leasing_phone ?? null;
+      mailAlias = e?.mail_alias ?? mailAlias;
       bookingRequiresConfirmation = e?.booking_requires_confirmation === true;
     }
 
@@ -134,6 +141,7 @@ async function sendRenterAcceptedConfirmation(
       org_name: r.org_name ?? null,
       brand_color: r.brand_color ?? null,
       logo_url: r.logo_url ?? null,
+      mail_alias: mailAlias,
       reply_to_email: r.reply_to_email ?? null,
       property_address: r.property_address ?? null,
       old_when_label: r.old_scheduled_at
