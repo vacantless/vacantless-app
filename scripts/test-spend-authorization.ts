@@ -36,6 +36,12 @@ const publishEverywhere = readFileSync(
   "app/dashboard/properties/[id]/publish-everywhere.tsx",
   "utf8",
 );
+const authenticatedLedgerGrants: string[] =
+  migration.match(/^grant .* on public\.distribution_channel_spend to authenticated;$/gm) ??
+  [];
+const serviceRoleLedgerGrants: string[] =
+  migration.match(/^grant .* on public\.distribution_channel_spend to service_role;$/gm) ??
+  [];
 
 ok(
   "migration extends existing distribution_channel_accounts",
@@ -56,11 +62,24 @@ ok(
     migration.includes("amount_cents              integer not null check (amount_cents > 0)") &&
     migration.includes("idx_distribution_channel_spend_org_channel_charged") &&
     migration.includes("alter table public.distribution_channel_spend enable row level security") &&
-    migration.includes("distribution_channel_spend_all"),
+    migration.includes("distribution_channel_spend_read"),
 );
 ok(
-  "migration grants worker service role ledger access",
-  migration.includes("grant select, insert, update, delete on public.distribution_channel_spend to service_role"),
+  "migration keeps ledger append-only",
+  migration.includes("revoke all on public.distribution_channel_spend from authenticated") &&
+    authenticatedLedgerGrants.includes(
+      "grant select on public.distribution_channel_spend to authenticated;",
+    ) &&
+    serviceRoleLedgerGrants.includes(
+      "grant select, insert on public.distribution_channel_spend to service_role;",
+    ) &&
+    !authenticatedLedgerGrants.some((grant) => /\b(update|delete)\b/.test(grant)) &&
+    !serviceRoleLedgerGrants.some((grant) => /\b(update|delete)\b/.test(grant)),
+);
+ok(
+  "migration labels spend ledger as unwritten scaffolding",
+  migration.includes("no runtime code writes this ledger yet") &&
+    migration.includes("codex/s651-kijiji-paid-lane"),
 );
 ok(
   "migration provides account-checked claim CAS",
@@ -69,6 +88,12 @@ ok(
     migration.includes("dca.spend_revoked_at is null") &&
     migration.includes("dca.spend_max_cents > 0") &&
     migration.includes("operator_submit_approved_at = null"),
+);
+ok(
+  "migration refusal preserves approver identity and audits prior approver",
+  !migration.includes("operator_submit_approved_by = null") &&
+    migration.includes("Prior approver: %s") &&
+    migration.includes("coalesce(prior_approver::text, 'unknown')"),
 );
 
 const updateDistribution = section(
@@ -91,6 +116,11 @@ ok(
     updateDistribution.includes("payload.spend_authorized = false") &&
     updateDistribution.includes("payload.spend_revoked_at = cap.requiresPayment ? nowISO : null") &&
     updateDistribution.includes('{ onConflict: "organization_id,channel" }'),
+);
+ok(
+  "settings action revoke preserves spend ceilings",
+  !updateDistribution.includes("payload.spend_max_cents = null") &&
+    !updateDistribution.includes("payload.spend_period_max_cents = null"),
 );
 
 ok(

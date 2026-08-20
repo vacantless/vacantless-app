@@ -43,7 +43,7 @@ end $$;
 comment on column public.distribution_channel_accounts.spend_authorized is
   'S668: standing per-org/channel authorization for the worker to complete paid postings within the recorded ceilings.';
 comment on column public.distribution_channel_accounts.spend_max_cents is
-  'S668: per-ad ceiling in cents. Null when spend_authorized is false.';
+  'S668: per-ad ceiling in cents. May remain populated after revocation to preserve the authorization record.';
 comment on column public.distribution_channel_accounts.spend_period_max_cents is
   'S668: optional per-calendar-month ceiling in cents. Null means no monthly cap.';
 comment on column public.distribution_channel_accounts.spend_authorized_at is
@@ -53,6 +53,9 @@ comment on column public.distribution_channel_accounts.spend_authorized_by is
 comment on column public.distribution_channel_accounts.spend_revoked_at is
   'S668: timestamp of the latest standing spend authorization revocation.';
 
+-- S668 scaffolding: no runtime code writes this ledger yet. The paid-lane slice
+-- on codex/s651-kijiji-paid-lane will write rows after charge completion when
+-- checkout totals are threaded into its paid gate.
 create table if not exists public.distribution_channel_spend (
   id                        uuid primary key default gen_random_uuid(),
   organization_id           uuid not null references public.organizations(id) on delete cascade,
@@ -70,12 +73,14 @@ create index if not exists idx_distribution_channel_spend_org_channel_charged
 
 alter table public.distribution_channel_spend enable row level security;
 drop policy if exists distribution_channel_spend_all on public.distribution_channel_spend;
-create policy distribution_channel_spend_all on public.distribution_channel_spend
-  for all to authenticated
-  using (organization_id in (select public.user_org_ids()))
-  with check (organization_id in (select public.user_org_ids()));
-grant select, insert, update, delete on public.distribution_channel_spend to authenticated;
-grant select, insert, update, delete on public.distribution_channel_spend to service_role;
+drop policy if exists distribution_channel_spend_read on public.distribution_channel_spend;
+create policy distribution_channel_spend_read on public.distribution_channel_spend
+  for select using (organization_id in (select public.user_org_ids()));
+
+revoke all on public.distribution_channel_spend from anon;
+revoke all on public.distribution_channel_spend from authenticated;
+grant select on public.distribution_channel_spend to authenticated;
+grant select, insert on public.distribution_channel_spend to service_role;
 
 create or replace function public.claim_approved_distribution_run_item_for_worker(
   p_item_id uuid,
@@ -93,6 +98,7 @@ declare
   reason text;
   message text;
   now_ts timestamptz := now();
+  prior_approver uuid;
 begin
   select
     automation_authorized,
@@ -120,11 +126,24 @@ begin
   end if;
 
   if reason is not null then
+    select dri.operator_submit_approved_by
+    into prior_approver
+    from public.distribution_run_items dri
+    where dri.id = p_item_id
+      and dri.organization_id = p_organization_id
+      and dri.channel = p_channel
+      and dri.mode = 'concierge'
+      and dri.publish_status = 'needs_operator'
+      and dri.operator_submit_approved_at is not null
+      and dri.concierge_claimed_by is null;
+
     message := format(
-      'Worker refused paid claim for organization %s channel %s: %s. Authorize standing spend in Distribution settings, then approve again.',
+      'Worker refused paid claim for organization %s channel %s: %s. Prior approver: %s. Refused at %s. Authorize standing spend in Distribution settings, then approve again.',
       p_organization_id,
       p_channel,
-      reason
+      reason,
+      coalesce(prior_approver::text, 'unknown'),
+      now_ts
     );
     return query
       update public.distribution_run_items dri
@@ -132,7 +151,6 @@ begin
           error_code = 'spend_authorization_required',
           error_message = message,
           operator_submit_approved_at = null,
-          operator_submit_approved_by = null,
           updated_at = now_ts
       where dri.id = p_item_id
         and dri.organization_id = p_organization_id

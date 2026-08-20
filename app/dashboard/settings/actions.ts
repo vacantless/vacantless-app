@@ -485,8 +485,6 @@ export async function updateDistributionChannelAccount(formData: FormData) {
     payload.spend_revoked_at = null;
   } else {
     payload.spend_authorized = false;
-    payload.spend_max_cents = null;
-    payload.spend_period_max_cents = null;
     payload.spend_revoked_at = cap.requiresPayment ? nowISO : null;
   }
   const { error } = await supabase
