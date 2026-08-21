@@ -96,7 +96,7 @@ export function shouldNotifyLeaseupTakedown(args: {
 }
 
 export function leaseupTakedownDashboardUrl(propertyId: string): string {
-  return `${APP_URL}/dashboard/properties/${encodeURIComponent(propertyId)}#distribute-header`;
+  return `${APP_URL}/dashboard/properties/${encodeURIComponent(propertyId)}?tab=distribute#distribute-header`;
 }
 
 async function sendLeaseupTakedownNeededNotification(

@@ -250,6 +250,22 @@ import { shareLinkStatus } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
+const DETAIL_TAB_IDS = [
+  "setup",
+  "market",
+  "distribute",
+  "assets",
+  "inquiries",
+] as const;
+
+type DetailTabId = (typeof DETAIL_TAB_IDS)[number];
+
+function detailTabFromParam(tab: string | undefined): DetailTabId | null {
+  return DETAIL_TAB_IDS.includes(tab as DetailTabId)
+    ? (tab as DetailTabId)
+    : null;
+}
+
 // Inherit-hint helpers for the per-unit tri-state utilities/pets selects (0050).
 // The empty option reads "Inherit (<building-effective value>)".
 function boolToSelect(v: boolean | null | undefined): string {
@@ -437,6 +453,7 @@ export default async function PropertyDetailPage({
 }: {
   params: { id: string };
   searchParams: {
+    tab?: string;
     saved?: string;
     created?: string;
     // One-click Publish (B1): published=1 confirms the rental went Live;
@@ -2266,15 +2283,18 @@ export default async function PropertyDetailPage({
     lifecycle.steps.find((s) => s.step === k);
   const setUpStep = stepOf("set_up");
   const marketStep = stepOf("market");
-  // Default tab mirrors the prior default-open logic for the collapsibles; a
-  // deep-link hash on load overrides it (handled inside TabbedSections).
-  const defaultTab = setUpOpen
-    ? "setup"
-    : marketOpen
-      ? "market"
-      : inquiriesOpen
-        ? "inquiries"
-        : "market";
+  // Default tab mirrors the prior default-open logic for the collapsibles.
+  // Explicit tab links win so "Get online" never lands on the asset binder first.
+  const requestedTab = detailTabFromParam(searchParams.tab);
+  const defaultTab =
+    requestedTab ??
+    (setUpOpen
+      ? "setup"
+      : marketOpen
+        ? "market"
+        : inquiriesOpen
+          ? "inquiries"
+          : "market");
   const setupOutstandingCount = readiness.checks.filter(
     (check) => check.required && check.key !== "live" && !check.ok,
   ).length;
@@ -3450,7 +3470,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="market"
-        label="Photos & ad"
+        label="Listing assets"
         done={marketStep?.state === "done"}
       >
 
@@ -3622,54 +3642,67 @@ export default async function PropertyDetailPage({
       {/* --- Posting reference (S412): the copy + fill sheet + gotchas live here
           as asset prep; WHERE the listing goes (channel cards + tracked posts)
           moved to the Distribute tab. --- */}
-      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center gap-2.5">
-          <IconTile size="sm"><Icons.list className="h-4 w-4" /></IconTile>
-          <h3 className="text-sm font-semibold text-gray-900">
-            What to paste on each site
-          </h3>
-        </div>
-        <p className="mb-4 text-xs text-gray-500">
-          {linkIsLive
-            ? "The field-by-field values and the per-portal gotchas to have open while you post. When you're ready to market this property and track where it's live, head to the Distribute tab."
-            : "Prepare your posting reference here. Posting and tracking turn on in the Distribute tab once this property is Live and accepting inquiries."}
-        </p>
-
-        {!linkIsLive && promotionGuard && (
-          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            <span className="font-medium">{promotionGuard.title}</span>{" "}
-            {promotionGuard.postingBody}
-          </p>
-        )}
-
-        {/* Per-portal "before you post" gotcha checklist (S260). Content, not
-            automation — the operator still posts by hand. */}
-        {linkIsLive && <BeforeYouPost />}
-
-        {/* Per-portal field-by-field fill sheet (S262). The values to paste into
-            each portal's form, resolved from this rental, with the gotcha on
-            each field. Still a reference — nothing is submitted. */}
-        {linkIsLive && <FillSheetCard sheets={fillSheets} />}
-
-        {/* Bridge to the Distribute command center (S412). */}
-        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-gray-900">
-              Ready to post?
-            </p>
-            <p className="text-xs text-gray-600">
-              Use the Get online tab to pick rental sites, copy the listing
-              text, and finish posting.
-            </p>
+      <details className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <IconTile size="sm"><Icons.list className="h-4 w-4" /></IconTile>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">
+                What to paste on each site
+              </h3>
+              <p className="text-xs text-gray-500">
+                Portal field sheet, gotchas, and manual posting reference.
+              </p>
+            </div>
           </div>
-          <a
-            href="#distribute-header"
-            className={SECONDARY_ACTION_CLASS}
-          >
-            Open Get online →
-          </a>
+          <span className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+            Open
+          </span>
+        </summary>
+
+        <div className="border-t border-gray-100 p-5">
+          <p className="mb-4 text-xs text-gray-500">
+            {linkIsLive
+              ? "The field-by-field values and the per-portal gotchas to have open while you post. When you're ready to market this property and track where it's live, head to Get online."
+              : "Prepare your posting reference here. Posting and tracking turn on in Get online once this property is Live and accepting inquiries."}
+          </p>
+
+          {!linkIsLive && promotionGuard && (
+            <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <span className="font-medium">{promotionGuard.title}</span>{" "}
+              {promotionGuard.postingBody}
+            </p>
+          )}
+
+          {/* Per-portal "before you post" gotcha checklist (S260). Content, not
+              automation — the operator still posts by hand. */}
+          {linkIsLive && <BeforeYouPost />}
+
+          {/* Per-portal field-by-field fill sheet (S262). The values to paste into
+              each portal's form, resolved from this rental, with the gotcha on
+              each field. Still a reference — nothing is submitted. */}
+          {linkIsLive && <FillSheetCard sheets={fillSheets} />}
+
+          {/* Bridge to the Distribute command center (S412). */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900">
+                Ready to post?
+              </p>
+              <p className="text-xs text-gray-600">
+                Use Get online to pick rental sites, copy the listing text, and
+                finish posting.
+              </p>
+            </div>
+            <a
+              href="?tab=distribute#distribute-header"
+              className={SECONDARY_ACTION_CLASS}
+            >
+              Open Get online →
+            </a>
+          </div>
         </div>
-      </div>
+      </details>
 
       {showBlastCard && (
         <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">

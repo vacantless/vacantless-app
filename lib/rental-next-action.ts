@@ -167,6 +167,9 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
   if (step === null) return null;
 
   const self = `/dashboard/properties/${input.propertyId}`;
+  const setupHref = `${self}?tab=setup#rental-details`;
+  const photosHref = `${self}?tab=market#property-photos`;
+  const distributeHref = `${self}?tab=distribute#distribute-header`;
   const facts = policyFacts(input.effective, input.inherited);
   const inheritedCount = facts.filter((f) => f.inherited).length;
 
@@ -193,7 +196,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         blurb,
         derived: facts,
         gaps,
-        cta: { label: "Add property details", href: `${self}#rental-details` },
+        cta: { label: "Add property details", href: setupHref },
       };
     }
 
@@ -235,8 +238,8 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
           gaps,
           cta:
             input.photoCount === 0
-              ? { label: "Add photos", href: `${self}#property-photos` }
-              : { label: "Review live listing", href: `${self}#distribute-header` },
+              ? { label: "Add photos", href: photosHref }
+              : { label: "Review live listing", href: distributeHref },
         };
       }
       return {
@@ -248,7 +251,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         gaps,
         cta:
           input.photoCount === 0
-            ? { label: "Add photos", href: `${self}#property-photos` }
+            ? { label: "Add photos", href: photosHref }
             : { label: "Set it Live", href: `${self}#publish-action` },
       };
     }
@@ -281,7 +284,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
             : input.openInquiryCount === 0
               ? [{ key: "market", label: "Refresh or add a renter channel" }]
               : [{ key: "share", label: "Share the link with more renters" }],
-        cta: { label: "Open marketing checklist", href: `${self}#distribute-header` },
+        cta: { label: "Open syndication", href: distributeHref },
       };
     }
 

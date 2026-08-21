@@ -642,5 +642,46 @@ export function PhotoManager(
     | "onUploadSuccess"
   >,
 ) {
-  return <PhotoUploadWorkspace {...props} sectionId="property-photos" />;
+  const photoCount = props.initialPhotos.length;
+  const coverSet = props.initialPhotos.some((photo) => photo.is_cover);
+  const defaultOpen = photoCount === 0;
+
+  return (
+    <details
+      id="property-photos"
+      open={defaultOpen}
+      className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <IconTile size="sm">
+            <Icons.page className="h-4 w-4" />
+          </IconTile>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Photos for this rental
+            </h3>
+            <p className="text-xs text-gray-500">
+              {photoCount === 0
+                ? `No photos yet - add up to ${props.photoCap}.`
+                : `${photoCount}/${props.photoCap} photos${
+                    coverSet ? " - cover set" : ""
+                  }.`}
+            </p>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+          Manage
+        </span>
+      </summary>
+      <div className="border-t border-gray-100 p-5">
+        <PhotoUploadWorkspace
+          {...props}
+          className="scroll-mt-6"
+          fileInputId="photo-upload"
+          showHeader={false}
+        />
+      </div>
+    </details>
+  );
 }

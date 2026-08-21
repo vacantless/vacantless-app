@@ -288,11 +288,11 @@ export function deriveRentalLifecycle(
       : `/dashboard/tenancies/new?property=${propertyId}`;
     switch (step) {
       case "set_up":
-        return `${self}#rental-details`;
+        return `${self}?tab=setup#rental-details`;
       case "market":
-        return `${self}#property-photos`;
+        return `${self}?tab=market#property-photos`;
       case "inquiries":
-        return `${self}#inquiries`;
+        return `${self}?tab=inquiries#inquiries`;
       case "viewings":
         return "/dashboard/showings";
       case "screen":

@@ -70,7 +70,7 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   ok("set_up always has a rent gap", findGap(a, "rent"));
   ok("set_up: beds gap when unset", findGap(a, "beds"));
   ok("set_up: baths gap when unset", findGap(a, "baths"));
-  ok("set_up cta -> #rental-details", a?.cta.href === `/dashboard/properties/${PID}#rental-details`);
+  ok("set_up cta -> details tab", a?.cta.href === `/dashboard/properties/${PID}?tab=setup#rental-details`);
 }
 {
   // rent still missing (hasRent defaults false) but beds/baths set -> rent gap is the outstanding one
@@ -126,7 +126,7 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   ok("market: photos gap when 0 photos", findGap(a, "photos"));
   ok("market: live gap when not live", findGap(a, "live"));
   ok("market: copy fact reflects channels", findFact(a, "copy")?.value === "Written for 5 channels");
-  ok("market: cta -> photos when no photos", a?.cta.href === `/dashboard/properties/${PID}#property-photos`);
+  ok("market: cta -> photos when no photos", a?.cta.href === `/dashboard/properties/${PID}?tab=market#property-photos`);
 }
 {
   const a = deriveNextAction(inp({ currentStep: "market", hasRent: true, photoCount: 4, isLive: false, channelCount: 5 }));
@@ -156,7 +156,7 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   ok("market: flag-on live listing reframes title", a?.title === "Strengthen your live ad");
   ok("market: flag-on live listing keeps photo nudge", findGap(a, "photos"));
   ok("market: flag-on live listing has no live gap", !findGap(a, "live"));
-  ok("market: flag-on live listing cta -> photos", a?.cta.href === `/dashboard/properties/${PID}#property-photos`);
+  ok("market: flag-on live listing cta -> photos", a?.cta.href === `/dashboard/properties/${PID}?tab=market#property-photos`);
 }
 
 // --- inquiries --------------------------------------------------------------
@@ -164,10 +164,10 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   const a = deriveNextAction(inp({ currentStep: "inquiries", hasRent: true, isLive: true, linkIsLive: true, photoCount: 2, listingPostCount: 0 }));
   ok("inquiries: link fact present when live", !!findFact(a, "link"));
   ok("inquiries: market gap present", findGap(a, "market"));
-  ok("inquiries: cta -> distribute", a?.cta.href === `/dashboard/properties/${PID}#distribute-header`);
+  ok("inquiries: cta -> distribute", a?.cta.href === `/dashboard/properties/${PID}?tab=distribute#distribute-header`);
   ok(
-    "inquiries: cta opens marketing checklist",
-    a?.cta.label === "Open marketing checklist",
+    "inquiries: cta opens syndication",
+    a?.cta.label === "Open syndication",
   );
 }
 {

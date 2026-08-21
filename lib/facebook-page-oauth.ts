@@ -233,9 +233,9 @@ export function facebookReturnPath(
 ): string {
   const params = new URLSearchParams({ fb: status });
   if (reason) params.set("reason", reason);
-  return propertyId
-    ? `/dashboard/properties/${encodeURIComponent(propertyId)}?${params.toString()}#distribute-header`
-    : `/dashboard/properties?${params.toString()}`;
+  if (!propertyId) return `/dashboard/properties?${params.toString()}`;
+  params.set("tab", "distribute");
+  return `/dashboard/properties/${encodeURIComponent(propertyId)}?${params.toString()}#distribute-header`;
 }
 
 export async function finalizeFacebookPageConnection(args: {

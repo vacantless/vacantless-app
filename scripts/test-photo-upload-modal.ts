@@ -184,8 +184,8 @@ ok(
   /export function PhotoUploadWorkspace/.test(managerSource),
 );
 ok(
-  "inline photo manager keeps property-photos anchor id",
-  /sectionId="property-photos"/.test(managerSource),
+  "inline photo manager keeps property-photos anchor on the disclosure",
+  /<details[\s\S]*id="property-photos"/.test(managerSource),
 );
 ok(
   "photo manager file input keeps browser-automation label",

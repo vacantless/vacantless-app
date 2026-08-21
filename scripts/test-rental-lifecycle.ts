@@ -335,15 +335,15 @@ ok("leadLeased: well-ordered", wellOrdered(leadLeased));
 // --- hrefs ------------------------------------------------------------------
 ok(
   "set_up href anchors to this rental's details",
-  live.steps[0].href === `/dashboard/properties/${PID}#rental-details`,
+  live.steps[0].href === `/dashboard/properties/${PID}?tab=setup#rental-details`,
 );
 ok(
   "market href anchors to photos",
-  live.steps[1].href === `/dashboard/properties/${PID}#property-photos`,
+  live.steps[1].href === `/dashboard/properties/${PID}?tab=market#property-photos`,
 );
 ok(
   "inquiries href anchors to inquiries section",
-  live.steps[2].href === `/dashboard/properties/${PID}#inquiries`,
+  live.steps[2].href === `/dashboard/properties/${PID}?tab=inquiries#inquiries`,
 );
 ok(
   "screen href routes to screening surface when no applicants",

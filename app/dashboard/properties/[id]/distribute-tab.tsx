@@ -490,7 +490,7 @@ export function DistributeTab({
     (channel) => channel.readinessTone === "positive",
   ).length;
   const readinessLabel = readyToShare
-    ? "Ready to post"
+    ? "Ready to syndicate"
       : setupOutstanding > 0
         ? `${setupOutstanding} ${
             setupOutstanding === 1 ? "listing detail" : "listing details"
@@ -502,12 +502,14 @@ export function DistributeTab({
           } to finish`;
   const headerBody =
     stepClarityLiveEnabled && linkIsLive
-      ? "Your listing is live. Finish any site that still needs your sign-in - then you're done."
+      ? "Your public page is live. Finish only the outside sites that still need your sign-in."
       : "Click Publish everywhere. We turn on the connected channels and show only the sign-in or payment steps needed for the rest.";
   const liveChipLabel =
     stepClarityLiveEnabled && linkIsLive
       ? liveChannels > 0
-        ? `Live on ${liveChannels} ${liveChannels === 1 ? "site" : "sites"}`
+        ? `Proof saved on ${liveChannels} ${
+            liveChannels === 1 ? "site" : "sites"
+          }`
         : "Public page live"
       : `${liveChannels} ${liveChannels === 1 ? "site" : "sites"} posted`;
   const publishEverywhereSurface = (
