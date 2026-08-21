@@ -88,6 +88,13 @@ export type PortalFreshnessInput = FreshnessPointerInput & {
   listingPostStatus: string | null | undefined;
   listingPostUrl: string | null | undefined;
   listingPostPostedOn: string | null | undefined;
+  /**
+   * Fallback age clock. `posted_on` is nullable and a great many rows never get
+   * one, which used to leave those rows literally ageless. Pass the row's
+   * `created_at` so a live portal row always has SOME clock. Accepts a full
+   * timestamp; only the leading YYYY-MM-DD is used.
+   */
+  listingPostCreatedAt?: string | null;
   nowISO: string;
   refreshDays?: number;
 };
@@ -100,8 +107,21 @@ export type PortalFreshnessDecision = {
     | "tracker_expired"
     | "pointer_due"
     | "posted_on_stale"
+    | "created_at_stale"
     | "not_due";
 };
+
+/**
+ * Narrow a date or timestamp to the bare `YYYY-MM-DD` that `daysBetween`
+ * requires. `posted_on` is already a DATE; `created_at` is a timestamptz like
+ * "2026-07-06 11:24:43.39666+00", which `daysBetween` would otherwise reject
+ * outright and silently return null for.
+ */
+function ymd(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const head = value.trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(head) ? head : null;
+}
 
 export function portalFreshnessDecision(
   input: PortalFreshnessInput,
@@ -129,15 +149,28 @@ export function portalFreshnessDecision(
     return { shouldFlag: true, reason: "pointer_due" };
   }
 
-  const postedOn = input.listingPostPostedOn ?? null;
+  // S670: a live portal row could become UNREACHABLE by every branch above.
+  // The pointer branch requires a non-null pointer, so an item that has never
+  // been scheduled (`reason: "no_pointer"`) is skipped by it - exactly the item
+  // that most needs a first look. If `posted_on` was also null the row had no
+  // age either, so it stayed "not_due" forever. 50 Glenrose Unit 4 read `live`
+  // on a dead Facebook ad for 46 days that way. Falling back to `created_at`
+  // gives every row a clock, which closes the hole without the false-alarm
+  // storm that flagging on a bare `no_pointer` would cause across live orgs.
+  const postedOn = ymd(input.listingPostPostedOn);
+  const createdAt = ymd(input.listingPostCreatedAt);
+  const ageAnchor = postedOn ?? createdAt;
   const today = input.nowISO.slice(0, 10);
-  const age = daysBetween(postedOn, today);
+  const age = daysBetween(ageAnchor, today);
   if (
     status === "live" &&
     age != null &&
     age >= (input.refreshDays ?? DEFAULT_REFRESH_DAYS)
   ) {
-    return { shouldFlag: true, reason: "posted_on_stale" };
+    return {
+      shouldFlag: true,
+      reason: postedOn ? "posted_on_stale" : "created_at_stale",
+    };
   }
 
   return { shouldFlag: false, reason: "not_due" };

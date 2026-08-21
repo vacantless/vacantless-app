@@ -175,6 +175,94 @@ eq(
   }).shouldFlag,
   false,
 );
+// --- S670: the unreachable-row hole ----------------------------------------
+// A live portal row with NO pointer and NO posted_on used to fall through every
+// branch to "not_due" and stay there forever. 50 Glenrose Unit 4 sat on a dead
+// Facebook ad for 46 days. created_at is the fallback clock.
+eq(
+  "no posted_on and no pointer: created_at ages the row in",
+  portalFreshnessDecision({
+    channel: "facebook",
+    listingPostStatus: "live",
+    listingPostUrl: "https://www.facebook.com/share/1BYLMy84Fo/",
+    listingPostPostedOn: null,
+    listingPostCreatedAt: "2026-06-01 11:24:43.39666+00",
+    staleAfter: null,
+    nextRetryAt: null,
+    nowISO: NOW,
+  }).reason,
+  "created_at_stale",
+);
+eq(
+  "a RECENT created_at does not flag, so freshly posted rows stay quiet",
+  portalFreshnessDecision({
+    channel: "facebook",
+    listingPostStatus: "live",
+    listingPostUrl: "https://www.facebook.com/share/1BYLMy84Fo/",
+    listingPostPostedOn: null,
+    listingPostCreatedAt: "2026-07-19 08:00:00+00",
+    staleAfter: null,
+    nextRetryAt: null,
+    nowISO: NOW,
+  }).shouldFlag,
+  false,
+);
+eq(
+  "posted_on still wins over created_at when both are present",
+  portalFreshnessDecision({
+    channel: "kijiji",
+    listingPostStatus: "live",
+    listingPostUrl: "https://www.kijiji.ca/v-apartments-condos/windsor/123",
+    listingPostPostedOn: "2026-07-01",
+    listingPostCreatedAt: "2026-07-19 08:00:00+00",
+    staleAfter: null,
+    nextRetryAt: null,
+    nowISO: NOW,
+  }).reason,
+  "posted_on_stale",
+);
+ok(
+  "with neither clock the row is still not flagged, so the fix cannot invent an age",
+  portalFreshnessDecision({
+    channel: "facebook",
+    listingPostStatus: "live",
+    listingPostUrl: "https://www.facebook.com/share/1BYLMy84Fo/",
+    listingPostPostedOn: null,
+    listingPostCreatedAt: null,
+    staleAfter: null,
+    nextRetryAt: null,
+    nowISO: NOW,
+  }).reason === "not_due",
+);
+eq(
+  "a malformed created_at is ignored rather than parsed into a wrong age",
+  portalFreshnessDecision({
+    channel: "facebook",
+    listingPostStatus: "live",
+    listingPostUrl: "https://www.facebook.com/share/1BYLMy84Fo/",
+    listingPostPostedOn: null,
+    listingPostCreatedAt: "not-a-date",
+    staleAfter: null,
+    nextRetryAt: null,
+    nowISO: NOW,
+  }).reason,
+  "not_due",
+);
+eq(
+  "an EXPIRED tracker still wins over the new clock",
+  portalFreshnessDecision({
+    channel: "facebook",
+    listingPostStatus: "expired",
+    listingPostUrl: "https://www.facebook.com/share/1BYLMy84Fo/",
+    listingPostPostedOn: null,
+    listingPostCreatedAt: "2026-06-01 11:24:43.39666+00",
+    staleAfter: null,
+    nextRetryAt: null,
+    nowISO: NOW,
+  }).reason,
+  "tracker_expired",
+);
+
 eq(
   "live portal without URL leaves problem state to existing guard",
   portalFreshnessDecision({

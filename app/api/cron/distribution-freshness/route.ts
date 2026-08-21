@@ -124,6 +124,7 @@ type ListingPostRow = {
   url: string | null;
   status: string;
   posted_on: string | null;
+  created_at: string | null;
 };
 
 type RelistRadarItemRow = {
@@ -1647,7 +1648,9 @@ async function loadListingPost(
   if (!postId) return null;
   const { data, error } = await admin
     .from("listing_posts")
-    .select("id, organization_id, property_id, portal, url, status, posted_on")
+    .select(
+      "id, organization_id, property_id, portal, url, status, posted_on, created_at",
+    )
     .eq("id", postId)
     .maybeSingle();
   if (error) throw new Error(`post_query:${error.message}`);
@@ -2281,6 +2284,9 @@ async function processItem({
       listingPostStatus: post?.status ?? null,
       listingPostUrl: post?.url ?? null,
       listingPostPostedOn: post?.posted_on ?? null,
+      // S670: the fallback clock. Without it a row with no posted_on and no
+      // pointer can never be flagged. See portalFreshnessDecision.
+      listingPostCreatedAt: post?.created_at ?? null,
       staleAfter: item.stale_after,
       nextRetryAt: item.next_retry_at,
       nowISO,
