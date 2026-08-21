@@ -51,6 +51,15 @@ type RentalLaunchState = {
   tone: "ready" | "active" | "warn" | "muted";
 };
 
+/**
+ * S670: the posting contract, stated once and unconditionally. The launch-queue
+ * redesign deleted the old "Nothing is posted automatically" tooltip, taking
+ * this page to ZERO statements of what Vacantless will and will not do on the
+ * operator's behalf. Exact wording is Noam's.
+ */
+const POSTING_SAFETY_PROMISE =
+  "Nothing is posted automatically. You approve outside-site posts, paid steps, and live proof.";
+
 const LAUNCH_STATE_CLASS: Record<RentalLaunchState["tone"], string> = {
   ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
   active: "border-blue-200 bg-blue-50 text-blue-700",
@@ -543,6 +552,9 @@ export default async function PropertiesPage({
                   // audit #5), so this stays a clean Copy action.
                   <CopyIntakeButton url={intakeUrl(p.id)} />
                 )}
+                {/* S670: the safety promise the launch-queue redesign dropped.
+                    This row is the entry point into posting, so it is where the
+                    contract belongs. Exact copy is Noam's. */}
                 {isPubliclyVisible(p.status) && !isPublicBookable(p.status) ? (
                   // Leased / Paused: the public /r page LOADS but tells renters
                   // the unit is no longer available, so a bare "Copy inquiry
@@ -557,7 +569,7 @@ export default async function PropertiesPage({
                     <Link
                       href={launch.href}
                       className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                      title={launch.detail}
+                      title={`${launch.detail}. ${POSTING_SAFETY_PROMISE}`}
                     >
                       {launch.action}
                     </Link>
@@ -566,13 +578,13 @@ export default async function PropertiesPage({
                   <Link
                     href={launch.href}
                     className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
-                    title={launch.detail}
+                    title={`${launch.detail}. ${POSTING_SAFETY_PROMISE}`}
                   >
                     {launch.action}
                   </Link>
                 )}
                 <Link
-                  href={`/dashboard/properties/${p.id}#rental-details`}
+                  href={`/dashboard/properties/${p.id}?tab=setup#rental-details`}
                   className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Edit
@@ -592,6 +604,12 @@ export default async function PropertiesPage({
             </li>
             );
           })}
+          {/* S670: stated ONCE under the list rather than per row. A `title`
+              tooltip never renders on touch, and this surface is aimed at
+              iPad and phone, so the contract needs a visible home. */}
+          <li className="border-t border-gray-100 bg-gray-50/60 px-4 py-2.5 text-xs text-gray-500">
+            {POSTING_SAFETY_PROMISE}
+          </li>
         </ul>
       ) : archivedView ? (
         <p className="mb-8 rounded-2xl border border-dashed border-gray-200 bg-white px-5 py-8 text-sm text-gray-500">
