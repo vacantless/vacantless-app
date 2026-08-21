@@ -45,6 +45,7 @@ function inp(over: Partial<NextActionInput> = {}): NextActionInput {
     channelCount: 0,
     linkIsLive: false,
     listingPostCount: 0,
+    liveListingPostCount: 0,
     hasAvailability: false,
     openInquiryCount: 0,
     applicantCount: 0,
@@ -54,6 +55,12 @@ function inp(over: Partial<NextActionInput> = {}): NextActionInput {
 
 function findGap(a: ReturnType<typeof deriveNextAction>, key: string): boolean {
   return !!a && a.gaps.some((g) => g.key === key);
+}
+function gapLabel(
+  a: ReturnType<typeof deriveNextAction>,
+  key: string,
+): string | undefined {
+  return a?.gaps.find((g) => g.key === key)?.label;
 }
 function findFact(a: ReturnType<typeof deriveNextAction>, key: string) {
   return a ? a.derived.find((f) => f.key === key) : undefined;
@@ -171,13 +178,58 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   );
 }
 {
-  const a = deriveNextAction(inp({ currentStep: "inquiries", linkIsLive: true, listingPostCount: 3 }));
-  ok("inquiries: posts fact reflects count", findFact(a, "posts")?.value === "3 channels");
+  const a = deriveNextAction(
+    inp({
+      currentStep: "inquiries",
+      linkIsLive: true,
+      listingPostCount: 3,
+      liveListingPostCount: 3,
+    }),
+  );
+  ok("inquiries: posts fact reflects live count", findFact(a, "posts")?.value === "3 sites");
   ok("inquiries: no-inquiry property still routes to distribution", findGap(a, "market"));
 }
 {
-  const a = deriveNextAction(inp({ currentStep: "inquiries", linkIsLive: true, listingPostCount: 3, openInquiryCount: 2 }));
+  const a = deriveNextAction(
+    inp({
+      currentStep: "inquiries",
+      linkIsLive: true,
+      listingPostCount: 3,
+      liveListingPostCount: 3,
+      openInquiryCount: 2,
+    }),
+  );
   ok("inquiries: with open inquiries, share-more gap remains", findGap(a, "share"));
+}
+{
+  const a = deriveNextAction(
+    inp({
+      currentStep: "inquiries",
+      linkIsLive: true,
+      listingPostCount: 2,
+      liveListingPostCount: 0,
+    }),
+  );
+  ok("expired history asks for a repost", findGap(a, "market"));
+  ok(
+    "expired history gap wording is repost",
+    gapLabel(a, "market") === "Refresh or repost an outside site",
+  );
+  ok("expired history shows no live-outside fact", !findFact(a, "posts"));
+}
+{
+  const a = deriveNextAction(
+    inp({
+      currentStep: "inquiries",
+      linkIsLive: true,
+      listingPostCount: 0,
+      liveListingPostCount: 0,
+    }),
+  );
+  ok(
+    "never-posted still asks for a first channel",
+    gapLabel(a, "market") === "Post to your first channel",
+  );
 }
 
 // --- viewings ---------------------------------------------------------------

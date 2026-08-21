@@ -33,6 +33,7 @@ function inp(over: Partial<RentalLifecycleInput> = {}): RentalLifecycleInput {
     bathsSet: true,
     photoCount: 0,
     listingPostCount: 0,
+    liveListingPostCount: 0,
     hasAvailability: false,
     leadStatuses: [],
     ...over,
@@ -115,14 +116,36 @@ ok(
 // --- live with photos: market done, inquiries current -----------------------
 const live = deriveRentalLifecycle(
   PID,
-  inp({ hasRent: true, propertyStatus: "available", photoCount: 5, listingPostCount: 2 }),
+  inp({
+    hasRent: true,
+    propertyStatus: "available",
+    photoCount: 5,
+    listingPostCount: 2,
+    liveListingPostCount: 2,
+  }),
 );
 ok("live+photos -> market done", stateOf(live, "market") === "done");
 ok("live+photos -> inquiries current", live.currentStep === "inquiries");
 ok(
-  "market detail summarizes Live · photos · posts",
-  live.steps[1].detail === "Live · 5 photos · 2 posts",
+  "market detail summarizes Live · photos · live ads",
+  live.steps[1].detail === "Live · 5 photos · 2 live ads",
 );
+{
+  const expired = deriveRentalLifecycle(
+    PID,
+    inp({
+      hasRent: true,
+      propertyStatus: "available",
+      photoCount: 5,
+      listingPostCount: 2,
+      liveListingPostCount: 0,
+    }),
+  );
+  ok(
+    "expired-only history does not render as live ads",
+    expired.steps[1].detail === "Live · 5 photos · no live ads",
+  );
+}
 ok(
   "inquiries detail empty-state",
   live.steps.find((s) => s.step === "inquiries")!.detail === "No inquiries yet",

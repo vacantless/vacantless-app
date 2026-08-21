@@ -381,6 +381,24 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     propertyDetailSource.includes('mode === "browser_copilot" &&') &&
       propertyDetailSource.includes("isCopilotChannel(publishKey)"),
   );
+  ok(
+    "first screen leads with honest syndication status",
+    propertyDetailSource.includes("SyndicationFirstCard") &&
+      propertyDetailSource.includes("Your renter page is live. No outside sites are live yet.") &&
+      propertyDetailSource.includes("Nothing is posted automatically. You approve outside-site posts"),
+  );
+  ok(
+    "first screen surfaces the specific human blocker",
+    propertyDetailSource.includes("buildSyndicationBlockerSummary") &&
+      propertyDetailSource.includes("needs payment before it can go live") &&
+      propertyDetailSource.includes("blockerSummary={syndicationBlockerSummary}"),
+  );
+  ok(
+    "lifecycle rail is demoted behind progress disclosure",
+    propertyDetailSource.includes("Rental progress") &&
+      propertyDetailSource.indexOf("<SyndicationFirstCard") <
+        propertyDetailSource.indexOf("<LifecycleRail lifecycle"),
+  );
 }
 {
   const propertiesSource = readFileSync("app/dashboard/properties/page.tsx", "utf8");

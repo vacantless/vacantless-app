@@ -94,7 +94,10 @@ export type NextActionInput = {
   // --- inquiries ----------------------------------------------------------
   /** Public link resolves (unit publicly visible). */
   linkIsLive: boolean;
+  /** listing_posts count, all statuses. Posting history, not current reach. */
   listingPostCount: number;
+  /** listing_posts rows whose status is 'live'. Current outside reach. */
+  liveListingPostCount: number;
 
   // --- viewings -----------------------------------------------------------
   hasAvailability: boolean;
@@ -265,11 +268,11 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
           value: "Live — inquiries land in your renter list",
           inherited: false,
         });
-      if (input.listingPostCount > 0)
+      if (input.liveListingPostCount > 0)
         derived.push({
           key: "posts",
-          label: "Posted",
-          value: plural(input.listingPostCount, "channel", "channels"),
+          label: "Live outside",
+          value: plural(input.liveListingPostCount, "site", "sites"),
           inherited: false,
         });
       return {
@@ -281,9 +284,11 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         gaps:
           input.listingPostCount === 0
             ? [{ key: "market", label: "Post to your first channel" }]
-            : input.openInquiryCount === 0
-              ? [{ key: "market", label: "Refresh or add a renter channel" }]
-              : [{ key: "share", label: "Share the link with more renters" }],
+            : input.liveListingPostCount === 0
+              ? [{ key: "market", label: "Refresh or repost an outside site" }]
+              : input.openInquiryCount === 0
+                ? [{ key: "market", label: "Refresh or add a renter channel" }]
+                : [{ key: "share", label: "Share the link with more renters" }],
         cta: { label: "Open syndication", href: distributeHref },
       };
     }

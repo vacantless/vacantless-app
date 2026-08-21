@@ -1259,7 +1259,11 @@ function SimpleGetOnline({
                   : "bg-brand text-white"
               }`}
             >
-              {linkIsLive ? "You're online" : "Ready to publish"}
+              {linkIsLive
+                ? railBuckets.externalLiveCount > 0
+                  ? "You're online"
+                  : "Renter page live"
+                : "Ready to publish"}
             </span>
             <h3
               className={`mt-3 text-2xl font-semibold ${
@@ -1267,9 +1271,11 @@ function SimpleGetOnline({
               }`}
             >
               {linkIsLive
-                ? `You're live on ${railBuckets.liveCount} ${
-                    railBuckets.liveCount === 1 ? "channel" : "channels"
-                  }.`
+                ? railBuckets.externalLiveCount > 0
+                  ? `Your renter page is live, plus ${railBuckets.externalLiveCount} outside ${
+                      railBuckets.externalLiveCount === 1 ? "site" : "sites"
+                    }.`
+                  : "Your renter page is live. No outside sites are live yet."
                 : `Publish ${addressLabel} everywhere renters are looking.`}
             </h3>
             <p
@@ -1278,7 +1284,9 @@ function SimpleGetOnline({
               }`}
             >
               {linkIsLive
-                ? "The renter page is live. Connected instant channels can sync from here, and guided channels stay in the 1-tap queue."
+                ? railBuckets.externalLiveCount > 0
+                  ? "Connected instant channels can sync from here, and guided channels stay in the 1-tap queue."
+                  : "Anyone with your link can inquire. Outside sites still need posting, and each one counts as live only once its real ad URL is saved."
                 : "Publish turns on the Vacantless renter page and email-alert reach first, then opens the guided queue for channels that need a login, payment, broker, or final human tap."}
             </p>
           </div>
@@ -1289,7 +1297,8 @@ function SimpleGetOnline({
                 : "bg-white text-gray-700"
             }`}
           >
-            {railBuckets.liveCount}/{railBuckets.totalCount} reaching renters
+            {railBuckets.externalLiveCount}/{railBuckets.externalTotalCount}{" "}
+            outside sites live
           </span>
         </div>
 

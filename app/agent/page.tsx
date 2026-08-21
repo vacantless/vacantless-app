@@ -258,7 +258,7 @@ export default async function AgentBookPage({
     supabase
       .from("tenancies")
       .select("id, property_id, status, start_date, created_at"),
-    supabase.from("listing_posts").select("property_id"),
+    supabase.from("listing_posts").select("property_id, status, url"),
     supabase.from("availability_rules").select("organization_id"),
     supabase.from("distribution_runs").select("id, property_id"),
     supabase.from("distribution_run_items").select("run_id, publish_status"),
@@ -289,11 +289,23 @@ export default async function AgentBookPage({
     leadStatusesByProp.set(r.property_id, arr);
   }
 
-  // Per-property listing-post count.
+  // Per-property listing-post counts: all statuses are posting history, while
+  // status='live' is current outside reach.
   const postCounts = new Map<string, number>();
-  for (const r of (postsRes.data ?? []) as { property_id: string | null }[]) {
-    if (r.property_id)
-      postCounts.set(r.property_id, (postCounts.get(r.property_id) ?? 0) + 1);
+  const livePostCounts = new Map<string, number>();
+  for (const r of (postsRes.data ?? []) as {
+    property_id: string | null;
+    status: string | null;
+    url: string | null;
+  }[]) {
+    if (!r.property_id) continue;
+    postCounts.set(r.property_id, (postCounts.get(r.property_id) ?? 0) + 1);
+    if (r.status === "live" && r.url?.trim()) {
+      livePostCounts.set(
+        r.property_id,
+        (livePostCounts.get(r.property_id) ?? 0) + 1,
+      );
+    }
   }
 
   // Orgs that have at least one weekly viewing window (per-org availability).
@@ -401,6 +413,7 @@ export default async function AgentBookPage({
       baths: p.baths,
       photoCount: photoCounts.get(p.id) ?? 0,
       listingPostCount: postCounts.get(p.id) ?? 0,
+      liveListingPostCount: livePostCounts.get(p.id) ?? 0,
       hasAvailability: orgsWithAvailability.has(p.organization_id),
       leadStatuses: leadStatusesByProp.get(p.id) ?? [],
       tenancyId,

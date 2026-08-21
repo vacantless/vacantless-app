@@ -447,6 +447,213 @@ function relistFocusAnchor({
   return RELIST_ONE_TAP_FALLBACK_ANCHOR;
 }
 
+type SyndicationBlockerSummary = {
+  chip: string;
+  body: string;
+};
+
+function channelList(labels: string[]) {
+  if (labels.length <= 1) return labels[0] ?? "";
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels[0]}, ${labels[1]}, and ${labels.length - 2} more`;
+}
+
+function buildSyndicationBlockerSummary({
+  channelCards,
+  runItems,
+  accountStatuses,
+}: {
+  channelCards: DistributeChannelCard[];
+  runItems: RunItemView[];
+  accountStatuses: Map<string, string | null | undefined>;
+}): SyndicationBlockerSummary | null {
+  const labelByKey = new Map(
+    channelCards.map((card) => [card.channel.key as string, card.channel.label]),
+  );
+  const payment = new Map<string, string>();
+  const login = new Map<string, string>();
+  const proof = new Map<string, string>();
+  const refresh = new Map<string, string>();
+  const labelFor = (key: string, fallback?: string | null) =>
+    fallback || labelByKey.get(key) || key;
+
+  for (const card of channelCards) {
+    const label = labelFor(card.channel.key);
+    const accountStatus = accountStatuses.get(card.channel.key);
+    if (accountStatus === "needs_payment") payment.set(card.channel.key, label);
+    if (accountStatus === "needs_login") login.set(card.channel.key, label);
+    if (card.status.value === "problem") proof.set(card.channel.key, label);
+    if (card.status.value === "needs_refresh") refresh.set(card.channel.key, label);
+  }
+
+  for (const item of runItems) {
+    const label = labelFor(item.channel, item.channelLabel);
+    if (item.publishStatus === "needs_payment") payment.set(item.channel, label);
+    if (item.publishStatus === "needs_login") login.set(item.channel, label);
+    if (item.liveWithoutUrl) proof.set(item.channel, label);
+    if (item.staleRefresh) refresh.set(item.channel, label);
+  }
+
+  const summary = (
+    labels: string[],
+    chipOne: string,
+    chipMany: string,
+    bodyOne: (label: string) => string,
+    bodyMany: (list: string) => string,
+  ) =>
+    labels.length === 0
+      ? null
+      : {
+          chip: `${labels.length} ${labels.length === 1 ? chipOne : chipMany}`,
+          body:
+            labels.length === 1
+              ? bodyOne(labels[0])
+              : bodyMany(channelList(labels)),
+        };
+
+  return (
+    summary(
+      [...payment.values()],
+      "needs payment",
+      "need payment",
+      (label) => `${label} needs payment before it can go live.`,
+      (list) => `${list} need payment before they can go live.`,
+    ) ??
+    summary(
+      [...login.values()],
+      "needs sign-in",
+      "need sign-in",
+      (label) => `${label} needs sign-in before it can go live.`,
+      (list) => `${list} need sign-in before they can go live.`,
+    ) ??
+    summary(
+      [...proof.values()],
+      "needs live proof",
+      "need live proof",
+      (label) => `${label} needs a live ad URL before it counts as live.`,
+      (list) => `${list} need live ad URLs before they count as live.`,
+    ) ??
+    summary(
+      [...refresh.values()],
+      "needs refresh",
+      "need refresh",
+      (label) => `${label} needs refresh or repost before it counts as live.`,
+      (list) => `${list} need refresh or repost before they count as live.`,
+    )
+  );
+}
+
+function SyndicationFirstCard({
+  propertyId,
+  linkIsLive,
+  setupOutstanding,
+  canSetLive,
+  liveOutsideCount,
+  postHistoryCount,
+  totalInquiryCount,
+  blockerSummary,
+}: {
+  propertyId: string;
+  linkIsLive: boolean;
+  setupOutstanding: number;
+  canSetLive: boolean;
+  liveOutsideCount: number;
+  postHistoryCount: number;
+  totalInquiryCount: number;
+  blockerSummary: SyndicationBlockerSummary | null;
+}) {
+  const encodedPropertyId = encodeURIComponent(propertyId);
+  const distributeHref = `/dashboard/properties/${encodedPropertyId}?tab=distribute#distribute-header`;
+  const setupHref = `/dashboard/properties/${encodedPropertyId}?tab=setup#rental-details`;
+  const hasPostHistory = postHistoryCount > 0;
+  const expiredOnly = linkIsLive && hasPostHistory && liveOutsideCount === 0;
+  const status = !linkIsLive
+    ? setupOutstanding > 0
+      ? `${setupOutstanding} ${
+          setupOutstanding === 1 ? "listing detail" : "listing details"
+        } before syndication.`
+      : "Ready to turn on the renter page."
+    : liveOutsideCount > 0
+      ? `Your renter page is live, plus ${liveOutsideCount} outside ${
+          liveOutsideCount === 1 ? "site" : "sites"
+        }.`
+      : "Your renter page is live. No outside sites are live yet.";
+  const body = !linkIsLive
+    ? setupOutstanding > 0
+      ? "Finish the required listing details first, then open syndication."
+      : "Set the renter page live, then finish only the outside sites that need your sign-in or proof."
+    : expiredOnly
+      ? "Previous outside ads need refresh or repost before they count as live."
+      : liveOutsideCount > 0
+        ? `${totalInquiryCount} ${
+            totalInquiryCount === 1 ? "inquiry is" : "inquiries are"
+          } tied to this rental so far.`
+        : "Outside sites still need posting, and each one counts as live only once its real ad URL is saved.";
+  const actionHref = !linkIsLive
+    ? setupOutstanding > 0
+      ? setupHref
+      : canSetLive
+        ? "#publish-action"
+        : setupHref
+    : distributeHref;
+  const actionLabel = !linkIsLive
+    ? setupOutstanding > 0
+      ? "Finish basics"
+      : canSetLive
+        ? "Set renter page live"
+        : "Review listing"
+    : expiredOnly
+      ? "Refresh or repost"
+      : liveOutsideCount > 0
+        ? "Review syndication"
+        : "Post outside sites";
+  const outsideLabel =
+    liveOutsideCount > 0
+      ? `${liveOutsideCount} outside ${liveOutsideCount === 1 ? "site" : "sites"} live`
+      : hasPostHistory
+        ? "Outside ads need refresh"
+        : "No outside sites live";
+  const attentionLabel = blockerSummary?.chip ?? outsideLabel;
+
+  return (
+    <section className="mb-4 rounded-2xl border border-slate-900 bg-slate-950 p-4 text-white shadow-sm sm:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+            Syndication
+          </p>
+          <h3 className="mt-1 text-xl font-semibold tracking-tight">
+            {status}
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-300">
+            {body}
+          </p>
+          {blockerSummary ? (
+            <p className="mt-2 max-w-3xl text-sm font-semibold leading-relaxed text-white">
+              {blockerSummary.body}
+            </p>
+          ) : null}
+          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
+            Nothing is posted automatically. You approve outside-site posts,
+            paid steps, and live proof.
+          </p>
+        </div>
+        <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:shrink-0 sm:items-end">
+          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-slate-100">
+            {attentionLabel}
+          </span>
+          <Link
+            href={actionHref}
+            className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-slate-100 sm:w-auto"
+          >
+            {actionLabel} →
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default async function PropertyDetailPage({
   params,
   searchParams,
@@ -530,6 +737,9 @@ export default async function PropertyDetailPage({
     .eq("property_id", p.id)
     .order("created_at", { ascending: true });
   const postRows = (posts ?? []) as ListingPostRow[];
+  const liveListingPostCount = postRows.filter(
+    (row) => row.status === "live" && Boolean(row.url?.trim()),
+  ).length;
   const postCounts = countLeadsByPost(leadRows);
 
   const { data: photos } = await supabase
@@ -1846,6 +2056,16 @@ export default async function PropertyDetailPage({
     realtorReferralEnabled,
     leaseupTakedownEnabled: process.env.LEASEUP_TAKEDOWN_ENABLED === "true",
   };
+  const syndicationBlockerSummary = buildSyndicationBlockerSummary({
+    channelCards: distributeChannelCards,
+    runItems,
+    accountStatuses: new Map(
+      distributeChannelCards.map((card) => [
+        card.channel.key,
+        accountStatusForChannel(card.channel.key),
+      ]),
+    ),
+  });
   const copilotNotice: DistributeRunNotice | null =
     searchParams.dist === "copilot_live"
       ? {
@@ -2175,6 +2395,7 @@ export default async function PropertyDetailPage({
     bathsSet: p.baths != null,
     photoCount: photoRows.length,
     listingPostCount: postRows.length,
+    liveListingPostCount,
     hasAvailability: (availabilityCount ?? 0) > 0,
     leadStatuses: leadRows.map((l) => l.status),
     tenancyId,
@@ -2259,6 +2480,7 @@ export default async function PropertyDetailPage({
     channelCount: copyTabs.length,
     linkIsLive: publicPageIsBookable,
     listingPostCount: postRows.length,
+    liveListingPostCount,
     hasAvailability: (availabilityCount ?? 0) > 0,
     openInquiryCount: leadRows.filter(
       (l) =>
@@ -2585,44 +2807,28 @@ export default async function PropertyDetailPage({
             )}
             <form action={duplicateProperty}>
               <input type="hidden" name="id" value={p.id} />
-              <button type="submit" className={SECONDARY_ACTION_CLASS}>
-                Duplicate this property
+              <button
+                type="submit"
+                title="Duplicate this property"
+                className={SECONDARY_ACTION_CLASS}
+              >
+                Duplicate
               </button>
             </form>
           </div>
         }
       />
 
-      {normalizedStatus === "available" && vacancyUnit && (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
-              Vacancy cost
-            </span>
-            <p className="text-sm font-semibold text-amber-950">
-              {vacancyUnit.days == null
-                ? "Vacancy start unknown"
-                : `Vacant ${vacancyUnit.days} ${
-                    vacancyUnit.days === 1 ? "day" : "days"
-                  }`}
-              {vacancyUnit.days != null && vacancyLostLabel
-                ? ` · about ${vacancyLostLabel} lost at asking so far`
-                : ""}
-            </p>
-          </div>
-          <p className="mt-1 text-xs leading-relaxed text-amber-800">
-            {vacancyUnit.days == null
-              ? "Tracked from when you mark a rental available. Older available rentals keep an unknown start instead of a guessed vacancy date."
-              : vacancyLostLabel
-                ? "Estimated with asking rent divided by 30 days, so the number stays honest and easy to audit."
-                : "Add an asking rent to estimate dollars lost so far; the vacancy days are still tracked."}
-          </p>
-        </div>
-      )}
-
-      <LifecycleRail lifecycle={lifecycle} />
-
-      {nextAction && <NextActionCard action={nextAction} />}
+      <SyndicationFirstCard
+        propertyId={p.id}
+        linkIsLive={publicPageIsBookable}
+        setupOutstanding={setupOutstandingCount}
+        canSetLive={!publicPageIsBookable && normalizedStatus !== "leased"}
+        liveOutsideCount={liveListingPostCount}
+        postHistoryCount={postRows.length}
+        totalInquiryCount={leadRows.length}
+        blockerSummary={syndicationBlockerSummary}
+      />
 
       <PhotoUploadModal
         propertyId={p.id}
@@ -2630,6 +2836,54 @@ export default async function PropertyDetailPage({
         photoCap={photoCap}
         storageUpsell={storageUpsell}
       />
+
+      <details className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">
+              Rental progress
+            </h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Lifecycle rail, vacancy cost, and the older step-by-step prompt.
+            </p>
+          </div>
+          <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+            Open
+          </span>
+        </summary>
+        <div className="space-y-4 border-t border-gray-100 p-5">
+          {normalizedStatus === "available" && vacancyUnit && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+                  Vacancy cost
+                </span>
+                <p className="text-sm font-semibold text-amber-950">
+                  {vacancyUnit.days == null
+                    ? "Vacancy start unknown"
+                    : `Vacant ${vacancyUnit.days} ${
+                        vacancyUnit.days === 1 ? "day" : "days"
+                      }`}
+                  {vacancyUnit.days != null && vacancyLostLabel
+                    ? ` · about ${vacancyLostLabel} lost at asking so far`
+                    : ""}
+                </p>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                {vacancyUnit.days == null
+                  ? "Tracked from when you mark a rental available. Older available rentals keep an unknown start instead of a guessed vacancy date."
+                  : vacancyLostLabel
+                    ? "Estimated with asking rent divided by 30 days, so the number stays honest and easy to audit."
+                    : "Add an asking rent to estimate dollars lost so far; the vacancy days are still tracked."}
+              </p>
+            </div>
+          )}
+
+          <LifecycleRail lifecycle={lifecycle} />
+
+          {nextAction && <NextActionCard action={nextAction} />}
+        </div>
+      </details>
 
       <TabbedSections initialTab={defaultTab}>
 

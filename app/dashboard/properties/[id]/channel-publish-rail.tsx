@@ -35,8 +35,14 @@ export type ChannelPublishRailBuckets = {
   instant: ChannelPublishRailRow[];
   oneTap: ChannelPublishRailRow[];
   gated: ChannelPublishRailRow[];
+  /** Every reaching row, including synthetic Vacantless-page/email rows. */
   liveCount: number;
+  /** Every row, including synthetic rows. */
   totalCount: number;
+  /** Outside sites only. Synthetic Vacantless-page/email rows are excluded. */
+  externalLiveCount: number;
+  /** Outside sites only. Synthetic Vacantless-page/email rows are excluded. */
+  externalTotalCount: number;
 };
 
 const SYNTHETIC_CHIP: ConnectChip = {
@@ -225,6 +231,12 @@ export function buildChannelPublishRailBuckets(input: {
     liveCount: [...instant, ...oneTap, ...gated].filter((row) => row.reachesRenters)
       .length,
     totalCount: instant.length + oneTap.length + gated.length,
+    externalLiveCount: [...instant, ...oneTap, ...gated].filter(
+      (row) => !row.synthetic && row.reachesRenters,
+    ).length,
+    externalTotalCount: [...instant, ...oneTap, ...gated].filter(
+      (row) => !row.synthetic,
+    ).length,
   };
 }
 
@@ -301,7 +313,7 @@ export function ChannelPublishRail({
   oneTapFooter?: ReactNode;
   actionForRow?: (row: ChannelPublishRailRow) => ReactNode;
 }) {
-  const ringLabel = `${buckets.liveCount}/${buckets.totalCount}`;
+  const ringLabel = `${buckets.externalLiveCount}/${buckets.externalTotalCount}`;
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -313,7 +325,8 @@ export function ChannelPublishRail({
             Publish to all channels
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-gray-600">
-            Publishes instantly where connected. Opens 1-tap finish for the rest.
+            Connected channels are ready after approval. Guided channels stay
+            1-tap.
           </p>
         </div>
         <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-green-600 text-sm font-bold text-green-700">
@@ -344,7 +357,8 @@ export function ChannelPublishRail({
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-800">
         <Icons.bolt className="h-4 w-4" />
         <span>
-          Auto-sync is scoped to connected instant channels only.
+          Nothing is posted automatically. Connected channels only run after
+          approval.
         </span>
       </div>
     </section>

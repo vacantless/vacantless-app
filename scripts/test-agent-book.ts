@@ -39,6 +39,7 @@ function unit(over: Partial<AgentBookUnitInput> & { orgId: string; propertyId: s
     baths: 1,
     photoCount: 2,
     listingPostCount: 0,
+    liveListingPostCount: 0,
     hasAvailability: true,
     leadStatuses: [],
     tenancyId: null,
