@@ -357,6 +357,15 @@ export function PublishEverywhere({
     forYou.find((row) => forYouNeedsOperatorStep(row)) ?? null;
   const liveForYouAllSet =
     stepClarityLiveEnabled && linkIsLive && firstOutstandingForYou == null;
+  const proofSavedCount = channelCards.filter(
+    (card) => card.status.value === "posted",
+  ).length;
+  const onlineHeadline =
+    proofSavedCount > 0
+      ? `Proof saved on ${proofSavedCount} ${
+          proofSavedCount === 1 ? "site" : "sites"
+        }.`
+      : "Your public page is live.";
 
   const publishBlockedByBasics = setupOutstanding > 0;
   const canPublish = !publishBlockedByBasics && canSetLive;
@@ -411,8 +420,7 @@ export function PublishEverywhere({
                 You&apos;re online
               </span>
               <h3 className="mt-3 text-2xl font-semibold text-green-950">
-                Live on {reach.instant}{" "}
-                {reach.instant === 1 ? "channel" : "channels"}.
+                {onlineHeadline}
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
                 The renter page is live. Finish any outside site that still asks
@@ -475,7 +483,7 @@ export function PublishEverywhere({
               You&apos;re online
             </span>
             <h3 className="mt-3 text-2xl font-semibold text-green-950">
-              Live on {reach.instant} {reach.instant === 1 ? "channel" : "channels"}.
+              {onlineHeadline}
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
               The renter page is live. Connected channels stay in sync, and any

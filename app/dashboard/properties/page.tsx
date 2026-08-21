@@ -370,7 +370,7 @@ export default async function PropertiesPage({
                   <>
                     <CopyIntakeButton url={intakeUrl(p.id)} />
                     <Link
-                      href={`/dashboard/properties/${p.id}#distribute-header`}
+                      href={`/dashboard/properties/${p.id}?tab=distribute#distribute-header`}
                       className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
                       title="Get this listing online. Nothing is posted automatically."
                     >
@@ -393,7 +393,7 @@ export default async function PropertiesPage({
                   // getting this listing online - into the unit's posting prep.
                   <>
                     <Link
-                      href={`/dashboard/properties/${p.id}#distribute-header`}
+                      href={`/dashboard/properties/${p.id}?tab=distribute#distribute-header`}
                       className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
                       title="Get this listing online. Nothing is posted automatically."
                     >
@@ -405,7 +405,7 @@ export default async function PropertiesPage({
                   </>
                 )}
                 <Link
-                  href={`/dashboard/properties/${p.id}#rental-details`}
+                  href={`/dashboard/properties/${p.id}?tab=setup#rental-details`}
                   className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Edit

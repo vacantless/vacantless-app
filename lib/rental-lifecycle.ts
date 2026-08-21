@@ -88,8 +88,10 @@ export type RentalLifecycleInput = {
   bathsSet: boolean;
   /** property_photos count. */
   photoCount: number;
-  /** listing_posts count (where the unit is posted). */
+  /** listing_posts count, all statuses. Posting history, not current reach. */
   listingPostCount: number;
+  /** listing_posts rows whose status is 'live'. Current outside reach. */
+  liveListingPostCount: number;
   /** org has at least one weekly viewing window so renters can self-book. */
   hasAvailability: boolean;
   /** leads.status for every inquiry on this unit. */
@@ -225,8 +227,9 @@ export function deriveRentalLifecycle(
         if (raw.market) {
           const bits = [propertyStatusLabel(input.propertyStatus)];
           bits.push(plural(input.photoCount, "photo", "photos"));
-          if (input.listingPostCount > 0)
-            bits.push(plural(input.listingPostCount, "post", "posts"));
+          if (input.liveListingPostCount > 0)
+            bits.push(plural(input.liveListingPostCount, "live ad", "live ads"));
+          else if (input.listingPostCount > 0) bits.push("no live ads");
           return bits.join(" · ");
         }
         if (input.photoCount === 0 && !isLive) return "Add photos & go live";
@@ -288,11 +291,11 @@ export function deriveRentalLifecycle(
       : `/dashboard/tenancies/new?property=${propertyId}`;
     switch (step) {
       case "set_up":
-        return `${self}#rental-details`;
+        return `${self}?tab=setup#rental-details`;
       case "market":
-        return `${self}#property-photos`;
+        return `${self}?tab=market#property-photos`;
       case "inquiries":
-        return `${self}#inquiries`;
+        return `${self}?tab=inquiries#inquiries`;
       case "viewings":
         return "/dashboard/showings";
       case "screen":

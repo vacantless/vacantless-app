@@ -42,7 +42,10 @@ export type AgentBookUnitInput = {
   beds: number | null;
   baths: number | null;
   photoCount: number;
+  /** listing_posts count, all statuses. Posting history, not current reach. */
   listingPostCount: number;
+  /** listing_posts rows whose status is 'live'. Current outside reach. */
+  liveListingPostCount: number;
   /** The unit's org has at least one weekly viewing window (per-org signal). */
   hasAvailability: boolean;
   leadStatuses: LeadStatus[];
@@ -132,6 +135,7 @@ export function buildAgentBookRows(input: AgentBookInput): AgentBookRow[] {
       bathsSet,
       photoCount: u.photoCount,
       listingPostCount: u.listingPostCount,
+      liveListingPostCount: u.liveListingPostCount,
       hasAvailability: u.hasAvailability,
       leadStatuses: u.leadStatuses,
       tenancyId: u.tenancyId ?? null,
@@ -159,6 +163,7 @@ export function buildAgentBookRows(input: AgentBookInput): AgentBookRow[] {
       channelCount: u.listingPostCount,
       linkIsLive: isLive,
       listingPostCount: u.listingPostCount,
+      liveListingPostCount: u.liveListingPostCount,
       hasAvailability: u.hasAvailability,
       openInquiryCount,
       applicantCount,

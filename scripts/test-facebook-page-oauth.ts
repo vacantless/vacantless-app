@@ -64,7 +64,7 @@ ok("session envelope has auth tag", env.authTag.length === 16);
 ok(
   "property return path anchors to distribute",
   facebookReturnPath("prop1", "connected") ===
-    "/dashboard/properties/prop1?fb=connected#distribute-header",
+    "/dashboard/properties/prop1?fb=connected&tab=distribute#distribute-header",
 );
 ok(
   "error return path carries reason",

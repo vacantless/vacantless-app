@@ -53,7 +53,7 @@ ok(
 ok(
   "dashboard URL targets Distribute",
   leaseupTakedownDashboardUrl("prop 1") ===
-    "https://app.vacantless.com/dashboard/properties/prop%201#distribute-header",
+    "https://app.vacantless.com/dashboard/properties/prop%201?tab=distribute#distribute-header",
 );
 
 const leaseupSource = readFileSync("lib/leaseup-takedown.ts", "utf8");

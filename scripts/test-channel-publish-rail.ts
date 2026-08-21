@@ -82,6 +82,7 @@ function buckets(opts: {
 {
   const b = buckets({ linkIsLive: true });
   eq("live renter page + email alert count", b.liveCount, 2);
+  eq("live renter page + email are not outside reach", b.externalLiveCount, 0);
   ok("synthetic live rows are instant", b.instant.slice(0, 2).every((item) => item.live));
 }
 
@@ -100,10 +101,11 @@ function buckets(opts: {
   ok("authorized facebook page graduates to instant", has(b.instant, "facebook_feed"));
   eq("authorized facebook page can be revoked", facebook?.automationAction ?? null, "revoke");
   ok(
-    "authorized facebook page copy states automatic publishing",
-    (facebook?.headline ?? "").includes("without another click"),
+    "authorized facebook page copy keeps approval in the loop",
+    (facebook?.headline ?? "").includes("publish and approve"),
   );
   eq("authorized live facebook page adds to live count", b.liveCount, 3);
+  eq("authorized live facebook page adds to outside reach", b.externalLiveCount, 1);
 }
 
 {
@@ -133,7 +135,7 @@ function buckets(opts: {
   );
   ok(
     "connected but unauthorized facebook page copy states consent plainly",
-    (facebook?.headline ?? "").includes("automatically without another click"),
+    (facebook?.headline ?? "").includes("when you publish"),
   );
 }
 
@@ -158,6 +160,7 @@ function buckets(opts: {
   });
   ok("instagram stays gated while disabled", has(disabled.gated, "instagram"));
   eq("disabled instagram is not counted live", disabled.liveCount, 2);
+  eq("disabled instagram is not outside reach", disabled.externalLiveCount, 0);
 
   const enabled = buckets({
     linkIsLive: true,
@@ -172,6 +175,7 @@ function buckets(opts: {
   });
   ok("enabled authorized instagram can graduate to instant", has(enabled.instant, "instagram"));
   eq("enabled live instagram counts only when explicit", enabled.liveCount, 3);
+  eq("enabled live instagram counts as outside reach", enabled.externalLiveCount, 1);
 }
 
 {
@@ -209,7 +213,7 @@ const publishEverywhereSource = readFileSync(
 ok(
   "Publish Everywhere renders channel authorization consent copy",
   publishEverywhereSource.includes(
-    "Authorize Vacantless to publish this listing to this account",
+    "Authorize Vacantless to post this listing to this account",
   ),
 );
 ok(

@@ -94,7 +94,10 @@ export type NextActionInput = {
   // --- inquiries ----------------------------------------------------------
   /** Public link resolves (unit publicly visible). */
   linkIsLive: boolean;
+  /** listing_posts count, all statuses. Posting history, not current reach. */
   listingPostCount: number;
+  /** listing_posts rows whose status is 'live'. Current outside reach. */
+  liveListingPostCount: number;
 
   // --- viewings -----------------------------------------------------------
   hasAvailability: boolean;
@@ -167,6 +170,9 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
   if (step === null) return null;
 
   const self = `/dashboard/properties/${input.propertyId}`;
+  const setupHref = `${self}?tab=setup#rental-details`;
+  const photosHref = `${self}?tab=market#property-photos`;
+  const distributeHref = `${self}?tab=distribute#distribute-header`;
   const facts = policyFacts(input.effective, input.inherited);
   const inheritedCount = facts.filter((f) => f.inherited).length;
 
@@ -193,7 +199,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         blurb,
         derived: facts,
         gaps,
-        cta: { label: "Add property details", href: `${self}#rental-details` },
+        cta: { label: "Add property details", href: setupHref },
       };
     }
 
@@ -235,8 +241,8 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
           gaps,
           cta:
             input.photoCount === 0
-              ? { label: "Add photos", href: `${self}#property-photos` }
-              : { label: "Review live listing", href: `${self}#distribute-header` },
+              ? { label: "Add photos", href: photosHref }
+              : { label: "Review live listing", href: distributeHref },
         };
       }
       return {
@@ -248,7 +254,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         gaps,
         cta:
           input.photoCount === 0
-            ? { label: "Add photos", href: `${self}#property-photos` }
+            ? { label: "Add photos", href: photosHref }
             : { label: "Set it Live", href: `${self}#publish-action` },
       };
     }
@@ -262,11 +268,11 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
           value: "Live — inquiries land in your renter list",
           inherited: false,
         });
-      if (input.listingPostCount > 0)
+      if (input.liveListingPostCount > 0)
         derived.push({
           key: "posts",
-          label: "Posted",
-          value: plural(input.listingPostCount, "channel", "channels"),
+          label: "Live outside",
+          value: plural(input.liveListingPostCount, "site", "sites"),
           inherited: false,
         });
       return {
@@ -278,10 +284,12 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
         gaps:
           input.listingPostCount === 0
             ? [{ key: "market", label: "Post to your first channel" }]
-            : input.openInquiryCount === 0
-              ? [{ key: "market", label: "Refresh or add a renter channel" }]
-              : [{ key: "share", label: "Share the link with more renters" }],
-        cta: { label: "Open marketing checklist", href: `${self}#distribute-header` },
+            : input.liveListingPostCount === 0
+              ? [{ key: "market", label: "Refresh or repost an outside site" }]
+              : input.openInquiryCount === 0
+                ? [{ key: "market", label: "Refresh or add a renter channel" }]
+                : [{ key: "share", label: "Share the link with more renters" }],
+        cta: { label: "Open syndication", href: distributeHref },
       };
     }
 

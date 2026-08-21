@@ -39,6 +39,7 @@ function unit(over: Partial<AgentBookUnitInput> & { orgId: string; propertyId: s
     baths: 1,
     photoCount: 2,
     listingPostCount: 0,
+    liveListingPostCount: 0,
     hasAvailability: true,
     leadStatuses: [],
     tenancyId: null,
@@ -88,7 +89,7 @@ ok("leased unit does not flag photos missing", rows[4]?.flags.photosMissing === 
 ok("new-inquiry unit stage = Viewings", rows[0]?.stage === "Viewings");
 ok("new-inquiry unit next action routes to viewings", rows[0]?.nextAction === "Go to viewings");
 ok("needs-operator unit stage = Inquiries", rows[1]?.stage === "Inquiries");
-ok("needs-operator unit next action = marketing checklist", rows[1]?.nextAction === "Open marketing checklist");
+ok("needs-operator unit next action = syndication", rows[1]?.nextAction === "Open syndication");
 ok("setup-gap unit stage = Unit details", rows[2]?.stage === "Unit details");
 ok("setup-gap unit next action = Add property details", rows[2]?.nextAction === "Add property details");
 ok("tenanted unit stage = Tenanted", rows[4]?.stage === "Tenanted");

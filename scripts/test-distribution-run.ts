@@ -232,7 +232,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "site picker and active run list stay compact when sites grow",
     panelSource.includes("max-h-80 overflow-y-auto") &&
       panelSource.includes("max-h-[42rem]") &&
-      panelSource.includes("More sites") &&
+      panelSource.includes("Other tracking") &&
       panelSource.includes("Connect accounts"),
   );
 }
@@ -380,6 +380,24 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "concierge rows do not render a broken guided-posting sidecar",
     propertyDetailSource.includes('mode === "browser_copilot" &&') &&
       propertyDetailSource.includes("isCopilotChannel(publishKey)"),
+  );
+  ok(
+    "first screen leads with honest syndication status",
+    propertyDetailSource.includes("SyndicationFirstCard") &&
+      propertyDetailSource.includes("Your renter page is live. No outside sites are live yet.") &&
+      propertyDetailSource.includes("Nothing is posted automatically. You approve outside-site posts"),
+  );
+  ok(
+    "first screen surfaces the specific human blocker",
+    propertyDetailSource.includes("buildSyndicationBlockerSummary") &&
+      propertyDetailSource.includes("needs payment before it can go live") &&
+      propertyDetailSource.includes("blockerSummary={syndicationBlockerSummary}"),
+  );
+  ok(
+    "lifecycle rail is demoted behind progress disclosure",
+    propertyDetailSource.includes("Rental progress") &&
+      propertyDetailSource.indexOf("<SyndicationFirstCard") <
+        propertyDetailSource.indexOf("<LifecycleRail lifecycle"),
   );
 }
 {
