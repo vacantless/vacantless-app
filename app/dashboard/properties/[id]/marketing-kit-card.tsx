@@ -77,17 +77,33 @@ export function MarketingKitCard({
   }
 
   return (
-    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-      <div className="mb-1 flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-gray-900">Marketing kit</h3>
-        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
-          Growth
+    <details className="mb-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Marketing kit
+            </h3>
+            <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
+              Growth
+            </span>
+          </div>
+          <p className="text-xs text-gray-500">
+            QR code, share link, and bulk wording when you need printable or
+            offline material.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+          Open
         </span>
-      </div>
-      <p className="mb-4 text-xs text-gray-500">
-        Everything you need to promote this rental yourself: a shareable link, a
-        QR code for flyers and signs, and all your channel wording in one copy.
-      </p>
+      </summary>
+
+      <div className="border-t border-gray-100 p-4">
+        <p className="mb-4 text-xs text-gray-500">
+          Everything you need to promote this rental yourself: a shareable link,
+          a QR code for flyers and signs, and all your channel wording in one
+          copy.
+        </p>
 
       {locked ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs text-gray-600">
@@ -238,6 +254,7 @@ export function MarketingKitCard({
           )}
         </div>
       )}
-    </div>
+      </div>
+    </details>
   );
 }

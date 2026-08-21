@@ -554,16 +554,6 @@ export function DistributeTab({
   );
   const advancedTools = (
     <>
-      <SimplePostingPlan
-        linkIsLive={linkIsLive}
-        setupOutstanding={setupOutstanding}
-        hasPhotos={hasPhotos}
-        canSetLive={canSetLive}
-        hasRun={Boolean(launchRun.run)}
-        selectedChannelCount={selectedChannelCount}
-        liveChannels={liveChannels}
-      />
-
       <DistributionBasicsPanel
         linkIsLive={linkIsLive}
         setupOutstanding={setupOutstanding}
@@ -817,6 +807,19 @@ export function DistributeTab({
           </div>
         )}
       </div>
+
+      <AutopilotLaunchCard
+        linkIsLive={linkIsLive}
+        setupOutstanding={setupOutstanding}
+        hasPhotos={hasPhotos}
+        canSetLive={canSetLive}
+        hasRun={Boolean(launchRun.run)}
+        selectedChannelCount={selectedChannelCount}
+        liveChannels={liveChannels}
+        automationSummary={automationSummary}
+        accountReadyCount={accountReadyCount}
+        accountTotalCount={launchRun.startChannels.length}
+      />
 
       {publishSimpleDefaultEnabled ? (
         publishEverywhereSurface
@@ -1542,7 +1545,7 @@ function SimpleGetOnline({
   );
 }
 
-function SimplePostingPlan({
+function AutopilotLaunchCard({
   linkIsLive,
   setupOutstanding,
   hasPhotos,
@@ -1550,6 +1553,9 @@ function SimplePostingPlan({
   hasRun,
   selectedChannelCount,
   liveChannels,
+  automationSummary,
+  accountReadyCount,
+  accountTotalCount,
 }: {
   linkIsLive: boolean;
   setupOutstanding: number;
@@ -1558,114 +1564,169 @@ function SimplePostingPlan({
   hasRun: boolean;
   selectedChannelCount: number;
   liveChannels: number;
+  automationSummary: AutomationStatusSummary;
+  accountReadyCount: number;
+  accountTotalCount: number;
 }) {
-  const steps = [
+  const attentionCount =
+    automationSummary.oneTap +
+    automationSummary.needsRefresh +
+    automationSummary.blocked;
+  const hasAutomaticWork = automationSummary.liveAuto > 0;
+  const hasProcessingWork = automationSummary.processing > 0;
+  const setupNeeded = Math.max(0, accountTotalCount - accountReadyCount);
+  const launchBlocked = setupOutstanding > 0 || !hasPhotos || !linkIsLive;
+  const primaryHref =
+    setupOutstanding > 0
+      ? "#rental-details"
+      : !hasPhotos
+        ? "#property-photos"
+        : !linkIsLive
+          ? canSetLive
+            ? "#publish-action"
+            : "#rental-details"
+          : "#publish-checklist";
+  const primaryAction =
+    setupOutstanding > 0
+      ? "Finish basics"
+      : !hasPhotos
+        ? "Add photos"
+        : !linkIsLive
+          ? canSetLive
+            ? "Set Live"
+            : "Review status"
+          : hasRun
+            ? attentionCount > 0
+              ? "Open next action"
+              : "Open run"
+            : "Open autopilot";
+  const launchLabel = launchBlocked
+    ? "Autopilot almost ready"
+    : hasRun
+      ? hasAutomaticWork
+        ? attentionCount > 0
+          ? "Autopilot needs one tap"
+          : "Autopilot running"
+        : hasProcessingWork
+          ? attentionCount > 0
+            ? "Run needs one tap"
+            : "Tracking your posts"
+          : attentionCount > 0
+            ? "Run needs one tap"
+            : "Run in progress"
+      : "Ready for autopilot";
+  const launchDetail = launchBlocked
+    ? "Vacantless prepares each channel and tells you the one step it needs."
+    : hasRun && hasAutomaticWork
+      ? "Authorized channels can run automatically; login, payment, approval, and proof still stop for you."
+      : hasRun && hasProcessingWork
+        ? "Vacantless is tracking submitted or proof-saved channels without claiming they are automatic."
+        : hasRun
+          ? "This run is saved; open it to review channel status and next steps."
+          : "Open one distribution run for selected automatic, guided, and proof-tracked channels.";
+  const safetyLine =
+    "Outside-site posts, paid submits, and Live status still stop for your approval or proof.";
+  const blockers = [
+    setupOutstanding > 0
+      ? `${setupOutstanding} ${
+          setupOutstanding === 1 ? "listing detail" : "listing details"
+        }`
+      : null,
+    !hasPhotos ? "photos" : null,
+    !linkIsLive ? "set public page Live" : null,
+  ].filter((item): item is string => Boolean(item));
+  const buckets = [
     {
-      label: "Finish the listing details",
-      detail:
-        setupOutstanding === 0
-          ? "Rent, beds, baths, and address are ready."
-          : `${setupOutstanding} ${
-              setupOutstanding === 1 ? "detail" : "details"
-            } still needs review.`,
-      href: "#rental-details",
-      action: setupOutstanding === 0 ? "Review" : "Finish",
-      done: setupOutstanding === 0,
+      label: "Channels selected",
+      value: String(selectedChannelCount),
+      detail: hasRun ? "in this run" : "selected",
+      tone: "bg-emerald-50 text-emerald-700",
     },
     {
-      label: "Add photos",
-      detail: hasPhotos
-        ? "Photos are ready."
-        : "Photos are not required, but they make the ad much stronger.",
-      href: "#property-photos",
-      action: hasPhotos ? "Review" : "Add photos",
-      done: hasPhotos,
+      label: "Needs one tap",
+      value: String(attentionCount),
+      detail: attentionCount === 1 ? "action waiting" : "actions waiting",
+      tone: attentionCount > 0 ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600",
     },
     {
-      label: "Set Live",
-      detail: linkIsLive
-        ? "Renters can open the Vacantless listing page."
-        : canSetLive
-          ? "Make the public page work before you post it anywhere."
-          : "Review the listing status before it can be posted again.",
-      href: linkIsLive ? "#share" : canSetLive ? "#publish-action" : "#rental-details",
-      action: linkIsLive ? "Open link" : canSetLive ? "Set Live" : "Review",
-      done: linkIsLive,
+      label: "Setup once",
+      value: `${accountReadyCount}/${accountTotalCount}`,
+      detail: setupNeeded > 0 ? `${setupNeeded} left` : "accounts ready",
+      tone: setupNeeded > 0 ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700",
     },
     {
-      label: "Choose rental sites",
-      detail: hasRun
-        ? "Your posting checklist is started."
-        : `${selectedChannelCount} suggested ${
-            selectedChannelCount === 1 ? "site is" : "sites are"
-          } selected for you.`,
-      href: "#publish-checklist",
-      action: hasRun ? "Open checklist" : "Choose sites",
-      done: hasRun,
-    },
-    {
-      label: "Post, then paste the live ad link",
-      detail:
-        liveChannels > 0
-          ? `${liveChannels} ${
-              liveChannels === 1 ? "site has" : "sites have"
-            } a saved live ad link.`
-          : "After you post on an outside site, paste the public ad link here.",
-      href: "#publish-checklist",
-      action: liveChannels > 0 ? "Review links" : "Start posting",
-      done: liveChannels > 0,
+      label: "Proof saved",
+      value: String(liveChannels),
+      detail: liveChannels === 1 ? "site live" : "sites live",
+      tone: liveChannels > 0 ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600",
     },
   ];
 
   return (
-    <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Simple posting plan
+    <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand">
+            Autopilot launch
+          </p>
+          <h3 className="mt-1 text-lg font-semibold text-gray-950">
+            {launchLabel}
           </h3>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-gray-600">
-            Work top to bottom. Each step opens the right place on this page.
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-600">
+            {launchDetail}
+          </p>
+          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-gray-500">
+            {safetyLine}
           </p>
         </div>
-        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-          No automatic posting
-        </span>
-      </div>
-      <ol className="divide-y divide-gray-100">
-        {steps.map((step, index) => (
-          <li
-            key={step.label}
-            className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+        {primaryHref === "#property-photos" ? (
+          <PhotoUploadLink
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
           >
-            <span
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                step.done
-                  ? "bg-green-600 text-white"
-                  : "bg-amber-50 text-amber-700"
-              }`}
-            >
-              {step.done ? <Icons.check className="h-4 w-4" /> : index + 1}
-            </span>
-            <div className="min-w-[14rem] flex-1">
-              <p className="text-sm font-semibold text-gray-900">{step.label}</p>
-              <p className="text-xs text-gray-600">{step.detail}</p>
-            </div>
-            {step.href === "#property-photos" ? (
-              <PhotoUploadLink className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
-                {step.action}
-              </PhotoUploadLink>
-            ) : (
-              <a
-                href={step.href}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            {primaryAction}
+          </PhotoUploadLink>
+        ) : (
+          <a
+            href={primaryHref}
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+          >
+            {primaryAction}
+          </a>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        {buckets.map((bucket) => (
+          <div
+            key={bucket.label}
+            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              {bucket.label}
+            </p>
+            <div className="mt-1 flex items-baseline justify-between gap-2">
+              <span className="text-lg font-semibold text-gray-950">
+                {bucket.value}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${bucket.tone}`}
               >
-                {step.action}
-              </a>
-            )}
-          </li>
+                {bucket.detail}
+              </span>
+            </div>
+          </div>
         ))}
-      </ol>
+      </div>
+
+      {blockers.length > 0 ? (
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Before launch: {blockers.join(", ")}.
+        </p>
+      ) : (
+        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          Good to launch. Submitted channels still require proof before they read as Live.
+        </p>
+      )}
     </section>
   );
 }

@@ -68,17 +68,33 @@ export function ListingCopyCard({
   const descriptionId = "listing-copy-description";
 
   return (
-    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-1 text-sm font-semibold text-gray-900">
-        Listing copy for each channel
-      </h3>
-      <p className="mb-4 text-xs text-gray-500">
-        Ready-to-paste wording built from this rental&apos;s details, formatted
-        for each site - the title length, link placement, and call-to-action are
-        adjusted per platform.{" "}
-        {notLive ? notLiveIntro : "Pick a channel, copy, and paste it into your ad."}{" "}
-        Edit the rental above and this updates automatically.
-      </p>
+    <details className="mb-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <h3 className="mb-1 text-sm font-semibold text-gray-900">
+            Listing copy for each channel
+          </h3>
+          <p className="text-xs text-gray-500">
+            {tabs.length} ready-to-paste{" "}
+            {tabs.length === 1 ? "version" : "versions"} generated from this
+            rental.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+          Open
+        </span>
+      </summary>
+
+      <div className="border-t border-gray-100 p-4">
+        <p className="mb-4 text-xs text-gray-500">
+          Ready-to-paste wording built from this rental&apos;s details,
+          formatted for each site - the title length, link placement, and
+          call-to-action are adjusted per platform.{" "}
+          {notLive
+            ? notLiveIntro
+            : "Pick a channel, copy, and paste it into your ad."}{" "}
+          Edit the rental above and this updates automatically.
+        </p>
 
       {notLive && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -176,6 +192,7 @@ export function ListingCopyCard({
           className="w-full resize-y rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800"
         />
       </div>
-    </div>
+      </div>
+    </details>
   );
 }

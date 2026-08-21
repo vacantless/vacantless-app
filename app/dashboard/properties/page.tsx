@@ -12,7 +12,7 @@ import {
   PRIMARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { rentalRowReadiness } from "@/lib/rental-readiness";
+import { rentalRowReadiness, type ReadinessSignal } from "@/lib/rental-readiness";
 import { getCurrentOrg } from "@/lib/org";
 import { canUseListingAiImport } from "@/lib/billing";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
@@ -36,6 +36,155 @@ type PropertyRow = {
   description: string | null;
   archived_at: string | null;
 };
+
+type ListingPostRef = {
+  property_id: string | null;
+  status: string | null;
+  url: string | null;
+};
+
+type RentalLaunchState = {
+  label: string;
+  detail: string;
+  action: string;
+  href: string;
+  tone: "ready" | "active" | "warn" | "muted";
+};
+
+const LAUNCH_STATE_CLASS: Record<RentalLaunchState["tone"], string> = {
+  ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  active: "border-blue-200 bg-blue-50 text-blue-700",
+  warn: "border-amber-200 bg-amber-50 text-amber-700",
+  muted: "border-gray-200 bg-gray-50 text-gray-500",
+};
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function missingBasics(row: PropertyRow): string[] {
+  const missing: string[] = [];
+  if (!row.address?.trim()) missing.push("address");
+  if (!row.rent_cents || row.rent_cents <= 0) missing.push("rent");
+  if (row.beds == null) missing.push("beds");
+  if (row.baths == null) missing.push("baths");
+  if (!row.description?.trim()) missing.push("description");
+  return missing;
+}
+
+function rentalLaunchState({
+  row,
+  readiness,
+  livePostCount,
+  archived,
+}: {
+  row: PropertyRow;
+  readiness: ReadinessSignal[];
+  livePostCount: number;
+  archived: boolean;
+}): RentalLaunchState {
+  const distributionHref = `/dashboard/properties/${row.id}?tab=distribute#distribute-header`;
+  const missing = missingBasics(row);
+
+  if (archived) {
+    return {
+      label: "Archived",
+      detail: "Restore before marketing",
+      action: "Review",
+      href: `/dashboard/properties/${row.id}`,
+      tone: "muted",
+    };
+  }
+
+  if (row.status === "leased") {
+    return {
+      label: "Leased",
+      detail: "Closed to inquiries",
+      action: "Review",
+      href: `/dashboard/properties/${row.id}`,
+      tone: "muted",
+    };
+  }
+
+  if (isPubliclyVisible(row.status) && !isPublicBookable(row.status)) {
+    return {
+      label: "Paused",
+      detail: "Relist when ready",
+      action: "Review",
+      href: distributionHref,
+      tone: "muted",
+    };
+  }
+
+  if (missing.length > 0) {
+    return {
+      label: "Needs basics",
+      detail: `${pluralize(missing.length, "detail")} before launch`,
+      action: "Finish basics",
+      href: `/dashboard/properties/${row.id}?tab=setup#rental-details`,
+      tone: "warn",
+    };
+  }
+
+  const warning = readiness.find((signal) => signal.tone === "warn");
+  if (warning?.key === "photos") {
+    return {
+      label: "Needs photos",
+      detail: "Add photos before syndication",
+      action: "Add photos",
+      href: `/dashboard/properties/${row.id}?tab=market#property-photos`,
+      tone: "warn",
+    };
+  }
+
+  if (warning?.key === "viewings") {
+    return {
+      label: "Needs viewings",
+      detail: "Set viewing windows before launch",
+      action: "Set viewings",
+      href: "/dashboard/availability",
+      tone: "warn",
+    };
+  }
+
+  if (warning?.key === "feed") {
+    return {
+      label: "Needs feed detail",
+      detail: "Fix feed blockers before syndication",
+      action: "Finish basics",
+      href: `/dashboard/properties/${row.id}?tab=setup#rental-details`,
+      tone: "warn",
+    };
+  }
+
+  if (!isPublicBookable(row.status)) {
+    return {
+      label: "Ready for Set Live",
+      detail: "Set Live before autopilot can start",
+      action: "Open Set Live",
+      href: `/dashboard/properties/${row.id}#publish-action`,
+      tone: "ready",
+    };
+  }
+
+  if (livePostCount > 0) {
+    return {
+      label: `Proof saved on ${pluralize(livePostCount, "site")}`,
+      detail: "Live ad URLs are tracked",
+      action: "View results",
+      href: distributionHref,
+      tone: "active",
+    };
+  }
+
+  return {
+    label: "Live, not distributed",
+    detail: "Open the channel run",
+    action: "Open distribution",
+    href: distributionHref,
+    tone: "ready",
+  };
+}
 
 export default async function PropertiesPage({
   searchParams,
@@ -75,7 +224,7 @@ export default async function PropertiesPage({
     supabase.from("tenancies").select("property_id").eq("organization_id", org.id),
     supabase
       .from("listing_posts")
-      .select("property_id")
+      .select("property_id, status, url")
       .eq("organization_id", org.id),
     // Org-wide weekly viewing windows — the same signal the property-detail
     // share-readiness check uses. One count for the selected org, so
@@ -122,9 +271,16 @@ export default async function PropertiesPage({
   }
 
   const postCounts = new Map<string, number>();
-  for (const r of (postRefs ?? []) as { property_id: string | null }[]) {
+  const livePostCounts = new Map<string, number>();
+  for (const r of (postRefs ?? []) as ListingPostRef[]) {
     if (r.property_id) {
       postCounts.set(r.property_id, (postCounts.get(r.property_id) ?? 0) + 1);
+      if (r.status === "live" && r.url?.trim()) {
+        livePostCounts.set(
+          r.property_id,
+          (livePostCounts.get(r.property_id) ?? 0) + 1,
+        );
+      }
     }
   }
 
@@ -310,12 +466,14 @@ export default async function PropertiesPage({
             const leadCount = leadCounts.get(p.id) ?? 0;
             const tenancyCount = tenancyCounts.get(p.id) ?? 0;
             const postCount = postCounts.get(p.id) ?? 0;
+            const livePostCount = livePostCounts.get(p.id) ?? 0;
             const canHardDelete = hardDeletable(
               p.status,
               leadCount,
               tenancyCount,
               postCount,
             );
+            const photoCount = photoCounts.get(p.id) ?? 0;
             const readiness = rentalRowReadiness({
               status: p.status,
               rentCents: p.rent_cents,
@@ -323,9 +481,17 @@ export default async function PropertiesPage({
               baths: p.baths,
               address: p.address,
               description: p.description,
-              photoCount: photoCounts.get(p.id) ?? 0,
+              photoCount,
               availabilityWindowCount: availabilityCount ?? 0,
             });
+            const launch = rentalLaunchState({
+              row: p,
+              readiness,
+              livePostCount,
+              archived: archivedView,
+            });
+            const statusLabel = propertyStatusLabel(p.status);
+            const showLaunchChip = launch.label !== statusLabel;
             return (
             <li key={p.id} className="px-4 py-3">
               {/* Mobile (default): stack so the address/specs get their own
@@ -361,48 +527,49 @@ export default async function PropertiesPage({
                     : "—"}
                 </span>
                 <StatusChip tone={propertyStatusTone(p.status)}>
-                  {propertyStatusLabel(p.status)}
+                  {statusLabel}
                 </StatusChip>
-                {isPublicBookable(p.status) ? (
+                {showLaunchChip && (
+                  <span
+                    title={launch.detail}
+                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${LAUNCH_STATE_CLASS[launch.tone]}`}
+                  >
+                    {launch.label}
+                  </span>
+                )}
+                {isPublicBookable(p.status) && (
                   // The photo-poor warning that used to sit here is now carried
                   // by the Photos chip in the readiness strip below (Codex design
                   // audit #5), so this stays a clean Copy action.
-                  <>
-                    <CopyIntakeButton url={intakeUrl(p.id)} />
-                    <Link
-                      href={`/dashboard/properties/${p.id}#distribute-header`}
-                      className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
-                      title="Get this listing online. Nothing is posted automatically."
-                    >
-                      Get this listing online →
-                    </Link>
-                  </>
-                ) : isPubliclyVisible(p.status) ? (
+                  <CopyIntakeButton url={intakeUrl(p.id)} />
+                )}
+                {isPubliclyVisible(p.status) && !isPublicBookable(p.status) ? (
                   // Leased / Paused: the public /r page LOADS but tells renters
                   // the unit is no longer available, so a bare "Copy inquiry
                   // link" reads like a Live listing. Label the state instead of
                   // offering an inquiry action (Codex QA re-review).
-                  <span className="text-xs text-gray-400">
-                    {p.status === "leased"
-                      ? "Leased - page shows unavailable"
-                      : "Paused - not accepting inquiries"}
-                  </span>
-                ) : (
-                  // Draft / off-market: the public /r link 404s, so no Copy
-                  // button (QA blocker #1). Still give one obvious way to start
-                  // getting this listing online - into the unit's posting prep.
                   <>
-                    <Link
-                      href={`/dashboard/properties/${p.id}#distribute-header`}
-                      className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
-                      title="Get this listing online. Nothing is posted automatically."
-                    >
-                      Get this listing online &rarr;
-                    </Link>
                     <span className="text-xs text-gray-400">
-                      Set Live to share your link
+                      {p.status === "leased"
+                        ? "Leased - page shows unavailable"
+                        : "Paused - not accepting inquiries"}
                     </span>
+                    <Link
+                      href={launch.href}
+                      className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      title={launch.detail}
+                    >
+                      {launch.action}
+                    </Link>
                   </>
+                ) : (
+                  <Link
+                    href={launch.href}
+                    className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
+                    title={launch.detail}
+                  >
+                    {launch.action}
+                  </Link>
                 )}
                 <Link
                   href={`/dashboard/properties/${p.id}#rental-details`}
