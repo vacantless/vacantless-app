@@ -96,6 +96,7 @@ export type PublishChannelChoiceView = {
   category: ChannelCategory | null;
   displayOrder: number | null;
   modeLabel: string;
+  status: PublishStatus;
   statusLabel: string;
   statusTone: PublishTone;
   description: string;

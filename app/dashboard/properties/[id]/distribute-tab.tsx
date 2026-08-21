@@ -64,7 +64,10 @@ import {
   type PublishChannelChoiceView,
   type RunItemView,
 } from "./launch-run-panel";
-import { CONCIERGE_OPEN_STATUSES } from "@/lib/distribution-publish";
+import {
+  CONCIERGE_OPEN_STATUSES,
+  type PublishStatus,
+} from "@/lib/distribution-publish";
 import {
   activeRunChannelCount,
   automationStatusSummary,
@@ -246,6 +249,51 @@ type DistributionHealth = {
   advancedLeads: number;
 };
 
+type PublishControlRoomBucketKey =
+  | "liveOutside"
+  | "readyNow"
+  | "needsPayment"
+  | "needsSignIn"
+  | "needsProof"
+  | "refreshDue"
+  | "blocked";
+
+type PublishControlRoomTone = "positive" | "warning" | "danger" | "neutral" | "info";
+
+type PublishControlRoomBucket = {
+  key: PublishControlRoomBucketKey;
+  label: string;
+  value: number;
+  detail: string;
+  tone: PublishControlRoomTone;
+};
+
+type PublishControlRoomSource = {
+  key: string;
+  status: PublishStatus;
+  liveWithoutUrl?: boolean;
+  staleRefresh?: boolean;
+};
+
+const READY_NOW_STATUSES: readonly PublishStatus[] = [
+  "queued",
+  "needs_operator",
+];
+const NEEDS_PAYMENT_STATUSES: readonly PublishStatus[] = ["needs_payment"];
+const NEEDS_SIGN_IN_STATUSES: readonly PublishStatus[] = ["needs_login"];
+const BLOCKED_STATUSES: readonly PublishStatus[] = ["blocked", "rejected"];
+
+const PUBLISH_CONTROL_ROOM_SAFETY_PROMISE =
+  "Nothing is posted automatically. You approve outside-site posts, paid steps, and live proof.";
+
+const CONTROL_ROOM_TONE_CLASS: Record<PublishControlRoomTone, string> = {
+  positive: "bg-emerald-50 text-emerald-700",
+  warning: "bg-amber-50 text-amber-700",
+  danger: "bg-red-50 text-red-700",
+  neutral: "bg-gray-100 text-gray-600",
+  info: "bg-blue-50 text-blue-700",
+};
+
 export type DistributeRunNotice = {
   tone: "success" | "warning" | "danger" | "info";
   title: string;
@@ -389,6 +437,167 @@ function distributionHealth({
   };
 }
 
+function countUniqueChannels(
+  sources: PublishControlRoomSource[],
+  predicate: (source: PublishControlRoomSource) => boolean,
+) {
+  return new Set(sources.filter(predicate).map((source) => source.key)).size;
+}
+
+function countStatuses(
+  sources: PublishControlRoomSource[],
+  statuses: readonly PublishStatus[],
+) {
+  return countUniqueChannels(sources, (source) =>
+    statuses.includes(source.status),
+  );
+}
+
+function controlRoomSources(launchRun: LaunchRunData): PublishControlRoomSource[] {
+  if (launchRun.run) {
+    return launchRun.items.map((item) => ({
+      key: item.channel,
+      status: item.publishStatus,
+      liveWithoutUrl: item.liveWithoutUrl,
+      staleRefresh: item.staleRefresh,
+    }));
+  }
+  return launchRun.startChannels
+    .filter((choice) => choice.defaultSelected)
+    .map((choice) => ({
+      key: choice.key,
+      status: choice.status,
+    }));
+}
+
+function proofIssueCount({
+  channelCards,
+  sources,
+}: {
+  channelCards: DistributeChannelCard[];
+  sources: PublishControlRoomSource[];
+}) {
+  const keys = new Set<string>(
+    channelCards
+      .filter((card) => card.status.value === "problem")
+      .map((card) => card.channel.key),
+  );
+  for (const source of sources) {
+    if (source.liveWithoutUrl) keys.add(source.key);
+  }
+  return keys.size;
+}
+
+function refreshDueCount({
+  channelCards,
+  sources,
+}: {
+  channelCards: DistributeChannelCard[];
+  sources: PublishControlRoomSource[];
+}) {
+  const keys = new Set<string>(
+    channelCards
+      .filter((card) => card.status.value === "needs_refresh")
+      .map((card) => card.channel.key),
+  );
+  for (const source of sources) {
+    if (source.staleRefresh) keys.add(source.key);
+  }
+  return keys.size;
+}
+
+function bucketTone(
+  count: number,
+  active: PublishControlRoomTone,
+  empty: PublishControlRoomTone = "neutral",
+) {
+  return count > 0 ? active : empty;
+}
+
+function bucketDetail(
+  count: number,
+  active: string,
+  empty: string,
+) {
+  return count > 0 ? active : empty;
+}
+
+export function buildPublishControlRoomBuckets({
+  channelCards,
+  launchRun,
+  liveOutsideCount,
+}: {
+  channelCards: DistributeChannelCard[];
+  launchRun: LaunchRunData;
+  liveOutsideCount: number;
+}): PublishControlRoomBucket[] {
+  const sources = controlRoomSources(launchRun);
+  const readyNow = countUniqueChannels(
+    sources,
+    (source) =>
+      READY_NOW_STATUSES.includes(source.status) &&
+      !source.liveWithoutUrl &&
+      !source.staleRefresh,
+  );
+  const needsPayment = countStatuses(sources, NEEDS_PAYMENT_STATUSES);
+  const needsSignIn = countStatuses(sources, NEEDS_SIGN_IN_STATUSES);
+  const needsProof = proofIssueCount({ channelCards, sources });
+  const refreshDue = refreshDueCount({ channelCards, sources });
+  const blocked = countStatuses(sources, BLOCKED_STATUSES);
+
+  return [
+    {
+      key: "liveOutside",
+      label: "Live outside",
+      value: liveOutsideCount,
+      detail: bucketDetail(liveOutsideCount, "proof saved", "none live"),
+      tone: bucketTone(liveOutsideCount, "positive"),
+    },
+    {
+      key: "readyNow",
+      label: "Ready now",
+      value: readyNow,
+      detail: bucketDetail(readyNow, "tap-ready", "none"),
+      tone: bucketTone(readyNow, "positive"),
+    },
+    {
+      key: "needsPayment",
+      label: "Needs payment",
+      value: needsPayment,
+      detail: bucketDetail(needsPayment, "pay to post", "clear"),
+      tone: bucketTone(needsPayment, "warning"),
+    },
+    {
+      key: "needsSignIn",
+      label: "Needs sign-in",
+      value: needsSignIn,
+      detail: bucketDetail(needsSignIn, "login needed", "clear"),
+      tone: bucketTone(needsSignIn, "warning"),
+    },
+    {
+      key: "needsProof",
+      label: "Needs proof",
+      value: needsProof,
+      detail: bucketDetail(needsProof, "save live URL", "clear"),
+      tone: bucketTone(needsProof, "danger"),
+    },
+    {
+      key: "refreshDue",
+      label: "Refresh due",
+      value: refreshDue,
+      detail: bucketDetail(refreshDue, "refresh/repost", "current"),
+      tone: bucketTone(refreshDue, "warning"),
+    },
+    {
+      key: "blocked",
+      label: "Blocked",
+      value: blocked,
+      detail: bucketDetail(blocked, "fix first", "clear"),
+      tone: bucketTone(blocked, "danger"),
+    },
+  ];
+}
+
 export function DistributeTab({
   propertyId,
   basics,
@@ -469,6 +678,11 @@ export function DistributeTab({
     otherPosts,
     launchRun,
     analytics,
+  });
+  const publishControlRoomBuckets = buildPublishControlRoomBuckets({
+    channelCards,
+    launchRun,
+    liveOutsideCount: liveChannels,
   });
   const automationSummary = automationStatusSummary(launchRun.items);
   const instagramCard =
@@ -749,6 +963,16 @@ export function DistributeTab({
 
   return (
     <div>
+      <PublishControlRoom
+        linkIsLive={linkIsLive}
+        setupOutstanding={setupOutstanding}
+        hasPhotos={hasPhotos}
+        canSetLive={canSetLive}
+        hasRun={Boolean(launchRun.run)}
+        selectedChannelCount={selectedChannelCount}
+        buckets={publishControlRoomBuckets}
+      />
+
       {/* Header — what this tab is + a one-line readiness signal. */}
       <div
         id="distribute-header"
@@ -809,19 +1033,6 @@ export function DistributeTab({
           </div>
         )}
       </div>
-
-      <AutopilotLaunchCard
-        linkIsLive={linkIsLive}
-        setupOutstanding={setupOutstanding}
-        hasPhotos={hasPhotos}
-        canSetLive={canSetLive}
-        hasRun={Boolean(launchRun.run)}
-        selectedChannelCount={selectedChannelCount}
-        liveChannels={liveChannels}
-        automationSummary={automationSummary}
-        accountReadyCount={accountReadyCount}
-        accountTotalCount={launchRun.startChannels.length}
-      />
 
       {publishSimpleDefaultEnabled ? (
         publishEverywhereSurface
@@ -1556,17 +1767,14 @@ function SimpleGetOnline({
   );
 }
 
-function AutopilotLaunchCard({
+function PublishControlRoom({
   linkIsLive,
   setupOutstanding,
   hasPhotos,
   canSetLive,
   hasRun,
   selectedChannelCount,
-  liveChannels,
-  automationSummary,
-  accountReadyCount,
-  accountTotalCount,
+  buckets,
 }: {
   linkIsLive: boolean;
   setupOutstanding: number;
@@ -1574,19 +1782,19 @@ function AutopilotLaunchCard({
   canSetLive: boolean;
   hasRun: boolean;
   selectedChannelCount: number;
-  liveChannels: number;
-  automationSummary: AutomationStatusSummary;
-  accountReadyCount: number;
-  accountTotalCount: number;
+  buckets: PublishControlRoomBucket[];
 }) {
-  const attentionCount =
-    automationSummary.oneTap +
-    automationSummary.needsRefresh +
-    automationSummary.blocked;
-  const hasAutomaticWork = automationSummary.liveAuto > 0;
-  const hasProcessingWork = automationSummary.processing > 0;
-  const setupNeeded = Math.max(0, accountTotalCount - accountReadyCount);
   const launchBlocked = setupOutstanding > 0 || !hasPhotos || !linkIsLive;
+  const attentionBuckets = buckets.filter(
+    (bucket) =>
+      bucket.value > 0 &&
+      bucket.key !== "liveOutside" &&
+      bucket.key !== "readyNow",
+  );
+  const attentionCount = attentionBuckets.reduce(
+    (sum, bucket) => sum + bucket.value,
+    0,
+  );
   const primaryHref =
     setupOutstanding > 0
       ? "#rental-details"
@@ -1608,35 +1816,21 @@ function AutopilotLaunchCard({
             : "Review status"
           : hasRun
             ? attentionCount > 0
-              ? "Open next action"
-              : "Open run"
-            : "Open autopilot";
+              ? "Open next publish step"
+              : "Review publish run"
+            : "Open publish run";
   const launchLabel = launchBlocked
-    ? "Autopilot almost ready"
+    ? "Finish setup before outside publishing"
     : hasRun
-      ? hasAutomaticWork
-        ? attentionCount > 0
-          ? "Autopilot needs one tap"
-          : "Autopilot running"
-        : hasProcessingWork
-          ? attentionCount > 0
-            ? "Run needs one tap"
-            : "Tracking your posts"
-          : attentionCount > 0
-            ? "Run needs one tap"
-            : "Run in progress"
-      : "Ready for autopilot";
+      ? attentionCount > 0
+        ? "Publishing needs your next tap"
+        : "Publish run is ready to review"
+      : "Ready to choose sites and publish";
   const launchDetail = launchBlocked
-    ? "Vacantless prepares each channel and tells you the one step it needs."
-    : hasRun && hasAutomaticWork
-      ? "Authorized channels can run automatically; login, payment, approval, and proof still stop for you."
-      : hasRun && hasProcessingWork
-        ? "Vacantless is tracking submitted or proof-saved channels without claiming they are automatic."
-        : hasRun
-          ? "This run is saved; open it to review channel status and next steps."
-          : "Open one distribution run for selected automatic, guided, and proof-tracked channels.";
-  const safetyLine =
-    "Outside-site posts, paid submits, and Live status still stop for your approval or proof.";
+    ? "The renter page, photos, and basics have to be ready before outside-site steps."
+    : hasRun
+      ? "Use one run to approve paid steps, finish sign-ins, refresh stale ads, and save live proof."
+      : "Choose the channels once. Vacantless prepares the copy and shows only sign-in, payment, or proof steps that need you.";
   const blockers = [
     setupOutstanding > 0
       ? `${setupOutstanding} ${
@@ -1646,39 +1840,19 @@ function AutopilotLaunchCard({
     !hasPhotos ? "photos" : null,
     !linkIsLive ? "set public page Live" : null,
   ].filter((item): item is string => Boolean(item));
-  const buckets = [
-    {
-      label: "Channels selected",
-      value: String(selectedChannelCount),
-      detail: hasRun ? "in this run" : "selected",
-      tone: "bg-emerald-50 text-emerald-700",
-    },
-    {
-      label: "Needs one tap",
-      value: String(attentionCount),
-      detail: attentionCount === 1 ? "action waiting" : "actions waiting",
-      tone: attentionCount > 0 ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600",
-    },
-    {
-      label: "Setup once",
-      value: `${accountReadyCount}/${accountTotalCount}`,
-      detail: setupNeeded > 0 ? `${setupNeeded} left` : "accounts ready",
-      tone: setupNeeded > 0 ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700",
-    },
-    {
-      label: "Proof saved",
-      value: String(liveChannels),
-      detail: liveChannels === 1 ? "site live" : "sites live",
-      tone: liveChannels > 0 ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600",
-    },
-  ];
+  const waitingSummary = attentionBuckets
+    .map((bucket) => `${bucket.label.toLowerCase()} (${bucket.value})`)
+    .join(", ");
 
   return (
-    <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <section
+      id="publish-control-room"
+      className="mb-4 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand">
-            Autopilot launch
+            Publish Control Room
           </p>
           <h3 className="mt-1 text-lg font-semibold text-gray-950">
             {launchLabel}
@@ -1687,29 +1861,35 @@ function AutopilotLaunchCard({
             {launchDetail}
           </p>
           <p className="mt-2 max-w-2xl text-xs leading-relaxed text-gray-500">
-            {safetyLine}
+            {PUBLISH_CONTROL_ROOM_SAFETY_PROMISE}
+          </p>
+          <p className="mt-2 text-xs font-medium text-gray-500">
+            {selectedChannelCount}{" "}
+            {selectedChannelCount === 1 ? "channel" : "channels"} in scope.
           </p>
         </div>
         {primaryHref === "#property-photos" ? (
           <PhotoUploadLink
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
           >
+            <Icons.bolt className="h-4 w-4" />
             {primaryAction}
           </PhotoUploadLink>
         ) : (
           <a
             href={primaryHref}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
           >
+            <Icons.bolt className="h-4 w-4" />
             {primaryAction}
           </a>
         )}
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
         {buckets.map((bucket) => (
           <div
-            key={bucket.label}
+            key={bucket.key}
             className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
           >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -1720,7 +1900,7 @@ function AutopilotLaunchCard({
                 {bucket.value}
               </span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${bucket.tone}`}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CONTROL_ROOM_TONE_CLASS[bucket.tone]}`}
               >
                 {bucket.detail}
               </span>
@@ -1731,11 +1911,15 @@ function AutopilotLaunchCard({
 
       {blockers.length > 0 ? (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Before launch: {blockers.join(", ")}.
+          Before publishing: {blockers.join(", ")}.
+        </p>
+      ) : attentionBuckets.length > 0 ? (
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Still needs you: {waitingSummary}.
         </p>
       ) : (
         <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          Good to launch. Submitted channels still require proof before they read as Live.
+          Good to publish. Outside sites count as Live only after proof is saved.
         </p>
       )}
     </section>

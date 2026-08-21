@@ -171,7 +171,7 @@ ok("null current step -> null action", deriveNextAction(inp({ currentStep: null 
   const a = deriveNextAction(inp({ currentStep: "inquiries", hasRent: true, isLive: true, linkIsLive: true, photoCount: 2, listingPostCount: 0 }));
   ok("inquiries: link fact present when live", !!findFact(a, "link"));
   ok("inquiries: market gap present", findGap(a, "market"));
-  ok("inquiries: cta -> distribute", a?.cta.href === `/dashboard/properties/${PID}?tab=distribute#distribute-header`);
+  ok("inquiries: cta -> distribute", a?.cta.href === `/dashboard/properties/${PID}?tab=distribute#publish-control-room`);
   ok(
     "inquiries: cta opens syndication",
     a?.cta.label === "Open syndication",

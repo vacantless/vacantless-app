@@ -563,7 +563,7 @@ function SyndicationFirstCard({
   blockerSummary: SyndicationBlockerSummary | null;
 }) {
   const encodedPropertyId = encodeURIComponent(propertyId);
-  const distributeHref = `/dashboard/properties/${encodedPropertyId}?tab=distribute#distribute-header`;
+  const distributeHref = `/dashboard/properties/${encodedPropertyId}?tab=distribute#publish-control-room`;
   const setupHref = `/dashboard/properties/${encodedPropertyId}?tab=setup#rental-details`;
   const hasPostHistory = postHistoryCount > 0;
   const expiredOnly = linkIsLive && hasPostHistory && liveOutsideCount === 0;
@@ -1807,6 +1807,7 @@ export default async function PropertyDetailPage({
       category: displayMeta?.category ?? null,
       displayOrder: displayMeta?.displayOrder ?? null,
       modeLabel: publishModeLabel(plan.mode),
+      status: plan.status,
       statusLabel: publishStatusLabel(plan.status),
       statusTone: publishStatusTone(plan.status),
       description: plan.description,
@@ -3949,7 +3950,7 @@ export default async function PropertyDetailPage({
               </p>
             </div>
             <a
-              href="?tab=distribute#distribute-header"
+              href="?tab=distribute#publish-control-room"
               className={SECONDARY_ACTION_CLASS}
             >
               Open Get online →

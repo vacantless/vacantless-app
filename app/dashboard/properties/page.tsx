@@ -92,7 +92,7 @@ function rentalLaunchState({
   livePostCount: number;
   archived: boolean;
 }): RentalLaunchState {
-  const distributionHref = `/dashboard/properties/${row.id}?tab=distribute#distribute-header`;
+  const distributionHref = `/dashboard/properties/${row.id}?tab=distribute#publish-control-room`;
   const missing = missingBasics(row);
 
   if (archived) {

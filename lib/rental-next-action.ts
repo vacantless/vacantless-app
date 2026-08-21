@@ -172,7 +172,7 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
   const self = `/dashboard/properties/${input.propertyId}`;
   const setupHref = `${self}?tab=setup#rental-details`;
   const photosHref = `${self}?tab=market#property-photos`;
-  const distributeHref = `${self}?tab=distribute#distribute-header`;
+  const distributeHref = `${self}?tab=distribute#publish-control-room`;
   const facts = policyFacts(input.effective, input.inherited);
   const inheritedCount = facts.filter((f) => f.inherited).length;
 

@@ -402,6 +402,10 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 }
 {
   const propertiesSource = readFileSync("app/dashboard/properties/page.tsx", "utf8");
+  const propertyDetailSource = readFileSync(
+    "app/dashboard/properties/[id]/page.tsx",
+    "utf8",
+  );
   ok(
     "properties list opens mobile launch queue entry points",
     propertiesSource.includes("Ready for Set Live") &&
@@ -414,11 +418,34 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "utf8",
   );
   ok(
-    "distribute tab leads with autopilot launch copy",
-    distributeSource.includes("Autopilot launch") &&
-      distributeSource.includes("Open autopilot") &&
-      distributeSource.includes("Channels selected") &&
-      distributeSource.includes("Outside-site posts, paid submits"),
+    "distribute tab leads with publish control room buckets",
+    distributeSource.includes("Publish Control Room") &&
+      distributeSource.includes("Open publish run") &&
+      distributeSource.includes("Live outside") &&
+      distributeSource.includes("Ready now") &&
+      distributeSource.includes("Needs payment") &&
+      distributeSource.includes("Needs sign-in") &&
+      distributeSource.includes("Needs proof") &&
+      distributeSource.includes("Refresh due") &&
+      distributeSource.includes("Blocked") &&
+      distributeSource.includes("Nothing is posted automatically. You approve outside-site posts"),
+  );
+  ok(
+    "publish control room derives blocker buckets from raw publish status",
+    distributeSource.includes("buildPublishControlRoomBuckets") &&
+      distributeSource.includes("choice.status") &&
+      propertyDetailSource.includes("status: plan.status"),
+  );
+  ok(
+    "publish control room is the first distribute-tab action surface",
+    distributeSource.includes('id="publish-control-room"') &&
+      distributeSource.indexOf("<PublishControlRoom") <
+      distributeSource.indexOf('id="distribute-header"'),
+  );
+  ok(
+    "mobile entry links land on the publish control room",
+    propertiesSource.includes("tab=distribute#publish-control-room") &&
+      propertyDetailSource.includes("tab=distribute#publish-control-room"),
   );
 }
 
