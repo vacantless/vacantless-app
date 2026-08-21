@@ -319,18 +319,19 @@ export function ChannelPublishRail({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Channel reach
+            Available outside sites
           </p>
           <h3 className="mt-1 text-lg font-semibold text-gray-950">
-            Publish to all channels
+            Publish beyond the renter page
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-gray-600">
-            Connected channels are ready after approval. Guided channels stay
-            1-tap.
+            This is the full channel menu. The Control Room above shows what is
+            selected in the current run.
           </p>
         </div>
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-green-600 text-sm font-bold text-green-700">
-          {ringLabel}
+        <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4 border-green-600 text-green-700">
+          <span className="text-sm font-bold">{ringLabel}</span>
+          <span className="text-[10px] font-semibold leading-none">live</span>
         </div>
       </div>
 

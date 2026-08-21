@@ -703,29 +703,6 @@ export function DistributeTab({
   const accountReadyCount = launchRun.startChannels.filter(
     (channel) => channel.readinessTone === "positive",
   ).length;
-  const readinessLabel = readyToShare
-    ? "Ready to syndicate"
-      : setupOutstanding > 0
-        ? `${setupOutstanding} ${
-            setupOutstanding === 1 ? "listing detail" : "listing details"
-          } to finish`
-      : !linkIsLive
-        ? "Set Live before posting"
-        : `${requiredOutstanding} ${
-            requiredOutstanding === 1 ? "thing" : "things"
-          } to finish`;
-  const headerBody =
-    stepClarityLiveEnabled && linkIsLive
-      ? "Your public page is live. Finish only the outside sites that still need your sign-in."
-      : "Click Publish everywhere. We turn on the connected channels and show only the sign-in or payment steps needed for the rest.";
-  const liveChipLabel =
-    stepClarityLiveEnabled && linkIsLive
-      ? liveChannels > 0
-        ? `Proof saved on ${liveChannels} ${
-            liveChannels === 1 ? "site" : "sites"
-          }`
-        : "Public page live"
-      : `${liveChannels} ${liveChannels === 1 ? "site" : "sites"} posted`;
   const publishEverywhereSurface = (
     <PublishEverywhere
       propertyId={propertyId}
@@ -766,6 +743,7 @@ export function DistributeTab({
       channelAccounts={channelAccounts}
       instantPublishDestinations={instantPublishDestinations}
       analytics={analytics}
+      showSummaryCard={false}
     />
   );
   const advancedTools = (
@@ -973,42 +951,13 @@ export function DistributeTab({
         buckets={publishControlRoomBuckets}
       />
 
-      {/* Header — what this tab is + a one-line readiness signal. */}
       <div
         id="distribute-header"
-        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm"
+        className="scroll-mt-6"
       >
-        <div className="mb-2 flex items-center gap-2.5">
-          <IconTile><Icons.link className="h-4 w-4" /></IconTile>
-          <h3 className="text-sm font-semibold text-white">
-            Get this listing online
-          </h3>
-        </div>
-        <p className="mb-3 max-w-2xl text-sm text-slate-300">
-          {headerBody}
-        </p>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span
-            className={`rounded-full px-2.5 py-0.5 font-medium ${
-              readyToShare
-                ? "bg-emerald-400 text-slate-950"
-                : "bg-amber-300 text-slate-950"
-            }`}
-          >
-            {readinessLabel}
-          </span>
-          <span className="rounded-full bg-white/10 px-2.5 py-0.5 font-medium text-slate-200">
-            {liveChipLabel}
-          </span>
-        </div>
-        {!linkIsLive && promotionNote && (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            {promotionNote}
-          </p>
-        )}
         {runNotice && (
           <div
-            className={`mt-3 rounded-lg border px-3 py-2 text-xs ${RUN_NOTICE_CLASS[runNotice.tone]}`}
+            className={`mb-4 rounded-lg border px-3 py-2 text-xs ${RUN_NOTICE_CLASS[runNotice.tone]}`}
           >
             <p>
               <strong>{runNotice.title}</strong> {runNotice.body}
@@ -1031,6 +980,11 @@ export function DistributeTab({
               </div>
             )}
           </div>
+        )}
+        {!linkIsLive && promotionNote && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {promotionNote}
+          </p>
         )}
       </div>
 
@@ -1302,6 +1256,7 @@ function SimpleGetOnline({
   instantPublishDestinations,
   analytics,
   showLaunchRunPanel = true,
+  showSummaryCard = true,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -1318,6 +1273,7 @@ function SimpleGetOnline({
   instantPublishDestinations: InstantDestination[];
   analytics: ChannelAnalyticsRow[];
   showLaunchRunPanel?: boolean;
+  showSummaryCard?: boolean;
 }) {
   const addressLabel = basics.address || replyInputs.address || "this rental";
   const publicLink = replyInputs.bookingUrl;
@@ -1456,124 +1412,125 @@ function SimpleGetOnline({
 
   return (
     <div className="space-y-4">
-      <section
-        id={linkIsLive ? "simple-live" : "simple-publish"}
-        className={`rounded-2xl border p-6 shadow-sm ${
-          linkIsLive
-            ? "border-green-200 bg-green-50"
-            : "border-brand/20 bg-brand/[0.04]"
-        }`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
+      {showSummaryCard && (
+        <section
+          id={linkIsLive ? "simple-live" : "simple-publish"}
+          className={`rounded-2xl border p-6 shadow-sm ${
+            linkIsLive
+              ? "border-green-200 bg-green-50"
+              : "border-brand/20 bg-brand/[0.04]"
+          }`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  linkIsLive
+                    ? "bg-green-600 text-white"
+                    : "bg-brand text-white"
+                }`}
+              >
+                {linkIsLive
+                  ? railBuckets.externalLiveCount > 0
+                    ? "You're online"
+                    : "Renter page live"
+                  : "Ready to publish"}
+              </span>
+              <h3
+                className={`mt-3 text-2xl font-semibold ${
+                  linkIsLive ? "text-green-950" : "text-gray-950"
+                }`}
+              >
+                {linkIsLive
+                  ? railBuckets.externalLiveCount > 0
+                    ? `Your renter page is live, plus ${railBuckets.externalLiveCount} outside ${
+                        railBuckets.externalLiveCount === 1 ? "site" : "sites"
+                      }.`
+                    : "Your renter page is live. No outside sites are live yet."
+                  : `Publish ${addressLabel} everywhere renters are looking.`}
+              </h3>
+              <p
+                className={`mt-2 max-w-3xl text-sm leading-relaxed ${
+                  linkIsLive ? "text-green-800" : "text-gray-600"
+                }`}
+              >
+                {linkIsLive
+                  ? railBuckets.externalLiveCount > 0
+                    ? "Connected instant channels can sync from here, and guided channels stay in the 1-tap queue."
+                    : "Anyone with your link can inquire. Outside sites still need posting, and each one counts as live only once its real ad URL is saved."
+                  : "Publish turns on the Vacantless renter page and email-alert reach first, then opens the guided queue for channels that need a login, payment, broker, or final human tap."}
+              </p>
+            </div>
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                 linkIsLive
-                  ? "bg-green-600 text-white"
-                  : "bg-brand text-white"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-white text-gray-700"
               }`}
             >
-              {linkIsLive
-                ? railBuckets.externalLiveCount > 0
-                  ? "You're online"
-                  : "Renter page live"
-                : "Ready to publish"}
+              {railBuckets.externalLiveCount}/{railBuckets.externalTotalCount}{" "}
+              outside sites live
             </span>
-            <h3
-              className={`mt-3 text-2xl font-semibold ${
-                linkIsLive ? "text-green-950" : "text-gray-950"
-              }`}
-            >
-              {linkIsLive
-                ? railBuckets.externalLiveCount > 0
-                  ? `Your renter page is live, plus ${railBuckets.externalLiveCount} outside ${
-                      railBuckets.externalLiveCount === 1 ? "site" : "sites"
-                    }.`
-                  : "Your renter page is live. No outside sites are live yet."
-                : `Publish ${addressLabel} everywhere renters are looking.`}
-            </h3>
-            <p
-              className={`mt-2 max-w-3xl text-sm leading-relaxed ${
-                linkIsLive ? "text-green-800" : "text-gray-600"
-              }`}
-            >
-              {linkIsLive
-                ? railBuckets.externalLiveCount > 0
-                  ? "Connected instant channels can sync from here, and guided channels stay in the 1-tap queue."
-                  : "Anyone with your link can inquire. Outside sites still need posting, and each one counts as live only once its real ad URL is saved."
-                : "Publish turns on the Vacantless renter page and email-alert reach first, then opens the guided queue for channels that need a login, payment, broker, or final human tap."}
-            </p>
           </div>
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              linkIsLive
-                ? "bg-green-100 text-green-800"
-                : "bg-white text-gray-700"
-            }`}
-          >
-            {railBuckets.externalLiveCount}/{railBuckets.externalTotalCount}{" "}
-            outside sites live
-          </span>
-        </div>
 
-        {linkIsLive ? (
-          <div className="mt-5 rounded-xl border border-green-200 bg-white/80 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-green-900">
-                  Shareable renter link
-                </p>
-                <p className="mt-1 text-sm text-green-800">
-                  {totalInquiryCount}{" "}
-                  {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
-                  this rental.
-                </p>
-              </div>
-              <a href="#publish-checklist" className={SECONDARY_BTN}>
-                <Icons.bolt className="h-4 w-4" />
-                Sync updates / re-publish
-              </a>
-            </div>
-            {publicLink ? (
-              <div className="mt-3 space-y-3">
-                <CopyLink url={publicLink} />
-                <div className="flex flex-wrap gap-2">
-                  <a
-                    href={`sms:?&body=${encodeURIComponent(shareBody)}`}
-                    className={SECONDARY_BTN}
-                  >
-                    <Icons.chat className="h-4 w-4" />
-                    Text
-                  </a>
-                  <a
-                    href={`mailto:?subject=${encodeURIComponent(
-                      shareSubject,
-                    )}&body=${encodeURIComponent(shareBody)}`}
-                    className={SECONDARY_BTN}
-                  >
-                    <Icons.mail className="h-4 w-4" />
-                    Email
-                  </a>
-                  <a
-                    href={publicLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={SECONDARY_BTN}
-                  >
-                    <Icons.link className="h-4 w-4" />
-                    Preview
-                  </a>
+          {linkIsLive ? (
+            <div className="mt-5 rounded-xl border border-green-200 bg-white/80 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-green-900">
+                    Shareable renter link
+                  </p>
+                  <p className="mt-1 text-sm text-green-800">
+                    {totalInquiryCount}{" "}
+                    {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
+                    this rental.
+                  </p>
                 </div>
+                <a href="#publish-checklist" className={SECONDARY_BTN}>
+                  <Icons.bolt className="h-4 w-4" />
+                  Sync updates / re-publish
+                </a>
               </div>
-            ) : (
-              <p className="mt-3 text-sm text-green-800">
-                The renter page is live; refresh if the share link has not
-                appeared yet.
-              </p>
-            )}
-          </div>
-        ) : publishBlockedByBasics ? (
-          <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
+              {publicLink ? (
+                <div className="mt-3 space-y-3">
+                  <CopyLink url={publicLink} />
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={`sms:?&body=${encodeURIComponent(shareBody)}`}
+                      className={SECONDARY_BTN}
+                    >
+                      <Icons.chat className="h-4 w-4" />
+                      Text
+                    </a>
+                    <a
+                      href={`mailto:?subject=${encodeURIComponent(
+                        shareSubject,
+                      )}&body=${encodeURIComponent(shareBody)}`}
+                      className={SECONDARY_BTN}
+                    >
+                      <Icons.mail className="h-4 w-4" />
+                      Email
+                    </a>
+                    <a
+                      href={publicLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={SECONDARY_BTN}
+                    >
+                      <Icons.link className="h-4 w-4" />
+                      Preview
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-green-800">
+                  The renter page is live; refresh if the share link has not
+                  appeared yet.
+                </p>
+              )}
+            </div>
+          ) : publishBlockedByBasics ? (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
               <p className="mb-3 text-sm font-semibold text-amber-950">
                 Finish {setupOutstanding}{" "}
                 {setupOutstanding === 1 ? "detail" : "details"} first.
@@ -1638,39 +1595,40 @@ function SimpleGetOnline({
                   </button>
                 </div>
               </form>
-          </div>
-        ) : canSetLive ? (
-          <>
-            <ConfirmPublishButton
-              propertyId={propertyId}
-              label="Publish everywhere"
-              formClassName="mt-5"
-              className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-              style={{ backgroundColor: "var(--brand-color)" }}
-              destinations={instantPublishDestinations}
-              address={addressLabel}
-            >
-              <Icons.bolt className="h-4 w-4" />
-            </ConfirmPublishButton>
-            <p className="mt-2 text-xs text-gray-600">
-              Publishes instantly where connected. Opens 1-tap finish for the rest.
-            </p>
-          </>
-        ) : (
-          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-sm font-semibold text-amber-950">
-              Review the listing status before this rental can go online.
-            </p>
-            <a
-              href="#rental-details"
-              className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-            >
-              Review listing
-            </a>
-          </div>
-        )}
-        {photoNudge}
-      </section>
+            </div>
+          ) : canSetLive ? (
+            <>
+              <ConfirmPublishButton
+                propertyId={propertyId}
+                label="Publish everywhere"
+                formClassName="mt-5"
+                className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+                style={{ backgroundColor: "var(--brand-color)" }}
+                destinations={instantPublishDestinations}
+                address={addressLabel}
+              >
+                <Icons.bolt className="h-4 w-4" />
+              </ConfirmPublishButton>
+              <p className="mt-2 text-xs text-gray-600">
+                Publishes instantly where connected. Opens 1-tap finish for the rest.
+              </p>
+            </>
+          ) : (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-950">
+                Review the listing status before this rental can go online.
+              </p>
+              <a
+                href="#rental-details"
+                className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+              >
+                Review listing
+              </a>
+            </div>
+          )}
+          {photoNudge}
+        </section>
+      )}
 
       <ChannelPublishRail
         buckets={railBuckets}
@@ -1865,7 +1823,8 @@ function PublishControlRoom({
           </p>
           <p className="mt-2 text-xs font-medium text-gray-500">
             {selectedChannelCount}{" "}
-            {selectedChannelCount === 1 ? "channel" : "channels"} in scope.
+            {selectedChannelCount === 1 ? "channel" : "channels"} selected in
+            this run.
           </p>
         </div>
         {primaryHref === "#property-photos" ? (

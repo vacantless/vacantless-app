@@ -417,6 +417,10 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "app/dashboard/properties/[id]/distribute-tab.tsx",
     "utf8",
   );
+  const channelRailSource = readFileSync(
+    "app/dashboard/properties/[id]/channel-publish-rail.tsx",
+    "utf8",
+  );
   ok(
     "distribute tab leads with publish control room buckets",
     distributeSource.includes("Publish Control Room") &&
@@ -441,6 +445,15 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     distributeSource.includes('id="publish-control-room"') &&
       distributeSource.indexOf("<PublishControlRoom") <
       distributeSource.indexOf('id="distribute-header"'),
+  );
+  ok(
+    "publish control room replaces the duplicate get-online hero stack",
+    distributeSource.includes("showSummaryCard={false}") &&
+      distributeSource.includes("selected in") &&
+      distributeSource.includes("this run") &&
+      channelRailSource.includes("Available outside sites") &&
+      !distributeSource.includes("Get this listing online") &&
+      !distributeSource.includes("Ready to syndicate"),
   );
   ok(
     "mobile entry links land on the publish control room",
