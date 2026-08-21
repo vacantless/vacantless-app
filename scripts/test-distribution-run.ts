@@ -403,8 +403,22 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 {
   const propertiesSource = readFileSync("app/dashboard/properties/page.tsx", "utf8");
   ok(
-    "properties list opens posting entry point",
-    propertiesSource.includes("Get this listing online"),
+    "properties list opens mobile launch queue entry points",
+    propertiesSource.includes("Ready for Set Live") &&
+      propertiesSource.includes("Open Set Live") &&
+      propertiesSource.includes("Open distribution") &&
+      propertiesSource.includes("Proof saved on"),
+  );
+  const distributeSource = readFileSync(
+    "app/dashboard/properties/[id]/distribute-tab.tsx",
+    "utf8",
+  );
+  ok(
+    "distribute tab leads with autopilot launch copy",
+    distributeSource.includes("Autopilot launch") &&
+      distributeSource.includes("Open autopilot") &&
+      distributeSource.includes("Channels selected") &&
+      distributeSource.includes("Outside-site posts, paid submits"),
   );
 }
 

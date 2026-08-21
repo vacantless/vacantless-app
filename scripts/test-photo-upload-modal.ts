@@ -224,11 +224,30 @@ ok(
   "distribute photo nudge and checklist use the modal trigger",
   count(distributeSource, /<PhotoUploadLink/g) === 2,
 );
+// S670: the old assertion here required the SimplePostingPlan `steps` array
+// (label/href/action/done) to still exist in distribute-tab.tsx. That array was
+// DELETED on purpose when AutopilotLaunchCard replaced SimplePostingPlan, so the
+// test was asserting the presence of code the redesign removed, and it made this
+// branch red on its own. Do NOT restore SimplePostingPlan to satisfy it.
+//
+// The invariant actually worth protecting is unchanged and is what this now
+// checks: when the card's primary action is "add photos", it must go through the
+// modal trigger rather than a raw anchor, so the deeplink opener can skip it.
 ok(
-  "distribute checklist keeps add-photo done and action semantics",
-  /label: "Add photos"[\s\S]*href: "#property-photos"[\s\S]*action: hasPhotos \? "Review" : "Add photos"[\s\S]*done: hasPhotos/.test(
+  "autopilot card can make photos its primary action",
+  /primaryHref =[\s\S]{0,400}?"#property-photos"/.test(distributeSource) &&
+    /primaryAction =[\s\S]{0,400}?"Add photos"/.test(distributeSource),
+);
+ok(
+  "autopilot card routes the photo primary action through the modal trigger",
+  /primaryHref === "#property-photos" \?\s*\(\s*<PhotoUploadLink/.test(
     distributeSource,
   ),
+);
+ok(
+  "SimplePostingPlan stays deleted",
+  !/function SimplePostingPlan/.test(distributeSource) &&
+    /function AutopilotLaunchCard/.test(distributeSource),
 );
 ok(
   "tabbed panels stay mounted with hidden attribute",
