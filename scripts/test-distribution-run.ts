@@ -232,7 +232,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "site picker and active run list stay compact when sites grow",
     panelSource.includes("max-h-80 overflow-y-auto") &&
       panelSource.includes("max-h-[42rem]") &&
-      panelSource.includes("More sites") &&
+      panelSource.includes("Other tracking") &&
       panelSource.includes("Connect accounts"),
   );
 }
