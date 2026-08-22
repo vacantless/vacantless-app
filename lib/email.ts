@@ -1655,7 +1655,7 @@ export async function sendTestEmail(p: TestEmailPayload): Promise<SendResult> {
   const subject = `${TEST_SUBJECT_PREFIX}${defaultSubject(sample)}`;
 
   const body = {
-    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    sender: senderOf(p.mail_alias, p.org_name),
     to: [{ email: p.to_email }],
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,

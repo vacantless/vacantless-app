@@ -28,7 +28,7 @@ function stubClient(settingRow: unknown) {
 }
 
 async function main() {
-  const { senderOf } = await import("../lib/email");
+  const { senderOf, sendTestEmail } = await import("../lib/email");
   const { sendOrgNotification } = await import("../lib/notifications-server");
 
   process.env.RENTER_FROM_ORG_ALIAS = "0";
@@ -60,6 +60,24 @@ async function main() {
   }) as typeof fetch;
 
   try {
+    captured = null;
+    const testResult = await sendTestEmail({
+      to_email: "noam@royallepage.ca",
+      org_name: "North Star Rentals QA",
+      brand_color: null,
+      logo_url: null,
+      mail_alias: "north-star-rentals-qa",
+      reply_to_email: "noam@royallepage.ca",
+    });
+    ok("test email delivered", testResult.sent === true, testResult);
+    ok(
+      "test email uses active org alias sender",
+      captured?.sender?.email === "north-star-rentals-qa@vacantless.com",
+      captured,
+    );
+    ok("test email keeps org reply-to", captured?.replyTo?.email === "noam@royallepage.ca", captured);
+
+    captured = null;
     const result = await sendOrgNotification({
       client: stubClient({
         event_key: "leasing.new_lead",
