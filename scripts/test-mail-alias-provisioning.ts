@@ -1,5 +1,7 @@
 // Unit tests for S684/S685 mail-alias provisioning safety.
 // Run: npx tsx scripts/test-mail-alias-provisioning.ts
+import { readFileSync } from "node:fs";
+
 import {
   canActivateMailAliasProvision,
   expectedMailAliasIngestEmail,
@@ -107,6 +109,21 @@ ok(
     provider_forward_readback: ["rentals@agileonline.ca", "agile@in.vacantless.com"],
   }),
 );
+
+{
+  const migration = readFileSync(
+    "supabase/migrations/0221_org_mail_alias_provisions.sql",
+    "utf8",
+  );
+  ok(
+    "migration revokes service_role defaults before DML grant",
+    migration.includes(
+      "revoke all on public.org_mail_alias_provisions from service_role;\n" +
+        "grant select on public.org_mail_alias_provisions to authenticated;\n" +
+        "grant select, insert, update, delete on public.org_mail_alias_provisions to service_role;",
+    ),
+  );
+}
 
 console.log(`\nmail-alias-provisioning: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

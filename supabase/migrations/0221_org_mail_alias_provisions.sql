@@ -69,5 +69,6 @@ create policy org_mail_alias_provisions_select_own on public.org_mail_alias_prov
 
 revoke all on public.org_mail_alias_provisions from anon;
 revoke all on public.org_mail_alias_provisions from authenticated;
+revoke all on public.org_mail_alias_provisions from service_role;
 grant select on public.org_mail_alias_provisions to authenticated;
 grant select, insert, update, delete on public.org_mail_alias_provisions to service_role;
