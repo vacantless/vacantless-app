@@ -39,6 +39,18 @@ export type MailAliasProvisionActivationInput = {
   provider_forward_readback?: string[] | null;
 };
 
+export type MailAliasProvisionForwardingReset = {
+  status: "needs_forward_update";
+  expected_forward_to_email: string | null;
+  expected_ingest_email: string;
+  provider_forward_readback: string[];
+  provider_verified_at: null;
+  activated_at: null;
+  last_checked_at: string;
+  last_error: string;
+  updated_at: string;
+};
+
 export function isMailAliasProvisionStatus(
   value: unknown,
 ): value is MailAliasProvisionStatus {
@@ -65,6 +77,28 @@ export function expectedMailAliasIngestEmail(
   ingestDomain = "in.vacantless.com",
 ): string {
   return `${alias}@${ingestDomain}`;
+}
+
+export function mailAliasProvisionForwardingReset(args: {
+  requestedAlias: string;
+  nextReplyToEmail: string | null;
+  checkedAt?: string;
+  lastError?: string;
+}): MailAliasProvisionForwardingReset {
+  const checkedAt = args.checkedAt ?? new Date().toISOString();
+  return {
+    status: "needs_forward_update",
+    expected_forward_to_email: args.nextReplyToEmail,
+    expected_ingest_email: expectedMailAliasIngestEmail(args.requestedAlias),
+    provider_forward_readback: [],
+    provider_verified_at: null,
+    activated_at: null,
+    last_checked_at: checkedAt,
+    last_error:
+      args.lastError ??
+      "Reply-to changed; provider forwarding must be reverified before alias activation.",
+    updated_at: checkedAt,
+  };
 }
 
 export function validateMailAliasProvisionRequest(

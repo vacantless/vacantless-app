@@ -6,6 +6,7 @@ import {
   canActivateMailAliasProvision,
   expectedMailAliasIngestEmail,
   isOpenMailAliasProvisionStatus,
+  mailAliasProvisionForwardingReset,
   mailAliasEmailFor,
   mailAliasProvisionStatusLabel,
   providerForwardingMatches,
@@ -109,6 +110,27 @@ ok(
     provider_forward_readback: ["rentals@agileonline.ca", "agile@in.vacantless.com"],
   }),
 );
+
+{
+  const reset = mailAliasProvisionForwardingReset({
+    requestedAlias: "north-star-rentals-qa",
+    nextReplyToEmail: "noam@royallepage.ca",
+    checkedAt: "2026-08-22T21:43:06.569Z",
+  });
+  ok(
+    "reply-to change reset scrubs stale provider verification",
+    reset.status === "needs_forward_update" &&
+      reset.expected_forward_to_email === "noam@royallepage.ca" &&
+      reset.expected_ingest_email === "north-star-rentals-qa@in.vacantless.com" &&
+      Array.isArray(reset.provider_forward_readback) &&
+      reset.provider_forward_readback.length === 0 &&
+      reset.provider_verified_at === null &&
+      reset.activated_at === null &&
+      reset.last_checked_at === "2026-08-22T21:43:06.569Z" &&
+      reset.updated_at === "2026-08-22T21:43:06.569Z",
+    reset,
+  );
+}
 
 {
   const migration = readFileSync(

@@ -26,6 +26,7 @@ import {
 import { sendTestEmail } from "@/lib/email";
 import {
   expectedMailAliasIngestEmail,
+  mailAliasProvisionForwardingReset,
   OPEN_MAIL_ALIAS_PROVISION_STATUSES,
   validateMailAliasProvisionRequest,
 } from "@/lib/mail-alias-provisioning";
@@ -630,11 +631,12 @@ export async function updateEmailSender(formData: FormData) {
     if (admin) {
       await admin
         .from("org_mail_alias_provisions")
-        .update({
-          status: "needs_forward_update",
-          last_error: "Reply-to changed; provider forwarding must be reverified.",
-          updated_at: new Date().toISOString(),
-        })
+        .update(
+          mailAliasProvisionForwardingReset({
+            requestedAlias: activeAlias,
+            nextReplyToEmail: nextReplyTo,
+          }),
+        )
         .eq("organization_id", org.id)
         .eq("requested_alias", activeAlias)
         .in("status", ["active", "provider_verified", "needs_forward_update"]);
