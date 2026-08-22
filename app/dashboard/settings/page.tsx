@@ -16,6 +16,7 @@ import {
   updatePublicContact,
   updateDistributionChannelAccount,
   updateEmailSender,
+  requestMailAlias,
   updateRenterMessages,
   updateTextMessages,
   updateShowingConfirmationSettings,
@@ -71,6 +72,11 @@ import {
   loadOrganizationFeatureFlags,
   planDefaultForFeature,
 } from "@/lib/feature-entitlements";
+import {
+  mailAliasEmailFor,
+  mailAliasProvisionStatusLabel,
+  type MailAliasProvisionStatus,
+} from "@/lib/mail-alias-provisioning";
 
 export const dynamic = "force-dynamic";
 
@@ -121,6 +127,19 @@ const STATUS_CHIP: Record<ConnectChipTone, string> = {
   danger: "bg-red-50 text-red-700",
   neutral: "bg-gray-100 text-gray-600",
   accent: "bg-blue-50 text-blue-700",
+};
+
+type MailAliasProvisionView = {
+  id: string;
+  requested_alias: string;
+  status: MailAliasProvisionStatus;
+  provider: string;
+  expected_forward_to_email: string | null;
+  expected_ingest_email: string | null;
+  provider_forward_readback: string[] | null;
+  provider_verified_at: string | null;
+  last_error: string | null;
+  updated_at: string;
 };
 
 function cadInputValue(cents: number | null | undefined): string {
@@ -186,6 +205,20 @@ export default async function SettingsPage({
     data: { user },
   } = await supabase.auth.getUser();
   const operatorEmail = user?.email ?? "";
+  const { data: mailAliasProvisionRows } = await supabase
+    .from("org_mail_alias_provisions")
+    .select(
+      "id, requested_alias, status, provider, expected_forward_to_email, expected_ingest_email, provider_forward_readback, provider_verified_at, last_error, updated_at",
+    )
+    .eq("organization_id", org.id)
+    .neq("status", "disabled")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  const mailAliasProvision = (mailAliasProvisionRows?.[0] ??
+    null) as MailAliasProvisionView | null;
+  const activeMailAliasEmail = org.mail_alias
+    ? mailAliasEmailFor(org.mail_alias)
+    : null;
 
   // Rotessa rent-collection connection for the selected org. The stored key is
   // never read here — we only surface status + environment.
@@ -1259,7 +1292,40 @@ export default async function SettingsPage({
 
             {senderFlash === "saved" && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Email sender settings saved.
+                Reply-to settings saved.
+              </div>
+            )}
+            {senderFlash === "alias_paused" && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                Reply-to saved. The active Vacantless alias was paused until
+                forwarding is verified again.
+              </div>
+            )}
+            {senderFlash === "alias_requested" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Alias request saved. It will stay pending until forwarding is
+                verified.
+              </div>
+            )}
+            {senderFlash === "alias_pending" && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+                That alias is already in progress for this account.
+              </div>
+            )}
+            {senderFlash === "alias_already_active" && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+                That Vacantless alias is already active for this account.
+              </div>
+            )}
+            {senderFlash === "alias_reply_to_required" && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                Add and save a reply-to email before requesting a Vacantless
+                alias.
+              </div>
+            )}
+            {senderFlash === "alias_taken" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                That Vacantless alias is already reserved.
               </div>
             )}
             {senderFlash === "invalid" && (
@@ -1297,33 +1363,94 @@ export default async function SettingsPage({
                   Leave blank to use the shared Vacantless inbox.
                 </span>
               </label>
-              <label className="block max-w-md">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Vacantless mail alias
-                </span>
-                <div className="flex items-stretch">
-                  <input
-                    name="mail_alias"
-                    type="text"
-                    inputMode="text"
-                    pattern="[a-z0-9][a-z0-9-]{1,30}"
-                    placeholder="agile"
-                    defaultValue={org.mail_alias ?? ""}
-                    className="min-w-0 flex-1 rounded-l-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                  <span className="inline-flex items-center rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500">
-                    @vacantless.com
-                  </span>
-                </div>
-                <span className="mt-1 block text-xs text-gray-400">
-                  Full address: {org.mail_alias ? `${org.mail_alias}@vacantless.com` : "set an alias to preview it"}.
-                  This alias must also exist as an ImprovMX forward before it is used.
-                </span>
-              </label>
               <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-                Save email sender
+                Save reply-to
               </button>
             </form>
+
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Vacantless reply address
+              </h4>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    Active alias
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-gray-900">
+                    {activeMailAliasEmail ?? "No active Vacantless alias"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    Latest request
+                  </p>
+                  {mailAliasProvision ? (
+                    <>
+                      <p className="mt-1 text-sm font-medium text-gray-900">
+                        {mailAliasEmailFor(mailAliasProvision.requested_alias)}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {mailAliasProvisionStatusLabel(mailAliasProvision.status)}
+                        {mailAliasProvision.provider_verified_at
+                          ? ` - verified ${new Date(
+                              mailAliasProvision.provider_verified_at,
+                            ).toLocaleDateString("en-CA")}`
+                          : ""}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm font-medium text-gray-900">
+                      No request yet
+                    </p>
+                  )}
+                </div>
+              </div>
+              {mailAliasProvision?.last_error && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  {mailAliasProvision.last_error}
+                </div>
+              )}
+
+              <form action={requestMailAlias} className="mt-4 max-w-md space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">
+                    Requested alias
+                  </span>
+                  <div className="flex items-stretch">
+                    <input
+                      name="requested_alias"
+                      type="text"
+                      inputMode="text"
+                      pattern="[a-z0-9][a-z0-9-]{1,30}"
+                      placeholder="agile"
+                      defaultValue={mailAliasProvision?.requested_alias ?? org.mail_alias ?? ""}
+                      className="min-w-0 flex-1 rounded-l-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <span className="inline-flex items-center rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500">
+                      @vacantless.com
+                    </span>
+                  </div>
+                  <span className="mt-1 block text-xs text-gray-400">
+                    Lowercase letters, numbers, and hyphens only.
+                  </span>
+                </label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!org.reply_to_email}
+                    type="submit"
+                  >
+                    Request alias
+                  </button>
+                  <span className="text-xs text-gray-400">
+                    {org.reply_to_email
+                      ? `Forwarding target: ${org.reply_to_email}`
+                      : "Save a reply-to first."}
+                  </span>
+                </div>
+              </form>
+            </div>
 
             {/* Send a test email */}
             <div className="mt-6 border-t border-gray-100 pt-5">

@@ -24,7 +24,12 @@ import {
   validateBuildingPolicySettings,
 } from "@/lib/policy-profile";
 import { sendTestEmail } from "@/lib/email";
-import { validateMailAlias } from "@/lib/email-ingest";
+import {
+  expectedMailAliasIngestEmail,
+  OPEN_MAIL_ALIAS_PROVISION_STATUSES,
+  validateMailAliasProvisionRequest,
+} from "@/lib/mail-alias-provisioning";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { canUseRenterSms } from "@/lib/billing";
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import {
@@ -602,21 +607,132 @@ export async function updateEmailSender(formData: FormData) {
   if (!replyTo.ok) {
     redirect("/dashboard/settings?tab=comms&sender=invalid");
   }
-  const mailAlias = validateMailAlias(formData.get("mail_alias"));
-  if (!mailAlias.ok) {
-    redirect("/dashboard/settings?tab=comms&sender=alias_invalid");
-  }
+
+  const nextReplyTo = replyTo.value;
+  const replyToChanged = (org.reply_to_email ?? null) !== nextReplyTo;
+  const activeAlias = org.mail_alias ?? null;
+  const shouldPauseAlias = replyToChanged && !!activeAlias;
 
   const supabase = createClient();
   const { error } = await supabase
     .from("organizations")
-    .update({ reply_to_email: replyTo.value, mail_alias: mailAlias.value })
+    .update({
+      reply_to_email: nextReplyTo,
+      ...(shouldPauseAlias ? { mail_alias: null } : {}),
+    })
     .eq("id", org.id);
   if (error) {
     redirect("/dashboard/settings?tab=comms&sender=error");
   }
 
+  if (shouldPauseAlias && activeAlias) {
+    const admin = createAdminClient();
+    if (admin) {
+      await admin
+        .from("org_mail_alias_provisions")
+        .update({
+          status: "needs_forward_update",
+          last_error: "Reply-to changed; provider forwarding must be reverified.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("organization_id", org.id)
+        .eq("requested_alias", activeAlias)
+        .in("status", ["active", "provider_verified", "needs_forward_update"]);
+    }
+
+    redirect("/dashboard/settings?tab=comms&sender=alias_paused");
+  }
+
   redirect("/dashboard/settings?tab=comms&sender=saved");
+}
+
+export async function requestMailAlias(formData: FormData) {
+  const org = await requireSettingsOrg();
+  if (!org.reply_to_email) {
+    redirect("/dashboard/settings?tab=comms&sender=alias_reply_to_required");
+  }
+
+  const requested = validateMailAliasProvisionRequest(formData.get("requested_alias"));
+  if (!requested.ok) {
+    redirect("/dashboard/settings?tab=comms&sender=alias_invalid");
+  }
+
+  const alias = requested.value;
+  if (org.mail_alias?.toLowerCase() === alias) {
+    redirect("/dashboard/settings?tab=comms&sender=alias_already_active");
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    redirect("/dashboard/settings?tab=comms&sender=error");
+  }
+
+  const { data: activeAliasRows, error: activeAliasError } = await admin
+    .from("organizations")
+    .select("id")
+    .ilike("mail_alias", alias)
+    .limit(1);
+  if (activeAliasError) {
+    redirect("/dashboard/settings?tab=comms&sender=error");
+  }
+  const activeAliasOrg = activeAliasRows?.[0] as { id: string } | undefined;
+  if (activeAliasOrg) {
+    redirect(
+      activeAliasOrg.id === org.id
+        ? "/dashboard/settings?tab=comms&sender=alias_already_active"
+        : "/dashboard/settings?tab=comms&sender=alias_taken",
+    );
+  }
+
+  const { data: provisionRows, error: provisionError } = await admin
+    .from("org_mail_alias_provisions")
+    .select("id, organization_id, status")
+    .ilike("requested_alias", alias)
+    .in("status", [...OPEN_MAIL_ALIAS_PROVISION_STATUSES])
+    .limit(1);
+  if (provisionError) {
+    redirect("/dashboard/settings?tab=comms&sender=error");
+  }
+  const openProvision = provisionRows?.[0] as
+    | { id: string; organization_id: string; status: string }
+    | undefined;
+  if (openProvision) {
+    redirect(
+      openProvision.organization_id === org.id
+        ? "/dashboard/settings?tab=comms&sender=alias_pending"
+        : "/dashboard/settings?tab=comms&sender=alias_taken",
+    );
+  }
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const now = new Date().toISOString();
+  const { error } = await admin.from("org_mail_alias_provisions").insert({
+    organization_id: org.id,
+    requested_alias: alias,
+    status: "reserved",
+    provider: "improvmx",
+    expected_forward_to_email: org.reply_to_email,
+    expected_ingest_email: expectedMailAliasIngestEmail(alias),
+    requested_by: user?.id ?? null,
+    requested_at: now,
+    updated_at: now,
+  });
+  if (error) {
+    const message = error.message.toLowerCase();
+    if (
+      error.code === "23505" ||
+      message.includes("duplicate key") ||
+      message.includes("org_mail_alias_provisions_requested_alias_open_unique")
+    ) {
+      redirect("/dashboard/settings?tab=comms&sender=alias_taken");
+    }
+    redirect("/dashboard/settings?tab=comms&sender=error");
+  }
+
+  redirect("/dashboard/settings?tab=comms&sender=alias_requested");
 }
 
 // Tab 2 / Renter messages — post-viewing feedback + automatic follow-up.
