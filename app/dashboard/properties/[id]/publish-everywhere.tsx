@@ -73,6 +73,13 @@ export type PublishEverywhereRunItem = {
   externalUrl: string | null;
 };
 
+export type PublishEverywherePostingBlocker = {
+  title: string;
+  detail: string;
+  href: string;
+  action: string;
+};
+
 // --- per-channel presentation (mode -> chip) -------------------------------
 // One place maps a resolved mode to its user-facing chip. No new color system:
 // green = instant, indigo = we-post-for-you, gray = after-setup (same tones the
@@ -280,6 +287,7 @@ export function PublishEverywhere({
   copilotEnabled = false,
   stepClarityLiveEnabled = false,
   runItems = [],
+  postingBlocker = null,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -294,6 +302,7 @@ export function PublishEverywhere({
   copilotEnabled?: boolean;
   stepClarityLiveEnabled?: boolean;
   runItems?: PublishEverywhereRunItem[];
+  postingBlocker?: PublishEverywherePostingBlocker | null;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDestinations, setConfirmDestinations] = useState<
@@ -368,7 +377,8 @@ export function PublishEverywhere({
       : "Your public page is live.";
 
   const publishBlockedByBasics = setupOutstanding > 0;
-  const canPublish = !publishBlockedByBasics && canSetLive;
+  const canPublish =
+    !postingBlocker && !publishBlockedByBasics && canSetLive;
 
   async function openConfirm() {
     setConfirmDestinations(instantDestinationsFromRows);
@@ -435,7 +445,24 @@ export function PublishEverywhere({
                 <p className="text-[11px] font-extrabold uppercase tracking-wide text-green-700">
                   Your next step
                 </p>
-                {firstOutstandingForYou ? (
+                {postingBlocker ? (
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-base font-semibold text-green-950">
+                        {postingBlocker.title}
+                      </h4>
+                      <p className="mt-0.5 text-sm text-green-800">
+                        {postingBlocker.detail}
+                      </p>
+                    </div>
+                    <a
+                      href={postingBlocker.href}
+                      className="inline-flex items-center gap-1 rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800"
+                    >
+                      {postingBlocker.action}
+                    </a>
+                  </div>
+                ) : firstOutstandingForYou ? (
                   <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h4 className="text-base font-semibold text-green-950">
@@ -467,14 +494,16 @@ export function PublishEverywhere({
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 {publicLink && <CopyLink url={publicLink} />}
-                <button
-                  type="button"
-                  onClick={openConfirm}
-                  className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
-                >
-                  <Icons.bolt className="h-4 w-4" />
-                  Sync updates / re-publish
-                </button>
+                {!postingBlocker && (
+                  <button
+                    type="button"
+                    onClick={openConfirm}
+                    className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
+                  >
+                    <Icons.bolt className="h-4 w-4" />
+                    Sync updates / re-publish
+                  </button>
+                )}
               </div>
             </section>
           ) : (
@@ -498,14 +527,16 @@ export function PublishEverywhere({
                 <CopyLink url={publicLink} />
               </div>
             )}
-            <button
-              type="button"
-              onClick={openConfirm}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
-            >
-              <Icons.bolt className="h-4 w-4" />
-              Sync updates / re-publish
-            </button>
+            {!postingBlocker && (
+              <button
+                type="button"
+                onClick={openConfirm}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
+              >
+                <Icons.bolt className="h-4 w-4" />
+                Sync updates / re-publish
+              </button>
+            )}
           </section>
           )
         ) : (
@@ -560,6 +591,21 @@ export function PublishEverywhere({
                   Then follow the short sign-in or fee list
                 </small>
               </button>
+            ) : postingBlocker ? (
+              <div className="mx-auto max-w-md rounded-xl border border-amber-200 bg-white/95 px-4 py-3 text-left">
+                <p className="text-sm font-semibold text-amber-950">
+                  {postingBlocker.title}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-900">
+                  {postingBlocker.detail}
+                </p>
+                <a
+                  href={postingBlocker.href}
+                  className="mt-2 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50"
+                >
+                  {postingBlocker.action}
+                </a>
+              </div>
             ) : publishBlockedByBasics ? (
               <div className="mx-auto max-w-md rounded-xl border border-amber-200 bg-white/95 px-4 py-3 text-left">
                 <p className="text-sm font-semibold text-amber-950">
@@ -605,6 +651,7 @@ export function PublishEverywhere({
             linkIsLive={linkIsLive}
             conciergeDeskEnabled={conciergeDeskEnabled}
             allSetSummary={liveForYouAllSet}
+            postingBlocker={postingBlocker}
           />
         )}
       </div>
@@ -759,6 +806,7 @@ function ForYouHandoff({
   linkIsLive,
   conciergeDeskEnabled,
   allSetSummary,
+  postingBlocker,
 }: {
   propertyId: string;
   addressLabel: string;
@@ -767,6 +815,7 @@ function ForYouHandoff({
   linkIsLive: boolean;
   conciergeDeskEnabled: boolean;
   allSetSummary: boolean;
+  postingBlocker?: PublishEverywherePostingBlocker | null;
 }) {
   const itemByChannel = new Map(runItems.map((it) => [it.channel, it]));
   return (
@@ -774,14 +823,28 @@ function ForYouHandoff({
       <div className="flex items-center gap-2">
         <span className="text-lg">🤝</span>
         <h3 className="text-base font-semibold tracking-tight text-indigo-950">
-          {allSetSummary ? "Posting proof saved" : "Finish these sites"}
+          {postingBlocker
+            ? "Waiting on one listing"
+            : allSetSummary
+              ? "Posting proof saved"
+              : "Finish these sites"}
         </h3>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
-        {allSetSummary
+        {postingBlocker
+          ? "Outside-site posting stays locked until the one listing has the facts every portal needs."
+          : allSetSummary
           ? "Live-ad proof is saved here. Reopen a site only when you change the listing."
           : "Vacantless fills the ad. You sign in if the site asks, pay the site only if it asks, then save the real live-ad link here."}
       </p>
+      {postingBlocker && (
+        <a
+          href={postingBlocker.href}
+          className="mt-3 inline-flex rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800"
+        >
+          {postingBlocker.action}
+        </a>
+      )}
       <ul className="mt-3 space-y-2.5">
         {rows.map((row) => (
           <ForYouRow
@@ -792,10 +855,11 @@ function ForYouHandoff({
             addressLabel={addressLabel}
             linkIsLive={linkIsLive}
             conciergeDeskEnabled={conciergeDeskEnabled}
+            postingBlocked={Boolean(postingBlocker)}
           />
         ))}
       </ul>
-      {conciergeDeskEnabled && (
+      {conciergeDeskEnabled && !postingBlocker && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
           “Have us post it” uses one done-for-you publish from your plan. We record
           a real live-ad link before it is marked live.
@@ -818,6 +882,7 @@ function ForYouRow({
   addressLabel,
   linkIsLive,
   conciergeDeskEnabled,
+  postingBlocked,
 }: {
   row: ResolvedRow;
   item: PublishEverywhereRunItem | null;
@@ -825,6 +890,7 @@ function ForYouRow({
   addressLabel: string;
   linkIsLive: boolean;
   conciergeDeskEnabled: boolean;
+  postingBlocked?: boolean;
 }) {
   const [approveOpen, setApproveOpen] = useState(false);
   const paid = row.mode === "paid_optin";
@@ -844,6 +910,8 @@ function ForYouRow({
 
   const stateChip = isLive
     ? { label: "Live", cls: "bg-green-50 text-green-700" }
+    : postingBlocked
+      ? { label: "Waiting", cls: "bg-amber-50 text-amber-700" }
     : needsApproval
       ? { label: "Ready — approve", cls: "bg-emerald-50 text-emerald-700" }
       : needsConnect
@@ -879,7 +947,12 @@ function ForYouRow({
         </p>
       )}
 
-      {item == null ? (
+      {postingBlocked && !isLive ? (
+        <p className="mt-2 text-[12px] leading-relaxed text-indigo-900/70">
+          Finish the one listing first. Sign-in, payment, and live-ad proof open
+          after the listing facts are ready.
+        </p>
+      ) : item == null ? (
         linkIsLive ? (
           <form
             action={openGuidedPosting}

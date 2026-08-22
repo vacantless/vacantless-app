@@ -711,6 +711,17 @@ export function DistributeTab({
   const accountReadyCount = launchRun.startChannels.filter(
     (channel) => channel.readinessTone === "positive",
   ).length;
+  const firstListingPacketMissing = listingPacket.missingRequired[0] ?? null;
+  const publishEverywherePostingBlocker =
+    firstListingPacketMissing
+      ? {
+          title: "Finish the one listing details first.",
+          detail:
+            `Needed before outside sites: ${shortMissingList(listingPacket.missingRequired)}. Sign-in, payment, and proof wait here.`,
+          href: packetFieldHref(firstListingPacketMissing.field),
+          action: `Add ${firstListingPacketMissing.label.toLowerCase()}`,
+        }
+      : null;
   const publishEverywhereSurface = (
     <div className="space-y-4">
       <ListingPacketCard readiness={listingPacket} />
@@ -735,6 +746,7 @@ export function DistributeTab({
           canConcierge: it.canConcierge,
           externalUrl: it.externalUrl,
         }))}
+        postingBlocker={publishEverywherePostingBlocker}
       />
     </div>
   );

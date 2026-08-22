@@ -452,6 +452,10 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "app/dashboard/properties/[id]/launch-run-panel.tsx",
     "utf8",
   );
+  const publishEverywhereSource = readFileSync(
+    "app/dashboard/properties/[id]/publish-everywhere.tsx",
+    "utf8",
+  );
   ok(
     "distribute tab leads with get online checklist buckets",
     distributeSource.includes("Get online checklist") &&
@@ -513,6 +517,18 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       propertyDetailSource.includes(
         "listingPacketReadiness.missingRequired.length === 0",
       ),
+  );
+  ok(
+    "publish everywhere defers site actions behind one-listing blockers",
+    distributeSource.includes("publishEverywherePostingBlocker") &&
+      distributeSource.includes("postingBlocker={publishEverywherePostingBlocker}") &&
+      publishEverywhereSource.includes(
+        "postingBlocker?: PublishEverywherePostingBlocker | null",
+      ) &&
+      publishEverywhereSource.includes("postingBlocked && !isLive") &&
+      publishEverywhereSource.indexOf("postingBlocked && !isLive") <
+        publishEverywhereSource.indexOf("item == null ? (") &&
+      publishEverywhereSource.includes("conciergeDeskEnabled && !postingBlocker"),
   );
   ok(
     "mobile entry links land on the publish control room",
