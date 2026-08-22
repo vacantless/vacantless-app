@@ -396,11 +396,18 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       propertyDetailSource.includes("outside sites count as Live only after proof is saved"),
   );
   ok(
-    "first screen sends property type blocker to the setup field",
-    propertyDetailSource.includes("firstListingPacketMissingField") &&
-      propertyDetailSource.includes('firstListingPacketMissingField === "property_type"') &&
-      propertyDetailSource.includes("?tab=setup#property-unit-type") &&
-      propertyDetailSource.includes("Add property type"),
+    "first screen sends the first listing blocker to its source field",
+    propertyDetailSource.includes("SYNDICATION_PACKET_FIELD_TARGETS") &&
+      propertyDetailSource.includes('photos: { tab: "market", hash: "#property-photos" }') &&
+      propertyDetailSource.includes(
+        'description: { tab: "setup", hash: "#listing-description" }',
+      ) &&
+      propertyDetailSource.includes(
+        'property_type: { tab: "setup", hash: "#property-unit-type" }',
+      ) &&
+      propertyDetailSource.includes("firstListingPacketTarget") &&
+      propertyDetailSource.includes("syndicationPacketTargetHref") &&
+      propertyDetailSource.includes("packetActionLabel"),
   );
   ok(
     "first screen keeps portal complexity compact",
