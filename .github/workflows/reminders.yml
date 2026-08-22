@@ -56,6 +56,22 @@ name: Vacantless background sweeps
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository
 #   secret → name CRON_SECRET, value = the same CRON_SECRET set in Vercel env.
 #
+# WHY EVERY STEP CARRIES RETRIES AND AN if-GUARD (S672, 2026-08-22):
+# run #933 failed with curl exit 35, an SSL connect error on the handshake to
+# vercel.app. Nothing was wrong with the app or the deploy; the runner's network
+# blipped. Two consequences were worth fixing, neither of them the blip itself.
+#   1. A bare `curl -sS` under `bash -e` fails the step on any transient fault.
+#      `--retry-all-errors` is the flag that matters here: plain `--retry` does
+#      NOT retry an SSL connect error, so it would not have caught this one.
+#   2. Steps run sequentially, so one failed step SKIPPED THE REMAINING SWEEPS
+#      for that cycle. `if: not cancelled()` lets the other endpoints still get
+#      pinged while the job as a whole still reports failure.
+# Deliberately NOT used: continue-on-error, which would make the job green and
+# hide a real outage. A persistent fault still fails this workflow, loudly.
+# Retrying is safe because every route is idempotent and acts only on rows whose
+# sent-at column is still null. `--max-time 90` sits above Vercel's own function
+# ceiling, so it can never cut short a request the platform would have allowed.
+#
 # Note: GitHub-scheduled runs can be delayed under load and are auto-disabled
 # after 60 days with no repo commits — fine for an active repo. When Vacantless
 # takes its first external paying customer, move to Vercel Pro native cron
@@ -71,152 +87,177 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger reminder sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/reminders" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger feedback sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/feedback" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger nurture sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/nurture" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger leasing-snapshot sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/leasing-snapshot" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger viewing-reminder sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/viewing-reminder" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger availability-tripwire sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/availability-tripwire" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger availability-reopened-notify sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/availability-reopened-notify" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger reschedule-nudge sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/reschedule-nudge" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger rent-increase sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/rent-increase" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger compliance-calendar sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/compliance-calendar" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger document-retention purge
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/document-retention" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger detector-eol sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/detector-eol" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger equipment-eol sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/equipment-eol" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger appliance-care sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/appliance-care" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger smart-lock-battery sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/smart-lock-battery" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger tenant-message-outbox sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/tenant-message-outbox" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger tenancy-insurance sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/tenancy-insurance" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger violation-followup sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/violation-followup" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger inspection-reminder sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/inspection-reminder" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger appointment-reminder sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/appointment-reminder" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger showing-outcome-nudge sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/showing-outcome-nudge" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger showing-confirmation-nudge sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/showing-confirmation-nudge" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger distribution-freshness sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/distribution-freshness" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger distribution-worker sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/distribution-worker" \
             -w "\nHTTP %{http_code}\n"
       - name: Trigger landlord-campaign sweep
+        if: ${{ !cancelled() }}
         run: |
-          curl -sS -X GET \
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/landlord-campaign" \
             -w "\nHTTP %{http_code}\n"
