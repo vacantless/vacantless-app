@@ -388,12 +388,19 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "first screen leads with honest syndication status",
-      propertyDetailSource.includes("SyndicationFirstCard") &&
+    propertyDetailSource.includes("SyndicationFirstCard") &&
       propertyDetailSource.includes("One listing needs") &&
       propertyDetailSource.includes("The 1-tap queue opens after the listing facts are ready.") &&
       propertyDetailSource.includes("One listing first. Sign-in, payment, and proof wait inside Get") &&
       propertyDetailSource.includes("online, and outside sites count as Live only after proof is saved") &&
       propertyDetailSource.includes("outside sites count as Live only after proof is saved"),
+  );
+  ok(
+    "first screen sends property type blocker to the setup field",
+    propertyDetailSource.includes("firstListingPacketMissingField") &&
+      propertyDetailSource.includes('firstListingPacketMissingField === "property_type"') &&
+      propertyDetailSource.includes("?tab=setup#property-unit-type") &&
+      propertyDetailSource.includes("Add property type"),
   );
   ok(
     "first screen keeps portal complexity compact",

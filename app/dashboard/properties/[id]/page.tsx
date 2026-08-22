@@ -51,6 +51,7 @@ import { buildShareReadiness } from "@/lib/share-readiness";
 import {
   buildListingPacketReadiness,
   type ListingPacketFieldFacts,
+  type ListingPacketMissingField,
 } from "@/lib/listing-packet-readiness";
 import { MIN_DESCRIPTION_CHARS } from "@/lib/listing-feed";
 import { feedSignal } from "@/lib/rental-readiness";
@@ -568,6 +569,7 @@ function SyndicationFirstCard({
   listingPacketMissingCount,
   listingPacketReadyChannelCount,
   listingPacketChannelCount,
+  firstListingPacketMissingField,
   firstListingPacketMissingLabel,
 }: {
   propertyId: string;
@@ -581,6 +583,7 @@ function SyndicationFirstCard({
   listingPacketMissingCount: number;
   listingPacketReadyChannelCount: number;
   listingPacketChannelCount: number;
+  firstListingPacketMissingField: ListingPacketMissingField["field"] | null;
   firstListingPacketMissingLabel: string | null;
 }) {
   const encodedPropertyId = encodeURIComponent(propertyId);
@@ -588,6 +591,10 @@ function SyndicationFirstCard({
   const hasPostHistory = postHistoryCount > 0;
   const needsListingWork = setupOutstanding > 0 || !hasPhotos;
   const packetBlocked = listingPacketMissingCount > 0;
+  const firstMissingHref =
+    packetBlocked && firstListingPacketMissingField === "property_type"
+      ? `/dashboard/properties/${encodedPropertyId}?tab=setup#property-unit-type`
+      : distributeHref;
   const expiredOnly =
     linkIsLive && hasPostHistory && liveOutsideCount === 0 && !needsListingWork;
   const status = packetBlocked
@@ -622,13 +629,15 @@ function SyndicationFirstCard({
             totalInquiryCount === 1 ? "inquiry is" : "inquiries are"
           } tied to this rental so far.`
         : "Outside sites still need posting, and each one counts as live only once its real ad URL is saved.";
-  const actionHref = !linkIsLive
-    ? distributeHref
-    : distributeHref;
+  const actionHref = packetBlocked ? firstMissingHref : distributeHref;
   const actionLabel = !linkIsLive
-    ? "Get online"
+    ? packetBlocked && firstListingPacketMissingField === "property_type"
+      ? "Add property type"
+      : "Get online"
     : packetBlocked || needsListingWork
-      ? "Get online"
+      ? packetBlocked && firstListingPacketMissingField === "property_type"
+        ? "Add property type"
+        : "Get online"
     : expiredOnly
       ? "Refresh or repost"
       : liveOutsideCount > 0
@@ -2941,6 +2950,9 @@ export default async function PropertyDetailPage({
         listingPacketMissingCount={listingPacketReadiness.missingRequired.length}
         listingPacketReadyChannelCount={listingPacketReadiness.readyChannelCount}
         listingPacketChannelCount={listingPacketReadiness.channelCount}
+        firstListingPacketMissingField={
+          listingPacketReadiness.missingRequired[0]?.field ?? null
+        }
         firstListingPacketMissingLabel={
           listingPacketReadiness.missingRequired[0]?.label ?? null
         }
