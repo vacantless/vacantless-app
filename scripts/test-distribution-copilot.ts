@@ -64,7 +64,7 @@ const kj = buildCopilotScript({ channel: "kijiji", copy: BASE, trackedUrl: TRACK
 ok(kj !== null, "kijiji script is not null");
 eq(kj.channel, "kijiji", "kijiji channel");
 eq(kj.transport, "browser_copilot", "kijiji transport = browser_copilot");
-eq(kj.transportLabel, "Guided posting", "kijiji transport label");
+eq(kj.transportLabel, "Posting assist", "kijiji transport label");
 eq(kj.portalUrl, "https://www.kijiji.ca/p-post-ad.html", "kijiji portal url");
 eq(kj.requiresLiveUrlToComplete, true, "kijiji requires live url to complete");
 ok(kj.stopGates.includes("login"), "kijiji stop gate: login");

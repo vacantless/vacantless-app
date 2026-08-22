@@ -22,9 +22,17 @@ import { buildShareReadiness, type ShareReadinessInput } from "./share-readiness
 export const CHANNEL_READINESS_CHANNELS = [
   "vacantless_page",
   "syndication_feed",
-  "rentfaster",
   "kijiji",
   "facebook_marketplace",
+  "rentals_ca",
+  "rentfaster",
+  "zumper",
+  "viewit",
+  "facebook_page",
+  "instagram",
+  "whatsapp",
+  "linkedin",
+  "snapchat",
   "mls",
 ] as const;
 export type ChannelReadinessChannel = (typeof CHANNEL_READINESS_CHANNELS)[number];
@@ -40,7 +48,10 @@ export type ChannelReadiness = {
   status: ChannelReadinessStatus;
   missingRequired: string[];
   missingRecommended: string[];
+  manualChoices: string[];
+  advancedOptions: string[];
   advisoryOnly?: boolean;
+  directPortalSupported?: boolean;
 };
 
 export type ChannelReadinessInput = ShareReadinessInput &
@@ -56,9 +67,17 @@ export type ChannelReadinessInput = ShareReadinessInput &
 const CHANNEL_LABELS: Record<ChannelReadinessChannel, string> = {
   vacantless_page: "Vacantless public page",
   syndication_feed: "Syndication feed",
-  rentfaster: "RentFaster",
   kijiji: "Kijiji",
   facebook_marketplace: "Facebook Marketplace",
+  rentals_ca: "Rentals.ca",
+  rentfaster: "RentFaster",
+  zumper: "Zumper + PadMapper",
+  viewit: "Viewit.ca",
+  facebook_page: "Facebook Page feed",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+  linkedin: "LinkedIn",
+  snapchat: "Snapchat",
   mls: "MLS advisory",
 };
 
@@ -192,7 +211,12 @@ function result(
   channel: ChannelReadinessChannel,
   missingRequired: string[],
   missingRecommended: string[] = [],
-  advisoryOnly = false,
+  opts: {
+    manualChoices?: string[];
+    advancedOptions?: string[];
+    advisoryOnly?: boolean;
+    directPortalSupported?: boolean;
+  } = {},
 ): ChannelReadiness {
   const status: ChannelReadinessStatus =
     missingRequired.length > 0
@@ -206,7 +230,10 @@ function result(
     status,
     missingRequired,
     missingRecommended,
-    ...(advisoryOnly ? { advisoryOnly: true } : {}),
+    manualChoices: opts.manualChoices ?? [],
+    advancedOptions: opts.advancedOptions ?? [],
+    ...(opts.advisoryOnly ? { advisoryOnly: true } : {}),
+    ...(opts.directPortalSupported ? { directPortalSupported: true } : {}),
   };
 }
 
@@ -216,6 +243,23 @@ function classifiedsRecommended(input: ChannelReadinessInput): string[] {
   if (!hasUtilitySet(input)) missing.push("Included utilities");
   if (!hasParking(input)) missing.push("Parking details");
   return missing;
+}
+
+function commonPortalRequired(input: ChannelReadinessInput): string[] {
+  const missing: string[] = [];
+  addMissing(missing, shareMissing(input, true));
+  if (effectivePhotoCount(input) === 0) missing.push("Photo");
+  if (!hasDescription(input)) {
+    missing.push(`Description (${MIN_DESCRIPTION_CHARS}+ characters)`);
+  }
+  return missing;
+}
+
+function directPortalChoices(...choices: string[]): {
+  manualChoices: string[];
+  directPortalSupported: true;
+} {
+  return { manualChoices: choices, directPortalSupported: true };
 }
 
 export function buildChannelReadiness(
@@ -234,17 +278,22 @@ export function buildChannelReadiness(
   addMissing(syndicationRequired, feedRequired);
   if (!hasText(contactPhone(input))) syndicationRequired.push("Contact phone");
   if (!hasPropertyTypeSignal(input)) syndicationRequired.push("Property type");
-  out.push(result("syndication_feed", syndicationRequired));
+  out.push(
+    result("syndication_feed", syndicationRequired, [], {
+      advancedOptions: ["Feed partner mapping", "Provider acceptance"],
+    }),
+  );
 
-  for (const channel of ["rentfaster", "kijiji"] as const) {
-    const missingRequired: string[] = [];
-    addMissing(missingRequired, shareRequired);
-    if (effectivePhotoCount(input) === 0) missingRequired.push("Photo");
-    if (!hasDescription(input)) {
-      missingRequired.push(`Description (${MIN_DESCRIPTION_CHARS}+ characters)`);
-    }
-    out.push(result(channel, missingRequired, classifiedsRecommended(input)));
-  }
+  out.push(
+    result("kijiji", commonPortalRequired(input), classifiedsRecommended(input), {
+      ...directPortalChoices(
+        "Category, location, and postal code",
+        "Package and cart review",
+        "Live ad URL proof",
+      ),
+      advancedOptions: ["Paid promotion", "Refresh/repost timing"],
+    }),
+  );
 
   const facebookRequired: string[] = [];
   addMissing(facebookRequired, shareRequired);
@@ -255,9 +304,94 @@ export function buildChannelReadiness(
   const facebookRecommended = hasDescription(input)
     ? classifiedsRecommended(input)
     : [`Description (${MIN_DESCRIPTION_CHARS}+ characters)`, ...classifiedsRecommended(input)];
-  out.push(result("facebook_marketplace", facebookRequired, facebookRecommended));
+  out.push(
+    result("facebook_marketplace", facebookRequired, facebookRecommended, {
+      ...directPortalChoices(
+        "Personal-profile posting",
+        "Unique photo and copy variation",
+        "Reply or QR-code pattern",
+      ),
+    }),
+  );
 
-  out.push(result("mls", [], [], true));
+  const rentalsRequired = commonPortalRequired(input);
+  if (effectivePhotoCount(input) < 2) rentalsRequired.push("Second photo");
+  if (!hasText(contactPhone(input))) rentalsRequired.push("Lead contact phone");
+  out.push(
+    result("rentals_ca", rentalsRequired, classifiedsRecommended(input), {
+      ...directPortalChoices(
+        "Property type and address autocomplete",
+        "Lead contact",
+        "Plan/add-on choice",
+        "Enable after posting",
+      ),
+      advancedOptions: ["Parking fee/details", "Open house", "Rent special"],
+    }),
+  );
+
+  out.push(
+    result("rentfaster", commonPortalRequired(input), classifiedsRecommended(input), {
+      ...directPortalChoices(
+        "Single-unit package",
+        "Add-on/payment review",
+        "Public ad proof URL",
+      ),
+      advancedOptions: ["Paid promotion", "Reactivation path"],
+    }),
+  );
+
+  out.push(
+    result("zumper", commonPortalRequired(input), classifiedsRecommended(input), {
+      ...directPortalChoices(
+        "Address autocomplete",
+        "Size/sqft value",
+        "Boost choice",
+      ),
+      advancedOptions: ["PadMapper exposure", "Rent override"],
+    }),
+  );
+
+  out.push(
+    result("viewit", commonPortalRequired(input), classifiedsRecommended(input), {
+      ...directPortalChoices("Payment review", "Public ad proof URL"),
+      advancedOptions: ["Paid listing package"],
+    }),
+  );
+
+  const socialRequired: string[] = [];
+  addMissing(socialRequired, shareRequired);
+  if (effectivePhotoCount(input) === 0) socialRequired.push("Photo");
+  out.push(
+    result("facebook_page", socialRequired, [], {
+      manualChoices: ["Page connection and approval"],
+      advancedOptions: ["Organic post copy", "Tracked link"],
+    }),
+  );
+  out.push(
+    result("instagram", socialRequired, [], {
+      manualChoices: ["Business account connection", "Image choice"],
+      advancedOptions: ["Caption", "Tracked link"],
+    }),
+  );
+
+  const shareOnlyRequired: string[] = [];
+  addMissing(shareOnlyRequired, shareRequired);
+  for (const channel of ["whatsapp", "linkedin", "snapchat"] as const) {
+    out.push(
+      result(channel, shareOnlyRequired, [], {
+        ...directPortalChoices("Share message", "Proof link or note"),
+        advancedOptions: ["Audience/list choice"],
+      }),
+    );
+  }
+
+  out.push(
+    result("mls", [], [], {
+      advisoryOnly: true,
+      manualChoices: ["Broker/MLS route"],
+      advancedOptions: ["Agent field sheet", "DDF/Realtor.ca proof"],
+    }),
+  );
 
   return out;
 }

@@ -210,10 +210,13 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "utf8",
   );
   ok("operator guide leads with what to do next", panelSource.includes("What to do next"));
-  ok("operator guide links to the priority item", panelSource.includes("Open this step"));
+  ok(
+    "operator guide links to the priority item by site name",
+    panelSource.includes("Go to {priorityItem.channelLabel} step"),
+  );
   ok(
     "operator guide explains proof before live",
-    panelSource.includes("only counts as Live after proof is saved"),
+    panelSource.includes("outside sites only count as Live after proof is saved"),
   );
   ok(
     "priority (and concierge target) channel opens by default",
@@ -268,16 +271,17 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "distribution dashboard uses plain four-part model",
-    distributeSource.includes("Distribution") &&
+      distributeSource.includes("Distribution") &&
       distributeSource.includes("Property") &&
       distributeSource.includes("Sites") &&
       distributeSource.includes("Account access") &&
-      distributeSource.includes("Posting choice"),
+      distributeSource.includes("Top-up help"),
   );
   ok(
-    "posting choice offers self-serve and done-for-you",
-    distributeSource.includes("Post it myself") &&
+    "posting choice treats self-serve as the fallback path",
+    distributeSource.includes("Done-for-you / top-up") &&
       distributeSource.includes("Pay Vacantless to post") &&
+      distributeSource.includes("Use a site yourself instead") &&
       distributeSource.includes("Open posting checklist"),
   );
   ok(
@@ -326,21 +330,22 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "utf8",
   );
   ok(
-    "guided posting primary CTA starts the flow",
-    copilotSource.includes("Start guided posting"),
+    "posting assist primary CTA starts the flow",
+    copilotSource.includes("Open helper window") &&
+      copilotSource.includes("If nothing opens, use the copy and steps below."),
   );
   ok(
-    "guided posting explains front and back of screen",
+    "posting assist explains front and back of screen",
     copilotSource.includes("On your screen") &&
       copilotSource.includes("Behind the scenes"),
   );
   ok(
-    "guided posting explains how completion is shown",
+    "posting assist explains how completion is shown",
     copilotSource.includes("How you know it is done") &&
       copilotSource.includes("checklist progress updates"),
   );
   ok(
-    "guided posting stays honest about no silent automation",
+    "posting assist stays honest about no silent automation",
     copilotSource.includes("Nothing is posted or paid") &&
       copilotSource.includes("does not log in, pay"),
   );
@@ -351,7 +356,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "utf8",
   );
   ok(
-    "sidecar repeats the three-step guided posting model",
+    "sidecar repeats the three-step posting assist model",
     sidecarSource.includes("1. Open the posting page") &&
       sidecarSource.includes("2. You approve the post") &&
       sidecarSource.includes("3. Save the live ad URL"),
@@ -367,25 +372,37 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "utf8",
   );
   ok(
-    "guided posting success return notice is explicit",
-    propertyDetailSource.includes("Guided posting saved.") &&
+    "posting proof success return notice is explicit",
+    propertyDetailSource.includes("Posting proof saved.") &&
       propertyDetailSource.includes("checklist progress and proof link update here"),
   );
   ok(
-    "guided posting missing URL return notice is explicit",
+    "posting proof missing URL return notice is explicit",
     propertyDetailSource.includes("Live ad URL needed.") &&
       propertyDetailSource.includes("Vacantless did not mark this channel Live"),
   );
   ok(
-    "concierge rows do not render a broken guided-posting sidecar",
+    "concierge rows do not render a broken posting-assist sidecar",
     propertyDetailSource.includes('mode === "browser_copilot" &&') &&
       propertyDetailSource.includes("isCopilotChannel(publishKey)"),
   );
   ok(
     "first screen leads with honest syndication status",
-    propertyDetailSource.includes("SyndicationFirstCard") &&
-      propertyDetailSource.includes("Your renter page is live. No outside sites are live yet.") &&
-      propertyDetailSource.includes("Nothing is posted automatically. You approve outside-site posts"),
+      propertyDetailSource.includes("SyndicationFirstCard") &&
+      propertyDetailSource.includes("One listing needs") &&
+      propertyDetailSource.includes("The 1-tap queue opens after the listing facts are ready.") &&
+      propertyDetailSource.includes("One listing first. Sign-in, payment, and proof wait inside Get") &&
+      propertyDetailSource.includes("online, and outside sites count as Live only after proof is saved") &&
+      propertyDetailSource.includes("outside sites count as Live only after proof is saved"),
+  );
+  ok(
+    "first screen keeps portal complexity compact",
+    propertyDetailSource.includes("Renter page live") &&
+      propertyDetailSource.includes("sites ready") &&
+      propertyDetailSource.includes("Outside ads not live") &&
+      !propertyDetailSource.includes("places ready") &&
+      !propertyDetailSource.includes("Direct portal links") &&
+      !propertyDetailSource.includes("readinessSnapshot={readinessSnapshot}"),
   );
   ok(
     "first screen surfaces the specific human blocker",
@@ -394,9 +411,9 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       propertyDetailSource.includes("blockerSummary={syndicationBlockerSummary}"),
   );
   ok(
-    "lifecycle rail is demoted behind progress disclosure",
-    propertyDetailSource.includes("Rental progress") &&
-      propertyDetailSource.indexOf("<SyndicationFirstCard") <
+    "lifecycle rail is demoted below the main tabs",
+    propertyDetailSource.includes("More rental context") &&
+      propertyDetailSource.indexOf("</TabbedSections>") <
         propertyDetailSource.indexOf("<LifecycleRail lifecycle"),
   );
 }
@@ -409,9 +426,19 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "properties list opens mobile launch queue entry points",
     propertiesSource.includes("Ready for Set Live") &&
-      propertiesSource.includes("Open Set Live") &&
-      propertiesSource.includes("Open distribution") &&
+      propertiesSource.includes("Get online") &&
       propertiesSource.includes("Proof saved on"),
+  );
+  const readinessChipsSource = readFileSync(
+    "app/dashboard/properties/readiness-chips.tsx",
+    "utf8",
+  );
+  ok(
+    "properties list groups readiness pills instead of exposing four raw states",
+    readinessChipsSource.includes("Ready online") &&
+      readinessChipsSource.includes("Needs") &&
+      readinessChipsSource.includes("Get online to launch") &&
+      readinessChipsSource.includes("describeSignals(signals)"),
   );
   const distributeSource = readFileSync(
     "app/dashboard/properties/[id]/distribute-tab.tsx",
@@ -421,12 +448,21 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "app/dashboard/properties/[id]/channel-publish-rail.tsx",
     "utf8",
   );
+  const launchRunPanelSource = readFileSync(
+    "app/dashboard/properties/[id]/launch-run-panel.tsx",
+    "utf8",
+  );
   ok(
-    "distribute tab leads with publish control room buckets",
-    distributeSource.includes("Publish Control Room") &&
-      distributeSource.includes("Open publish run") &&
+    "distribute tab leads with get online checklist buckets",
+    distributeSource.includes("Get online checklist") &&
+      distributeSource.includes("Start posting steps") &&
+      distributeSource.includes("Review posting steps") &&
       distributeSource.includes("Live outside") &&
       distributeSource.includes("Ready now") &&
+      distributeSource.includes("visibleBuckets") &&
+      distributeSource.includes("Renter page") &&
+      distributeSource.includes("Outside ads") &&
+      distributeSource.includes("Ready to post") &&
       distributeSource.includes("Needs payment") &&
       distributeSource.includes("Needs sign-in") &&
       distributeSource.includes("Needs proof") &&
@@ -448,12 +484,25 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "publish control room replaces the duplicate get-online hero stack",
-    distributeSource.includes("showSummaryCard={false}") &&
-      distributeSource.includes("selected in") &&
-      distributeSource.includes("this run") &&
-      channelRailSource.includes("Available outside sites") &&
+      distributeSource.includes("showSummaryCard={false}") &&
+      distributeSource.includes('selectedChannelCount === 1 ? "site" : "sites"') &&
+      channelRailSource.includes("Posting plan") &&
+      channelRailSource.includes("Vacantless posts first; you handle exceptions.") &&
+      channelRailSource.includes("Use this site yourself") &&
+      channelRailSource.includes("Open site") &&
       !distributeSource.includes("Get this listing online") &&
       !distributeSource.includes("Ready to syndicate"),
+  );
+  ok(
+    "launch queue defers to setup blockers before portal steps",
+    distributeSource.includes("launchSetupBlocker") &&
+      distributeSource.includes("Finish the one listing details first.") &&
+      distributeSource.includes("setupBlocker={launchSetupBlocker}") &&
+      distributeSource.includes("showAction={false}") &&
+      distributeSource.includes("No posting yet") &&
+      distributeSource.includes("Posting help included") &&
+      distributeSource.includes("{!packetBlocked && (") &&
+      launchRunPanelSource.includes("Waiting on one listing"),
   );
   ok(
     "mobile entry links land on the publish control room",

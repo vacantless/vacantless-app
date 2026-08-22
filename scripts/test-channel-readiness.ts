@@ -43,17 +43,30 @@ const full: ChannelReadinessInput = {
   parking_count: 1,
 };
 
-ok("channel list has 6 entries", CHANNEL_READINESS_CHANNELS.length === 6);
+ok("channel list has all current display channels", CHANNEL_READINESS_CHANNELS.length === 14);
 
 const fullByChannel = readinessByChannel(full);
 ok("vacantless ready", fullByChannel.vacantless_page.status === "ready");
 ok("syndication ready", fullByChannel.syndication_feed.status === "ready");
-ok("rentfaster ready", fullByChannel.rentfaster.status === "ready");
 ok("kijiji ready", fullByChannel.kijiji.status === "ready");
 ok("facebook ready", fullByChannel.facebook_marketplace.status === "ready");
+ok("rentals.ca ready", fullByChannel.rentals_ca.status === "ready");
+ok("rentfaster ready", fullByChannel.rentfaster.status === "ready");
+ok("zumper ready", fullByChannel.zumper.status === "ready");
+ok("viewit ready", fullByChannel.viewit.status === "ready");
+ok("facebook page ready", fullByChannel.facebook_page.status === "ready");
+ok("instagram ready", fullByChannel.instagram.status === "ready");
+ok("whatsapp ready", fullByChannel.whatsapp.status === "ready");
+ok("linkedin ready", fullByChannel.linkedin.status === "ready");
+ok("snapchat ready", fullByChannel.snapchat.status === "ready");
 ok("mls advisory ready", fullByChannel.mls.status === "ready");
 ok("mls advisory flag", fullByChannel.mls.advisoryOnly === true);
 ok("mls has no required flags", fullByChannel.mls.missingRequired.length === 0);
+ok("kijiji has direct portal fallback", fullByChannel.kijiji.directPortalSupported === true);
+ok(
+  "rentals.ca keeps portal-only choices",
+  fullByChannel.rentals_ca.manualChoices.includes("Plan/add-on choice"),
+);
 
 const bare: ChannelReadinessInput = {
   ...full,
@@ -104,6 +117,10 @@ ok(
   "no-photo facebook requires photo",
   noPhoto.facebook_marketplace.missingRequired.includes("Photo"),
 );
+ok(
+  "no-photo rentals.ca requires a second photo",
+  noPhoto.rentals_ca.missingRequired.includes("Second photo"),
+);
 
 const withLink = readinessByChannel({
   ...full,
@@ -149,6 +166,10 @@ ok(
 ok(
   "facebook recommends parking details",
   missingRecommendations.facebook_marketplace.missingRecommended.includes("Parking details"),
+);
+ok(
+  "zumper carries direct portal sqft choice",
+  readinessByChannel(full).zumper.manualChoices.includes("Size/sqft value"),
 );
 
 console.log(`channel-readiness: ${passed} passed, ${failed} failed`);

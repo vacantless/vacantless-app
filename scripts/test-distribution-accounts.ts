@@ -48,7 +48,7 @@ eq(channelCapability("whatsapp").supportsConcierge, true, "whatsapp supports con
 eq(channelCapability("snapchat").supportsCopilot, true, "snapchat supports co-pilot");
 eq(channelCapability("viewit").requiresPayment, true, "viewit needs payment");
 eq(channelCapability("rentals_ca").transport, "feed_partner", "rentals_ca feed_partner");
-eq(channelCapability("rentals_ca").needsOrgAccount, false, "rentals_ca is guided unless partner acceptance exists");
+eq(channelCapability("rentals_ca").needsOrgAccount, false, "rentals_ca uses posting assist unless partner acceptance exists");
 eq(channelCapability("rentfaster").transport, "feed_partner", "rentfaster feed candidate");
 eq(channelCapability("rentfaster").requiresPayment, true, "rentfaster needs payment");
 eq(channelCapability("rentfaster").postingPolicy, "human_confirmed", "rentfaster human confirmed");
@@ -65,10 +65,10 @@ eq(allChannelCapabilities().length, 16, "16 channel capabilities");
   eq(r.nextActionKind, "publish_now", "vacantless publish_now");
 }
 {
-  // Rentals.ca is a feed-candidate, but the default operator lane is guided.
+  // Rentals.ca is a feed-candidate, but the default operator lane is posting assist.
   const r = channelAccountReadiness({ capability: channelCapability("rentals_ca"), accountStatus: null });
-  eq(r.status, "ready", "rentals_ca no account => guided ready");
-  eq(r.nextActionLabel, "Use guided posting", "rentals_ca guided next step");
+  eq(r.status, "ready", "rentals_ca no account => posting assist ready");
+  eq(r.nextActionLabel, "Use posting assist", "rentals_ca posting assist next step");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("rentals_ca"), accountStatus: "submitted" });
@@ -80,8 +80,8 @@ eq(allChannelCapabilities().length, 16, "16 channel capabilities");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("rentfaster") });
-  eq(r.status, "ready", "rentfaster ready to guide");
-  eq(r.nextActionLabel, "Use guided posting", "rentfaster guided next step");
+  eq(r.status, "ready", "rentfaster ready for posting assist");
+  eq(r.nextActionLabel, "Use posting assist", "rentfaster posting assist next step");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("zumper"), hasFeedRoute: true });

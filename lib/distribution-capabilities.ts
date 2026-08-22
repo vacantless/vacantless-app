@@ -10,7 +10,7 @@
 //
 // Honesty rules (brief): automatic only where real (Vacantless page + org feed);
 // Facebook/Kijiji/Viewit are browser co-pilot or concierge (never silent posting);
-// Rentals.ca/RentFaster/Zumper are feed-candidates when accepted, else guided;
+// Rentals.ca/RentFaster/Zumper are feed-candidates when accepted, else assist;
 // Realtor.ca is a broker/DDF route. "submitted"/feed-ready is never "live".
 // ============================================================================
 
@@ -310,7 +310,7 @@ export function channelAccountReadiness(
     return { ...base, status: "ready", nextActionLabel: "Record a tracked post", nextActionKind: "manual_custom" };
   }
   if (cap.transport === "feed_partner") {
-    return { ...base, status: "ready", nextActionLabel: "Use guided posting", nextActionKind: "feed_setup" };
+    return { ...base, status: "ready", nextActionLabel: "Use posting assist", nextActionKind: "feed_setup" };
   }
   return { ...base, status: "ready", nextActionLabel: "Open co-pilot", nextActionKind: "open_copilot" };
 }

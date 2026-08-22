@@ -1,4 +1,4 @@
-// Guided launch-run panel (S412 Slice 2). Server component. A saved, resumable
+// Assisted launch-run panel (S412 Slice 2). Server component. A saved, resumable
 // posting session: pick channels -> work each as a checklist -> mark done +
 // paste the live URL (which produces the tracked listing_posts row). Renders at
 // the top of the Distribute tab, above the channel cards.
@@ -78,7 +78,7 @@ export type RunItemView = {
   verificationStatus: string | null;
   proofUrl: string | null;
   conciergeRequestedAt: string | null;
-  // S482: the honest browser co-pilot guided-posting script (copilot channels).
+  // S482: the honest browser co-pilot posting-assist script (copilot channels).
   copilotScript: CopilotScript | null;
   // S488 Slice 1: merged from the retired where-posted grid so the command
   // center carries one status vocabulary. Both are derived in page.tsx from the
@@ -271,12 +271,12 @@ function operatorActionSummary(item: RunItemView): string {
   if (item.mode === "browser_copilot") {
     switch (item.publishStatus) {
       case "needs_payment":
-        return `Start guided posting for ${item.channelLabel}; you approve any payment, then save the live ad URL.`;
+        return `Open the ${item.channelLabel} posting step; you approve any payment, then save the live ad URL.`;
       case "needs_login":
-        return `Start guided posting for ${item.channelLabel}; you sign in and post, then save the live ad URL.`;
+        return `Open the ${item.channelLabel} posting step; you sign in and post, then save the live ad URL.`;
       case "needs_operator":
       case "queued":
-        return `Start guided posting for ${item.channelLabel}; Vacantless prepares the post and waits for your live ad URL.`;
+        return `Open the ${item.channelLabel} posting step; Vacantless prepares the post and waits for your live ad URL.`;
     }
   }
   switch (item.publishStatus) {
@@ -337,6 +337,7 @@ export function LaunchRunPanel({
   startChannels,
   realtorReferralEnabled,
   leaseupTakedownEnabled,
+  setupBlocker,
 }: {
   propertyId: string;
   run: { id: string } | null;
@@ -351,8 +352,14 @@ export function LaunchRunPanel({
   // the "dispatch a network agent" referral.
   realtorReferralEnabled: boolean;
   leaseupTakedownEnabled: boolean;
+  setupBlocker?: {
+    title: string;
+    detail: string;
+    href: string;
+    action: string;
+  } | null;
 }) {
-  // S588: gated entry into the guided distribution wizard for this listing.
+  // S588: gated entry into the distribution wizard for this listing.
   // Dark like the nav entry — only shows when DISTRIBUTION_WIZARD_ENABLED is set.
   const wizardEnabled = process.env.DISTRIBUTION_WIZARD_ENABLED === "1";
   const guidedHref = `/dashboard/link-portals?property=${encodeURIComponent(
@@ -468,7 +475,7 @@ export function LaunchRunPanel({
                 href={guidedHref}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Guided setup
+                Portal setup
               </Link>
             )}
             <Link
@@ -519,12 +526,71 @@ export function LaunchRunPanel({
         item.canConcierge &&
         (item.channel !== "realtor_ca" || realtorReferralEnabled),
     ) ?? null;
-  const liveProofCount = items.filter(
+  const renterPageDone = items.some(
+    (item) =>
+      item.channel === "vacantless" &&
+      item.publishStatus === "live" &&
+      !item.staleRefresh &&
+      !item.liveWithoutUrl,
+  );
+  const outsideItems = items.filter((item) => item.channel !== "vacantless");
+  const outsideLiveProofCount = outsideItems.filter(
     (item) =>
       item.publishStatus === "live" &&
       !item.staleRefresh &&
       !item.liveWithoutUrl,
   ).length;
+  const queueProgressLabel = renterPageDone
+    ? `Renter page done · ${outsideLiveProofCount} of ${outsideItems.length} outside sites live`
+    : `${outsideLiveProofCount} of ${outsideItems.length} outside sites live`;
+
+  if (setupBlocker) {
+    return (
+      <div
+        id="publish-checklist"
+        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-gray-950">
+            1-tap queue
+          </h3>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+            {items.length} {items.length === 1 ? "site" : "sites"} waiting
+          </span>
+        </div>
+        <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+          <div
+            className="h-full rounded-full bg-brand"
+            style={{ width: `${progress.pct}%` }}
+          />
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+            Waiting on one listing
+          </p>
+          <p className="mt-1 text-base font-semibold text-amber-950">
+            {setupBlocker.title}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-amber-900">
+            {setupBlocker.detail}
+          </p>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+          {renterPageDone && (
+            <span className="rounded-full bg-green-50 px-2.5 py-1 font-semibold text-green-700">
+              Renter page done
+            </span>
+          )}
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
+            {outsideLiveProofCount} of {outsideItems.length} outside sites live
+          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
+            Sign-in, payment, and proof later
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -543,7 +609,7 @@ export function LaunchRunPanel({
             Connect accounts
           </Link>
           <span className="text-xs font-medium text-gray-600">
-            {progress.resolved} of {progress.total} channels done
+            {queueProgressLabel}
           </span>
         </div>
       </div>
@@ -562,7 +628,7 @@ export function LaunchRunPanel({
             <p className="mt-1 text-base font-semibold text-gray-900">
               {priorityItem
                 ? operatorActionSummary(priorityItem)
-                : "No urgent publishing step. Keep an eye on refresh due dates or add another channel."}
+                : "No urgent publishing step. Keep an eye on refresh due dates or add another site."}
             </p>
             <p className="mt-2 text-xs text-gray-600">
               {priorityItem
@@ -570,9 +636,9 @@ export function LaunchRunPanel({
                 : "Your public page and finished sites stay tracked here. Submitted feed rows are not treated as Live until the real ad link exists."}
             </p>
             <p className="mt-2 text-xs text-gray-500">
-              {liveProofCount} of {progress.total} channels have live proof. A
-              channel only counts as Live after proof is saved, so you do
-              not have to guess what happened.
+              {outsideLiveProofCount} of {outsideItems.length} outside sites
+              have a live ad link. The renter page is tracked separately, and
+              outside sites only count as Live after proof is saved.
             </p>
           </div>
           {priorityItem && (
@@ -580,7 +646,7 @@ export function LaunchRunPanel({
               href={`#run-item-${priorityItem.id}`}
               className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
             >
-              Open this step
+              Go to {priorityItem.channelLabel} step
             </a>
           )}
         </div>
@@ -664,7 +730,7 @@ export function LaunchRunPanel({
               </div>
             )}
 
-            {/* Co-pilot channels get the guided panel instead of the flat
+            {/* Co-pilot channels get the posting-assist panel instead of the flat
                 step list; everything else keeps the plain checklist. */}
             {!item.copilotScript && !isTakedownItem(item) && (
               <ol className="mb-3 space-y-1.5">
@@ -1017,46 +1083,51 @@ export function LaunchRunPanel({
         ))}
       </ul>
 
-      <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
-        {selectable.length > 0 && (
-          <form action={addRunChannel} className="flex items-end gap-2">
+      <details className="mt-4 border-t border-gray-100 pt-3">
+        <summary className="cursor-pointer list-none text-xs font-semibold text-gray-600 hover:text-gray-800 [&::-webkit-details-marker]:hidden">
+          More site options
+        </summary>
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          {selectable.length > 0 && (
+            <form action={addRunChannel} className="flex items-end gap-2">
+              <input type="hidden" name="property_id" value={propertyId} />
+              <input type="hidden" name="run_id" value={run.id} />
+              <div>
+                <label
+                  htmlFor="run-add-channel"
+                  className="mb-1 block text-xs font-medium text-gray-600"
+                >
+                  Add a site
+                </label>
+                <select
+                  id="run-add-channel"
+                  name="channel"
+                  className={FIELD_CLASS}
+                  defaultValue={firstSelectableChoice?.key ?? ""}
+                >
+                  {renderSelectableOptions()}
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Add
+              </button>
+            </form>
+          )}
+          <form action={cancelDistributionRun}>
             <input type="hidden" name="property_id" value={propertyId} />
             <input type="hidden" name="run_id" value={run.id} />
-            <div>
-              <label
-                htmlFor="run-add-channel"
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Add a channel
-              </label>
-              <select
-                id="run-add-channel"
-                name="channel"
-                className={FIELD_CLASS}
-                defaultValue={firstSelectableChoice?.key ?? ""}
-              >
-                {renderSelectableOptions()}
-              </select>
-            </div>
             <button
               type="submit"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="text-xs font-medium text-red-600 hover:text-red-700"
             >
-              Add
+              Cancel this run
             </button>
           </form>
-        )}
-        <form action={cancelDistributionRun}>
-          <input type="hidden" name="property_id" value={propertyId} />
-          <input type="hidden" name="run_id" value={run.id} />
-          <button
-            type="submit"
-            className="text-xs font-medium text-red-600 hover:text-red-700"
-          >
-            Cancel this run
-          </button>
-        </form>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }

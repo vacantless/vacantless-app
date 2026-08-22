@@ -82,7 +82,7 @@ function CopyField({
   );
 }
 
-function GuidedPostingPromise({
+function PostingAssistPromise({
   channelLabel,
 }: {
   channelLabel: string;
@@ -219,7 +219,7 @@ export function CopilotPanel({
     <div className="mb-3 rounded-xl border border-brand/30 bg-brand/5 p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-brand">
-          Guided posting - {script.channelLabel}
+          Posting assist - {script.channelLabel}
         </p>
         {script.portalUrl && (
           <a
@@ -239,7 +239,7 @@ export function CopilotPanel({
           and tracks the result; you still approve anything on{" "}
           {script.channelLabel}.
         </p>
-        <GuidedPostingPromise channelLabel={script.channelLabel} />
+        <PostingAssistPromise channelLabel={script.channelLabel} />
 
         {/* Honesty: what Vacantless does and does not do. */}
         <ul className="space-y-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
@@ -272,12 +272,13 @@ export function CopilotPanel({
             onClick={openSidecar}
             className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white"
           >
-            Start guided posting
+            Open helper window
           </button>
           <p className="mt-1.5 text-[11px] text-gray-600">
             One click opens the helper window. Nothing is posted or paid until
             you do it on {script.channelLabel}; Vacantless only marks this
             channel complete after the live ad URL is saved.
+            If nothing opens, use the copy and steps below.
           </p>
         </div>
 

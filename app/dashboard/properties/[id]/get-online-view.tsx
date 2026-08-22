@@ -33,10 +33,10 @@ export function GetOnlineView({
     window.localStorage.setItem(MODE_KEY, next);
   }
 
-  return (
-    <div>
-      <div className="mb-4 flex justify-end">
-        {mode === "advanced" ? (
+  if (mode === "advanced") {
+    return (
+      <div>
+        <div className="mb-4 flex justify-end">
           <button
             type="button"
             onClick={() => setAndStore("simple")}
@@ -44,7 +44,16 @@ export function GetOnlineView({
           >
             &larr; Simple view
           </button>
-        ) : (
+        </div>
+        {advanced}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {simple}
+      <div className="mt-4 flex justify-end">
           <button
             type="button"
             onClick={() => setAndStore("advanced")}
@@ -52,9 +61,7 @@ export function GetOnlineView({
           >
             {linkIsLive ? "Advanced performance tools" : "Advanced tools"} &rarr;
           </button>
-        )}
       </div>
-      {mode === "advanced" ? advanced : simple}
     </div>
   );
 }

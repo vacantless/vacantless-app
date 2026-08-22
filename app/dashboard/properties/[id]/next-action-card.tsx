@@ -5,7 +5,7 @@ import type { NextAction } from "@/lib/rental-next-action";
 import { PhotoUploadLink } from "./photo-upload-modal";
 
 // The rental lifecycle "next action" card (IA Step 4 slice 3, S279). Sits under
-// the read-only rail and turns the current step into a guided, PRE-FILLED prompt:
+// the read-only rail and turns the current step into an assisted, PRE-FILLED prompt:
 // what's already been derived/inherited for the operator (confirm, don't
 // re-enter — the postal-code cascade), the few gaps still needing them, and one
 // primary CTA. Presentational — all logic is in lib/rental-next-action.

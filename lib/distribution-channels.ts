@@ -29,7 +29,7 @@ import type { ListingPostStatus } from "./listing-distribution";
 //    posts. (Facebook, Kijiji, Viewit.)
 //  - feed_or_assisted: the channel accepts structured listings and is a feed
 //    CANDIDATE (Vacantless has an XML feed), but until a partner route is proven
-//    it is still guided manual. (Rentals.ca, Zumper.)
+//    it still needs posting assist. (Rentals.ca, Zumper.)
 //  - api_automatic: a sanctioned API post still gated by operator approval.
 //  - broker: a realtor/DDF route (Realtor.ca) — not a self-serve landlord post.
 export const CHANNEL_MODES = [
@@ -41,8 +41,8 @@ export const CHANNEL_MODES = [
 export type ChannelMode = (typeof CHANNEL_MODES)[number];
 
 const CHANNEL_MODE_LABELS: Record<ChannelMode, string> = {
-  assisted_manual: "Guided posting",
-  feed_or_assisted: "Feed candidate / guided",
+  assisted_manual: "Posting assist",
+  feed_or_assisted: "Feed candidate / assist",
   api_automatic: "API posting",
   broker: "Broker / MLS",
 };
@@ -50,7 +50,7 @@ const CHANNEL_MODE_LABELS: Record<ChannelMode, string> = {
 export function channelModeLabel(mode: unknown): string {
   return typeof mode === "string" && (CHANNEL_MODES as readonly string[]).includes(mode)
     ? CHANNEL_MODE_LABELS[mode as ChannelMode]
-    : "Guided posting";
+    : "Posting assist";
 }
 
 // --- canonical channel registry fields ------------------------------------
@@ -140,7 +140,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     integrationStatus: "planned",
     connectKind: "none",
     notes:
-      "Marketplace is not a connected Vacantless channel yet. Use the guided posting tools until a real account connection exists.",
+      "Marketplace is not a connected Vacantless channel yet. Use posting assist until a real account connection exists.",
     mode: "assisted_manual",
     blurb:
       "Vacantless prepares Facebook-safe wording, photo order, and renter replies. You review the Facebook post, then paste the live ad link back here.",
@@ -160,7 +160,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "account_login",
     mode: "feed_or_assisted",
     blurb:
-      "Rentals.ca is a feed candidate, not a live Vacantless integration. Until a partner route is accepted, use the guided copy, field sheet, and proof tracking.",
+      "Rentals.ca is a feed candidate, not a live Vacantless integration. Until a partner route is accepted, use the prepared copy, field sheet, and proof tracking.",
     copyKey: "rentals_ca",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -176,7 +176,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     integrationStatus: "planned",
     connectKind: "none",
     notes:
-      "RentFaster.ca remains guided/manual in Vacantless; do not show it as connected until a real account-backed posting route exists.",
+      "RentFaster.ca remains proof-gated in Vacantless; do not show it as connected until a real account-backed posting route exists.",
     mode: "feed_or_assisted",
     blurb:
       "RentFaster is a feed candidate and paid self-serve listing lane. Start logged in, choose Single Unit, review package/add-ons, then paste the live ad link.",
@@ -196,7 +196,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "account_login",
     mode: "feed_or_assisted",
     blurb:
-      "Zumper is the managed posting path and can also reach PadMapper. Use guided posting until a partner route is accepted; submitted is not counted as live until proof comes back.",
+      "Zumper is the managed posting path and can also reach PadMapper. Use posting assist until a partner route is accepted; submitted is not counted as live until proof comes back.",
     copyKey: "zumper",
     hasFillSheet: true,
     hasGuardrails: true,

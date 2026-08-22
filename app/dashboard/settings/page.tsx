@@ -859,7 +859,7 @@ export default async function SettingsPage({
                   </p>
                   <p className="mt-1 max-w-2xl text-xs text-gray-400">
                     {connectSummary.connected} connected · {connectSummary.toSetUp} to set up ·{" "}
-                    {connectSummary.other} guided or coming soon
+                    {connectSummary.other} assist or coming soon
                   </p>
                 </div>
               </div>
@@ -1021,7 +1021,7 @@ export default async function SettingsPage({
                     )}
                     {cap.supportsCopilot && (
                       <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">
-                        Guided
+                        Assist
                       </span>
                     )}
                     {cap.supportsConcierge && (

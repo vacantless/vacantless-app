@@ -48,6 +48,11 @@ import { FillSheetCard } from "./fill-sheet-card";
 import { PhotoManager } from "./photo-manager";
 import { PhotoUploadLink, PhotoUploadModal } from "./photo-upload-modal";
 import { buildShareReadiness } from "@/lib/share-readiness";
+import {
+  buildListingPacketReadiness,
+  type ListingPacketFieldFacts,
+} from "@/lib/listing-packet-readiness";
+import { MIN_DESCRIPTION_CHARS } from "@/lib/listing-feed";
 import { feedSignal } from "@/lib/rental-readiness";
 import {
   sortPhotos,
@@ -249,6 +254,14 @@ import type { AddressDisplayMode } from "@/lib/address-privacy";
 import { shareLinkStatus } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
+
+function packetHasText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function packetHasPositiveNumber(value: number | null | undefined): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
 
 const DETAIL_TAB_IDS = [
   "setup",
@@ -547,27 +560,41 @@ function SyndicationFirstCard({
   propertyId,
   linkIsLive,
   setupOutstanding,
-  canSetLive,
+  hasPhotos,
   liveOutsideCount,
   postHistoryCount,
   totalInquiryCount,
   blockerSummary,
+  listingPacketMissingCount,
+  listingPacketReadyChannelCount,
+  listingPacketChannelCount,
+  firstListingPacketMissingLabel,
 }: {
   propertyId: string;
   linkIsLive: boolean;
   setupOutstanding: number;
-  canSetLive: boolean;
+  hasPhotos: boolean;
   liveOutsideCount: number;
   postHistoryCount: number;
   totalInquiryCount: number;
   blockerSummary: SyndicationBlockerSummary | null;
+  listingPacketMissingCount: number;
+  listingPacketReadyChannelCount: number;
+  listingPacketChannelCount: number;
+  firstListingPacketMissingLabel: string | null;
 }) {
   const encodedPropertyId = encodeURIComponent(propertyId);
   const distributeHref = `/dashboard/properties/${encodedPropertyId}?tab=distribute#publish-control-room`;
-  const setupHref = `/dashboard/properties/${encodedPropertyId}?tab=setup#rental-details`;
   const hasPostHistory = postHistoryCount > 0;
-  const expiredOnly = linkIsLive && hasPostHistory && liveOutsideCount === 0;
-  const status = !linkIsLive
+  const needsListingWork = setupOutstanding > 0 || !hasPhotos;
+  const packetBlocked = listingPacketMissingCount > 0;
+  const expiredOnly =
+    linkIsLive && hasPostHistory && liveOutsideCount === 0 && !needsListingWork;
+  const status = packetBlocked
+    ? `Renter page ${linkIsLive ? "live" : "not live"}. One listing needs ${listingPacketMissingCount} ${
+        listingPacketMissingCount === 1 ? "detail" : "details"
+      } for outside sites.`
+    : !linkIsLive
     ? setupOutstanding > 0
       ? `${setupOutstanding} ${
           setupOutstanding === 1 ? "listing detail" : "listing details"
@@ -578,10 +605,16 @@ function SyndicationFirstCard({
           liveOutsideCount === 1 ? "site" : "sites"
         }.`
       : "Your renter page is live. No outside sites are live yet.";
-  const body = !linkIsLive
+  const body = packetBlocked
+    ? `Start with ${
+        firstListingPacketMissingLabel?.toLowerCase() ?? "the missing detail"
+      }. The 1-tap queue opens after the listing facts are ready.`
+    : !linkIsLive
     ? setupOutstanding > 0
-      ? "Finish the required listing details first, then open syndication."
+      ? "Get online shows the required listing details first, then opens only the channel choices that need your sign-in or proof."
       : "Set the renter page live, then finish only the outside sites that need your sign-in or proof."
+    : needsListingWork
+      ? "Get online shows the missing listing items first, then opens only the outside-site steps that need your sign-in or proof."
     : expiredOnly
       ? "Previous outside ads need refresh or repost before they count as live."
       : liveOutsideCount > 0
@@ -590,18 +623,12 @@ function SyndicationFirstCard({
           } tied to this rental so far.`
         : "Outside sites still need posting, and each one counts as live only once its real ad URL is saved.";
   const actionHref = !linkIsLive
-    ? setupOutstanding > 0
-      ? setupHref
-      : canSetLive
-        ? "#publish-action"
-        : setupHref
+    ? distributeHref
     : distributeHref;
   const actionLabel = !linkIsLive
-    ? setupOutstanding > 0
-      ? "Finish basics"
-      : canSetLive
-        ? "Set renter page live"
-        : "Review listing"
+    ? "Get online"
+    : needsListingWork
+      ? "Get online"
     : expiredOnly
       ? "Refresh or repost"
       : liveOutsideCount > 0
@@ -613,14 +640,39 @@ function SyndicationFirstCard({
       : hasPostHistory
         ? "Outside ads need refresh"
         : "No outside sites live";
-  const attentionLabel = blockerSummary?.chip ?? outsideLabel;
+  const attentionLabel = packetBlocked
+    ? `${listingPacketMissingCount} listing ${
+        listingPacketMissingCount === 1 ? "detail" : "details"
+      } missing`
+    : needsListingWork
+    ? !hasPhotos
+      ? "Photos missing"
+      : "Listing details missing"
+    : blockerSummary?.chip ?? outsideLabel;
+  const missingBasicsLabel =
+    packetBlocked
+      ? `${listingPacketReadyChannelCount}/${listingPacketChannelCount} sites ready`
+      : setupOutstanding > 0
+      ? `${setupOutstanding} ${
+          setupOutstanding === 1 ? "listing detail" : "listing details"
+        } missing`
+      : hasPhotos
+        ? "Listing details ready"
+        : "Photos missing";
+  const renterPageLabel = linkIsLive ? "Renter page live" : "Renter page not live";
+  const outsideAdsLabel =
+    liveOutsideCount > 0
+      ? `${liveOutsideCount} outside ${
+          liveOutsideCount === 1 ? "ad" : "ads"
+        } live`
+      : "Outside ads not live";
 
   return (
     <section className="mb-4 rounded-2xl border border-slate-900 bg-slate-950 p-4 text-white shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
-            Syndication
+            Get online
           </p>
           <h3 className="mt-1 text-xl font-semibold tracking-tight">
             {status}
@@ -628,14 +680,25 @@ function SyndicationFirstCard({
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-300">
             {body}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+            <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-100">
+              {renterPageLabel}
+            </span>
+            <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-100">
+              {missingBasicsLabel}
+            </span>
+            <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-100">
+              {outsideAdsLabel}
+            </span>
+          </div>
           {blockerSummary ? (
             <p className="mt-2 max-w-3xl text-sm font-semibold leading-relaxed text-white">
               {blockerSummary.body}
             </p>
           ) : null}
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
-            Nothing is posted automatically. You approve outside-site posts,
-            paid steps, and live proof.
+            One listing first. Sign-in, payment, and proof wait inside Get
+            online, and outside sites count as Live only after proof is saved.
           </p>
         </div>
         <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:shrink-0 sm:items-end">
@@ -2071,7 +2134,7 @@ export default async function PropertyDetailPage({
     searchParams.dist === "copilot_live"
       ? {
           tone: "success",
-          title: "Guided posting saved.",
+          title: "Posting proof saved.",
           body:
             "This channel is now marked Live because a real ad URL was saved. The checklist progress and proof link update here.",
         }
@@ -2095,14 +2158,14 @@ export default async function PropertyDetailPage({
                 tone: "warning",
                 title: "This publish run is closed.",
                 body:
-                  "Start or reopen a publish checklist before saving guided-posting proof.",
+                  "Start or reopen a publish checklist before saving posting proof.",
               }
             : searchParams.dist === "copilot_concierge"
               ? {
                   tone: "info",
                   title: "The desk owns this channel now.",
                   body:
-                    "Guided posting is paused because this channel was handed to Vacantless for done-for-you posting.",
+                    "Posting assist is paused because this channel was handed to Vacantless for done-for-you posting.",
                 }
               : searchParams.dist === "copilot_already"
                 ? {
@@ -2114,7 +2177,7 @@ export default async function PropertyDetailPage({
                 : searchParams.dist === "copilot_channel"
                   ? {
                       tone: "warning",
-                      title: "Guided posting is not available here.",
+                      title: "Posting assist is not available here.",
                       body:
                         "Use the checklist action for this channel, then save proof when the outside listing is live.",
                     }
@@ -2321,6 +2384,50 @@ export default async function PropertyDetailPage({
     acType: p.ac_type,
     onSiteManagement: p.on_site_management,
   };
+  const listingPacketFacts: ListingPacketFieldFacts = {
+    title: packetHasText(p.address) || packetHasText(p.description),
+    address: packetHasText(p.address),
+    rent: packetHasPositiveNumber(p.rent_cents),
+    beds_baths: p.beds != null && p.baths != null,
+    photos: photoRows.length > 0,
+    description:
+      typeof p.description === "string" &&
+      p.description.trim().length >= MIN_DESCRIPTION_CHARS,
+    property_type: packetHasText(p.unit_type) || packetHasText(p.structure_type),
+    contact_phone: packetHasText(org?.public_contact_phone),
+    contact_email: packetHasText(org?.public_contact_email ?? org?.reply_to_email),
+    availability_date: packetHasText(p.available_date),
+    lease_term: packetHasText(effectiveFeatures.lease_term ?? p.lease_term),
+    utilities:
+      effectiveFeatures.heat_included != null ||
+      effectiveFeatures.hydro_included != null ||
+      effectiveFeatures.water_included != null,
+    parking: packetHasText(p.parking),
+    amenities:
+      packetHasText(p.laundry) ||
+      packetHasText(effectiveFeatures.ac_type ?? p.ac_type) ||
+      p.air_conditioning === true ||
+      p.balcony === true ||
+      p.has_smart_lock === true,
+    pets:
+      effectiveFeatures.pets_cats != null ||
+      effectiveFeatures.pets_dogs != null ||
+      packetHasText(effectiveFeatures.pets_dog_size ?? p.pets_dog_size) ||
+      packetHasText(p.pets_notes),
+    laundry: packetHasText(p.laundry),
+    air_conditioning:
+      p.air_conditioning === true ||
+      packetHasText(effectiveFeatures.ac_type ?? p.ac_type),
+    furnished: typeof p.furnished === "boolean",
+    square_footage: packetHasPositiveNumber(p.sqft),
+    virtual_tour: packetHasText(p.virtual_tour_url),
+    post_caption: packetHasText(p.description) || packetHasText(p.address),
+    tracked_link: linkIsLive,
+  };
+  const listingPacketReadiness = buildListingPacketReadiness({
+    channels: DISTRIBUTION_CHANNELS.map((channel) => channel.key),
+    fieldFacts: listingPacketFacts,
+  });
   // --- Listing quality (S412 Slice 5) -------------------------------------
   const hasFeatures = Object.values(
     (effectiveFeatures ?? {}) as Record<string, unknown>,
@@ -2824,11 +2931,17 @@ export default async function PropertyDetailPage({
         propertyId={p.id}
         linkIsLive={publicPageIsBookable}
         setupOutstanding={setupOutstandingCount}
-        canSetLive={!publicPageIsBookable && normalizedStatus !== "leased"}
+        hasPhotos={hasListingPhotos}
         liveOutsideCount={liveListingPostCount}
         postHistoryCount={postRows.length}
         totalInquiryCount={leadRows.length}
         blockerSummary={syndicationBlockerSummary}
+        listingPacketMissingCount={listingPacketReadiness.missingRequired.length}
+        listingPacketReadyChannelCount={listingPacketReadiness.readyChannelCount}
+        listingPacketChannelCount={listingPacketReadiness.channelCount}
+        firstListingPacketMissingLabel={
+          listingPacketReadiness.missingRequired[0]?.label ?? null
+        }
       />
 
       <PhotoUploadModal
@@ -2837,54 +2950,6 @@ export default async function PropertyDetailPage({
         photoCap={photoCap}
         storageUpsell={storageUpsell}
       />
-
-      <details className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">
-              Rental progress
-            </h3>
-            <p className="mt-0.5 text-xs text-gray-500">
-              Lifecycle rail, vacancy cost, and the older step-by-step prompt.
-            </p>
-          </div>
-          <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
-            Open
-          </span>
-        </summary>
-        <div className="space-y-4 border-t border-gray-100 p-5">
-          {normalizedStatus === "available" && vacancyUnit && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
-                  Vacancy cost
-                </span>
-                <p className="text-sm font-semibold text-amber-950">
-                  {vacancyUnit.days == null
-                    ? "Vacancy start unknown"
-                    : `Vacant ${vacancyUnit.days} ${
-                        vacancyUnit.days === 1 ? "day" : "days"
-                      }`}
-                  {vacancyUnit.days != null && vacancyLostLabel
-                    ? ` · about ${vacancyLostLabel} lost at asking so far`
-                    : ""}
-                </p>
-              </div>
-              <p className="mt-1 text-xs leading-relaxed text-amber-800">
-                {vacancyUnit.days == null
-                  ? "Tracked from when you mark a rental available. Older available rentals keep an unknown start instead of a guessed vacancy date."
-                  : vacancyLostLabel
-                    ? "Estimated with asking rent divided by 30 days, so the number stays honest and easy to audit."
-                    : "Add an asking rent to estimate dollars lost so far; the vacancy days are still tracked."}
-              </p>
-            </div>
-          )}
-
-          <LifecycleRail lifecycle={lifecycle} />
-
-          {nextAction && <NextActionCard action={nextAction} />}
-        </div>
-      </details>
 
       <TabbedSections initialTab={defaultTab}>
 
@@ -4022,6 +4087,7 @@ export default async function PropertyDetailPage({
           setupOutstanding={setupOutstandingCount}
           hasPhotos={hasListingPhotos}
           canSetLive={normalizedStatus !== "leased"}
+          listingPacket={listingPacketReadiness}
           channelCards={distributeChannelCards}
           otherPosts={distributeOtherPosts}
           promotionNote={promotionGuard?.postingBody ?? null}
@@ -4169,6 +4235,54 @@ export default async function PropertyDetailPage({
       </TabPanel>
 
       </TabbedSections>
+
+      <details className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">
+              More rental context
+            </h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Vacancy cost, lifecycle status, and the older progress prompt.
+            </p>
+          </div>
+          <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+            Open
+          </span>
+        </summary>
+        <div className="space-y-4 border-t border-gray-100 p-5">
+          {normalizedStatus === "available" && vacancyUnit && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+                  Vacancy cost
+                </span>
+                <p className="text-sm font-semibold text-amber-950">
+                  {vacancyUnit.days == null
+                    ? "Vacancy start unknown"
+                    : `Vacant ${vacancyUnit.days} ${
+                        vacancyUnit.days === 1 ? "day" : "days"
+                      }`}
+                  {vacancyUnit.days != null && vacancyLostLabel
+                    ? ` · about ${vacancyLostLabel} lost at asking so far`
+                    : ""}
+                </p>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                {vacancyUnit.days == null
+                  ? "Tracked from when you mark a rental available. Older available rentals keep an unknown start instead of a guessed vacancy date."
+                  : vacancyLostLabel
+                    ? "Estimated with asking rent divided by 30 days, so the number stays honest and easy to audit."
+                    : "Add an asking rent to estimate dollars lost so far; the vacancy days are still tracked."}
+              </p>
+            </div>
+          )}
+
+          <LifecycleRail lifecycle={lifecycle} />
+
+          {nextAction && <NextActionCard action={nextAction} />}
+        </div>
+      </details>
     </div>
   );
 }

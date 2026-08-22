@@ -2,7 +2,7 @@
 // Pure publish-run adapter model (S467 One-Click Publish Run).
 //
 // The Distribute tab already has channel cards, feed readiness, partner-account
-// tracking, and guided launch runs. This file adds the honest "click Publish
+// tracking, and assisted launch runs. This file adds the honest "click Publish
 // once" state model over those primitives: automatic where the app can really
 // act, feed/partner where configured, browser co-pilot or concierge where a
 // human must confirm login/payment/CAPTCHA, and broker/DDF for Realtor.ca.
@@ -96,7 +96,7 @@ const PUBLISH_STATUS_TONES: Record<PublishStatus, PublishTone> = {
 const PUBLISH_MODE_LABELS: Record<PublishMode, string> = {
   automatic: "Automatic",
   feed_partner: "Feed candidate",
-  browser_copilot: "Guided posting",
+  browser_copilot: "Posting assist",
   concierge: "Vacantless desk",
   broker: "Broker / MLS",
   custom: "Custom tracked post",
@@ -188,7 +188,7 @@ export function normalizePublishMode(raw: unknown): PublishMode {
 export function publishModeLabel(value: unknown): string {
   return isPublishMode(value)
     ? PUBLISH_MODE_LABELS[value]
-    : "Guided posting";
+    : "Posting assist";
 }
 
 export function isResolvedPublishStatus(status: PublishStatus): boolean {
@@ -366,7 +366,7 @@ export function publishChannelMeta(key: PublishChannelKey): PublishChannelMeta {
       key,
       label: key,
       mode: "browser_copilot",
-      description: "Guided publishing channel.",
+      description: "Posting assist channel.",
       actionLabel: null,
       actionUrl: null,
       defaultSelected: false,
@@ -526,7 +526,7 @@ export function preparePublishChannel(
       status: "needs_login",
       operatorActionUrl: meta.actionUrl,
       auditMessage:
-        "Guided posting required. Vacantless prepares the ad, but you sign in, review, and post.",
+        "Posting assist required. Vacantless prepares the ad, but you sign in, review, and post.",
     });
   }
 
@@ -535,7 +535,7 @@ export function preparePublishChannel(
       status: "needs_payment",
       operatorActionUrl: meta.actionUrl,
       auditMessage:
-        "Guided paid-listing flow. You review any login or payment before posting.",
+        "Proof-gated paid-listing flow. You review any login or payment before posting.",
     });
   }
 
@@ -615,14 +615,14 @@ function feedPartnerPlan(
       status: "needs_payment",
       operatorActionUrl: meta.actionUrl,
       auditMessage:
-        "No accepted RentFaster feed route is recorded. Use the guided paid-listing flow; you review and pay before posting.",
+        "No accepted RentFaster feed route is recorded. Use the proof-gated paid-listing flow; you review and pay before posting.",
     });
   }
   return plan(meta, {
     status: "needs_operator",
     operatorActionUrl: meta.actionUrl,
     auditMessage:
-      "No accepted partner feed is recorded. Use guided posting or send the feed to the partner.",
+      "No accepted partner feed is recorded. Use posting assist or send the feed to the partner.",
   });
 }
 

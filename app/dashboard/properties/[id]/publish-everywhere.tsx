@@ -14,7 +14,7 @@
 // path, NO new server action, NO migration:
 //   • Co-pilot-capable channels (Kijiji + FB Marketplace, the extension-fillable
 //     ones) resolve into the for-you bucket and, once a distribution run exists,
-//     get a real "Start guided posting" deep-link to the existing co-pilot
+//     get a real "Open posting step" deep-link to the existing co-pilot
 //     sidecar (the extension co-locates the fill on the portal page). The
 //     landlord signs in, covers any site fee, and taps post — we never post,
 //     log in, or pay for them.
@@ -667,7 +667,7 @@ export function PublishEverywhere({
               <p className="mb-1.5 text-[11px] leading-relaxed text-gray-500">
                 {firstOutstandingForYou
                   ? "Same sites as Finish these sites; actions stay on the left."
-                  : "Guided sites are summarized here; no extra action is needed."}
+                  : "Posting proof is summarized here; no extra action is needed."}
               </p>
             )}
             {forYou.map((r) => (
@@ -743,7 +743,7 @@ function BucketLabel({ bucket }: { bucket: PublishBucket }) {
 
 // Slice 3 for-you handoff. Each co-pilot channel maps to its live distribution
 // run item (created by publishProperty). Ready -> the honest two-tier choice:
-//   • "Start guided posting" opens the EXISTING co-pilot sidecar; the extension
+//   • "Open posting step" opens the EXISTING co-pilot sidecar; the extension
 //     co-locates the auto-fill on the portal page. The landlord signs in, covers
 //     any site fee, taps post — we never post, log in, or pay for them.
 //   • "Have us post it" hands the SAME item to the publishing desk via the
@@ -774,7 +774,7 @@ function ForYouHandoff({
       <div className="flex items-center gap-2">
         <span className="text-lg">🤝</span>
         <h3 className="text-base font-semibold tracking-tight text-indigo-950">
-          {allSetSummary ? "Guided sites saved" : "Finish these sites"}
+          {allSetSummary ? "Posting proof saved" : "Finish these sites"}
         </h3>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
@@ -836,7 +836,7 @@ function ForYouRow({
   // pending the fee) both collapse to one branded "Approve & publish" tap.
   const needsApproval =
     !isLive && (gate === "needs_operator" || gate === "needs_payment");
-  // needs_login can't be approved — it needs a re-connect, so route to guided posting.
+  // needs_login can't be approved — it needs a re-connect, so route to posting assist.
   const needsConnect = !isLive && gate === "needs_login";
   const working =
     !isLive &&
@@ -896,7 +896,7 @@ function ForYouRow({
           </form>
         ) : (
           <p className="mt-2 text-[12px] text-gray-500">
-            Publish first, then start the guided post here.
+            Publish first, then open this posting step here.
           </p>
         )
       ) : isLive ? (

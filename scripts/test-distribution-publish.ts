@@ -175,7 +175,7 @@ ok("mode label feed partner is candidate", publishModeLabel("feed_partner") === 
 }
 {
   const plan = preparePublishChannel("rentfaster", base);
-  ok("RentFaster without partner is guided paid flow", plan.status === "needs_payment");
+  ok("RentFaster without partner is proof-gated paid flow", plan.status === "needs_payment");
   ok("RentFaster without partner does not claim feed submission", plan.auditMessage.includes("No accepted RentFaster feed route"));
 }
 {

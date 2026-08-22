@@ -2608,7 +2608,7 @@ export async function addRunChannel(formData: FormData) {
 }
 
 /**
- * S631 Slice 3 polish: open the guided-posting co-pilot for a for-you channel
+ * S631 Slice 3 polish: open the posting-assist co-pilot for a for-you channel
  * straight from the Publish Everywhere surface, creating the distribution run +
  * run item ON DEMAND when none exists yet (a live rental whose run never included
  * this co-pilot channel — e.g. Facebook Marketplace). Ensures the run/item via the

@@ -206,7 +206,7 @@ ok("instagram copyKey = instagram", channelByKey("instagram")?.copyKey === "inst
 ok("instagram is API posting", channelByKey("instagram")?.mode === "api_automatic");
 ok("facebook feed is separate from Marketplace", channelByKey("facebook_feed")?.label === "Facebook Page feed");
 ok("facebook feed is API posting", channelByKey("facebook_feed")?.mode === "api_automatic");
-ok("whatsapp uses guided posting", channelByKey("whatsapp")?.mode === "assisted_manual");
+ok("whatsapp uses posting assist", channelByKey("whatsapp")?.mode === "assisted_manual");
 ok("snapchat is NOT feed-eligible", channelByKey("snapchat")?.feedEligible === false);
 ok("rentals_ca is feed-eligible", channelByKey("rentals_ca")?.feedEligible === true);
 ok("rentfaster is feed-eligible", channelByKey("rentfaster")?.feedEligible === true);
@@ -266,13 +266,14 @@ const launchRunPanelSource = readFileSync(
   "utf8",
 );
 ok(
-  "launch run panel exposes guided posting rows",
-  launchRunPanelSource.includes("Start guided posting for"),
+  "launch run panel exposes posting-step rows",
+  launchRunPanelSource.includes("Open the") &&
+    launchRunPanelSource.includes("posting step"),
 );
 
 // --- labels ----------------------------------------------------------------
 ok("modeLabel broker", channelModeLabel("broker") === "Broker / MLS");
-ok("modeLabel junk -> default", channelModeLabel("???") === "Guided posting");
+ok("modeLabel junk -> default", channelModeLabel("???") === "Posting assist");
 ok("statusLabel posted", channelStatusLabel("posted") === "Posted");
 ok("statusLabel needs_refresh", channelStatusLabel("needs_refresh") === "Needs refresh");
 ok("statusLabel junk -> Not started", channelStatusLabel("???") === "Not started");

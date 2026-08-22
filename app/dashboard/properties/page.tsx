@@ -127,10 +127,10 @@ function rentalLaunchState({
 
   if (missing.length > 0) {
     return {
-      label: "Needs basics",
+      label: `${pluralize(missing.length, "detail")} missing`,
       detail: `${pluralize(missing.length, "detail")} before launch`,
-      action: "Finish basics",
-      href: `/dashboard/properties/${row.id}?tab=setup#rental-details`,
+      action: "Get online",
+      href: distributionHref,
       tone: "warn",
     };
   }
@@ -140,8 +140,8 @@ function rentalLaunchState({
     return {
       label: "Needs photos",
       detail: "Add photos before syndication",
-      action: "Add photos",
-      href: `/dashboard/properties/${row.id}?tab=market#property-photos`,
+      action: "Get online",
+      href: distributionHref,
       tone: "warn",
     };
   }
@@ -160,8 +160,8 @@ function rentalLaunchState({
     return {
       label: "Needs feed detail",
       detail: "Fix feed blockers before syndication",
-      action: "Finish basics",
-      href: `/dashboard/properties/${row.id}?tab=setup#rental-details`,
+      action: "Get online",
+      href: distributionHref,
       tone: "warn",
     };
   }
@@ -170,8 +170,8 @@ function rentalLaunchState({
     return {
       label: "Ready for Set Live",
       detail: "Set Live before autopilot can start",
-      action: "Open Set Live",
-      href: `/dashboard/properties/${row.id}#publish-action`,
+      action: "Get online",
+      href: distributionHref,
       tone: "ready",
     };
   }
@@ -189,7 +189,7 @@ function rentalLaunchState({
   return {
     label: "Live, not distributed",
     detail: "Open the channel run",
-    action: "Open distribution",
+    action: "Get online",
     href: distributionHref,
     tone: "ready",
   };
@@ -503,16 +503,12 @@ export default async function PropertiesPage({
             const showLaunchChip = launch.label !== statusLabel;
             return (
             <li key={p.id} className="px-4 py-3">
-              {/* Mobile (default): stack so the address/specs get their own
-                  full-width row and the rent/status/actions cluster drops to a
-                  separate wrapping row below — at true phone width the old
-                  single justified row squeezed the address into one-word-per-
-                  line wrapping beside the shrink-0 action cluster (Codex design
-                  follow-up, pre-pilot). sm+ restores the original justified row. */}
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-2">
+              {/* Stack through tablet widths so the launch/action cluster never
+                  crushes the address into awkward wrapped fragments. */}
+              <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-x-3 lg:gap-y-2">
               <Link
                 href={`/dashboard/properties/${p.id}`}
-                className="min-w-0 sm:flex-1 hover:underline"
+                className="min-w-0 lg:flex-1 hover:underline"
               >
                 <span className="text-gray-900">{p.address}</span>
                 <span className="ml-2 text-xs text-gray-400">
@@ -529,7 +525,7 @@ export default async function PropertiesPage({
                   </span>
                 )}
               </Link>
-              <span className="flex shrink-0 flex-wrap items-center gap-2">
+              <span className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
                 <span className="text-sm text-gray-500">
                   {p.rent_cents
                     ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
@@ -545,12 +541,6 @@ export default async function PropertiesPage({
                   >
                     {launch.label}
                   </span>
-                )}
-                {isPublicBookable(p.status) && (
-                  // The photo-poor warning that used to sit here is now carried
-                  // by the Photos chip in the readiness strip below (Codex design
-                  // audit #5), so this stays a clean Copy action.
-                  <CopyIntakeButton url={intakeUrl(p.id)} />
                 )}
                 {/* S670: the safety promise the launch-queue redesign dropped.
                     This row is the entry point into posting, so it is where the
@@ -577,11 +567,17 @@ export default async function PropertiesPage({
                 ) : (
                   <Link
                     href={launch.href}
-                    className="rounded-lg border border-brand/40 bg-brand/5 px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10"
+                    className="inline-flex min-w-[5.75rem] justify-center rounded-lg border border-brand bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand/90"
                     title={`${launch.detail}. ${POSTING_SAFETY_PROMISE}`}
                   >
                     {launch.action}
                   </Link>
+                )}
+                {isPublicBookable(p.status) && (
+                  // The photo-poor warning that used to sit here is now carried
+                  // by the compact readiness pill below (Codex design audit #5),
+                  // so this stays a clean Copy action.
+                  <CopyIntakeButton url={intakeUrl(p.id)} />
                 )}
                 <Link
                   href={`/dashboard/properties/${p.id}?tab=setup#rental-details`}
@@ -634,7 +630,39 @@ export default async function PropertiesPage({
       {/* Scroll target for the empty-state CTA. Keep the id stable for existing
           links while the product language says property. */}
       <div id="add-rental" className="scroll-mt-4" />
-      <SectionHeading>Add a property</SectionHeading>
+      <details
+        open={
+          allRows.length === 0 ||
+          Boolean(searchParams.added) ||
+          typeof searchParams.import === "string"
+        }
+        className={
+          allRows.length > 0
+            ? "mb-8 rounded-2xl border border-gray-200 bg-white shadow-sm"
+            : "mb-8"
+        }
+      >
+        <summary
+          className={
+            allRows.length > 0
+              ? "flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm [&::-webkit-details-marker]:hidden"
+              : "sr-only"
+          }
+        >
+          <span>
+            <span className="font-semibold text-gray-900">Add a property</span>
+            <span className="ml-2 text-xs text-gray-500">
+              Start fresh or import MLS/realtor.ca
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-brand">
+            Add
+          </span>
+        </summary>
+        <div
+          className={allRows.length > 0 ? "border-t border-gray-100 p-5" : ""}
+        >
+      {allRows.length === 0 ? <SectionHeading>Add a property</SectionHeading> : null}
 
       {/* Fresh-org audit #3: lead with the simple, persona-neutral path. A small
           landlord with no MLS sheet enters an address and goes; the realtor
@@ -795,6 +823,8 @@ export default async function PropertiesPage({
               <ListingImageImport />
             </form>
           )}
+        </div>
+      </details>
         </div>
       </details>
       </>

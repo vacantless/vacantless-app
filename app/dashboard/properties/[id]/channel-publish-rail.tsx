@@ -29,6 +29,7 @@ export type ChannelPublishRailRow = {
   reachesRenters: boolean;
   live: boolean;
   synthetic: boolean;
+  portalUrl: string | null;
 };
 
 export type ChannelPublishRailBuckets = {
@@ -79,6 +80,7 @@ function syntheticRow(
     reachesRenters: live,
     live,
     synthetic: true,
+    portalUrl: null,
   };
 }
 
@@ -112,10 +114,16 @@ function bucketForChannel(input: {
     account?.automationAuthorized !== true &&
     channel.mode === "api_automatic" &&
     !(channel.key === "instagram" && !instagramEnabled);
-  // Facebook Marketplace is a working guided-posting (browser_copilot) channel
+  const postingAssistChip: ConnectChip = {
+    state: "manual",
+    label: "Posting assist",
+    tone: "neutral",
+    canConnect: false,
+  };
+  // Facebook Marketplace is a working posting-assist (browser_copilot) channel
   // today even though it has no API integration (integrationStatus "planned").
   // Don't let the shared "planned -> Coming soon" verdict mislabel it as
-  // unavailable; show the honest guided-posting chip so it matches its
+  // unavailable; show the honest posting-assist chip so it matches its
   // "1 tap to finish" placement. Scope: rail only — the Settings tile stays
   // "not available yet", which is correct (there is no account to connect).
   const chip: ConnectChip =
@@ -127,7 +135,11 @@ function bucketForChannel(input: {
           canConnect: false,
         }
       : channel.key === "facebook" && baseChip.state === "coming_soon"
-      ? { state: "manual", label: "Guided posting", tone: "neutral", canConnect: false }
+      ? postingAssistChip
+      : baseChip.state === "connect" &&
+          (channel.mode === "assisted_manual" ||
+            (channel.mode === "feed_or_assisted" && !hasFeedRoute))
+        ? postingAssistChip
       : baseChip;
   const tile = channelTileStatus(channel.key, {
     account_status: accountStatus,
@@ -181,6 +193,10 @@ function bucketForChannel(input: {
         ? "Connected; authorize Vacantless to post this listing to this account when you publish."
         : automationAction === "revoke"
           ? "Authorized; this account receives a post when you publish and approve."
+          : chip.state === "manual" && channel.mode === "feed_or_assisted"
+            ? "Use posting assist until a feed route is connected."
+          : chip.state === "manual"
+            ? "Vacantless prepares it; you review, post, and save the live URL."
           : tile.headline;
 
   return {
@@ -193,6 +209,7 @@ function bucketForChannel(input: {
     reachesRenters: tier === "instant" && live,
     live,
     synthetic: false,
+    portalUrl: channel.portalUrl,
   };
 }
 
@@ -249,23 +266,47 @@ function ChannelRow({
 }) {
   const statusLabel = row.live ? "Live" : row.chip.label;
   return (
-    <li className="flex min-h-12 items-center justify-between gap-3 border-t border-gray-100 py-3 first:border-t-0 first:pt-0 last:pb-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-gray-950">
-          {row.label}
-        </p>
-        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-gray-500">
-          {row.headline}
-        </p>
+    <li className="border-t border-gray-100 py-3 first:border-t-0 first:pt-0 last:pb-0">
+      <div className="flex min-h-12 items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-gray-950">
+            {row.label}
+          </p>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-gray-500">
+            {row.headline}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {action}
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${CHIP_CLASS[row.live ? "positive" : row.chip.tone]}`}
+          >
+            {statusLabel}
+          </span>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {action}
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${CHIP_CLASS[row.live ? "positive" : row.chip.tone]}`}
-        >
-          {statusLabel}
-        </span>
-      </div>
+      {row.portalUrl ? (
+        <details className="mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+          <summary className="cursor-pointer list-none text-xs font-semibold text-gray-600 [&::-webkit-details-marker]:hidden">
+            Use this site yourself
+          </summary>
+          <p className="mt-1 text-xs leading-relaxed text-gray-500">
+            Vacantless keeps the copy ready. Open the portal only if you want
+            its full native controls or prefer not to use the automated path.
+          </p>
+          <a
+            href={row.portalUrl}
+            target="_blank"
+            rel="noreferrer"
+            title={`Open ${row.label} directly`}
+            aria-label={`Open ${row.label} directly`}
+            className="mt-2 inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            <Icons.link className="h-3.5 w-3.5" />
+            <span>Open site</span>
+          </a>
+        </details>
+      ) : null}
     </li>
   );
 }
@@ -313,35 +354,79 @@ export function ChannelPublishRail({
   oneTapFooter?: ReactNode;
   actionForRow?: (row: ChannelPublishRailRow) => ReactNode;
 }) {
-  const ringLabel = `${buckets.externalLiveCount}/${buckets.externalTotalCount}`;
+  const ringLiveLabel = `${buckets.externalLiveCount} live`;
+  const ringTotalLabel = `${buckets.externalTotalCount} ${
+    buckets.externalTotalCount === 1 ? "site" : "sites"
+  }`;
+  const planCards = [
+    {
+      label: "Included",
+      value: buckets.instant.length,
+      detail: "runs after approval",
+    },
+    {
+      label: "Needs your tap",
+      value: buckets.oneTap.length,
+      detail: "sign-in, proof, or review",
+    },
+    {
+      label: "Top-up / setup",
+      value: buckets.gated.length,
+      detail: "paid, connected, or broker route",
+    },
+  ];
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Available outside sites
+            Posting plan
           </p>
           <h3 className="mt-1 text-lg font-semibold text-gray-950">
-            Publish beyond the renter page
+            Vacantless posts first; you handle exceptions.
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-gray-600">
-            This is the full channel menu. The Control Room above shows what is
-            selected in the current run.
+            Included routes stay automated. Sign-in, payment, approval, and
+            proof appear only when a site needs them.
           </p>
         </div>
         <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4 border-green-600 text-green-700">
-          <span className="text-sm font-bold">{ringLabel}</span>
-          <span className="text-[10px] font-semibold leading-none">live</span>
+          <span className="text-sm font-bold">{ringLiveLabel}</span>
+          <span className="text-center text-[10px] font-semibold leading-none">
+            {ringTotalLabel}
+          </span>
         </div>
+      </div>
+
+      <div className="mb-3 grid gap-2 sm:grid-cols-3">
+        {planCards.map((card) => (
+          <div
+            key={card.label}
+            className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              {card.label}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-gray-950">
+              {card.value}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">{card.detail}</p>
+          </div>
+        ))}
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
         <TierCard
-          title="Publishes instantly"
+          title="Included automation"
           rows={buckets.instant}
+          defaultOpen={false}
           actionForRow={actionForRow}
         />
-        <TierCard title="1 tap to finish" rows={buckets.oneTap} defaultOpen>
+        <TierCard
+          title="Needs sign-in or proof"
+          rows={buckets.oneTap}
+          defaultOpen={false}
+        >
           {oneTapFooter ? (
             <div className="mt-3 rounded-lg border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-gray-700">
               {oneTapFooter}
@@ -349,8 +434,9 @@ export function ChannelPublishRail({
           ) : null}
         </TierCard>
         <TierCard
-          title="Connect / gated"
+          title="Top-up / account setup"
           rows={buckets.gated}
+          defaultOpen={false}
           actionForRow={actionForRow}
         />
       </div>
@@ -358,8 +444,7 @@ export function ChannelPublishRail({
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-800">
         <Icons.bolt className="h-4 w-4" />
         <span>
-          Nothing is posted automatically. Connected channels only run after
-          approval.
+          Nothing is posted, paid, or marked Live without approval and proof.
         </span>
       </div>
     </section>

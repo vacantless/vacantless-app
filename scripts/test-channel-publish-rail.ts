@@ -65,17 +65,34 @@ function buckets(opts: {
   eq("default instant only has synthetic rows", keys(b.instant).join("|"), "vacantless_page|email_alerts");
   ok("facebook marketplace is one-tap, not instant", has(b.oneTap, "facebook"));
   eq(
-    "facebook marketplace chip reads Guided posting, not Coming soon",
+    "facebook marketplace chip reads Posting assist, not Coming soon",
     b.oneTap.find((r) => r.key === "facebook")?.chip.label ?? "",
-    "Guided posting",
+    "Posting assist",
   );
   ok("kijiji live assisted-manual is one-tap", has(b.oneTap, "kijiji"));
+  eq(
+    "kijiji reads Posting assist, not Connect",
+    b.oneTap.find((r) => r.key === "kijiji")?.chip.label ?? "",
+    "Posting assist",
+  );
   ok("rentals.ca without accepted feed is one-tap", has(b.oneTap, "rentals_ca"));
+  eq(
+    "rentals.ca without feed route reads Posting assist, not Connect",
+    b.oneTap.find((r) => r.key === "rentals_ca")?.chip.label ?? "",
+    "Posting assist",
+  );
   ok("zumper without accepted feed is one-tap", has(b.oneTap, "zumper"));
+  eq(
+    "zumper without feed route reads Posting assist, not Connect",
+    b.oneTap.find((r) => r.key === "zumper")?.chip.label ?? "",
+    "Posting assist",
+  );
   ok("rentfaster planned route is gated", has(b.gated, "rentfaster"));
   ok("facebook page pre-connect is gated", has(b.gated, "facebook_feed"));
   ok("instagram is gated by default", has(b.gated, "instagram"));
   ok("realtor.ca stays gated", has(b.gated, "realtor_ca"));
+  ok("kijiji exposes direct portal URL", /^https:\/\//.test(b.oneTap.find((r) => r.key === "kijiji")?.portalUrl ?? ""));
+  ok("synthetic renter page has no direct portal URL", b.instant.find((r) => r.key === "vacantless_page")?.portalUrl == null);
   eq("real row count includes two synthetic rows", b.totalCount, DISTRIBUTION_CHANNELS.length + 2);
 }
 

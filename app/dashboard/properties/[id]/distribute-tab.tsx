@@ -95,6 +95,12 @@ import {
   type ChannelPublishAccountRow,
   type ChannelPublishRailRow,
 } from "./channel-publish-rail";
+import type {
+  ListingPacketChannelReadiness,
+  ListingPacketMissingField,
+  ListingPacketReadiness,
+} from "@/lib/listing-packet-readiness";
+import type { PortalRequirementFieldKey } from "@/lib/portal-requirements";
 import { PublishEverywhere } from "./publish-everywhere";
 import {
   ConfirmPublishButton,
@@ -557,7 +563,7 @@ export function buildPublishControlRoomBuckets({
       key: "readyNow",
       label: "Ready now",
       value: readyNow,
-      detail: bucketDetail(readyNow, "tap-ready", "none"),
+      detail: bucketDetail(readyNow, "ready", "none"),
       tone: bucketTone(readyNow, "positive"),
     },
     {
@@ -610,6 +616,7 @@ export function DistributeTab({
   setupOutstanding,
   hasPhotos,
   canSetLive,
+  listingPacket,
   channelCards,
   otherPosts,
   promotionNote,
@@ -639,6 +646,7 @@ export function DistributeTab({
   setupOutstanding: number;
   hasPhotos: boolean;
   canSetLive: boolean;
+  listingPacket: ListingPacketReadiness;
   channelCards: DistributeChannelCard[];
   otherPosts: DistributePostRow[];
   promotionNote: string | null;
@@ -704,28 +712,31 @@ export function DistributeTab({
     (channel) => channel.readinessTone === "positive",
   ).length;
   const publishEverywhereSurface = (
-    <PublishEverywhere
-      propertyId={propertyId}
-      basics={basics}
-      linkIsLive={linkIsLive}
-      setupOutstanding={setupOutstanding}
-      canSetLive={canSetLive}
-      channelCards={channelCards}
-      replyInputs={replyInputs}
-      totalInquiryCount={totalInquiryCount}
-      conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
-      conciergeUsage={launchRun.conciergeUsage}
-      copilotEnabled={publishEverywhereCopilotEnabled}
-      stepClarityLiveEnabled={stepClarityLiveEnabled}
-      runItems={launchRun.items.map((it) => ({
-        id: it.id,
-        channel: it.channel,
-        publishStatus: it.publishStatus,
-        mode: it.mode,
-        canConcierge: it.canConcierge,
-        externalUrl: it.externalUrl,
-      }))}
-    />
+    <div className="space-y-4">
+      <ListingPacketCard readiness={listingPacket} />
+      <PublishEverywhere
+        propertyId={propertyId}
+        basics={basics}
+        linkIsLive={linkIsLive}
+        setupOutstanding={setupOutstanding}
+        canSetLive={canSetLive}
+        channelCards={channelCards}
+        replyInputs={replyInputs}
+        totalInquiryCount={totalInquiryCount}
+        conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
+        conciergeUsage={launchRun.conciergeUsage}
+        copilotEnabled={publishEverywhereCopilotEnabled}
+        stepClarityLiveEnabled={stepClarityLiveEnabled}
+        runItems={launchRun.items.map((it) => ({
+          id: it.id,
+          channel: it.channel,
+          publishStatus: it.publishStatus,
+          mode: it.mode,
+          canConcierge: it.canConcierge,
+          externalUrl: it.externalUrl,
+        }))}
+      />
+    </div>
   );
   const simpleGetOnlineSurface = (
     <SimpleGetOnline
@@ -735,6 +746,7 @@ export function DistributeTab({
       setupOutstanding={setupOutstanding}
       hasPhotos={hasPhotos}
       canSetLive={canSetLive}
+      listingPacket={listingPacket}
       launchRun={launchRun}
       instagramCard={instagramCard}
       replyInputs={replyInputs}
@@ -813,7 +825,7 @@ export function DistributeTab({
         />
       </DistributionStatusStrip>
 
-      {/* THE command center — one guided surface: pick channels, follow one next
+      {/* THE command center — one assisted surface: pick channels, follow one next
           action per channel, paste the live URL. After the Slice 1 merge this is
           the single action surface (Codex #2). */}
       <LaunchRunPanel
@@ -946,6 +958,7 @@ export function DistributeTab({
         setupOutstanding={setupOutstanding}
         hasPhotos={hasPhotos}
         canSetLive={canSetLive}
+        listingPacket={listingPacket}
         hasRun={Boolean(launchRun.run)}
         selectedChannelCount={selectedChannelCount}
         buckets={publishControlRoomBuckets}
@@ -1106,6 +1119,208 @@ function DistributionStatusStrip({
   );
 }
 
+const PACKET_FIELD_HREF: Partial<Record<PortalRequirementFieldKey, string>> = {
+  address: "#rental-details",
+  rent: "#rental-details",
+  beds_baths: "#rental-details",
+  photos: "#property-photos",
+  description: "#listing-description",
+  property_type: "#property-unit-type",
+  contact_phone: "/dashboard/settings",
+  contact_email: "/dashboard/settings",
+  availability_date: "#property-available-date",
+  lease_term: "#rental-details",
+  utilities: "#rental-details",
+  parking: "#property-parking",
+  amenities: "#rental-details",
+  pets: "#rental-details",
+  laundry: "#property-laundry",
+  air_conditioning: "#rental-details",
+  furnished: "#rental-details",
+  square_footage: "#property-sqft",
+  virtual_tour: "#virtual_tour_url",
+};
+
+const PACKET_TIER_LABEL: Record<ListingPacketChannelReadiness["tier"], string> = {
+  included: "Included",
+  needs_tap: "Needs your tap",
+  top_up: "Top-up",
+  broker: "Broker",
+};
+
+function packetFieldHref(field: PortalRequirementFieldKey): string {
+  return PACKET_FIELD_HREF[field] ?? "#rental-details";
+}
+
+function shortMissingList(items: readonly ListingPacketMissingField[]): string {
+  if (items.length === 0) return "";
+  const labels = items.slice(0, 3).map((item) => item.label.toLowerCase());
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels[0]}, ${labels[1]}, and ${labels[2]}`;
+}
+
+function ListingPacketCard({
+  readiness,
+  showAction = true,
+}: {
+  readiness: ListingPacketReadiness;
+  showAction?: boolean;
+}) {
+  const missingRequired = readiness.missingRequired;
+  const ready = readiness.readyChannelCount === readiness.channelCount;
+  const primaryMissing = missingRequired[0] ?? null;
+  const missingText = shortMissingList(missingRequired);
+  const actionHref = primaryMissing
+    ? packetFieldHref(primaryMissing.field)
+    : "#publish-checklist";
+  const actionLabel = primaryMissing
+    ? `Add ${primaryMissing.label.toLowerCase()}`
+    : "Choose sites";
+  const headline = ready
+    ? "Your one listing has what every site needs."
+    : `Your one listing is ready for ${readiness.readyChannelCount} ${
+        readiness.readyChannelCount === 1 ? "site" : "sites"
+      }.`;
+  const subline = ready
+    ? "Posting choices stay below: included routes, sign-in steps, paid top-ups, and proof."
+    : `Add ${missingText} to satisfy the remaining sites.`;
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <IconTile>
+              <Icons.list className="h-4 w-4" />
+            </IconTile>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              One listing
+            </p>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                ready ? TONE_CHIP.positive : TONE_CHIP.warning
+              }`}
+            >
+              {ready ? "Ready" : `${missingRequired.length} details missing`}
+            </span>
+          </div>
+          <h3 className="mt-3 text-lg font-semibold text-gray-950">
+            {headline}
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
+            {subline}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-2 text-right">
+          <div>
+            <p className="text-2xl font-semibold text-gray-950">
+              {readiness.readyChannelCount}
+            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              ready sites
+            </p>
+          </div>
+          {showAction && (
+            <a
+              href={actionHref}
+              className={
+                ready
+                  ? "rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+                  : "rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+              }
+            >
+              {actionLabel}
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-700">
+          {readiness.channelCount} total sites
+        </span>
+        <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-700">
+          {missingRequired.length} missing details
+        </span>
+        <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-700">
+          Sign-in/payment/proof later
+        </span>
+      </div>
+
+      <details className="mt-4 border-t border-gray-100 pt-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-gray-800 [&::-webkit-details-marker]:hidden">
+          Why sites differ
+          <span className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600">
+            Details
+          </span>
+        </summary>
+        <ul className="mt-3 divide-y divide-gray-100">
+          {readiness.channels.map((channel) => (
+            <ListingPacketChannelRow key={channel.channel} channel={channel} />
+          ))}
+        </ul>
+      </details>
+    </section>
+  );
+}
+
+function ListingPacketChannelRow({
+  channel,
+}: {
+  channel: ListingPacketChannelReadiness;
+}) {
+  const missing = channel.missingRequired
+    .slice(0, 3)
+    .map((field) =>
+      field === "contact_phone"
+        ? "contact phone"
+        : field === "beds_baths"
+          ? "beds and baths"
+          : field.replace(/_/g, " "),
+    );
+  const statusLabel = channel.ready
+    ? "Ready"
+    : `${channel.missingRequired.length} missing`;
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-gray-950">{channel.label}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+          {channel.ready
+            ? packetReadyDetail(channel)
+            : `Needs ${missing.join(", ")}.`}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
+          {PACKET_TIER_LABEL[channel.tier]}
+        </span>
+        <span
+          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+            channel.ready ? TONE_CHIP.positive : TONE_CHIP.warning
+          }`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function packetReadyDetail(channel: ListingPacketChannelReadiness): string {
+  if (channel.tier === "included") {
+    return "Listing facts ready; it can run after approval.";
+  }
+  if (channel.tier === "top_up") {
+    return "Listing facts ready; payment stays below.";
+  }
+  if (channel.tier === "broker") {
+    return "Listing facts ready; broker proof stays below.";
+  }
+  return "Listing facts ready; sign-in or proof stays below.";
+}
+
 function conciergeRequestedDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const time = Date.parse(value);
@@ -1247,6 +1462,7 @@ function SimpleGetOnline({
   setupOutstanding,
   hasPhotos,
   canSetLive,
+  listingPacket,
   launchRun,
   instagramCard,
   replyInputs,
@@ -1264,6 +1480,7 @@ function SimpleGetOnline({
   setupOutstanding: number;
   hasPhotos: boolean;
   canSetLive: boolean;
+  listingPacket: ListingPacketReadiness;
   launchRun: LaunchRunData;
   instagramCard: DistributeChannelCard | null;
   replyInputs: ReplyInputs;
@@ -1305,6 +1522,44 @@ function SimpleGetOnline({
     instagramEnabled: instagramCard?.instagramAccount?.enabled === true,
   });
   const analyticsSummary = analyticsTotals(analytics);
+  const firstPacketMissing = listingPacket.missingRequired[0] ?? null;
+  const packetBlocked = listingPacket.missingRequired.length > 0;
+  const launchSetupBlocker =
+    firstPacketMissing
+      ? {
+          title: "Finish the one listing details first.",
+          detail:
+            `Needed before outside sites: ${shortMissingList(listingPacket.missingRequired)}. Sign-in, payment, and proof wait here.`,
+          href: packetFieldHref(firstPacketMissing.field),
+          action: `Add ${firstPacketMissing.label.toLowerCase()}`,
+        }
+      : setupOutstanding > 0
+      ? {
+          title: `Finish ${setupOutstanding} ${
+            setupOutstanding === 1 ? "listing detail" : "listing details"
+          } first.`,
+          detail:
+            "After that, this queue will take you to the first site that needs your sign-in, approval, or proof.",
+          href: "#rental-details",
+          action: "Finish details",
+        }
+      : !hasPhotos
+        ? {
+            title: "Add photos before posting to sites.",
+            detail:
+              "After photos are added, this queue will take you to the first site that needs your sign-in, approval, or proof.",
+            href: "#property-photos",
+            action: "Add photos first",
+          }
+        : !linkIsLive
+          ? {
+              title: "Set the renter page live before posting to sites.",
+              detail:
+                "After the renter page is live, this queue will take you to the first site that needs your sign-in, approval, or proof.",
+              href: "#publish-action",
+              action: "Set Live first",
+            }
+          : null;
 
   const photoNudge = !hasPhotos ? (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
@@ -1320,7 +1575,7 @@ function SimpleGetOnline({
   const oneTapFooter = launchRun.conciergeDeskEnabled ? (
     <>
       <p>
-        Free co-pilot stays available; Growth concierge can take over eligible
+        Posting assist is included. Growth concierge can take over eligible
         manual posts after you approve access.
       </p>
       <p className="mt-1 font-semibold text-gray-900">
@@ -1353,15 +1608,15 @@ function SimpleGetOnline({
           href="#publish-checklist"
           className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
         >
-          {hasReachRunItems ? "Open 1-tap queue" : "Choose guided channels"}
+          {hasReachRunItems ? "Open 1-tap queue" : "Choose sites"}
         </a>
       )}
     </>
   ) : (
     <>
       <p>
-        Free co-pilot prepares the outside-site steps. Concierge posting is a
-        Growth upgrade when you want Vacantless to do those posts with approval.
+        Posting assist is included. Done-for-you posting, paid placements, and
+        extra manual reach stay as Growth or top-up work.
       </p>
       {launchRun.conciergeDailyLostLabel && (
         <p className="mt-1 text-gray-600">
@@ -1372,7 +1627,7 @@ function SimpleGetOnline({
         href="/dashboard/billing"
         className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
       >
-        Review Growth
+        Review Growth / top-up
       </a>
     </>
   );
@@ -1456,9 +1711,9 @@ function SimpleGetOnline({
               >
                 {linkIsLive
                   ? railBuckets.externalLiveCount > 0
-                    ? "Connected instant channels can sync from here, and guided channels stay in the 1-tap queue."
+                    ? "Connected instant sites can sync from here, and proof-gated sites stay in the 1-tap queue."
                     : "Anyone with your link can inquire. Outside sites still need posting, and each one counts as live only once its real ad URL is saved."
-                  : "Publish turns on the Vacantless renter page and email-alert reach first, then opens the guided queue for channels that need a login, payment, broker, or final human tap."}
+                  : "Publish turns on the Vacantless renter page and email-alert reach first, then opens the 1-tap queue for sites that need a login, payment, broker, or final human tap."}
               </p>
             </div>
             <span
@@ -1630,18 +1885,53 @@ function SimpleGetOnline({
         </section>
       )}
 
-      <ChannelPublishRail
-        buckets={railBuckets}
-        oneTapFooter={oneTapFooter}
-        actionForRow={railActionForRow}
-      />
+      <ListingPacketCard readiness={listingPacket} showAction={false} />
+
+      {showLaunchRunPanel && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {packetBlocked ? "Next after one listing" : "1-tap queue"}
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-gray-950">
+                {packetBlocked
+                  ? "The 1-tap queue opens after the listing facts are ready."
+                  : "Vacantless preps each outside step; you approve, post, or save proof."}
+              </h3>
+            </div>
+            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+              {packetBlocked ? "No posting yet" : "Posting help included"}
+            </span>
+          </div>
+          <LaunchRunPanel
+            propertyId={propertyId}
+            run={launchRun.run}
+            items={launchRun.items}
+            progress={launchRun.progress}
+            selectable={launchRun.selectable}
+            startChannels={launchRun.startChannels}
+            realtorReferralEnabled={launchRun.realtorReferralEnabled}
+            leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
+            setupBlocker={launchSetupBlocker}
+          />
+        </section>
+      )}
+
+      {!packetBlocked && (
+        <ChannelPublishRail
+          buckets={railBuckets}
+          oneTapFooter={oneTapFooter}
+          actionForRow={railActionForRow}
+        />
+      )}
 
       <section className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-3">
         {linkIsLive ? (
           <>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Channel-attributed inquiries
+                Outside-site inquiries
               </p>
               <p className="mt-1 text-2xl font-semibold text-gray-950">
                 {analyticsSummary.leads}
@@ -1679,7 +1969,7 @@ function SimpleGetOnline({
                 Inquiries
               </p>
               <p className="mt-1 text-sm text-gray-500">
-                Tracked channel links start attributing renters once live.
+                Tracked site links start attributing renters once live.
               </p>
             </div>
             <div>
@@ -1694,33 +1984,6 @@ function SimpleGetOnline({
         )}
       </section>
 
-      {showLaunchRunPanel && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                1-tap queue
-              </p>
-              <h3 className="mt-1 text-base font-semibold text-gray-950">
-                Vacantless preps each outside step; you approve, post, or save proof.
-              </h3>
-            </div>
-            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
-              Free co-pilot path
-            </span>
-          </div>
-          <LaunchRunPanel
-            propertyId={propertyId}
-            run={launchRun.run}
-            items={launchRun.items}
-            progress={launchRun.progress}
-            selectable={launchRun.selectable}
-            startChannels={launchRun.startChannels}
-            realtorReferralEnabled={launchRun.realtorReferralEnabled}
-            leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
-          />
-        </section>
-      )}
     </div>
   );
 }
@@ -1730,6 +1993,7 @@ function PublishControlRoom({
   setupOutstanding,
   hasPhotos,
   canSetLive,
+  listingPacket,
   hasRun,
   selectedChannelCount,
   buckets,
@@ -1738,23 +2002,34 @@ function PublishControlRoom({
   setupOutstanding: number;
   hasPhotos: boolean;
   canSetLive: boolean;
+  listingPacket: ListingPacketReadiness;
   hasRun: boolean;
   selectedChannelCount: number;
   buckets: PublishControlRoomBucket[];
 }) {
-  const launchBlocked = setupOutstanding > 0 || !hasPhotos || !linkIsLive;
+  const packetMissing = listingPacket.missingRequired;
+  const firstPacketMissing = packetMissing[0] ?? null;
+  const packetMissingText = shortMissingList(packetMissing);
+  const packetBlocked = packetMissing.length > 0;
+  const launchBlocked = packetBlocked || setupOutstanding > 0 || !hasPhotos || !linkIsLive;
   const attentionBuckets = buckets.filter(
     (bucket) =>
       bucket.value > 0 &&
       bucket.key !== "liveOutside" &&
       bucket.key !== "readyNow",
   );
+  const liveOutsideBucket = buckets.find(
+    (bucket) => bucket.key === "liveOutside",
+  );
+  const readyNowBucket = buckets.find((bucket) => bucket.key === "readyNow");
   const attentionCount = attentionBuckets.reduce(
     (sum, bucket) => sum + bucket.value,
     0,
   );
   const primaryHref =
-    setupOutstanding > 0
+    firstPacketMissing
+      ? packetFieldHref(firstPacketMissing.field)
+      : setupOutstanding > 0
       ? "#rental-details"
       : !hasPhotos
         ? "#property-photos"
@@ -1764,43 +2039,89 @@ function PublishControlRoom({
             : "#rental-details"
           : "#publish-checklist";
   const primaryAction =
-    setupOutstanding > 0
-      ? "Finish basics"
+    firstPacketMissing
+      ? `Add ${firstPacketMissing.label.toLowerCase()}`
+      : setupOutstanding > 0
+      ? "Add details"
       : !hasPhotos
         ? "Add photos"
         : !linkIsLive
           ? canSetLive
-            ? "Set Live"
+            ? "Set renter page live"
             : "Review status"
           : hasRun
             ? attentionCount > 0
-              ? "Open next publish step"
-              : "Review publish run"
-            : "Open publish run";
-  const launchLabel = launchBlocked
-    ? "Finish setup before outside publishing"
+              ? "Open next posting step"
+              : "Review posting steps"
+            : "Start posting steps";
+  const launchLabel = packetBlocked
+    ? `One listing needs ${packetMissing.length} ${
+        packetMissing.length === 1 ? "thing" : "things"
+      } before every site can use it`
+    : launchBlocked
+    ? "Set the renter page live before posting to sites"
     : hasRun
       ? attentionCount > 0
-        ? "Publishing needs your next tap"
-        : "Publish run is ready to review"
+      ? "Publishing needs your next tap"
+        : "Posting steps are ready to review"
       : "Ready to choose sites and publish";
-  const launchDetail = launchBlocked
-    ? "The renter page, photos, and basics have to be ready before outside-site steps."
+  const launchDetail = packetBlocked
+    ? `Start with ${firstPacketMissing?.label.toLowerCase() ?? "the missing item"}. Sign-in, payment, and proof stay below.`
+    : launchBlocked
+    ? "Turn on the renter page first. Outside sites count as live only after their real ad link is saved."
     : hasRun
-      ? "Use one run to approve paid steps, finish sign-ins, refresh stale ads, and save live proof."
-      : "Choose the channels once. Vacantless prepares the copy and shows only sign-in, payment, or proof steps that need you.";
+      ? "Use one checklist to approve paid steps, finish sign-ins, refresh stale ads, and save live proof."
+      : "Choose the sites once. Vacantless prepares the copy and shows only sign-in, payment, or proof steps that need you.";
   const blockers = [
-    setupOutstanding > 0
+    packetBlocked ? packetMissingText : null,
+    !packetBlocked && setupOutstanding > 0
       ? `${setupOutstanding} ${
           setupOutstanding === 1 ? "listing detail" : "listing details"
         }`
       : null,
-    !hasPhotos ? "photos" : null,
-    !linkIsLive ? "set public page Live" : null,
+    !packetBlocked && !hasPhotos ? "photos" : null,
+    !linkIsLive ? "renter page not live" : null,
   ].filter((item): item is string => Boolean(item));
   const waitingSummary = attentionBuckets
     .map((bucket) => `${bucket.label.toLowerCase()} (${bucket.value})`)
     .join(", ");
+  const visibleBuckets: Array<{
+    key: string;
+    label: string;
+    value: string | number;
+    detail?: string;
+    tone: PublishControlRoomTone;
+  }> = [
+    {
+      key: "renter-page",
+      label: "Renter page",
+      value: linkIsLive ? "Live" : "Not live",
+      tone: linkIsLive ? "positive" : "warning",
+    },
+    ...(liveOutsideBucket
+      ? [
+          {
+            key: liveOutsideBucket.key,
+            label: "Outside ads",
+            value: liveOutsideBucket.value,
+            detail: liveOutsideBucket.detail,
+            tone: liveOutsideBucket.tone,
+          },
+        ]
+      : []),
+    ...(!launchBlocked && readyNowBucket && readyNowBucket.value > 0
+      ? [
+          {
+            key: readyNowBucket.key,
+            label: "Ready to post",
+            value: readyNowBucket.value,
+            detail: readyNowBucket.detail,
+            tone: readyNowBucket.tone,
+          },
+        ]
+      : []),
+    ...attentionBuckets,
+  ];
 
   return (
     <section
@@ -1810,7 +2131,7 @@ function PublishControlRoom({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand">
-            Publish Control Room
+            Get online checklist
           </p>
           <h3 className="mt-1 text-lg font-semibold text-gray-950">
             {launchLabel}
@@ -1823,8 +2144,7 @@ function PublishControlRoom({
           </p>
           <p className="mt-2 text-xs font-medium text-gray-500">
             {selectedChannelCount}{" "}
-            {selectedChannelCount === 1 ? "channel" : "channels"} selected in
-            this run.
+            {selectedChannelCount === 1 ? "site" : "sites"} selected.
           </p>
         </div>
         {primaryHref === "#property-photos" ? (
@@ -1845,32 +2165,30 @@ function PublishControlRoom({
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
-        {buckets.map((bucket) => (
-          <div
+      <div className="mt-4 flex flex-wrap gap-2">
+        {visibleBuckets.map((bucket) => (
+          <span
             key={bucket.key}
-            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs"
           >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            <span className="font-semibold uppercase tracking-wide text-gray-500">
               {bucket.label}
-            </p>
-            <div className="mt-1 flex items-baseline justify-between gap-2">
-              <span className="text-lg font-semibold text-gray-950">
-                {bucket.value}
-              </span>
+            </span>
+            <span className="font-semibold text-gray-950">{bucket.value}</span>
+            {bucket.detail && (
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CONTROL_ROOM_TONE_CLASS[bucket.tone]}`}
               >
                 {bucket.detail}
               </span>
-            </div>
-          </div>
+            )}
+          </span>
         ))}
       </div>
 
       {blockers.length > 0 ? (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Before publishing: {blockers.join(", ")}.
+          Before outside sites: {blockers.join(", ")}.
         </p>
       ) : attentionBuckets.length > 0 ? (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -1957,11 +2275,11 @@ function DistributionBasicsPanel({
       action: "Connect accounts",
     },
     {
-      title: "Posting choice",
-      value: "You or us",
-      detail: "Self-serve or managed",
+      title: "Top-up help",
+      value: "Optional",
+      detail: "Done-for-you",
       href: "#posting-mode",
-      action: "Pick mode",
+      action: "Review help",
     },
   ];
 
@@ -2027,31 +2345,10 @@ function PostingModePanel({
         : "Vacantless takes over the site and records the live ad link here."
       : "Choose sites first, then the done-for-you option appears here.";
   return (
-    <section
-      id="posting-mode"
-      className="mb-4 grid scroll-mt-6 gap-3 md:grid-cols-2"
-    >
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          Post it myself
-        </p>
-        <p className="mt-1 text-lg font-semibold text-gray-950">
-          Compose. Post. Prove.
-        </p>
-        <p className="mt-1 text-xs text-gray-600">
-          Guided steps, your accounts, your approval.
-        </p>
-        <a
-          href="#publish-checklist"
-          className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          Open posting checklist
-        </a>
-      </div>
-
+    <section id="posting-mode" className="mb-4 scroll-mt-6 space-y-3">
       <div className="rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
-          Done-for-you
+          Done-for-you / top-up
         </p>
         <p className="mt-1 text-lg font-semibold text-white">
           {doneForYouHeading}
@@ -2103,6 +2400,29 @@ function PostingModePanel({
           )}
         </div>
       </div>
+      <details className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-gray-900 [&::-webkit-details-marker]:hidden">
+          Use a site yourself instead
+          <span className="ml-2 text-xs font-normal text-gray-500">
+            Prepared copy, your login, your final proof
+          </span>
+        </summary>
+        <div className="border-t border-gray-100 px-5 py-4">
+          <p className="text-sm font-semibold text-gray-950">
+            Compose. Post. Prove.
+          </p>
+          <p className="mt-1 text-xs text-gray-600">
+            Vacantless prepares the steps and keeps the live-link proof here,
+            but you sign in, post, and save the ad URL yourself.
+          </p>
+          <a
+            href="#publish-checklist"
+            className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Open posting checklist
+          </a>
+        </div>
+      </details>
     </section>
   );
 }
@@ -2393,8 +2713,8 @@ function RentFasterPostingKit({
           <CopyLink url={reservedTrackedUrl} />
         ) : (
           <p className="text-xs text-amber-800">
-            Add RentFaster to a publish run to reserve the tracked link before
-            you post.
+            Add RentFaster to the posting checklist to reserve the tracked link
+            before you post.
           </p>
         )}
       </div>

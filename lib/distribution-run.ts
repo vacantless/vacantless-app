@@ -1,5 +1,5 @@
 // ============================================================================
-// Pure helpers for guided launch RUNS (S412 Slice 2). No DOM / env / IO —
+// Pure helpers for assisted launch RUNS (S412 Slice 2). No DOM / env / IO —
 // unit-tested (scripts/test-distribution-run.ts).
 //
 // A run is a saved, resumable posting session: the operator picks channels and

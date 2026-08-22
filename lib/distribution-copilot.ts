@@ -124,7 +124,7 @@ export function isCopilotChannel(channel: PublishChannelKey): boolean {
 }
 
 /**
- * Build the guided co-pilot script for a browser_copilot channel, or null when
+ * Build the posting-assist co-pilot script for a browser_copilot channel, or null when
  * the channel isn't co-pilot-eligible (automatic / feed / broker / custom). Pure.
  */
 export function buildCopilotScript(

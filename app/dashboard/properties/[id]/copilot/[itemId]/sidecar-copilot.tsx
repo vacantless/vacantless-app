@@ -121,7 +121,7 @@ export function SidecarCopilot({
     <div className="mx-auto w-full max-w-lg space-y-3">
       <header className="space-y-1">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">
-          Guided posting — no install needed
+          Posting assist - no install needed
         </p>
         <h1 className="text-lg font-semibold text-gray-900">
           Post to {channelLabel}
