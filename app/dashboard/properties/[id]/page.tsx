@@ -627,7 +627,7 @@ function SyndicationFirstCard({
     : distributeHref;
   const actionLabel = !linkIsLive
     ? "Get online"
-    : needsListingWork
+    : packetBlocked || needsListingWork
       ? "Get online"
     : expiredOnly
       ? "Refresh or repost"
@@ -2563,7 +2563,9 @@ export default async function PropertyDetailPage({
       : relistDistributeHref(p.id, relistAnchor);
   const showRelistOneTap =
     relistOneTapEnabled &&
-    (publicPageIsBookable || normalizedStatus === "leased");
+    (normalizedStatus === "leased" ||
+      (publicPageIsBookable &&
+        listingPacketReadiness.missingRequired.length === 0));
   const nextAction = deriveNextAction({
     propertyId: p.id,
     currentStep: lifecycle.currentStep,

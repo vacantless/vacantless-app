@@ -458,6 +458,54 @@ export function LaunchRunPanel({
     </>
   );
 
+  if (setupBlocker) {
+    const waitingSiteCount =
+      items.length ||
+      startChannels.filter((channel) => channel.defaultSelected).length ||
+      startChannels.length;
+
+    return (
+      <div
+        id="publish-checklist"
+        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-gray-950">
+            1-tap queue
+          </h3>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+            No posting yet
+          </span>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+            Waiting on one listing
+          </p>
+          <p className="mt-1 text-base font-semibold text-amber-950">
+            {setupBlocker.title}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-amber-900">
+            {setupBlocker.detail}
+          </p>
+          <a
+            href={setupBlocker.href}
+            className="mt-3 inline-flex rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800"
+          >
+            {setupBlocker.action}
+          </a>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
+            {waitingSiteCount} {waitingSiteCount === 1 ? "site" : "sites"} waiting
+          </span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
+            Sign-in, payment, and proof later
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   // No active run: offer to start one.
   if (!run) {
     return (
@@ -543,54 +591,6 @@ export function LaunchRunPanel({
   const queueProgressLabel = renterPageDone
     ? `Renter page done · ${outsideLiveProofCount} of ${outsideItems.length} outside sites live`
     : `${outsideLiveProofCount} of ${outsideItems.length} outside sites live`;
-
-  if (setupBlocker) {
-    return (
-      <div
-        id="publish-checklist"
-        className="mb-4 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-      >
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-gray-950">
-            1-tap queue
-          </h3>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-            {items.length} {items.length === 1 ? "site" : "sites"} waiting
-          </span>
-        </div>
-        <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-          <div
-            className="h-full rounded-full bg-brand"
-            style={{ width: `${progress.pct}%` }}
-          />
-        </div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
-            Waiting on one listing
-          </p>
-          <p className="mt-1 text-base font-semibold text-amber-950">
-            {setupBlocker.title}
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-amber-900">
-            {setupBlocker.detail}
-          </p>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-          {renterPageDone && (
-            <span className="rounded-full bg-green-50 px-2.5 py-1 font-semibold text-green-700">
-              Renter page done
-            </span>
-          )}
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
-            {outsideLiveProofCount} of {outsideItems.length} outside sites live
-          </span>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
-            Sign-in, payment, and proof later
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div

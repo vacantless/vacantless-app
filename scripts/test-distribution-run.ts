@@ -502,7 +502,17 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("No posting yet") &&
       distributeSource.includes("Posting help included") &&
       distributeSource.includes("{!packetBlocked && (") &&
-      launchRunPanelSource.includes("Waiting on one listing"),
+      launchRunPanelSource.includes("Waiting on one listing") &&
+      launchRunPanelSource.indexOf("if (setupBlocker)") <
+        launchRunPanelSource.indexOf("if (!run)") &&
+      launchRunPanelSource.includes("{setupBlocker.action}"),
+  );
+  ok(
+    "packet blockers win before relist and outside-site actions",
+    propertyDetailSource.includes(": packetBlocked || needsListingWork") &&
+      propertyDetailSource.includes(
+        "listingPacketReadiness.missingRequired.length === 0",
+      ),
   );
   ok(
     "mobile entry links land on the publish control room",
