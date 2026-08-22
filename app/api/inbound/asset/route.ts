@@ -14,6 +14,9 @@ import {
   type IngestAttachmentInput,
   type IngestLoopHeaders,
 } from "@/lib/email-ingest";
+import { routePostmarkInbound } from "@/lib/inbound-postmark-dispatch";
+import { handleInboundLeadPost } from "@/lib/portal-lead-ingest-server";
+import { handleInboundReplyPost } from "@/lib/renter-reply-ingest-server";
 import { canUseCaptureEmailIn } from "@/lib/billing";
 import {
   etransferDedupeKey,
@@ -101,6 +104,14 @@ type RuleRow = {
   created_at: string | null;
 };
 
+function requestWithCachedPayload(req: NextRequest, payload: Record<string, unknown>) {
+  return {
+    headers: req.headers,
+    url: req.url,
+    json: async () => payload,
+  };
+}
+
 function mapRuleRow(r: RuleRow): CategorizationRule {
   return {
     id: r.id,
@@ -149,6 +160,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, handled: "bad_payload" });
   }
 
+  const ingestDomain = process.env.INGEST_EMAIL_DOMAIN || DEFAULT_INGEST_DOMAIN;
+  const dispatch = routePostmarkInbound(payload, { ingestDomain });
+  if (dispatch.target === "reply") {
+    return handleInboundReplyPost(requestWithCachedPayload(req, payload));
+  }
+  if (dispatch.target === "lead") {
+    return handleInboundLeadPost(requestWithCachedPayload(req, payload));
+  }
+
   const str = (v: unknown): string => (typeof v === "string" ? v : "");
   // Recipients: Postmark gives ToFull/CcFull arrays of {Email} + To/Cc strings.
   const recipientStrings: string[] = [];
@@ -166,7 +186,6 @@ export async function POST(req: NextRequest) {
     if (s) recipientStrings.push(s);
   }
 
-  const ingestDomain = process.env.INGEST_EMAIL_DOMAIN || DEFAULT_INGEST_DOMAIN;
   const token = pickIngestToken(recipientStrings, ingestDomain);
 
   // From: prefer the structured FromFull.Email, fall back to the From header.
