@@ -502,6 +502,165 @@ export type ConnectChip = {
   canConnect: boolean;
 };
 
+export const CHANNEL_CONNECTION_STATES = [
+  "connected_ready",
+  "connected_needs_authorization",
+  "needs_sign_in",
+  "needs_payment_or_setup",
+  "planned_or_unavailable",
+  "broker_route",
+  "always_on",
+] as const;
+export type ChannelConnectionState =
+  (typeof CHANNEL_CONNECTION_STATES)[number];
+
+export type ChannelConnectionStage = {
+  state: ChannelConnectionState;
+  label: string;
+  helper: string;
+  tone: ConnectChipTone;
+  canConnect: boolean;
+  countsAsReady: boolean;
+};
+
+export function channelConnectionStage(input: {
+  integrationStatus: ChannelIntegrationStatus | null;
+  transport: string;
+  requiresPayment: boolean;
+  accountStatus: string | null;
+  hasFeedRoute: boolean;
+  automationAuthorized: boolean;
+  requiresAutomationAuthorization: boolean;
+}): ChannelConnectionStage {
+  if (input.integrationStatus === "mls_gated" || input.transport === "broker") {
+    return {
+      state: "broker_route",
+      label: "Broker route",
+      helper: "This channel needs an agent, MLS, or broker handoff; it is not a self-serve account connection.",
+      tone: "neutral",
+      canConnect: false,
+      countsAsReady: false,
+    };
+  }
+
+  if (input.integrationStatus === "planned") {
+    return {
+      state: "planned_or_unavailable",
+      label: "Planned",
+      helper: "This channel is listed for the roadmap, but there is no connected Vacantless posting path yet.",
+      tone: "neutral",
+      canConnect: false,
+      countsAsReady: false,
+    };
+  }
+
+  if (input.integrationStatus === null && input.transport === "automatic") {
+    return {
+      state: "always_on",
+      label: "On",
+      helper: "This Vacantless-owned route does not need an external account connection.",
+      tone: "positive",
+      canConnect: false,
+      countsAsReady: true,
+    };
+  }
+
+  if (input.accountStatus === "needs_login") {
+    return {
+      state: "needs_sign_in",
+      label: "Needs sign-in",
+      helper: "Sign in or refresh the saved session before Vacantless can continue this channel.",
+      tone: "warning",
+      canConnect: true,
+      countsAsReady: false,
+    };
+  }
+
+  if (input.accountStatus === "needs_payment") {
+    return {
+      state: "needs_payment_or_setup",
+      label: "Needs payment/setup",
+      helper: "Finish the paid placement or setup step before this channel can move forward.",
+      tone: "warning",
+      canConnect: true,
+      countsAsReady: false,
+    };
+  }
+
+  if (input.accountStatus === "rejected") {
+    return {
+      state: "needs_payment_or_setup",
+      label: "Review setup",
+      helper: "The channel rejected or blocked this route. Review the setup before trying again.",
+      tone: "danger",
+      canConnect: true,
+      countsAsReady: false,
+    };
+  }
+
+  if (input.accountStatus === "paused") {
+    return {
+      state: "needs_payment_or_setup",
+      label: "Paused",
+      helper: "Resume this channel before it can receive a listing.",
+      tone: "neutral",
+      canConnect: true,
+      countsAsReady: false,
+    };
+  }
+
+  if (input.accountStatus === "submitted") {
+    return {
+      state: "needs_payment_or_setup",
+      label: "Submitted",
+      helper: "Setup was submitted and is waiting on the channel to accept the route.",
+      tone: "neutral",
+      canConnect: false,
+      countsAsReady: false,
+    };
+  }
+
+  const connected =
+    input.accountStatus === "connected" ||
+    input.accountStatus === "accepted" ||
+    input.hasFeedRoute === true;
+
+  if (connected && input.requiresAutomationAuthorization && !input.automationAuthorized) {
+    return {
+      state: "connected_needs_authorization",
+      label: "Connected - authorize posting",
+      helper: "The account is connected. Authorize Vacantless before it can auto-post to this channel.",
+      tone: "warning",
+      canConnect: false,
+      countsAsReady: false,
+    };
+  }
+
+  if (connected) {
+    return {
+      state: "connected_ready",
+      label: input.requiresAutomationAuthorization ? "Connected + authorized" : "Connected",
+      helper: input.requiresAutomationAuthorization
+        ? "This account is connected and authorized for approved posts."
+        : "This account or feed route is ready for the next publishing step.",
+      tone: "positive",
+      canConnect: false,
+      countsAsReady: true,
+    };
+  }
+
+  return {
+    state: "needs_payment_or_setup",
+    label: input.requiresPayment ? "Needs payment/setup" : "Needs setup",
+    helper: input.requiresPayment
+      ? "Finish account setup and confirm any paid-placement rules before using this channel."
+      : "Connect or record this channel once before using it from Get online.",
+    tone: "accent",
+    canConnect: true,
+    countsAsReady: false,
+  };
+}
+
 export function channelConnectChip(input: {
   integrationStatus: ChannelIntegrationStatus | null;
   transport: string;

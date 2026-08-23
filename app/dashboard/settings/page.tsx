@@ -57,7 +57,7 @@ import {
 } from "@/lib/distribution-capabilities";
 import {
   channelByKey,
-  channelConnectChip,
+  channelConnectionStage,
   type ConnectChipTone,
 } from "@/lib/distribution-channels";
 import {
@@ -330,13 +330,14 @@ export default async function SettingsPage({
   const { data: distributionAccountRows } = await supabase
     .from("distribution_channel_accounts")
     .select(
-      "channel, account_status, feed_url, manager_url, external_account_label, contact_name, contact_email, notes, last_setup_checked_at, last_successful_publish_at, last_verification_at, spend_authorized, spend_max_cents, spend_period_max_cents, spend_authorized_at, spend_authorized_by, spend_revoked_at",
+      "channel, account_status, automation_authorized, feed_url, manager_url, external_account_label, contact_name, contact_email, notes, last_setup_checked_at, last_successful_publish_at, last_verification_at, spend_authorized, spend_max_cents, spend_period_max_cents, spend_authorized_at, spend_authorized_by, spend_revoked_at",
     )
     .eq("organization_id", org.id)
     .order("channel", { ascending: true });
   type DistributionAccountRow = {
     channel: string;
     account_status: string;
+    automation_authorized: boolean | null;
     feed_url: string | null;
     manager_url: string | null;
     external_account_label: string | null;
@@ -363,12 +364,15 @@ export default async function SettingsPage({
       ? account.account_status
       : null;
     const registry = channelByKey(cap.channel);
-    const connectChip = channelConnectChip({
+    const connectionStage = channelConnectionStage({
       integrationStatus: registry?.integrationStatus ?? null,
       transport: cap.transport,
-      needsOrgAccount: cap.needsOrgAccount,
+      requiresPayment: cap.requiresPayment,
       accountStatus,
       hasFeedRoute: Boolean(account?.feed_url),
+      automationAuthorized: account?.automation_authorized === true,
+      requiresAutomationAuthorization:
+        registry?.mode === "api_automatic" || cap.postingPolicy === "automatic_allowed",
     });
     const readiness = channelAccountReadiness({
       capability: cap,
@@ -381,21 +385,28 @@ export default async function SettingsPage({
       account,
       accountStatus: accountStatus ?? "not_started",
       readiness,
-      connectChip,
+      connectionStage,
     };
   });
   const connectSummary = distributionChannels.reduce(
-    (summary, { connectChip }) => {
-      if (connectChip.state === "connected" || connectChip.state === "always_on") {
-        summary.connected += 1;
-      } else if (connectChip.canConnect) {
-        summary.toSetUp += 1;
+    (summary, { connectionStage }) => {
+      if (
+        connectionStage.state === "connected_ready" ||
+        connectionStage.state === "always_on"
+      ) {
+        summary.ready += 1;
+      } else if (connectionStage.state === "connected_needs_authorization") {
+        summary.authorization += 1;
+      } else if (connectionStage.state === "needs_sign_in") {
+        summary.signIn += 1;
+      } else if (connectionStage.state === "needs_payment_or_setup") {
+        summary.setup += 1;
       } else {
-        summary.other += 1;
+        summary.planned += 1;
       }
       return summary;
     },
-    { connected: 0, toSetUp: 0, other: 0 },
+    { ready: 0, authorization: 0, signIn: 0, setup: 0, planned: 0 },
   );
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
@@ -891,8 +902,9 @@ export default async function SettingsPage({
                     listing from the property&apos;s Get online tab.
                   </p>
                   <p className="mt-1 max-w-2xl text-xs text-gray-400">
-                    {connectSummary.connected} connected · {connectSummary.toSetUp} to set up ·{" "}
-                    {connectSummary.other} assist or coming soon
+                    {connectSummary.ready} ready · {connectSummary.authorization} need authorization ·{" "}
+                    {connectSummary.signIn} need sign-in · {connectSummary.setup} setup/payment ·{" "}
+                    {connectSummary.planned} planned/broker
                   </p>
                 </div>
               </div>
@@ -1005,7 +1017,7 @@ export default async function SettingsPage({
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness, connectChip }) => {
+            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness, connectionStage }) => {
               const statusId = `dist-${cap.channel}-status`;
               const feedId = `dist-${cap.channel}-feed`;
               const managerId = `dist-${cap.channel}-manager`;
@@ -1037,11 +1049,14 @@ export default async function SettingsPage({
                       </p>
                     </div>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CHIP[connectChip.tone]}`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CHIP[connectionStage.tone]}`}
                     >
-                      {connectChip.label}
+                      {connectionStage.label}
                     </span>
                   </div>
+                  <p className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                    {connectionStage.helper}
+                  </p>
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
