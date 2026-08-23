@@ -100,7 +100,11 @@ import type {
   ListingPacketMissingField,
   ListingPacketReadiness,
 } from "@/lib/listing-packet-readiness";
-import type { PortalRequirementFieldKey } from "@/lib/portal-requirements";
+import {
+  portalRequirementActionPlanFor,
+  type PortalRequirementActionPlan,
+  type PortalRequirementFieldKey,
+} from "@/lib/portal-requirements";
 import { PublishEverywhere } from "./publish-everywhere";
 import {
   ConfirmPublishButton,
@@ -1169,6 +1173,62 @@ const PACKET_TIER_LABEL: Record<ListingPacketChannelReadiness["tier"], string> =
   broker: "Broker",
 };
 
+type PortalRequirementFlagChip = {
+  key: string;
+  label: string;
+  className: string;
+};
+
+function portalRequirementFlagChips(
+  plan: PortalRequirementActionPlan | null,
+): PortalRequirementFlagChip[] {
+  const chips: PortalRequirementFlagChip[] = [];
+  if (!plan) return chips;
+  if (plan.requiresAccount) {
+    chips.push({
+      key: "account",
+      label: "Account",
+      className: "bg-blue-50 text-blue-700",
+    });
+  }
+  if (plan.requiresPayment) {
+    chips.push({
+      key: "payment",
+      label: "Payment",
+      className: "bg-amber-50 text-amber-700",
+    });
+  }
+  if (plan.requiresProof) {
+    chips.push({
+      key: "proof",
+      label: "Proof",
+      className: "bg-emerald-50 text-emerald-700",
+    });
+  }
+  if (plan.requiresBroker) {
+    chips.push({
+      key: "broker",
+      label: "Broker",
+      className: "bg-slate-100 text-slate-700",
+    });
+  }
+  if (plan.requiresFeedRoute) {
+    chips.push({
+      key: "feed",
+      label: "Feed route",
+      className: "bg-cyan-50 text-cyan-700",
+    });
+  }
+  if (plan.requiresAudience) {
+    chips.push({
+      key: "audience",
+      label: "Audience",
+      className: "bg-indigo-50 text-indigo-700",
+    });
+  }
+  return chips;
+}
+
 function packetFieldHref(
   field: PortalRequirementFieldKey,
   propertyId?: string,
@@ -1321,6 +1381,11 @@ function ListingPacketChannelRow({
 }: {
   channel: ListingPacketChannelReadiness;
 }) {
+  const actionPlan = portalRequirementActionPlanFor(channel.channel);
+  const actionChips = portalRequirementFlagChips(actionPlan);
+  const primaryActionLabel = actionPlan?.primaryActionLabel ?? null;
+  const primaryActionDetail = actionPlan?.primaryAction?.detail ?? null;
+  const actionPrefix = channel.ready ? "Next" : "Then";
   const missing = channel.missingRequired
     .slice(0, 3)
     .map((field) =>
@@ -1342,6 +1407,28 @@ function ListingPacketChannelRow({
             ? packetReadyDetail(channel)
             : `Needs ${missing.join(", ")}.`}
         </p>
+        {primaryActionLabel && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full bg-brand/10 px-2.5 py-1 text-[11px] font-semibold text-brand">
+              {actionPrefix}: {primaryActionLabel}
+            </span>
+            {actionChips.map((chip) => (
+              <span
+                key={chip.key}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${chip.className}`}
+              >
+                {chip.label}
+              </span>
+            ))}
+          </div>
+        )}
+        {primaryActionDetail && (
+          <p className="mt-1 text-xs leading-relaxed text-gray-500">
+            {channel.ready
+              ? primaryActionDetail
+              : `After the listing facts are ready: ${primaryActionDetail}`}
+          </p>
+        )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">

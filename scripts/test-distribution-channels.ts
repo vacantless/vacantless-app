@@ -275,6 +275,27 @@ ok(
   distributeTabSource.includes("Tracked inquiry link") &&
     distributeTabSource.includes("reservedTrackedUrl"),
 );
+ok(
+  "Distribute channel rows consume portal requirement action plans",
+  distributeTabSource.includes("portalRequirementActionPlanFor(channel.channel)") &&
+    distributeTabSource.includes("primaryActionLabel"),
+);
+ok(
+  "Distribute channel rows render source-owned requirement flags",
+  distributeTabSource.includes("portalRequirementFlagChips") &&
+    [
+      "requiresAccount",
+      "requiresPayment",
+      "requiresProof",
+      "requiresBroker",
+      "requiresFeedRoute",
+      "requiresAudience",
+    ].every((flag) => distributeTabSource.includes(flag)),
+);
+ok(
+  "Blocked channel rows keep listing facts before operator actions",
+  distributeTabSource.includes("After the listing facts are ready"),
+);
 
 const launchRunPanelSource = readFileSync(
   "app/dashboard/properties/[id]/launch-run-panel.tsx",
