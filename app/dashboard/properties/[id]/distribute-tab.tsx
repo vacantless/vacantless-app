@@ -1232,7 +1232,10 @@ function ListingPacketCard({
       }.`;
   const subline = ready
     ? "Posting choices stay below: included routes, sign-in steps, paid top-ups, and proof."
-    : `Add ${missingText} to satisfy the remaining sites.`;
+    : primaryMissing?.field === "property_type"
+      ? primaryAction?.detail ??
+        "Choose the property type in Unit details to unlock outside-site posting."
+      : `Add ${missingText} to satisfy the remaining sites.`;
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

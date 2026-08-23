@@ -416,7 +416,11 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       ) &&
       propertyDetailSource.includes("firstListingPacketTarget") &&
       propertyDetailSource.includes("syndicationPacketTargetHref") &&
-      propertyDetailSource.includes("packetActionLabel"),
+      propertyDetailSource.includes("packetActionLabel") &&
+      propertyDetailSource.includes(
+        'firstListingPacketMissingField === "property_type"',
+      ) &&
+      propertyDetailSource.includes('"Choose property type"'),
   );
   ok(
     "first screen keeps portal complexity compact",
@@ -543,6 +547,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes(
         "Choose the property type in Unit details to unlock outside-site posting.",
       ) &&
+      distributeSource.includes('primaryMissing?.field === "property_type"') &&
       distributeSource.includes("packetFieldAction(firstListingPacketMissing, propertyId)") &&
       distributeSource.includes("packetFieldAction(firstPacketMissing, propertyId)") &&
       distributeSource.includes("<ListingPacketCard readiness={listingPacket} propertyId={propertyId} />") &&
