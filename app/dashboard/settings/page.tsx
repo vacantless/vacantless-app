@@ -367,6 +367,7 @@ export default async function SettingsPage({
     const connectionStage = channelConnectionStage({
       integrationStatus: registry?.integrationStatus ?? null,
       transport: cap.transport,
+      requiresLogin: cap.requiresLogin,
       requiresPayment: cap.requiresPayment,
       accountStatus,
       hasFeedRoute: Boolean(account?.feed_url),

@@ -36,6 +36,7 @@ function stageFor(
   return channelConnectionStage({
     integrationStatus: registry?.integrationStatus ?? null,
     transport: cap.transport,
+    requiresLogin: cap.requiresLogin,
     requiresPayment: cap.requiresPayment,
     accountStatus: overrides.accountStatus ?? null,
     hasFeedRoute: overrides.hasFeedRoute ?? false,
@@ -82,6 +83,22 @@ eq("planned Marketplace remains planned", stageFor("facebook", { accountStatus: 
 eq("planned Viewit does not surface stale payment rows", stageFor("viewit", { accountStatus: "needs_payment" }).state, "planned_or_unavailable");
 eq("Vacantless route is always on", stageFor("vacantless").state, "always_on");
 eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: true }).state, "connected_ready");
+
+{
+  const stage = stageFor("rentfaster");
+  ok("planned RentFaster names paid assist", stage.helper.includes("paid posting assist"));
+  ok("planned RentFaster keeps payment approval gate", stage.helper.includes("approve before paying"));
+  ok("planned RentFaster keeps proof gate", stage.helper.includes("live ad URL as proof"));
+  ok("planned RentFaster cannot connect from Settings", stage.canConnect === false);
+}
+
+{
+  const stage = stageFor("facebook");
+  ok("planned Marketplace names posting assist", stage.helper.includes("Posting assist can prepare"));
+  ok("planned Marketplace keeps operator sign-in gate", stage.helper.includes("signed-in operator"));
+  ok("planned Marketplace keeps proof gate", stage.helper.includes("live ad URL as proof"));
+  ok("planned Marketplace helper does not mention payment", !stage.helper.includes("paid posting assist"));
+}
 
 console.log(`\nchannel-connection-stages: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
