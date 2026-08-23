@@ -416,7 +416,11 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       ) &&
       propertyDetailSource.includes("firstListingPacketTarget") &&
       propertyDetailSource.includes("syndicationPacketTargetHref") &&
-      propertyDetailSource.includes("packetActionLabel"),
+      propertyDetailSource.includes("packetActionLabel") &&
+      propertyDetailSource.includes(
+        'firstListingPacketMissingField === "property_type"',
+      ) &&
+      propertyDetailSource.includes('"Choose property type"'),
   );
   ok(
     "first screen keeps portal complexity compact",
@@ -533,6 +537,23 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       launchRunPanelSource.indexOf("if (setupBlocker)") <
         launchRunPanelSource.indexOf("if (!run)") &&
       launchRunPanelSource.includes("{setupBlocker.action}"),
+  );
+  ok(
+    "property type blocker is one tap from Get online to Unit details",
+    distributeSource.includes("function packetFieldAction") &&
+      distributeSource.includes('field === "property_type" && propertyId') &&
+      distributeSource.includes("?tab=setup#property-unit-type") &&
+      distributeSource.includes("Choose property type") &&
+      distributeSource.includes(
+        "Choose the property type in Unit details to unlock outside-site posting.",
+      ) &&
+      distributeSource.includes('primaryMissing?.field === "property_type"') &&
+      distributeSource.includes("packetFieldAction(firstListingPacketMissing, propertyId)") &&
+      distributeSource.includes("packetFieldAction(firstPacketMissing, propertyId)") &&
+      distributeSource.includes("<ListingPacketCard readiness={listingPacket} propertyId={propertyId} />") &&
+      distributeSource.includes("propertyId={propertyId}") &&
+      distributeSource.includes("action: firstListingPacketAction.action") &&
+      distributeSource.includes("action: firstPacketAction.action"),
   );
   ok(
     "packet blockers win before relist and outside-site actions",

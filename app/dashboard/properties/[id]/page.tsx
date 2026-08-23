@@ -638,9 +638,12 @@ function SyndicationFirstCard({
     packetBlocked && firstListingPacketTarget
       ? syndicationPacketTargetHref(encodedPropertyId, firstListingPacketTarget)
       : distributeHref;
-  const packetActionLabel = firstListingPacketMissingLabel
-    ? `Add ${firstListingPacketMissingLabel.toLowerCase()}`
-    : "Get online";
+  const packetActionLabel =
+    firstListingPacketMissingField === "property_type"
+      ? "Choose property type"
+      : firstListingPacketMissingLabel
+        ? `Add ${firstListingPacketMissingLabel.toLowerCase()}`
+        : "Get online";
   const expiredOnly =
     linkIsLive && hasPostHistory && liveOutsideCount === 0 && !needsListingWork;
   const status = packetBlocked
