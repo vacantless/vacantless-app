@@ -113,6 +113,19 @@ export type DistributionChannel = {
   portalUrl: string;
 };
 
+export const GET_ONLINE_ASSIST_KINDS = [
+  "posting_assist",
+  "paid_posting_assist",
+] as const;
+export type GetOnlineAssistKind = (typeof GET_ONLINE_ASSIST_KINDS)[number];
+
+const GET_ONLINE_ASSIST_BY_CHANNEL: Partial<
+  Record<DistributionChannel["key"], GetOnlineAssistKind>
+> = {
+  facebook: "posting_assist",
+  rentfaster: "paid_posting_assist",
+};
+
 // Order = ranked display order for Distribute/Get online. Publish execution
 // stays decoupled in lib/distribution-publish.
 export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
@@ -406,6 +419,13 @@ export function channelByKey(
   return (
     DISTRIBUTION_CHANNELS.find((c) => c.key === key) ?? null
   );
+}
+
+export function getOnlineAssistKindForChannel(
+  channel: DistributionChannel,
+): GetOnlineAssistKind | null {
+  if (channel.integrationStatus !== "planned") return null;
+  return GET_ONLINE_ASSIST_BY_CHANNEL[channel.key] ?? null;
 }
 
 export const CANONICAL_CHANNEL_REGISTRY = DISTRIBUTION_CHANNELS;

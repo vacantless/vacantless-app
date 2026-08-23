@@ -282,7 +282,16 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     distributeSource.includes("Done-for-you / top-up") &&
       distributeSource.includes("Pay Vacantless to post") &&
       distributeSource.includes("Use a site yourself instead") &&
-      distributeSource.includes("Open posting checklist"),
+      distributeSource.includes("Open posting checklist") &&
+      distributeSource.includes("Paid placements still need your") &&
+      distributeSource.includes("approval and proof"),
+  );
+  ok(
+    "one-tap footer opens queue from all selected one-tap run items",
+    distributeSource.includes("ONE_TAP_RUN_STATUSES") &&
+      distributeSource.includes("selectedOneTapRunItems") &&
+      distributeSource.includes("hasOneTapRunItems ? \"Open 1-tap queue\" : \"Choose sites\"") &&
+      !distributeSource.includes("hasReachRunItems ? \"Open 1-tap queue\" : \"Choose sites\""),
   );
   ok(
     "already-queued desk work shows request date when available",

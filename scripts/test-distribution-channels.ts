@@ -19,6 +19,7 @@ import {
   daysBetween,
   computeChannelStatus,
   distributionChannelDisplayGroupFor,
+  getOnlineAssistKindForChannel,
   groupDistributionChannelsForDisplay,
   type ChannelPost,
 } from "../lib/distribution-channels";
@@ -224,6 +225,20 @@ ok("kijiji TTL is 60 days", channelByKey("kijiji")?.ttlDays === 60);
 ok("kijiji is free", channelByKey("kijiji")?.paid === false);
 ok("rentfaster is paid", channelByKey("rentfaster")?.paid === true);
 ok("viewit is paid", channelByKey("viewit")?.paid === true);
+ok(
+  "facebook is explicit Get online posting assist",
+  getOnlineAssistKindForChannel(channelByKey("facebook")!) ===
+    "posting_assist",
+);
+ok(
+  "rentfaster is explicit paid Get online posting assist",
+  getOnlineAssistKindForChannel(channelByKey("rentfaster")!) ===
+    "paid_posting_assist",
+);
+ok(
+  "viewit paid channel is not implicitly added to Get online assist",
+  getOnlineAssistKindForChannel(channelByKey("viewit")!) === null,
+);
 ok("facebook unknown TTL stays null", channelByKey("facebook")?.ttlDays === null);
 ok(
   "all matrix channels have a fill sheet",

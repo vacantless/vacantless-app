@@ -87,7 +87,19 @@ function buckets(opts: {
     b.oneTap.find((r) => r.key === "zumper")?.chip.label ?? "",
     "Posting assist",
   );
-  ok("rentfaster planned route is gated", has(b.gated, "rentfaster"));
+  ok("rentfaster paid posting assist is one-tap", has(b.oneTap, "rentfaster"));
+  eq(
+    "rentfaster reads Needs payment, not Coming soon",
+    b.oneTap.find((r) => r.key === "rentfaster")?.chip.label ?? "",
+    "Needs payment",
+  );
+  ok(
+    "rentfaster paid assist keeps payment/proof honest",
+    (b.oneTap.find((r) => r.key === "rentfaster")?.headline ?? "").includes(
+      "approve any fee",
+    ),
+  );
+  ok("viewit paid planned route remains gated", has(b.gated, "viewit"));
   ok("facebook page pre-connect is gated", has(b.gated, "facebook_feed"));
   ok("instagram is gated by default", has(b.gated, "instagram"));
   ok("realtor.ca stays gated", has(b.gated, "realtor_ca"));
@@ -236,6 +248,26 @@ ok(
 ok(
   "Publish Everywhere can revoke channel automation",
   publishEverywhereSource.includes("revokeChannelAutomation"),
+);
+
+const channelPublishRailSource = readFileSync(
+  "app/dashboard/properties/[id]/channel-publish-rail.tsx",
+  "utf8",
+);
+ok(
+  "posting rail one-tap title names payment",
+  channelPublishRailSource.includes("Needs sign-in, payment, or proof"),
+);
+ok(
+  "rentfaster stays proof-gated in the rail copy",
+  channelPublishRailSource.includes("save the real live URL"),
+);
+ok(
+  "direct portal copy does not imply silent automation",
+  !channelPublishRailSource.includes("prefer not to use the automated path") &&
+    channelPublishRailSource.includes(
+      "needs native controls, payment, sign-in, or final review",
+    ),
 );
 
 console.log(`\nchannel-publish-rail: ${passed} passed, ${failed} failed`);
