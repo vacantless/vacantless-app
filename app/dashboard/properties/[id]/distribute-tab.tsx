@@ -287,6 +287,12 @@ const READY_NOW_STATUSES: readonly PublishStatus[] = [
 ];
 const NEEDS_PAYMENT_STATUSES: readonly PublishStatus[] = ["needs_payment"];
 const NEEDS_SIGN_IN_STATUSES: readonly PublishStatus[] = ["needs_login"];
+const ONE_TAP_RUN_STATUSES: readonly PublishStatus[] = [
+  "queued",
+  "needs_operator",
+  "needs_login",
+  "needs_payment",
+];
 const BLOCKED_STATUSES: readonly PublishStatus[] = ["blocked", "rejected"];
 
 const PUBLISH_CONTROL_ROOM_SAFETY_PROMISE =
@@ -1522,7 +1528,12 @@ function SimpleGetOnline({
       CONCIERGE_OPEN_STATUSES.includes(item.publishStatus),
   );
   const conciergeTargets = reachChannels.filter((item) => item.canConcierge);
-  const hasReachRunItems = reachChannels.length > 0;
+  const selectedOneTapRunItems = launchRun.items.filter(
+    (item) =>
+      item.mode !== "automatic" &&
+      ONE_TAP_RUN_STATUSES.includes(item.publishStatus),
+  );
+  const hasOneTapRunItems = selectedOneTapRunItems.length > 0;
   const publishBlockedByBasics = setupOutstanding > 0;
   const railBuckets = buildChannelPublishRailBuckets({
     channels: channelCards.map((card) => card.channel),
@@ -1588,7 +1599,8 @@ function SimpleGetOnline({
     <>
       <p>
         Posting assist is included. Growth concierge can take over eligible
-        manual posts after you approve access.
+        manual posts after you approve access. Paid placements still need your
+        approval and proof.
       </p>
       <p className="mt-1 font-semibold text-gray-900">
         {conciergeUsageLabel(launchRun.conciergeUsage)}
@@ -1620,7 +1632,7 @@ function SimpleGetOnline({
           href="#publish-checklist"
           className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
         >
-          {hasReachRunItems ? "Open 1-tap queue" : "Choose sites"}
+          {hasOneTapRunItems ? "Open 1-tap queue" : "Choose sites"}
         </a>
       )}
     </>
@@ -1628,7 +1640,8 @@ function SimpleGetOnline({
     <>
       <p>
         Posting assist is included. Done-for-you posting, paid placements, and
-        extra manual reach stay as Growth or top-up work.
+        extra manual reach stay as Growth or top-up work. Paid placements still
+        need your approval and proof.
       </p>
       {launchRun.conciergeDailyLostLabel && (
         <p className="mt-1 text-gray-600">

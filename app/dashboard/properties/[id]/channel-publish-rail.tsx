@@ -3,6 +3,7 @@ import { Icons } from "@/components/icons";
 import {
   channelConnectChip,
   channelTileStatus,
+  getOnlineAssistKindForChannel,
   type ConnectChip,
   type DistributionChannel,
 } from "@/lib/distribution-channels";
@@ -120,12 +121,16 @@ function bucketForChannel(input: {
     tone: "neutral",
     canConnect: false,
   };
-  // Facebook Marketplace is a working posting-assist (browser_copilot) channel
-  // today even though it has no API integration (integrationStatus "planned").
-  // Don't let the shared "planned -> Coming soon" verdict mislabel it as
-  // unavailable; show the honest posting-assist chip so it matches its
-  // "1 tap to finish" placement. Scope: rail only — the Settings tile stays
-  // "not available yet", which is correct (there is no account to connect).
+  const paidPostingAssistChip: ConnectChip = {
+    state: "needs_payment",
+    label: "Needs payment",
+    tone: "warning",
+    canConnect: true,
+  };
+  const assistKind = getOnlineAssistKindForChannel(channel);
+  // Some channels have no real account connection yet, but still have a useful,
+  // proof-gated posting-assist route in Get online. Keep Settings honest
+  // ("planned"/not connectable) while the property rail shows the actual next tap.
   const chip: ConnectChip =
     needsAutomationAuthorization
       ? {
@@ -134,8 +139,10 @@ function bucketForChannel(input: {
           tone: "warning",
           canConnect: false,
         }
-      : channel.key === "facebook" && baseChip.state === "coming_soon"
+      : assistKind === "posting_assist" && baseChip.state === "coming_soon"
       ? postingAssistChip
+      : assistKind === "paid_posting_assist" && baseChip.state === "coming_soon"
+      ? paidPostingAssistChip
       : baseChip.state === "connect" &&
           (channel.mode === "assisted_manual" ||
             (channel.mode === "feed_or_assisted" && !hasFeedRoute))
@@ -165,8 +172,6 @@ function bucketForChannel(input: {
     tier = "gated";
   } else if (apiReady || feedReady) {
     tier = "instant";
-  } else if (channel.key === "facebook") {
-    tier = "one_tap";
   } else if (unavailable) {
     tier = "gated";
   } else if (
@@ -195,6 +200,8 @@ function bucketForChannel(input: {
           ? "Authorized; this account receives a post when you publish and approve."
           : chip.state === "manual" && channel.mode === "feed_or_assisted"
             ? "Use posting assist until a feed route is connected."
+          : channel.key === "rentfaster" && chip.state === "needs_payment"
+            ? "Vacantless prepares the RentFaster post; you approve any fee and save the real live URL."
           : chip.state === "manual"
             ? "Vacantless prepares it; you review, post, and save the live URL."
           : tile.headline;
@@ -291,8 +298,8 @@ function ChannelRow({
             Use this site yourself
           </summary>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
-            Vacantless keeps the copy ready. Open the portal only if you want
-            its full native controls or prefer not to use the automated path.
+            Vacantless keeps the copy ready. Open the portal when this site
+            needs native controls, payment, sign-in, or final review.
           </p>
           <a
             href={row.portalUrl}
@@ -367,7 +374,7 @@ export function ChannelPublishRail({
     {
       label: "Needs your tap",
       value: buckets.oneTap.length,
-      detail: "sign-in, proof, or review",
+      detail: "sign-in, payment, or proof",
     },
     {
       label: "Top-up / setup",
@@ -423,7 +430,7 @@ export function ChannelPublishRail({
           actionForRow={actionForRow}
         />
         <TierCard
-          title="Needs sign-in or proof"
+          title="Needs sign-in, payment, or proof"
           rows={buckets.oneTap}
           defaultOpen={false}
         >
