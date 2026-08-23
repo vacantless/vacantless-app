@@ -3,6 +3,7 @@
 import {
   channelByKey,
   channelConnectionStage,
+  groupChannelConnectionChecklist,
 } from "../lib/distribution-channels";
 import { channelCapability } from "../lib/distribution-capabilities";
 import type { PublishChannelKey } from "../lib/distribution-publish";
@@ -53,6 +54,7 @@ function stageFor(
   });
   eq("connected Facebook Page feed waits for authorization", stage.state, "connected_needs_authorization");
   eq("authorization stage is warning", stage.tone, "warning");
+  eq("authorization next action is explicit", stage.nextActionLabel, "Authorize auto-post");
   ok("authorization stage does not count as ready", stage.countsAsReady === false);
   ok("authorization helper names authorization", stage.helper.includes("Authorize Vacantless"));
 }
@@ -64,6 +66,7 @@ function stageFor(
   });
   eq("authorized Facebook Page feed is ready", stage.state, "connected_ready");
   eq("authorized label is explicit", stage.label, "Connected + authorized");
+  eq("authorized next action points to Get online", stage.nextActionLabel, "Use from Get online");
   ok("authorized stage counts as ready", stage.countsAsReady === true);
 }
 
@@ -83,6 +86,52 @@ eq("planned Marketplace remains planned", stageFor("facebook", { accountStatus: 
 eq("planned Viewit does not surface stale payment rows", stageFor("viewit", { accountStatus: "needs_payment" }).state, "planned_or_unavailable");
 eq("Vacantless route is always on", stageFor("vacantless").state, "always_on");
 eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: true }).state, "connected_ready");
+
+{
+  const groups = groupChannelConnectionChecklist([
+    {
+      channel: "facebook_feed",
+      label: "Facebook Page feed",
+      stage: stageFor("facebook_feed", {
+        accountStatus: "connected",
+        automationAuthorized: false,
+      }),
+    },
+    {
+      channel: "kijiji",
+      label: "Kijiji",
+      stage: stageFor("kijiji", { accountStatus: "needs_login" }),
+    },
+    {
+      channel: "zumper",
+      label: "Zumper + PadMapper",
+      stage: stageFor("zumper", { accountStatus: "needs_payment" }),
+    },
+    {
+      channel: "rentals_ca",
+      label: "Rentals.ca",
+      stage: stageFor("rentals_ca", { hasFeedRoute: true }),
+    },
+    {
+      channel: "realtor_ca",
+      label: "Realtor.ca",
+      stage: stageFor("realtor_ca", {
+        accountStatus: "connected",
+        automationAuthorized: true,
+      }),
+    },
+  ]);
+  eq(
+    "checklist groups action buckets in operator order",
+    groups.map((group) => group.id).join("|"),
+    "authorization|sign_in|setup|ready|planned",
+  );
+  eq("authorization bucket preserves channel label", groups[0]?.items[0]?.label, "Facebook Page feed");
+  eq("sign-in bucket next action is explicit", groups[1]?.items[0]?.stage.nextActionLabel, "Refresh sign-in");
+  eq("setup bucket next action is explicit", groups[2]?.items[0]?.stage.nextActionLabel, "Finish setup/payment");
+  eq("ready bucket points back to Get online", groups[3]?.items[0]?.stage.nextActionLabel, "Use from Get online");
+  eq("planned bucket includes broker routes", groups[4]?.items[0]?.stage.state, "broker_route");
+}
 
 {
   const stage = stageFor("rentfaster");
