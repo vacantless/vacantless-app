@@ -557,6 +557,46 @@ function buildSyndicationBlockerSummary({
   );
 }
 
+type SyndicationPacketFieldTarget =
+  | { tab: "setup" | "market"; hash: string }
+  | { href: string };
+
+const SYNDICATION_PACKET_FIELD_TARGETS: Partial<
+  Record<ListingPacketMissingField["field"], SyndicationPacketFieldTarget>
+> = {
+  title: { tab: "setup", hash: "#rental-details" },
+  address: { tab: "setup", hash: "#rental-details" },
+  unit_number: { tab: "setup", hash: "#rental-details" },
+  rent: { tab: "setup", hash: "#rental-details" },
+  beds_baths: { tab: "setup", hash: "#rental-details" },
+  photos: { tab: "market", hash: "#property-photos" },
+  description: { tab: "setup", hash: "#listing-description" },
+  property_type: { tab: "setup", hash: "#property-unit-type" },
+  contact_phone: { href: "/dashboard/settings" },
+  contact_email: { href: "/dashboard/settings" },
+  availability_date: { tab: "setup", hash: "#property-available-date" },
+  lease_term: { tab: "setup", hash: "#rental-details" },
+  utilities: { tab: "setup", hash: "#rental-details" },
+  parking: { tab: "setup", hash: "#property-parking" },
+  amenities: { tab: "setup", hash: "#rental-details" },
+  pets: { tab: "setup", hash: "#rental-details" },
+  laundry: { tab: "setup", hash: "#property-laundry" },
+  air_conditioning: { tab: "setup", hash: "#rental-details" },
+  furnished: { tab: "setup", hash: "#rental-details" },
+  square_footage: { tab: "setup", hash: "#property-sqft" },
+  virtual_tour: { tab: "setup", hash: "#virtual_tour_url" },
+  floorplans: { tab: "market", hash: "#property-photos" },
+  video: { tab: "setup", hash: "#virtual_tour_url" },
+};
+
+function syndicationPacketTargetHref(
+  encodedPropertyId: string,
+  target: SyndicationPacketFieldTarget,
+) {
+  if ("href" in target) return target.href;
+  return `/dashboard/properties/${encodedPropertyId}?tab=${target.tab}${target.hash}`;
+}
+
 function SyndicationFirstCard({
   propertyId,
   linkIsLive,
@@ -591,10 +631,16 @@ function SyndicationFirstCard({
   const hasPostHistory = postHistoryCount > 0;
   const needsListingWork = setupOutstanding > 0 || !hasPhotos;
   const packetBlocked = listingPacketMissingCount > 0;
+  const firstListingPacketTarget = firstListingPacketMissingField
+    ? SYNDICATION_PACKET_FIELD_TARGETS[firstListingPacketMissingField] ?? null
+    : null;
   const firstMissingHref =
-    packetBlocked && firstListingPacketMissingField === "property_type"
-      ? `/dashboard/properties/${encodedPropertyId}?tab=setup#property-unit-type`
+    packetBlocked && firstListingPacketTarget
+      ? syndicationPacketTargetHref(encodedPropertyId, firstListingPacketTarget)
       : distributeHref;
+  const packetActionLabel = firstListingPacketMissingLabel
+    ? `Add ${firstListingPacketMissingLabel.toLowerCase()}`
+    : "Get online";
   const expiredOnly =
     linkIsLive && hasPostHistory && liveOutsideCount === 0 && !needsListingWork;
   const status = packetBlocked
@@ -631,12 +677,12 @@ function SyndicationFirstCard({
         : "Outside sites still need posting, and each one counts as live only once its real ad URL is saved.";
   const actionHref = packetBlocked ? firstMissingHref : distributeHref;
   const actionLabel = !linkIsLive
-    ? packetBlocked && firstListingPacketMissingField === "property_type"
-      ? "Add property type"
+    ? packetBlocked
+      ? packetActionLabel
       : "Get online"
     : packetBlocked || needsListingWork
-      ? packetBlocked && firstListingPacketMissingField === "property_type"
-        ? "Add property type"
+      ? packetBlocked
+        ? packetActionLabel
         : "Get online"
     : expiredOnly
       ? "Refresh or repost"
