@@ -546,6 +546,7 @@ export type ChannelConnectionStage = {
 export function channelConnectionStage(input: {
   integrationStatus: ChannelIntegrationStatus | null;
   transport: string;
+  requiresLogin: boolean;
   requiresPayment: boolean;
   accountStatus: string | null;
   hasFeedRoute: boolean;
@@ -564,10 +565,15 @@ export function channelConnectionStage(input: {
   }
 
   if (input.integrationStatus === "planned") {
+    const helper = input.requiresPayment
+      ? "No connected Vacantless account exists here yet. Treat this as paid posting assist: review any fee, approve before paying, and save the live ad URL as proof."
+      : input.requiresLogin
+        ? "No connected Vacantless account exists here yet. Posting assist can prepare the listing, but a signed-in operator must review the post and save the live ad URL as proof."
+        : "This channel is listed for the roadmap, but there is no connected Vacantless posting path yet.";
     return {
       state: "planned_or_unavailable",
       label: "Planned",
-      helper: "This channel is listed for the roadmap, but there is no connected Vacantless posting path yet.",
+      helper,
       tone: "neutral",
       canConnect: false,
       countsAsReady: false,
