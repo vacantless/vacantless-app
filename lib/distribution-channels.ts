@@ -537,6 +537,7 @@ export type ChannelConnectionState =
 export type ChannelConnectionStage = {
   state: ChannelConnectionState;
   label: string;
+  nextActionLabel: string;
   helper: string;
   tone: ConnectChipTone;
   canConnect: boolean;
@@ -557,6 +558,7 @@ export function channelConnectionStage(input: {
     return {
       state: "broker_route",
       label: "Broker route",
+      nextActionLabel: "Create broker handoff",
       helper: "This channel needs an agent, MLS, or broker handoff; it is not a self-serve account connection.",
       tone: "neutral",
       canConnect: false,
@@ -573,6 +575,7 @@ export function channelConnectionStage(input: {
     return {
       state: "planned_or_unavailable",
       label: "Planned",
+      nextActionLabel: input.requiresPayment ? "Use paid posting assist" : "Use posting assist",
       helper,
       tone: "neutral",
       canConnect: false,
@@ -584,6 +587,7 @@ export function channelConnectionStage(input: {
     return {
       state: "always_on",
       label: "On",
+      nextActionLabel: "No account action",
       helper: "This Vacantless-owned route does not need an external account connection.",
       tone: "positive",
       canConnect: false,
@@ -595,6 +599,7 @@ export function channelConnectionStage(input: {
     return {
       state: "needs_sign_in",
       label: "Needs sign-in",
+      nextActionLabel: "Refresh sign-in",
       helper: "Sign in or refresh the saved session before Vacantless can continue this channel.",
       tone: "warning",
       canConnect: true,
@@ -606,6 +611,7 @@ export function channelConnectionStage(input: {
     return {
       state: "needs_payment_or_setup",
       label: "Needs payment/setup",
+      nextActionLabel: "Finish setup/payment",
       helper: "Finish the paid placement or setup step before this channel can move forward.",
       tone: "warning",
       canConnect: true,
@@ -617,6 +623,7 @@ export function channelConnectionStage(input: {
     return {
       state: "needs_payment_or_setup",
       label: "Review setup",
+      nextActionLabel: "Review rejection",
       helper: "The channel rejected or blocked this route. Review the setup before trying again.",
       tone: "danger",
       canConnect: true,
@@ -628,6 +635,7 @@ export function channelConnectionStage(input: {
     return {
       state: "needs_payment_or_setup",
       label: "Paused",
+      nextActionLabel: "Resume channel",
       helper: "Resume this channel before it can receive a listing.",
       tone: "neutral",
       canConnect: true,
@@ -639,6 +647,7 @@ export function channelConnectionStage(input: {
     return {
       state: "needs_payment_or_setup",
       label: "Submitted",
+      nextActionLabel: "Check acceptance",
       helper: "Setup was submitted and is waiting on the channel to accept the route.",
       tone: "neutral",
       canConnect: false,
@@ -655,6 +664,7 @@ export function channelConnectionStage(input: {
     return {
       state: "connected_needs_authorization",
       label: "Connected - authorize posting",
+      nextActionLabel: "Authorize auto-post",
       helper: "The account is connected. Authorize Vacantless before it can auto-post to this channel.",
       tone: "warning",
       canConnect: false,
@@ -666,6 +676,7 @@ export function channelConnectionStage(input: {
     return {
       state: "connected_ready",
       label: input.requiresAutomationAuthorization ? "Connected + authorized" : "Connected",
+      nextActionLabel: "Use from Get online",
       helper: input.requiresAutomationAuthorization
         ? "This account is connected and authorized for approved posts."
         : "This account or feed route is ready for the next publishing step.",
@@ -678,6 +689,7 @@ export function channelConnectionStage(input: {
   return {
     state: "needs_payment_or_setup",
     label: input.requiresPayment ? "Needs payment/setup" : "Needs setup",
+    nextActionLabel: input.requiresPayment ? "Set up payment rules" : "Set up account",
     helper: input.requiresPayment
       ? "Finish account setup and confirm any paid-placement rules before using this channel."
       : "Connect or record this channel once before using it from Get online.",
@@ -685,6 +697,77 @@ export function channelConnectionStage(input: {
     canConnect: true,
     countsAsReady: false,
   };
+}
+
+export const CHANNEL_CONNECTION_CHECKLIST_GROUPS = [
+  {
+    id: "authorization",
+    label: "Authorize",
+    helper: "Connected accounts waiting on explicit posting consent.",
+  },
+  {
+    id: "sign_in",
+    label: "Sign in",
+    helper: "Portal sessions that need a fresh operator sign-in.",
+  },
+  {
+    id: "setup",
+    label: "Setup/payment",
+    helper: "Accounts, feed routes, or paid-placement rules to finish.",
+  },
+  {
+    id: "ready",
+    label: "Ready",
+    helper: "Routes ready for the next Get online step.",
+  },
+  {
+    id: "planned",
+    label: "Planned/broker",
+    helper: "Roadmap or broker routes that must stay fail-closed.",
+  },
+] as const;
+export type ChannelConnectionChecklistGroupId =
+  (typeof CHANNEL_CONNECTION_CHECKLIST_GROUPS)[number]["id"];
+
+export type ChannelConnectionChecklistInput = {
+  channel: string;
+  label: string;
+  stage: ChannelConnectionStage;
+  href?: string | null;
+};
+
+export type ChannelConnectionChecklistGroup<T extends ChannelConnectionChecklistInput> = {
+  id: ChannelConnectionChecklistGroupId;
+  label: string;
+  helper: string;
+  items: T[];
+};
+
+export function channelConnectionChecklistGroupFor(
+  stage: ChannelConnectionStage,
+): ChannelConnectionChecklistGroupId {
+  if (stage.state === "connected_needs_authorization") return "authorization";
+  if (stage.state === "needs_sign_in") return "sign_in";
+  if (stage.state === "needs_payment_or_setup") return "setup";
+  if (stage.state === "connected_ready" || stage.state === "always_on") return "ready";
+  return "planned";
+}
+
+export function groupChannelConnectionChecklist<T extends ChannelConnectionChecklistInput>(
+  items: readonly T[],
+): Array<ChannelConnectionChecklistGroup<T>> {
+  const grouped = new Map<ChannelConnectionChecklistGroupId, T[]>(
+    CHANNEL_CONNECTION_CHECKLIST_GROUPS.map((group) => [group.id, []]),
+  );
+
+  for (const item of items) {
+    grouped.get(channelConnectionChecklistGroupFor(item.stage))?.push(item);
+  }
+
+  return CHANNEL_CONNECTION_CHECKLIST_GROUPS.map((group) => ({
+    ...group,
+    items: grouped.get(group.id) ?? [],
+  })).filter((group) => group.items.length > 0);
 }
 
 export function channelConnectChip(input: {

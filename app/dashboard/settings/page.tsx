@@ -58,6 +58,7 @@ import {
 import {
   channelByKey,
   channelConnectionStage,
+  groupChannelConnectionChecklist,
   type ConnectChipTone,
 } from "@/lib/distribution-channels";
 import {
@@ -408,6 +409,14 @@ export default async function SettingsPage({
       return summary;
     },
     { ready: 0, authorization: 0, signIn: 0, setup: 0, planned: 0 },
+  );
+  const connectionChecklistGroups = groupChannelConnectionChecklist(
+    distributionChannels.map(({ cap, meta, connectionStage }) => ({
+      channel: cap.channel,
+      label: meta.label,
+      stage: connectionStage,
+      href: `#channel-${cap.channel}`,
+    })),
   );
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
@@ -915,6 +924,62 @@ export default async function SettingsPage({
               >
                 Open rentals
               </Link>
+            </div>
+            <div className="mt-5 border-t border-gray-100 pt-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Setup checklist
+                  </h4>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Finish the account steps here, then publish each listing from Get online.
+                  </p>
+                </div>
+                <span className="text-xs text-gray-400">
+                  {distributionChannels.length} channels
+                </span>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                {connectionChecklistGroups.map((group) => (
+                  <section
+                    key={group.id}
+                    className="min-w-0 border-l border-gray-200 pl-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <h5 className="text-xs font-semibold text-gray-800">
+                        {group.label}
+                      </h5>
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                        {group.items.length}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {group.helper}
+                    </p>
+                    <ul className="mt-3 space-y-2">
+                      {group.items.map((item) => (
+                        <li key={item.channel} className="min-w-0">
+                          <a
+                            href={item.href ?? undefined}
+                            className="block min-w-0 rounded-lg px-1 py-1 hover:bg-gray-50"
+                          >
+                            <span className="block truncate text-xs font-medium text-gray-800">
+                              {item.label}
+                            </span>
+                            <span
+                              className={`mt-1 inline-flex max-w-full rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[item.stage.tone]}`}
+                            >
+                              <span className="truncate">
+                                {item.stage.nextActionLabel}
+                              </span>
+                            </span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
             </div>
             <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="flex flex-wrap items-center gap-2">
