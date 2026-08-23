@@ -156,6 +156,48 @@ export type PortalRequirements = {
   notes: readonly string[];
 };
 
+export const PORTAL_REQUIREMENT_ACTION_KINDS = [
+  "sign_in",
+  "authorize_account",
+  "confirm_feed_route",
+  "approve_payment",
+  "use_posting_assist",
+  "use_paid_posting_assist",
+  "approve_api_post",
+  "create_broker_handoff",
+  "choose_audience",
+  "share_message",
+  "save_live_proof",
+] as const;
+export type PortalRequirementActionKind =
+  (typeof PORTAL_REQUIREMENT_ACTION_KINDS)[number];
+
+export type PortalRequirementAction = {
+  kind: PortalRequirementActionKind;
+  label: string;
+  detail: string;
+  field: PortalRequirementFieldKey | null;
+};
+
+export type PortalRequirementActionPlan = {
+  channel: PortalRequirementChannelKey;
+  label: string;
+  defaultTier: PortalDistributionTier;
+  automationMode: PortalAutomationMode;
+  sourceLevel: PortalRequirementSourceLevel;
+  proofRequired: boolean;
+  liveProofLabel: string;
+  actions: PortalRequirementAction[];
+  primaryAction: PortalRequirementAction | null;
+  primaryActionLabel: string | null;
+  requiresAccount: boolean;
+  requiresPayment: boolean;
+  requiresProof: boolean;
+  requiresBroker: boolean;
+  requiresFeedRoute: boolean;
+  requiresAudience: boolean;
+};
+
 export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
   {
     channel: "kijiji",
@@ -610,6 +652,277 @@ export function portalRequirementsFor(
   );
 }
 
+const PORTAL_REQUIREMENT_ACTION_LABELS: Record<
+  PortalRequirementActionKind,
+  string
+> = {
+  sign_in: "Sign in",
+  authorize_account: "Authorize account",
+  confirm_feed_route: "Confirm feed route",
+  approve_payment: "Approve payment",
+  use_posting_assist: "Use posting assist",
+  use_paid_posting_assist: "Use paid posting assist",
+  approve_api_post: "Approve API post",
+  create_broker_handoff: "Create broker handoff",
+  choose_audience: "Choose audience",
+  share_message: "Share message",
+  save_live_proof: "Save live proof",
+};
+
+const PRIMARY_ACTION_BY_MODE: Record<
+  PortalAutomationMode,
+  readonly PortalRequirementActionKind[]
+> = {
+  api_post: ["approve_api_post"],
+  feed_candidate: ["confirm_feed_route"],
+  posting_assist: ["use_posting_assist"],
+  paid_self_serve: ["approve_payment", "use_paid_posting_assist"],
+  broker_referral: ["create_broker_handoff"],
+  share_message: ["share_message"],
+};
+
+function rowHasField(
+  row: PortalRequirements,
+  field: PortalRequirementFieldKey,
+): boolean {
+  return (
+    row.required.includes(field) ||
+    row.recommended.includes(field) ||
+    row.optional.includes(field)
+  );
+}
+
+function rowRequiresField(
+  row: PortalRequirements,
+  field: PortalRequirementFieldKey,
+): boolean {
+  return row.required.includes(field);
+}
+
+function portalRequirementAction(
+  kind: PortalRequirementActionKind,
+  detail: string,
+  field: PortalRequirementFieldKey | null,
+): PortalRequirementAction {
+  return {
+    kind,
+    label: PORTAL_REQUIREMENT_ACTION_LABELS[kind],
+    detail,
+    field,
+  };
+}
+
+function pushPortalRequirementAction(
+  actions: PortalRequirementAction[],
+  action: PortalRequirementAction,
+): void {
+  if (!actions.some((existing) => existing.kind === action.kind)) {
+    actions.push(action);
+  }
+}
+
+function portalRequirementActionsForRow(
+  row: PortalRequirements,
+): PortalRequirementAction[] {
+  const actions: PortalRequirementAction[] = [];
+
+  if (row.automationMode === "api_post" && rowHasField(row, "account_login")) {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "authorize_account",
+        "Connect and authorize the channel account before posting.",
+        "account_login",
+      ),
+    );
+  } else if (
+    rowRequiresField(row, "account_login") &&
+    row.automationMode !== "feed_candidate"
+  ) {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "sign_in",
+        "Use a verified channel account before posting.",
+        "account_login",
+      ),
+    );
+  }
+
+  if (
+    row.automationMode === "feed_candidate" ||
+    rowRequiresField(row, "feed_route")
+  ) {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "confirm_feed_route",
+        "Confirm the accepted feed or account route before treating this channel as ready.",
+        "feed_route",
+      ),
+    );
+  }
+
+  if (
+    row.automationMode === "broker_referral" ||
+    rowRequiresField(row, "broker_route")
+  ) {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "create_broker_handoff",
+        "Prepare the broker packet and wait for the real listing URL.",
+        "broker_route",
+      ),
+    );
+  }
+
+  if (rowRequiresField(row, "payment")) {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "approve_payment",
+        "Approve paid placement before this channel can go live.",
+        "payment",
+      ),
+    );
+  }
+
+  if (row.automationMode === "posting_assist") {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "use_posting_assist",
+        "Use the prepared portal checklist, then finish the posting.",
+        null,
+      ),
+    );
+  }
+
+  if (row.automationMode === "paid_self_serve") {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "use_paid_posting_assist",
+        "Use the paid portal checklist, finish payment, then complete the post.",
+        null,
+      ),
+    );
+  }
+
+  if (row.automationMode === "api_post") {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "approve_api_post",
+        "Review and approve the prepared connected-account post.",
+        "post_caption",
+      ),
+    );
+  }
+
+  if (rowRequiresField(row, "audience")) {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "choose_audience",
+        "Choose the audience or broadcast list before sharing.",
+        "audience",
+      ),
+    );
+  }
+
+  if (row.automationMode === "share_message") {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "share_message",
+        "Send the prepared caption with the tracked Vacantless link.",
+        "post_caption",
+      ),
+    );
+  }
+
+  if (row.proofRequired || rowRequiresField(row, "proof_url")) {
+    pushPortalRequirementAction(
+      actions,
+      portalRequirementAction(
+        "save_live_proof",
+        `Save proof using: ${row.liveProofLabel}.`,
+        "proof_url",
+      ),
+    );
+  }
+
+  return actions;
+}
+
+function primaryPortalRequirementAction(
+  row: PortalRequirements,
+  actions: readonly PortalRequirementAction[],
+): PortalRequirementAction | null {
+  for (const kind of PRIMARY_ACTION_BY_MODE[row.automationMode]) {
+    const action = actions.find((candidate) => candidate.kind === kind);
+    if (action) return action;
+  }
+  return actions[0] ?? null;
+}
+
+function portalRequirementActionPlanForRow(
+  row: PortalRequirements,
+): PortalRequirementActionPlan {
+  const actions = portalRequirementActionsForRow(row);
+  const primaryAction = primaryPortalRequirementAction(row, actions);
+  const requiresProof = row.proofRequired || rowRequiresField(row, "proof_url");
+
+  return {
+    channel: row.channel,
+    label: row.label,
+    defaultTier: row.defaultTier,
+    automationMode: row.automationMode,
+    sourceLevel: row.sourceLevel,
+    proofRequired: row.proofRequired,
+    liveProofLabel: row.liveProofLabel,
+    actions,
+    primaryAction,
+    primaryActionLabel: primaryAction?.label ?? null,
+    requiresAccount:
+      rowHasField(row, "account_login") ||
+      row.automationMode === "feed_candidate",
+    requiresPayment:
+      rowRequiresField(row, "payment") || row.defaultTier === "top_up",
+    requiresProof,
+    requiresBroker:
+      rowRequiresField(row, "broker_route") ||
+      row.automationMode === "broker_referral",
+    requiresFeedRoute:
+      rowRequiresField(row, "feed_route") ||
+      row.automationMode === "feed_candidate",
+    requiresAudience: rowRequiresField(row, "audience"),
+  };
+}
+
+export function portalRequirementActionsFor(
+  channel: PortalRequirementChannelKey | PortalKey | string | null | undefined,
+): PortalRequirementAction[] {
+  const row = portalRequirementsFor(channel);
+  return row ? portalRequirementActionsForRow(row) : [];
+}
+
+export function portalRequirementActionPlanFor(
+  channel: PortalRequirementChannelKey | PortalKey | string | null | undefined,
+): PortalRequirementActionPlan | null {
+  const row = portalRequirementsFor(channel);
+  return row ? portalRequirementActionPlanForRow(row) : null;
+}
+
+export function portalRequirementActionPlansFor(
+  channels: readonly (PortalRequirementChannelKey | string)[] =
+    PORTAL_REQUIREMENTS.map((row) => row.channel),
+): PortalRequirementActionPlan[] {
+  return requirementRowsFor(channels).map(portalRequirementActionPlanForRow);
+}
+
 export function requiredFieldsFor(
   channel: PortalRequirementChannelKey | PortalKey | string | null | undefined,
 ): PortalRequirementFieldKey[] {
@@ -678,4 +991,3 @@ export function buildOneListingPacketRequirements(
     sourceLevels: unique(rows.map((row) => row.sourceLevel)),
   };
 }
-
