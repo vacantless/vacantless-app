@@ -1,5 +1,6 @@
 // Pure tests for the operator-facing account connection stage reducer.
 // Run: npx tsx scripts/test-channel-connection-stages.ts
+import { readFileSync } from "node:fs";
 import {
   channelByKey,
   channelConnectionStage,
@@ -148,6 +149,30 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
   ok("planned Marketplace keeps proof gate", stage.helper.includes("live ad URL as proof"));
   ok("planned Marketplace helper does not mention payment", !stage.helper.includes("paid posting assist"));
 }
+
+const settingsSource = readFileSync("app/dashboard/settings/page.tsx", "utf8");
+ok(
+  "Settings Distribution consumes portal requirement action plans",
+  settingsSource.includes("portalRequirementActionPlanFor(cap.channel)") &&
+    settingsSource.includes("actionPlan.primaryActionLabel"),
+);
+ok(
+  "Settings Distribution renders source-owned requirement flags",
+  settingsSource.includes("requirementFlagChips") &&
+    [
+      "requiresAccount",
+      "requiresPayment",
+      "requiresProof",
+      "requiresBroker",
+      "requiresFeedRoute",
+      "requiresAudience",
+    ].every((flag) => settingsSource.includes(flag)),
+);
+ok(
+  "Settings checklist surfaces Get online next actions",
+  settingsSource.includes("Next from Get online:") &&
+    settingsSource.includes("Next: {item.actionLabel}"),
+);
 
 console.log(`\nchannel-connection-stages: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

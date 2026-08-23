@@ -78,6 +78,10 @@ import {
   mailAliasProvisionStatusLabel,
   type MailAliasProvisionStatus,
 } from "@/lib/mail-alias-provisioning";
+import {
+  portalRequirementActionPlanFor,
+  type PortalRequirementActionPlan,
+} from "@/lib/portal-requirements";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +133,62 @@ const STATUS_CHIP: Record<ConnectChipTone, string> = {
   neutral: "bg-gray-100 text-gray-600",
   accent: "bg-blue-50 text-blue-700",
 };
+
+type RequirementFlagChip = {
+  key: string;
+  label: string;
+  className: string;
+};
+
+function requirementFlagChips(
+  plan: PortalRequirementActionPlan | null,
+): RequirementFlagChip[] {
+  const chips: RequirementFlagChip[] = [];
+  if (!plan) return chips;
+  if (plan.requiresAccount) {
+    chips.push({
+      key: "account",
+      label: "Account",
+      className: "bg-blue-50 text-blue-700",
+    });
+  }
+  if (plan.requiresPayment) {
+    chips.push({
+      key: "payment",
+      label: "Payment",
+      className: "bg-amber-50 text-amber-700",
+    });
+  }
+  if (plan.requiresProof) {
+    chips.push({
+      key: "proof",
+      label: "Proof",
+      className: "bg-emerald-50 text-emerald-700",
+    });
+  }
+  if (plan.requiresBroker) {
+    chips.push({
+      key: "broker",
+      label: "Broker",
+      className: "bg-slate-100 text-slate-700",
+    });
+  }
+  if (plan.requiresFeedRoute) {
+    chips.push({
+      key: "feed",
+      label: "Feed route",
+      className: "bg-cyan-50 text-cyan-700",
+    });
+  }
+  if (plan.requiresAudience) {
+    chips.push({
+      key: "audience",
+      label: "Audience",
+      className: "bg-indigo-50 text-indigo-700",
+    });
+  }
+  return chips;
+}
 
 type MailAliasProvisionView = {
   id: string;
@@ -365,6 +425,7 @@ export default async function SettingsPage({
       ? account.account_status
       : null;
     const registry = channelByKey(cap.channel);
+    const actionPlan = portalRequirementActionPlanFor(cap.channel);
     const connectionStage = channelConnectionStage({
       integrationStatus: registry?.integrationStatus ?? null,
       transport: cap.transport,
@@ -388,6 +449,8 @@ export default async function SettingsPage({
       accountStatus: accountStatus ?? "not_started",
       readiness,
       connectionStage,
+      actionPlan,
+      requirementChips: requirementFlagChips(actionPlan),
     };
   });
   const connectSummary = distributionChannels.reduce(
@@ -411,12 +474,16 @@ export default async function SettingsPage({
     { ready: 0, authorization: 0, signIn: 0, setup: 0, planned: 0 },
   );
   const connectionChecklistGroups = groupChannelConnectionChecklist(
-    distributionChannels.map(({ cap, meta, connectionStage }) => ({
-      channel: cap.channel,
-      label: meta.label,
-      stage: connectionStage,
-      href: `#channel-${cap.channel}`,
-    })),
+    distributionChannels.map(
+      ({ cap, meta, connectionStage, actionPlan, requirementChips }) => ({
+        channel: cap.channel,
+        label: meta.label,
+        stage: connectionStage,
+        actionLabel: actionPlan?.primaryActionLabel ?? null,
+        requirementChips,
+        href: `#channel-${cap.channel}`,
+      }),
+    ),
   );
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
@@ -973,6 +1040,23 @@ export default async function SettingsPage({
                                 {item.stage.nextActionLabel}
                               </span>
                             </span>
+                            {item.actionLabel && (
+                              <span className="mt-1 block truncate text-[11px] text-gray-500">
+                                Next: {item.actionLabel}
+                              </span>
+                            )}
+                            {item.requirementChips.length > 0 && (
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {item.requirementChips.slice(0, 3).map((chip) => (
+                                  <span
+                                    key={chip.key}
+                                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${chip.className}`}
+                                  >
+                                    {chip.label}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
                           </a>
                         </li>
                       ))}
@@ -1083,7 +1167,7 @@ export default async function SettingsPage({
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness, connectionStage }) => {
+            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness, connectionStage, actionPlan, requirementChips }) => {
               const statusId = `dist-${cap.channel}-status`;
               const feedId = `dist-${cap.channel}-feed`;
               const managerId = `dist-${cap.channel}-manager`;
@@ -1123,6 +1207,28 @@ export default async function SettingsPage({
                   <p className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
                     {connectionStage.helper}
                   </p>
+                  {actionPlan?.primaryActionLabel && (
+                    <div className="mt-3 rounded-lg border border-gray-100 bg-white px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">
+                          Next from Get online: {actionPlan.primaryActionLabel}
+                        </span>
+                        {requirementChips.map((chip) => (
+                          <span
+                            key={chip.key}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${chip.className}`}
+                          >
+                            {chip.label}
+                          </span>
+                        ))}
+                      </div>
+                      {actionPlan.primaryAction?.detail && (
+                        <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                          {actionPlan.primaryAction.detail}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
