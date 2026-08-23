@@ -718,19 +718,21 @@ export function DistributeTab({
     (channel) => channel.readinessTone === "positive",
   ).length;
   const firstListingPacketMissing = listingPacket.missingRequired[0] ?? null;
+  const firstListingPacketAction = firstListingPacketMissing
+    ? packetFieldAction(firstListingPacketMissing, propertyId)
+    : null;
   const publishEverywherePostingBlocker =
-    firstListingPacketMissing
+    firstListingPacketAction
       ? {
           title: "Finish the one listing details first.",
-          detail:
-            `Needed before outside sites: ${shortMissingList(listingPacket.missingRequired)}. Sign-in, payment, and proof wait here.`,
-          href: packetFieldHref(firstListingPacketMissing.field),
-          action: `Add ${firstListingPacketMissing.label.toLowerCase()}`,
+          detail: `${firstListingPacketAction.detail} Sign-in, payment, and proof wait here.`,
+          href: firstListingPacketAction.href,
+          action: firstListingPacketAction.action,
         }
       : null;
   const publishEverywhereSurface = (
     <div className="space-y-4">
-      <ListingPacketCard readiness={listingPacket} />
+      <ListingPacketCard readiness={listingPacket} propertyId={propertyId} />
       <PublishEverywhere
         propertyId={propertyId}
         basics={basics}
@@ -972,6 +974,7 @@ export function DistributeTab({
   return (
     <div>
       <PublishControlRoom
+        propertyId={propertyId}
         linkIsLive={linkIsLive}
         setupOutstanding={setupOutstanding}
         hasPhotos={hasPhotos}
@@ -1166,8 +1169,34 @@ const PACKET_TIER_LABEL: Record<ListingPacketChannelReadiness["tier"], string> =
   broker: "Broker",
 };
 
-function packetFieldHref(field: PortalRequirementFieldKey): string {
+function packetFieldHref(
+  field: PortalRequirementFieldKey,
+  propertyId?: string,
+): string {
+  if (field === "property_type" && propertyId) {
+    return `/dashboard/properties/${encodeURIComponent(propertyId)}?tab=setup#property-unit-type`;
+  }
   return PACKET_FIELD_HREF[field] ?? "#rental-details";
+}
+
+function packetFieldAction(
+  missing: ListingPacketMissingField,
+  propertyId?: string,
+): { href: string; action: string; detail: string } {
+  if (missing.field === "property_type") {
+    return {
+      href: packetFieldHref(missing.field, propertyId),
+      action: "Choose property type",
+      detail: "Choose the property type in Unit details to unlock outside-site posting.",
+    };
+  }
+
+  const label = missing.label.toLowerCase();
+  return {
+    href: packetFieldHref(missing.field, propertyId),
+    action: `Add ${label}`,
+    detail: `Add ${label} before outside sites can use the one listing.`,
+  };
 }
 
 function shortMissingList(items: readonly ListingPacketMissingField[]): string {
@@ -1181,20 +1210,21 @@ function shortMissingList(items: readonly ListingPacketMissingField[]): string {
 function ListingPacketCard({
   readiness,
   showAction = true,
+  propertyId,
 }: {
   readiness: ListingPacketReadiness;
   showAction?: boolean;
+  propertyId?: string;
 }) {
   const missingRequired = readiness.missingRequired;
   const ready = readiness.readyChannelCount === readiness.channelCount;
   const primaryMissing = missingRequired[0] ?? null;
+  const primaryAction = primaryMissing
+    ? packetFieldAction(primaryMissing, propertyId)
+    : null;
   const missingText = shortMissingList(missingRequired);
-  const actionHref = primaryMissing
-    ? packetFieldHref(primaryMissing.field)
-    : "#publish-checklist";
-  const actionLabel = primaryMissing
-    ? `Add ${primaryMissing.label.toLowerCase()}`
-    : "Choose sites";
+  const actionHref = primaryAction?.href ?? "#publish-checklist";
+  const actionLabel = primaryAction?.action ?? "Choose sites";
   const headline = ready
     ? "Your one listing has what every site needs."
     : `Your one listing is ready for ${readiness.readyChannelCount} ${
@@ -1546,15 +1576,17 @@ function SimpleGetOnline({
   });
   const analyticsSummary = analyticsTotals(analytics);
   const firstPacketMissing = listingPacket.missingRequired[0] ?? null;
+  const firstPacketAction = firstPacketMissing
+    ? packetFieldAction(firstPacketMissing, propertyId)
+    : null;
   const packetBlocked = listingPacket.missingRequired.length > 0;
   const launchSetupBlocker =
-    firstPacketMissing
+    firstPacketAction
       ? {
           title: "Finish the one listing details first.",
-          detail:
-            `Needed before outside sites: ${shortMissingList(listingPacket.missingRequired)}. Sign-in, payment, and proof wait here.`,
-          href: packetFieldHref(firstPacketMissing.field),
-          action: `Add ${firstPacketMissing.label.toLowerCase()}`,
+          detail: `${firstPacketAction.detail} Sign-in, payment, and proof wait here.`,
+          href: firstPacketAction.href,
+          action: firstPacketAction.action,
         }
       : setupOutstanding > 0
       ? {
@@ -1910,7 +1942,11 @@ function SimpleGetOnline({
         </section>
       )}
 
-      <ListingPacketCard readiness={listingPacket} showAction={false} />
+      <ListingPacketCard
+        readiness={listingPacket}
+        propertyId={propertyId}
+        showAction={false}
+      />
 
       {showLaunchRunPanel && (
         <section className="space-y-3">
@@ -2014,6 +2050,7 @@ function SimpleGetOnline({
 }
 
 function PublishControlRoom({
+  propertyId,
   linkIsLive,
   setupOutstanding,
   hasPhotos,
@@ -2023,6 +2060,7 @@ function PublishControlRoom({
   selectedChannelCount,
   buckets,
 }: {
+  propertyId: string;
   linkIsLive: boolean;
   setupOutstanding: number;
   hasPhotos: boolean;
@@ -2034,6 +2072,9 @@ function PublishControlRoom({
 }) {
   const packetMissing = listingPacket.missingRequired;
   const firstPacketMissing = packetMissing[0] ?? null;
+  const firstPacketAction = firstPacketMissing
+    ? packetFieldAction(firstPacketMissing, propertyId)
+    : null;
   const packetMissingText = shortMissingList(packetMissing);
   const packetBlocked = packetMissing.length > 0;
   const launchBlocked = packetBlocked || setupOutstanding > 0 || !hasPhotos || !linkIsLive;
@@ -2052,8 +2093,8 @@ function PublishControlRoom({
     0,
   );
   const primaryHref =
-    firstPacketMissing
-      ? packetFieldHref(firstPacketMissing.field)
+    firstPacketAction
+      ? firstPacketAction.href
       : setupOutstanding > 0
       ? "#rental-details"
       : !hasPhotos
@@ -2064,8 +2105,8 @@ function PublishControlRoom({
             : "#rental-details"
           : "#publish-checklist";
   const primaryAction =
-    firstPacketMissing
-      ? `Add ${firstPacketMissing.label.toLowerCase()}`
+    firstPacketAction
+      ? firstPacketAction.action
       : setupOutstanding > 0
       ? "Add details"
       : !hasPhotos
@@ -2091,7 +2132,7 @@ function PublishControlRoom({
         : "Posting steps are ready to review"
       : "Ready to choose sites and publish";
   const launchDetail = packetBlocked
-    ? `Start with ${firstPacketMissing?.label.toLowerCase() ?? "the missing item"}. Sign-in, payment, and proof stay below.`
+    ? `${firstPacketAction?.detail ?? "Start with the missing listing item."} Sign-in, payment, and proof stay below.`
     : launchBlocked
     ? "Turn on the renter page first. Outside sites count as live only after their real ad link is saved."
     : hasRun
