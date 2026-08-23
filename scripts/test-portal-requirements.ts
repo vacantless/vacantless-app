@@ -12,6 +12,9 @@ import {
   PORTAL_REQUIREMENTS,
   buildOneListingPacketRequirements,
   isPortalOperatorField,
+  portalRequirementActionPlanFor,
+  portalRequirementActionPlansFor,
+  portalRequirementActionsFor,
   portalRequirementFieldLabel,
   portalRequirementsFor,
   recommendedFieldsFor,
@@ -28,6 +31,14 @@ function ok(name: string, cond: boolean) {
     failed++;
     console.error(`  x ${name}`);
   }
+}
+
+function actionLabelsFor(channel: string): string[] {
+  return portalRequirementActionsFor(channel).map((action) => action.label);
+}
+
+function actionKindsFor(channel: string): string[] {
+  return portalRequirementActionsFor(channel).map((action) => action.kind);
 }
 
 const requirementKeys = PORTAL_REQUIREMENTS.map((row) => row.channel);
@@ -84,6 +95,10 @@ ok(
   ),
 );
 ok("Rentals.ca exposes top-up plans", rentals?.topUps.join("|") === "Promoted listing|Featured listing");
+const rentalsActionPlan = portalRequirementActionPlanFor("rentals_ca");
+ok("Rentals.ca primary action confirms feed route", rentalsActionPlan?.primaryActionLabel === "Confirm feed route");
+ok("Rentals.ca action plan requires feed route", rentalsActionPlan?.requiresFeedRoute === true);
+ok("Rentals.ca actions keep proof explicit", actionLabelsFor("rentals_ca").includes("Save live proof"));
 
 const rentfaster = portalRequirementsFor("rentfaster");
 ok("RentFaster is paid self serve", rentfaster?.automationMode === "paid_self_serve");
@@ -94,12 +109,23 @@ ok(
   "RentFaster operator steps mention new-user review",
   rentfaster?.operatorSteps.some((step) => /review/i.test(step)) === true,
 );
+const rentfasterActions = actionLabelsFor("rentfaster");
+ok("RentFaster actions include sign in", rentfasterActions.includes("Sign in"));
+ok("RentFaster actions include payment approval", rentfasterActions.includes("Approve payment"));
+ok("RentFaster actions include paid posting assist", rentfasterActions.includes("Use paid posting assist"));
+ok("RentFaster actions include proof", rentfasterActions.includes("Save live proof"));
+ok(
+  "RentFaster primary action highlights paid gate",
+  portalRequirementActionPlanFor("rentfaster")?.primaryActionLabel === "Approve payment",
+);
 
 const zumper = portalRequirementsFor("zumper");
 ok("Zumper is a feed candidate", zumper?.automationMode === "feed_candidate");
 ok("Zumper requires phone", requiredFieldsFor("zumper").includes("contact_phone"));
 ok("Zumper includes PadMapper proof language", /PadMapper/.test(zumper?.liveProofLabel ?? ""));
 ok("Zumper carries premium top-ups", zumper?.topUps.includes("Premium listing plan") === true);
+ok("Zumper actions include feed route", actionLabelsFor("zumper").includes("Confirm feed route"));
+ok("Zumper actions include proof", actionLabelsFor("zumper").includes("Save live proof"));
 
 const viewit = portalRequirementsFor("viewit");
 ok("Viewit is paid", viewit?.defaultTier === "top_up");
@@ -108,11 +134,15 @@ ok(
   "Viewit carries edit-link workflow",
   viewit?.operatorSteps.join(" ").includes("activation email") === true,
 );
+ok("Viewit action plan requires payment", portalRequirementActionPlanFor("viewit")?.requiresPayment === true);
+ok("Viewit primary action is payment", portalRequirementActionPlanFor("viewit")?.primaryActionLabel === "Approve payment");
 
 const realtor = portalRequirementsFor("realtor_ca");
 ok("Realtor.ca is broker tier", realtor?.defaultTier === "broker");
 ok("Realtor.ca requires broker route", requiredFieldsFor("realtor_ca").includes("broker_route"));
 ok("Realtor.ca has no paid top-ups", realtor?.topUps.length === 0);
+ok("Realtor.ca primary action is broker handoff", portalRequirementActionPlanFor("realtor_ca")?.primaryActionLabel === "Create broker handoff");
+ok("Realtor.ca action plan keeps broker flag", portalRequirementActionPlanFor("realtor_ca")?.requiresBroker === true);
 
 const facebook = portalRequirementsFor("facebook");
 ok("Marketplace is not sourced as official yet", facebook?.sourceLevel === "operator_assertion");
@@ -121,6 +151,21 @@ ok(
   "Marketplace source refs show verification target",
   facebook?.sourceRefs.some((ref) => ref.includes("facebook.com/help")) === true,
 );
+ok("Marketplace primary action is posting assist", portalRequirementActionPlanFor("facebook")?.primaryActionLabel === "Use posting assist");
+ok("Kijiji primary action is posting assist", portalRequirementActionPlanFor("kijiji")?.primaryActionLabel === "Use posting assist");
+
+const facebookFeedActions = actionLabelsFor("facebook_feed");
+ok("Facebook Page feed actions authorize account", facebookFeedActions.includes("Authorize account"));
+ok("Facebook Page feed actions approve API post", facebookFeedActions.includes("Approve API post"));
+ok("Facebook Page feed primary action is API approval", portalRequirementActionPlanFor("facebook_feed")?.primaryActionLabel === "Approve API post");
+ok("Instagram actions approve API post", actionLabelsFor("instagram").includes("Approve API post"));
+
+const whatsappActions = actionLabelsFor("whatsapp");
+ok("WhatsApp actions choose audience", whatsappActions.includes("Choose audience"));
+ok("WhatsApp actions share message", whatsappActions.includes("Share message"));
+ok("WhatsApp primary action is share message", portalRequirementActionPlanFor("whatsapp")?.primaryActionLabel === "Share message");
+ok("LinkedIn actions sign in", actionLabelsFor("linkedin").includes("Sign in"));
+ok("Snapchat actions share message", actionLabelsFor("snapchat").includes("Share message"));
 
 const socialPacket = buildOneListingPacketRequirements([
   "facebook_feed",
@@ -155,6 +200,30 @@ const allPacket = buildOneListingPacketRequirements();
 ok("default packet covers every channel", allPacket.channels.length === 12);
 ok("default packet includes broker proof gate", allPacket.operatorFields.includes("broker_route"));
 ok("default packet labels multiple source levels", allPacket.sourceLevels.length >= 3);
+
+const allActionPlans = portalRequirementActionPlansFor();
+ok("action plans cover every requirements row", allActionPlans.length === PORTAL_REQUIREMENTS.length);
+ok("other has no requirement actions", portalRequirementActionsFor("other").length === 0);
+ok("unknown has no requirement action plan", portalRequirementActionPlanFor("not_real") === null);
+for (const row of PORTAL_REQUIREMENTS) {
+  const plan = portalRequirementActionPlanFor(row.channel);
+  ok(`${row.channel}: action plan resolves`, plan?.channel === row.channel);
+  ok(`${row.channel}: action plan has a primary action`, Boolean(plan?.primaryAction));
+  ok(
+    `${row.channel}: action text has no em dash`,
+    !/[—–]/.test(
+      portalRequirementActionsFor(row.channel)
+        .map((action) => `${action.label} ${action.detail}`)
+        .join(" "),
+    ),
+  );
+  if (row.proofRequired) {
+    ok(
+      `${row.channel}: proof-required channel saves live proof`,
+      actionKindsFor(row.channel).includes("save_live_proof"),
+    );
+  }
+}
 
 console.log(`portal-requirements: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
