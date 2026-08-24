@@ -57,6 +57,7 @@ import {
 } from "@/lib/distribution-capabilities";
 import {
   channelByKey,
+  channelConnectionChecklistActionLabel,
   channelConnectionStage,
   groupChannelConnectionChecklist,
   type ConnectChipTone,
@@ -479,7 +480,10 @@ export default async function SettingsPage({
         channel: cap.channel,
         label: meta.label,
         stage: connectionStage,
-        actionLabel: actionPlan?.primaryActionLabel ?? null,
+        actionLabel: channelConnectionChecklistActionLabel({
+          stage: connectionStage,
+          fallbackActionLabel: actionPlan?.primaryActionLabel,
+        }),
         requirementChips,
         href: `#channel-${cap.channel}`,
       }),
@@ -1037,14 +1041,12 @@ export default async function SettingsPage({
                               className={`mt-1 inline-flex max-w-full rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[item.stage.tone]}`}
                             >
                               <span className="truncate">
-                                {item.stage.nextActionLabel}
-                              </span>
-                            </span>
-                            {item.actionLabel && (
-                              <span className="mt-1 block truncate text-[11px] text-gray-500">
                                 Next: {item.actionLabel}
                               </span>
-                            )}
+                            </span>
+                            <span className="mt-1 block truncate text-[11px] text-gray-500">
+                              {item.stage.label}
+                            </span>
                             {item.requirementChips.length > 0 && (
                               <span className="mt-1 flex flex-wrap gap-1">
                                 {item.requirementChips.slice(0, 3).map((chip) => (

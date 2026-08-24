@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import {
   channelByKey,
+  channelConnectionChecklistActionLabel,
   channelConnectionStage,
   groupChannelConnectionChecklist,
 } from "../lib/distribution-channels";
@@ -97,21 +98,25 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
         accountStatus: "connected",
         automationAuthorized: false,
       }),
+      actionLabel: "Authorize auto-post",
     },
     {
       channel: "kijiji",
       label: "Kijiji",
       stage: stageFor("kijiji", { accountStatus: "needs_login" }),
+      actionLabel: "Refresh sign-in",
     },
     {
       channel: "zumper",
       label: "Zumper + PadMapper",
       stage: stageFor("zumper", { accountStatus: "needs_payment" }),
+      actionLabel: "Finish setup/payment",
     },
     {
       channel: "rentals_ca",
       label: "Rentals.ca",
       stage: stageFor("rentals_ca", { hasFeedRoute: true }),
+      actionLabel: "Use from Get online",
     },
     {
       channel: "realtor_ca",
@@ -120,6 +125,7 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
         accountStatus: "connected",
         automationAuthorized: true,
       }),
+      actionLabel: "Create broker handoff",
     },
   ]);
   eq(
@@ -132,6 +138,36 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
   eq("setup bucket next action is explicit", groups[2]?.items[0]?.stage.nextActionLabel, "Finish setup/payment");
   eq("ready bucket points back to Get online", groups[3]?.items[0]?.stage.nextActionLabel, "Use from Get online");
   eq("planned bucket includes broker routes", groups[4]?.items[0]?.stage.state, "broker_route");
+}
+
+{
+  eq(
+    "checklist uses account authorization before portal fallback",
+    channelConnectionChecklistActionLabel({
+      stage: stageFor("facebook_feed", {
+        accountStatus: "connected",
+        automationAuthorized: false,
+      }),
+      fallbackActionLabel: "Approve API post",
+    }),
+    "Authorize auto-post",
+  );
+  eq(
+    "checklist points ready channels back to Get online",
+    channelConnectionChecklistActionLabel({
+      stage: stageFor("rentals_ca", { hasFeedRoute: true }),
+      fallbackActionLabel: "Confirm feed route",
+    }),
+    "Use from Get online",
+  );
+  eq(
+    "checklist uses portal action for planned routes",
+    channelConnectionChecklistActionLabel({
+      stage: stageFor("rentfaster"),
+      fallbackActionLabel: "Approve payment",
+    }),
+    "Approve payment",
+  );
 }
 
 {
