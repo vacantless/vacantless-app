@@ -733,6 +733,7 @@ export type ChannelConnectionChecklistInput = {
   channel: string;
   label: string;
   stage: ChannelConnectionStage;
+  actionLabel: string;
   href?: string | null;
 };
 
@@ -751,6 +752,20 @@ export function channelConnectionChecklistGroupFor(
   if (stage.state === "needs_payment_or_setup") return "setup";
   if (stage.state === "connected_ready" || stage.state === "always_on") return "ready";
   return "planned";
+}
+
+export function channelConnectionChecklistActionLabel(input: {
+  stage: ChannelConnectionStage;
+  fallbackActionLabel?: string | null;
+}): string {
+  if (
+    input.stage.state === "planned_or_unavailable" ||
+    input.stage.state === "broker_route"
+  ) {
+    return input.fallbackActionLabel ?? input.stage.nextActionLabel;
+  }
+
+  return input.stage.nextActionLabel;
 }
 
 export function groupChannelConnectionChecklist<T extends ChannelConnectionChecklistInput>(
