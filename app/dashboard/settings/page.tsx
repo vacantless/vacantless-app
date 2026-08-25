@@ -60,6 +60,7 @@ import {
   channelConnectionChecklistActionLabel,
   channelConnectionStage,
   groupChannelConnectionChecklist,
+  recommendedChannelConnectionChecklistAction,
   type ConnectChipTone,
 } from "@/lib/distribution-channels";
 import {
@@ -489,6 +490,8 @@ export default async function SettingsPage({
       }),
     ),
   );
+  const recommendedConnectionAction =
+    recommendedChannelConnectionChecklistAction(connectionChecklistGroups);
 
   const color = org.brand_color || DEFAULT_BRAND_COLOR;
   const showingConfirmMode = org.showing_confirm_mode === "agent" ? "agent" : "auto";
@@ -1006,9 +1009,25 @@ export default async function SettingsPage({
                     Finish the account steps here, then publish each listing from Get online.
                   </p>
                 </div>
-                <span className="text-xs text-gray-400">
-                  {distributionChannels.length} channels
-                </span>
+                <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
+                  {recommendedConnectionAction && (
+                    <a
+                      href={recommendedConnectionAction.item.href ?? undefined}
+                      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-brand/20 bg-brand/5 px-3 py-2 text-xs hover:bg-brand/10"
+                    >
+                      <span className="shrink-0 font-semibold text-brand">
+                        Next setup
+                      </span>
+                      <span className="min-w-0 truncate text-gray-700">
+                        {recommendedConnectionAction.item.label}:{" "}
+                        {recommendedConnectionAction.item.actionLabel}
+                      </span>
+                    </a>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {distributionChannels.length} channels
+                  </span>
+                </div>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 {connectionChecklistGroups.map((group) => (
