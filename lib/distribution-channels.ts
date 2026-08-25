@@ -744,6 +744,11 @@ export type ChannelConnectionChecklistGroup<T extends ChannelConnectionChecklist
   items: T[];
 };
 
+export type RecommendedChannelConnectionChecklistAction<T extends ChannelConnectionChecklistInput> = {
+  group: ChannelConnectionChecklistGroup<T>;
+  item: T;
+};
+
 export function channelConnectionChecklistGroupFor(
   stage: ChannelConnectionStage,
 ): ChannelConnectionChecklistGroupId {
@@ -783,6 +788,27 @@ export function groupChannelConnectionChecklist<T extends ChannelConnectionCheck
     ...group,
     items: grouped.get(group.id) ?? [],
   })).filter((group) => group.items.length > 0);
+}
+
+const CHANNEL_CONNECTION_RECOMMENDATION_ORDER: readonly ChannelConnectionChecklistGroupId[] = [
+  "authorization",
+  "sign_in",
+  "setup",
+  "planned",
+  "ready",
+];
+
+export function recommendedChannelConnectionChecklistAction<T extends ChannelConnectionChecklistInput>(
+  groups: readonly ChannelConnectionChecklistGroup<T>[],
+): RecommendedChannelConnectionChecklistAction<T> | null {
+  for (const groupId of CHANNEL_CONNECTION_RECOMMENDATION_ORDER) {
+    const group = groups.find((candidate) => candidate.id === groupId);
+    const item = group?.items[0] ?? null;
+    if (group && item) {
+      return { group, item };
+    }
+  }
+  return null;
 }
 
 export function channelConnectChip(input: {

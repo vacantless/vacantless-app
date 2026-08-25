@@ -6,6 +6,7 @@ import {
   channelConnectionChecklistActionLabel,
   channelConnectionStage,
   groupChannelConnectionChecklist,
+  recommendedChannelConnectionChecklistAction,
 } from "../lib/distribution-channels";
 import { channelCapability } from "../lib/distribution-capabilities";
 import type { PublishChannelKey } from "../lib/distribution-publish";
@@ -141,6 +142,55 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
 }
 
 {
+  const groups = groupChannelConnectionChecklist([
+    {
+      channel: "rentals_ca",
+      label: "Rentals.ca",
+      stage: stageFor("rentals_ca", { hasFeedRoute: true }),
+      actionLabel: "Use from Get online",
+    },
+    {
+      channel: "realtor_ca",
+      label: "Realtor.ca",
+      stage: stageFor("realtor_ca"),
+      actionLabel: "Create broker handoff",
+    },
+    {
+      channel: "network_feed",
+      label: "Network feed",
+      stage: stageFor("network_feed"),
+      actionLabel: "Set up account",
+    },
+  ]);
+  const recommendation = recommendedChannelConnectionChecklistAction(groups);
+  eq("recommended checklist action prefers setup before planned", recommendation?.group.id, "setup");
+  eq("recommended checklist action exposes the setup item", recommendation?.item.label, "Network feed");
+}
+
+{
+  const groups = groupChannelConnectionChecklist([
+    {
+      channel: "instagram",
+      label: "Instagram",
+      stage: stageFor("instagram", {
+        accountStatus: "connected",
+        automationAuthorized: false,
+      }),
+      actionLabel: "Authorize auto-post",
+    },
+    {
+      channel: "kijiji",
+      label: "Kijiji",
+      stage: stageFor("kijiji", { accountStatus: "needs_login" }),
+      actionLabel: "Refresh sign-in",
+    },
+  ]);
+  const recommendation = recommendedChannelConnectionChecklistAction(groups);
+  eq("recommended checklist action prefers authorization first", recommendation?.group.id, "authorization");
+  eq("recommended checklist action keeps the channel label", recommendation?.item.label, "Instagram");
+}
+
+{
   eq(
     "checklist uses account authorization before portal fallback",
     channelConnectionChecklistActionLabel({
@@ -208,6 +258,11 @@ ok(
   "Settings checklist surfaces Get online next actions",
   settingsSource.includes("Next from Get online:") &&
     settingsSource.includes("Next: {item.actionLabel}"),
+);
+ok(
+  "Settings checklist surfaces one recommended setup action",
+  settingsSource.includes("recommendedChannelConnectionChecklistAction") &&
+    settingsSource.includes("Next setup"),
 );
 
 console.log(`\nchannel-connection-stages: ${passed} passed, ${failed} failed`);
