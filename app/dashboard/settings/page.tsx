@@ -1013,15 +1013,36 @@ export default async function SettingsPage({
                   {recommendedConnectionAction && (
                     <a
                       href={recommendedConnectionAction.item.href ?? undefined}
-                      className="inline-flex max-w-full items-center gap-2 rounded-lg border border-brand/20 bg-brand/5 px-3 py-2 text-xs hover:bg-brand/10"
+                      className="flex max-w-full min-w-0 flex-col gap-1.5 rounded-lg border border-brand/20 bg-brand/5 px-3 py-2 text-xs hover:bg-brand/10 sm:min-w-[20rem]"
                     >
-                      <span className="shrink-0 font-semibold text-brand">
-                        Next setup
+                      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <span className="shrink-0 font-semibold text-brand">
+                          Next setup
+                        </span>
+                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-brand ring-1 ring-brand/15">
+                          {recommendedConnectionAction.group.label}
+                        </span>
                       </span>
-                      <span className="min-w-0 truncate text-gray-700">
+                      <span className="min-w-0 truncate font-medium text-gray-800">
                         {recommendedConnectionAction.item.label}:{" "}
                         {recommendedConnectionAction.item.actionLabel}
                       </span>
+                      <span className="min-w-0 truncate text-[11px] text-gray-500">
+                        {recommendedConnectionAction.item.stage.label} ·{" "}
+                        {recommendedConnectionAction.group.helper}
+                      </span>
+                      {recommendedConnectionAction.item.requirementChips.length > 0 && (
+                        <span className="flex min-w-0 flex-wrap gap-1">
+                          {recommendedConnectionAction.item.requirementChips.map((chip) => (
+                            <span
+                              key={chip.key}
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${chip.className}`}
+                            >
+                              {chip.label}
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </a>
                   )}
                   <span className="text-xs text-gray-400">

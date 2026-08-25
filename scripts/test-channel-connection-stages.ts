@@ -264,6 +264,18 @@ ok(
   settingsSource.includes("recommendedChannelConnectionChecklistAction") &&
     settingsSource.includes("Next setup"),
 );
+ok(
+  "Settings recommended setup action shows priority and stage context",
+  settingsSource.includes("recommendedConnectionAction.group.label") &&
+    settingsSource.includes("recommendedConnectionAction.group.helper") &&
+    settingsSource.includes("recommendedConnectionAction.item.stage.label"),
+);
+ok(
+  "Settings recommended setup action reuses requirement chips",
+  settingsSource.includes("recommendedConnectionAction.item.requirementChips") &&
+    settingsSource.includes("chip.className") &&
+    settingsSource.includes("chip.label"),
+);
 
 console.log(`\nchannel-connection-stages: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
