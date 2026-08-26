@@ -465,13 +465,20 @@ Verified deployed/read-only DB proof after worker reconciliation:
 
 - `npm run verify:spend-rpc` -> 4 passed, 0 failed.
 
-Recommended next gate after this source and read-only DB proof is one of:
+Verified DB fixture proof after read-only DB proof:
+
+- `node --env-file=.env.local scripts/verify-spend-rpc-fixture.mjs --apply --org-id=8ea1da48-0cd2-45a4-bfba-023b31a67884 --channel=snapchat`
+  -> 8 passed, 0 failed.
+- The fixture used the existing `Growth Test` org, an unused synthetic `snapchat` channel account,
+  and synthetic property/run/item rows.
+- It proved missing standing spend authorization is refused and clears approval, then proved
+  authorized standing spend lets the RPC claim the approved item with the worker sentinel.
+- Cleanup verified the synthetic run item, run, channel account, and property were deleted.
+
+Recommended next gate after this source and DB proof is one of:
 
 - PR/merge sequencing gate: open/review the app branch and worker branch together so the dashboard
   contract, DB RPC, and worker claim path land in the right order.
-- Dry fixture gate: create an isolated test-org approved paid item, prove the worker claim refuses
-  missing spend authorization and claims through the RPC after standing spend is authorized, then
-  clean up the fixture. This mutates DB test rows but still does not post, charge, or run a portal.
 - Live reminder-readback gate: only after explicit approval, read back the target env flags and DB
   shape, then prove the existing distribution-freshness cron can create/stamp Keep live events
   without sending an unintended landlord email.
@@ -482,15 +489,18 @@ Recommended next gate after this source and read-only DB proof is one of:
 
 These gates did not:
 
-- change worker behavior
 - apply migrations
 - touch Vercel/env
 - run a worker
 - send a landlord email
 - post to an external portal
 - charge or authorize payment
-- mutate production data
 - mark any channel live or removed
+
+The DB fixture gate did temporarily mutate the deployed database inside the existing `Growth Test`
+org only. It created synthetic child rows for `snapchat` and verified cleanup removed them. It did
+not touch a real channel account, real listing, portal, payment method, landlord message, or live
+status.
 
 It is a reset artifact so the next implementation starts from the final product Noam wants, not the
 historical guided/co-pilot path.
