@@ -9,6 +9,10 @@
 // ============================================================================
 
 import { channelByKey } from "./distribution-channels";
+import type {
+  DistributionLifecycleAttention,
+  DistributionLifecycleAttentionTone,
+} from "./distribution-freshness";
 import {
   PUBLISH_CHANNEL_KEYS,
   type PublishChannelKey,
@@ -123,6 +127,7 @@ export type DistributionChannelContract = {
 export type DistributionContractAccountState = {
   accountStatus?: string | null;
   automationAuthorized?: boolean | null;
+  autoSubmitAllowed?: boolean | null;
   spendAuthorized?: boolean | null;
   spendMaxCents?: number | null;
   spendRevokedAt?: string | null;
@@ -140,6 +145,28 @@ export type DistributionLifecycleSummary = {
   refreshLabel: string;
   takedownLabel: string;
   detail: string;
+};
+
+export const DISTRIBUTION_KEEP_LIVE_ACTION_KINDS = [
+  "watching",
+  "auto_refresh",
+  "send_reminder",
+  "request_account",
+  "request_authorization",
+  "request_spend",
+  "remove_ad",
+  "save_proof",
+  "none",
+] as const;
+export type DistributionKeepLiveActionKind =
+  (typeof DISTRIBUTION_KEEP_LIVE_ACTION_KINDS)[number];
+
+export type DistributionKeepLiveAction = {
+  kind: DistributionKeepLiveActionKind;
+  label: string;
+  tone: DistributionLifecycleAttentionTone;
+  detail: string;
+  dueAt: string | null;
 };
 
 export type DistributionContractTone =
@@ -616,4 +643,178 @@ export function participatesInKeepLive(
     contract.refreshKind === "ttl_auto" ||
     contract.refreshKind === "ttl_reminder"
   );
+}
+
+function connectedForKeepLive(
+  contract: DistributionChannelContract,
+  account: DistributionContractAccountState,
+): boolean {
+  return accountReady(contract, account);
+}
+
+function authorizedForKeepLive(
+  contract: DistributionChannelContract,
+  account: DistributionContractAccountState,
+): boolean {
+  return authorizationReady(contract, account);
+}
+
+function autoRefreshAllowedForKeepLive(
+  account: DistributionContractAccountState,
+): boolean {
+  return (
+    account.automationAuthorized === true &&
+    account.autoSubmitAllowed === true
+  );
+}
+
+function setupActionForKeepLive(
+  contract: DistributionChannelContract,
+  account: DistributionContractAccountState,
+  dueAt: string | null,
+): DistributionKeepLiveAction | null {
+  if (!connectedForKeepLive(contract, account)) {
+    return {
+      kind: "request_account",
+      label: "Reconnect needed",
+      tone: "warning",
+      detail: `Connect ${contract.label} before Vacantless can refresh or remove this destination.`,
+      dueAt,
+    };
+  }
+  if (!authorizedForKeepLive(contract, account)) {
+    return {
+      kind: "request_authorization",
+      label: "Needs authorization",
+      tone: "warning",
+      detail: `Authorize Vacantless to refresh or remove ${contract.label} before this can run behind the scenes.`,
+      dueAt,
+    };
+  }
+  if (!spendReady(contract, account)) {
+    return {
+      kind: "request_spend",
+      label: "Needs spend limit",
+      tone: "warning",
+      detail: `Set a landlord pass-through spend limit before Vacantless refreshes ${contract.label}.`,
+      dueAt,
+    };
+  }
+  return null;
+}
+
+export function resolveDistributionKeepLiveAction({
+  contract,
+  account = {},
+  attention,
+}: {
+  contract: DistributionChannelContract;
+  account?: DistributionContractAccountState;
+  attention?: DistributionLifecycleAttention | null;
+}): DistributionKeepLiveAction | null {
+  if (!attention) {
+    if (!participatesInKeepLive(contract)) return null;
+    return {
+      kind: "watching",
+      label: "Keep-live watch",
+      tone: "neutral",
+      detail: `${contract.label} expiry will be tracked after Vacantless saves live proof.`,
+      dueAt: null,
+    };
+  }
+
+  if (attention.kind === "proof_needed") {
+    return {
+      kind: "save_proof",
+      label: "Save proof",
+      tone: "danger",
+      detail: attention.detail,
+      dueAt: attention.dueAt,
+    };
+  }
+
+  if (attention.kind === "takedown_needed") {
+    if (contract.takedownKind === "none") {
+      return {
+        kind: "none",
+        label: "No takedown step",
+        tone: "neutral",
+        detail: "No removal step is tracked for this destination yet.",
+        dueAt: attention.dueAt,
+      };
+    }
+    if (contract.takedownKind === "broker_request") {
+      return {
+        kind: "remove_ad",
+        label: "Broker removal",
+        tone: "warning",
+        detail: `Ask the broker or agent route to remove ${contract.label}, then save proof here.`,
+        dueAt: attention.dueAt,
+      };
+    }
+    if (
+      contract.takedownKind === "api_delete" ||
+      contract.takedownKind === "headless_delete"
+    ) {
+      const setup = setupActionForKeepLive(contract, account, attention.dueAt);
+      if (setup) return setup;
+      return {
+        kind: "remove_ad",
+        label: "Ready to remove",
+        tone: "warning",
+        detail: `Vacantless has a behind-the-scenes removal path for ${contract.label}. Remove it and save removal proof before marking the destination done.`,
+        dueAt: attention.dueAt,
+      };
+    }
+    return {
+      kind: "remove_ad",
+      label: "Remove ad",
+      tone: "warning",
+      detail: attention.detail,
+      dueAt: attention.dueAt,
+    };
+  }
+
+  if (
+    attention.kind === "refresh_due" ||
+    attention.kind === "expires_soon"
+  ) {
+    if (!participatesInKeepLive(contract)) {
+      return {
+        kind: "send_reminder",
+        label:
+          attention.kind === "refresh_due" ? "Review refresh" : "Review expiry",
+        tone: attention.tone,
+        detail: attention.detail,
+        dueAt: attention.dueAt,
+      };
+    }
+    const setup = setupActionForKeepLive(contract, account, attention.dueAt);
+    if (setup) return setup;
+    if (
+      contract.refreshKind === "ttl_auto" &&
+      autoRefreshAllowedForKeepLive(account)
+    ) {
+      return {
+        kind: "auto_refresh",
+        label:
+          attention.kind === "refresh_due"
+            ? "Refresh scheduled"
+            : "Keep-live scheduled",
+        tone: "positive",
+        detail: `${contract.label} can refresh behind the scenes within the current account, authorization, and spend settings. Vacantless still waits for live proof before counting it Live again.`,
+        dueAt: attention.dueAt,
+      };
+    }
+    return {
+      kind: "send_reminder",
+      label:
+        attention.kind === "refresh_due" ? "Reminder needed" : "Reminder scheduled",
+      tone: "warning",
+      detail: `${attention.detail} Turn on hands-off refresh to let Vacantless handle this automatically when the account and spend gates allow it.`,
+      dueAt: attention.dueAt,
+    };
+  }
+
+  return null;
 }

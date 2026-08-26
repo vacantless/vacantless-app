@@ -216,6 +216,7 @@ import {
   distributionLifecycleSummary,
   distributionLaunchStateLabel,
   distributionLaunchStateTone,
+  resolveDistributionKeepLiveAction,
   resolveDistributionLaunchReadiness,
 } from "@/lib/distribution-channel-contracts";
 import { authorizedInstantPublishDestinations } from "@/lib/auto-distribution";
@@ -2146,6 +2147,20 @@ export default async function PropertyDetailPage({
           nowISO: lifecycleNowISO,
         })
       : channelStatusValueByKey.get(r.channel) === "needs_refresh";
+    const lifecycleAttention = distributionLifecycleAttention({
+      channel: r.channel,
+      channelLabel,
+      propertyStatus: normalizedStatus,
+      publishStatus,
+      transport: r.transport,
+      verificationStatus: r.verification_status,
+      staleAfter: r.stale_after,
+      externalExpiresAt: r.external_expires_at,
+      externalUrl: r.external_url,
+      proofUrl: r.proof_url,
+      liveWithoutUrl,
+      nowISO: lifecycleNowISO,
+    });
     return {
       id: r.id,
       channel: r.channel,
@@ -2172,20 +2187,23 @@ export default async function PropertyDetailPage({
       verificationStatus: r.verification_status,
       proofUrl: r.proof_url,
       conciergeRequestedAt: r.concierge_requested_at,
-      lifecycleAttention: distributionLifecycleAttention({
-        channel: r.channel,
-        channelLabel,
-        propertyStatus: normalizedStatus,
-        publishStatus,
-        transport: r.transport,
-        verificationStatus: r.verification_status,
-        staleAfter: r.stale_after,
-        externalExpiresAt: r.external_expires_at,
-        externalUrl: r.external_url,
-        proofUrl: r.proof_url,
-        liveWithoutUrl,
-        nowISO: lifecycleNowISO,
-      }),
+      lifecycleAttention,
+      keepLiveAction: contract
+        ? resolveDistributionKeepLiveAction({
+            contract,
+            account: {
+              accountStatus: accountStatusForChannel(publishKey ?? r.channel),
+              automationAuthorized:
+                channelAccount?.automationAuthorized === true,
+              autoSubmitAllowed: channelAccount?.autoSubmitAllowed === true,
+              spendAuthorized: channelAccount?.spendAuthorized === true,
+              spendMaxCents: channelAccount?.spendMaxCents ?? null,
+              spendRevokedAt: channelAccount?.spendRevokedAt ?? null,
+              feedAccepted: Boolean(channelAccount?.feedUrl),
+            },
+            attention: lifecycleAttention,
+          })
+        : null,
       steps: buildRunSteps(r.channel, {
         guardrailCount: guardrailsForPortal(r.channel).length,
       }),
@@ -2354,7 +2372,7 @@ export default async function PropertyDetailPage({
             tone: "info",
             title: "Hands-off refreshes are off.",
             body:
-              "Relist Radar will email before the next free Kijiji refresh cycle.",
+              "Keep live reminders will email before the next free Kijiji refresh cycle.",
           }
         : searchParams.dist === "radar_setup"
           ? {

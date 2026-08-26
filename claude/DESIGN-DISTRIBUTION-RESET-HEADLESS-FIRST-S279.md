@@ -419,12 +419,30 @@ The property page now reads `distribution_run_items.external_expires_at` and pas
 attention into the launch queue. This is still read-only display logic; reminder send stamps,
 landlord emails, cron behavior, worker refreshes, and portal takedowns remain separate gates.
 
-Verified source proof after Gate 3:
+Gate 4 folded the existing Relist Radar substrate into the cleaned-up "Keep live" product model
+without changing DB shape, cron scheduling, worker behavior, or live sends. The source now resolves
+each run-item attention state against the channel contract plus account/authorization/hands-off
+refresh/spend state:
 
-- `npx tsx scripts/test-distribution-channel-contracts.ts` -> 207 passed, 0 failed.
+- an expiring Kijiji item with connected account, posting authorization, hands-off refresh, and
+  landlord spend limit reads as "Keep-live scheduled" instead of a human task;
+- missing account, missing authorization, or missing spend becomes one setup action;
+- proof-needed and takedown-needed remain top-priority operator tasks;
+- Facebook Page feed takedown checks the API-account/authorization gate before reading as ready to
+  remove;
+- landlord-facing email, decision-link, notification, dashboard, and worker-audit copy says
+  "Keep live" while internal tables/routes/event keys keep the existing `relist_radar_*` names.
+
+Verified source proof after Gate 4:
+
+- `npx tsx scripts/test-distribution-channel-contracts.ts` -> 218 passed, 0 failed.
 - `npx tsx scripts/test-channel-publish-rail.ts` -> 55 passed, 0 failed.
 - `npx tsx scripts/test-distribution-run.ts` -> 106 passed, 0 failed.
 - `npx tsx scripts/test-distribution-freshness.ts` -> 43 passed, 0 failed.
+- `npx tsx scripts/test-relist-radar.ts` -> 63 passed, 0 failed.
+- `npx tsx scripts/test-relist-radar-email.ts` -> 64 passed, 0 failed.
+- `npx tsx scripts/test-relist-radar-execute.ts` -> 39 passed, 0 failed.
+- `npx tsx scripts/test-notifications.ts` -> 123 passed, 0 failed.
 - `npx tsx scripts/test-channel-connection-stages.ts` -> 45 passed, 0 failed.
 - `npx tsx scripts/test-distribution-channels.ts` -> 268 passed, 0 failed.
 - `npx tsx scripts/test-spend-authorization.ts` -> 16 passed, 0 failed.
@@ -436,10 +454,11 @@ Verified source proof after Gate 3:
 
 Recommended next gate after this source proof is one of:
 
-- DB/cron reminder gate: only after explicit approval, persist/stamp reminder sends and connect the
-  distribution-freshness cron to landlord-facing reminder delivery.
 - Worker reconciliation gate: reconcile paid headless worker claims with the app spend RPC before
   any paid channel can run unattended.
+- Live reminder-readback gate: only after explicit approval, read back the target env flags and DB
+  shape, then prove the existing distribution-freshness cron can create/stamp Keep live events
+  without sending an unintended landlord email.
 - Takedown expansion gate: add or prove channel-specific headless/API removal paths; until then the
   UI correctly presents removal as one operator task.
 
@@ -451,6 +470,7 @@ These gates did not:
 - apply migrations
 - touch Vercel/env
 - run a worker
+- send a landlord email
 - post to an external portal
 - charge or authorize payment
 - mutate production data

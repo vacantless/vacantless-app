@@ -44,6 +44,7 @@ import {
   groupByDistributionChannelDisplayGroup,
   type ChannelCategory,
 } from "@/lib/distribution-channels";
+import type { DistributionKeepLiveAction } from "@/lib/distribution-channel-contracts";
 import type { DistributionLifecycleAttention } from "@/lib/distribution-freshness";
 
 export type RunItemView = {
@@ -79,6 +80,7 @@ export type RunItemView = {
   proofUrl: string | null;
   conciergeRequestedAt: string | null;
   lifecycleAttention?: DistributionLifecycleAttention | null;
+  keepLiveAction?: DistributionKeepLiveAction | null;
   // S482: the honest browser co-pilot posting-assist script (copilot channels).
   copilotScript: CopilotScript | null;
   // S488 Slice 1: merged from the retired where-posted grid so the command
@@ -190,6 +192,41 @@ function DisplayStatusChip({ item }: { item: RunItemView }) {
   );
 }
 
+type LifecycleDisplay = Pick<
+  DistributionLifecycleAttention,
+  "label" | "tone" | "detail" | "dueAt"
+> & { kind: string };
+
+function lifecycleDisplay(item: RunItemView): LifecycleDisplay | null {
+  return item.keepLiveAction ?? item.lifecycleAttention ?? null;
+}
+
+function LifecycleStatusChip({ item }: { item: RunItemView }) {
+  const display = lifecycleDisplay(item);
+  if (!display || isRemovedTakedownItem(item)) return null;
+  return (
+    <span
+      title={display.detail}
+      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[display.tone]}`}
+    >
+      {display.label}
+    </span>
+  );
+}
+
+function LifecycleAttentionBox({ item }: { item: RunItemView }) {
+  const display = lifecycleDisplay(item);
+  if (!display || isRemovedTakedownItem(item)) return null;
+  return (
+    <div
+      className={`mb-3 rounded-lg border px-3 py-2 text-xs ${ATTENTION_BOX[display.tone]}`}
+    >
+      <p className="font-semibold">{display.label}</p>
+      <p className="mt-1 leading-relaxed">{display.detail}</p>
+    </div>
+  );
+}
+
 // Slice 1: the single derived status chip for a run row. Folds the two former
 // vocabularies (PublishStatus + the grid's ChannelStatusValue) into one, and
 // applies the two Codex P3s:
@@ -243,6 +280,23 @@ const OPERATOR_ACTION_WEIGHT: Partial<Record<PublishStatus, number>> = {
 };
 
 function operatorActionWeight(item: RunItemView): number | null {
+  if (item.keepLiveAction) {
+    switch (item.keepLiveAction.kind) {
+      case "remove_ad":
+      case "save_proof":
+        return 0;
+      case "request_account":
+      case "request_authorization":
+      case "request_spend":
+        return 1;
+      case "send_reminder":
+        return 2;
+      case "auto_refresh":
+      case "watching":
+      case "none":
+        return null;
+    }
+  }
   if (item.lifecycleAttention?.kind === "takedown_needed") return 0;
   if (item.lifecycleAttention?.kind === "proof_needed") return 0;
   if (item.liveWithoutUrl) return 0;
@@ -270,6 +324,9 @@ function primaryOperatorItem(items: RunItemView[]): RunItemView | null {
 }
 
 function operatorActionSummary(item: RunItemView): string {
+  if (item.keepLiveAction && item.keepLiveAction.kind !== "none") {
+    return item.keepLiveAction.detail;
+  }
   if (isTakedownItem(item)) {
     if (isRemovedTakedownItem(item)) return `${item.channelLabel} ad removal is recorded.`;
     if (item.publishStatus === "queued") return `${item.channelLabel} ad removal is queued.`;
@@ -329,6 +386,27 @@ function operatorActionSummary(item: RunItemView): string {
 }
 
 function operatorOwnerLine(item: RunItemView): string {
+  if (item.keepLiveAction) {
+    switch (item.keepLiveAction.kind) {
+      case "auto_refresh":
+        return "Vacantless handles the refresh behind the scenes, then waits for real live-ad proof before restoring a Live state.";
+      case "send_reminder":
+        return "Vacantless will use the existing reminder cycle instead of pretending it can safely refresh without the missing consent.";
+      case "request_spend":
+        return "Paid refreshes stay blocked until the landlord pass-through limit is set.";
+      case "request_account":
+      case "request_authorization":
+        return "This stays as one setup task, then future launch and refresh work can run from the connected account.";
+      case "remove_ad":
+        return "Removal is part of the same listing lifecycle; the ad is not treated as removed until proof is saved.";
+      case "save_proof":
+        return "Live needs a real destination URL or proof record before Vacantless counts this site.";
+      case "watching":
+        return "After proof exists, Vacantless keeps the expiry clock on this same row.";
+      case "none":
+        break;
+    }
+  }
   if (isTakedownItem(item)) {
     return "Vacantless keeps the tracker row for attribution and records your removal confirmation here.";
   }
@@ -718,14 +796,7 @@ export function LaunchRunPanel({
                         {verificationResultLabel(item.verificationStatus)}
                       </span>
                     )}
-                    {item.lifecycleAttention && !isRemovedTakedownItem(item) && (
-                      <span
-                        title={item.lifecycleAttention.detail}
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[item.lifecycleAttention.tone]}`}
-                      >
-                        {item.lifecycleAttention.label}
-                      </span>
-                    )}
+                    <LifecycleStatusChip item={item} />
                   </div>
                 </div>
                 <span className="mt-0.5 text-xs font-medium text-brand group-open:hidden">
@@ -745,18 +816,7 @@ export function LaunchRunPanel({
                     {operatorOwnerLine(item)}
                   </p>
                 </div>
-                {item.lifecycleAttention && !isRemovedTakedownItem(item) && (
-                  <div
-                    className={`mb-3 rounded-lg border px-3 py-2 text-xs ${ATTENTION_BOX[item.lifecycleAttention.tone]}`}
-                  >
-                    <p className="font-semibold">
-                      {item.lifecycleAttention.label}
-                    </p>
-                    <p className="mt-1 leading-relaxed">
-                      {item.lifecycleAttention.detail}
-                    </p>
-                  </div>
-                )}
+                <LifecycleAttentionBox item={item} />
 
             {(item.auditMessage || item.errorMessage || item.blockers.length > 0) && (
               <div className="mb-3 space-y-2">

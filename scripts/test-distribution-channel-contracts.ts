@@ -5,6 +5,7 @@ import {
   DISTRIBUTION_AUTHORIZATION_KINDS,
   DISTRIBUTION_CHANNEL_CONTRACTS,
   DISTRIBUTION_EXECUTION_KINDS,
+  DISTRIBUTION_KEEP_LIVE_ACTION_KINDS,
   DISTRIBUTION_PROOF_KINDS,
   DISTRIBUTION_REFRESH_KINDS,
   DISTRIBUTION_ROLLOUT_STATES,
@@ -19,6 +20,7 @@ import {
   distributionTakedownLabel,
   hasAutomatedTakedown,
   participatesInKeepLive,
+  resolveDistributionKeepLiveAction,
   resolveDistributionLaunchReadiness,
 } from "../lib/distribution-channel-contracts";
 import { PUBLISH_CHANNEL_KEYS } from "../lib/distribution-publish";
@@ -45,6 +47,7 @@ const proofKinds = enumSet(DISTRIBUTION_PROOF_KINDS);
 const refreshKinds = enumSet(DISTRIBUTION_REFRESH_KINDS);
 const takedownKinds = enumSet(DISTRIBUTION_TAKEDOWN_KINDS);
 const rolloutStates = enumSet(DISTRIBUTION_ROLLOUT_STATES);
+const keepLiveKinds = enumSet(DISTRIBUTION_KEEP_LIVE_ACTION_KINDS);
 
 // --- coverage and enum integrity ------------------------------------------
 {
@@ -304,6 +307,123 @@ ok(
   distributionLifecycleSummary(distributionChannelContract("linkedin")).detail ===
     "Expiry watch after proof; no takedown step is tracked here.",
 );
+
+// --- keep-live lifecycle action resolver ----------------------------------
+{
+  const kijiji = distributionChannelContract("kijiji");
+  const expiresSoon = {
+    kind: "expires_soon" as const,
+    label: "Expires soon",
+    tone: "warning" as const,
+    detail: "Kijiji expires on 2026-08-14.",
+    actionLabel: "Review expiry",
+    dueAt: "2026-08-14T14:00:00.000Z",
+  };
+  const auto = resolveDistributionKeepLiveAction({
+    contract: kijiji,
+    account: {
+      accountStatus: "connected",
+      automationAuthorized: true,
+      autoSubmitAllowed: true,
+      spendAuthorized: true,
+      spendMaxCents: 5000,
+    },
+    attention: expiresSoon,
+  });
+  ok("keep-live auto action is valid", keepLiveKinds.has(auto?.kind ?? ""));
+  ok("Kijiji ready hands-off expiry becomes auto-refresh", auto?.kind === "auto_refresh");
+  ok("Kijiji auto-refresh reads as scheduled", auto?.label === "Keep-live scheduled");
+  ok(
+    "Kijiji missing spend asks for spend",
+    resolveDistributionKeepLiveAction({
+      contract: kijiji,
+      account: {
+        accountStatus: "connected",
+        automationAuthorized: true,
+        autoSubmitAllowed: true,
+      },
+      attention: expiresSoon,
+    })?.kind === "request_spend",
+  );
+  ok(
+    "Kijiji without hands-off consent sends reminder",
+    resolveDistributionKeepLiveAction({
+      contract: kijiji,
+      account: {
+        accountStatus: "connected",
+        automationAuthorized: true,
+        autoSubmitAllowed: false,
+        spendAuthorized: true,
+        spendMaxCents: 5000,
+      },
+      attention: expiresSoon,
+    })?.kind === "send_reminder",
+  );
+  ok(
+    "Kijiji missing account asks reconnect",
+    resolveDistributionKeepLiveAction({
+      contract: kijiji,
+      attention: expiresSoon,
+    })?.kind === "request_account",
+  );
+  ok(
+    "Kijiji quiet state keeps a watch row",
+    resolveDistributionKeepLiveAction({ contract: kijiji })?.kind === "watching",
+  );
+}
+{
+  const proofNeeded = {
+    kind: "proof_needed" as const,
+    label: "Proof needed",
+    tone: "danger" as const,
+    detail: "Facebook Marketplace is marked Live without a real ad URL.",
+    actionLabel: "Save proof",
+    dueAt: null,
+  };
+  ok(
+    "proof-needed action is save proof",
+    resolveDistributionKeepLiveAction({
+      contract: distributionChannelContract("facebook"),
+      attention: proofNeeded,
+    })?.kind === "save_proof",
+  );
+}
+{
+  const takedownNeeded = {
+    kind: "takedown_needed" as const,
+    label: "Takedown needed",
+    tone: "warning" as const,
+    detail: "Facebook Page feed is still live.",
+    actionLabel: "Remove ad",
+    dueAt: null,
+  };
+  const facebookFeed = distributionChannelContract("facebook_feed");
+  ok(
+    "API takedown missing account asks reconnect",
+    resolveDistributionKeepLiveAction({
+      contract: facebookFeed,
+      attention: takedownNeeded,
+    })?.kind === "request_account",
+  );
+  ok(
+    "API takedown with account/auth is ready to remove",
+    resolveDistributionKeepLiveAction({
+      contract: facebookFeed,
+      account: {
+        accountStatus: "connected",
+        automationAuthorized: true,
+      },
+      attention: takedownNeeded,
+    })?.kind === "remove_ad",
+  );
+  ok(
+    "operator takedown remains removal task",
+    resolveDistributionKeepLiveAction({
+      contract: distributionChannelContract("viewit"),
+      attention: takedownNeeded,
+    })?.label === "Remove ad",
+  );
+}
 
 // --- display-safe labels ---------------------------------------------------
 ok("ready label", distributionLaunchStateLabel("ready") === "Ready");

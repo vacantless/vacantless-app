@@ -527,7 +527,9 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "property page derives expiry and takedown attention from run item state",
     propertyDetailSource.includes("distributionLifecycleAttention") &&
       propertyDetailSource.includes("external_expires_at") &&
-      propertyDetailSource.includes("lifecycleAttention: distributionLifecycleAttention"),
+      propertyDetailSource.includes("const lifecycleAttention = distributionLifecycleAttention") &&
+      propertyDetailSource.includes("lifecycleAttention,") &&
+      propertyDetailSource.includes("resolveDistributionKeepLiveAction"),
   );
   ok(
     "publish control room is the first distribute-tab action surface",
