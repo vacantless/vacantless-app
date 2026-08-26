@@ -256,6 +256,12 @@ Existing source already supports a real lease-up takedown path for Facebook Page
 - write `distribution_verifications.result='removed'`
 - run item lands terminal removed/done shape
 
+Current worker readback also shows Kijiji delete helpers, but they are tied to the Relist Radar
+free-refresh cycle: delete prior free Kijiji ad, confirm it is gone, then repost when a free slot is
+available. That is not yet the same as a general lease-up takedown queue for Kijiji. Until app +
+worker share a lease-up takedown contract for Kijiji, the product contract must keep Kijiji removal
+as an operator task.
+
 Reset requirement:
 
 Every destination row needs a takedown contract:
@@ -490,6 +496,23 @@ Verified read-only Keep-live/reminder proof after spend DB proof:
 - This verifier did not call the cron route, create reminder rows, send email, enqueue a worker,
   post/remove any portal ad, or touch payment.
 
+Verified read-only takedown contract proof after reminder readback:
+
+- `npm run verify:takedown-contracts` -> 17 passed, 0 failed.
+- App source checks proved Facebook Page feed is the only API-delete portal in the channel
+  contract; Facebook Marketplace, Kijiji, RentFaster, Viewit, and other browser portal removals
+  remain operator tasks; Realtor.ca remains broker removal.
+- App lease-up checks proved automated removal is queued only for connected and authorized
+  `facebook_feed` accounts, and that takedown rows use `transport='takedown'` so the publish worker
+  does not treat removal as a new-post job.
+- Worker source checks proved the lease-up sweep is scoped to queued `facebook_feed` takedown rows,
+  uses a guarded claim, requires Graph DELETE plus object-gone proof, and marks
+  `listing_posts.status='removed'` only through `markTakenDown`.
+- Worker readback also proved Kijiji delete is currently part of the Relist Radar free-refresh path,
+  not a general lease-up takedown queue.
+- This verifier did not read or mutate DB rows, call Graph/Kijiji, run Playwright, send email, or
+  remove any ad.
+
 Recommended next gate after this source and DB proof is one of:
 
 - PR/merge sequencing gate: open/review the app branch and worker branch together so the dashboard
@@ -497,8 +520,11 @@ Recommended next gate after this source and DB proof is one of:
 - Keep-live clock fixture gate: with landlord email and worker execution still disabled, create an
   isolated synthetic expiring live item in a test org, run only the candidate-clock path, prove a
   `relist_radar_events` candidate is stamped idempotently, then clean it up.
-- Takedown expansion gate: add or prove channel-specific headless/API removal paths; until then the
-  UI correctly presents removal as one operator task.
+- Kijiji lease-up takedown contract gate: if we want Kijiji removal to become headless beyond the
+  Relist Radar refresh cycle, add an app enqueue contract plus worker claim/proof path for leased
+  Kijiji ads. Until then, the UI correctly presents Kijiji removal as one operator task.
+- Broader takedown expansion gate: add or prove channel-specific headless/API removal paths for
+  other portals; until then the UI correctly presents removal as one operator task.
 
 ## Boundaries
 
@@ -510,6 +536,7 @@ These gates did not:
 - run a worker
 - send a landlord email
 - post to an external portal
+- call Graph/Kijiji removal paths
 - charge or authorize payment
 - mark any channel live or removed
 

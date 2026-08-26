@@ -13,6 +13,7 @@
     "verify:spend-rpc": "node --env-file=.env.local scripts/verify-spend-rpc-deployed.mjs",
     "verify:spend-rpc:fixture": "node --env-file=.env.local scripts/verify-spend-rpc-fixture.mjs",
     "verify:relist-radar": "node --env-file=.env.local scripts/verify-relist-radar-deployed.mjs",
+    "verify:takedown-contracts": "node scripts/verify-takedown-contracts.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
