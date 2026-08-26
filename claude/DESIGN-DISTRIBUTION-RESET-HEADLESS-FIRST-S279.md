@@ -159,10 +159,19 @@ Existing app substrates to keep:
 Important reconciliation gate:
 
 The app migration `0217_distribution_channel_spend_authorization.sql` adds the spend authorization
-columns and the guarded `claim_approved_distribution_run_item_for_worker` RPC. The current local
-standalone worker branch still has `src/claim.ts` selecting `requires_payment` but not enforcing
-`spend_authorized` / `spend_max_cents`, and does not call that RPC. Before any paid worker lane goes
-live, the worker claim path must be reconciled with the app-side spend gate.
+columns and the guarded `claim_approved_distribution_run_item_for_worker` RPC. The standalone worker
+claim path is now reconciled on `vacantless-worker` branch
+`codex/s279-worker-spend-claim-reconcile` at `ec767d6`: approved paid claims read
+`spend_authorized` / `spend_max_cents`, refuse missing/revoked spend authorization, and call the app
+RPC for the final worker claim CAS.
+
+Read-only deployed proof on 2026-08-26:
+
+- `npm run verify:spend-rpc` -> 4 passed, 0 failed.
+- This verified the deployed database exposes the spend columns, spend ledger table, worker
+  approval/claim columns, and the claim RPC signature.
+- The RPC check used impossible UUIDs and a synthetic channel, returned `[]`, and did not claim or
+  mutate any row.
 
 ## Channel execution model
 
@@ -452,10 +461,17 @@ Verified source proof after Gate 4:
 - `npm run build`.
 - Focused `git diff --check`.
 
-Recommended next gate after this source proof is one of:
+Verified deployed/read-only DB proof after worker reconciliation:
 
-- Worker reconciliation gate: reconcile paid headless worker claims with the app spend RPC before
-  any paid channel can run unattended.
+- `npm run verify:spend-rpc` -> 4 passed, 0 failed.
+
+Recommended next gate after this source and read-only DB proof is one of:
+
+- PR/merge sequencing gate: open/review the app branch and worker branch together so the dashboard
+  contract, DB RPC, and worker claim path land in the right order.
+- Dry fixture gate: create an isolated test-org approved paid item, prove the worker claim refuses
+  missing spend authorization and claims through the RPC after standing spend is authorized, then
+  clean up the fixture. This mutates DB test rows but still does not post, charge, or run a portal.
 - Live reminder-readback gate: only after explicit approval, read back the target env flags and DB
   shape, then prove the existing distribution-freshness cron can create/stamp Keep live events
   without sending an unintended landlord email.
