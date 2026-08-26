@@ -1,7 +1,7 @@
 # DESIGN - Distribution reset: headless-first launch experience (S279)
 
 Date: 2026-08-26
-Status: product/architecture reset plus source/UI Gate 1 and Gate 2 implementation; no DB, provider, worker, payment, portal, live-send, or deploy gate
+Status: product/architecture reset plus source/UI Gates 1-4, deployed DB proof, and worker spend-claim reconciliation; no provider, portal, live-send, payment, worker deploy, or production merge gate
 Author: Codex, after Noam corrected the old guided framing
 
 ## Why this reset exists
@@ -475,13 +475,28 @@ Verified DB fixture proof after read-only DB proof:
   authorized standing spend lets the RPC claim the approved item with the worker sentinel.
 - Cleanup verified the synthetic run item, run, channel account, and property were deleted.
 
+Verified read-only Keep-live/reminder proof after spend DB proof:
+
+- `npm run verify:relist-radar` -> 18 passed, 0 failed.
+- Source checks proved the distribution-freshness route keeps the candidate clock, landlord email,
+  and free worker enqueue behind separate flags: `RELIST_RADAR_CLOCK_ENABLED`,
+  `RELIST_RADAR_EMAIL_ENABLED`, and `RELIST_RADAR_EXECUTE_FREE_ENABLED`.
+- Env readback for this proof had clock disabled, landlord Relist Radar email disabled, free worker
+  refresh execution disabled, and no org allowlist loaded.
+- Deployed DB checks verified `distribution_run_items` expiry/backup columns,
+  `relist_radar_settings`, `relist_radar_events` decision/send-stamp columns,
+  `relist_radar_decision_tokens`, and refresh authorization columns on
+  `distribution_channel_accounts`.
+- This verifier did not call the cron route, create reminder rows, send email, enqueue a worker,
+  post/remove any portal ad, or touch payment.
+
 Recommended next gate after this source and DB proof is one of:
 
 - PR/merge sequencing gate: open/review the app branch and worker branch together so the dashboard
   contract, DB RPC, and worker claim path land in the right order.
-- Live reminder-readback gate: only after explicit approval, read back the target env flags and DB
-  shape, then prove the existing distribution-freshness cron can create/stamp Keep live events
-  without sending an unintended landlord email.
+- Keep-live clock fixture gate: with landlord email and worker execution still disabled, create an
+  isolated synthetic expiring live item in a test org, run only the candidate-clock path, prove a
+  `relist_radar_events` candidate is stamped idempotently, then clean it up.
 - Takedown expansion gate: add or prove channel-specific headless/API removal paths; until then the
   UI correctly presents removal as one operator task.
 
@@ -491,6 +506,7 @@ These gates did not:
 
 - apply migrations
 - touch Vercel/env
+- call the distribution-freshness cron route
 - run a worker
 - send a landlord email
 - post to an external portal
