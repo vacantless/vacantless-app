@@ -41,6 +41,9 @@ function row(
     transport: null,
     automationAuthorized: false,
     hasFeedRoute: false,
+    spendAuthorized: false,
+    spendMaxCents: null,
+    spendRevokedAt: null,
     ...overrides,
   };
 }
@@ -63,47 +66,56 @@ function buckets(opts: {
 {
   const b = buckets();
   eq("default instant only has synthetic rows", keys(b.instant).join("|"), "vacantless_page|email_alerts");
-  ok("facebook marketplace is one-tap, not instant", has(b.oneTap, "facebook"));
+  ok("facebook marketplace is fallback, not instant", has(b.oneTap, "facebook"));
   eq(
-    "facebook marketplace chip reads Posting assist, not Coming soon",
+    "facebook marketplace chip reads Fallback task, not Coming soon",
     b.oneTap.find((r) => r.key === "facebook")?.chip.label ?? "",
-    "Posting assist",
+    "Fallback task",
   );
-  ok("kijiji live assisted-manual is one-tap", has(b.oneTap, "kijiji"));
+  ok("kijiji needs account setup by default", has(b.gated, "kijiji"));
   eq(
-    "kijiji reads Posting assist, not Connect",
-    b.oneTap.find((r) => r.key === "kijiji")?.chip.label ?? "",
-    "Posting assist",
-  );
-  ok("rentals.ca without accepted feed is one-tap", has(b.oneTap, "rentals_ca"));
-  eq(
-    "rentals.ca without feed route reads Posting assist, not Connect",
-    b.oneTap.find((r) => r.key === "rentals_ca")?.chip.label ?? "",
-    "Posting assist",
-  );
-  ok("zumper without accepted feed is one-tap", has(b.oneTap, "zumper"));
-  eq(
-    "zumper without feed route reads Posting assist, not Connect",
-    b.oneTap.find((r) => r.key === "zumper")?.chip.label ?? "",
-    "Posting assist",
-  );
-  ok("rentfaster paid posting assist is one-tap", has(b.oneTap, "rentfaster"));
-  eq(
-    "rentfaster reads Needs payment, not Coming soon",
-    b.oneTap.find((r) => r.key === "rentfaster")?.chip.label ?? "",
-    "Needs payment",
+    "kijiji reads Needs account",
+    b.gated.find((r) => r.key === "kijiji")?.chip.label ?? "",
+    "Needs account",
   );
   ok(
-    "rentfaster paid assist keeps payment/proof honest",
-    (b.oneTap.find((r) => r.key === "rentfaster")?.headline ?? "").includes(
-      "approve any fee",
+    "kijiji rail shows expiry and removal lifecycle",
+    (b.gated.find((r) => r.key === "kijiji")?.lifecycleSummary ?? "").includes(
+      "Auto-refresh before 60 days",
+    ) &&
+      (b.gated.find((r) => r.key === "kijiji")?.lifecycleSummary ?? "").includes(
+        "removal task",
+      ),
+  );
+  ok("rentals.ca without account is setup-gated", has(b.gated, "rentals_ca"));
+  eq(
+    "rentals.ca without account reads Needs account",
+    b.gated.find((r) => r.key === "rentals_ca")?.chip.label ?? "",
+    "Needs account",
+  );
+  ok("zumper without account is setup-gated", has(b.gated, "zumper"));
+  eq(
+    "zumper without account reads Needs account",
+    b.gated.find((r) => r.key === "zumper")?.chip.label ?? "",
+    "Needs account",
+  );
+  ok("rentfaster paid channel needs account first", has(b.gated, "rentfaster"));
+  eq(
+    "rentfaster reads Needs account, not Coming soon",
+    b.gated.find((r) => r.key === "rentfaster")?.chip.label ?? "",
+    "Needs account",
+  );
+  ok(
+    "rentfaster paid setup keeps spend honest",
+    (b.gated.find((r) => r.key === "rentfaster")?.headline ?? "").includes(
+      "Connect",
     ),
   );
-  ok("viewit paid planned route remains gated", has(b.gated, "viewit"));
+  ok("viewit paid route remains gated", has(b.gated, "viewit"));
   ok("facebook page pre-connect is gated", has(b.gated, "facebook_feed"));
   ok("instagram is gated by default", has(b.gated, "instagram"));
   ok("realtor.ca stays gated", has(b.gated, "realtor_ca"));
-  ok("kijiji exposes direct portal URL", /^https:\/\//.test(b.oneTap.find((r) => r.key === "kijiji")?.portalUrl ?? ""));
+  ok("kijiji exposes direct portal URL", /^https:\/\//.test(b.gated.find((r) => r.key === "kijiji")?.portalUrl ?? ""));
   ok("synthetic renter page has no direct portal URL", b.instant.find((r) => r.key === "vacantless_page")?.portalUrl == null);
   eq("real row count includes two synthetic rows", b.totalCount, DISTRIBUTION_CHANNELS.length + 2);
 }
@@ -170,10 +182,45 @@ function buckets(opts: {
 
 {
   const b = buckets({
-    accounts: [row("rentals_ca", { accountStatus: "accepted", hasFeedRoute: true })],
+    accounts: [
+      row("kijiji", {
+        accountStatus: "connected",
+        automationAuthorized: true,
+        spendAuthorized: true,
+        spendMaxCents: 5000,
+      }),
+    ],
   });
-  ok("accepted rentals.ca feed graduates to instant", has(b.instant, "rentals_ca"));
-  ok("zumper without accepted feed remains one-tap", has(b.oneTap, "zumper"));
+  const kijiji = b.instant.find((r) => r.key === "kijiji");
+  ok("connected funded Kijiji graduates to ready launch", has(b.instant, "kijiji"));
+  eq("Kijiji ready chip", kijiji?.chip.label ?? "", "Ready");
+}
+
+{
+  const b = buckets({
+    accounts: [
+      row("rentfaster", {
+        accountStatus: "connected",
+        automationAuthorized: true,
+      }),
+    ],
+  });
+  const rentfaster = b.gated.find((r) => r.key === "rentfaster");
+  ok("RentFaster connected without spend needs limit", has(b.gated, "rentfaster"));
+  eq("RentFaster spend chip", rentfaster?.chip.label ?? "", "Needs spend limit");
+}
+
+{
+  const b = buckets({
+    accounts: [
+      row("rentals_ca", {
+        accountStatus: "connected",
+        automationAuthorized: true,
+      }),
+    ],
+  });
+  ok("connected rentals.ca account graduates to ready launch", has(b.instant, "rentals_ca"));
+  ok("zumper without account remains setup-gated", has(b.gated, "zumper"));
 }
 
 {
@@ -255,19 +302,25 @@ const channelPublishRailSource = readFileSync(
   "utf8",
 );
 ok(
-  "posting rail one-tap title names payment",
-  channelPublishRailSource.includes("Needs sign-in, payment, or proof"),
+  "posting rail launch title names account and spend setup",
+  channelPublishRailSource.includes("Account and spend setup"),
 );
 ok(
-  "rentfaster stays proof-gated in the rail copy",
-  channelPublishRailSource.includes("save the real live URL"),
+  "paid channels keep spend limit copy",
+  channelPublishRailSource.includes("pass-through spend limit"),
 );
 ok(
   "direct portal copy does not imply silent automation",
   !channelPublishRailSource.includes("prefer not to use the automated path") &&
     channelPublishRailSource.includes(
-      "needs native controls, payment, sign-in, or final review",
+      "needs native controls, sign-in, payment",
     ),
+);
+ok(
+  "rail renders lifecycle summary below the readiness headline",
+  channelPublishRailSource.includes("lifecycleSummary") &&
+    channelPublishRailSource.includes("Follows the renter page") &&
+    channelPublishRailSource.includes("turns off when the rental is leased or paused"),
 );
 
 console.log(`\nchannel-publish-rail: ${passed} passed, ${failed} failed`);

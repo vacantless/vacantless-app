@@ -111,6 +111,46 @@ export type PortalFreshnessDecision = {
     | "not_due";
 };
 
+export const DISTRIBUTION_LIFECYCLE_ATTENTION_KINDS = [
+  "takedown_needed",
+  "refresh_due",
+  "expires_soon",
+  "proof_needed",
+] as const;
+export type DistributionLifecycleAttentionKind =
+  (typeof DISTRIBUTION_LIFECYCLE_ATTENTION_KINDS)[number];
+
+export type DistributionLifecycleAttentionTone =
+  | "positive"
+  | "warning"
+  | "danger"
+  | "neutral";
+
+export type DistributionLifecycleAttention = {
+  kind: DistributionLifecycleAttentionKind;
+  label: string;
+  tone: DistributionLifecycleAttentionTone;
+  detail: string;
+  actionLabel: string;
+  dueAt: string | null;
+};
+
+export type DistributionLifecycleAttentionInput = {
+  channel: string;
+  channelLabel: string;
+  propertyStatus: string | null | undefined;
+  publishStatus: string | null | undefined;
+  transport: string | null | undefined;
+  verificationStatus?: string | null;
+  staleAfter?: string | null;
+  externalExpiresAt?: string | null;
+  externalUrl?: string | null;
+  proofUrl?: string | null;
+  liveWithoutUrl?: boolean;
+  nowISO: string;
+  expiryLeadDays?: number;
+};
+
 /**
  * Narrow a date or timestamp to the bare `YYYY-MM-DD` that `daysBetween`
  * requires. `posted_on` is already a DATE; `created_at` is a timestamptz like
@@ -121,6 +161,136 @@ function ymd(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const head = value.trim().slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(head) ? head : null;
+}
+
+function daysUntil({
+  nowISO,
+  targetISO,
+}: {
+  nowISO: string;
+  targetISO: string | null | undefined;
+}): number | null {
+  const now = parseMs(nowISO);
+  const target = parseMs(targetISO);
+  if (now == null || target == null) return null;
+  return Math.ceil((target - now) / 86_400_000);
+}
+
+function dateOnly(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const ms = parseMs(value);
+  if (ms == null) return null;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function propertyNeedsExternalTakedown(status: string | null | undefined): boolean {
+  return status === "leased" || status === "paused" || status === "off_market";
+}
+
+function itemHasLiveExternalProof(
+  input: DistributionLifecycleAttentionInput,
+): boolean {
+  if (input.transport === "takedown") return false;
+  if (input.publishStatus !== "live") return false;
+  return Boolean(input.externalUrl?.trim() || input.proofUrl?.trim());
+}
+
+export function distributionLifecycleAttention(
+  input: DistributionLifecycleAttentionInput,
+): DistributionLifecycleAttention | null {
+  if (
+    input.transport === "takedown" &&
+    input.publishStatus !== "skipped" &&
+    input.publishStatus !== "rejected"
+  ) {
+    return {
+      kind: "takedown_needed",
+      label: "Takedown needed",
+      tone: "warning",
+      detail: `Remove the ${input.channelLabel} ad, then save removal proof here.`,
+      actionLabel: "Remove ad",
+      dueAt: null,
+    };
+  }
+
+  if (
+    propertyNeedsExternalTakedown(input.propertyStatus) &&
+    itemHasLiveExternalProof(input)
+  ) {
+    return {
+      kind: "takedown_needed",
+      label: "Takedown needed",
+      tone: "warning",
+      detail: `${input.channelLabel} is still live, but this rental is no longer accepting new renters.`,
+      actionLabel: "Remove ad",
+      dueAt: null,
+    };
+  }
+
+  if (input.publishStatus === "live" && input.liveWithoutUrl === true) {
+    return {
+      kind: "proof_needed",
+      label: "Proof needed",
+      tone: "danger",
+      detail: `${input.channelLabel} is marked Live without a real ad URL.`,
+      actionLabel: "Save proof",
+      dueAt: null,
+    };
+  }
+
+  if (
+    runItemNeedsRefresh({
+      verificationStatus: input.verificationStatus,
+      staleAfter: input.staleAfter,
+      nowISO: input.nowISO,
+    })
+  ) {
+    return {
+      kind: "refresh_due",
+      label: "Refresh due",
+      tone: "warning",
+      detail: `${input.channelLabel} needs fresh proof or a refresh before it keeps counting as Live.`,
+      actionLabel: "Refresh ad",
+      dueAt: input.staleAfter ?? null,
+    };
+  }
+
+  if (input.publishStatus !== "live") return null;
+
+  const days = daysUntil({
+    nowISO: input.nowISO,
+    targetISO: input.externalExpiresAt,
+  });
+  if (days == null) return null;
+
+  const dueDate = dateOnly(input.externalExpiresAt);
+  if (days <= 0) {
+    return {
+      kind: "refresh_due",
+      label: "Refresh due",
+      tone: "warning",
+      detail: dueDate
+        ? `${input.channelLabel} expired on ${dueDate}. Refresh it or remove it.`
+        : `${input.channelLabel} is expired. Refresh it or remove it.`,
+      actionLabel: "Refresh ad",
+      dueAt: input.externalExpiresAt ?? null,
+    };
+  }
+
+  if (days <= (input.expiryLeadDays ?? 3)) {
+    return {
+      kind: "expires_soon",
+      label: "Expires soon",
+      tone: "warning",
+      detail: dueDate
+        ? `${input.channelLabel} expires on ${dueDate}. Vacantless should remind or refresh before then.`
+        : `${input.channelLabel} expires soon. Vacantless should remind or refresh before then.`,
+      actionLabel: "Review expiry",
+      dueAt: input.externalExpiresAt ?? null,
+    };
+  }
+
+  return null;
 }
 
 export function portalFreshnessDecision(

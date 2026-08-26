@@ -233,10 +233,21 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "site picker and active run list stay compact when sites grow",
-    panelSource.includes("max-h-80 overflow-y-auto") &&
+      panelSource.includes("max-h-80 overflow-y-auto") &&
       panelSource.includes("max-h-[42rem]") &&
       panelSource.includes("Other tracking") &&
-      panelSource.includes("Connect accounts"),
+      panelSource.includes("Launch setup"),
+  );
+  ok(
+    "site picker shows refresh and takedown lifecycle cues",
+    panelSource.includes("lifecycleSummary") &&
+      panelSource.includes("{c.lifecycleSummary}"),
+  );
+  ok(
+    "active run rows surface lifecycle attention chips",
+    panelSource.includes("lifecycleAttention") &&
+      panelSource.includes("ATTENTION_BOX") &&
+      panelSource.includes("takedown_needed"),
   );
 }
 {
@@ -261,7 +272,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "front done-for-you CTA submits instead of only jumping",
     distributeSource.includes("form action={requestConciergePublish}") &&
       distributeSource.includes("target={conciergeTarget ?? null}") &&
-      distributeSource.includes("Ask Vacantless to post it"),
+      distributeSource.includes("Handle {target.channelLabel}"),
   );
   ok(
     "already-queued desk work is labeled as in progress",
@@ -284,13 +295,13 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("Use a site yourself instead") &&
       distributeSource.includes("Open posting checklist") &&
       distributeSource.includes("Paid placements still need your") &&
-      distributeSource.includes("approval and proof"),
+      distributeSource.includes("spend limit, and proof"),
   );
   ok(
-    "one-tap footer opens queue from all selected one-tap run items",
+    "fallback footer opens queue from all selected one-tap run items",
     distributeSource.includes("ONE_TAP_RUN_STATUSES") &&
       distributeSource.includes("selectedOneTapRunItems") &&
-      distributeSource.includes("hasOneTapRunItems ? \"Open 1-tap queue\" : \"Choose sites\"") &&
+      distributeSource.includes("hasOneTapRunItems ? \"Open launch queue\" : \"Choose destinations\"") &&
       !distributeSource.includes("hasReachRunItems ? \"Open 1-tap queue\" : \"Choose sites\""),
   );
   ok(
@@ -508,6 +519,17 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       propertyDetailSource.includes("status: plan.status"),
   );
   ok(
+    "property page derives launch lifecycle from the source contract",
+    propertyDetailSource.includes("distributionLifecycleSummary") &&
+      propertyDetailSource.includes("lifecycleSummary: lifecycle.detail"),
+  );
+  ok(
+    "property page derives expiry and takedown attention from run item state",
+    propertyDetailSource.includes("distributionLifecycleAttention") &&
+      propertyDetailSource.includes("external_expires_at") &&
+      propertyDetailSource.includes("lifecycleAttention: distributionLifecycleAttention"),
+  );
+  ok(
     "publish control room is the first distribute-tab action surface",
     distributeSource.includes('id="publish-control-room"') &&
       distributeSource.indexOf("<PublishControlRoom") <
@@ -517,9 +539,9 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "publish control room replaces the duplicate get-online hero stack",
       distributeSource.includes("showSummaryCard={false}") &&
       distributeSource.includes('selectedChannelCount === 1 ? "site" : "sites"') &&
-      channelRailSource.includes("Posting plan") &&
-      channelRailSource.includes("Vacantless posts first; you handle exceptions.") &&
-      channelRailSource.includes("Use this site yourself") &&
+      channelRailSource.includes("Launch plan") &&
+      channelRailSource.includes("Launch everywhere from one listing.") &&
+      channelRailSource.includes("Site access") &&
       channelRailSource.includes("Open site") &&
       !distributeSource.includes("Get this listing online") &&
       !distributeSource.includes("Ready to syndicate"),
@@ -531,7 +553,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("setupBlocker={launchSetupBlocker}") &&
       distributeSource.includes("showAction={false}") &&
       distributeSource.includes("No posting yet") &&
-      distributeSource.includes("Posting help included") &&
+      distributeSource.includes("Fallback help included") &&
       distributeSource.includes("{!packetBlocked && (") &&
       launchRunPanelSource.includes("Waiting on one listing") &&
       launchRunPanelSource.indexOf("if (setupBlocker)") <

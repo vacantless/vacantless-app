@@ -1720,9 +1720,8 @@ function SimpleGetOnline({
   const oneTapFooter = launchRun.conciergeDeskEnabled ? (
     <>
       <p>
-        Posting assist is included. Growth concierge can take over eligible
-        manual posts after you approve access. Paid placements still need your
-        approval and proof.
+        Fallback help is included for destinations that still need a person.
+        Paid placements still need your approval, spend limit, and proof.
       </p>
       <p className="mt-1 font-semibold text-gray-900">
         {conciergeUsageLabel(launchRun.conciergeUsage)}
@@ -1744,7 +1743,7 @@ function SimpleGetOnline({
                 type="submit"
                 className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
               >
-                Post {target.channelLabel} for me
+                Handle {target.channelLabel}
               </button>
             </form>
           ))}
@@ -1754,16 +1753,16 @@ function SimpleGetOnline({
           href="#publish-checklist"
           className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
         >
-          {hasOneTapRunItems ? "Open 1-tap queue" : "Choose sites"}
+          {hasOneTapRunItems ? "Open launch queue" : "Choose destinations"}
         </a>
       )}
     </>
   ) : (
     <>
       <p>
-        Posting assist is included. Done-for-you posting, paid placements, and
-        extra manual reach stay as Growth or top-up work. Paid placements still
-        need your approval and proof.
+        Fallback help, paid placements, and extra manual reach stay as Growth or
+        top-up work. Paid placements still need your approval, spend limit, and
+        proof.
       </p>
       {launchRun.conciergeDailyLostLabel && (
         <p className="mt-1 text-gray-600">
@@ -1809,6 +1808,20 @@ function SimpleGetOnline({
         </form>
       );
     }
+    if (row.chip.canConnect) {
+      const label =
+        row.readinessState === "needs_spend_limit"
+          ? "Set spend limit"
+          : "Connect account";
+      return (
+        <a
+          href={`/dashboard/settings?tab=distribution#channel-${row.key}`}
+          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+        >
+          {label}
+        </a>
+      );
+    }
     return null;
   };
 
@@ -1836,7 +1849,7 @@ function SimpleGetOnline({
                   ? railBuckets.externalLiveCount > 0
                     ? "You're online"
                     : "Renter page live"
-                  : "Ready to publish"}
+                  : "Ready to launch"}
               </span>
               <h3
                 className={`mt-3 text-2xl font-semibold ${
@@ -1858,9 +1871,9 @@ function SimpleGetOnline({
               >
                 {linkIsLive
                   ? railBuckets.externalLiveCount > 0
-                    ? "Connected instant sites can sync from here, and proof-gated sites stay in the 1-tap queue."
-                    : "Anyone with your link can inquire. Outside sites still need posting, and each one counts as live only once its real ad URL is saved."
-                  : "Publish turns on the Vacantless renter page and email-alert reach first, then opens the 1-tap queue for sites that need a login, payment, broker, or final human tap."}
+                    ? "Ready destinations can sync from here, and proof-gated exceptions stay in the launch queue."
+                    : "Anyone with your link can inquire. Outside sites count as live only once the real ad URL is saved."
+                  : "Launch turns on the Vacantless renter page and email-alert reach first, then opens the queue for account, spend, broker, or proof exceptions."}
               </p>
             </div>
             <span
@@ -2002,7 +2015,7 @@ function SimpleGetOnline({
             <>
               <ConfirmPublishButton
                 propertyId={propertyId}
-                label="Publish everywhere"
+                label="Launch everywhere"
                 formClassName="mt-5"
                 className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
                 style={{ backgroundColor: "var(--brand-color)" }}
@@ -2043,16 +2056,16 @@ function SimpleGetOnline({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {packetBlocked ? "Next after one listing" : "1-tap queue"}
+                {packetBlocked ? "Next after one listing" : "Launch queue"}
               </p>
               <h3 className="mt-1 text-base font-semibold text-gray-950">
                 {packetBlocked
-                  ? "The 1-tap queue opens after the listing facts are ready."
-                  : "Vacantless preps each outside step; you approve, post, or save proof."}
+                  ? "The launch queue opens after the listing facts are ready."
+                  : "Vacantless launches ready destinations and shows only account, spend, or proof exceptions."}
               </h3>
             </div>
             <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
-              {packetBlocked ? "No posting yet" : "Posting help included"}
+              {packetBlocked ? "No posting yet" : "Fallback help included"}
             </span>
           </div>
           <LaunchRunPanel
@@ -2428,7 +2441,7 @@ function DistributionBasicsPanel({
       value: `${accountReadyCount}/${accountTotalCount} ready`,
       detail: "Credentials",
       href: "/dashboard/settings?tab=distribution",
-      action: "Connect accounts",
+      action: "Open launch setup",
     },
     {
       title: "Top-up help",
@@ -2494,7 +2507,7 @@ function PostingModePanel({
   const doneForYouBody = activeItem
     ? activeReferral
       ? `The referral is in progress.${activeRequestedSentence} It still needs the real Realtor.ca listing URL before it counts as Live.`
-      : `The publishing desk has this channel in its queue.${activeRequestedSentence} No second click is needed; staff still has to post and save proof before it counts as Live.`
+      : `Vacantless has this channel in its queue.${activeRequestedSentence} No second click is needed; real live-ad proof is still required before it counts as Live.`
     : target
       ? referralTarget
         ? "A licensed network agent handles the Realtor.ca path through their brokerage."

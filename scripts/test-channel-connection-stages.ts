@@ -260,9 +260,9 @@ ok(
     settingsSource.includes("Next: {item.actionLabel}"),
 );
 ok(
-  "Settings checklist surfaces one recommended setup action",
+  "Settings checklist surfaces one recommended readiness action",
   settingsSource.includes("recommendedChannelConnectionChecklistAction") &&
-    settingsSource.includes("Next setup"),
+    settingsSource.includes("Next readiness step"),
 );
 ok(
   "Settings recommended setup action shows priority and stage context",

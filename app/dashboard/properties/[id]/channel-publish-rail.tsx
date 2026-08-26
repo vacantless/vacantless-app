@@ -1,13 +1,18 @@
 import type { ReactNode } from "react";
 import { Icons } from "@/components/icons";
 import {
-  channelConnectChip,
-  channelTileStatus,
-  getOnlineAssistKindForChannel,
   type ConnectChip,
   type DistributionChannel,
 } from "@/lib/distribution-channels";
-import { channelCapability } from "@/lib/distribution-capabilities";
+import {
+  distributionChannelContract,
+  distributionLifecycleSummary,
+  distributionLaunchStateLabel,
+  resolveDistributionLaunchReadiness,
+  type DistributionChannelContract,
+  type DistributionLaunchState,
+} from "@/lib/distribution-channel-contracts";
+import type { PublishChannelKey } from "@/lib/distribution-publish";
 
 export type ChannelPublishAccountRow = {
   channel: string;
@@ -16,6 +21,9 @@ export type ChannelPublishAccountRow = {
   automationAuthorized: boolean;
   autoSubmitAllowed?: boolean;
   hasFeedRoute: boolean;
+  spendAuthorized?: boolean | null;
+  spendMaxCents?: number | null;
+  spendRevokedAt?: string | null;
 };
 
 export type ChannelPublishTierId = "instant" | "one_tap" | "gated";
@@ -26,6 +34,9 @@ export type ChannelPublishRailRow = {
   tier: ChannelPublishTierId;
   chip: ConnectChip;
   headline: string;
+  lifecycleSummary: string;
+  readinessState: DistributionLaunchState;
+  readinessReason: string;
   automationAction: "authorize" | "revoke" | null;
   reachesRenters: boolean;
   live: boolean;
@@ -54,6 +65,13 @@ const SYNTHETIC_CHIP: ConnectChip = {
   canConnect: false,
 };
 
+const READY_CHIP: ConnectChip = {
+  state: "connected",
+  label: "Ready",
+  tone: "positive",
+  canConnect: false,
+};
+
 const CHIP_CLASS: Record<ConnectChip["tone"], string> = {
   positive: "bg-green-50 text-green-700",
   warning: "bg-amber-50 text-amber-700",
@@ -77,12 +95,100 @@ function syntheticRow(
     tier: "instant",
     chip: SYNTHETIC_CHIP,
     headline: live ? "Live with the renter page." : "Turns on with Publish.",
+    lifecycleSummary:
+      "Follows the renter page and turns off when the rental is leased or paused.",
+    readinessState: "ready",
+    readinessReason: "Ready for launch.",
     automationAction: null,
     reachesRenters: live,
     live,
     synthetic: true,
     portalUrl: null,
   };
+}
+
+function contractForChannel(channel: DistributionChannel): DistributionChannelContract {
+  return distributionChannelContract(channel.key as PublishChannelKey);
+}
+
+function readinessChip(state: DistributionLaunchState): ConnectChip {
+  switch (state) {
+    case "ready":
+      return READY_CHIP;
+    case "needs_account":
+      return {
+        state: "connect",
+        label: distributionLaunchStateLabel(state),
+        tone: "accent",
+        canConnect: true,
+      };
+    case "needs_authorization":
+      return {
+        state: "connected",
+        label: distributionLaunchStateLabel(state),
+        tone: "warning",
+        canConnect: false,
+      };
+    case "needs_spend_limit":
+      return {
+        state: "needs_payment",
+        label: distributionLaunchStateLabel(state),
+        tone: "warning",
+        canConnect: true,
+      };
+    case "needs_broker":
+      return {
+        state: "mls_route",
+        label: distributionLaunchStateLabel(state),
+        tone: "neutral",
+        canConnect: false,
+      };
+    case "fallback_task":
+      return {
+        state: "manual",
+        label: distributionLaunchStateLabel(state),
+        tone: "neutral",
+        canConnect: false,
+      };
+    case "planned":
+      return {
+        state: "coming_soon",
+        label: distributionLaunchStateLabel(state),
+        tone: "neutral",
+        canConnect: false,
+      };
+  }
+}
+
+function readyHeadline(contract: DistributionChannelContract): string {
+  if (contract.executionKind === "api") {
+    return "Connected and authorized. Vacantless can launch this after you approve the listing.";
+  }
+  if (contract.executionKind === "headless_worker") {
+    return "Account and authorization are ready. Vacantless can launch this behind the scenes after approval.";
+  }
+  if (contract.executionKind === "feed") {
+    return "Feed route is ready. Partner acceptance is still tracked separately from live proof.";
+  }
+  return "Ready for the launch action.";
+}
+
+function readinessHeadline(
+  contract: DistributionChannelContract,
+  state: DistributionLaunchState,
+  reason: string,
+): string {
+  if (state === "ready") return readyHeadline(contract);
+  if (state === "needs_account") {
+    return `Connect ${contract.label} once before this destination can launch.`;
+  }
+  if (state === "needs_authorization") {
+    return "Authorize Vacantless to post, refresh, or remove listings for this account.";
+  }
+  if (state === "needs_spend_limit") {
+    return "Set the landlord pass-through spend limit before this paid channel can launch.";
+  }
+  return reason;
 }
 
 function bucketForChannel(input: {
@@ -92,45 +198,30 @@ function bucketForChannel(input: {
   liveChannelKeys: Set<string>;
 }): ChannelPublishRailRow {
   const { channel, account, instagramEnabled, liveChannelKeys } = input;
-  const capability = channelCapability(channel.key);
   const hasFeedRoute = account?.hasFeedRoute === true;
   const accountStatus = account?.accountStatus ?? null;
-  const baseChip =
+  const contract = contractForChannel(channel);
+  const launchReadiness =
     channel.key === "instagram" && !instagramEnabled
       ? {
-          state: "coming_soon",
-          label: "Coming soon",
-          tone: "neutral",
-          canConnect: false,
-        } satisfies ConnectChip
-      : channelConnectChip({
-          integrationStatus: channel.integrationStatus,
-          transport: account?.transport ?? capability.transport,
-          needsOrgAccount: capability.needsOrgAccount,
+          channel: "instagram" as PublishChannelKey,
+          label: channel.label,
+          state: "planned" as const,
+          reason: "Instagram publishing is dark until the channel is enabled for this org.",
+        }
+      : resolveDistributionLaunchReadiness(contract, {
           accountStatus,
-          hasFeedRoute,
+          automationAuthorized: account?.automationAuthorized === true,
+          spendAuthorized: account?.spendAuthorized === true,
+          spendMaxCents: account?.spendMaxCents ?? null,
+          spendRevokedAt: account?.spendRevokedAt ?? null,
+          feedAccepted: hasFeedRoute,
         });
   const needsAutomationAuthorization =
     accountStatus === "connected" &&
     account?.automationAuthorized !== true &&
     channel.mode === "api_automatic" &&
     !(channel.key === "instagram" && !instagramEnabled);
-  const postingAssistChip: ConnectChip = {
-    state: "manual",
-    label: "Posting assist",
-    tone: "neutral",
-    canConnect: false,
-  };
-  const paidPostingAssistChip: ConnectChip = {
-    state: "needs_payment",
-    label: "Needs payment",
-    tone: "warning",
-    canConnect: true,
-  };
-  const assistKind = getOnlineAssistKindForChannel(channel);
-  // Some channels have no real account connection yet, but still have a useful,
-  // proof-gated posting-assist route in Get online. Keep Settings honest
-  // ("planned"/not connectable) while the property rail shows the actual next tap.
   const chip: ConnectChip =
     needsAutomationAuthorization
       ? {
@@ -139,19 +230,7 @@ function bucketForChannel(input: {
           tone: "warning",
           canConnect: false,
         }
-      : assistKind === "posting_assist" && baseChip.state === "coming_soon"
-      ? postingAssistChip
-      : assistKind === "paid_posting_assist" && baseChip.state === "coming_soon"
-      ? paidPostingAssistChip
-      : baseChip.state === "connect" &&
-          (channel.mode === "assisted_manual" ||
-            (channel.mode === "feed_or_assisted" && !hasFeedRoute))
-        ? postingAssistChip
-      : baseChip;
-  const tile = channelTileStatus(channel.key, {
-    account_status: accountStatus,
-    automation_authorized: account?.automationAuthorized === true,
-  });
+      : readinessChip(launchReadiness.state);
   const automationAction: ChannelPublishRailRow["automationAction"] =
     needsAutomationAuthorization
       ? "authorize"
@@ -160,34 +239,10 @@ function bucketForChannel(input: {
           channel.mode === "api_automatic"
         ? "revoke"
         : null;
-  const apiReady =
-    channel.mode === "api_automatic" &&
-    chip.state === "connected" &&
-    tile.state === "linked";
-  const feedReady = channel.mode === "feed_or_assisted" && hasFeedRoute;
-  const unavailable =
-    chip.state === "coming_soon" || chip.state === "mls_route";
   let tier: ChannelPublishTierId = "gated";
-  if (channel.key === "instagram" && !instagramEnabled) {
-    tier = "gated";
-  } else if (apiReady || feedReady) {
+  if (launchReadiness.state === "ready") {
     tier = "instant";
-  } else if (unavailable) {
-    tier = "gated";
-  } else if (
-    channel.mode === "api_automatic" &&
-    (chip.state === "connect" || chip.state === "connected")
-  ) {
-    tier = "gated";
-  } else if (
-    (channel.mode === "assisted_manual" &&
-      channel.integrationStatus === "live") ||
-    (channel.mode === "assisted_manual" && chip.state === "connect") ||
-    (channel.mode === "feed_or_assisted" && !hasFeedRoute) ||
-    chip.state === "manual" ||
-    chip.state === "needs_login" ||
-    chip.state === "needs_payment"
-  ) {
+  } else if (launchReadiness.state === "fallback_task") {
     tier = "one_tap";
   }
   const live = liveChannelKeys.has(channel.key);
@@ -198,13 +253,12 @@ function bucketForChannel(input: {
         ? "Connected; authorize Vacantless to post this listing to this account when you publish."
         : automationAction === "revoke"
           ? "Authorized; this account receives a post when you publish and approve."
-          : chip.state === "manual" && channel.mode === "feed_or_assisted"
-            ? "Use posting assist until a feed route is connected."
-          : channel.key === "rentfaster" && chip.state === "needs_payment"
-            ? "Vacantless prepares the RentFaster post; you approve any fee and save the real live URL."
-          : chip.state === "manual"
-            ? "Vacantless prepares it; you review, post, and save the live URL."
-          : tile.headline;
+          : readinessHeadline(
+              contract,
+              launchReadiness.state,
+              launchReadiness.reason,
+          );
+  const lifecycle = distributionLifecycleSummary(contract);
 
   return {
     key: channel.key,
@@ -212,6 +266,9 @@ function bucketForChannel(input: {
     tier,
     chip,
     headline,
+    lifecycleSummary: lifecycle.detail,
+    readinessState: launchReadiness.state,
+    readinessReason: launchReadiness.reason,
     automationAction,
     reachesRenters: tier === "instant" && live,
     live,
@@ -282,6 +339,9 @@ function ChannelRow({
           <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-gray-500">
             {row.headline}
           </p>
+          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">
+            {row.lifecycleSummary}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {action}
@@ -295,11 +355,11 @@ function ChannelRow({
       {row.portalUrl ? (
         <details className="mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
           <summary className="cursor-pointer list-none text-xs font-semibold text-gray-600 [&::-webkit-details-marker]:hidden">
-            Use this site yourself
+            Site access
           </summary>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
-            Vacantless keeps the copy ready. Open the portal when this site
-            needs native controls, payment, sign-in, or final review.
+            Open the site only when it needs native controls, sign-in, payment,
+            final review, or removal proof.
           </p>
           <a
             href={row.portalUrl}
@@ -367,19 +427,19 @@ export function ChannelPublishRail({
   }`;
   const planCards = [
     {
-      label: "Included",
+      label: "Ready",
       value: buckets.instant.length,
-      detail: "runs after approval",
+      detail: "launches after approval",
     },
     {
-      label: "Needs your tap",
+      label: "Fallback",
       value: buckets.oneTap.length,
-      detail: "sign-in, payment, or proof",
+      detail: "exception tasks",
     },
     {
-      label: "Top-up / setup",
+      label: "Setup",
       value: buckets.gated.length,
-      detail: "paid, connected, or broker route",
+      detail: "account, auth, or spend",
     },
   ];
   return (
@@ -387,14 +447,14 @@ export function ChannelPublishRail({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Posting plan
+            Launch plan
           </p>
           <h3 className="mt-1 text-lg font-semibold text-gray-950">
-            Vacantless posts first; you handle exceptions.
+            Launch everywhere from one listing.
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-gray-600">
-            Included routes stay automated. Sign-in, payment, approval, and
-            proof appear only when a site needs them.
+            Ready destinations launch from Vacantless. Account, authorization,
+            spend, and proof exceptions stay explicit before anything posts.
           </p>
         </div>
         <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4 border-green-600 text-green-700">
@@ -424,13 +484,13 @@ export function ChannelPublishRail({
 
       <div className="grid gap-3 xl:grid-cols-3">
         <TierCard
-          title="Included automation"
+          title="Ready to launch"
           rows={buckets.instant}
           defaultOpen={false}
           actionForRow={actionForRow}
         />
         <TierCard
-          title="Needs sign-in, payment, or proof"
+          title="Fallback tasks"
           rows={buckets.oneTap}
           defaultOpen={false}
         >
@@ -441,7 +501,7 @@ export function ChannelPublishRail({
           ) : null}
         </TierCard>
         <TierCard
-          title="Top-up / account setup"
+          title="Account and spend setup"
           rows={buckets.gated}
           defaultOpen={false}
           actionForRow={actionForRow}

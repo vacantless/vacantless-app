@@ -133,7 +133,8 @@ ok(
   settingsPage.includes('name="spend_authorized"') &&
     settingsPage.includes('name="spend_max_cad"') &&
     settingsPage.includes('name="spend_period_max_cad"') &&
-    settingsPage.includes("Authorize paid {meta.label} postings") &&
+    settingsPage.includes("Pass paid {meta.label} costs to the landlord") &&
+    settingsPage.includes("Vacantless can only continue a paid channel inside") &&
     settingsPage.includes("Revoked {new Date(account.spend_revoked_at).toLocaleDateString"),
 );
 

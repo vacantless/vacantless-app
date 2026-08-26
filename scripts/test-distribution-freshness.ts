@@ -2,6 +2,8 @@
 //   npx tsx scripts/test-distribution-freshness.ts
 import { readFileSync } from "node:fs";
 import {
+  DISTRIBUTION_LIFECYCLE_ATTENTION_KINDS,
+  distributionLifecycleAttention,
   freshnessDue,
   freshnessPointer,
   freshnessUpdateForVerification,
@@ -80,6 +82,104 @@ ok("org_feed is verifiable", isFreshnessVerifiableChannel("org_feed"));
 ok("kijiji is not verifiable by cron", !isFreshnessVerifiableChannel("kijiji"));
 ok("facebook is portal", isFreshnessPortalChannel("facebook"));
 ok("org_feed is not portal", !isFreshnessPortalChannel("org_feed"));
+
+// --- dashboard lifecycle attention ----------------------------------------
+ok(
+  "lifecycle attention has four operator states",
+  DISTRIBUTION_LIFECYCLE_ATTENTION_KINDS.join("|") ===
+    "takedown_needed|refresh_due|expires_soon|proof_needed",
+);
+eq(
+  "leased property with live external proof needs takedown",
+  distributionLifecycleAttention({
+    channel: "kijiji",
+    channelLabel: "Kijiji",
+    propertyStatus: "leased",
+    publishStatus: "live",
+    transport: "browser_copilot",
+    externalUrl: "https://www.kijiji.ca/v-test/123",
+    nowISO: NOW,
+  })?.kind,
+  "takedown_needed",
+);
+eq(
+  "open takedown item stays attention",
+  distributionLifecycleAttention({
+    channel: "facebook_feed",
+    channelLabel: "Facebook Page feed",
+    propertyStatus: "leased",
+    publishStatus: "needs_operator",
+    transport: "takedown",
+    nowISO: NOW,
+  })?.actionLabel,
+  "Remove ad",
+);
+eq(
+  "live row without URL needs proof",
+  distributionLifecycleAttention({
+    channel: "facebook",
+    channelLabel: "Facebook Marketplace",
+    propertyStatus: "available",
+    publishStatus: "live",
+    transport: "fallback",
+    liveWithoutUrl: true,
+    nowISO: NOW,
+  })?.kind,
+  "proof_needed",
+);
+eq(
+  "past stale_after becomes refresh due",
+  distributionLifecycleAttention({
+    channel: "kijiji",
+    channelLabel: "Kijiji",
+    propertyStatus: "available",
+    publishStatus: "live",
+    transport: "headless_worker",
+    verificationStatus: "verified_live",
+    staleAfter: "2026-07-20T11:00:00.000Z",
+    nowISO: NOW,
+  })?.kind,
+  "refresh_due",
+);
+eq(
+  "expiry inside lead window becomes expires soon",
+  distributionLifecycleAttention({
+    channel: "kijiji",
+    channelLabel: "Kijiji",
+    propertyStatus: "available",
+    publishStatus: "live",
+    transport: "headless_worker",
+    externalExpiresAt: "2026-07-22T12:00:00.000Z",
+    nowISO: NOW,
+  })?.label,
+  "Expires soon",
+);
+eq(
+  "future expiry outside lead window is quiet",
+  distributionLifecycleAttention({
+    channel: "kijiji",
+    channelLabel: "Kijiji",
+    propertyStatus: "available",
+    publishStatus: "live",
+    transport: "headless_worker",
+    externalExpiresAt: "2026-08-22T12:00:00.000Z",
+    nowISO: NOW,
+  }),
+  null,
+);
+eq(
+  "non-live row without takedown transport is quiet",
+  distributionLifecycleAttention({
+    channel: "kijiji",
+    channelLabel: "Kijiji",
+    propertyStatus: "available",
+    publishStatus: "queued",
+    transport: "headless_worker",
+    externalExpiresAt: "2026-07-22T12:00:00.000Z",
+    nowISO: NOW,
+  }),
+  null,
+);
 
 // --- verifier result advancement ------------------------------------------
 eq(

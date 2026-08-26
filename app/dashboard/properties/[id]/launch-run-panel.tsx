@@ -36,7 +36,6 @@ import {
 import {
   PUBLISH_STATUSES,
   publishStatusLabel,
-  publishModeLabel,
   type PublishMode,
   type PublishStatus,
   type PublishTone,
@@ -45,6 +44,7 @@ import {
   groupByDistributionChannelDisplayGroup,
   type ChannelCategory,
 } from "@/lib/distribution-channels";
+import type { DistributionLifecycleAttention } from "@/lib/distribution-freshness";
 
 export type RunItemView = {
   id: string;
@@ -78,6 +78,7 @@ export type RunItemView = {
   verificationStatus: string | null;
   proofUrl: string | null;
   conciergeRequestedAt: string | null;
+  lifecycleAttention?: DistributionLifecycleAttention | null;
   // S482: the honest browser co-pilot posting-assist script (copilot channels).
   copilotScript: CopilotScript | null;
   // S488 Slice 1: merged from the retired where-posted grid so the command
@@ -102,6 +103,7 @@ export type PublishChannelChoiceView = {
   description: string;
   blockers: string[];
   defaultSelected: boolean;
+  lifecycleSummary: string;
   // S480: pre-Publish channel setup readiness.
   readinessLabel: string;
   readinessTone: PublishTone;
@@ -117,6 +119,13 @@ const STATUS_CHIP: Record<PublishTone, string> = {
   warning: "bg-amber-50 text-amber-700",
   danger: "bg-red-50 text-red-700",
   neutral: "bg-gray-100 text-gray-600",
+};
+
+const ATTENTION_BOX: Record<PublishTone, string> = {
+  positive: "border-green-200 bg-green-50 text-green-800",
+  warning: "border-amber-200 bg-amber-50 text-amber-800",
+  danger: "border-red-200 bg-red-50 text-red-700",
+  neutral: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
 const AUTOMATION_DOT_CLASS: Record<AutomationStatusState, string> = {
@@ -234,8 +243,12 @@ const OPERATOR_ACTION_WEIGHT: Partial<Record<PublishStatus, number>> = {
 };
 
 function operatorActionWeight(item: RunItemView): number | null {
+  if (item.lifecycleAttention?.kind === "takedown_needed") return 0;
+  if (item.lifecycleAttention?.kind === "proof_needed") return 0;
   if (item.liveWithoutUrl) return 0;
+  if (item.lifecycleAttention?.kind === "refresh_due") return 1;
   if (item.staleRefresh) return 1;
+  if (item.lifecycleAttention?.kind === "expires_soon") return 2;
   return OPERATOR_ACTION_WEIGHT[item.publishStatus] ?? null;
 }
 
@@ -261,6 +274,18 @@ function operatorActionSummary(item: RunItemView): string {
     if (isRemovedTakedownItem(item)) return `${item.channelLabel} ad removal is recorded.`;
     if (item.publishStatus === "queued") return `${item.channelLabel} ad removal is queued.`;
     return `Remove the ${item.channelLabel} ad, then mark it removed.`;
+  }
+  if (item.lifecycleAttention?.kind === "takedown_needed") {
+    return item.lifecycleAttention.detail;
+  }
+  if (item.lifecycleAttention?.kind === "proof_needed") {
+    return item.lifecycleAttention.detail;
+  }
+  if (item.lifecycleAttention?.kind === "refresh_due") {
+    return item.lifecycleAttention.detail;
+  }
+  if (item.lifecycleAttention?.kind === "expires_soon") {
+    return item.lifecycleAttention.detail;
   }
   if (item.liveWithoutUrl) {
     return "Paste the real live ad URL before this site can count as Live.";
@@ -320,7 +345,7 @@ function operatorOwnerLine(item: RunItemView): string {
     return "The helper opens in front of you with copy and proof fields. Behind the scenes, Vacantless tracks this site as waiting until you save the real ad URL.";
   }
   if (item.mode === "concierge") {
-    return "The Vacantless publishing desk can work this, but it still needs real live-ad proof before it counts.";
+    return "Vacantless can handle this fallback, but it still needs real live-ad proof before it counts.";
   }
   if (item.mode === "broker") {
     return "A licensed broker or agent must complete the outside listing; Vacantless only tracks the proof.";
@@ -407,6 +432,9 @@ export function LaunchRunPanel({
                 {c.blockers[0] ?? c.setupBlockers[0]}
               </span>
             )}
+            <span className="block truncate text-[11px] text-slate-500">
+              {c.lifecycleSummary}
+            </span>
           </span>
           <span
             className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline-flex ${
@@ -471,7 +499,7 @@ export function LaunchRunPanel({
       >
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-950">
-            1-tap queue
+            Launch queue
           </h3>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
             No posting yet
@@ -499,7 +527,7 @@ export function LaunchRunPanel({
             {waitingSiteCount} {waitingSiteCount === 1 ? "site" : "sites"} waiting
           </span>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
-            Sign-in, payment, and proof later
+            Account, spend, and proof later
           </span>
         </div>
       </div>
@@ -530,11 +558,13 @@ export function LaunchRunPanel({
               href="/dashboard/settings?tab=distribution"
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Connect accounts
+              Launch setup
             </Link>
           </div>
         </div>
-        <p className="mb-3 text-xs text-gray-500">Pick the sites where renters find this listing.</p>
+        <p className="mb-3 text-xs text-gray-500">
+          Pick the destinations Vacantless should launch from this listing.
+        </p>
         <form action={startDistributionRun}>
           <input type="hidden" name="property_id" value={propertyId} />
           <div className="mb-3 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-inner">
@@ -606,7 +636,7 @@ export function LaunchRunPanel({
             href="/dashboard/settings?tab=distribution"
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Connect accounts
+            Launch setup
           </Link>
           <span className="text-xs font-medium text-gray-600">
             {queueProgressLabel}
@@ -677,7 +707,7 @@ export function LaunchRunPanel({
                       {item.channelLabel}
                     </span>
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                      {publishModeLabel(item.mode)}
+                      {item.modeLabel}
                     </span>
                     <DisplayStatusChip item={item} />
                     {item.verificationStatus && !isRemovedTakedownItem(item) && (
@@ -686,6 +716,14 @@ export function LaunchRunPanel({
                         className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[verificationResultTone(item.verificationStatus)]}`}
                       >
                         {verificationResultLabel(item.verificationStatus)}
+                      </span>
+                    )}
+                    {item.lifecycleAttention && !isRemovedTakedownItem(item) && (
+                      <span
+                        title={item.lifecycleAttention.detail}
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CHIP[item.lifecycleAttention.tone]}`}
+                      >
+                        {item.lifecycleAttention.label}
                       </span>
                     )}
                   </div>
@@ -707,6 +745,18 @@ export function LaunchRunPanel({
                     {operatorOwnerLine(item)}
                   </p>
                 </div>
+                {item.lifecycleAttention && !isRemovedTakedownItem(item) && (
+                  <div
+                    className={`mb-3 rounded-lg border px-3 py-2 text-xs ${ATTENTION_BOX[item.lifecycleAttention.tone]}`}
+                  >
+                    <p className="font-semibold">
+                      {item.lifecycleAttention.label}
+                    </p>
+                    <p className="mt-1 leading-relaxed">
+                      {item.lifecycleAttention.detail}
+                    </p>
+                  </div>
+                )}
 
             {(item.auditMessage || item.errorMessage || item.blockers.length > 0) && (
               <div className="mb-3 space-y-2">
@@ -821,11 +871,11 @@ export function LaunchRunPanel({
                   type="submit"
                   className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
                 >
-                  Ask Vacantless to post it
+                  Have Vacantless handle it
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
-                  Our publishing desk takes over this channel and still records
-                  real live-ad proof before it is marked Live.
+                  Vacantless handles this fallback and still records real
+                  live-ad proof before it is marked Live.
                 </span>
               </form>
             )}
