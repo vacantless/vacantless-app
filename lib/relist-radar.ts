@@ -682,7 +682,7 @@ export function buildRelistRadarEmail({
               "annonce",
               "annonces",
             )} de ${safeAddress}.`
-          : `Relist Radar a trouve ${count} ${plural(
+          : `Keep live a trouve ${count} ${plural(
               count,
               "annonce",
               "annonces",
@@ -695,7 +695,7 @@ export function buildRelistRadarEmail({
               "ad",
               "ads",
             )} at ${safeAddress}.`
-          : `Relist Radar found ${count} ${plural(
+          : `Keep live found ${count} ${plural(
               count,
               "ad",
               "ads",
@@ -717,12 +717,12 @@ export function buildRelistRadarEmail({
         ? `Dernier rappel: ${safeAddress}`
         : kind === "paid_lapse"
           ? `Annonce payante expiree: ${safeAddress}`
-          : `Rafraichir les annonces: ${safeAddress}`
+          : `Keep live: ${safeAddress}`
       : kind === "last_chance"
         ? `Last chance: ${safeAddress}`
         : kind === "paid_lapse"
           ? `Paid listing expired: ${safeAddress}`
-          : `Refresh listing ads: ${safeAddress}`;
+          : `Keep live: ${safeAddress}`;
 
   const body = [summaryText, detailsText, safetyNote, manageLine]
     .filter((part) => part.trim())
@@ -750,7 +750,7 @@ export function buildRelistRadarAutopilotRecap({
       return `- ${item.channelLabel} at ${item.propertyAddress} reached its refresh date on ${date}.`;
     })
     .join("\n");
-  const summaryText = `Relist Radar queued ${count} free ${plural(
+  const summaryText = `Keep live queued ${count} free ${plural(
     count,
     "refresh",
     "refreshes",
@@ -761,7 +761,7 @@ export function buildRelistRadarAutopilotRecap({
     .filter((part) => part.trim())
     .join("\n\n");
   return {
-    subject: `Relist Radar monthly recap: ${monthLabel}`,
+    subject: `Keep live monthly recap: ${monthLabel}`,
     body,
     dashboardUrl,
     summaryText,

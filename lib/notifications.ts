@@ -326,7 +326,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar",
     family: "leasing",
     audience: "operator",
-    label: "Relist Radar refresh decision",
+    label: "Keep live refresh decision",
     description:
       "When tracked ads are close to expiry, your listing team gets one per-property note with safe links to record skip or paid-refresh consent. Vacantless does not repost or charge from this email.",
     tokens: [
@@ -344,7 +344,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar_last_chance",
     family: "leasing",
     audience: "operator",
-    label: "Relist Radar last chance",
+    label: "Keep live last chance",
     description:
       "When a free relist was skipped and expiry is tomorrow, your listing team gets one last chance to record keep-live or let-expire intent. No portal action runs from the link.",
     tokens: [
@@ -362,7 +362,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar_paid_lapse",
     family: "leasing",
     audience: "operator",
-    label: "Relist Radar paid listing lapse",
+    label: "Keep live paid listing lapse",
     description:
       "When a paid listing reaches expiry with no recorded consent, your listing team gets a post-expiry nudge and the cycle is stamped no-response. No money is spent.",
     tokens: [
@@ -380,9 +380,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar_autopilot_recap",
     family: "leasing",
     audience: "operator",
-    label: "Relist Radar monthly recap",
+    label: "Keep live monthly recap",
     description:
-      "When hands-off Kijiji refresh is enabled, your listing team gets a monthly recap of the free refreshes Relist Radar queued. Paid channels stay separate.",
+      "When hands-off Kijiji refresh is enabled, your listing team gets a monthly recap of the free refreshes Vacantless queued. Paid channels stay separate.",
     tokens: [
       ...COMMON_TOKENS,
       "relist_radar_subject",

@@ -137,7 +137,7 @@ export async function GET(
   if (!verified.ok) {
     return htmlResponse({
       title: "Link rejected",
-      body: "This Relist Radar link is invalid or expired.",
+      body: "This Keep live link is invalid or expired.",
       status: 400,
     });
   }
@@ -161,7 +161,7 @@ export async function GET(
   if (tokenErr) {
     return htmlResponse({
       title: "Link unavailable",
-      body: "We could not check this Relist Radar link. Please open Distribute instead.",
+      body: "We could not check this Keep live link. Please open Distribute instead.",
       status: 503,
     });
   }
@@ -169,21 +169,21 @@ export async function GET(
   if (!token || !tokenMatchesPayload(token, verified.payload)) {
     return htmlResponse({
       title: "Link rejected",
-      body: "This Relist Radar link is not recognized.",
+      body: "This Keep live link is not recognized.",
       status: 400,
     });
   }
   if (token.used_at) {
     return htmlResponse({
       title: "Already used",
-      body: "This Relist Radar link was already used.",
+      body: "This Keep live link was already used.",
       status: 409,
     });
   }
   if (Date.parse(token.expires_at) < Date.now()) {
     return htmlResponse({
       title: "Link expired",
-      body: "This Relist Radar link has expired.",
+      body: "This Keep live link has expired.",
       status: 410,
     });
   }
@@ -196,7 +196,7 @@ export async function GET(
   if (eventErr) {
     return htmlResponse({
       title: "Link unavailable",
-      body: "We could not load this Relist Radar cycle. Please open Distribute instead.",
+      body: "We could not load this Keep live cycle. Please open Distribute instead.",
       status: 503,
     });
   }
@@ -204,14 +204,14 @@ export async function GET(
   if (!event || !eventMatchesPayload(event, verified.payload)) {
     return htmlResponse({
       title: "Link rejected",
-      body: "This Relist Radar link does not match an active cycle.",
+      body: "This Keep live link does not match an active cycle.",
       status: 400,
     });
   }
   if (!actionAllowed(verified.payload.action, event.decision)) {
     return htmlResponse({
       title: "Already recorded",
-      body: "A decision is already recorded for this Relist Radar cycle.",
+      body: "A decision is already recorded for this Keep live cycle.",
       status: 409,
     });
   }
@@ -227,7 +227,7 @@ export async function GET(
   if (burnErr || !burned) {
     return htmlResponse({
       title: "Already used",
-      body: "This Relist Radar link was already used.",
+      body: "This Keep live link was already used.",
       status: 409,
     });
   }
@@ -254,7 +254,7 @@ export async function GET(
   if (updateErr || !updated) {
     return htmlResponse({
       title: "Already recorded",
-      body: "A decision is already recorded for this Relist Radar cycle.",
+      body: "A decision is already recorded for this Keep live cycle.",
       status: 409,
     });
   }

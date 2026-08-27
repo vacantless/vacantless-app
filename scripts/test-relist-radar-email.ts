@@ -119,7 +119,9 @@ function emailItem(overrides: Partial<RelistRadarEmailItem> = {}): RelistRadarEm
       }),
     ],
   });
-  ok("notice subject names refresh", email.subject.includes("Refresh listing ads"));
+  ok("notice subject names keep live", email.subject.includes("Keep live"));
+  ok("notice body names keep live", email.body.includes("Keep live found"));
+  ok("notice body hides Relist Radar", !email.body.includes("Relist Radar"));
   ok("notice body has free expiry", email.body.includes("Kijiji expires on"));
   ok("notice body has free auto-refresh copy", email.body.includes("auto-refresh on the expiry-day morning"));
   ok("notice body has paid refresh amount", email.body.includes("$54.95"));
@@ -165,7 +167,7 @@ function emailItem(overrides: Partial<RelistRadarEmailItem> = {}): RelistRadarEm
     items: [emailItem()],
     locale: "fr",
   });
-  ok("fr subject supported", email.subject.includes("Rafraichir"));
+  ok("fr subject supported", email.subject.includes("Keep live"));
   ok("fr body supported", email.body.includes("annonce"));
 }
 

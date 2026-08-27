@@ -50,22 +50,27 @@ import { getStripe } from "@/lib/stripe";
 import {
   CHANNEL_ACCOUNT_STATUSES,
   allChannelCapabilities,
-  channelAccountReadiness,
   isChannelAccountStatus,
-  transportLabel,
   type ChannelAccountStatus,
 } from "@/lib/distribution-capabilities";
 import {
-  channelByKey,
   channelConnectionChecklistActionLabel,
-  channelConnectionStage,
   groupChannelConnectionChecklist,
   recommendedChannelConnectionChecklistAction,
+  type ChannelConnectionStage,
   type ConnectChipTone,
 } from "@/lib/distribution-channels";
 import {
   publishChannelMeta,
 } from "@/lib/distribution-publish";
+import {
+  distributionChannelContract,
+  distributionExecutionLabel,
+  distributionLaunchStateLabel,
+  resolveDistributionLaunchReadiness,
+  type DistributionChannelContract,
+  type DistributionLaunchReadiness,
+} from "@/lib/distribution-channel-contracts";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import {
   SETTINGS_ORG_FEATURES,
@@ -207,6 +212,96 @@ type MailAliasProvisionView = {
 
 function cadInputValue(cents: number | null | undefined): string {
   return typeof cents === "number" && cents > 0 ? (cents / 100).toFixed(2) : "";
+}
+
+function stageFromLaunchReadiness(
+  readiness: DistributionLaunchReadiness,
+): ChannelConnectionStage {
+  switch (readiness.state) {
+    case "ready":
+      return {
+        state: "connected_ready",
+        label: "Ready",
+        nextActionLabel: "Launch from property",
+        helper: readiness.reason,
+        tone: "positive",
+        canConnect: false,
+        countsAsReady: true,
+      };
+    case "needs_authorization":
+      return {
+        state: "connected_needs_authorization",
+        label: "Needs authorization",
+        nextActionLabel: "Authorize posting",
+        helper: readiness.reason,
+        tone: "warning",
+        canConnect: false,
+        countsAsReady: false,
+      };
+    case "needs_spend_limit":
+      return {
+        state: "needs_payment_or_setup",
+        label: "Needs spend limit",
+        nextActionLabel: "Set spend limit",
+        helper: readiness.reason,
+        tone: "warning",
+        canConnect: true,
+        countsAsReady: false,
+      };
+    case "needs_account":
+      return {
+        state: "needs_payment_or_setup",
+        label: "Needs account",
+        nextActionLabel: "Connect account",
+        helper: readiness.reason,
+        tone: "accent",
+        canConnect: true,
+        countsAsReady: false,
+      };
+    case "needs_broker":
+      return {
+        state: "broker_route",
+        label: "Broker route",
+        nextActionLabel: "Create broker handoff",
+        helper: readiness.reason,
+        tone: "neutral",
+        canConnect: false,
+        countsAsReady: false,
+      };
+    case "fallback_task":
+      return {
+        state: "planned_or_unavailable",
+        label: "Fallback task",
+        nextActionLabel: "Use fallback task",
+        helper: readiness.reason,
+        tone: "neutral",
+        canConnect: false,
+        countsAsReady: false,
+      };
+    case "planned":
+      return {
+        state: "planned_or_unavailable",
+        label: "Planned",
+        nextActionLabel: "Wait for integration",
+        helper: readiness.reason,
+        tone: "neutral",
+        canConnect: false,
+        countsAsReady: false,
+      };
+  }
+}
+
+function contractBadgeLabels(contract: DistributionChannelContract): string[] {
+  const labels = [distributionExecutionLabel(contract.executionKind)];
+  if (contract.authorizationKind === "posting") labels.push("Authorize posting");
+  if (contract.authorizationKind === "posting_and_refresh") {
+    labels.push("Authorize post/refresh");
+  }
+  if (contract.spendKind !== "none") labels.push("Paid pass-through");
+  if (contract.refreshKind === "ttl_auto") labels.push("Keep-live ready");
+  if (contract.takedownKind === "api_delete") labels.push("API takedown");
+  if (contract.takedownKind === "headless_delete") labels.push("Automated takedown");
+  return labels;
 }
 
 export default async function SettingsPage({
@@ -426,33 +521,28 @@ export default async function SettingsPage({
     const accountStatus = isChannelAccountStatus(account?.account_status)
       ? account.account_status
       : null;
-    const registry = channelByKey(cap.channel);
     const actionPlan = portalRequirementActionPlanFor(cap.channel);
-    const connectionStage = channelConnectionStage({
-      integrationStatus: registry?.integrationStatus ?? null,
-      transport: cap.transport,
-      requiresLogin: cap.requiresLogin,
-      requiresPayment: cap.requiresPayment,
+    const contract = distributionChannelContract(cap.channel);
+    const launchReadiness = resolveDistributionLaunchReadiness(contract, {
       accountStatus,
-      hasFeedRoute: Boolean(account?.feed_url),
       automationAuthorized: account?.automation_authorized === true,
-      requiresAutomationAuthorization:
-        registry?.mode === "api_automatic" || cap.postingPolicy === "automatic_allowed",
+      spendAuthorized: account?.spend_authorized === true,
+      spendMaxCents: account?.spend_max_cents ?? null,
+      spendRevokedAt: account?.spend_revoked_at ?? null,
+      feedAccepted: Boolean(account?.feed_url),
     });
-    const readiness = channelAccountReadiness({
-      capability: cap,
-      accountStatus,
-      hasFeedRoute: Boolean(account?.feed_url),
-    });
+    const connectionStage = stageFromLaunchReadiness(launchReadiness);
     return {
       cap,
       meta: publishChannelMeta(cap.channel),
+      contract,
+      launchReadiness,
       account,
       accountStatus: accountStatus ?? "not_started",
-      readiness,
       connectionStage,
       actionPlan,
       requirementChips: requirementFlagChips(actionPlan),
+      contractBadges: contractBadgeLabels(contract),
     };
   });
   const connectSummary = distributionChannels.reduce(
@@ -979,16 +1069,15 @@ export default async function SettingsPage({
                 <IconTile size="sm"><Icons.link className="h-4 w-4" /></IconTile>
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                    Connect accounts
+                    Launch setup
                   </h3>
                   <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                    Connect each website&apos;s account once here. You post each
-                    listing from the property&apos;s Get online tab.
+                    Connect each destination once, authorize posting, and set
+                    landlord pass-through limits for paid channels.
                   </p>
                   <p className="mt-1 max-w-2xl text-xs text-gray-400">
                     {connectSummary.ready} ready · {connectSummary.authorization} need authorization ·{" "}
-                    {connectSummary.signIn} need sign-in · {connectSummary.setup} setup/payment ·{" "}
-                    {connectSummary.planned} planned/broker
+                    {connectSummary.setup} need account/spend · {connectSummary.planned} fallback/planned
                   </p>
                 </div>
               </div>
@@ -1003,10 +1092,10 @@ export default async function SettingsPage({
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Setup checklist
+                    Readiness checklist
                   </h4>
                   <p className="mt-1 text-sm text-gray-500">
-                    Finish the account steps here, then publish each listing from Get online.
+                    Finish setup here, then launch selected listings from the property dashboard.
                   </p>
                 </div>
                 <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
@@ -1017,7 +1106,7 @@ export default async function SettingsPage({
                     >
                       <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                         <span className="shrink-0 font-semibold text-brand">
-                          Next setup
+                          Next readiness step
                         </span>
                         <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-brand ring-1 ring-brand/15">
                           {recommendedConnectionAction.group.label}
@@ -1046,7 +1135,7 @@ export default async function SettingsPage({
                     </a>
                   )}
                   <span className="text-xs text-gray-400">
-                    {distributionChannels.length} channels
+                    {distributionChannels.length} destinations
                   </span>
                 </div>
               </div>
@@ -1209,7 +1298,7 @@ export default async function SettingsPage({
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            {distributionChannels.map(({ cap, meta, account, accountStatus, readiness, connectionStage, actionPlan, requirementChips }) => {
+            {distributionChannels.map(({ cap, meta, contract, launchReadiness, account, accountStatus, connectionStage, actionPlan, requirementChips, contractBadges }) => {
               const statusId = `dist-${cap.channel}-status`;
               const feedId = `dist-${cap.channel}-feed`;
               const managerId = `dist-${cap.channel}-manager`;
@@ -1221,8 +1310,12 @@ export default async function SettingsPage({
                 account?.spend_authorized === true &&
                 account.spend_revoked_at == null &&
                 (account.spend_max_cents ?? 0) > 0;
-              const showFeedField = cap.supportsFeed || cap.needsOrgAccount;
+              const showFeedField =
+                cap.supportsFeed ||
+                cap.needsOrgAccount ||
+                contract.accountKind === "partner_feed";
               const showPortalFields = cap.transport !== "automatic";
+              const showSpendFields = contract.spendKind !== "none";
               return (
                 <form
                   id={`channel-${cap.channel}`}
@@ -1237,13 +1330,13 @@ export default async function SettingsPage({
                         {meta.label}
                       </h3>
                       <p className="mt-1 text-xs text-gray-500">
-                        {meta.description}
+                        {contract.note}
                       </p>
                     </div>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CHIP[connectionStage.tone]}`}
                     >
-                      {connectionStage.label}
+                      {distributionLaunchStateLabel(launchReadiness.state)}
                     </span>
                   </div>
                   <p className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
@@ -1273,39 +1366,19 @@ export default async function SettingsPage({
                   )}
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                      {transportLabel(cap.transport)}
-                    </span>
-                    {cap.supportsFeed && (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                        Feed
+                    {contractBadges.map((badge) => (
+                      <span
+                        key={badge}
+                        className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600"
+                      >
+                        {badge}
                       </span>
-                    )}
-                    {cap.supportsCopilot && (
-                      <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700">
-                        Assist
-                      </span>
-                    )}
-                    {cap.supportsConcierge && (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                        Concierge
-                      </span>
-                    )}
-                    {cap.requiresLogin && (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                        Login
-                      </span>
-                    )}
-                    {cap.requiresPayment && (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                        Payment
-                      </span>
-                    )}
+                    ))}
                   </div>
 
-                  {readiness.blockers.length > 0 && (
+                  {launchReadiness.state !== "ready" && (
                     <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      {readiness.blockers[0]}
+                      {launchReadiness.reason}
                     </p>
                   )}
 
@@ -1408,7 +1481,7 @@ export default async function SettingsPage({
                     </label>
                   </div>
 
-                  {cap.requiresPayment && (
+                  {showSpendFields && (
                     <div className="mt-4 border-t border-gray-100 pt-4">
                       <label className="flex items-start gap-3">
                         <input
@@ -1420,10 +1493,11 @@ export default async function SettingsPage({
                         />
                         <span className="min-w-0 text-sm">
                           <span className="block font-medium text-gray-800">
-                            Authorize paid {meta.label} postings
+                            Pass paid {meta.label} costs to the landlord
                           </span>
                           <span className="block text-xs text-gray-500">
-                            Worker claims require this standing authorization before any paid {meta.label} submit.
+                            Vacantless can only continue a paid channel inside
+                            the ceiling saved here.
                           </span>
                         </span>
                       </label>

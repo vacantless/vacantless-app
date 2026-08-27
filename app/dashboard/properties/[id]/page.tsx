@@ -152,6 +152,7 @@ import {
   type RunItemStatus,
 } from "@/lib/distribution-run";
 import {
+  distributionLifecycleAttention,
   runItemHasFreshnessState,
   runItemNeedsRefresh,
 } from "@/lib/distribution-freshness";
@@ -197,11 +198,7 @@ import {
   isCopilotChannel,
 } from "@/lib/distribution-copilot";
 import {
-  channelCapability,
-  channelAccountReadiness,
-  channelReadinessLabel,
   type ChannelAccountStatus,
-  type ChannelReadinessValue,
 } from "@/lib/distribution-capabilities";
 import {
   isCopilotSupportedKey,
@@ -213,6 +210,15 @@ import {
   fbPageChannelEnabled,
   igChannelEnabledForOrg,
 } from "@/lib/facebook-page-oauth";
+import {
+  distributionChannelContract,
+  distributionExecutionLabel,
+  distributionLifecycleSummary,
+  distributionLaunchStateLabel,
+  distributionLaunchStateTone,
+  resolveDistributionKeepLiveAction,
+  resolveDistributionLaunchReadiness,
+} from "@/lib/distribution-channel-contracts";
 import { authorizedInstantPublishDestinations } from "@/lib/auto-distribution";
 import { ConfirmPublishButton } from "./confirm-publish-button";
 import { DetectorsSection, type DetectorView } from "./detectors-section";
@@ -1712,7 +1718,7 @@ export default async function PropertyDetailPage({
   const { data: channelAccountRows } = await supabase
     .from("distribution_channel_accounts")
     .select(
-      "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized, auto_submit_allowed",
+      "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized, auto_submit_allowed, spend_authorized, spend_max_cents, spend_revoked_at",
     )
     .eq("organization_id", propertyOrgId);
   const channelAccountByKey = new Map<
@@ -1725,6 +1731,9 @@ export default async function PropertyDetailPage({
       capabilities: Record<string, unknown>;
       automationAuthorized: boolean;
       autoSubmitAllowed: boolean;
+      spendAuthorized: boolean;
+      spendMaxCents: number | null;
+      spendRevokedAt: string | null;
     }
   >();
   for (const row of (channelAccountRows ?? []) as Array<{
@@ -1736,6 +1745,9 @@ export default async function PropertyDetailPage({
     capabilities: Record<string, unknown> | null;
     automation_authorized: boolean | null;
     auto_submit_allowed: boolean | null;
+    spend_authorized: boolean | null;
+    spend_max_cents: number | null;
+    spend_revoked_at: string | null;
   }>) {
     channelAccountByKey.set(row.channel, {
       status: row.account_status,
@@ -1745,6 +1757,9 @@ export default async function PropertyDetailPage({
       capabilities: row.capabilities ?? {},
       automationAuthorized: row.automation_authorized === true,
       autoSubmitAllowed: row.auto_submit_allowed === true,
+      spendAuthorized: row.spend_authorized === true,
+      spendMaxCents: row.spend_max_cents,
+      spendRevokedAt: row.spend_revoked_at,
     });
   }
   const instantPublishDestinations = authorizedInstantPublishDestinations({
@@ -1759,16 +1774,12 @@ export default async function PropertyDetailPage({
     facebookOAuthConfigured() && fbPageChannelEnabled();
   const instagramGraphEnabled =
     facebookPageEnabled && igChannelEnabledForOrg(propertyOrgId);
-  const readinessToneFor = (
-    v: ChannelReadinessValue,
-  ): "positive" | "warning" | "danger" | "neutral" =>
-    v === "ready" || v === "submitted"
-      ? "positive"
-      : v === "needs_login" || v === "needs_payment"
-        ? "warning"
-        : v === "rejected"
-          ? "danger"
-          : "neutral";
+  const launchReadinessToneFor = (
+    state: ReturnType<typeof resolveDistributionLaunchReadiness>["state"],
+  ): "positive" | "warning" | "danger" | "neutral" => {
+    const tone = distributionLaunchStateTone(state);
+    return tone === "accent" ? "neutral" : tone;
+  };
   const accountStatusForChannel = (key: string): ChannelAccountStatus | null => {
     const acct = channelAccountByKey.get(key);
     if (acct) return acct.status as ChannelAccountStatus;
@@ -1776,6 +1787,20 @@ export default async function PropertyDetailPage({
     // partner status values (not_started/submitted/accepted/rejected/paused) are
     // a subset of the channel-account statuses.
     return partner ? (partner.status as ChannelAccountStatus) : null;
+  };
+  const launchReadinessForChannel = (channel: PublishChannelKey) => {
+    const account = channelAccountByKey.get(channel) ?? null;
+    return resolveDistributionLaunchReadiness(
+      distributionChannelContract(channel),
+      {
+        accountStatus: accountStatusForChannel(channel),
+        automationAuthorized: account?.automationAuthorized === true,
+        spendAuthorized: account?.spendAuthorized === true,
+        spendMaxCents: account?.spendMaxCents ?? null,
+        spendRevokedAt: account?.spendRevokedAt ?? null,
+        feedAccepted: Boolean(account?.feedUrl),
+      },
+    );
   };
   const fillSheetByPortal = new Map(fillSheets.map((sheet) => [sheet.portal, sheet]));
   const distributeChannelCards: DistributeChannelCard[] =
@@ -1851,6 +1876,9 @@ export default async function PropertyDetailPage({
       transport: account?.transport ?? null,
       automationAuthorized: account?.automationAuthorized ?? false,
       autoSubmitAllowed: account?.autoSubmitAllowed ?? false,
+      spendAuthorized: account?.spendAuthorized ?? false,
+      spendMaxCents: account?.spendMaxCents ?? null,
+      spendRevokedAt: account?.spendRevokedAt ?? null,
       hasFeedRoute: Boolean(
         account?.feedUrl || (partner?.status === "accepted" && partner.feedUrl),
       ),
@@ -1917,26 +1945,29 @@ export default async function PropertyDetailPage({
       publishContextForChannel(meta.key),
     );
     const displayMeta = distributionChannelDisplayMeta.get(plan.key) ?? null;
-    const readiness = channelAccountReadiness({
-      capability: channelCapability(meta.key),
-      accountStatus: accountStatusForChannel(meta.key),
-      hasFeedRoute: !!channelAccountByKey.get(meta.key)?.feedUrl,
-    });
+    const contract = distributionChannelContract(meta.key);
+    const launchReadiness = launchReadinessForChannel(meta.key);
+    const lifecycle = distributionLifecycleSummary(contract);
     return {
       key: plan.key,
       label: plan.label,
       category: displayMeta?.category ?? null,
       displayOrder: displayMeta?.displayOrder ?? null,
-      modeLabel: publishModeLabel(plan.mode),
+      modeLabel: distributionExecutionLabel(contract.executionKind),
       status: plan.status,
       statusLabel: publishStatusLabel(plan.status),
       statusTone: publishStatusTone(plan.status),
-      description: plan.description,
+      description: contract.note,
       blockers: plan.blockers,
-      defaultSelected: plan.defaultSelected && plan.status !== "blocked",
-      readinessLabel: channelReadinessLabel(readiness.status),
-      readinessTone: readinessToneFor(readiness.status),
-      setupBlockers: readiness.blockers,
+      lifecycleSummary: lifecycle.detail,
+      defaultSelected:
+        plan.defaultSelected &&
+        plan.status !== "blocked" &&
+        launchReadiness.state === "ready",
+      readinessLabel: distributionLaunchStateLabel(launchReadiness.state),
+      readinessTone: launchReadinessToneFor(launchReadiness.state),
+      setupBlockers:
+        launchReadiness.state === "ready" ? [] : [launchReadiness.reason],
     };
   });
 
@@ -1967,13 +1998,14 @@ export default async function PropertyDetailPage({
     concierge_requested_at: string | null;
     operator_submit_approved_at: string | null;
     stale_after: string | null;
+    external_expires_at: string | null;
   };
   let runItemRows: RunItemRow[] = [];
   if (activeRun) {
     const { data: ri } = await supabase
       .from("distribution_run_items")
       .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after",
+        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at",
       )
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
@@ -2071,9 +2103,11 @@ export default async function PropertyDetailPage({
     conciergeDaysVacant == null
       ? null
       : formatMoney(dollarsLostSoFar({ rentCents: p.rent_cents, days: 1 }));
+  const lifecycleNowISO = new Date(nowMs).toISOString();
   const runItems: RunItemView[] = runItemRows.map((r) => {
     const publishKey = normalizePublishChannel(r.channel);
     const meta = publishKey ? publishChannelMeta(publishKey) : null;
+    const contract = publishKey ? distributionChannelContract(publishKey) : null;
     const channelAccount = channelAccountByKey.get(r.channel) ?? null;
     const publishStatus = normalizePublishStatus(
       r.publish_status ?? publishStatusFromLegacyStatus(r.status),
@@ -2101,16 +2135,44 @@ export default async function PropertyDetailPage({
             publicPageLive: linkIsLive,
           })
         : null;
+    const channelLabel = meta?.label ?? channelLabelByKey.get(r.channel) ?? r.channel;
+    const liveWithoutUrl = channelStatusValueByKey.get(r.channel) === "problem";
+    const staleRefresh = runItemHasFreshnessState({
+      verificationStatus: r.verification_status,
+      staleAfter: r.stale_after,
+    })
+      ? runItemNeedsRefresh({
+          verificationStatus: r.verification_status,
+          staleAfter: r.stale_after,
+          nowISO: lifecycleNowISO,
+        })
+      : channelStatusValueByKey.get(r.channel) === "needs_refresh";
+    const lifecycleAttention = distributionLifecycleAttention({
+      channel: r.channel,
+      channelLabel,
+      propertyStatus: normalizedStatus,
+      publishStatus,
+      transport: r.transport,
+      verificationStatus: r.verification_status,
+      staleAfter: r.stale_after,
+      externalExpiresAt: r.external_expires_at,
+      externalUrl: r.external_url,
+      proofUrl: r.proof_url,
+      liveWithoutUrl,
+      nowISO: lifecycleNowISO,
+    });
     return {
       id: r.id,
       channel: r.channel,
-      channelLabel: meta?.label ?? channelLabelByKey.get(r.channel) ?? r.channel,
+      channelLabel,
       status: r.status,
       publishStatus,
       statusLabel: publishStatusLabel(publishStatus),
       statusTone: publishStatusTone(publishStatus),
       mode,
-      modeLabel: publishModeLabel(mode),
+      modeLabel: contract
+        ? distributionExecutionLabel(contract.executionKind)
+        : publishModeLabel(mode),
       blockers: blockersFromRow(r.blockers),
       operatorActionUrl: r.operator_action_url,
       auditMessage: r.audit_message,
@@ -2125,6 +2187,23 @@ export default async function PropertyDetailPage({
       verificationStatus: r.verification_status,
       proofUrl: r.proof_url,
       conciergeRequestedAt: r.concierge_requested_at,
+      lifecycleAttention,
+      keepLiveAction: contract
+        ? resolveDistributionKeepLiveAction({
+            contract,
+            account: {
+              accountStatus: accountStatusForChannel(publishKey ?? r.channel),
+              automationAuthorized:
+                channelAccount?.automationAuthorized === true,
+              autoSubmitAllowed: channelAccount?.autoSubmitAllowed === true,
+              spendAuthorized: channelAccount?.spendAuthorized === true,
+              spendMaxCents: channelAccount?.spendMaxCents ?? null,
+              spendRevokedAt: channelAccount?.spendRevokedAt ?? null,
+              feedAccepted: Boolean(channelAccount?.feedUrl),
+            },
+            attention: lifecycleAttention,
+          })
+        : null,
       steps: buildRunSteps(r.channel, {
         guardrailCount: guardrailsForPortal(r.channel).length,
       }),
@@ -2142,17 +2221,8 @@ export default async function PropertyDetailPage({
       copilotScript,
       // S543: explicit item freshness state wins; only older rows without it
       // fall back to the where-posted tracker's coarse posted_on age.
-      staleRefresh: runItemHasFreshnessState({
-        verificationStatus: r.verification_status,
-        staleAfter: r.stale_after,
-      })
-        ? runItemNeedsRefresh({
-            verificationStatus: r.verification_status,
-            staleAfter: r.stale_after,
-            nowISO: new Date(nowMs).toISOString(),
-          })
-        : channelStatusValueByKey.get(r.channel) === "needs_refresh",
-      liveWithoutUrl: channelStatusValueByKey.get(r.channel) === "problem",
+      staleRefresh,
+      liveWithoutUrl,
     };
   });
   const reservedTrackedLinksByChannel: Record<string, string> = {};
@@ -2302,7 +2372,7 @@ export default async function PropertyDetailPage({
             tone: "info",
             title: "Hands-off refreshes are off.",
             body:
-              "Relist Radar will email before the next free Kijiji refresh cycle.",
+              "Keep live reminders will email before the next free Kijiji refresh cycle.",
           }
         : searchParams.dist === "radar_setup"
           ? {

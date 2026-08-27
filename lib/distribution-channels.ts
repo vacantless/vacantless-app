@@ -703,27 +703,27 @@ export const CHANNEL_CONNECTION_CHECKLIST_GROUPS = [
   {
     id: "authorization",
     label: "Authorize",
-    helper: "Connected accounts waiting on explicit posting consent.",
+    helper: "Connected accounts waiting on posting or refresh consent.",
   },
   {
     id: "sign_in",
-    label: "Sign in",
-    helper: "Portal sessions that need a fresh operator sign-in.",
+    label: "Reconnect",
+    helper: "Saved sessions that need a fresh sign-in.",
   },
   {
     id: "setup",
-    label: "Setup/payment",
-    helper: "Accounts, feed routes, or paid-placement rules to finish.",
+    label: "Account/spend",
+    helper: "Accounts, feed routes, or landlord spend limits to finish.",
   },
   {
     id: "ready",
     label: "Ready",
-    helper: "Routes ready for the next Get online step.",
+    helper: "Destinations ready for launch.",
   },
   {
     id: "planned",
-    label: "Planned/broker",
-    helper: "Roadmap or broker routes that must stay fail-closed.",
+    label: "Fallback/planned",
+    helper: "Broker, fallback, and future destinations.",
   },
 ] as const;
 export type ChannelConnectionChecklistGroupId =

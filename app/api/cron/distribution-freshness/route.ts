@@ -1303,7 +1303,7 @@ async function enqueueRelistRadarFreeRefresh({
       error_code: null,
       error_message: null,
       audit_message:
-        "Relist Radar queued a free Kijiji refresh. The worker may post only with the $0 plan; Live still needs real URL proof.",
+        "Keep live queued a free Kijiji refresh. The worker may post only with the $0 plan; Live still needs real URL proof.",
       relist_radar_backup: backup,
       last_attempt_id: att.id as string,
       attempt_count: priorAttempts + 1,

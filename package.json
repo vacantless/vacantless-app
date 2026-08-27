@@ -10,6 +10,10 @@
     "test:feature-entitlements": "tsx scripts/test-feature-entitlements.ts",
     "test:channel-connect-chip": "tsx scripts/test-channel-connect-chip.ts",
     "test:selected-org-dashboard-scope": "tsx scripts/test-selected-org-dashboard-scope.ts",
+    "verify:spend-rpc": "node --env-file=.env.local scripts/verify-spend-rpc-deployed.mjs",
+    "verify:spend-rpc:fixture": "node --env-file=.env.local scripts/verify-spend-rpc-fixture.mjs",
+    "verify:relist-radar": "node --env-file=.env.local scripts/verify-relist-radar-deployed.mjs",
+    "verify:takedown-contracts": "node scripts/verify-takedown-contracts.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
