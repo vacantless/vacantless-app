@@ -62,6 +62,29 @@ ok("ready portal packet has no missing required facts", readyPortals.missingRequ
 ok("portal packet still knows operator fields exist", readyPortals.operatorFieldCount >= 2);
 ok("portal packet does not treat payment as missing listing fact", !readyPortals.missingRequired.some((m) => m.field === "payment"));
 
+const defaultLaunchPacket = buildListingPacketReadiness({
+  channels: ["facebook", "kijiji"],
+  fieldFacts: strongPortalFacts,
+});
+ok("default launch packet covers Facebook and Kijiji only", defaultLaunchPacket.channelCount === 2);
+ok("default launch packet is ready with residential facts", defaultLaunchPacket.readyChannelCount === 2);
+ok(
+  "default launch packet ignores commercial-only listing fields",
+  !defaultLaunchPacket.missingRequired.some((m) =>
+    ["available_area", "lease_rate", "transaction_type"].includes(m.field),
+  ),
+);
+
+const commercialLaunchPacket = buildListingPacketReadiness({
+  channels: ["spacelist", "costar_loopnet"],
+  fieldFacts: strongPortalFacts,
+});
+ok(
+  "commercial launch packet still requires commercial listing fields",
+  commercialLaunchPacket.missingRequired.some((m) => m.field === "available_area") &&
+    commercialLaunchPacket.missingRequired.some((m) => m.field === "lease_rate"),
+);
+
 const missingPhotos = buildListingPacketReadiness({
   channels: ["rentals_ca", "rentfaster", "zumper", "viewit"],
   fieldFacts: { ...strongPortalFacts, photos: false },
@@ -100,4 +123,3 @@ ok("beds/baths only blocks RentFaster in selected trio", weakPacket.missingRequi
 
 console.log(`listing-packet-readiness: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
-
