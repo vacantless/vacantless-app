@@ -40,6 +40,7 @@ import {
   normalizeUrl,
   normalizeText,
   normalizeDate,
+  portalLabel,
   validateListingPost,
   reservableTrackerId,
 } from "@/lib/listing-distribution";
@@ -1696,7 +1697,7 @@ export async function addListingPost(formData: FormData) {
     organization_id: prop.organization_id,
     property_id: propertyId,
     portal,
-    label: normalizeText(formData.get("label")),
+    label: listingPostLabelForPortal(formData.get("label"), portal),
     url,
     status,
     posted_on: normalizeDate(formData.get("posted_on")),
@@ -1731,7 +1732,7 @@ export async function updateListingPost(formData: FormData) {
     .from("listing_posts")
     .update({
       portal,
-      label: normalizeText(formData.get("label")),
+      label: listingPostLabelForPortal(formData.get("label"), portal),
       url,
       status,
       posted_on: normalizeDate(formData.get("posted_on")),
@@ -1837,6 +1838,14 @@ function livePostForChannel(
       return bd.localeCompare(ad);
     });
   return live[0] ?? null;
+}
+
+function listingPostLabelForPortal(raw: unknown, portal: string): string | null {
+  const label = normalizeText(raw);
+  if (label) return label;
+  return portal === "spacelist" || portal === "costar_loopnet"
+    ? portalLabel(portal)
+    : null;
 }
 
 function publishItemResolved(row: {
@@ -2173,6 +2182,7 @@ async function stageDistributionRunForProperty({
         organization_id: orgId,
         property_id: propertyId,
         portal: plan.key,
+        label: listingPostLabelForPortal(null, plan.key),
         status: "draft",
         url: null,
       })
@@ -2434,6 +2444,7 @@ export async function updateRunItem(formData: FormData) {
             organization_id: orgId,
             property_id: propertyId,
             portal,
+            label: listingPostLabelForPortal(null, portal),
             url,
             status: "live",
           })
@@ -2562,6 +2573,7 @@ export async function addRunChannel(formData: FormData) {
               organization_id: run.organization_id as string,
               property_id: propertyId,
               portal: channel,
+              label: listingPostLabelForPortal(null, channel),
               status: "draft",
               url: null,
             })

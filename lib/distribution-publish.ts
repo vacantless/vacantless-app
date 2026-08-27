@@ -36,6 +36,8 @@ export const PUBLISH_CHANNEL_KEYS = [
   "rentfaster",
   "zumper",
   "viewit",
+  "spacelist",
+  "costar_loopnet",
   "realtor_ca",
   "other",
 ] as const;
@@ -520,13 +522,19 @@ export function preparePublishChannel(
     key === "kijiji" ||
     key === "linkedin" ||
     key === "whatsapp" ||
-    key === "snapchat"
+    key === "snapchat" ||
+    key === "spacelist" ||
+    key === "costar_loopnet"
   ) {
     return plan(meta, {
       status: "needs_login",
       operatorActionUrl: meta.actionUrl,
       auditMessage:
-        "Posting assist required. Vacantless prepares the ad, but you sign in, review, and post.",
+        key === "costar_loopnet"
+          ? "CoStar / LoopNet posting assist required. Vacantless prepares the CRE or 5+ multifamily listing packet, but sign-in, verification, payment, final posting, and proof stay human-gated."
+          : key === "spacelist"
+          ? "Commercial posting assist required. Vacantless prepares the listing packet, but sign-in, verification, payment, final posting, and proof stay human-gated."
+          : "Posting assist required. Vacantless prepares the ad, but you sign in, review, and post.",
     });
   }
 

@@ -91,7 +91,7 @@ const FULL: FillSheetInput = {
 };
 
 // --- every postable portal yields a usable sheet ---------------------------
-ok("12 postable portals", FILL_SHEET_PORTALS.length === 12);
+ok("14 postable portals", FILL_SHEET_PORTALS.length === 14);
 ok("3 field sources", FILL_FIELD_SOURCES.length === 3);
 
 for (const portal of FILL_SHEET_PORTALS) {
@@ -330,6 +330,58 @@ ok(
     realtor.fields[0].guardrailId === "realtorca-ddf-only",
 );
 
+// --- commercial portals stay source-assisted and review-gated --------------
+const spacelist = buildFillSheet(FULL, "spacelist");
+ok(
+  "spacelist: transaction defaults to lease",
+  spacelist.fields.find((f) => f.id === "spacelist-transaction-type")?.value ===
+    "For Lease",
+);
+ok(
+  "spacelist: commercial use is manual",
+  spacelist.fields.find((f) => f.id === "spacelist-property-use")?.source ===
+    "manual",
+);
+ok(
+  "spacelist: area can prefill from sqft but remains review-guarded",
+  (() => {
+    const f = spacelist.fields.find((x) => x.id === "spacelist-available-area");
+    return f?.value === "850" && f?.guardrailId === "spacelist-commercial-economics";
+  })(),
+);
+ok(
+  "spacelist: lease rate is manual",
+  spacelist.fields.find((f) => f.id === "spacelist-lease-rate")?.source ===
+    "manual",
+);
+ok(
+  "spacelist: proof URL is manual",
+  spacelist.fields.find((f) => f.id === "spacelist-live-url")?.guardrailId ===
+    "spacelist-proof-capture",
+);
+
+const costarLoopnet = buildFillSheet(FULL, "costar_loopnet");
+ok(
+  "costar_loopnet: authorized representative is manual",
+  costarLoopnet.fields.find((f) => f.id === "costar-loopnet-account")
+    ?.guardrailId === "costar-loopnet-authorized-rep",
+);
+ok(
+  "costar_loopnet: payment is a manual stop",
+  costarLoopnet.fields.find((f) => f.id === "costar-loopnet-payment")
+    ?.guardrailId === "costar-loopnet-payment-stop",
+);
+ok(
+  "costar_loopnet: multifamily unit count is manual",
+  costarLoopnet.fields.find((f) => f.id === "costar-loopnet-unit-count")
+    ?.guardrailId === "costar-loopnet-one-channel",
+);
+ok(
+  "costar_loopnet: proof URL is manual",
+  costarLoopnet.fields.find((f) => f.id === "costar-loopnet-live-url")
+    ?.guardrailId === "costar-loopnet-proof-capture",
+);
+
 // --- junk / "other" key falls back, never throws ---------------------------
 const junk = buildFillSheet(FULL, "craigslist" as never);
 ok("junk key -> other", junk.portal === "other");
@@ -392,7 +444,7 @@ const WITH_TOUR: FillSheetInput = {
   ...FULL,
   virtualTourUrl: "https://youriguide.com/833_pillette/",
 };
-for (const portal of ["kijiji", "rentals_ca", "zumper", "viewit"] as const) {
+for (const portal of ["kijiji", "rentals_ca", "zumper", "viewit", "spacelist"] as const) {
   const sheet = buildFillSheet(WITH_TOUR, portal);
   const tour = sheet.fields.find((f) => f.id.endsWith("-virtual-tour"));
   ok(`${portal}: tour field present when URL set`, !!tour);
@@ -404,7 +456,7 @@ for (const portal of ["kijiji", "rentals_ca", "zumper", "viewit"] as const) {
   ok(`${portal}: tour follows description`, di >= 0 && ids[di + 1].endsWith("-virtual-tour"));
 }
 // Excluded portals never grow a tour field.
-for (const portal of ["facebook", "rentfaster", "realtor_ca"] as const) {
+for (const portal of ["facebook", "rentfaster", "costar_loopnet", "realtor_ca"] as const) {
   const sheet = buildFillSheet(WITH_TOUR, portal);
   ok(`${portal}: no tour field`, !sheet.fields.some((f) => f.id.endsWith("-virtual-tour")));
 }

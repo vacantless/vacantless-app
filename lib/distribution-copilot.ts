@@ -295,6 +295,8 @@ const COPILOT_CHANNEL_HOSTS: Record<string, string[]> = {
   kijiji: ["kijiji.ca"],
   facebook: ["facebook.com"],
   viewit: ["viewit.ca"],
+  spacelist: ["spacelist.ca"],
+  costar_loopnet: ["loopnet.com", "costar.com", "showcase.com"],
 };
 
 // POSITIVE per-channel "this is a public listing" path shapes. The server gate is
@@ -311,10 +313,14 @@ const COPILOT_CHANNEL_HOSTS: Record<string, string[]> = {
 //   viewit   a numeric listing id — either its own path segment (/26049) OR the
 //            slug form ending VIT=<id> / VIT%3D<id> (pathname keeps %3D encoded),
 //            e.g. /3015SandwichSt-Windsor-1bdrm-VIT=22134 (Codex S485b re-review).
+//   spacelist /listings/<...>/<numeric listing id> (browse pages have no id)
+//   costar_loopnet public CoStar/LoopNet/Showcase detail URL with a numeric listing id
 const COPILOT_LISTING_PATH: Record<string, RegExp> = {
   kijiji: /^\/v-.+\/\d{6,}\/?$/i,
   facebook: /\/marketplace\/item\/\d{6,}(?:\/|$)/i,
   viewit: /\/\d{5,}(?:\/|$)|VIT(?:=|%3D)\d{5,}/i,
+  spacelist: /\/listings\/.+\/\d{5,}(?:\/|$)/i,
+  costar_loopnet: /\/\d{5,}(?:\/|$)/i,
 };
 
 function copilotHostMatches(host: string, base: string): boolean {

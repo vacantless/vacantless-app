@@ -28,6 +28,8 @@ export const CHANNEL_READINESS_CHANNELS = [
   "rentfaster",
   "zumper",
   "viewit",
+  "spacelist",
+  "costar_loopnet",
   "facebook_page",
   "instagram",
   "whatsapp",
@@ -73,6 +75,8 @@ const CHANNEL_LABELS: Record<ChannelReadinessChannel, string> = {
   rentfaster: "RentFaster",
   zumper: "Zumper + PadMapper",
   viewit: "Viewit.ca",
+  spacelist: "SpaceList.ca",
+  costar_loopnet: "CoStar / LoopNet",
   facebook_page: "Facebook Page feed",
   instagram: "Instagram",
   whatsapp: "WhatsApp",
@@ -262,6 +266,23 @@ function directPortalChoices(...choices: string[]): {
   return { manualChoices: choices, directPortalSupported: true };
 }
 
+function commercialPortalRequired(input: ChannelReadinessInput): string[] {
+  const missing = commonPortalRequired(input);
+  addMissing(missing, ["Commercial use", "Available area", "Lease rate / price"]);
+  return missing;
+}
+
+function costarLoopnetRequired(input: ChannelReadinessInput): string[] {
+  const missing = commonPortalRequired(input);
+  addMissing(missing, [
+    "Commercial or 5+ multifamily asset type",
+    "Unit count",
+    "Available area",
+    "Lease rate / price",
+  ]);
+  return missing;
+}
+
 export function buildChannelReadiness(
   input: ChannelReadinessInput,
 ): ChannelReadiness[] {
@@ -355,6 +376,29 @@ export function buildChannelReadiness(
     result("viewit", commonPortalRequired(input), classifiedsRecommended(input), {
       ...directPortalChoices("Payment review", "Public ad proof URL"),
       advancedOptions: ["Paid listing package"],
+    }),
+  );
+
+  out.push(
+    result("spacelist", commercialPortalRequired(input), [], {
+      ...directPortalChoices(
+        "Commercial use and transaction type",
+        "Lease rate / price and available area",
+        "Public listing proof URL",
+      ),
+      advancedOptions: ["SpaceList Pro or Engine"],
+    }),
+  );
+
+  out.push(
+    result("costar_loopnet", costarLoopnetRequired(input), [], {
+      ...directPortalChoices(
+        "Authorized representative account",
+        "Commercial or 5+ multifamily eligibility",
+        "Verification and package review",
+        "Public listing proof URL",
+      ),
+      advancedOptions: ["Paid marketing package", "CoStar subscription"],
     }),
   );
 

@@ -55,6 +55,8 @@ const base: PublishChannelContext = {
 ok("publish keys include internal public page", PUBLISH_CHANNEL_KEYS.includes("vacantless"));
 ok("publish keys include per-org feed", PUBLISH_CHANNEL_KEYS.includes("org_feed"));
 ok("publish keys include rentfaster", PUBLISH_CHANNEL_KEYS.includes("rentfaster"));
+ok("publish keys include SpaceList", PUBLISH_CHANNEL_KEYS.includes("spacelist"));
+ok("publish keys include CoStar / LoopNet", PUBLISH_CHANNEL_KEYS.includes("costar_loopnet"));
 ok(
   "publish keys include social vehicles",
   ["linkedin", "instagram", "facebook_feed", "whatsapp", "snapchat"].every((key) =>
@@ -62,6 +64,7 @@ ok(
   ),
 );
 ok("normalize accepts facebook", normalizePublishChannel(" facebook ") === "facebook");
+ok("normalize accepts spacelist", normalizePublishChannel(" spacelist ") === "spacelist");
 ok("normalize rejects junk", normalizePublishChannel("craigslist") === null);
 ok("network feed hidden by default", !publishChannelChoices().some((c) => c.key === "network_feed"));
 ok(
@@ -159,6 +162,19 @@ ok("mode label feed partner is candidate", publishModeLabel("feed_partner") === 
 {
   const plan = preparePublishChannel("viewit", base);
   ok("viewit needs payment", plan.status === "needs_payment");
+}
+{
+  const plan = preparePublishChannel("spacelist", base);
+  ok("SpaceList needs login", plan.status === "needs_login");
+  ok("SpaceList mode browser co-pilot", plan.mode === "browser_copilot");
+  ok("SpaceList audit is commercial", /Commercial posting assist/.test(plan.auditMessage));
+}
+{
+  const plan = preparePublishChannel("costar_loopnet", base);
+  ok("CoStar / LoopNet needs login", plan.status === "needs_login");
+  ok("CoStar / LoopNet mode browser co-pilot", plan.mode === "browser_copilot");
+  ok("CoStar / LoopNet audit names payment gate", /payment/.test(plan.auditMessage));
+  ok("CoStar / LoopNet audit names 5+ multifamily", /5\+ multifamily/.test(plan.auditMessage));
 }
 {
   const plan = preparePublishChannel("realtor_ca", base);

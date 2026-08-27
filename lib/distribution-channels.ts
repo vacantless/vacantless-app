@@ -123,6 +123,8 @@ const GET_ONLINE_ASSIST_BY_CHANNEL: Partial<
   Record<DistributionChannel["key"], GetOnlineAssistKind>
 > = {
   facebook: "posting_assist",
+  spacelist: "posting_assist",
+  costar_loopnet: "paid_posting_assist",
   rentfaster: "paid_posting_assist",
 };
 
@@ -236,6 +238,44 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     ttlDays: null,
     paid: true,
     portalUrl: "https://www.viewit.ca/",
+  },
+  {
+    key: "spacelist",
+    label: "SpaceList.ca",
+    category: "portal",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "SpaceList is the first commercial-only target channel. Vacantless does not have a connected posting path for it yet.",
+    mode: "assisted_manual",
+    blurb:
+      "SpaceList is a commercial-only listing lane. Vacantless prepares the commercial field sheet; a signed-in operator reviews the property use, lease facts, and proof URL.",
+    copyKey: null,
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: false,
+    ttlDays: null,
+    paid: false,
+    portalUrl: "https://www.spacelist.ca/",
+  },
+  {
+    key: "costar_loopnet",
+    label: "CoStar / LoopNet",
+    category: "portal",
+    integrationStatus: "planned",
+    connectKind: "none",
+    notes:
+      "CoStar and LoopNet stay one paid/operator-assisted CRE and 5+ multifamily candidate until account, price, and proof behavior are verified.",
+    mode: "assisted_manual",
+    blurb:
+      "CoStar / LoopNet is for commercial or 5+ multifamily investment inventory. Vacantless prepares the source packet, but login, verification, payment, and posting stay human-gated.",
+    copyKey: null,
+    hasFillSheet: true,
+    hasGuardrails: true,
+    feedEligible: false,
+    ttlDays: null,
+    paid: true,
+    portalUrl: "https://www.loopnet.com/solutions/",
   },
   {
     key: "realtor_ca",

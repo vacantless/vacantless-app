@@ -42,6 +42,8 @@ const TRACKED = "https://app.vacantless.com/r/abc123?p=post1";
 ok(isCopilotChannel("facebook"), "facebook is a co-pilot channel");
 ok(isCopilotChannel("kijiji"), "kijiji is a co-pilot channel");
 ok(isCopilotChannel("viewit"), "viewit is a co-pilot channel");
+ok(isCopilotChannel("spacelist"), "spacelist is a co-pilot channel");
+ok(isCopilotChannel("costar_loopnet"), "costar_loopnet is a co-pilot channel");
 ok(!isCopilotChannel("vacantless"), "vacantless is NOT co-pilot (automatic)");
 ok(!isCopilotChannel("org_feed"), "org_feed is NOT co-pilot (automatic)");
 ok(!isCopilotChannel("rentals_ca"), "rentals_ca is NOT co-pilot (feed partner)");
@@ -90,6 +92,19 @@ ok(vi.stopGates.includes("payment"), "viewit stop gate: payment");
 ok(vi.steps.some((s) => s.stopGate === "payment"), "viewit has a payment stop-gate step");
 ok(vi.honesty.some((h) => h.toLowerCase().includes("payment")), "viewit honesty mentions payment");
 
+// --- commercial co-pilot channels ------------------------------------------
+const sl = buildCopilotScript({ channel: "spacelist", copy: BASE, trackedUrl: TRACKED, publicPageLive: true }) as CopilotScript;
+ok(sl !== null, "spacelist script is not null");
+eq(sl.portalUrl, "https://www.spacelist.ca/", "spacelist portal url");
+ok(sl.stopGates.includes("login"), "spacelist stop gate: login");
+ok(!sl.stopGates.includes("payment"), "spacelist does not assume a payment gate");
+
+const cl = buildCopilotScript({ channel: "costar_loopnet", copy: BASE, trackedUrl: TRACKED, publicPageLive: true }) as CopilotScript;
+ok(cl !== null, "costar_loopnet script is not null");
+eq(cl.portalUrl, "https://www.loopnet.com/solutions/", "costar_loopnet portal url");
+ok(cl.stopGates.includes("login"), "costar_loopnet stop gate: login");
+ok(cl.stopGates.includes("payment"), "costar_loopnet stop gate: payment");
+
 // --- facebook: photo-dedup guidance ----------------------------------------
 const fb = buildCopilotScript({ channel: "facebook", copy: BASE, trackedUrl: TRACKED, publicPageLive: true }) as CopilotScript;
 ok(fb.steps.some((s) => s.key === "fields_photos" && (s.detail ?? "").includes("Facebook flags duplicate photos")), "facebook photo-dedup reminder");
@@ -106,11 +121,15 @@ ok(!kjDark.fields.some((f) => f.key === "tracked_link"), "no tracked_link field 
 ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/2-bed/1740248220"), "kijiji live /v- ad can mark live");
 ok(canMarkCopilotLive("facebook", "https://www.facebook.com/marketplace/item/1234567890123"), "facebook marketplace item can mark live");
 ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/rental/12345"), "viewit numeric-segment listing can mark live");
+ok(canMarkCopilotLive("spacelist", "https://www.spacelist.ca/listings/on/for-lease/123456"), "spacelist listing detail can mark live");
+ok(canMarkCopilotLive("costar_loopnet", "https://www.loopnet.com/Listing/123-Main-St-Windsor-ON/12345678/"), "loopnet listing detail can mark live");
 // S485c: viewit slug listings end in VIT=<id> / VIT%3D<id> (Codex S485b re-review).
 ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/3015SandwichSt-Windsor-1bdrm-VIT=22134"), "viewit VIT= slug listing can mark live");
 ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/3015SandwichSt-Windsor-1bdrm-VIT%3D22134"), "viewit VIT%3D slug listing can mark live");
 ok(canMarkCopilotLive("viewit", "https://www.viewit.ca/AvenueStClair-Toronto-2bdrm-VIT%3D244963"), "viewit VIT%3D slug listing (2) can mark live");
 ok(!canMarkCopilotLive("viewit", "https://www.viewit.ca/browse-toronto-apartments"), "viewit browse page (no id) rejected");
+ok(!canMarkCopilotLive("spacelist", "https://www.spacelist.ca/listings/on/for-lease"), "spacelist search page rejected");
+ok(!canMarkCopilotLive("costar_loopnet", "https://www.loopnet.com/solutions/"), "loopnet solutions page rejected");
 // A live /v- ad whose TITLE slug starts with b- must NOT be rejected (the /v- + trailing id still matches).
 ok(canMarkCopilotLive("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor/b-bright-basement/1740248220"), "live /v- ad with b- title slug still ok");
 // A trailing query does not break the match (pathname is used).

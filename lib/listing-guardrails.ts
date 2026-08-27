@@ -403,6 +403,68 @@ const VIEWIT: Guardrail[] = [
   },
 ];
 
+const SPACELIST: Guardrail[] = [
+  {
+    id: "spacelist-commercial-only",
+    severity: "critical",
+    title: "Use SpaceList only for commercial or mixed-use commercial space.",
+    detail:
+      "SpaceList is a commercial real estate marketplace. Do not push a normal residential rental through this channel unless the unit is truly commercial, mixed-use commercial, office, retail, industrial, medical, land, multifamily, or other CRE inventory.",
+  },
+  {
+    id: "spacelist-commercial-economics",
+    severity: "warning",
+    title: "Review rate, area, use, zoning, and lease type before publishing.",
+    detail:
+      "Commercial listings are not monthly-rent residential ads. Confirm whether the rate is gross, net, NNN, or price on request, and make sure available area, permitted use, zoning, and additional rent are not guessed.",
+  },
+  {
+    id: "spacelist-proof-capture",
+    severity: "warning",
+    title: "Save a real SpaceList listing URL, not a search page.",
+    detail:
+      "SpaceList browse URLs and broker pages do not prove the space is live. Open the public listing detail after publishing and save the listing URL back in Vacantless.",
+  },
+  {
+    id: "spacelist-pro-not-auto",
+    severity: "tip",
+    title: "Treat Pro and Engine as separate paid/setup decisions.",
+    detail:
+      "SpaceList may offer Pro or Engine features for teams and embedded websites. Those are not part of the basic posting proof and need explicit approval before any subscription or paid setup.",
+  },
+];
+
+const COSTAR_LOOPNET: Guardrail[] = [
+  {
+    id: "costar-loopnet-payment-stop",
+    severity: "critical",
+    title: "Stop for approval before any paid LoopNet or CoStar package.",
+    detail:
+      "CoStar and LoopNet can present paid marketing, subscription, or premium exposure paths. Do not approve a package, saved-card charge, subscription, or ad spend unless the landlord has explicitly authorized it.",
+  },
+  {
+    id: "costar-loopnet-authorized-rep",
+    severity: "critical",
+    title: "Use only an owner, broker, or authorized representative account.",
+    detail:
+      "LoopNet help says brokers, owners, property managers, developers, and authorized representatives can advertise, with verification possible. Do not post as an account that cannot represent the property.",
+  },
+  {
+    id: "costar-loopnet-one-channel",
+    severity: "warning",
+    title: "Treat CoStar, LoopNet, and Showcase as one CRE or 5+ multifamily network lane.",
+    detail:
+      "Do not count CoStar, LoopNet, and Showcase as separate reach unless the paid product or public proof explicitly shows separate live surfaces. The inventory should be commercial CRE or 5+ multifamily/multiplex investment property, and one listing URL is one proof row until a later proof gate says otherwise.",
+  },
+  {
+    id: "costar-loopnet-proof-capture",
+    severity: "warning",
+    title: "Save a real public listing URL with a listing id.",
+    detail:
+      "A CoStar product page, LoopNet search result, marketing-solutions page, account dashboard, or login page does not prove the property is live. Save the public listing detail URL after proof exists.",
+  },
+];
+
 const REALTOR_CA: Guardrail[] = [
   {
     id: "realtorca-ddf-only",
@@ -454,6 +516,8 @@ const PORTAL_GUARDRAILS: Record<PortalKey, Guardrail[]> = {
   rentfaster: RENTFASTER,
   zumper: ZUMPER,
   viewit: VIEWIT,
+  spacelist: SPACELIST,
+  costar_loopnet: COSTAR_LOOPNET,
   realtor_ca: REALTOR_CA,
   other: [],
 };

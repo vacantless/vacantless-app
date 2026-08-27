@@ -18,6 +18,8 @@ export const PORTAL_KEYS = [
   "rentfaster",
   "zumper",
   "viewit",
+  "spacelist",
+  "costar_loopnet",
   "realtor_ca",
   "other",
 ] as const;
@@ -36,6 +38,8 @@ const PORTAL_LABELS: Record<PortalKey, string> = {
   rentfaster: "RentFaster.ca",
   zumper: "Zumper + PadMapper",
   viewit: "Viewit.ca",
+  spacelist: "SpaceList.ca",
+  costar_loopnet: "CoStar / LoopNet",
   realtor_ca: "Realtor.ca",
   other: "Other",
 };
@@ -217,6 +221,8 @@ export type ListingPostError =
   | "live_needs_url"
   | "url_not_web"
   | "rentfaster_url_required"
+  | "spacelist_url_required"
+  | "costar_loopnet_url_required"
   | "realtor_url_required";
 
 /** True when a string is a plausible absolute http(s) URL. */
@@ -271,6 +277,52 @@ export function isRentFasterListingUrl(value: string | null | undefined): boolea
   }
 }
 
+/** True for a public SpaceList listing URL, not a search/list-browse page. */
+export function isSpaceListListingUrl(value: string | null | undefined): boolean {
+  if (!isWebUrl(value)) return false;
+  try {
+    const u = new URL(String(value).trim());
+    const host = u.hostname.toLowerCase();
+    if (host !== "spacelist.ca" && host !== "www.spacelist.ca") return false;
+    const path = u.pathname.toLowerCase().replace(/\/+$/, "");
+    if (!path || path === "/" || path === "/listings") return false;
+    if (/\/(?:users|login|sign_in|brokers)(?:\/|$)/.test(path)) return false;
+    // SpaceList search pages are shaped like /listings/ab/for-sale. A listing
+    // detail carries a listing id in the path; require that id so a browse page
+    // cannot be saved as live proof before the authenticated proof gate.
+    return /\/listings\//.test(path) && /\/\d{5,}(?:\/|$)/.test(path);
+  } catch {
+    return false;
+  }
+}
+
+/** True for a public CoStar/LoopNet listing URL, not a product/search page. */
+export function isCostarLoopNetListingUrl(value: string | null | undefined): boolean {
+  if (!isWebUrl(value)) return false;
+  try {
+    const u = new URL(String(value).trim());
+    const host = u.hostname.toLowerCase();
+    const isKnownHost =
+      host === "loopnet.com" ||
+      host === "www.loopnet.com" ||
+      host === "costar.com" ||
+      host === "www.costar.com" ||
+      host === "showcase.com" ||
+      host === "www.showcase.com";
+    if (!isKnownHost) return false;
+    const path = u.pathname.replace(/\/+$/, "");
+    if (!path || path === "/" || /^\/(?:search|products?|solutions?|login)(?:\/|$)/i.test(path)) {
+      return false;
+    }
+    // LoopNet public detail pages conventionally include a numeric listing id.
+    // CoStar/Showcase share-proof shapes are not live-proven yet, so keep this
+    // conservative and revise in the later authenticated proof gate if needed.
+    return /\/\d{5,}(?:\/|$)/.test(path);
+  } catch {
+    return false;
+  }
+}
+
 export function validateListingPost(
   input: ListingPostInput,
 ): ListingPostValidation {
@@ -292,6 +344,20 @@ export function validateListingPost(
   }
   if (
     input.status === "live" &&
+    input.portal === "spacelist" &&
+    !isSpaceListListingUrl(url)
+  ) {
+    return { ok: false, field: "url", code: "spacelist_url_required" };
+  }
+  if (
+    input.status === "live" &&
+    input.portal === "costar_loopnet" &&
+    !isCostarLoopNetListingUrl(url)
+  ) {
+    return { ok: false, field: "url", code: "costar_loopnet_url_required" };
+  }
+  if (
+    input.status === "live" &&
     input.portal === "realtor_ca" &&
     !isRealtorCaListingUrl(url)
   ) {
@@ -309,6 +375,10 @@ export function listingPostErrorMessage(code: unknown): string {
       return "That doesn't look like a web link. Use the full address, like https://www.kijiji.ca/...";
     case "rentfaster_url_required":
       return "Use the live RentFaster.ca listing link, not the search, pricing, or dashboard page, before marking RentFaster Live.";
+    case "spacelist_url_required":
+      return "Use the live SpaceList.ca listing link with a listing id, not a search, broker, or sign-in page, before marking SpaceList Live.";
+    case "costar_loopnet_url_required":
+      return "Use the live LoopNet/CoStar listing link with a listing id, not a search, product, or login page, before marking CoStar / LoopNet Live.";
     case "realtor_url_required":
       return "Use the live Realtor.ca listing link, like https://www.realtor.ca/real-estate/123456/..., before marking Realtor.ca Live.";
     default:

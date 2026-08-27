@@ -154,6 +154,19 @@ const CHANNEL_CAPABILITIES: Record<PublishChannelKey, ChannelCapability> = {
     requiresPayment: true,
     postingPolicy: "human_confirmed",
   }),
+  spacelist: CAP("spacelist", "browser_copilot", {
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    postingPolicy: "human_confirmed",
+  }),
+  costar_loopnet: CAP("costar_loopnet", "browser_copilot", {
+    supportsCopilot: true,
+    supportsConcierge: true,
+    requiresLogin: true,
+    requiresPayment: true,
+    postingPolicy: "human_confirmed",
+  }),
   realtor_ca: CAP("realtor_ca", "broker", {
     supportsConcierge: true,
     postingPolicy: "broker_only",
