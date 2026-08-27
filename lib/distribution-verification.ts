@@ -204,6 +204,8 @@ export const STALE_DAYS: Partial<Record<string, number>> = {
   rentals_ca: 7,
   rentfaster: 14,
   zumper: 7,
+  spacelist: 14,
+  costar_loopnet: 30,
   org_feed: 7,
   network_feed: 7,
   vacantless: 14,

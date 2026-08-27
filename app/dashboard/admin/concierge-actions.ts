@@ -11,6 +11,7 @@ import {
   normalizePortal,
   normalizeUrl,
   normalizeText,
+  portalLabel,
   validateListingPost,
 } from "@/lib/listing-distribution";
 import {
@@ -28,6 +29,14 @@ import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const DESK = "/dashboard/admin/concierge";
+
+function commercialListingPostLabelForPortal(
+  portal: ReturnType<typeof normalizePortal>,
+): string | undefined {
+  return portal === "spacelist" || portal === "costar_loopnet"
+    ? portalLabel(portal)
+    : undefined;
+}
 
 // A concierge claim left untouched past this window is treated as abandoned, so
 // another staff member can take the item over instead of it locking forever.
@@ -171,6 +180,7 @@ export async function completeConciergeItem(formData: FormData) {
   let listingPostId = (item.listing_post_id as string | null) ?? null;
   if (url && isPortalKey(channel)) {
     const portal = normalizePortal(channel);
+    const label = commercialListingPostLabelForPortal(portal);
     // Trust the denormalized FK only if it still points at THIS org+property+
     // portal and isn't removed; otherwise discard it and re-resolve.
     if (listingPostId) {
@@ -201,7 +211,7 @@ export async function completeConciergeItem(formData: FormData) {
     if (listingPostId) {
       const { error: upErr } = await admin
         .from("listing_posts")
-        .update({ url, status: "live" })
+        .update({ url, status: "live", ...(label ? { label } : {}) })
         .eq("id", listingPostId)
         .eq("organization_id", orgId)
         .eq("property_id", propertyId)
@@ -216,6 +226,7 @@ export async function completeConciergeItem(formData: FormData) {
           portal,
           url,
           status: "live",
+          ...(label ? { label } : {}),
         })
         .select("id")
         .single();

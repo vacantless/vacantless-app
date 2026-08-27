@@ -47,6 +47,12 @@ eq(channelCapability("facebook_feed").requiresLogin, false, "facebook feed uses 
 eq(channelCapability("whatsapp").supportsConcierge, true, "whatsapp supports concierge");
 eq(channelCapability("snapchat").supportsCopilot, true, "snapchat supports co-pilot");
 eq(channelCapability("viewit").requiresPayment, true, "viewit needs payment");
+eq(channelCapability("spacelist").transport, "browser_copilot", "spacelist is co-pilot");
+eq(channelCapability("spacelist").requiresLogin, true, "spacelist needs login");
+eq(channelCapability("spacelist").requiresPayment, false, "spacelist does not assume payment");
+eq(channelCapability("costar_loopnet").transport, "browser_copilot", "costar_loopnet is co-pilot");
+eq(channelCapability("costar_loopnet").requiresLogin, true, "costar_loopnet needs login");
+eq(channelCapability("costar_loopnet").requiresPayment, true, "costar_loopnet carries payment exposure");
 eq(channelCapability("rentals_ca").transport, "feed_partner", "rentals_ca feed_partner");
 eq(channelCapability("rentals_ca").needsOrgAccount, false, "rentals_ca uses posting assist unless partner acceptance exists");
 eq(channelCapability("rentfaster").transport, "feed_partner", "rentfaster feed candidate");
@@ -55,7 +61,7 @@ eq(channelCapability("rentfaster").postingPolicy, "human_confirmed", "rentfaster
 eq(channelCapability("realtor_ca").transport, "broker", "realtor_ca broker");
 eq(channelCapability("realtor_ca").postingPolicy, "broker_only", "realtor_ca broker_only");
 eq(channelCapability("other").transport, "custom", "other custom");
-eq(allChannelCapabilities().length, 16, "16 channel capabilities");
+eq(allChannelCapabilities().length, 18, "18 channel capabilities");
 
 // --- account readiness ------------------------------------------------------
 {
@@ -128,6 +134,16 @@ eq(allChannelCapabilities().length, 16, "16 channel capabilities");
 {
   const r = channelAccountReadiness({ capability: channelCapability("viewit"), accountStatus: "needs_payment" });
   eq(r.status, "needs_payment", "viewit needs_payment surfaces");
+}
+{
+  const r = channelAccountReadiness({ capability: channelCapability("spacelist") });
+  eq(r.status, "ready", "spacelist ready for posting assist");
+  eq(r.nextActionKind, "open_copilot", "spacelist open_copilot");
+}
+{
+  const r = channelAccountReadiness({ capability: channelCapability("costar_loopnet") });
+  eq(r.status, "ready", "costar_loopnet ready for posting assist");
+  eq(r.nextActionKind, "open_copilot", "costar_loopnet open_copilot");
 }
 {
   const r = channelAccountReadiness({ capability: channelCapability("realtor_ca") });

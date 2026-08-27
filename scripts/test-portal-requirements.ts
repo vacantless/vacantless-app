@@ -45,7 +45,7 @@ const requirementKeys = PORTAL_REQUIREMENTS.map((row) => row.channel);
 const requirementKeySet = new Set(requirementKeys);
 const channelKeys = DISTRIBUTION_CHANNELS.map((channel) => channel.key);
 
-ok("one requirements row per distribution channel", requirementKeys.length === 12);
+ok("one requirements row per distribution channel", requirementKeys.length === 14);
 ok("requirements rows have no duplicates", requirementKeySet.size === requirementKeys.length);
 for (const key of PORTAL_KEYS.filter((key) => key !== "other")) {
   ok(`requirements cover portal key ${key}`, requirementKeySet.has(key));
@@ -137,6 +137,30 @@ ok(
 ok("Viewit action plan requires payment", portalRequirementActionPlanFor("viewit")?.requiresPayment === true);
 ok("Viewit primary action is payment", portalRequirementActionPlanFor("viewit")?.primaryActionLabel === "Approve payment");
 
+const spacelist = portalRequirementsFor("spacelist");
+ok("SpaceList row resolves", spacelist?.label === "SpaceList.ca");
+ok("SpaceList is posting assist", spacelist?.automationMode === "posting_assist");
+ok("SpaceList is source verified today", spacelist?.verifiedOn === "2026-08-27");
+ok("SpaceList requires commercial use", requiredFieldsFor("spacelist").includes("commercial_use"));
+ok("SpaceList requires available area", requiredFieldsFor("spacelist").includes("available_area"));
+ok("SpaceList requires lease rate", requiredFieldsFor("spacelist").includes("lease_rate"));
+ok("SpaceList keeps Pro as explicit top-up", spacelist?.topUps.join(" ").includes("Pro") === true);
+ok("SpaceList primary action is posting assist", portalRequirementActionPlanFor("spacelist")?.primaryActionLabel === "Use posting assist");
+ok("SpaceList action plan requires account", portalRequirementActionPlanFor("spacelist")?.requiresAccount === true);
+
+const costarLoopnet = portalRequirementsFor("costar_loopnet");
+ok("CoStar / LoopNet row resolves", costarLoopnet?.label === "CoStar / LoopNet");
+ok("CoStar / LoopNet is top-up tier", costarLoopnet?.defaultTier === "top_up");
+ok("CoStar / LoopNet is source verified today", costarLoopnet?.verifiedOn === "2026-08-27");
+ok("CoStar / LoopNet requires asset type", requiredFieldsFor("costar_loopnet").includes("property_type"));
+ok("CoStar / LoopNet requires unit count", requiredFieldsFor("costar_loopnet").includes("unit_count"));
+ok("CoStar / LoopNet requires identity verification", requiredFieldsFor("costar_loopnet").includes("identity_verification"));
+ok("CoStar / LoopNet recommends payment review", recommendedFieldsFor("costar_loopnet").includes("payment"));
+ok("CoStar / LoopNet action plan surfaces payment exposure", portalRequirementActionPlanFor("costar_loopnet")?.requiresPayment === true);
+ok("CoStar / LoopNet primary action remains posting assist", portalRequirementActionPlanFor("costar_loopnet")?.primaryActionLabel === "Use posting assist");
+ok("CoStar / LoopNet source refs include LoopNet", costarLoopnet?.sourceRefs.some((ref) => ref.includes("loopnet.com")) === true);
+ok("CoStar / LoopNet source refs include multifamily", costarLoopnet?.sourceRefs.some((ref) => ref.includes("multifamily") || ref.includes("apartment-buildings")) === true);
+
 const realtor = portalRequirementsFor("realtor_ca");
 ok("Realtor.ca is broker tier", realtor?.defaultTier === "broker");
 ok("Realtor.ca requires broker route", requiredFieldsFor("realtor_ca").includes("broker_route"));
@@ -196,8 +220,17 @@ ok(
   portalPacket.proofRequiredChannels.length === 5,
 );
 
+const commercialPacket = buildOneListingPacketRequirements([
+  "spacelist",
+  "costar_loopnet",
+]);
+ok("commercial packet includes commercial use", commercialPacket.requiredListingFields.includes("commercial_use"));
+ok("commercial packet includes unit count", commercialPacket.requiredListingFields.includes("unit_count"));
+ok("commercial packet keeps payment as operator field", commercialPacket.operatorFields.includes("payment"));
+ok("commercial packet requires proof for both channels", commercialPacket.proofRequiredChannels.length === 2);
+
 const allPacket = buildOneListingPacketRequirements();
-ok("default packet covers every channel", allPacket.channels.length === 12);
+ok("default packet covers every channel", allPacket.channels.length === 14);
 ok("default packet includes broker proof gate", allPacket.operatorFields.includes("broker_route"));
 ok("default packet labels multiple source levels", allPacket.sourceLevels.length >= 3);
 

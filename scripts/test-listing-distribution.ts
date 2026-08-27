@@ -19,6 +19,8 @@ import {
   isWebUrl,
   isRealtorCaListingUrl,
   isRentFasterListingUrl,
+  isSpaceListListingUrl,
+  isCostarLoopNetListingUrl,
   validateListingPost,
   listingPostErrorMessage,
   reservableTrackerId,
@@ -37,7 +39,7 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- portals ---------------------------------------------------------------
-ok("PORTAL_KEYS has 13", PORTAL_KEYS.length === 13);
+ok("PORTAL_KEYS has 15", PORTAL_KEYS.length === 15);
 ok("PORTALS mirrors keys", PORTALS.length === PORTAL_KEYS.length);
 ok("PORTALS carries labels", PORTALS[0].label === "Kijiji");
 ok("isPortalKey: kijiji", isPortalKey("kijiji"));
@@ -50,6 +52,8 @@ ok("normalizePortal: non-string -> other", normalizePortal(null) === "other");
 ok("portalLabel: rentals_ca", portalLabel("rentals_ca") === "Rentals.ca");
 ok("portalLabel: rentfaster", portalLabel("rentfaster") === "RentFaster.ca");
 ok("portalLabel: zumper names PadMapper reach", portalLabel("zumper") === "Zumper + PadMapper");
+ok("portalLabel: spacelist", portalLabel("spacelist") === "SpaceList.ca");
+ok("portalLabel: costar_loopnet", portalLabel("costar_loopnet") === "CoStar / LoopNet");
 ok("portalLabel: facebook", portalLabel("facebook") === "Facebook Marketplace");
 ok("portalLabel: linkedin", portalLabel("linkedin") === "LinkedIn");
 ok("portalLabel: instagram", portalLabel("instagram") === "Instagram");
@@ -188,6 +192,30 @@ ok(
   !isRentFasterListingUrl("https://www.rentfaster.ca/prices/"),
 );
 ok(
+  "isSpaceListListingUrl: detail listing accepted",
+  isSpaceListListingUrl("https://www.spacelist.ca/listings/on/for-lease/123456"),
+);
+ok(
+  "isSpaceListListingUrl: search page rejected",
+  !isSpaceListListingUrl("https://www.spacelist.ca/listings/on/for-lease"),
+);
+ok(
+  "isSpaceListListingUrl: broker page rejected",
+  !isSpaceListListingUrl("https://www.spacelist.ca/brokers"),
+);
+ok(
+  "isCostarLoopNetListingUrl: LoopNet detail accepted",
+  isCostarLoopNetListingUrl("https://www.loopnet.com/Listing/123-Main-St-Windsor-ON/12345678/"),
+);
+ok(
+  "isCostarLoopNetListingUrl: LoopNet search rejected",
+  !isCostarLoopNetListingUrl("https://www.loopnet.com/search/commercial-real-estate/us/for-sale/"),
+);
+ok(
+  "isCostarLoopNetListingUrl: CoStar product page rejected",
+  !isCostarLoopNetListingUrl("https://www.costar.com/products/listings"),
+);
+ok(
   "isRentFasterListingUrl: wrong host rejected",
   !isRentFasterListingUrl("https://example.com/on/toronto/rentals/apartment/1"),
 );
@@ -253,6 +281,38 @@ ok(
     portal: "rentfaster",
     status: "live",
     url: "https://www.rentfaster.ca/on/toronto/rentals/apartment/1-bedroom/123-main-street/567890",
+  }).ok === true,
+);
+ok(
+  "validate: spacelist live requires detail URL",
+  validateListingPost({
+    portal: "spacelist",
+    status: "live",
+    url: "https://www.spacelist.ca/listings/on/for-lease",
+  }).ok === false,
+);
+ok(
+  "validate: spacelist detail URL ok",
+  validateListingPost({
+    portal: "spacelist",
+    status: "live",
+    url: "https://www.spacelist.ca/listings/on/for-lease/123456",
+  }).ok === true,
+);
+ok(
+  "validate: costar_loopnet live requires detail URL",
+  validateListingPost({
+    portal: "costar_loopnet",
+    status: "live",
+    url: "https://www.loopnet.com/solutions/",
+  }).ok === false,
+);
+ok(
+  "validate: costar_loopnet detail URL ok",
+  validateListingPost({
+    portal: "costar_loopnet",
+    status: "live",
+    url: "https://www.loopnet.com/Listing/123-Main-St-Windsor-ON/12345678/",
   }).ok === true,
 );
 const realtorWrongHost = validateListingPost({

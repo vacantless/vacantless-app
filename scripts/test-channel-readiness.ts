@@ -43,7 +43,7 @@ const full: ChannelReadinessInput = {
   parking_count: 1,
 };
 
-ok("channel list has all current display channels", CHANNEL_READINESS_CHANNELS.length === 14);
+ok("channel list has all current display channels", CHANNEL_READINESS_CHANNELS.length === 16);
 
 const fullByChannel = readinessByChannel(full);
 ok("vacantless ready", fullByChannel.vacantless_page.status === "ready");
@@ -54,6 +54,8 @@ ok("rentals.ca ready", fullByChannel.rentals_ca.status === "ready");
 ok("rentfaster ready", fullByChannel.rentfaster.status === "ready");
 ok("zumper ready", fullByChannel.zumper.status === "ready");
 ok("viewit ready", fullByChannel.viewit.status === "ready");
+ok("spacelist waits for commercial fields", fullByChannel.spacelist.status === "missing_required");
+ok("costar_loopnet waits for CRE or multifamily fields", fullByChannel.costar_loopnet.status === "missing_required");
 ok("facebook page ready", fullByChannel.facebook_page.status === "ready");
 ok("instagram ready", fullByChannel.instagram.status === "ready");
 ok("whatsapp ready", fullByChannel.whatsapp.status === "ready");
@@ -62,6 +64,23 @@ ok("snapchat ready", fullByChannel.snapchat.status === "ready");
 ok("mls advisory ready", fullByChannel.mls.status === "ready");
 ok("mls advisory flag", fullByChannel.mls.advisoryOnly === true);
 ok("mls has no required flags", fullByChannel.mls.missingRequired.length === 0);
+ok(
+  "spacelist names commercial-specific gaps",
+  ["Commercial use", "Available area", "Lease rate / price"].every((label) =>
+    fullByChannel.spacelist.missingRequired.includes(label),
+  ),
+);
+ok(
+  "costar_loopnet names CRE and multifamily-specific gaps",
+  [
+    "Commercial or 5+ multifamily asset type",
+    "Unit count",
+    "Available area",
+    "Lease rate / price",
+  ].every((label) =>
+    fullByChannel.costar_loopnet.missingRequired.includes(label),
+  ),
+);
 ok("kijiji has direct portal fallback", fullByChannel.kijiji.directPortalSupported === true);
 ok(
   "rentals.ca keeps portal-only choices",

@@ -121,6 +121,7 @@ const TOUR_FIELD_PORTALS: ReadonlySet<PortalKey> = new Set([
   "rentals_ca",
   "zumper",
   "viewit",
+  "spacelist",
 ]);
 
 // The field-id prefix each builder uses, so the inserted tour field keys match.
@@ -129,6 +130,7 @@ const PORTAL_FIELD_PREFIX: Partial<Record<PortalKey, string>> = {
   rentals_ca: "rentalsca",
   zumper: "zumper",
   viewit: "viewit",
+  spacelist: "spacelist",
 };
 
 // Portals we produce a sheet for — the guardrail/distribution taxonomy minus
@@ -145,6 +147,8 @@ export const FILL_SHEET_PORTALS: readonly PortalKey[] = [
   "rentfaster",
   "zumper",
   "viewit",
+  "spacelist",
+  "costar_loopnet",
   "realtor_ca",
 ];
 
@@ -1268,6 +1272,208 @@ function viewitFields(input: FillSheetInput, _title: string, body: string): Fill
   ];
 }
 
+function commercialAreaField(
+  input: FillSheetInput,
+): { value: string | null; source: FillFieldSource } {
+  const area = sqftField(input.features?.sqft);
+  return { value: area, source: area ? "listing" : "manual" };
+}
+
+function spaceListFields(input: FillSheetInput, title: string, body: string): FillField[] {
+  const area = commercialAreaField(input);
+  return [
+    {
+      id: "spacelist-transaction-type",
+      label: "Sale or lease",
+      value: "For Lease",
+      source: "preset",
+      hint: "Review this before publishing; commercial sale and lease use different packets.",
+      guardrailId: "spacelist-commercial-only",
+    },
+    {
+      id: "spacelist-property-use",
+      label: "Property use",
+      value: null,
+      source: "manual",
+      hint: "Choose Office, Retail, Industrial, Medical, Land, Multifamily, or the closest true commercial use.",
+      guardrailId: "spacelist-commercial-only",
+    },
+    {
+      id: "spacelist-address",
+      label: "Address",
+      value: textOrNull(input.address),
+      source: "listing",
+      hint: "Pick the SpaceList address match, then verify city/province and map placement.",
+    },
+    {
+      id: "spacelist-available-area",
+      label: "Available area",
+      value: area.value,
+      source: area.source,
+      hint: "Use the actual commercial rentable area. Do not invent square footage.",
+      guardrailId: "spacelist-commercial-economics",
+    },
+    {
+      id: "spacelist-lease-rate",
+      label: "Lease rate",
+      value: null,
+      source: "manual",
+      hint: "Enter the commercial rate exactly as approved, such as gross monthly, $/sq ft/year, or price on request.",
+      guardrailId: "spacelist-commercial-economics",
+    },
+    {
+      id: "spacelist-lease-type",
+      label: "Lease type / additional rent",
+      value: null,
+      source: "manual",
+      hint: "Confirm gross, net, NNN, TMI, CAM, utilities, and other recoveries before publishing.",
+      guardrailId: "spacelist-commercial-economics",
+    },
+    {
+      id: "spacelist-title",
+      label: "Listing title",
+      value: title,
+      source: "listing",
+    },
+    {
+      id: "spacelist-description",
+      label: "Description",
+      value: body,
+      source: "listing",
+      hint: "Review residential phrasing and replace it with commercial-use language where needed.",
+      guardrailId: "spacelist-commercial-economics",
+    },
+    {
+      id: "spacelist-photos",
+      label: "Photos and floorplans",
+      value: null,
+      source: "manual",
+      hint: "Upload exterior, interior, storefront/building context, and floorplan images where available.",
+      guardrailId: "universal-exterior-photo",
+    },
+    {
+      id: "spacelist-contact-email",
+      label: "Contact email",
+      value: textOrNull(input.leadContactEmail),
+      source: "listing",
+    },
+    {
+      id: "spacelist-contact-phone",
+      label: "Contact phone",
+      value: textOrNull(input.leadContactPhone),
+      source: "listing",
+    },
+    {
+      id: "spacelist-live-url",
+      label: "Live listing URL",
+      value: null,
+      source: "manual",
+      hint: "After publishing, open the public listing detail and save its URL as proof.",
+      guardrailId: "spacelist-proof-capture",
+    },
+  ];
+}
+
+function costarLoopnetFields(input: FillSheetInput, title: string, body: string): FillField[] {
+  const area = commercialAreaField(input);
+  return [
+    {
+      id: "costar-loopnet-account",
+      label: "Account / representative",
+      value: null,
+      source: "manual",
+      hint: "Use only an owner, broker, property manager, developer, or authorized representative account.",
+      guardrailId: "costar-loopnet-authorized-rep",
+    },
+    {
+      id: "costar-loopnet-transaction-type",
+      label: "Sale or lease",
+      value: "For Lease",
+      source: "preset",
+      hint: "Review before publishing; sale, lease, business-sale, and multifamily investment packages differ.",
+      guardrailId: "costar-loopnet-one-channel",
+    },
+    {
+      id: "costar-loopnet-property-use",
+      label: "Property use / asset type",
+      value: null,
+      source: "manual",
+      hint: "Choose the true CRE type or 5+ multifamily/multiplex investment asset type; do not reuse a single-unit residential guess.",
+      guardrailId: "costar-loopnet-one-channel",
+    },
+    {
+      id: "costar-loopnet-unit-count",
+      label: "Unit count",
+      value: null,
+      source: "manual",
+      hint: "For multifamily/multiplex inventory, confirm it is 5+ units before treating this as a CoStar/LoopNet candidate.",
+      guardrailId: "costar-loopnet-one-channel",
+    },
+    {
+      id: "costar-loopnet-address",
+      label: "Address",
+      value: textOrNull(input.address),
+      source: "listing",
+      hint: "Confirm ownership/authorization and map placement before continuing.",
+      guardrailId: "costar-loopnet-authorized-rep",
+    },
+    {
+      id: "costar-loopnet-available-area",
+      label: "Available area",
+      value: area.value,
+      source: area.source,
+      hint: "Use the actual rentable or sale area. Do not invent square footage.",
+      guardrailId: "costar-loopnet-one-channel",
+    },
+    {
+      id: "costar-loopnet-lease-rate",
+      label: "Lease rate / price",
+      value: null,
+      source: "manual",
+      hint: "Confirm the approved commercial rate, sale price, or price-on-request language before entering it.",
+      guardrailId: "costar-loopnet-payment-stop",
+    },
+    {
+      id: "costar-loopnet-title",
+      label: "Listing title",
+      value: title,
+      source: "listing",
+    },
+    {
+      id: "costar-loopnet-description",
+      label: "Description",
+      value: body,
+      source: "listing",
+      hint: "Replace single-unit residential phrasing with CRE or multifamily investment details before any post.",
+      guardrailId: "costar-loopnet-one-channel",
+    },
+    {
+      id: "costar-loopnet-media",
+      label: "Photos, floorplans, and tour",
+      value: null,
+      source: "manual",
+      hint: "Upload only approved CRE or multifamily media, brochures, rent rolls, floorplans, and tours.",
+      guardrailId: "universal-exterior-photo",
+    },
+    {
+      id: "costar-loopnet-payment",
+      label: "Payment / package",
+      value: null,
+      source: "manual",
+      hint: "Stop for explicit approval before any paid package, subscription, or marketing placement.",
+      guardrailId: "costar-loopnet-payment-stop",
+    },
+    {
+      id: "costar-loopnet-live-url",
+      label: "Live listing URL",
+      value: null,
+      source: "manual",
+      hint: "Save a real public listing detail URL after proof exists.",
+      guardrailId: "costar-loopnet-proof-capture",
+    },
+  ];
+}
+
 function realtorCaFields(): FillField[] {
   return [
     {
@@ -1297,6 +1503,8 @@ const FIELD_BUILDERS: Record<
   rentfaster: rentFasterFields,
   zumper: zumperFields,
   viewit: viewitFields,
+  spacelist: spaceListFields,
+  costar_loopnet: costarLoopnetFields,
   realtor_ca: () => realtorCaFields(),
   other: () => [],
 };

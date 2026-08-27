@@ -90,6 +90,16 @@ export function leadSourceLabelForReferrerHost(host: unknown): string | null {
   }
   if (normalized === "zumper.com") return sourceLabelForPost({ portal: "zumper" });
   if (normalized === "viewit.ca") return sourceLabelForPost({ portal: "viewit" });
+  if (normalized === "spacelist.ca") {
+    return sourceLabelForPost({ portal: "spacelist" });
+  }
+  if (
+    normalized === "loopnet.com" ||
+    normalized === "costar.com" ||
+    normalized === "showcase.com"
+  ) {
+    return sourceLabelForPost({ portal: "costar_loopnet" });
+  }
   if (normalized === "instagram.com") {
     return sourceLabelForPost({ portal: "instagram" });
   }
@@ -129,6 +139,16 @@ export function leadSourceLabelForUtmSource(source: unknown): string | null {
     case "viewit":
     case "viewit.ca":
       return sourceLabelForPost({ portal: "viewit" });
+    case "spacelist":
+    case "spacelist.ca":
+      return sourceLabelForPost({ portal: "spacelist" });
+    case "costar":
+    case "costar.com":
+    case "loopnet":
+    case "loopnet.com":
+    case "showcase":
+    case "showcase.com":
+      return sourceLabelForPost({ portal: "costar_loopnet" });
     case "instagram":
     case "instagram.com":
       return sourceLabelForPost({ portal: "instagram" });

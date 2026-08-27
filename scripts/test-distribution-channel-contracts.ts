@@ -272,6 +272,31 @@ for (const channel of ["whatsapp", "linkedin", "snapchat"] as const) {
       .state === "planned",
   );
 }
+{
+  const spacelist = distributionChannelContract("spacelist");
+  ok("SpaceList stays planned", resolveDistributionLaunchReadiness(spacelist).state === "planned");
+  ok("SpaceList proof is external URL", spacelist.proofKind === "external_url");
+  ok("SpaceList takedown is operator task", spacelist.takedownKind === "operator_task");
+}
+{
+  const costarLoopnet = distributionChannelContract("costar_loopnet");
+  ok(
+    "CoStar / LoopNet stays planned",
+    resolveDistributionLaunchReadiness(costarLoopnet).state === "planned",
+  );
+  ok(
+    "CoStar / LoopNet carries optional paid exposure",
+    costarLoopnet.spendKind === "paid_pass_through_optional",
+  );
+  ok(
+    "CoStar / LoopNet takedown is operator task",
+    costarLoopnet.takedownKind === "operator_task",
+  );
+  ok(
+    "CoStar / LoopNet note names multifamily lane",
+    /5\+ multifamily/.test(costarLoopnet.note),
+  );
+}
 
 // --- keep-live/reminders ---------------------------------------------------
 ok(

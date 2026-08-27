@@ -37,7 +37,7 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- matrix ----------------------------------------------------------------
-ok("12 channels in the matrix", DISTRIBUTION_CHANNELS.length === 12);
+ok("14 channels in the matrix", DISTRIBUTION_CHANNELS.length === 14);
 ok(
   "matrix excludes 'other'",
   !DISTRIBUTION_CHANNELS.some((c) => (c.key as string) === "other"),
@@ -58,6 +58,8 @@ const expectedDisplayOrder = [
   "rentfaster",
   "zumper",
   "viewit",
+  "spacelist",
+  "costar_loopnet",
   "realtor_ca",
   "facebook_feed",
   "instagram",
@@ -99,7 +101,7 @@ ok(
   "listing sites group order",
   displayGroups[0]?.group.title === "Listing sites" &&
     displayGroups[0]?.channels.map((channel) => channel.key).join("|") ===
-      "kijiji|facebook|rentals_ca|rentfaster|zumper|viewit|realtor_ca",
+      "kijiji|facebook|rentals_ca|rentfaster|zumper|viewit|spacelist|costar_loopnet|realtor_ca",
 );
 ok(
   "share and social group order",
@@ -156,7 +158,16 @@ ok(
 );
 ok(
   "planned split stays dark for non-integrated targets",
-  sameKeys(plannedKeys, ["facebook", "linkedin", "rentfaster", "snapchat", "viewit", "whatsapp"]),
+  sameKeys(plannedKeys, [
+    "costar_loopnet",
+    "facebook",
+    "linkedin",
+    "rentfaster",
+    "snapchat",
+    "spacelist",
+    "viewit",
+    "whatsapp",
+  ]),
 );
 ok("mls gated split is Realtor.ca only", sameKeys(mlsGatedKeys, ["realtor_ca"]));
 
@@ -225,10 +236,25 @@ ok("kijiji TTL is 60 days", channelByKey("kijiji")?.ttlDays === 60);
 ok("kijiji is free", channelByKey("kijiji")?.paid === false);
 ok("rentfaster is paid", channelByKey("rentfaster")?.paid === true);
 ok("viewit is paid", channelByKey("viewit")?.paid === true);
+ok("spacelist is commercial-only planned assist", channelByKey("spacelist")?.integrationStatus === "planned" && channelByKey("spacelist")?.paid === false);
+ok("spacelist has no residential copy profile", channelByKey("spacelist")?.copyKey === null);
+ok("costar_loopnet is paid-exposure planned assist", channelByKey("costar_loopnet")?.integrationStatus === "planned" && channelByKey("costar_loopnet")?.paid === true);
+ok("costar_loopnet has no residential copy profile", channelByKey("costar_loopnet")?.copyKey === null);
+ok("costar_loopnet names 5+ multifamily inventory", /5\+ multifamily/.test(channelByKey("costar_loopnet")?.blurb ?? ""));
 ok(
   "facebook is explicit Get online posting assist",
   getOnlineAssistKindForChannel(channelByKey("facebook")!) ===
     "posting_assist",
+);
+ok(
+  "spacelist is explicit Get online posting assist",
+  getOnlineAssistKindForChannel(channelByKey("spacelist")!) ===
+    "posting_assist",
+);
+ok(
+  "costar_loopnet is explicit paid Get online posting assist",
+  getOnlineAssistKindForChannel(channelByKey("costar_loopnet")!) ===
+    "paid_posting_assist",
 );
 ok(
   "rentfaster is explicit paid Get online posting assist",

@@ -8,7 +8,12 @@ import {
   severityLabel,
   type Guardrail,
 } from "../lib/listing-guardrails";
-import { PORTAL_KEYS, isRentFasterListingUrl } from "../lib/listing-distribution";
+import {
+  PORTAL_KEYS,
+  isCostarLoopNetListingUrl,
+  isRentFasterListingUrl,
+  isSpaceListListingUrl,
+} from "../lib/listing-distribution";
 
 let passed = 0;
 let failed = 0;
@@ -142,6 +147,42 @@ const viewit = guardrailsForPortal("viewit");
 ok(
   "viewit: paid warning present + critical",
   viewit.some((g) => g.id === "viewit-paid-not-free" && g.severity === "critical"),
+);
+
+const spacelist = guardrailsForPortal("spacelist");
+ok(
+  "spacelist: commercial-only guardrail present + critical",
+  spacelist.some((g) => g.id === "spacelist-commercial-only" && g.severity === "critical"),
+);
+ok(
+  "spacelist URL guard accepts listing detail",
+  isSpaceListListingUrl("https://www.spacelist.ca/listings/on/for-lease/123456"),
+);
+ok(
+  "spacelist URL guard rejects search page",
+  !isSpaceListListingUrl("https://www.spacelist.ca/listings/on/for-lease"),
+);
+
+const costarLoopnet = guardrailsForPortal("costar_loopnet");
+ok(
+  "costar_loopnet: payment stop present + critical",
+  costarLoopnet.some((g) => g.id === "costar-loopnet-payment-stop" && g.severity === "critical"),
+);
+ok(
+  "costar_loopnet: authorized rep guardrail present + critical",
+  costarLoopnet.some((g) => g.id === "costar-loopnet-authorized-rep" && g.severity === "critical"),
+);
+ok(
+  "costar_loopnet: multifamily eligibility is named",
+  costarLoopnet.some((g) => g.id === "costar-loopnet-one-channel" && /5\+ multifamily/.test(g.detail)),
+);
+ok(
+  "costar_loopnet URL guard accepts LoopNet detail",
+  isCostarLoopNetListingUrl("https://www.loopnet.com/Listing/123-Main-St-Windsor-ON/12345678/"),
+);
+ok(
+  "costar_loopnet URL guard rejects solutions page",
+  !isCostarLoopNetListingUrl("https://www.loopnet.com/solutions/"),
 );
 
 // realtor_ca + other have no money-trap criticals (only universal warnings/tips)
