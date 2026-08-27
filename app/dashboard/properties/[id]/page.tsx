@@ -53,6 +53,10 @@ import {
   type ListingPacketFieldFacts,
   type ListingPacketMissingField,
 } from "@/lib/listing-packet-readiness";
+import {
+  portalRequirementsFor,
+  type PortalRequirementChannelKey,
+} from "@/lib/portal-requirements";
 import { MIN_DESCRIPTION_CHARS } from "@/lib/listing-feed";
 import { feedSignal } from "@/lib/rental-readiness";
 import {
@@ -268,6 +272,12 @@ function packetHasText(value: unknown): boolean {
 
 function packetHasPositiveNumber(value: number | null | undefined): boolean {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function isPortalRequirementChannelKey(
+  channel: string,
+): channel is PortalRequirementChannelKey {
+  return portalRequirementsFor(channel) != null;
 }
 
 const DETAIL_TAB_IDS = [
@@ -1937,9 +1947,14 @@ export default async function PropertyDetailPage({
       { category: channel.category, displayOrder },
     ]),
   );
-  const publishStartChannels = publishChannelChoices({
+  const publishChannelMetas = publishChannelChoices({
     includeNetworkFeed: networkFeedEnabled,
-  }).map((meta) => {
+  });
+  const defaultLaunchPortalChannels = publishChannelMetas
+    .filter((meta) => meta.defaultSelected)
+    .map((meta) => meta.key)
+    .filter(isPortalRequirementChannelKey);
+  const publishStartChannels = publishChannelMetas.map((meta) => {
     const plan = preparePublishChannel(
       meta.key,
       publishContextForChannel(meta.key),
@@ -2552,8 +2567,17 @@ export default async function PropertyDetailPage({
     post_caption: packetHasText(p.description) || packetHasText(p.address),
     tracked_link: linkIsLive,
   };
+  const activeLaunchPortalChannels = activeRun
+    ? runItems
+        .map((item) => item.channel)
+        .filter(isPortalRequirementChannelKey)
+    : [];
+  const listingPacketChannels =
+    activeLaunchPortalChannels.length > 0
+      ? activeLaunchPortalChannels
+      : defaultLaunchPortalChannels;
   const listingPacketReadiness = buildListingPacketReadiness({
-    channels: DISTRIBUTION_CHANNELS.map((channel) => channel.key),
+    channels: listingPacketChannels,
     fieldFacts: listingPacketFacts,
   });
   // --- Listing quality (S412 Slice 5) -------------------------------------

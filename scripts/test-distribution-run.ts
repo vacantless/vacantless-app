@@ -524,6 +524,17 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       propertyDetailSource.includes("lifecycleSummary: lifecycle.detail"),
   );
   ok(
+    "property page scopes packet blockers to active or default launch portals",
+    propertyDetailSource.includes("const defaultLaunchPortalChannels") &&
+      propertyDetailSource.includes(".filter((meta) => meta.defaultSelected)") &&
+      propertyDetailSource.includes("const activeLaunchPortalChannels") &&
+      propertyDetailSource.includes("const listingPacketChannels") &&
+      propertyDetailSource.includes("channels: listingPacketChannels") &&
+      !propertyDetailSource.includes(
+        "channels: DISTRIBUTION_CHANNELS.map((channel) => channel.key)",
+      ),
+  );
+  ok(
     "property page derives expiry and takedown attention from run item state",
     propertyDetailSource.includes("distributionLifecycleAttention") &&
       propertyDetailSource.includes("external_expires_at") &&
