@@ -22,7 +22,9 @@ import type {
 // The six per-org publish modes.
 export const PUBLISH_MODES = [
   "instant_auto", // fires on click, hands-off (page/email, authorized API, accepted feed)
-  "copilot_fill", // one-click in-session fill; landlord signs in + posts (Kijiji/Marketplace)
+  "copilot_fill", // one-click in-session fill; landlord signs in + posts (Kijiji/Marketplace).
+  // S304: for Kijiji this is one of TWO paths, not the only one - a headless
+  // worker lane exists but is gated (stored session + approval + spend).
   "paid_optin", // copilot_fill + a listing fee paid direct to the site (Viewit/RentFaster)
   "needs_connection", // available, org hasn't connected/authorized/accepted yet
   "brokerage_gated", // via the landlord's agent (Realtor.ca)

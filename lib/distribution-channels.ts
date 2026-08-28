@@ -12,10 +12,23 @@
 // blocker list from the data that already exists. NO new integrations, NO new
 // tables — static config + a pure reducer over listing_posts + share-readiness.
 //
-// Honesty rules carried from the plan: we never claim automated posting for
-// Facebook/Kijiji (assisted-manual only), and "feed_or_assisted" means the org
-// XML feed is a CANDIDATE route, not a proven partner acceptance (that is a
-// later slice). Keep wording precise; do not overpromise.
+// Honesty rules carried from the plan. UPDATED S304: the blanket "no automated
+// posting for Facebook/Kijiji" line was true when written and is now HALF wrong.
+//  - Facebook MARKETPLACE is still assisted-manual. Unchanged.
+//  - KIJIJI has a headless worker lane (worker src/phase-b-submit.ts, mapping
+//    validated 2026-07-23, and lib/distribution-channel-contracts.ts marks it
+//    executionKind "headless_worker"). It is NOT yet rolled out: rolloutState is
+//    "source_built", it needs a stored session plus operator approval, and its
+//    spendKind is "paid_pass_through_required" while spend_authorized is false
+//    for every org. So do not claim hands-off posting either. Say worker-backed
+//    AND gated.
+// "feed_or_assisted" still means the org XML feed is a CANDIDATE route, not a
+// proven partner acceptance. Keep wording precise; do not overpromise.
+//
+// KNOWN MODELLING GAP (S304): the `mode` union below has no value for a worker
+// lane, so this catalog cannot express Kijiji's real state. Adding one changes
+// behaviour, not just copy, so it is a separate gate. Until then the contract
+// layer is the source of truth for execution kind and this file carries copy.
 // ============================================================================
 
 import type { PortalKey } from "./listing-distribution";
@@ -26,7 +39,9 @@ import type { ListingPostStatus } from "./listing-distribution";
 // How Vacantless can help on this channel today. Precise, non-overpromising:
 //  - assisted_manual: no supported feed/API for long-term rentals; Vacantless
 //    generates copy + a fill sheet + guardrails and tracks the live URL. A human
-//    posts. (Facebook, Kijiji, Viewit.)
+//    posts. (Facebook Marketplace, Viewit.) NOTE S304: Kijiji still carries this
+//    mode because the union has no worker value, but it ALSO has a headless
+//    worker lane. See the modelling-gap note above before trusting this field.
 //  - feed_or_assisted: the channel accepts structured listings and is a feed
 //    CANDIDATE (Vacantless has an XML feed), but until a partner route is proven
 //    it still needs posting assist. (Rentals.ca, Zumper.)
@@ -139,7 +154,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "account_login",
     mode: "assisted_manual",
     blurb:
-      "Vacantless gives you the title, description, field sheet, and Kijiji reminders. You post on Kijiji, then paste the live ad link back here.",
+      "Two ways in. Today: Vacantless gives you the title, description, field sheet and reminders, you post on Kijiji and paste the live ad link back. Coming: an automated Kijiji lane that is already built but still gated on a saved Kijiji session, your approval, and spend authorization before it can post for you.",
     copyKey: "kijiji",
     hasFillSheet: true,
     hasGuardrails: true,
