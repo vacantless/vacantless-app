@@ -179,3 +179,166 @@ nothing and spends the credibility the rule was written to protect.
 Units 3 and 33 are getting clicks that do not convert, or no clicks at all. Those
 imply opposite fixes. Price is the leading hypothesis on the lead evidence, but it
 is a hypothesis, not a measurement.
+
+---
+
+# RE-CHECK RESULT - 2026-08-22 (S672, scheduled follow-up, DAY 5)
+
+_Written by the scheduled cloud run that fired 2026-08-22 12:02 UTC. It labelled itself S671; that
+is wrong and is corrected here, because S671 is already the branch and commit name of the publish
+control room built inside Session 670. The session numbering goes 670 -> 672._
+
+_Read 2026-08-22 12:02 UTC / 08:02 EDT. `date -u` and `TZ=America/Toronto date` both run before any
+day arithmetic. All figures are Supabase reads on project `nvhvdyxpyogvadpjlvij` with
+`organizations.name` joined, so the Growth Test duplicate Unit 3 (`5a1e0c7d`) is excluded from every
+row below. No ad was posted, edited or deleted. No lead was worked. Unit 32 left paused._
+
+## HEADLINE: the S668 confounder has dissolved. Unit 20 recovered. Units 3 and 33 did not.
+
+**Unit 20 took 2 leads on 2026-08-21** (Toronto local), most recently `2026-08-21 20:45:23 UTC`.
+Its lifetime count moved 82 -> 84. Its zero-run therefore ran 2026-08-19 to 2026-08-20 and ended:
+**two days, not three.** That is exactly the length of its two prior zero-runs in the window
+(8/12-8/13 and 8/5-8/6), so it was ordinary variance, not an outage.
+
+**This retires the building-level distribution hypothesis that S668 raised.** A $1,195 ad at 833
+Pillette converted inside the same window in which the $1,225 and $1,275 ads at the same address,
+from the same seller account, took nothing. The address is demonstrably not throttled wholesale.
+The variable that separates the converting unit from the two silent ones is price.
+
+## ANSWER TO THE ASSIGNED QUESTION, stated explicitly
+
+Both facts still hold for **833 Pillette Unit 3** and **833 Pillette Unit 33**:
+
+- **Still zero EVER.** `max(leads.created_at)` is `null` for both. Not "none recently". No lead has
+  ever been recorded against either property_id.
+- **Still zero SINCE BASELINE.** Zero since the 2026-08-19 07:45 UTC freeze, zero since the S668
+  read at 2026-08-21 12:01 UTC, and zero since the 2026-08-21 14:24 UTC snapshot in the task brief.
+
+## Lead counts, 2026-08-22 12:02 UTC
+
+| Unit | Rent | Status | Lifetime | 7d | vs 8/21 14:24 snapshot | Last lead |
+|---|---|---|---|---|---|---|
+| 1551 Assumption D | $995 | available | **25** (was 19) | 25 | **+6** | 2026-08-22 01:59 UTC |
+| 833 Pillette 20 | $1,195 | available | **84** (was 83) | 8 | **+1** | 2026-08-21 20:45 UTC |
+| 833 Pillette 33 | $1,225 | available | **0** | 0 | 0 | **never** |
+| 833 Pillette 3 | $1,275 | available | **0** | 0 | 0 | **never** |
+
+All four are `available`, none archived (`archived_at` null on all four), all four still carry a
+`live` facebook `listing_posts` row. Per S670, `live` here means an operator said so; nothing probed
+the portal this run, so treat those rows as unverified up.
+
+Daily, last 14 days, Toronto dates:
+
+| Day | Unit 20 ($1,195) | Assumption D ($995) | Unit 33 ($1,225) | Unit 3 ($1,275) |
+|---|---|---|---|---|
+| 2026-08-14 | 5 | 0 | 0 | 0 |
+| 2026-08-15 | 1 | 0 | 0 | 0 |
+| 2026-08-16 | 0 | 0 | 0 | 0 |
+| 2026-08-17 | 1 | 1 | 0 | 0 |
+| 2026-08-18 | 4 | 4 | 0 | 0 |
+| 2026-08-19 | 0 | 5 | 0 | 0 |
+| 2026-08-20 | 0 | 7 | 0 | 0 |
+| 2026-08-21 | **2** | 8 | 0 | 0 |
+| 2026-08-22 (part) | 0 | 0 | 0 | 0 |
+
+Unit 3 and Unit 33 columns are zero for every day they have existed and for every day before.
+
+## DAY COUNT: the 5-full-day threshold is reached today
+
+Unit 3 posted **2026-08-17**. As of **2026-08-22** that is **5 full days elapsed**, which is the
+threshold the S667 rule names and the date S668 predicted. Unit 33 posted 2026-08-18 and is at
+**4 full days**, so it has not independently cleared the bar; it is included below as corroboration,
+not as its own trigger.
+
+## STEP 2 BLOCKER: Facebook click data NOT obtained, and not obtainable from here
+
+This run executed as a **cloud scheduled task**. There is no bridge to Noam's Mac: no
+`mcp__remote-devices__*` tools are present in this session, so Claude in Chrome, `device_bash` and
+any authenticated Facebook session are unreachable. This is the documented behaviour of scheduled
+cloud runs, not an outage, so no retry was attempted.
+
+**`facebook.com/marketplace/you/insights` was therefore not loaded at all this run.** Recording that
+precisely: the 2026-08-21 Page-context redirect was **not** reproduced or re-observed today, because
+no browser was reachable to reproduce it with. Do not read this entry as a second sighting of that
+blocker.
+
+**No click number is estimated, inferred or carried forward.** Per-listing 7-day clicks for
+`2351921432302721` (Unit 3) and `1384693680275876` (Unit 33) remain **UNKNOWN**. Reach for those two
+ads has never been confirmed, on any date, by any run.
+
+## DECISION: threshold met on days and on lead data. Pricing note DRAFTED and shown to Noam. NOT sent.
+
+The S667 rule attaches "with confirmed reach" to the 5-day count, and reach is still unconfirmed. The
+task brief for this run resolves that tension explicitly: draft the note anyway, framed as a **price
+hypothesis** and not as proven click-through data, and state inside the note that Marketplace click
+data could not be read. That is what was done. The draft is in
+`claude/DRAFT-NARAYAN-PILLETTE-PRICE-HYPOTHESIS-S672.md`.
+
+**The note was shown to Noam and NOT sent.** Narayan confirmed all four rents in writing on
+2026-08-18; the send decision is Noam's.
+
+Evidence the draft rests on, all of it now stronger than at S668:
+
+1. **Same-day, same-channel, same-seller control.** Assumption D ($995) and Unit 3 ($1,275) both
+   posted 2026-08-17. In 5 days Assumption D took **25** leads. Unit 3 took **0**.
+2. **Within-building comparison, address and seller held constant.** At 833 Pillette, $1,195
+   (Unit 20) is still converting, 84 lifetime and 8 in the last 7 days including 2 yesterday, while
+   $1,225 (Unit 33) and $1,275 (Unit 3) sit at zero lifetime.
+3. **The S668 counter-hypothesis is dead.** Unit 20's silence was a 2-day run inside its own normal
+   range, and it ended on 8/21. There is no building-level suppression to blame.
+
+**The break appears to sit between $1,195 and $1,225.** That is a hypothesis from lead data. It is
+not a measured click-through rate and it must not be presented as one.
+
+## What remains unknowable without Noam's computer
+
+Whether Units 3 and 33 are getting clicks that fail to convert, or getting no clicks at all. That is
+still the original S667 question and it is still open. It changes the remedy: clicks without leads
+means price or creative, no clicks means distribution. The lead-side evidence now leans price, but
+leaning is not measuring. Getting the number needs a **local** scheduled task or an attended session
+on Noam's Mac, targeting per-listing 7-day clicks for `2351921432302721` and `1384693680275876`,
+plus a same-sitting re-read of `1535405094643346` so the three are same-day comparable.
+
+_Constraints honoured this run: no ad posted, edited or deleted; no leads worked (Aaliyah's lane);
+no Facebook account context changed and no attempt to; no Kijiji theory re-derived; Unit 32 left
+paused; ImprovMX and memory drift untouched; org confirmed as Agile Real Estate Group on every
+property read; no git writes; no click figure guessed._
+
+## PROCESS DEFECT FOUND BY THIS RUN, and it is structural, not a lapse
+
+RULE ZERO ordered this run to append to the Mac path
+`.../vacantless-app/claude/BASELINE-AGILE-LISTING-PERFORMANCE-S667.md`. **A cloud scheduled run
+cannot reach that path**, because scheduled sessions carry no `mcp__remote-devices__*` tools. The
+run correctly wrote to the project-hosted mirror instead and said so. S672 then copied it here by
+hand, which is what you are reading.
+
+**So the 2026-08-21 silence was probably never a discipline problem either.** That run hit the same
+unreachable path. Writing RULE ZERO harder was the wrong fix; naming a reachable target is the right
+one. Any future scheduled re-check must be told to write to the PROJECT copy, with a human or an
+attended session syncing it into the repo afterwards.
+
+---
+
+# LANE CLOSED - 2026-08-22 (S672)
+
+**Noam's decision, 2026-08-22: pricing at 833 Pillette is Narayan's and Aaliyah's, not this
+project's.** That closes this baseline as an action thread. It stays as the record of what the
+lead data showed and how it was reasoned about.
+
+Consequences, so no future session re-opens it by accident:
+
+- **The Narayan note was never sent and is not to be sent.** It is at
+  `claude/DRAFT-NARAYAN-PILLETTE-PRICE-HYPOTHESIS-S672.md`, marked NOT SENT and LANE CLOSED.
+  Do not redraft it, do not offer to send it, do not raise Unit 3 or Unit 33 pricing with Narayan.
+- **No successor re-check is scheduled and none should be.** Both zero-lead tasks
+  (`trig_01N9qXeXaas23L1FbV1tmQxD`, `trig_01TvX6DP3bFqMUraTYGWkgyb`) were one-shots and have both
+  fired and ended. Nothing is armed. Do not arm anything new.
+- **The open Facebook click-data question is now academic for pricing purposes.** It stays open
+  only as the separate Page-context blocker in
+  `claude/OPEN-ITEM-FACEBOOK-PAGE-CONTEXT-BLOCKS-MARKETPLACE-S670.md`, which is a measurement
+  capability gap worth fixing on its own merits, not a pricing input.
+- **The lead figures above remain valid as of 2026-08-22 12:02 UTC** and are fine to cite as
+  history. They are not a mandate to act.
+
+What this project still owns at 833 Pillette: that the ads are actually up, that the app does not
+claim `live` without proof, and that inquiries reach Aaliyah. Not what the rent should be.
