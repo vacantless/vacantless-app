@@ -548,7 +548,7 @@ async function runLandlordCampaign(
   if (testMode) {
     const { data: testOrgData, error: testOrgErr } = await admin
       .from("organizations")
-      .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, booking_timezone, plan, created_at, landlord_campaign_step_sent, landlord_campaign_last_sent_at, landlord_campaign_opted_out, landlord_campaign_email")
+      .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, booking_timezone, plan, created_at, landlord_campaign_step_sent, landlord_campaign_last_sent_at, landlord_campaign_opted_out")
       .eq("id", testOrg);
 
     if (testOrgErr) {
