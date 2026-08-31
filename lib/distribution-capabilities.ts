@@ -91,6 +91,7 @@ const CHANNEL_CAPABILITIES: Record<PublishChannelKey, ChannelCapability> = {
     supportsCopilot: true,
     supportsConcierge: true,
     requiresLogin: true,
+    requiresPayment: true,
     postingPolicy: "human_confirmed",
   }),
   linkedin: CAP("linkedin", "browser_copilot", {

@@ -72,7 +72,7 @@ eq(kj.requiresLiveUrlToComplete, true, "kijiji requires live url to complete");
 ok(kj.stopGates.includes("login"), "kijiji stop gate: login");
 ok(kj.stopGates.includes("captcha"), "kijiji stop gate: captcha");
 ok(kj.stopGates.includes("final_review"), "kijiji stop gate: final_review");
-ok(!kj.stopGates.includes("payment"), "kijiji has NO payment gate");
+ok(kj.stopGates.includes("payment"), "kijiji stop gate: payment");
 ok(kj.fields.some((f) => f.key === "title" && f.value.length > 0), "kijiji has a non-empty title field");
 ok(kj.fields.some((f) => f.key === "body" && f.value.includes(TRACKED)), "kijiji body carries the tracked link");
 ok(kj.fields.some((f) => f.key === "price" && f.value === "$2,200/month"), "kijiji price field = formatted rent");
@@ -80,7 +80,7 @@ ok(kj.fields.some((f) => f.key === "address" && f.value === BASE.address), "kiji
 ok(kj.fields.some((f) => f.key === "tracked_link" && f.value === TRACKED), "kijiji tracked_link field");
 ok(kj.steps.some((s) => s.stopGate === "login"), "kijiji has a login stop-gate step");
 ok(kj.steps.some((s) => s.stopGate === "final_review"), "kijiji has a final_review stop-gate step");
-ok(!kj.steps.some((s) => s.stopGate === "payment"), "kijiji has NO payment stop-gate step");
+ok(kj.steps.some((s) => s.stopGate === "payment"), "kijiji has a payment stop-gate step");
 ok(kj.steps.some((s) => s.key === "paste_url"), "kijiji has a paste_url step");
 ok(kj.steps[0].key === "open", "kijiji first step opens the portal");
 ok(kj.honesty.some((h) => h.includes("marked live") && h.includes("proof")), "kijiji honesty: never live without proof");
