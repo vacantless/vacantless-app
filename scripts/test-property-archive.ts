@@ -48,8 +48,21 @@ const tenancyActionsSource = readFileSync(
 );
 
 ok(
-  "public /r visibility still hides draft and off-market",
-  /return status !== "draft" && status !== "off_market";/.test(listingStateSource),
+  // Migration 0223 (S672): off-market now LOADS and renders the "no longer
+  // available" page with the org's open units, so a link already shared for an
+  // archived unit keeps working. Only a draft still 404s.
+  "public /r visibility hides draft and ONLY draft",
+  /return status !== "draft";\n\}/.test(listingStateSource),
+);
+ok(
+  "public /r visibility no longer hides off-market",
+  !/status !== "draft" && status !== "off_market"/.test(listingStateSource),
+);
+ok(
+  "the off-market help string no longer promises a not-found page",
+  !/off_market: "Retired\. The public link returns not-found\."/.test(
+    listingStateSource,
+  ),
 );
 ok(
   "feed still only lists available rentals",

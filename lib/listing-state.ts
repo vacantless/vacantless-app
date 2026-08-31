@@ -11,14 +11,16 @@
 //   paused      → temporarily not accepting; the /r page LOADS but shows the
 //                 unit as not currently available (a shared link stays valid)
 //   leased      → rented; the /r page LOADS and says it's no longer available
-//   off_market  → retired/hidden; PRIVATE (the public /r link 404s)
+//   off_market  → retired/hidden, but the public /r link STILL LOADS and shows
+//                 the "no longer available" page with the org's open units
+//                 (migration 0223). Only draft 404s.
 //
 // PUBLIC CONTRACT — these predicates MUST stay in lockstep with migration 0020
 // and the S193/0018 gate:
 //   bookable / accepts inquiries  : status === 'available'   ← whitelist gate
 //                                   (get_public_availability / submit_public_lead
 //                                    / book_public_showing all require it)
-//   publicly visible on /r        : status NOT IN ('draft', 'off_market')
+//   publicly visible on /r        : status <> 'draft'  (0223)
 //                                   (get_public_listing display guard)
 
 export const PROPERTY_STATUSES = [
@@ -48,7 +50,7 @@ const HELP: Record<PropertyStatus, string> = {
   available: "Live. Renters can view the unit and book a viewing online.",
   paused: "Hidden from new renters, but kept so you can relist it later.",
   leased: "Marked rented. The public page tells renters it's no longer available.",
-  off_market: "Retired. The public link returns not-found.",
+  off_market: "Retired. The public link still opens and points renters at your other vacancies.",
 };
 
 // Tailwind pill classes for a status badge on the property + list pages.
@@ -107,9 +109,14 @@ export function isPublicBookable(status: string): boolean {
   return status === "available";
 }
 
-/** True when the public /r page should LOAD (draft + off_market 404). */
+/**
+ * True when the public /r page should LOAD. Only a draft 404s: since migration
+ * 0223 an off-market unit loads and renders the "no longer available" page with
+ * the org's open units, so a link already shared for an archived unit keeps
+ * working. Mirrors `get_public_listing`, which filters `status <> 'draft'`.
+ */
 export function isPubliclyVisible(status: string): boolean {
-  return status !== "draft" && status !== "off_market";
+  return status !== "draft";
 }
 
 /** True when the /r page loads but must show a "not available" state. */

@@ -115,6 +115,20 @@ ok(
   ),
 );
 
+// The TypeScript status contract must mirror the RPC, or the dashboard will keep
+// telling operators that archiving returns a not-found page.
+const listingState = readFileSync("lib/listing-state.ts", "utf8");
+ok(
+  "isPubliclyVisible hides draft and only draft",
+  /export function isPubliclyVisible\(status: string\): boolean \{\n  return status !== "draft";/.test(
+    listingState,
+  ),
+);
+ok(
+  "the operator help text for off-market matches the new behaviour",
+  /off_market: "Retired\. The public link still opens/.test(listingState),
+);
+
 // The write path must stay closed. Rendering a gone page must never make a
 // non-available unit bookable or inquirable.
 const leadGuard = migrations
