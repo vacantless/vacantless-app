@@ -258,11 +258,13 @@ export default async function PublicListingPage({
     ...sibling,
     displayAddress: displayAddressFor(sibling),
   }));
-  // A unit can be marked "leased" (or off-market) after its link is shared. The
+  // A unit can be marked "leased" or off-market after its link is shared. The
   // public action RPCs (availability / inquiry / booking) hard-block anything
   // that isn't 'available'; the page must visibly reflect that instead of still
-  // showing "Available now" + a booking form. (off-market returns no listing at
-  // all above → 404; 'leased' still loads here so we can say it's gone.)
+  // showing "Available now" + a booking form. Both statuses load here so we can
+  // say it's gone and offer the open siblings. Only 'draft' 404s, because a
+  // draft was never published. (Migration 0223; before it, off-market 404'd and
+  // every shared link to an archived unit died.)
   const isAvailable = l.status === "available";
   // Guardrail: keep white-on-brand (header, button) and brand-on-white (price)
   // legible even when the tenant picked a pale color.
