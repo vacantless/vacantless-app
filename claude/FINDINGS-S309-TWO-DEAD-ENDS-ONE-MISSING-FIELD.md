@@ -1,3 +1,8 @@
+> **[PARTIALLY SUPERSEDED 2026-08-31 by `FINDINGS-S673-THE-ENUM-ALREADY-EXISTS-IN-METADATA.md`. Read that first.]**
+> The "one missing reason field" framing is withdrawn. The reason is already recorded, in structured form, in
+> `distribution_publish_attempts.metadata`, and `error_code` already exists on BOTH tables with the worker writing
+> real values onto `distribution_run_items`. What is missing is the WIRE between them, not the field.
+
 > **PARTLY RESOLVED 2026-08-31 (same session), migration `0223_offmarket_shows_referral_page`, commit `8bc5a9f`.**
 > The FIRST dead end is fixed: an off-market unit's `/r` page no longer 404s. Both public RPCs moved
 > from `status not in ('off_market','draft')` to `status <> 'draft'`, so the "no longer available"

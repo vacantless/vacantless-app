@@ -1,5 +1,20 @@
 # S309: syndication is an escalation business, not an automation business
 
+> **[PARTIALLY SUPERSEDED 2026-08-31 by `FINDINGS-S673-THE-ENUM-ALREADY-EXISTS-IN-METADATA.md`, and again 2026-09-02 by `FINDINGS-S674-ALREADY-LIVE-IS-THE-S642-CONTRACT.md`. Read both first.]** **S674 note on the numbers below: every count stated "of 1,973" or "of 1,986" rows is inflated seventeen-fold.** 1,953 of the 2,067 rows in `distribution_publish_attempts` are `distribution_freshness_cron` no-ops; **only 114 are real publish attempts**, and that 114 has not moved since 2026-08-14 [verified 2026-09-02 via Supabase]. "Not one `error_code` in the whole table" is true and nearly meaningless; the honest figure is 0 of 114.
+> The strategy in this document stands: escalation as the unit of billing, no captcha bypass, the credential
+> governance gaps, and syndication being priced nowhere today. **Three things in it are withdrawn.**
+> (1) **The "3 live out of 107 attempts, 2.8%" headline is attempt-weighted over a retry loop.** Those 107 attempts
+> are 11 distinct run items, one of which burned 44 on its own. Per run item the strict figure is 5 of 11.
+> (2) **The proposed reason enum does not need to be shipped and the two-week measurement is unnecessary.** The reason
+> is already recorded on all 78 concierge `needs_operator` attempts inside `distribution_publish_attempts.metadata`.
+> One read-only query classifies every one: captcha 0, login_required 3, stop_gate_by_design 19, never_reached_end 18,
+> unclassifiable 15, already_live 11, payment_or_account_wall 8, field_rejected 3, listing_cap 1. **Both strategic
+> unknowns this document said needed a fortnight are therefore answered, and both answers are favourable.**
+> (3) **"Not one `error_code`" is a missing WIRE, not a missing field.** The column exists on both tables; the worker
+> writes real values onto `distribution_run_items` and every caller of the durable attempt recorder passes null.
+> Do not add a column.
+
+
 _Written 2026-08-31. All figures read from production via the Supabase MCP on 2026-08-31. Read-only:
 nothing in this document was pushed, deployed, or written to the database._
 
