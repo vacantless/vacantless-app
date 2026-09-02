@@ -1027,7 +1027,12 @@ export function DistributeTab({
       </div>
 
       {publishSimpleDefaultEnabled ? (
-        publishEverywhereSurface
+        <GetOnlineView
+          orgDefaultMode="simple"
+          linkIsLive={linkIsLive}
+          simple={publishEverywhereSurface}
+          advanced={advancedTools}
+        />
       ) : (
         <GetOnlineView
           orgDefaultMode={orgDefaultMode}
