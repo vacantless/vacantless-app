@@ -43,6 +43,7 @@ import { ListingCopyCard } from "./listing-copy-card";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
 import { qrSvg } from "@/lib/qr-svg";
+import { loadReservedListingPostIds } from "@/lib/listing-post-reservations";
 import { buildAllFillSheets } from "@/lib/listing-fill-sheet";
 import { FillSheetCard } from "./fill-sheet-card";
 import { PhotoManager } from "./photo-manager";
@@ -1660,21 +1661,21 @@ export default async function PropertyDetailPage({
   // item. Hide those from the where-posted tracker (the ready ?p= link shows in
   // the co-pilot panel instead); a manually-created url-less draft that no run
   // item references still shows.
-  const reservedPlumbingPostIds = new Set<string>();
-  {
-    const draftIds = postRows
-      .filter((post) => post.status === "draft" && !(post.url && post.url.trim()))
-      .map((post) => post.id);
-    if (draftIds.length > 0) {
+  // S681: the SAME rule now decides hardDeletable in properties/actions.ts and
+  // the Delete control on the list page. Keep all three on
+  // lib/listing-post-reservations so they can never drift again.
+  const reservedPlumbingPostIds = await loadReservedListingPostIds(
+    postRows,
+    async (draftIds) => {
       const { data: refRows } = await supabase
         .from("distribution_run_items")
         .select("listing_post_id")
         .in("listing_post_id", draftIds);
-      for (const ref of (refRows ?? []) as { listing_post_id: string | null }[]) {
-        if (ref.listing_post_id) reservedPlumbingPostIds.add(ref.listing_post_id);
-      }
-    }
-  }
+      return ((refRows ?? []) as { listing_post_id: string | null }[]).map(
+        (ref) => ref.listing_post_id,
+      );
+    },
+  );
   const postsByPortal = new Map<PortalKey, ListingPostRow[]>();
   for (const post of postRows) {
     if (reservedPlumbingPostIds.has(post.id)) continue;

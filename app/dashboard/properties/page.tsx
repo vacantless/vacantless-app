@@ -17,6 +17,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { canUseListingAiImport } from "@/lib/billing";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { hardDeletable } from "@/lib/property-archive";
+import { loadReservedListingPostIds } from "@/lib/listing-post-reservations";
 import { addProperty, importPropertyFromMls, importListingFromImages } from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
 import { MlsPdfImport } from "./mls-pdf-import";
@@ -38,6 +39,7 @@ type PropertyRow = {
 };
 
 type ListingPostRef = {
+  id: string;
   property_id: string | null;
   status: string | null;
   url: string | null;
@@ -233,7 +235,7 @@ export default async function PropertiesPage({
     supabase.from("tenancies").select("property_id").eq("organization_id", org.id),
     supabase
       .from("listing_posts")
-      .select("property_id, status, url")
+      .select("id, property_id, status, url")
       .eq("organization_id", org.id),
     // Org-wide weekly viewing windows — the same signal the property-detail
     // share-readiness check uses. One count for the selected org, so
@@ -279,11 +281,33 @@ export default async function PropertiesPage({
     }
   }
 
+  // S681: postCounts gates the Delete control via hardDeletable, so it must
+  // exclude co-pilot RESERVATIONS - url-less drafts referenced by a run item.
+  // Those are hidden from the where-posted tracker, so an operator can never
+  // clear one, and counting them made such a property undeletable forever.
+  // Same rule as properties/actions.ts and the detail page, from one module.
+  // livePostCounts is untouched: it drives the launch state, not deletion.
+  const postRefRows = (postRefs ?? []) as ListingPostRef[];
+  const reservedPostIds = await loadReservedListingPostIds(
+    postRefRows,
+    async (draftIds) => {
+      const { data: refRows } = await supabase
+        .from("distribution_run_items")
+        .select("listing_post_id")
+        .in("listing_post_id", draftIds);
+      return ((refRows ?? []) as { listing_post_id: string | null }[]).map(
+        (ref) => ref.listing_post_id,
+      );
+    },
+  );
+
   const postCounts = new Map<string, number>();
   const livePostCounts = new Map<string, number>();
-  for (const r of (postRefs ?? []) as ListingPostRef[]) {
+  for (const r of postRefRows) {
     if (r.property_id) {
-      postCounts.set(r.property_id, (postCounts.get(r.property_id) ?? 0) + 1);
+      if (!reservedPostIds.has(r.id)) {
+        postCounts.set(r.property_id, (postCounts.get(r.property_id) ?? 0) + 1);
+      }
       if (r.status === "live" && r.url?.trim()) {
         livePostCounts.set(
           r.property_id,

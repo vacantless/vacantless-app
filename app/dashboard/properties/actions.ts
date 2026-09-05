@@ -45,6 +45,11 @@ import {
   reservableTrackerId,
 } from "@/lib/listing-distribution";
 import { normalizeRunItemStatus } from "@/lib/distribution-run";
+import {
+  loadReservedListingPostIds,
+  visibleListingPostCount,
+  type ReservationCandidate,
+} from "@/lib/listing-post-reservations";
 import { normalizePartnerStatus } from "@/lib/distribution-partner";
 import {
   isPublishStatus,
@@ -250,6 +255,40 @@ async function countPropertyReferences(
     .eq("organization_id", orgId)
     .eq("property_id", propertyId);
   return count ?? 0;
+}
+
+// S681: a co-pilot RESERVATION (a url-less draft listing_posts row referenced
+// by a run item) is deliberately HIDDEN from the where-posted tracker, so an
+// operator can neither see it nor remove it. Counting it as a post made every
+// property that ever entered the co-pilot permanently undeletable, with no
+// control anywhere to clear the blocker.
+//
+// Count only what the operator can actually act on, using the SAME rule the
+// tracker renders by (lib/listing-post-reservations). This is NOT a general
+// loosening: a real tracked post still blocks the delete, which is the whole
+// point of hardDeletable as a deletion safety guard.
+async function countOperatorVisibleListingPosts(
+  supabase: ReturnType<typeof createClient>,
+  orgId: string,
+  propertyId: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from("listing_posts")
+    .select("id, status, url")
+    .eq("organization_id", orgId)
+    .eq("property_id", propertyId);
+  const posts = (data ?? []) as ReservationCandidate[];
+  if (posts.length === 0) return 0;
+  const reserved = await loadReservedListingPostIds(posts, async (draftIds) => {
+    const { data: refRows } = await supabase
+      .from("distribution_run_items")
+      .select("listing_post_id")
+      .in("listing_post_id", draftIds);
+    return ((refRows ?? []) as { listing_post_id: string | null }[]).map(
+      (ref) => ref.listing_post_id,
+    );
+  });
+  return visibleListingPostCount(posts, reserved);
 }
 
 function revalidatePropertyList() {
@@ -1445,13 +1484,17 @@ export async function deleteProperty(formData: FormData) {
   const [leadCount, tenancyCount, postCount] = await Promise.all([
     countPropertyReferences(supabase, "leads", org.id, id),
     countPropertyReferences(supabase, "tenancies", org.id, id),
-    countPropertyReferences(supabase, "listing_posts", org.id, id),
+    countOperatorVisibleListingPosts(supabase, org.id, id),
   ]);
 
   if (!hardDeletable(p.status ?? "", leadCount, tenancyCount, postCount)) {
     redirect("/dashboard/properties?delete_blocked=1");
   }
 
+  // listing_posts, distribution_runs and (through the run) distribution_run_items
+  // all carry ON DELETE CASCADE from properties, so the reserved plumbing that
+  // countOperatorVisibleListingPosts just excluded is cleaned up by the FKs.
+  // No manual cascade here on purpose. Verified against the live schema 2026-09-05.
   const { error } = await supabase
     .from("properties")
     .delete()
