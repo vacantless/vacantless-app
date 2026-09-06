@@ -76,6 +76,13 @@ type Summary = {
   notified: boolean;
   /** S681: how many stuck-backlog alerts this invocation actually delivered. */
   sweptAlerts: number;
+  /**
+   * S681: why the sweep did nothing, when it did nothing. The first version
+   * returned a bare 0 on error, so a swallowed PostgREST failure looked exactly
+   * like a healthy quiet run. The GH Action prints this response body, so the
+   * reason has to be IN it or nobody can tell the two apart.
+   */
+  sweepSkipped?: string;
   skippedReason?: string;
   details: Array<Record<string, unknown>>;
 };
@@ -165,7 +172,9 @@ const SWEEP_SCAN_LIMIT = 200;
 //
 // Reuses the existing event, recipients and templates. No new event.
 // ---------------------------------------------------------------------------
-async function runStuckSweep(admin: AdminClient): Promise<number> {
+type SweepResult = { alerted: number; skipped?: string };
+
+async function runStuckSweep(admin: AdminClient): Promise<SweepResult> {
   try {
     const { data, error } = await admin
       .from("distribution_run_items")
@@ -174,16 +183,22 @@ async function runStuckSweep(admin: AdminClient): Promise<number> {
       )
       .in("publish_status", ["needs_login", "needs_payment", "needs_operator", "queued"])
       .limit(SWEEP_SCAN_LIMIT);
-    if (error || !data) return 0;
+    // Name the failure. A missing column (migration 0224 not applied, or
+    // PostgREST's schema cache not yet reloaded after it) reads identically to
+    // "nothing was due" unless the reason is reported.
+    if (error) return { alerted: 0, skipped: `query_failed: ${error.message}` };
+    if (!data) return { alerted: 0, skipped: "query_returned_no_rows" };
 
     const nowMs = Date.now();
     const nowISO = new Date(nowMs).toISOString();
     const due = selectStuckToAlert(data as unknown as StuckCandidate[], nowMs);
 
     let delivered = 0;
+    let considered = 0;
     for (const item of due) {
       const kind = stuckKind(item);
       if (!kind) continue;
+      considered += 1;
 
       const { data: orgRow } = await admin
         .from("organizations")
@@ -252,12 +267,17 @@ async function runStuckSweep(admin: AdminClient): Promise<number> {
 
       if (result.delivered) delivered += 1;
     }
-    return delivered;
-  } catch {
-    // Deploy-safe, matching this route's existing posture: if migration 0224
-    // has not landed the column is missing and the select throws. The sweep
-    // must never break the posting worker.
-    return 0;
+    if (due.length === 0) return { alerted: 0, skipped: "nothing_due" };
+    if (delivered === 0)
+      return { alerted: 0, skipped: `considered_${considered}_delivered_none` };
+    return { alerted: delivered };
+  } catch (err) {
+    // Deploy-safe, matching this route's existing posture: the sweep must never
+    // break the posting worker. But it must SAY why it stopped.
+    return {
+      alerted: 0,
+      skipped: `threw: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 }
 
@@ -292,7 +312,9 @@ export async function GET(req: NextRequest) {
   // guards POSTING. Telling an operator an item has been parked for weeks is a
   // read and an email, and withholding it while the worker is dark is exactly
   // how nine items went unmentioned for up to 54 days.
-  base.sweptAlerts = await runStuckSweep(admin);
+  const sweep = await runStuckSweep(admin);
+  base.sweptAlerts = sweep.alerted;
+  if (sweep.skipped) base.sweepSkipped = sweep.skipped;
 
   // Env dark gate (posting only).
   if (!envFlagEnabled(process.env.DISTRIBUTION_WORKER_ENABLED)) {
