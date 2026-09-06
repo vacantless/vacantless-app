@@ -33,6 +33,14 @@ import {
   type WorkerListingFacts,
 } from "@/lib/distribution-worker";
 import { composePostWithAgent } from "@/lib/distribution-worker-ai";
+import {
+  daysParked,
+  selectStuckToAlert,
+  stuckKind,
+  STUCK_GATE_LABEL,
+  STUCK_NEXT_STEP,
+  type StuckCandidate,
+} from "@/lib/distribution-stuck-sweep";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -66,6 +74,8 @@ type Summary = {
   prepared: number;
   gate: WorkerGate | null;
   notified: boolean;
+  /** S681: how many stuck-backlog alerts this invocation actually delivered. */
+  sweptAlerts: number;
   skippedReason?: string;
   details: Array<Record<string, unknown>>;
 };
@@ -139,6 +149,118 @@ async function releaseWorkerClaim(
     .eq("concierge_claimed_by", WORKER_CLAIM_ID);
 }
 
+
+const SWEEP_SCAN_LIMIT = 200;
+
+// ---------------------------------------------------------------------------
+// S681: the stuck-item backlog sweep.
+//
+// leasing.distribution_job_needs_action only ever fired at the INSTANT this
+// cron moved an item to its gate. Nothing looked at an item that was ALREADY
+// parked, so anything that reached a gate by another path, or before that code
+// shipped, was never mentioned again. Measured 2026-09-05: nine items parked,
+// the oldest 54 days, including a real landlord org whose concierge request had
+// been `queued` for 48 days and could never be claimed, because that org has no
+// distribution_channel_accounts row.
+//
+// Reuses the existing event, recipients and templates. No new event.
+// ---------------------------------------------------------------------------
+async function runStuckSweep(admin: AdminClient): Promise<number> {
+  try {
+    const { data, error } = await admin
+      .from("distribution_run_items")
+      .select(
+        "id, organization_id, run_id, channel, publish_status, mode, created_at, updated_at, last_stuck_alerted_at",
+      )
+      .in("publish_status", ["needs_login", "needs_payment", "needs_operator", "queued"])
+      .limit(SWEEP_SCAN_LIMIT);
+    if (error || !data) return 0;
+
+    const nowMs = Date.now();
+    const nowISO = new Date(nowMs).toISOString();
+    const due = selectStuckToAlert(data as unknown as StuckCandidate[], nowMs);
+
+    let delivered = 0;
+    for (const item of due) {
+      const kind = stuckKind(item);
+      if (!kind) continue;
+
+      const { data: orgRow } = await admin
+        .from("organizations")
+        .select("id, name, brand_color, logo_url, reply_to_email, public_contact_email")
+        .eq("id", item.organization_id)
+        .maybeSingle();
+      if (!orgRow) continue;
+
+      const { data: runRow } = await admin
+        .from("distribution_runs")
+        .select("property_id")
+        .eq("id", item.run_id)
+        .maybeSingle();
+      const propertyId = (runRow?.property_id as string | null) ?? null;
+
+      let address: string | null = null;
+      if (propertyId) {
+        const { data: prop } = await admin
+          .from("properties")
+          .select("address")
+          .eq("id", propertyId)
+          .maybeSingle();
+        address = (prop?.address as string | null) ?? null;
+      }
+
+      const dashboardUrl = propertyId
+        ? `${APP_URL}/dashboard/properties/${propertyId}#distribute-header`
+        : `${APP_URL}/dashboard/properties`;
+      const days = daysParked(item, nowMs);
+      const waited = `It has been waiting ${days} day${days === 1 ? "" : "s"}.`;
+
+      const fallback = await operatorFallbackForOrg(admin, {
+        id: orgRow.id as string,
+        reply_to_email: (orgRow.reply_to_email as string | null) ?? null,
+        public_contact_email: (orgRow.public_contact_email as string | null) ?? null,
+      });
+
+      const result = await sendOrgNotification({
+        client: admin,
+        org: {
+          id: orgRow.id as string,
+          name: (orgRow.name as string | null) ?? null,
+          brand_color: (orgRow.brand_color as string | null) ?? null,
+          logo_url: (orgRow.logo_url as string | null) ?? null,
+          reply_to_email: (orgRow.reply_to_email as string | null) ?? null,
+        },
+        eventKey: NOTIF_EVENT,
+        vars: {
+          org_name: (orgRow.name as string | null) ?? "",
+          property_address: address ?? "",
+          channel_label: channelByKey(item.channel)?.label ?? item.channel,
+          gate_label: STUCK_GATE_LABEL[kind],
+          next_step: `${STUCK_NEXT_STEP[kind]}. ${waited}`,
+          dashboard_url: dashboardUrl,
+        },
+        operatorFallback: fallback,
+        action: { label: "Open Distribute", url: dashboardUrl },
+      });
+
+      // Stamp whether or not it was delivered. An org with no reachable
+      // recipient must not make the sweep retry it on every single run.
+      await admin
+        .from("distribution_run_items")
+        .update({ last_stuck_alerted_at: nowISO })
+        .eq("id", item.id);
+
+      if (result.delivered) delivered += 1;
+    }
+    return delivered;
+  } catch {
+    // Deploy-safe, matching this route's existing posture: if migration 0224
+    // has not landed the column is missing and the select throws. The sweep
+    // must never break the posting worker.
+    return 0;
+  }
+}
+
 export async function GET(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
@@ -152,20 +274,29 @@ export async function GET(req: NextRequest) {
     prepared: 0,
     gate: null,
     notified: false,
+    sweptAlerts: 0,
     details: [],
   };
 
-  // Env dark gate.
-  if (!envFlagEnabled(process.env.DISTRIBUTION_WORKER_ENABLED)) {
-    return NextResponse.json({ ...base, reason: "disabled" }, { status: 200 });
-  }
-
+  // The admin client is resolved BEFORE the dark gate because the stuck sweep
+  // below needs it and runs whether or not the posting worker is armed.
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
-      { ...base, enabled: true, ok: false, reason: "service_role_not_configured" },
+      { ...base, ok: false, reason: "service_role_not_configured" },
       { status: 200 },
     );
+  }
+
+  // S681: the stuck sweep runs BEFORE the env dark gate ON PURPOSE. That gate
+  // guards POSTING. Telling an operator an item has been parked for weeks is a
+  // read and an email, and withholding it while the worker is dark is exactly
+  // how nine items went unmentioned for up to 54 days.
+  base.sweptAlerts = await runStuckSweep(admin);
+
+  // Env dark gate (posting only).
+  if (!envFlagEnabled(process.env.DISTRIBUTION_WORKER_ENABLED)) {
+    return NextResponse.json({ ...base, reason: "disabled" }, { status: 200 });
   }
 
   try {
