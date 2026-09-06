@@ -88,6 +88,24 @@ export function shouldAlert(row: StuckCandidate, nowMs: number): boolean {
 }
 
 /**
+ * The most recent alert timestamp per organization, across ALL rows handed in
+ * (including ones already stamped). This is what makes the per-org limit hold
+ * ACROSS sweeps rather than only within one.
+ */
+export function orgLastAlertedMs(
+  rows: readonly StuckCandidate[],
+): Map<string, number> {
+  const byOrg = new Map<string, number>();
+  for (const row of rows) {
+    const ms = parsedMs(row.last_stuck_alerted_at);
+    if (ms === null) continue;
+    const current = byOrg.get(row.organization_id);
+    if (current === undefined || ms > current) byOrg.set(row.organization_id, ms);
+  }
+  return byOrg;
+}
+
+/**
  * The items to alert on this sweep: oldest parked first, ONE PER ORG, capped.
  *
  * Oldest-first matters. The backlog is weeks deep, so a newest-first sweep would
@@ -101,14 +119,27 @@ export function shouldAlert(row: StuckCandidate, nowMs: number): boolean {
  * org's backlog must never crowd out another org's first mention. Alerting on
  * each org's oldest item surfaces every affected org on the very first run,
  * and needs no notion of which orgs are "real", which is not knowable here.
+ *
+ * AND THE PER-ORG LIMIT MUST HOLD ACROSS SWEEPS, NOT JUST WITHIN ONE. The first
+ * version of this capped each sweep at five and deduped within the batch, which
+ * reads as safe until you notice the cron fires EVERY 15 MINUTES. Run one stamps
+ * one item per org, run two picks each org's NEXT item, and the whole 33-item
+ * backlog would have gone out as ~33 emails in about two hours. A per-invocation
+ * cap is not a rate limit. The org's own last-alert timestamp is.
  */
 export function selectStuckToAlert(
   rows: readonly StuckCandidate[],
   nowMs: number,
   max: number = MAX_ALERTS_PER_SWEEP,
 ): StuckCandidate[] {
+  const lastByOrg = orgLastAlertedMs(rows);
+  const orgIsQuiet = (orgId: string) => {
+    const last = lastByOrg.get(orgId);
+    return last === undefined || nowMs - last >= RENAG_AFTER_DAYS * DAY_MS;
+  };
+
   const due = rows
-    .filter((row) => shouldAlert(row, nowMs))
+    .filter((row) => shouldAlert(row, nowMs) && orgIsQuiet(row.organization_id))
     .sort((a, b) => (parkedSinceMs(a) ?? 0) - (parkedSinceMs(b) ?? 0));
 
   const seenOrgs = new Set<string>();

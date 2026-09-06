@@ -58,6 +58,28 @@ org before naming the first real customer (Abbas, position 10) and four before A
 surfaced on the first run. It needs no notion of which orgs are "real", which is not
 knowable in that code. Locked down by tests shaped like the live backlog.
 
+## A SECOND audit, after deploy, caught a worse one
+
+**The GitHub Action runs every 15 minutes, not daily.** I had reasoned about the
+5-per-sweep cap as if the cadence were daily. It is not, and a per-invocation cap is not a
+rate limit: run one stamps one item per org, run two picks each org's NEXT item, and the
+whole backlog goes out. Measured: **33 due items, so roughly 33 emails in about two
+hours.**
+
+**Emergency brake applied first, at 2026-09-06, before the next tick:** stamped
+`last_stuck_alerted_at = now()` on all due items EXCEPT each org's oldest, leaving exactly
+four to fire (one per org, the intended behaviour) and suppressing the rest for the 7-day
+re-nag window. Non-destructive, and it bought the time to fix the code properly.
+
+**Then the real fix:** the per-org limit now holds ACROSS sweeps, not just within one. A new
+`orgLastAlertedMs` derives each org's most recent stamp from the same rows the sweep already
+reads, and an org is skipped entirely while it is inside the re-nag window. "This org has
+stuck work" is an org-level fact, so a stamp on one item correctly silences its siblings.
+
+**The lesson worth keeping: a per-invocation cap says nothing about volume until you know
+the invocation rate.** I checked the schedule only after shipping. Read the cron cadence
+BEFORE reasoning about any per-run limit.
+
 ## What this does NOT do
 
 **It does not post anything.** It converts silent failure into visible failure. That is the

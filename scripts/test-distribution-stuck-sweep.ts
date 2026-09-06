@@ -8,6 +8,7 @@
 import {
   daysParked,
   parkedSinceMs,
+  orgLastAlertedMs,
   selectStuckToAlert,
   shouldAlert,
   stuckKind,
@@ -163,6 +164,67 @@ ok(
   "a live item is never selected however old",
   selectStuckToAlert([row({ publish_status: "live", updated_at: daysAgo(99) })], NOW).length === 0,
 );
+
+
+// --- the 15-minute cadence blast: the bug the deploy audit caught -----------
+// The cron fires EVERY 15 MINUTES. A per-invocation cap deduped only within one
+// batch, so run 1 stamped one item per org and run 2 picked each org's NEXT one.
+// The whole 33-item backlog would have gone out as ~33 emails in ~2 hours.
+{
+  const nine: StuckCandidate[] = Array.from({ length: 9 }, (_, i) =>
+    row({ id: `qa${i}`, organization_id: "qa-org", updated_at: daysAgo(54) }),
+  );
+
+  // Run 1: nothing stamped yet, the org speaks once.
+  ok("run 1 alerts the org exactly once", selectStuckToAlert(nine, NOW).length === 1);
+
+  // Run 2, fifteen minutes later, with the first item now stamped.
+  const afterRun1 = nine.map((r, i) =>
+    i === 0 ? { ...r, last_stuck_alerted_at: new Date(NOW).toISOString() } : r,
+  );
+  const fifteenLater = NOW + 15 * 60_000;
+  ok(
+    "run 2 fifteen minutes later says NOTHING for that org",
+    selectStuckToAlert(afterRun1, fifteenLater).length === 0,
+  );
+
+  // Still silent a day later.
+  ok(
+    "and is still silent a day later",
+    selectStuckToAlert(afterRun1, NOW + 86_400_000).length === 0,
+  );
+
+  // Speaks again only after the re-nag window.
+  ok(
+    "it speaks again after the re-nag window, once",
+    selectStuckToAlert(afterRun1, NOW + (RENAG_AFTER_DAYS + 1) * 86_400_000).length === 1,
+  );
+}
+
+{
+  // A stamped item in an org silences that org's OTHER items too, which is the
+  // whole point: "this org has stuck work" is an org-level fact.
+  const rows: StuckCandidate[] = [
+    row({ id: "stamped", organization_id: "o1", updated_at: daysAgo(50), last_stuck_alerted_at: daysAgo(1) }),
+    row({ id: "quiet-sibling", organization_id: "o1", updated_at: daysAgo(40) }),
+    row({ id: "other-org", organization_id: "o2", updated_at: daysAgo(30) }),
+  ];
+  const picked = selectStuckToAlert(rows, NOW).map((r) => r.id);
+  ok("a recently alerted org is skipped entirely", !picked.includes("quiet-sibling"));
+  ok("an unalerted org is unaffected", picked.includes("other-org"));
+  ok("exactly one alert goes out", picked.length === 1);
+}
+
+{
+  const rows: StuckCandidate[] = [
+    row({ id: "a", organization_id: "o1", last_stuck_alerted_at: daysAgo(3) }),
+    row({ id: "b", organization_id: "o1", last_stuck_alerted_at: daysAgo(1) }),
+    row({ id: "c", organization_id: "o2", last_stuck_alerted_at: null }),
+  ];
+  const m = orgLastAlertedMs(rows);
+  ok("per-org last-alert takes the MOST RECENT stamp", m.get("o1") === Date.parse(daysAgo(1)));
+  ok("an org with no stamp is absent from the map", !m.has("o2"));
+}
 
 // --- copy ------------------------------------------------------------------
 ok(
