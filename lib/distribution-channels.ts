@@ -65,6 +65,17 @@ export const CHANNEL_CATEGORIES = [
 ] as const;
 export type ChannelCategory = (typeof CHANNEL_CATEGORIES)[number];
 
+// S681 CAVEAT, read before trusting "live" on an account_login channel.
+// "live" here means the channel has a real POST PATH today. It does NOT mean a
+// landlord can connect it themselves. Facebook/Instagram (oauth) are the only
+// self-serve connections in the product. kijiji, rentals_ca, zumper, rentfaster
+// and viewit are account_login, and the "Log in" route lands on a Settings form
+// whose only control is a SELF-DECLARED account_status dropdown. There is no
+// session-ingestion route anywhere in the app (lib/distribution-session-crypto
+// exists; nothing feeds it), so those channels are concierge-onboarded in
+// practice. The Stage 1 copy now says so, guarded by
+// scripts/test-stage1-connect-copy-truth.ts. Do not widen that claim without
+// shipping a real connect route first.
 export const CHANNEL_INTEGRATION_STATUSES = [
   "live",
   "planned",
