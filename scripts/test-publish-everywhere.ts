@@ -7,6 +7,7 @@ import {
   bucketForMode,
   derivePublishPreflight,
   forYouLiveState,
+  retiredProofUrlsFromPosts,
   liveProofUrlFromPosts,
   ALWAYS_ON_INSTANT_COUNT,
   type PublishChannelInput,
@@ -139,6 +140,11 @@ eq("no run item, live post URL = live (S685 Manning by hand)", forYouLiveState({
 eq("run item live wins its own URL", forYouLiveState({ runItem: { publishStatus: "live", externalUrl: "https://z/1" }, liveProofUrl: "https://z/2" }), { isLive: true, liveUrl: "https://z/1" });
 eq("run item queued + no post = not live", forYouLiveState({ runItem: { publishStatus: "queued", externalUrl: null }, liveProofUrl: null }), { isLive: false, liveUrl: null });
 eq("run item queued + live post = live (proof outranks a stale queue)", forYouLiveState({ runItem: { publishStatus: "queued", externalUrl: null }, liveProofUrl: "https://k/1" }), { isLive: true, liveUrl: "https://k/1" });
+// S692: the listing row is the proof; a run item whose URL the row has retired is stale (506 Manning Kijiji, removed by Kijiji 2026-09-07).
+eq("run item live but its URL is a removed row = not live", forYouLiveState({ runItem: { publishStatus: "live", externalUrl: "https://k/dead" }, liveProofUrl: null, retiredUrls: ["https://k/dead"] }), { isLive: false, liveUrl: null });
+eq("run item live, URL retired, but a newer live row exists = live on the row's URL", forYouLiveState({ runItem: { publishStatus: "live", externalUrl: "https://k/dead" }, liveProofUrl: "https://k/new", retiredUrls: ["https://k/dead"] }), { isLive: true, liveUrl: "https://k/new" });
+eq("run item live with a URL no row has retired = live (unchanged)", forYouLiveState({ runItem: { publishStatus: "live", externalUrl: "https://k/1" }, liveProofUrl: null, retiredUrls: ["https://k/other"] }), { isLive: true, liveUrl: "https://k/1" });
+eq("retired URLs from posts: removed + draft with URLs, live excluded", retiredProofUrlsFromPosts([{ status: "removed", url: "https://a" }, { status: "draft", url: "https://b" }, { status: "live", url: "https://c" }, { status: "removed", url: null }]), ["https://a", "https://b"]);
 eq("draft post is not proof", liveProofUrlFromPosts([{ status: "draft", url: "https://r/1" }]), null);
 eq("live post without URL is not proof", liveProofUrlFromPosts([{ status: "live", url: null }]), null);
 eq("live post with URL among removed ones", liveProofUrlFromPosts([{ status: "removed", url: "https://old" }, { status: "live", url: "https://new" }]), "https://new");

@@ -224,6 +224,14 @@ export type ForYouLiveInput = {
   runItem: { publishStatus: string; externalUrl: string | null } | null;
   /** URL of the channel's `live` listing_posts row, when one exists. */
   liveProofUrl: string | null;
+  /**
+   * URLs of this channel's listing_posts rows that are NOT live (removed,
+   * draft, expired). S692: the listing row is the proof and the run item only
+   * mirrors it; when the ad behind a run item's URL has been retired on the
+   * row (506 Manning Kijiji, removed by Kijiji 2026-09-07), the run item's
+   * "live" is stale and must not win.
+   */
+  retiredUrls?: readonly string[];
 };
 
 export function forYouLiveState(input: ForYouLiveInput): {
@@ -231,13 +239,27 @@ export function forYouLiveState(input: ForYouLiveInput): {
   liveUrl: string | null;
 } {
   const item = input.runItem;
+  const retired = new Set((input.retiredUrls ?? []).map((u) => u.trim()).filter(Boolean));
+  const itemRetired =
+    item != null && Boolean(item.externalUrl) && retired.has((item.externalUrl ?? "").trim());
   const itemLive =
-    item != null && (item.publishStatus === "live" || Boolean(item.externalUrl));
+    item != null &&
+    !itemRetired &&
+    (item.publishStatus === "live" || Boolean(item.externalUrl));
   const proofLive = Boolean(input.liveProofUrl);
   return {
     isLive: itemLive || proofLive,
-    liveUrl: item?.externalUrl || input.liveProofUrl || null,
+    liveUrl: (itemLive ? item?.externalUrl : null) || input.liveProofUrl || null,
   };
+}
+
+/** URLs of a channel's listing_posts rows that are not live (feeds forYouLiveState.retiredUrls). */
+export function retiredProofUrlsFromPosts(
+  posts: readonly { status: string; url: string | null }[],
+): string[] {
+  return posts
+    .filter((post) => post.status !== "live" && Boolean(post.url?.trim()))
+    .map((post) => (post.url ?? "").trim());
 }
 
 /**

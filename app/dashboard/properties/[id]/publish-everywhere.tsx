@@ -51,6 +51,7 @@ import {
   isCopilotSupportedKey,
   forYouLiveState,
   liveProofUrlFromPosts,
+  retiredProofUrlsFromPosts,
   type PublishMode,
   type PublishBucket,
   type PublishChannelInput,
@@ -178,6 +179,8 @@ type ResolvedRow = {
   automationAction?: "authorize" | "revoke" | null;
   /** URL of this channel's `live` listing_posts row (hand-posted or worker-posted), or null. */
   liveProofUrl?: string | null;
+  /** URLs of this channel's non-live rows; a run item pointing at one is stale (S692). */
+  retiredProofUrls?: readonly string[];
 };
 
 type InstantDestination = {
@@ -379,6 +382,7 @@ export function PublishEverywhere({
       bucket,
       automationAction: automationActionForCard(card),
       liveProofUrl: liveProofUrlFromPosts(card.posts),
+      retiredProofUrls: retiredProofUrlsFromPosts(card.posts),
     };
   });
   const reach = summarizeReach(resolved.map((r) => r.bucket), true);
@@ -405,6 +409,7 @@ export function PublishEverywhere({
     forYouLiveState({
       runItem: runItemByChannel.get(row.key) ?? null,
       liveProofUrl: row.liveProofUrl ?? null,
+      retiredUrls: row.retiredProofUrls ?? [],
     });
   const forYouIsLive = (row: ResolvedRow) => liveStateFor(row).isLive;
   const forYouNeedsOperatorStep = (row: ResolvedRow) => {
@@ -958,6 +963,7 @@ function ForYouRow({
   const { isLive, liveUrl } = forYouLiveState({
     runItem: item,
     liveProofUrl: row.liveProofUrl ?? null,
+    retiredUrls: row.retiredProofUrls ?? [],
   });
   const gate =
     item != null && item.mode === "concierge" ? item.publishStatus : null;
