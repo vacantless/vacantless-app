@@ -21,6 +21,7 @@
     "test:no-client-secret-imports": "tsx scripts/test-no-client-secret-imports.ts",
     "test:question-sheet": "tsx scripts/test-question-sheet.ts",
     "test:question-sheet-save": "tsx scripts/test-question-sheet-save.ts",
+    "test:listing-post-live-check": "tsx scripts/test-listing-post-live-check.ts",
     "test:question-sheet-page-half": "tsx scripts/test-question-sheet-page-half.ts"
   },
   "dependencies": {
