@@ -58,14 +58,29 @@ export async function POST(req: NextRequest) {
   const wanted = valid.filter((c) => !sessionCheckThrottled(org.id, c.key));
   const { accountLogin, oauth } = splitByConnectKind(wanted);
 
-  const [requestResult, probed] = await Promise.all([
-    requestSessionCheck({
-      orgId: org.id,
-      channels: accountLogin.map((c) => c.key),
-      userId: user?.id ?? null,
-    }),
-    probeOauthSessions({ orgId: org.id, channels: oauth.map((c) => c.key) }),
-  ]);
+  let requestResult: { requested: string[]; missing: string[] };
+  let probed: Awaited<ReturnType<typeof probeOauthSessions>>;
+  try {
+    [requestResult, probed] = await Promise.all([
+      requestSessionCheck({
+        orgId: org.id,
+        channels: accountLogin.map((c) => c.key),
+        userId: user?.id ?? null,
+      }),
+      probeOauthSessions({ orgId: org.id, channels: oauth.map((c) => c.key) }),
+    ]);
+  } catch (err) {
+    // Before migration 0225 the status columns do not exist and the writes
+    // fail; the tiles keep rendering from the account row. Say so, do not 500.
+    console.warn(
+      "[session-check] unavailable:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return NextResponse.json(
+      { error: "session_status_unavailable" },
+      { status: 503 },
+    );
+  }
 
   return NextResponse.json({
     requested: requestResult.requested,
