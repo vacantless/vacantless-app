@@ -211,3 +211,54 @@ export const COPILOT_SUPPORTED_KEYS: readonly string[] = ["kijiji", "facebook"];
 export function isCopilotSupportedKey(key: string): boolean {
   return COPILOT_SUPPORTED_KEYS.includes(key);
 }
+
+// --- One "is this site live" rule (S691) -------------------------------------
+// The property page has two records of an outside site: the distribution run
+// item (worker/copilot path) and the listing_posts row (the saved live-ad URL,
+// which is also what a hand-posted site gets, S685 Manning). Every reader on
+// the page must agree, so the rule lives here: a site is live when EITHER the
+// run item says live / carries an external URL, OR a listing_posts row is
+// `live` with a URL. A live site never "needs your sign-in".
+
+export type ForYouLiveInput = {
+  runItem: { publishStatus: string; externalUrl: string | null } | null;
+  /** URL of the channel's `live` listing_posts row, when one exists. */
+  liveProofUrl: string | null;
+};
+
+export function forYouLiveState(input: ForYouLiveInput): {
+  isLive: boolean;
+  liveUrl: string | null;
+} {
+  const item = input.runItem;
+  const itemLive =
+    item != null && (item.publishStatus === "live" || Boolean(item.externalUrl));
+  const proofLive = Boolean(input.liveProofUrl);
+  return {
+    isLive: itemLive || proofLive,
+    liveUrl: item?.externalUrl || input.liveProofUrl || null,
+  };
+}
+
+/**
+ * The live listing_posts URL for a channel card, or null. When several rows
+ * are live (Kijiji duplicates, S666), the newest wins: latest `posted_on`,
+ * then the later array position (the page loads rows created_at ascending).
+ */
+export function liveProofUrlFromPosts(
+  posts: readonly { status: string; url: string | null; posted_on?: string | null }[],
+): string | null {
+  let best: { url: string; posted: string; index: number } | null = null;
+  posts.forEach((post, index) => {
+    if (post.status !== "live" || !post.url) return;
+    const posted = post.posted_on ?? "";
+    if (
+      best == null ||
+      posted > best.posted ||
+      (posted === best.posted && index > best.index)
+    ) {
+      best = { url: post.url, posted, index };
+    }
+  });
+  return best ? (best as { url: string }).url : null;
+}

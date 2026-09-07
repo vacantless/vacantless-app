@@ -234,5 +234,13 @@ eq("none button key is absent", stage1ConnectButtonKey("none"), null);
   eq("reason key null -> needs_login", stage1ReasonKey({ lastCheckCode: null }), "needs_login");
 }
 
+// --- S691: self_post state + account_login sub lines -------------------------
+eq("self_post title key", stage1StatusCopy("self_post").titleKey, "status.selfPost");
+eq("self_post sub key", stage1StatusCopy("self_post").subKey, "status.selfPostSub");
+eq("self_post sits in the ready group", groupStage1ChannelRows([row("facebook", "self_post", false)])[0].rows.length, 1);
+eq("account_login linked sub does not promise automatic sending", stage1StatusCopy("linked", "account_login").subKey, "status.linkedSubLogin");
+eq("account_login not_linked sub does not promise posting for you", stage1StatusCopy("not_linked", "account_login").subKey, "status.notLinkedSubLogin");
+eq("oauth linked keeps the automatic sub", stage1StatusCopy("linked", "oauth").subKey, "status.linkedSub");
+
 console.log(`\nstage1-link-portals: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

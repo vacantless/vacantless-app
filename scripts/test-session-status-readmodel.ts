@@ -61,7 +61,8 @@ const connected = (over: Partial<ChannelTileAccount> = {}): ChannelTileAccount =
 // --- 3.1 resolution order, one positive case per step -----------------------
 eq("1 unknown key -> not_available_yet", channelTileStatus("nope", connected(), fresh(), NOW).state, "not_available_yet");
 eq("2 mls_gated -> mls_only", channelTileStatus("realtor_ca", connected(), fresh(), NOW).state, "mls_only");
-eq("3 planned -> not_available_yet", channelTileStatus("facebook", connected(), fresh(), NOW).state, "not_available_yet");
+eq("3 planned -> not_available_yet", channelTileStatus("rentfaster", connected(), fresh(), NOW).state, "not_available_yet");
+eq("3b planned + selfPost (Marketplace) -> self_post", channelTileStatus("facebook", connected(), fresh(), NOW).state, "self_post");
 {
   const s = channelTileStatus("kijiji", null, fresh(), NOW);
   eq("4 no account -> not_linked", s.state, "not_linked");

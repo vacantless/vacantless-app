@@ -6,6 +6,8 @@ import {
   summarizeReach,
   bucketForMode,
   derivePublishPreflight,
+  forYouLiveState,
+  liveProofUrlFromPosts,
   ALWAYS_ON_INSTANT_COUNT,
   type PublishChannelInput,
   type PublishMode,
@@ -130,6 +132,18 @@ eq(
   preflight.feeChannels.every((row) => row.selectedByDefault === false),
   true,
 );
+
+// --- S691: one live rule (hand-posted sites with a listing_posts URL are live) ---
+eq("no run item, no post = not live", forYouLiveState({ runItem: null, liveProofUrl: null }), { isLive: false, liveUrl: null });
+eq("no run item, live post URL = live (S685 Manning by hand)", forYouLiveState({ runItem: null, liveProofUrl: "https://www.kijiji.ca/v-view-details.html?adId=1743093990" }), { isLive: true, liveUrl: "https://www.kijiji.ca/v-view-details.html?adId=1743093990" });
+eq("run item live wins its own URL", forYouLiveState({ runItem: { publishStatus: "live", externalUrl: "https://z/1" }, liveProofUrl: "https://z/2" }), { isLive: true, liveUrl: "https://z/1" });
+eq("run item queued + no post = not live", forYouLiveState({ runItem: { publishStatus: "queued", externalUrl: null }, liveProofUrl: null }), { isLive: false, liveUrl: null });
+eq("run item queued + live post = live (proof outranks a stale queue)", forYouLiveState({ runItem: { publishStatus: "queued", externalUrl: null }, liveProofUrl: "https://k/1" }), { isLive: true, liveUrl: "https://k/1" });
+eq("draft post is not proof", liveProofUrlFromPosts([{ status: "draft", url: "https://r/1" }]), null);
+eq("live post without URL is not proof", liveProofUrlFromPosts([{ status: "live", url: null }]), null);
+eq("live post with URL among removed ones", liveProofUrlFromPosts([{ status: "removed", url: "https://old" }, { status: "live", url: "https://new" }]), "https://new");
+eq("newest live post wins by posted_on", liveProofUrlFromPosts([{ status: "live", url: "https://a", posted_on: "2026-09-01" }, { status: "live", url: "https://b", posted_on: "2026-09-06" }, { status: "live", url: "https://c", posted_on: "2026-09-03" }]), "https://b");
+eq("same posted_on: later row wins (rows load created_at ascending)", liveProofUrlFromPosts([{ status: "live", url: "https://a", posted_on: "2026-09-06" }, { status: "live", url: "https://b", posted_on: "2026-09-06" }]), "https://b");
 
 if (failures > 0) {
   console.error(`\n${failures} test(s) failed`);

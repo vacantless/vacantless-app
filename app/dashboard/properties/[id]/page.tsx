@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -559,8 +560,8 @@ function buildSyndicationBlockerSummary({
     ) ??
     summary(
       [...proof.values()],
-      "needs live proof",
-      "need live proof",
+      "needs the ad link",
+      "need the ad link",
       (label) => `${label} needs a live ad URL before it counts as live.`,
       (list) => `${list} need live ad URLs before they count as live.`,
     ) ??
@@ -664,9 +665,9 @@ function SyndicationFirstCard({
   const expiredOnly =
     linkIsLive && hasPostHistory && liveOutsideCount === 0 && !needsListingWork;
   const status = packetBlocked
-    ? `Renter page ${linkIsLive ? "live" : "not live"}. One listing needs ${listingPacketMissingCount} ${
+    ? `Renter page ${linkIsLive ? "live" : "not live"}. Your listing needs ${listingPacketMissingCount} ${
         listingPacketMissingCount === 1 ? "detail" : "details"
-      } for outside sites.`
+      } for the rental sites.`
     : !linkIsLive
     ? setupOutstanding > 0
       ? `${setupOutstanding} ${
@@ -674,27 +675,27 @@ function SyndicationFirstCard({
         } before syndication.`
       : "Ready to turn on the renter page."
     : liveOutsideCount > 0
-      ? `Your renter page is live, plus ${liveOutsideCount} outside ${
+      ? `Your renter page is live, plus ${liveOutsideCount} rental ${
           liveOutsideCount === 1 ? "site" : "sites"
         }.`
-      : "Your renter page is live. No outside sites are live yet.";
+      : "Your renter page is live. No rental sites are live yet.";
   const body = packetBlocked
     ? `Start with ${
         firstListingPacketMissingLabel?.toLowerCase() ?? "the missing detail"
-      }. The 1-tap queue opens after the listing facts are ready.`
+      }. Posting opens after the listing details are ready.`
     : !linkIsLive
     ? setupOutstanding > 0
-      ? "Get online shows the required listing details first, then opens only the channel choices that need your sign-in or proof."
-      : "Set the renter page live, then finish only the outside sites that need your sign-in or proof."
+      ? "Get online shows the required listing details first, then opens only the channel choices that need your sign-in or the ad link."
+      : "Set the renter page live, then finish only the rental sites that need you to sign in or save the ad link."
     : needsListingWork
-      ? "Get online shows the missing listing items first, then opens only the outside-site steps that need your sign-in or proof."
+      ? "Get online shows the missing listing items first, then opens only the rental-site steps that need your sign-in or the ad link."
     : expiredOnly
-      ? "Previous outside ads need refresh or repost before they count as live."
+      ? "Previous ads on rental sites need refresh or repost before they count as live."
       : liveOutsideCount > 0
         ? `${totalInquiryCount} ${
             totalInquiryCount === 1 ? "inquiry is" : "inquiries are"
           } tied to this rental so far.`
-        : "Outside sites still need posting, and each one counts as live only once its real ad URL is saved.";
+        : "Rental sites still need posting, and each one counts as live only once its real ad URL is saved.";
   const actionHref = packetBlocked ? firstMissingHref : distributeHref;
   const actionLabel = !linkIsLive
     ? packetBlocked
@@ -708,13 +709,13 @@ function SyndicationFirstCard({
       ? "Refresh or repost"
       : liveOutsideCount > 0
         ? "Review syndication"
-        : "Post outside sites";
+        : "Post rental sites";
   const outsideLabel =
     liveOutsideCount > 0
-      ? `${liveOutsideCount} outside ${liveOutsideCount === 1 ? "site" : "sites"} live`
+      ? `${liveOutsideCount} rental ${liveOutsideCount === 1 ? "site" : "sites"} live`
       : hasPostHistory
-        ? "Outside ads need refresh"
-        : "No outside sites live";
+        ? "Ads on rental sites need refresh"
+        : "No rental sites live";
   const attentionLabel = packetBlocked
     ? `${listingPacketMissingCount} listing ${
         listingPacketMissingCount === 1 ? "detail" : "details"
@@ -737,10 +738,10 @@ function SyndicationFirstCard({
   const renterPageLabel = linkIsLive ? "Renter page live" : "Renter page not live";
   const outsideAdsLabel =
     liveOutsideCount > 0
-      ? `${liveOutsideCount} outside ${
+      ? `${liveOutsideCount} ${
           liveOutsideCount === 1 ? "ad" : "ads"
-        } live`
-      : "Outside ads not live";
+        } live on rental sites`
+      : "Not on any rental site";
 
   return (
     <section className="mb-4 rounded-2xl border border-slate-900 bg-slate-950 p-4 text-white shadow-sm sm:p-5">
@@ -772,8 +773,8 @@ function SyndicationFirstCard({
             </p>
           ) : null}
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
-            One listing first. Sign-in, payment, and proof wait inside Get
-            online, and outside sites count as Live only after proof is saved.
+            Your listing first. Sign-in and site fees wait inside Get online,
+            and a site counts as Live only after the link to your ad is saved.
           </p>
         </div>
         <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:shrink-0 sm:items-end">
@@ -985,7 +986,7 @@ export default async function PropertyDetailPage({
               "Set this rental Live to include your public listing link.",
             copyFallbackCta: "Contact us for availability details.",
             postingBody:
-              "Set this rental Live before adding posts or sharing tracked links.",
+              "Set this rental Live before posting or sharing your inquiry link.",
           };
 
   // Ready-to-paste per-channel listing copy, built from this unit's real fields.
@@ -2278,31 +2279,31 @@ export default async function PropertyDetailPage({
     searchParams.dist === "copilot_live"
       ? {
           tone: "success",
-          title: "Posting proof saved.",
+          title: "Your ad is live.",
           body:
-            "This channel is now marked Live because a real ad URL was saved. The checklist progress and proof link update here.",
+            "This channel is now marked Live because a real ad URL was saved. The checklist progress and ad link update here.",
         }
       : searchParams.dist === "copilot_needsurl"
         ? {
             tone: "warning",
             title: "Live ad URL needed.",
             body:
-              "Vacantless did not mark this channel Live. After you post on the outside site, paste the real public ad URL.",
+              "Vacantless did not mark this channel Live. After you post on the rental site, paste the real public ad URL.",
           }
         : searchParams.dist === "copilot_prooffail" ||
             searchParams.dist === "copilot_trackerfail"
           ? {
               tone: "danger",
-              title: "Proof was not saved.",
+              title: "The ad link was not saved.",
               body:
-                "Vacantless left the channel unfinished so it does not look Live without proof. Try saving the live ad URL again.",
+                "Vacantless left the channel unfinished so it does not look Live without the ad link. Try saving the live ad URL again.",
             }
           : searchParams.dist === "copilot_run_closed"
             ? {
                 tone: "warning",
                 title: "This publish run is closed.",
                 body:
-                  "Start or reopen a publish checklist before saving posting proof.",
+                  "Start or reopen a publish checklist before saving the ad link.",
               }
             : searchParams.dist === "copilot_concierge"
               ? {
@@ -2316,14 +2317,14 @@ export default async function PropertyDetailPage({
                     tone: "info",
                     title: "This channel is already being updated.",
                     body:
-                      "Refresh the checklist and check the channel status before saving proof again.",
+                      "Refresh the checklist and check the channel status before saving the ad link again.",
                   }
                 : searchParams.dist === "copilot_channel"
                   ? {
                       tone: "warning",
                       title: "Posting assist is not available here.",
                       body:
-                        "Use the checklist action for this channel, then save proof when the outside listing is live.",
+                        "Use the checklist action for this channel, then save the ad link when the ad is live on the site.",
                     }
                   : null;
   const distributeRunNotice: DistributeRunNotice | null =
@@ -4263,6 +4264,7 @@ export default async function PropertyDetailPage({
           publishEverywhereCopilotEnabled={publishEverywhereCopilotEnabled}
           publishSimpleDefaultEnabled={publishSimpleDefaultEnabled}
           stepClarityLiveEnabled={stepClarityLiveEnabled}
+          wizardEnabled={distributionWizardEnabled()}
         />
       </TabPanel>
 

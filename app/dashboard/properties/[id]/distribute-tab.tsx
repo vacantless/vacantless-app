@@ -564,9 +564,9 @@ export function buildPublishControlRoomBuckets({
   return [
     {
       key: "liveOutside",
-      label: "Live outside",
+      label: "Live on rental sites",
       value: liveOutsideCount,
-      detail: bucketDetail(liveOutsideCount, "proof saved", "none live"),
+      detail: bucketDetail(liveOutsideCount, "ad link saved", "none live"),
       tone: bucketTone(liveOutsideCount, "positive"),
     },
     {
@@ -592,7 +592,7 @@ export function buildPublishControlRoomBuckets({
     },
     {
       key: "needsProof",
-      label: "Needs proof",
+      label: "Needs the ad link",
       value: needsProof,
       detail: bucketDetail(needsProof, "save live URL", "clear"),
       tone: bucketTone(needsProof, "danger"),
@@ -644,6 +644,7 @@ export function DistributeTab({
   publishEverywhereCopilotEnabled,
   publishSimpleDefaultEnabled,
   stepClarityLiveEnabled,
+  wizardEnabled,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -674,6 +675,7 @@ export function DistributeTab({
   publishEverywhereCopilotEnabled: boolean;
   publishSimpleDefaultEnabled: boolean;
   stepClarityLiveEnabled: boolean;
+  wizardEnabled: boolean;
 }) {
   // S533: posted only — a stale (needs_refresh) channel is not "posted" for
   // the header chip either; it surfaces via the health panel's refresh count.
@@ -728,8 +730,8 @@ export function DistributeTab({
   const publishEverywherePostingBlocker =
     firstListingPacketAction
       ? {
-          title: "Finish the one listing details first.",
-          detail: `${firstListingPacketAction.detail} Sign-in, payment, and proof wait here.`,
+          title: "Finish your listing details first.",
+          detail: `${firstListingPacketAction.detail} Sign-in, payment, and the ad link come after this.`,
           href: firstListingPacketAction.href,
           action: firstListingPacketAction.action,
         }
@@ -750,6 +752,7 @@ export function DistributeTab({
         conciergeUsage={launchRun.conciergeUsage}
         copilotEnabled={publishEverywhereCopilotEnabled}
         stepClarityLiveEnabled={stepClarityLiveEnabled}
+        wizardEnabled={wizardEnabled}
         runItems={launchRun.items.map((it) => ({
           id: it.id,
           channel: it.channel,
@@ -1206,7 +1209,7 @@ function portalRequirementFlagChips(
   if (plan.requiresProof) {
     chips.push({
       key: "proof",
-      label: "Proof",
+      label: "Ad link",
       className: "bg-emerald-50 text-emerald-700",
     });
   }
@@ -1252,7 +1255,7 @@ function packetFieldAction(
     return {
       href: packetFieldHref(missing.field, propertyId),
       action: "Choose property type",
-      detail: "Choose the property type in Unit details to unlock outside-site posting.",
+      detail: "Choose the property type in Unit details to unlock posting to rental sites.",
     };
   }
 
@@ -1260,7 +1263,7 @@ function packetFieldAction(
   return {
     href: packetFieldHref(missing.field, propertyId),
     action: `Add ${label}`,
-    detail: `Add ${label} before outside sites can use the one listing.`,
+    detail: `Add ${label} before the rental sites can use your listing.`,
   };
 }
 
@@ -1291,15 +1294,15 @@ function ListingPacketCard({
   const actionHref = primaryAction?.href ?? "#publish-checklist";
   const actionLabel = primaryAction?.action ?? "Choose sites";
   const headline = ready
-    ? "Your one listing has what every site needs."
-    : `Your one listing is ready for ${readiness.readyChannelCount} ${
+    ? "Your listing has what every site needs."
+    : `Your listing is ready for ${readiness.readyChannelCount} ${
         readiness.readyChannelCount === 1 ? "site" : "sites"
       }.`;
   const subline = ready
-    ? "Posting choices stay below: included routes, sign-in steps, paid top-ups, and proof."
+    ? "Posting choices stay below: which sites, sign-in steps, and any site fees."
     : primaryMissing?.field === "property_type"
       ? primaryAction?.detail ??
-        "Choose the property type in Unit details to unlock outside-site posting."
+        "Choose the property type in Unit details to unlock posting to rental sites."
       : `Add ${missingText} to satisfy the remaining sites.`;
 
   return (
@@ -1311,7 +1314,7 @@ function ListingPacketCard({
               <Icons.list className="h-4 w-4" />
             </IconTile>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              One listing
+              Your listing
             </p>
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -1360,7 +1363,7 @@ function ListingPacketCard({
           {missingRequired.length} missing details
         </span>
         <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-700">
-          Sign-in/payment/proof later
+          Sign-in and fees come later
         </span>
       </div>
 
@@ -1431,7 +1434,7 @@ function ListingPacketChannelRow({
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
             {channel.ready
               ? primaryActionDetail
-              : `After the listing facts are ready: ${primaryActionDetail}`}
+              : `After the listing details are ready: ${primaryActionDetail}`}
           </p>
         )}
       </div>
@@ -1453,15 +1456,15 @@ function ListingPacketChannelRow({
 
 function packetReadyDetail(channel: ListingPacketChannelReadiness): string {
   if (channel.tier === "included") {
-    return "Listing facts ready; it can run after approval.";
+    return "Listing details ready; it can run after approval.";
   }
   if (channel.tier === "top_up") {
-    return "Listing facts ready; payment stays below.";
+    return "Listing details ready; payment comes later.";
   }
   if (channel.tier === "broker") {
-    return "Listing facts ready; broker proof stays below.";
+    return "Listing details ready; your agent's ad link comes later.";
   }
-  return "Listing facts ready; sign-in or proof stays below.";
+  return "Listing details ready; sign-in and the ad link come later.";
 }
 
 function conciergeRequestedDate(value: string | null | undefined): string | null {
@@ -1678,8 +1681,8 @@ function SimpleGetOnline({
   const launchSetupBlocker =
     firstPacketAction
       ? {
-          title: "Finish the one listing details first.",
-          detail: `${firstPacketAction.detail} Sign-in, payment, and proof wait here.`,
+          title: "Finish your listing details first.",
+          detail: `${firstPacketAction.detail} Sign-in, payment, and the ad link come after this.`,
           href: firstPacketAction.href,
           action: firstPacketAction.action,
         }
@@ -1689,7 +1692,7 @@ function SimpleGetOnline({
             setupOutstanding === 1 ? "listing detail" : "listing details"
           } first.`,
           detail:
-            "After that, this queue will take you to the first site that needs your sign-in, approval, or proof.",
+            "After that, this queue will take you to the first site that needs your sign-in, approval, or ad link.",
           href: "#rental-details",
           action: "Finish details",
         }
@@ -1697,7 +1700,7 @@ function SimpleGetOnline({
         ? {
             title: "Add photos before posting to sites.",
             detail:
-              "After photos are added, this queue will take you to the first site that needs your sign-in, approval, or proof.",
+              "After photos are added, this queue will take you to the first site that needs your sign-in, approval, or ad link.",
             href: "#property-photos",
             action: "Add photos first",
           }
@@ -1705,7 +1708,7 @@ function SimpleGetOnline({
           ? {
               title: "Set the renter page live before posting to sites.",
               detail:
-                "After the renter page is live, this queue will take you to the first site that needs your sign-in, approval, or proof.",
+                "After the renter page is live, this queue will take you to the first site that needs your sign-in, approval, or ad link.",
               href: "#publish-action",
               action: "Set Live first",
             }
@@ -1726,7 +1729,7 @@ function SimpleGetOnline({
     <>
       <p>
         Fallback help is included for destinations that still need a person.
-        Paid placements still need your approval, spend limit, and proof.
+        Paid placements still need your approval, spend limit, and the ad link.
       </p>
       <p className="mt-1 font-semibold text-gray-900">
         {conciergeUsageLabel(launchRun.conciergeUsage)}
@@ -1767,7 +1770,7 @@ function SimpleGetOnline({
       <p>
         Fallback help, paid placements, and extra manual reach stay as Growth or
         top-up work. Paid placements still need your approval, spend limit, and
-        proof.
+        the ad link.
       </p>
       {launchRun.conciergeDailyLostLabel && (
         <p className="mt-1 text-gray-600">
@@ -1863,10 +1866,10 @@ function SimpleGetOnline({
               >
                 {linkIsLive
                   ? railBuckets.externalLiveCount > 0
-                    ? `Your renter page is live, plus ${railBuckets.externalLiveCount} outside ${
+                    ? `Your renter page is live, plus ${railBuckets.externalLiveCount} rental ${
                         railBuckets.externalLiveCount === 1 ? "site" : "sites"
                       }.`
-                    : "Your renter page is live. No outside sites are live yet."
+                    : "Your renter page is live. No rental sites are live yet."
                   : `Publish ${addressLabel} everywhere renters are looking.`}
               </h3>
               <p
@@ -1876,9 +1879,9 @@ function SimpleGetOnline({
               >
                 {linkIsLive
                   ? railBuckets.externalLiveCount > 0
-                    ? "Ready destinations can sync from here, and proof-gated exceptions stay in the launch queue."
-                    : "Anyone with your link can inquire. Outside sites count as live only once the real ad URL is saved."
-                  : "Launch turns on the Vacantless renter page and email-alert reach first, then opens the queue for account, spend, broker, or proof exceptions."}
+                    ? "Ready destinations can sync from here, and sites still waiting on an ad link stay in the launch queue."
+                    : "Anyone with your link can inquire. Rental sites count as live only once the real ad URL is saved."
+                  : "Launch turns on the Vacantless renter page and email-alert reach first, then opens the queue for account, spend, broker, or ad-link exceptions."}
               </p>
             </div>
             <span
@@ -1889,7 +1892,7 @@ function SimpleGetOnline({
               }`}
             >
               {railBuckets.externalLiveCount}/{railBuckets.externalTotalCount}{" "}
-              outside sites live
+              rental sites live
             </span>
           </div>
 
@@ -2061,12 +2064,12 @@ function SimpleGetOnline({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {packetBlocked ? "Next after one listing" : "Launch queue"}
+                {packetBlocked ? "Next after your listing" : "Launch queue"}
               </p>
               <h3 className="mt-1 text-base font-semibold text-gray-950">
                 {packetBlocked
-                  ? "The launch queue opens after the listing facts are ready."
-                  : "Vacantless launches ready destinations and shows only account, spend, or proof exceptions."}
+                  ? "Posting opens after the listing details are ready."
+                  : "Vacantless launches ready destinations and shows only account, spend, or ad-link exceptions."}
               </h3>
             </div>
             <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
@@ -2229,7 +2232,7 @@ function PublishControlRoom({
               : "Review posting steps"
             : "Start posting steps";
   const launchLabel = packetBlocked
-    ? `One listing needs ${packetMissing.length} ${
+    ? `Your listing needs ${packetMissing.length} ${
         packetMissing.length === 1 ? "thing" : "things"
       } before every site can use it`
     : launchBlocked
@@ -2240,12 +2243,12 @@ function PublishControlRoom({
         : "Posting steps are ready to review"
       : "Ready to choose sites and publish";
   const launchDetail = packetBlocked
-    ? `${firstPacketAction?.detail ?? "Start with the missing listing item."} Sign-in, payment, and proof stay below.`
+    ? `${firstPacketAction?.detail ?? "Start with the missing listing item."} Sign-in, payment, and the ad link come after this.`
     : launchBlocked
-    ? "Turn on the renter page first. Outside sites count as live only after their real ad link is saved."
+    ? "Turn on the renter page first. A site counts as Live only after the link to your ad is saved."
     : hasRun
-      ? "Use one checklist to approve paid steps, finish sign-ins, refresh stale ads, and save live proof."
-      : "Choose the sites once. Vacantless prepares the copy and shows only sign-in, payment, or proof steps that need you.";
+      ? "Use one checklist to approve paid steps, finish sign-ins, refresh stale ads, and save the ad link."
+      : "Choose the sites once. Vacantless prepares the copy and shows only the sign-in, payment, or ad-link steps that need you.";
   const blockers = [
     packetBlocked ? packetMissingText : null,
     !packetBlocked && setupOutstanding > 0
@@ -2276,7 +2279,7 @@ function PublishControlRoom({
       ? [
           {
             key: liveOutsideBucket.key,
-            label: "Outside ads",
+            label: "Ads on rental sites",
             value: liveOutsideBucket.value,
             detail: liveOutsideBucket.detail,
             tone: liveOutsideBucket.tone,
@@ -2362,7 +2365,7 @@ function PublishControlRoom({
 
       {blockers.length > 0 ? (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Before outside sites: {blockers.join(", ")}.
+          Before the rental sites: {blockers.join(", ")}.
         </p>
       ) : attentionBuckets.length > 0 ? (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -2370,7 +2373,7 @@ function PublishControlRoom({
         </p>
       ) : (
         <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          Good to publish. Outside sites count as Live only after proof is saved.
+          Good to publish. Rental sites count as Live only after the ad link is saved.
         </p>
       )}
     </section>
@@ -2512,7 +2515,7 @@ function PostingModePanel({
   const doneForYouBody = activeItem
     ? activeReferral
       ? `The referral is in progress.${activeRequestedSentence} It still needs the real Realtor.ca listing URL before it counts as Live.`
-      : `Vacantless has this channel in its queue.${activeRequestedSentence} No second click is needed; real live-ad proof is still required before it counts as Live.`
+      : `Vacantless has this channel in its queue.${activeRequestedSentence} No second click is needed; the link to your ad is still required before it counts as Live.`
     : target
       ? referralTarget
         ? "A licensed network agent handles the Realtor.ca path through their brokerage."
@@ -2578,15 +2581,15 @@ function PostingModePanel({
         <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-gray-900 [&::-webkit-details-marker]:hidden">
           Use a site yourself instead
           <span className="ml-2 text-xs font-normal text-gray-500">
-            Prepared copy, your login, your final proof
+            Prepared copy, your login, your ad link
           </span>
         </summary>
         <div className="border-t border-gray-100 px-5 py-4">
           <p className="text-sm font-semibold text-gray-950">
-            Compose. Post. Prove.
+            Write. Post. Save the link.
           </p>
           <p className="mt-1 text-xs text-gray-600">
-            Vacantless prepares the steps and keeps the live-link proof here,
+            Vacantless prepares the steps and keeps the ad link here,
             but you sign in, post, and save the ad URL yourself.
           </p>
           <a
@@ -2996,8 +2999,8 @@ function ChannelCard({
       : null;
   const proofSummary =
     card.posts.length > 0
-      ? `${card.posts.length} ${card.posts.length === 1 ? "proof link" : "proof links"} saved`
-      : "No proof link saved";
+      ? `${card.posts.length} ${card.posts.length === 1 ? "ad link" : "ad links"} saved`
+      : "No ad link saved";
 
   return (
     <div

@@ -13,6 +13,7 @@ import {
 } from "@/lib/onboarding";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { computeOnboardingState } from "@/lib/onboarding-wizard";
+import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { isSubscriptionActive, pilotStatus } from "@/lib/billing";
 import {
   SectionHeading,
@@ -385,6 +386,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
         hasProperty: (propertyCount ?? 0) > 0,
+        hasLiveListing: (listingOnlineCount ?? 0) > 0,
+        wizardEnabled: distributionWizardEnabled(),
         hasTenancy: (onboardingTenancyCount ?? 0) > 0,
         railStepDoneAt:
           (onboardingRow as { rail_step_done_at: string | null } | null)

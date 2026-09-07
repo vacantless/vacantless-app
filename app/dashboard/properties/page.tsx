@@ -16,6 +16,7 @@ import { rentalRowReadiness, type ReadinessSignal } from "@/lib/rental-readiness
 import { getCurrentOrg } from "@/lib/org";
 import { canUseListingAiImport } from "@/lib/billing";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { hardDeletable } from "@/lib/property-archive";
 import { loadReservedListingPostIds } from "@/lib/listing-post-reservations";
 import { addProperty, importPropertyFromMls, importListingFromImages } from "./actions";
@@ -88,13 +89,23 @@ function rentalLaunchState({
   readiness,
   livePostCount,
   archived,
+  wizardEnabled,
 }: {
   row: PropertyRow;
   readiness: ReadinessSignal[];
   livePostCount: number;
   archived: boolean;
+  wizardEnabled: boolean;
 }): RentalLaunchState {
-  const distributionHref = `/dashboard/properties/${row.id}?tab=distribute#publish-control-room`;
+  const controlRoomHref = `/dashboard/properties/${row.id}?tab=distribute#publish-control-room`;
+  // S691 (first-time walk): a rental that has never been on any site opens
+  // the guided wizard (Connect sites -> Add details -> Send live), which
+  // explains each site in plain words. Once one ad is live, the control room
+  // is the right screen. Wizard dark = control room, never a broken link.
+  const distributionHref =
+    wizardEnabled && livePostCount === 0
+      ? `/dashboard/link-portals?property=${encodeURIComponent(row.id)}`
+      : controlRoomHref;
   const missing = missingBasics(row);
 
   if (archived) {
@@ -122,7 +133,7 @@ function rentalLaunchState({
       label: "Paused",
       detail: "Relist when ready",
       action: "Review",
-      href: distributionHref,
+      href: controlRoomHref,
       tone: "muted",
     };
   }
@@ -141,7 +152,7 @@ function rentalLaunchState({
   if (warning?.key === "photos") {
     return {
       label: "Needs photos",
-      detail: "Add photos before syndication",
+      detail: "Add photos on the way to posting",
       action: "Get online",
       href: distributionHref,
       tone: "warn",
@@ -160,8 +171,8 @@ function rentalLaunchState({
 
   if (warning?.key === "feed") {
     return {
-      label: "Needs feed detail",
-      detail: "Fix feed blockers before syndication",
+      label: "Needs listing details",
+      detail: "Fix the listing details before posting",
       action: "Get online",
       href: distributionHref,
       tone: "warn",
@@ -171,7 +182,7 @@ function rentalLaunchState({
   if (!isPublicBookable(row.status)) {
     return {
       label: "Ready for Set Live",
-      detail: "Set Live before autopilot can start",
+      detail: "Set Live, then post it to the rental sites",
       action: "Get online",
       href: distributionHref,
       tone: "ready",
@@ -180,17 +191,17 @@ function rentalLaunchState({
 
   if (livePostCount > 0) {
     return {
-      label: `Proof saved on ${pluralize(livePostCount, "site")}`,
-      detail: "Live ad URLs are tracked",
+      label: `Live on ${pluralize(livePostCount, "site")}`,
+      detail: "Ad links saved",
       action: "View results",
-      href: distributionHref,
+      href: controlRoomHref,
       tone: "active",
     };
   }
 
   return {
-    label: "Live, not distributed",
-    detail: "Open the channel run",
+    label: "Not on any rental site yet",
+    detail: "Post it to the rental sites",
     action: "Get online",
     href: distributionHref,
     tone: "ready",
@@ -262,6 +273,7 @@ export default async function PropertiesPage({
   const addPropertyV2Enabled = envFlagEnabled(
     process.env.ADD_PROPERTY_V2_ENABLED,
   );
+  const wizardEnabled = distributionWizardEnabled();
 
   // Per-property inquiry counts for the selected org.
   const leadCounts = new Map<string, number>();
@@ -522,6 +534,7 @@ export default async function PropertiesPage({
               readiness,
               livePostCount,
               archived: archivedView,
+              wizardEnabled,
             });
             const statusLabel = propertyStatusLabel(p.status);
             const showLaunchChip = launch.label !== statusLabel;

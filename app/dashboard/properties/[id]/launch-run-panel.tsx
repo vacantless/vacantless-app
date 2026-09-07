@@ -348,7 +348,7 @@ function operatorActionSummary(item: RunItemView): string {
     return "Paste the real live ad URL before this site can count as Live.";
   }
   if (item.staleRefresh) {
-    return "Refresh this ad, then save fresh proof so renters do not hit an old listing.";
+    return "Refresh this ad, then save the new ad link so renters do not hit an old listing.";
   }
   if (item.mode === "browser_copilot") {
     switch (item.publishStatus) {
@@ -367,15 +367,15 @@ function operatorActionSummary(item: RunItemView): string {
     case "needs_login":
       return `Sign in on ${item.channelLabel}, finish the post, then paste the live ad URL here.`;
     case "needs_operator":
-      return `Follow the ${item.channelLabel} steps, then save proof when the post is really live.`;
+      return `Follow the ${item.channelLabel} steps, then save the ad link when the post is really live.`;
     case "queued":
       return `Start ${item.channelLabel} when you are ready to work this channel.`;
     case "submitting":
-      return `${item.channelLabel} is being submitted. Check back for proof before calling it Live.`;
+      return `${item.channelLabel} is being submitted. Check back for the ad link before calling it Live.`;
     case "submitted":
       return `${item.channelLabel} was submitted, but that does not mean it is live on the partner site yet.`;
     case "live":
-      return `${item.channelLabel} already has live proof. No action needed unless the ad changes.`;
+      return `${item.channelLabel} already has the ad link. No action needed unless the ad changes.`;
     case "blocked":
       return `${item.channelLabel} is blocked. Fix the setup issue before posting.`;
     case "rejected":
@@ -389,7 +389,7 @@ function operatorOwnerLine(item: RunItemView): string {
   if (item.keepLiveAction) {
     switch (item.keepLiveAction.kind) {
       case "auto_refresh":
-        return "Vacantless handles the refresh behind the scenes, then waits for real live-ad proof before restoring a Live state.";
+        return "Vacantless handles the refresh behind the scenes, then waits for the link to your ad before restoring a Live state.";
       case "send_reminder":
         return "Vacantless will use the existing reminder cycle instead of pretending it can safely refresh without the missing consent.";
       case "request_spend":
@@ -398,11 +398,11 @@ function operatorOwnerLine(item: RunItemView): string {
       case "request_authorization":
         return "This stays as one setup task, then future launch and refresh work can run from the connected account.";
       case "remove_ad":
-        return "Removal is part of the same listing lifecycle; the ad is not treated as removed until proof is saved.";
+        return "Removal is part of the same listing lifecycle; the ad is not treated as removed until the ad link is saved.";
       case "save_proof":
-        return "Live needs a real destination URL or proof record before Vacantless counts this site.";
+        return "Live needs a real destination URL or ad link before Vacantless counts this site.";
       case "watching":
-        return "After proof exists, Vacantless keeps the expiry clock on this same row.";
+        return "After the ad link exists, Vacantless keeps the expiry clock on this same row.";
       case "none":
         break;
     }
@@ -411,22 +411,22 @@ function operatorOwnerLine(item: RunItemView): string {
     return "Vacantless keeps the tracker row for attribution and records your removal confirmation here.";
   }
   if (item.channel === "facebook_feed") {
-    return "Vacantless can post to the connected Facebook Page only after you authorize this item. It still needs Graph API proof before it counts as Live.";
+    return "Vacantless can post to the connected Facebook Page only after you authorize this item. It still needs the post link from Facebook before it counts as Live.";
   }
   if (item.mode === "automatic") {
-    return "Vacantless can check this inside the app, then it saves proof here.";
+    return "Vacantless can check this inside the app, then it saves the ad link here.";
   }
   if (item.mode === "feed_partner") {
     return "Vacantless prepares the feed; a partner site may still need to accept it before it is truly live.";
   }
   if (item.mode === "browser_copilot") {
-    return "The helper opens in front of you with copy and proof fields. Behind the scenes, Vacantless tracks this site as waiting until you save the real ad URL.";
+    return "The helper opens in front of you with copy and ad-link fields. Behind the scenes, Vacantless tracks this site as waiting until you save the real ad URL.";
   }
   if (item.mode === "concierge") {
-    return "Vacantless can handle this fallback, but it still needs real live-ad proof before it counts.";
+    return "Vacantless can handle this fallback, but it still needs the link to your ad before it counts.";
   }
   if (item.mode === "broker") {
-    return "A licensed broker or agent must complete the outside listing; Vacantless only tracks the proof.";
+    return "A licensed broker or agent must complete the listing on that site; Vacantless only tracks the ad link.";
   }
   return "Use this to track another place you posted, so leads can be counted correctly.";
 }
@@ -585,7 +585,7 @@ export function LaunchRunPanel({
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">
-            Waiting on one listing
+            Finish your listing first
           </p>
           <p className="mt-1 text-base font-semibold text-amber-950">
             {setupBlocker.title}
@@ -605,7 +605,7 @@ export function LaunchRunPanel({
             {waitingSiteCount} {waitingSiteCount === 1 ? "site" : "sites"} waiting
           </span>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">
-            Account, spend, and proof later
+            Account, spend, and the ad link later
           </span>
         </div>
       </div>
@@ -697,8 +697,8 @@ export function LaunchRunPanel({
       !item.liveWithoutUrl,
   ).length;
   const queueProgressLabel = renterPageDone
-    ? `Renter page done · ${outsideLiveProofCount} of ${outsideItems.length} outside sites live`
-    : `${outsideLiveProofCount} of ${outsideItems.length} outside sites live`;
+    ? `Renter page done · ${outsideLiveProofCount} of ${outsideItems.length} rental sites live`
+    : `${outsideLiveProofCount} of ${outsideItems.length} rental sites live`;
 
   return (
     <div
@@ -744,9 +744,9 @@ export function LaunchRunPanel({
                 : "Your public page and finished sites stay tracked here. Submitted feed rows are not treated as Live until the real ad link exists."}
             </p>
             <p className="mt-2 text-xs text-gray-500">
-              {outsideLiveProofCount} of {outsideItems.length} outside sites
+              {outsideLiveProofCount} of {outsideItems.length} rental sites
               have a live ad link. The renter page is tracked separately, and
-              outside sites only count as Live after proof is saved.
+              rental sites only count as Live after the ad link is saved.
             </p>
           </div>
           {priorityItem && (
@@ -935,7 +935,7 @@ export function LaunchRunPanel({
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
                   Vacantless handles this fallback and still records real
-                  live-ad proof before it is marked Live.
+                  the ad link before it is marked Live.
                 </span>
               </form>
             )}
@@ -951,7 +951,7 @@ export function LaunchRunPanel({
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
                   {item.channel === "facebook_feed"
-                    ? "Vacantless posts one organic Page-feed link through Graph API and reports back with the post proof. Marketplace and paid ads stay separate."
+                    ? "Vacantless posts one organic Page-feed link through Graph API and reports back with the post link. Marketplace and paid ads stay separate."
                     : `Vacantless posts this prepared ad to ${item.channelLabel} automatically and reports back. Paid channels require standing spend authorization before the worker can claim them.`}
                 </span>
               </form>
@@ -1031,7 +1031,7 @@ export function LaunchRunPanel({
             )}
             {item.proofUrl && (
               <p className="mb-3 truncate text-xs text-gray-500">
-                Proof:{" "}
+                Ad link:{" "}
                 <a
                   href={item.proofUrl}
                   target="_blank"
@@ -1107,7 +1107,7 @@ export function LaunchRunPanel({
                     type="submit"
                     className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                   >
-                    Save proof
+                    Save the ad link
                   </button>
                 </form>
 

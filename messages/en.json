@@ -21,7 +21,7 @@
     "groupReady": "Ready to connect now",
     "groupComing": "Coming soon",
     "groupAgent": "Agent / MLS only",
-    "kindLogin": "You use your own account for this site. Vacantless writes the ad and tracks where it went, but it never logs in or posts for you.",
+    "kindLogin": "You use your own account for this site. Vacantless writes the ad and keeps the link; it never signs in as you.",
     "kindOauth": "One secure connect button",
     "kindNone": "Not connected through Vacantless",
     "status": {
@@ -40,10 +40,14 @@
       "deadSession": "RECONNECT",
       "deadSessionSub": "Your {name} session ended ({reason}). Sign in again to continue.",
       "capReached": "FREE CAP REACHED",
-      "capReachedSub": "{capLine}"
+      "capReachedSub": "{capLine}",
+      "linkedSubLogin": "Your account is on file. We write the ad and keep the link; you post it, or ask us to post it for you.",
+      "notLinkedSubLogin": "Tell us which account you use. We write the ad; you post it, or ask us to post it for you.",
+      "selfPost": "YOU POST IT YOURSELF",
+      "selfPostSub": "Free. Vacantless writes the ad and keeps your link; you post it from your own {name} account."
     },
     "buttons": {
-      "login": "CLICK HERE TO RECORD YOUR {name} ACCOUNT",
+      "login": "TELL US YOUR {name} ACCOUNT",
       "connect": "CLICK HERE TO CONNECT YOUR {name}",
       "disconnect": "Disconnect",
       "reconnect": "RECONNECT YOUR {name} ACCOUNT",

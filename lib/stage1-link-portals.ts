@@ -26,15 +26,19 @@ export type Stage1StatusCopy = {
     | "status.capReached"
     | "status.notLinked"
     | "status.notAvailable"
+    | "status.selfPost"
     | "status.mlsOnly";
   subKey:
     | "status.linkedSub"
+    | "status.linkedSubLogin"
     | "status.connectedNeedsAuthSub"
     | "status.checkingSub"
     | "status.deadSessionSub"
     | "status.capReachedSub"
     | "status.notLinkedSub"
+    | "status.notLinkedSubLogin"
     | "status.notAvailableSub"
+    | "status.selfPostSub"
     | "status.mlsOnlySub";
   tone: Stage1StatusTone;
 };
@@ -50,6 +54,7 @@ export const STAGE1_GROUPS: readonly Stage1Group[] = [
       "dead_session",
       "cap_reached",
       "not_linked",
+      "self_post",
     ],
   },
   {
@@ -100,6 +105,11 @@ export const STAGE1_STATUS_COPY: Record<ChannelTileState, Stage1StatusCopy> = {
     subKey: "status.notAvailableSub",
     tone: "neutral",
   },
+  self_post: {
+    titleKey: "status.selfPost",
+    subKey: "status.selfPostSub",
+    tone: "info",
+  },
   mls_only: {
     titleKey: "status.mlsOnly",
     subKey: "status.mlsOnlySub",
@@ -137,10 +147,23 @@ export function stage1ReasonKey(
     : "needs_login";
 }
 
+/**
+ * Status copy for a tile. For an account_login site (Kijiji, Rentals.ca,
+ * Zumper) the "linked" and "not linked" sub lines must not promise automatic
+ * sending: the self-serve path records which account the landlord uses and
+ * prepares the ad; posting for them is the done-for-you service (S691, the
+ * Kijiji card said "automatically send" and "never posts for you" together).
+ */
 export function stage1StatusCopy(
   state: ChannelTileState,
+  connectKind?: ChannelConnectKind,
 ): Stage1StatusCopy {
-  return STAGE1_STATUS_COPY[state];
+  const copy = STAGE1_STATUS_COPY[state];
+  if (connectKind === "account_login") {
+    if (state === "linked") return { ...copy, subKey: "status.linkedSubLogin" };
+    if (state === "not_linked") return { ...copy, subKey: "status.notLinkedSubLogin" };
+  }
+  return copy;
 }
 
 export function groupStage1ChannelRows(

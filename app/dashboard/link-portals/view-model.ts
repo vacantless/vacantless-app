@@ -92,7 +92,7 @@ export async function buildLinkPortalsViewModel(
     const channel = channelByKey(row.channel);
     if (!channel) return null;
 
-    const copy = stage1StatusCopy(row.state);
+    const copy = stage1StatusCopy(row.state, channel.connectKind);
     const label = row.accountLabel ?? channel.label;
     const reason = t(`reason.${stage1ReasonKey(row)}`);
     const capCost = row.costCap;
@@ -124,6 +124,7 @@ export async function buildLinkPortalsViewModel(
     const hasAccount =
       row.state !== "not_linked" &&
       row.state !== "not_available_yet" &&
+      row.state !== "self_post" &&
       row.state !== "mls_only";
 
     const accountLine =

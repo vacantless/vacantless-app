@@ -49,11 +49,14 @@ import {
   resolvePublishMode,
   summarizeReach,
   isCopilotSupportedKey,
+  forYouLiveState,
+  liveProofUrlFromPosts,
   type PublishMode,
   type PublishBucket,
   type PublishChannelInput,
 } from "@/lib/publish-everywhere";
 import { conciergeUsageLabel } from "@/lib/billing";
+import { firstRunCostLine, firstRunIsFree } from "@/lib/distribution-channels";
 import type {
   DistributeChannelCard,
   GetOnlineBasics,
@@ -173,6 +176,8 @@ type ResolvedRow = {
   mode: PublishMode;
   bucket: PublishBucket;
   automationAction?: "authorize" | "revoke" | null;
+  /** URL of this channel's `live` listing_posts row (hand-posted or worker-posted), or null. */
+  liveProofUrl?: string | null;
 };
 
 type InstantDestination = {
@@ -229,14 +234,24 @@ function ChannelAutomationAction({
 function ChannelRow({
   row,
   propertyId,
+  wizardEnabled = false,
 }: {
   row: ResolvedRow;
   propertyId?: string;
+  wizardEnabled?: boolean;
 }) {
   const chip =
     row.automationAction === "authorize"
       ? { label: "Needs authorization", cls: "bg-amber-50 text-amber-700" }
       : MODE_CHIP[row.mode];
+  // S691: "Connect once" was a dead chip; it now opens the Connect sites
+  // screen for this property. Every row shows what the site costs so a
+  // first-time landlord can do the free ones first.
+  const connectHref =
+    row.mode === "needs_connection" && propertyId && wizardEnabled
+      ? `/dashboard/link-portals?property=${encodeURIComponent(propertyId)}`
+      : null;
+  const costLine = row.key === "site" || row.key === "email" ? null : firstRunCostLine(row.key);
   return (
     <div className="py-1.5">
       <div className="flex items-center gap-3">
@@ -244,12 +259,24 @@ function ChannelRow({
           {CHANNEL_GLYPH[row.key] ?? "🏠"}
         </span>
         <span className="text-sm font-semibold text-gray-800">{row.label}</span>
-        <span
-          className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${chip.cls}`}
-        >
-          {chip.label}
-        </span>
+        {connectHref ? (
+          <a
+            href={connectHref}
+            className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold underline-offset-2 hover:underline ${chip.cls}`}
+          >
+            Connect →
+          </a>
+        ) : (
+          <span
+            className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${chip.cls}`}
+          >
+            {chip.label}
+          </span>
+        )}
       </div>
+      {costLine ? (
+        <p className="ml-10 text-[11px] leading-snug text-gray-500">{costLine}</p>
+      ) : null}
       {propertyId && row.automationAction ? (
         <div className="ml-10">
           <ChannelAutomationAction propertyId={propertyId} row={row} />
@@ -288,6 +315,7 @@ export function PublishEverywhere({
   stepClarityLiveEnabled = false,
   runItems = [],
   postingBlocker = null,
+  wizardEnabled = false,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -303,6 +331,8 @@ export function PublishEverywhere({
   stepClarityLiveEnabled?: boolean;
   runItems?: PublishEverywhereRunItem[];
   postingBlocker?: PublishEverywherePostingBlocker | null;
+  /** DISTRIBUTION_WIZARD_ENABLED: "Connect →" links to the wizard only when it is on. */
+  wizardEnabled?: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDestinations, setConfirmDestinations] = useState<
@@ -332,6 +362,7 @@ export function PublishEverywhere({
       mode,
       bucket,
       automationAction: automationActionForCard(card),
+      liveProofUrl: liveProofUrlFromPosts(card.posts),
     };
   });
   const reach = summarizeReach(resolved.map((r) => r.bucket), true);
@@ -341,20 +372,29 @@ export function PublishEverywhere({
     key,
     label,
   }));
-  const forYou = byBucket("for_you");
-  const setupRows = resolved.filter(
-    (r) => r.mode === "needs_connection" || r.mode === "brokerage_gated",
+  // S691: free sites first, in every list a first-time landlord reads.
+  const freeFirst = (rows: ResolvedRow[]) =>
+    [...rows].sort((a, b) => Number(firstRunIsFree(b.key)) - Number(firstRunIsFree(a.key)));
+  const forYou = freeFirst(byBucket("for_you"));
+  const setupRows = freeFirst(
+    resolved.filter(
+      (r) => r.mode === "needs_connection" || r.mode === "brokerage_gated",
+    ),
   );
   const comingSoonRows = resolved.filter((r) => r.mode === "planned");
   const runItemByChannel = new Map(runItems.map((item) => [item.channel, item]));
-  const forYouIsLive = (row: ResolvedRow) => {
-    const item = runItemByChannel.get(row.key);
-    return item != null && (item.publishStatus === "live" || Boolean(item.externalUrl));
-  };
+  // S691: one live rule for the whole page (lib/publish-everywhere.ts). A site
+  // posted by hand has a live listing_posts row and no run item; it is live.
+  const forYouIsLive = (row: ResolvedRow) =>
+    forYouLiveState({
+      runItem: runItemByChannel.get(row.key) ?? null,
+      liveProofUrl: row.liveProofUrl ?? null,
+    }).isLive;
   const forYouNeedsOperatorStep = (row: ResolvedRow) => {
+    // Live first: a hand-posted site has a live listing row and no run item.
+    if (forYouIsLive(row)) return false;
     const item = runItemByChannel.get(row.key);
     if (item == null) return true;
-    if (forYouIsLive(row)) return false;
     return !(
       item.mode === "concierge" &&
       (item.publishStatus === "queued" ||
@@ -371,10 +411,10 @@ export function PublishEverywhere({
   ).length;
   const onlineHeadline =
     proofSavedCount > 0
-      ? `Proof saved on ${proofSavedCount} ${
+      ? `Live on ${proofSavedCount} ${
           proofSavedCount === 1 ? "site" : "sites"
         }.`
-      : "Your public page is live.";
+      : "Your Vacantless page is live.";
 
   const publishBlockedByBasics = setupOutstanding > 0;
   const canPublish =
@@ -433,8 +473,8 @@ export function PublishEverywhere({
                 {onlineHeadline}
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-                The renter page is live. Finish any outside site that still asks
-                for sign-in or payment, then leave it alone until the listing
+                Your Vacantless page is live. Finish any rental site that still asks you
+                to sign in or pay, then leave it alone until the listing
                 changes.{" "}
                 {totalInquiryCount}{" "}
                 {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
@@ -515,9 +555,8 @@ export function PublishEverywhere({
               {onlineHeadline}
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-              The renter page is live. Connected channels stay in sync, and any
-              outside site that needs a sign-in or payment shows its next step
-              below.{" "}
+              Your Vacantless page is live. Connected sites stay in sync, and any rental
+              site that needs a sign-in or payment shows its next step below.{" "}
               {totalInquiryCount}{" "}
               {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to this
               rental so far.
@@ -572,7 +611,7 @@ export function PublishEverywhere({
                   Confirm the live link
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  A site counts as Live after the real ad link is saved.
+                  A site counts as Live after the link to your ad is saved.
                 </small>
               </div>
             </div>
@@ -713,8 +752,8 @@ export function PublishEverywhere({
             {stepClarityLiveEnabled && linkIsLive && (
               <p className="mb-1.5 text-[11px] leading-relaxed text-gray-500">
                 {firstOutstandingForYou
-                  ? "Same sites as Finish these sites; actions stay on the left."
-                  : "Posting proof is summarized here; no extra action is needed."}
+                  ? "Same sites as “Post to these sites”; actions stay on the left."
+                  : "Your live sites are listed here; nothing more to do."}
               </p>
             )}
             {forYou.map((r) => (
@@ -727,7 +766,12 @@ export function PublishEverywhere({
           <div className="mb-3.5">
             <BucketLabel bucket="after_setup" />
             {setupRows.map((r) => (
-              <ChannelRow key={r.key} row={r} propertyId={propertyId} />
+              <ChannelRow
+                key={r.key}
+                row={r}
+                propertyId={propertyId}
+                wizardEnabled={wizardEnabled}
+              />
             ))}
           </div>
         )}
@@ -745,8 +789,8 @@ export function PublishEverywhere({
         )}
 
         <div className="mt-2 border-t border-gray-100 pt-3 text-[11.5px] leading-relaxed text-gray-500">
-          <b className="text-gray-700">Connected now</b> means the channel can go
-          live from this publish.
+          <b className="text-gray-700">Connected now</b> means Vacantless can send it
+          when you tap Publish; it shows Live once the ad link comes back.
           <br />
           <b className="text-gray-700">Needs your sign-in</b> means Vacantless
           fills the ad, then you sign in, cover any site fee, and tap post.
@@ -824,18 +868,18 @@ function ForYouHandoff({
         <span className="text-lg">🤝</span>
         <h3 className="text-base font-semibold tracking-tight text-indigo-950">
           {postingBlocker
-            ? "Waiting on one listing"
+            ? "Finish your listing first"
             : allSetSummary
-              ? "Posting proof saved"
-              : "Finish these sites"}
+              ? "Your ads are live"
+              : "Post to these sites"}
         </h3>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
         {postingBlocker
-          ? "Outside-site posting stays locked until the one listing has the facts every portal needs."
+          ? "Posting to rental sites opens once your listing has the details every site needs."
           : allSetSummary
-          ? "Live-ad proof is saved here. Reopen a site only when you change the listing."
-          : "Vacantless fills the ad. You sign in if the site asks, pay the site only if it asks, then save the real live-ad link here."}
+          ? "The link to each ad is saved here. Reopen a site only when you change the listing."
+          : "Vacantless fills the ad. You sign in if the site asks, pay the site only if it asks, then save the link to your ad here."}
       </p>
       {postingBlocker && (
         <a
@@ -894,8 +938,10 @@ function ForYouRow({
 }) {
   const [approveOpen, setApproveOpen] = useState(false);
   const paid = row.mode === "paid_optin";
-  const isLive =
-    item != null && (item.publishStatus === "live" || Boolean(item.externalUrl));
+  const { isLive, liveUrl } = forYouLiveState({
+    runItem: item,
+    liveProofUrl: row.liveProofUrl ?? null,
+  });
   const gate =
     item != null && item.mode === "concierge" ? item.publishStatus : null;
   // needs_operator (free channel, prepared) + needs_payment (paid site, prepared
@@ -938,6 +984,9 @@ function ForYouRow({
           {stateChip.label}
         </span>
       </div>
+      {!isLive && firstRunCostLine(row.key) ? (
+        <p className="mt-1 text-[11px] leading-snug text-gray-500">{firstRunCostLine(row.key)}</p>
+      ) : null}
 
       {paid && !isLive && (
         <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
@@ -949,9 +998,22 @@ function ForYouRow({
 
       {postingBlocked && !isLive ? (
         <p className="mt-2 text-[12px] leading-relaxed text-indigo-900/70">
-          Finish the one listing first. Sign-in, payment, and live-ad proof open
-          after the listing facts are ready.
+          Finish your listing first. Sign-in and any site fee come after the
+          details are complete.
         </p>
+      ) : isLive ? (
+        liveUrl ? (
+          <a
+            href={liveUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
+          >
+            View live ad ↗
+          </a>
+        ) : (
+          <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
+        )
       ) : item == null ? (
         linkIsLive ? (
           <form
@@ -971,19 +1033,6 @@ function ForYouRow({
           <p className="mt-2 text-[12px] text-gray-500">
             Publish first, then open this posting step here.
           </p>
-        )
-      ) : isLive ? (
-        item.externalUrl ? (
-          <a
-            href={item.externalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
-          >
-            View live ad ↗
-          </a>
-        ) : (
-          <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
         )
       ) : needsApproval ? (
         <div className="mt-2">

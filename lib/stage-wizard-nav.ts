@@ -12,6 +12,19 @@
 // Append ?property=<id> to a wizard href, preserving any existing query string
 // and trailing #hash. Null / blank id -> the href is returned unchanged (the
 // org-level fallback).
+/**
+ * The guided wizard (Connect sites -> Add details -> Send live) is behind
+ * DISTRIBUTION_WIZARD_ENABLED. One predicate for every link that targets it,
+ * so a dark wizard never gets a live link (S691). Accepts 1/true/yes like the
+ * other env flags.
+ */
+export function distributionWizardEnabled(
+  value: string | null | undefined = process.env.DISTRIBUTION_WIZARD_ENABLED,
+): boolean {
+  const v = String(value ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 export function withPropertyParam(
   href: string,
   propertyId: string | null | undefined,

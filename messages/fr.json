@@ -21,7 +21,7 @@
     "groupReady": "Prêt à connecter maintenant",
     "groupComing": "Bientôt disponible",
     "groupAgent": "Agent / MLS seulement",
-    "kindLogin": "Vous utilisez votre propre compte pour ce site. Vacantless rédige l'annonce et effectue le suivi, mais il ne se connecte jamais et ne publie jamais à votre place.",
+    "kindLogin": "Vous utilisez votre propre compte pour ce site. Vacantless rédige l'annonce et garde le lien; il ne se connecte jamais à votre place.",
     "kindOauth": "Un bouton de connexion sécurisé",
     "kindNone": "Non connecté via Vacantless",
     "status": {
@@ -40,10 +40,14 @@
       "deadSession": "RECONNECTER",
       "deadSessionSub": "Votre session {name} a pris fin ({reason}). Reconnectez-vous pour continuer.",
       "capReached": "LIMITE GRATUITE ATTEINTE",
-      "capReachedSub": "{capLine}"
+      "capReachedSub": "{capLine}",
+      "linkedSubLogin": "Votre compte est enregistré. Nous rédigeons l'annonce et gardons le lien; vous l'affichez, ou demandez-nous de le faire.",
+      "notLinkedSubLogin": "Indiquez-nous quel compte vous utilisez. Nous rédigeons l'annonce; vous l'affichez, ou demandez-nous de le faire.",
+      "selfPost": "VOUS L'AFFICHEZ VOUS-MÊME",
+      "selfPostSub": "Gratuit. Vacantless rédige l'annonce et garde votre lien; vous l'affichez depuis votre propre compte {name}."
     },
     "buttons": {
-      "login": "CLIQUEZ ICI POUR ENREGISTRER VOTRE COMPTE {name}",
+      "login": "INDIQUEZ VOTRE COMPTE {name}",
       "connect": "CLIQUEZ ICI POUR CONNECTER VOTRE {name}",
       "disconnect": "Déconnecter",
       "reconnect": "RECONNECTER VOTRE COMPTE {name}",

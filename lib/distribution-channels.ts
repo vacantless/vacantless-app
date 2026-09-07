@@ -104,6 +104,12 @@ export type DistributionChannel = {
   // today. "planned" must not render a working connect CTA.
   integrationStatus: ChannelIntegrationStatus;
   connectKind: ChannelConnectKind;
+  /**
+   * S691: a planned (not connected) site the landlord can still use today by
+   * posting from their own account with our prepared ad. The connect tile
+   * reads "you post it yourself" instead of "not available yet".
+   */
+  selfPost?: boolean;
   notes?: string;
   mode: ChannelMode;
   // One-line "what Vacantless does here", operator-facing.
@@ -165,6 +171,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     category: "classifieds",
     integrationStatus: "planned",
     connectKind: "none",
+    selfPost: true,
     notes:
       "Marketplace is not a connected Vacantless channel yet. Use posting assist until a real account connection exists.",
     mode: "assisted_manual",
@@ -512,6 +519,7 @@ export const CHANNEL_TILE_STATES = [
   "cap_reached",
   "not_linked",
   "not_available_yet",
+  "self_post",
   "mls_only",
 ] as const;
 export type ChannelTileState = (typeof CHANNEL_TILE_STATES)[number];
@@ -765,6 +773,55 @@ export function channelCostCapLine(
   return { capLine, costLine, capReached: v.capReached };
 }
 
+/**
+ * S691 (first-time walk): what a site costs, in one line, before any account
+ * or session exists. Read by the control room rail so a landlord with no
+ * money knows which sites to do first. Derived from CHANNEL_COST_CENTS and
+ * CHANNEL_FREE_CAP so it cannot drift from the connect-tile lines above.
+ * Null for channels with no posting path yet.
+ */
+export function firstRunCostLine(channelKey: unknown): string | null {
+  const channel = channelByKey(channelKey);
+  if (!channel) return null;
+  switch (channel.key) {
+    case "facebook":
+      return "Free. You post it from your own Facebook account.";
+    case "kijiji":
+      return `1 free ad per personal account, then ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)} each.`;
+    case "rentals_ca":
+      return `Free: up to ${CHANNEL_FREE_CAP.rentals_ca ?? 0} listings per account.`;
+    case "zumper":
+      return `Free: up to ${CHANNEL_FREE_CAP.zumper ?? 0} listings per account.`;
+    case "facebook_feed":
+    case "instagram":
+      return "Free.";
+    case "realtor_ca":
+      return "Through your agent.";
+    case "rentfaster":
+    case "viewit":
+      return "Paid site.";
+    default:
+      return null;
+  }
+}
+
+/** True when a landlord can post there without paying anything today. */
+export function firstRunIsFree(channelKey: unknown): boolean {
+  const channel = channelByKey(channelKey);
+  if (!channel) return false;
+  switch (channel.key) {
+    case "facebook":
+    case "kijiji":
+    case "rentals_ca":
+    case "zumper":
+    case "facebook_feed":
+    case "instagram":
+      return true;
+    default:
+      return false;
+  }
+}
+
 export const SESSION_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 // Same rule as the 0225 view's `stale` column, for callers that pass a row
@@ -838,6 +895,14 @@ export function channelTileStatus(
       ...base,
       state: "mls_only",
       headline: `${channel.label} requires an MLS or broker route.`,
+    };
+  }
+
+  if (channel.integrationStatus === "planned" && channel.selfPost) {
+    return {
+      ...base,
+      state: "self_post",
+      headline: `You post on ${channel.label} yourself from your own account; Vacantless writes the ad and keeps the link.`,
     };
   }
 

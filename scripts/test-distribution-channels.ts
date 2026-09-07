@@ -22,6 +22,8 @@ import {
   getOnlineAssistKindForChannel,
   groupDistributionChannelsForDisplay,
   type ChannelPost,
+  firstRunCostLine,
+  firstRunIsFree,
 } from "../lib/distribution-channels";
 import { PORTAL_KEYS } from "../lib/listing-distribution";
 
@@ -198,7 +200,10 @@ for (const c of DISTRIBUTION_CHANNELS.filter((c) => c.integrationStatus === "pla
     account_status: "connected",
     automation_authorized: true,
   });
-  ok(`${c.key}: planned -> not_available_yet`, status.state === "not_available_yet");
+  ok(
+    `${c.key}: planned -> ${c.selfPost ? "self_post (you post it yourself)" : "not_available_yet"}`,
+    status.state === (c.selfPost ? "self_post" : "not_available_yet"),
+  );
   ok(`${c.key}: planned cannot connect`, status.canConnect === false);
 }
 {
@@ -323,7 +328,7 @@ ok(
 );
 ok(
   "Blocked channel rows keep listing facts before operator actions",
-  distributeTabSource.includes("After the listing facts are ready"),
+  distributeTabSource.includes("After the listing details are ready"),
 );
 
 const launchRunPanelSource = readFileSync(
@@ -515,6 +520,17 @@ const live = (posted_on: string | null, url = "https://kijiji.ca/x", inquiryCoun
     s.blockers.filter((b) => b.includes("Set this rental Live")).length === 1,
   );
 }
+
+// --- S691: first-run cost line (free first) ---------------------------------
+ok("kijiji first-run line: 1 free ad then price", firstRunCostLine("kijiji") === "1 free ad per personal account, then $33.84 each.");
+ok("rentals_ca first-run line reads the cap", firstRunCostLine("rentals_ca") === "Free: up to 3 listings per account.");
+ok("zumper first-run line reads the cap", firstRunCostLine("zumper") === "Free: up to 5 listings per account.");
+ok("facebook marketplace is free, own account", /Free/.test(firstRunCostLine("facebook") ?? "") && /own Facebook/.test(firstRunCostLine("facebook") ?? ""));
+ok("facebook_feed + instagram free", firstRunCostLine("facebook_feed") === "Free." && firstRunCostLine("instagram") === "Free.");
+ok("realtor_ca through an agent", firstRunCostLine("realtor_ca") === "Through your agent.");
+ok("rentfaster + viewit paid", firstRunCostLine("rentfaster") === "Paid site." && firstRunCostLine("viewit") === "Paid site.");
+ok("unknown channel has no line", firstRunCostLine("nope") === null && firstRunCostLine("other") === null);
+ok("free set = the six free lanes", ["facebook", "kijiji", "rentals_ca", "zumper", "facebook_feed", "instagram"].every(firstRunIsFree) && !firstRunIsFree("rentfaster") && !firstRunIsFree("realtor_ca"));
 
 // ---------------------------------------------------------------------------
 console.log(`\ndistribution-channels: ${passed} passed, ${failed} failed`);

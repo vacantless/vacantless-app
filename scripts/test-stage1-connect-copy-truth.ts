@@ -36,12 +36,12 @@ const frButtonLogin: string = fr.stage1.buttons.login;
 
 // --- the promise must be qualified -----------------------------------------
 ok(
-  "en kindLogin says Vacantless never logs in or posts for you",
-  /never logs in/i.test(enKindLogin) && /posts for you/i.test(enKindLogin),
+  "en kindLogin says Vacantless never signs in as you (S691: the done-for-you service posts from its own session, never as the landlord)",
+  /never signs in as you/i.test(enKindLogin),
 );
 ok(
   "fr kindLogin carries the same disclaimer",
-  /jamais/i.test(frKindLogin) && /publie/i.test(frKindLogin),
+  /jamais/i.test(frKindLogin) && /connecte/i.test(frKindLogin),
 );
 
 // --- the button must not claim setup or connection -------------------------

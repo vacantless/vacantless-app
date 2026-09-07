@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { dismissGettingStarted, markRailStepHandled } from "./actions";
 import { FocusActiveStep } from "./focus-step";
+import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +42,22 @@ export default async function GettingStartedPage({
   const org = await getCurrentOrg();
   if (!org) return null;
 
-  const [{ count: propertyCount }, { count: tenancyCount }, { data: onboarding }] =
-    await Promise.all([
+  const [
+    { count: propertyCount },
+    { count: liveListingCount },
+    { count: tenancyCount },
+    { data: onboarding },
+  ] = await Promise.all([
       supabase
         .from("properties")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", org.id),
+      // A live ad on any rental site (object status, status='live' only).
+      supabase
+        .from("listing_posts")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id)
+        .eq("status", "live"),
       supabase
         .from("tenancies")
         .select("id", { count: "exact", head: true })
@@ -61,6 +72,8 @@ export default async function GettingStartedPage({
   const row = onboarding as OnboardingRow | null;
   const state = computeOnboardingState({
     hasProperty: (propertyCount ?? 0) > 0,
+    hasLiveListing: (liveListingCount ?? 0) > 0,
+    wizardEnabled: distributionWizardEnabled(),
     hasTenancy: (tenancyCount ?? 0) > 0,
     dismissedAt: row?.dismissed_at ?? null,
     railStepDoneAt: row?.rail_step_done_at ?? null,

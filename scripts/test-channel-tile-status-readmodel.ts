@@ -71,8 +71,10 @@ async function main() {
       ]),
     );
     const status = statuses.get("facebook");
-    ok("planned channel stays not_available_yet", status?.state === "not_available_yet");
-    ok("planned channel cannot connect", status?.canConnect === false);
+    ok("planned self-post channel (Marketplace) reads self_post, never 'not available'", status?.state === "self_post");
+    ok("self-post channel cannot connect", status?.canConnect === false);
+    const planned = statuses.get("rentfaster");
+    ok("planned channel without self-post stays not_available_yet", planned?.state === "not_available_yet");
   }
 
   {

@@ -216,7 +216,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "operator guide explains proof before live",
-    panelSource.includes("outside sites only count as Live after proof is saved"),
+    panelSource.includes("rental sites only count as Live after the ad link is saved"),
   );
   ok(
     "priority (and concierge target) channel opens by default",
@@ -295,7 +295,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("Use a site yourself instead") &&
       distributeSource.includes("Open posting checklist") &&
       distributeSource.includes("Paid placements still need your") &&
-      distributeSource.includes("spend limit, and proof"),
+      distributeSource.includes("spend limit, and") && /the ad link\./.test(distributeSource),
   );
   ok(
     "fallback footer opens queue from all selected one-tap run items",
@@ -393,8 +393,8 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "posting proof success return notice is explicit",
-    propertyDetailSource.includes("Posting proof saved.") &&
-      propertyDetailSource.includes("checklist progress and proof link update here"),
+    propertyDetailSource.includes("Your ad is live.") &&
+      propertyDetailSource.includes("checklist progress and ad link update here"),
   );
   ok(
     "posting proof missing URL return notice is explicit",
@@ -409,11 +409,11 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "first screen leads with honest syndication status",
     propertyDetailSource.includes("SyndicationFirstCard") &&
-      propertyDetailSource.includes("One listing needs") &&
-      propertyDetailSource.includes("The 1-tap queue opens after the listing facts are ready.") &&
-      propertyDetailSource.includes("One listing first. Sign-in, payment, and proof wait inside Get") &&
-      propertyDetailSource.includes("online, and outside sites count as Live only after proof is saved") &&
-      propertyDetailSource.includes("outside sites count as Live only after proof is saved"),
+      propertyDetailSource.includes("Your listing needs") &&
+      propertyDetailSource.includes("Posting opens after the listing details are ready.") &&
+      propertyDetailSource.includes("Your listing first. Sign-in and site fees wait inside Get online,") &&
+      propertyDetailSource.includes("and a site counts as Live only after the link to your ad is saved") &&
+      propertyDetailSource.includes("a site counts as Live only after the link to your ad is saved"),
   );
   ok(
     "first screen sends the first listing blocker to its source field",
@@ -437,7 +437,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "first screen keeps portal complexity compact",
     propertyDetailSource.includes("Renter page live") &&
       propertyDetailSource.includes("sites ready") &&
-      propertyDetailSource.includes("Outside ads not live") &&
+      propertyDetailSource.includes("Not on any rental site") &&
       !propertyDetailSource.includes("places ready") &&
       !propertyDetailSource.includes("Direct portal links") &&
       !propertyDetailSource.includes("readinessSnapshot={readinessSnapshot}"),
@@ -465,7 +465,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "properties list opens mobile launch queue entry points",
     propertiesSource.includes("Ready for Set Live") &&
       propertiesSource.includes("Get online") &&
-      propertiesSource.includes("Proof saved on"),
+      propertiesSource.includes("Live on ${pluralize(livePostCount"),
   );
   const readinessChipsSource = readFileSync(
     "app/dashboard/properties/readiness-chips.tsx",
@@ -499,15 +499,15 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     distributeSource.includes("Get online checklist") &&
       distributeSource.includes("Start posting steps") &&
       distributeSource.includes("Review posting steps") &&
-      distributeSource.includes("Live outside") &&
+      distributeSource.includes("Live on rental sites") &&
       distributeSource.includes("Ready now") &&
       distributeSource.includes("visibleBuckets") &&
       distributeSource.includes("Renter page") &&
-      distributeSource.includes("Outside ads") &&
+      distributeSource.includes("Ads on rental sites") &&
       distributeSource.includes("Ready to post") &&
       distributeSource.includes("Needs payment") &&
       distributeSource.includes("Needs sign-in") &&
-      distributeSource.includes("Needs proof") &&
+      distributeSource.includes("Needs the ad link") &&
       distributeSource.includes("Refresh due") &&
       distributeSource.includes("Blocked") &&
       distributeSource.includes("Nothing is posted automatically. You approve outside-site posts"),
@@ -562,13 +562,13 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "launch queue defers to setup blockers before portal steps",
     distributeSource.includes("launchSetupBlocker") &&
-      distributeSource.includes("Finish the one listing details first.") &&
+      distributeSource.includes("Finish your listing details first.") &&
       distributeSource.includes("setupBlocker={launchSetupBlocker}") &&
       distributeSource.includes("showAction={false}") &&
       distributeSource.includes("No posting yet") &&
       distributeSource.includes("Fallback help included") &&
       distributeSource.includes("{!packetBlocked && (") &&
-      launchRunPanelSource.includes("Waiting on one listing") &&
+      launchRunPanelSource.includes("Finish your listing first") &&
       launchRunPanelSource.indexOf("if (setupBlocker)") <
         launchRunPanelSource.indexOf("if (!run)") &&
       launchRunPanelSource.includes("{setupBlocker.action}"),
@@ -580,7 +580,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("?tab=setup#property-unit-type") &&
       distributeSource.includes("Choose property type") &&
       distributeSource.includes(
-        "Choose the property type in Unit details to unlock outside-site posting.",
+        "Choose the property type in Unit details to unlock posting to rental sites.",
       ) &&
       distributeSource.includes('primaryMissing?.field === "property_type"') &&
       distributeSource.includes("packetFieldAction(firstListingPacketMissing, propertyId)") &&
