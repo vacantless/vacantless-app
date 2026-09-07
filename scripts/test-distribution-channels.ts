@@ -187,7 +187,10 @@ for (const c of DISTRIBUTION_CHANNELS.filter((c) => c.integrationStatus === "liv
     account_status: "connected",
     automation_authorized: false,
   });
-  ok(`${c.key}: connected without auth -> not_linked`, unauthorized.state === "not_linked");
+  ok(
+    `${c.key}: connected without auth -> connected_needs_authorization (S690)`,
+    unauthorized.state === "connected_needs_authorization",
+  );
 }
 
 for (const c of DISTRIBUTION_CHANNELS.filter((c) => c.integrationStatus === "planned")) {

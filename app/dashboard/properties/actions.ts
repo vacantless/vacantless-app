@@ -170,6 +170,7 @@ import {
   listChannelTileStatuses as listChannelTileStatusesFromAccounts,
   type ChannelTileStatusRow,
   type DistributionChannelAccountTileRow,
+  type DistributionChannelSessionStatusRow,
 } from "@/lib/distribution-channel-tile-statuses";
 import { normalizeAddressDisplayMode } from "@/lib/address-privacy";
 import {
@@ -2301,14 +2302,35 @@ export async function listChannelTileStatuses(
 ): Promise<ChannelTileStatusRow[]> {
   const supabase = createClient();
 
-  return listChannelTileStatusesFromAccounts(orgId, async () => {
-    const { data: accounts } = await supabase
-      .from("distribution_channel_accounts")
-      .select("channel, account_status, automation_authorized")
-      .eq("organization_id", orgId);
+  return listChannelTileStatusesFromAccounts(
+    orgId,
+    async () => {
+      const { data: accounts } = await supabase
+        .from("distribution_channel_accounts")
+        .select(
+          "channel, account_status, automation_authorized, external_account_label, spend_authorized, spend_max_cents, spend_revoked_at, capabilities",
+        )
+        .eq("organization_id", orgId);
 
-    return (accounts ?? []) as DistributionChannelAccountTileRow[];
-  });
+      return (accounts ?? []) as DistributionChannelAccountTileRow[];
+    },
+    // Post Everywhere Slice 1 (SPEC-S688 3.3): the 0225 session-status view,
+    // RLS + column grant, no secret columns. Only with the wizard flag on; with
+    // it off (or the view unreadable, e.g. before 0225 is applied) the tiles
+    // resolve from the account row alone, exactly as before this slice.
+    process.env.DISTRIBUTION_WIZARD_ENABLED === "1"
+      ? async () => {
+          const { data: sessions, error } = await supabase
+            .from("distribution_channel_session_status")
+            .select(
+              "channel, account_label, alive, cap_used, cap_total, last_checked_at, last_check_code, last_check_error, check_pending, stale, last_validated_at",
+            )
+            .eq("organization_id", orgId);
+          if (error) return undefined;
+          return (sessions ?? []) as DistributionChannelSessionStatusRow[];
+        }
+      : undefined,
+  );
 }
 
 export async function propertyAfterLiveSummary(

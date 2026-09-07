@@ -32,14 +32,61 @@
       "notAvailable": "NOT AVAILABLE YET",
       "notAvailableSub": "We are still building this connection. Nothing to do here yet.",
       "mlsOnly": "AGENT / MLS ONLY",
-      "mlsOnlySub": "Realtor.ca is not a direct post. We prepare the sheet for your agent."
+      "mlsOnlySub": "Realtor.ca is not a direct post. We prepare the sheet for your agent.",
+      "connectedNeedsAuth": "CONNECTED, NOT AUTHORIZED",
+      "connectedNeedsAuthSub": "Signed in as {label}. Authorize Vacantless before it can post here.",
+      "checking": "CHECKING",
+      "checkingSub": "Looking at your {name} account. This takes under a minute.",
+      "deadSession": "RECONNECT",
+      "deadSessionSub": "Your {name} session ended ({reason}). Sign in again to continue.",
+      "capReached": "FREE CAP REACHED",
+      "capReachedSub": "{capLine}"
     },
     "buttons": {
       "login": "CLICK HERE TO RECORD YOUR {name} ACCOUNT",
       "connect": "CLICK HERE TO CONNECT YOUR {name}",
-      "disconnect": "Disconnect"
+      "disconnect": "Disconnect",
+      "reconnect": "RECONNECT YOUR {name} ACCOUNT",
+      "authorize": "AUTHORIZE AUTOMATION"
     },
-    "igNote": "Needs a Facebook Page with a linked Instagram Business account."
+    "igNote": "Needs a Facebook Page with a linked Instagram Business account.",
+    "account": {
+      "connectedAs": "Connected as {label}",
+      "lastChecked": "Checked {ago}",
+      "neverChecked": "Not checked yet"
+    },
+    "reason": {
+      "needs_login": "signed out",
+      "cloudflare": "the site asked for a human check",
+      "captcha": "the site asked for a human check",
+      "no_session": "no saved session",
+      "timeout": "the site did not respond",
+      "error": "an error"
+    },
+    "cap": {
+      "kijijiTierUnknown": "Tell us if this is a personal or business Kijiji account.",
+      "kijijiFreeAvailable": "Your 1 free ad is available.",
+      "kijijiFreeUsed": "Free slot used (1 of 1).",
+      "rentalsUsed": "Free (Limited): {used} of 3 active listings used.",
+      "rentalsReached": "Free cap reached: 3 of 3 active. Disable one or pay for a plan.",
+      "rentalsUnknown": "Free (Limited): up to 3 active listings per account.",
+      "zumperUsed": "Free: {used} of 5 listings used.",
+      "zumperReached": "Free cap reached: 5 of 5 listings. Remove one first.",
+      "zumperUnknown": "Free: up to 5 listings per account."
+    },
+    "cost": {
+      "free": "Free.",
+      "kijijiTierUnknown": "Tell us if this is a personal or business Kijiji account.",
+      "kijijiNext": "Free. The next ad after it is {price}.",
+      "kijijiPerAd": "{price} per ad, paid at the last step.",
+      "kijijiPerExtraAd": "{price} per extra ad, paid at the last step.",
+      "spendSuffix": "Set a spend limit before a paid post."
+    },
+    "kijijiTier": {
+      "personal": "Personal: 1 free ad",
+      "business": "Business: every ad is paid",
+      "save": "Save"
+    }
   },
   "stage2": {
     "title": "Add property details",

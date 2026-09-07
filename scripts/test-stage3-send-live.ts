@@ -37,6 +37,16 @@ const row = (
   state,
   headline: `${channel} fallback headline the UI must not render`,
   canConnect,
+  canReconnect: false,
+  needsCheck: false,
+  accountLabel: null,
+  alive: null,
+  lastCheckedAt: null,
+  lastCheckCode: null,
+  capLine: null,
+  costLine: null,
+  costCap: { cap: null, cost: null, spendSuffix: false, capReached: false },
+  kijijiTier: null,
 });
 
 const tiles: ChannelTileStatusRow[] = [

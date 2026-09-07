@@ -6,8 +6,13 @@ import {
   groupStage1ChannelRows,
   stage1ConnectButtonKey,
   stage1ConnectHref,
+  stage1ReasonKey,
   stage1StatusCopy,
+  STAGE1_GROUPS,
 } from "../lib/stage1-link-portals";
+import {
+  buildChannelTileStatuses,
+} from "../lib/distribution-channel-tile-statuses";
 
 let passed = 0;
 let failed = 0;
@@ -33,11 +38,23 @@ const row = (
   channel: string,
   state: ChannelTileStatusRow["state"],
   canConnect: boolean,
+  over: Partial<ChannelTileStatusRow> = {},
 ): ChannelTileStatusRow => ({
   channel,
   state,
   headline: `${channel} fallback headline that UI must not render`,
   canConnect,
+  canReconnect: state === "dead_session",
+  needsCheck: false,
+  accountLabel: null,
+  alive: null,
+  lastCheckedAt: null,
+  lastCheckCode: null,
+  capLine: null,
+  costLine: null,
+  costCap: { cap: null, cost: null, spendSuffix: false, capReached: false },
+  kijijiTier: null,
+  ...over,
 });
 
 const rows: ChannelTileStatusRow[] = [
@@ -145,6 +162,77 @@ eq(
 );
 eq("oauth button key", stage1ConnectButtonKey("oauth"), "buttons.connect");
 eq("none button key is absent", stage1ConnectButtonKey("none"), null);
+
+// --- S690 Post Everywhere Slice 1 --------------------------------------------
+{
+  const NOW = Date.parse("2026-09-07T15:00:00Z");
+  const account = {
+    channel: "rentals_ca",
+    account_status: "connected",
+    automation_authorized: true,
+  };
+  const session = {
+    channel: "rentals_ca",
+    account_label: "n@example.com",
+    alive: true,
+    cap_used: 1,
+    cap_total: 3,
+    last_checked_at: new Date(NOW - 60_000).toISOString(),
+    last_check_code: "ok",
+    last_check_error: null,
+    check_pending: false,
+    stale: false,
+  };
+  const withSession = buildChannelTileStatuses([account], [session], NOW).find(
+    (r) => r.channel === "rentals_ca",
+  );
+  eq("connected + authorized + fresh session -> linked", withSession?.state, "linked");
+  const noSession = buildChannelTileStatuses([account], [], NOW).find(
+    (r) => r.channel === "rentals_ca",
+  );
+  eq("connected + authorized + no session row (model on) -> dead_session", noSession?.state, "dead_session");
+  const unprobed = buildChannelTileStatuses(
+    [account],
+    [{ ...session, alive: null, last_checked_at: null, last_check_code: null, stale: true }],
+    NOW,
+  ).find((r) => r.channel === "rentals_ca");
+  eq("connected + authorized + unprobed session -> checking", unprobed?.state, "checking");
+  const modelOff = buildChannelTileStatuses([account], undefined, NOW).find(
+    (r) => r.channel === "rentals_ca",
+  );
+  eq("connected + authorized, model off -> linked", modelOff?.state, "linked");
+
+  ok(
+    "canRenderStage1Connect true for dead_session",
+    canRenderStage1Connect(row("kijiji", "dead_session", false), "account_login"),
+  );
+  ok(
+    "canRenderStage1Connect false for dead_session with connectKind none",
+    !canRenderStage1Connect(row("kijiji", "dead_session", false), "none"),
+  );
+  ok(
+    "canRenderStage1Connect false for checking",
+    !canRenderStage1Connect(row("kijiji", "checking", false), "account_login"),
+  );
+  ok(
+    "canRenderStage1Connect false for cap_reached",
+    !canRenderStage1Connect(row("kijiji", "cap_reached", false), "account_login"),
+  );
+
+  const ready = STAGE1_GROUPS[0].states;
+  for (const state of ["connected_needs_authorization", "checking", "dead_session", "cap_reached"] as const) {
+    ok(`ready group holds ${state}`, ready.includes(state));
+    ok(`${state} has copy`, stage1StatusCopy(state).titleKey.startsWith("status."));
+  }
+  eq("checking tone neutral", stage1StatusCopy("checking").tone, "neutral");
+  eq("dead_session tone attention", stage1StatusCopy("dead_session").tone, "attention");
+  eq("cap_reached tone info", stage1StatusCopy("cap_reached").tone, "info");
+  eq("connected_needs_authorization tone attention", stage1StatusCopy("connected_needs_authorization").tone, "attention");
+
+  eq("reason key passes through", stage1ReasonKey({ lastCheckCode: "cloudflare" }), "cloudflare");
+  eq("reason key unknown -> needs_login", stage1ReasonKey({ lastCheckCode: "weird" }), "needs_login");
+  eq("reason key null -> needs_login", stage1ReasonKey({ lastCheckCode: null }), "needs_login");
+}
 
 console.log(`\nstage1-link-portals: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

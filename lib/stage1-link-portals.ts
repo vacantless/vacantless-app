@@ -20,11 +20,19 @@ export type Stage1GroupedRows = Stage1Group & {
 export type Stage1StatusCopy = {
   titleKey:
     | "status.linked"
+    | "status.connectedNeedsAuth"
+    | "status.checking"
+    | "status.deadSession"
+    | "status.capReached"
     | "status.notLinked"
     | "status.notAvailable"
     | "status.mlsOnly";
   subKey:
     | "status.linkedSub"
+    | "status.connectedNeedsAuthSub"
+    | "status.checkingSub"
+    | "status.deadSessionSub"
+    | "status.capReachedSub"
     | "status.notLinkedSub"
     | "status.notAvailableSub"
     | "status.mlsOnlySub";
@@ -35,7 +43,14 @@ export const STAGE1_GROUPS: readonly Stage1Group[] = [
   {
     id: "ready",
     titleKey: "groupReady",
-    states: ["linked", "not_linked"],
+    states: [
+      "linked",
+      "connected_needs_authorization",
+      "checking",
+      "dead_session",
+      "cap_reached",
+      "not_linked",
+    ],
   },
   {
     id: "coming",
@@ -54,6 +69,26 @@ export const STAGE1_STATUS_COPY: Record<ChannelTileState, Stage1StatusCopy> = {
     titleKey: "status.linked",
     subKey: "status.linkedSub",
     tone: "success",
+  },
+  connected_needs_authorization: {
+    titleKey: "status.connectedNeedsAuth",
+    subKey: "status.connectedNeedsAuthSub",
+    tone: "attention",
+  },
+  checking: {
+    titleKey: "status.checking",
+    subKey: "status.checkingSub",
+    tone: "neutral",
+  },
+  dead_session: {
+    titleKey: "status.deadSession",
+    subKey: "status.deadSessionSub",
+    tone: "attention",
+  },
+  cap_reached: {
+    titleKey: "status.capReached",
+    subKey: "status.capReachedSub",
+    tone: "info",
   },
   not_linked: {
     titleKey: "status.notLinked",
@@ -81,6 +116,27 @@ export const STAGE1_CONNECT_KIND_COPY: Record<
   none: "kindNone",
 };
 
+// Reason keys the dead-session sub line can name (stage1.reason.*). Mirrors the
+// 0225 last_check_code check constraint; anything else reads as "needs_login".
+export const STAGE1_REASON_KEYS = [
+  "needs_login",
+  "cloudflare",
+  "captcha",
+  "no_session",
+  "timeout",
+  "error",
+] as const;
+export type Stage1ReasonKey = (typeof STAGE1_REASON_KEYS)[number];
+
+export function stage1ReasonKey(
+  row: Pick<ChannelTileStatusRow, "lastCheckCode">,
+): Stage1ReasonKey {
+  const code = row.lastCheckCode;
+  return (STAGE1_REASON_KEYS as readonly string[]).includes(code ?? "")
+    ? (code as Stage1ReasonKey)
+    : "needs_login";
+}
+
 export function stage1StatusCopy(
   state: ChannelTileState,
 ): Stage1StatusCopy {
@@ -96,15 +152,16 @@ export function groupStage1ChannelRows(
   }));
 }
 
+// The Connect / Record button renders for a channel the operator can act on:
+// never linked yet, or linked once and now signed out (Reconnect).
 export function canRenderStage1Connect(
-  row: Pick<ChannelTileStatusRow, "state" | "canConnect">,
+  row: Pick<ChannelTileStatusRow, "state" | "canConnect"> &
+    Partial<Pick<ChannelTileStatusRow, "canReconnect">>,
   connectKind: ChannelConnectKind,
 ): boolean {
-  return (
-    row.canConnect === true &&
-    row.state === "not_linked" &&
-    connectKind !== "none"
-  );
+  if (connectKind === "none") return false;
+  if (row.state === "dead_session") return row.canReconnect !== false;
+  return row.canConnect === true && row.state === "not_linked";
 }
 
 export function stage1ConnectHref(
@@ -123,6 +180,14 @@ export function stage1ConnectHref(
     default:
       return null;
   }
+}
+
+// Where "Authorize automation" sends the operator: the same settings anchor
+// the Connect button uses, which is where the authorize form lives.
+export function stage1AuthorizeHref(channel: string): string {
+  return `/dashboard/settings?tab=distribution#channel-${encodeURIComponent(
+    channel,
+  )}`;
 }
 
 export function stage1ConnectButtonKey(

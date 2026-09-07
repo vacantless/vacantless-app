@@ -481,8 +481,35 @@ export function getOnlineAssistKindForChannel(
 
 export const CANONICAL_CHANNEL_REGISTRY = DISTRIBUTION_CHANNELS;
 
+// ============================================================================
+// Connect-tile verdict (Post Everywhere Slice 1, SPEC-S688 section 3).
+//
+// Pure. The tile reads two rows: the org's distribution_channel_accounts row
+// (who connected, is automation authorized, spend limit, kijiji tier) and the
+// worker-owned distribution_channel_session_status view row (is the saved
+// session alive, signed in as whom, how much of the free cap is used, when the
+// worker last looked). Neither read touches a secret column.
+//
+// `session` has three shapes on purpose:
+//   undefined -> the session model is not in play for this caller (flag off, or
+//                the 0225 view is not readable yet). Resolve from the account
+//                row alone: no "checking", no cap, exactly the pre-Slice-1 tile.
+//   null      -> the session model is on and this channel has no session row
+//                (nothing to probe: the tile reads Reconnect, code no_session).
+//   object    -> the view row.
+// With the flag off (Agile today) the page never writes (acceptance 3) and
+// Stage 3 "send live" keeps every channel it could send to before this slice;
+// the only visible change is that a connected-but-unauthorized account now
+// reads "Authorize" instead of "Connect", and a needs_login account reads
+// "Reconnect", both per spec steps 5 and 8.
+// ============================================================================
+
 export const CHANNEL_TILE_STATES = [
   "linked",
+  "connected_needs_authorization",
+  "checking",
+  "dead_session",
+  "cap_reached",
   "not_linked",
   "not_available_yet",
   "mls_only",
@@ -492,64 +519,440 @@ export type ChannelTileState = (typeof CHANNEL_TILE_STATES)[number];
 export type ChannelTileAccount = {
   account_status?: string | null;
   automation_authorized?: boolean | null;
+  external_account_label?: string | null;
+  spend_authorized?: boolean | null;
+  spend_max_cents?: number | null;
+  spend_revoked_at?: string | null;
+  capabilities?: Record<string, unknown> | null;
+};
+
+export type ChannelTileSession = {
+  account_label?: string | null;
+  alive?: boolean | null;
+  cap_used?: number | null;
+  cap_total?: number | null;
+  last_checked_at?: string | null;
+  last_check_code?: string | null;
+  last_check_error?: string | null;
+  check_pending?: boolean | null;
+  stale?: boolean | null;
+  // When the session blob was last (re)written by a warm or a reconnect. A
+  // dead verdict older than this write is stale and must be re-probed.
+  last_validated_at?: string | null;
 };
 
 export type ChannelTileStatus = {
   state: ChannelTileState;
   headline: string;
   canConnect: boolean;
+  canReconnect: boolean;
+  needsCheck: boolean;
+  accountLabel: string | null;
+  alive: boolean | null;
+  lastCheckedAt: string | null;
+  lastCheckCode: string | null;
+  capLine: string | null;
+  costLine: string | null;
+  // Structured form of capLine/costLine for locale rendering (page).
+  costCap: ChannelCostCap;
+  kijijiTier: KijijiTier | null;
+};
+
+// One source of truth for what a portal costs. The worker never writes a price.
+export const CHANNEL_COST_CENTS: Partial<Record<DistributionChannel["key"], number>> = {
+  kijiji: 3384, // $33.84 per Owner ad, tax in, Toronto rental category (S667)
+  rentals_ca: 0, // Limited plan
+  zumper: 0,
+  facebook_feed: 0,
+  instagram: 0,
+};
+
+// Free cap per account. Kijiji depends on the account tier (personal = 1 free
+// ad, business = every ad paid) and is resolved from capabilities.kijiji_tier.
+export const CHANNEL_FREE_CAP: Partial<Record<DistributionChannel["key"], number>> = {
+  rentals_ca: 3,
+  zumper: 5,
+};
+
+export const KIJIJI_TIERS = ["personal", "business"] as const;
+export type KijijiTier = (typeof KIJIJI_TIERS)[number];
+
+export function kijijiTierOf(
+  account: ChannelTileAccount | null | undefined,
+): KijijiTier | null {
+  const raw = account?.capabilities?.kijiji_tier;
+  return raw === "personal" || raw === "business" ? raw : null;
+}
+
+// Mirrors spendReady() in lib/distribution-channel-contracts.ts (the
+// launch-readiness predicate) on the tile's snake_case account row. Keep the
+// two in step; test-session-status-readmodel pins this one.
+export function spendReadyForAccount(
+  account: ChannelTileAccount | null | undefined,
+): boolean {
+  return (
+    account?.spend_authorized === true &&
+    !account?.spend_revoked_at &&
+    typeof account?.spend_max_cents === "number" &&
+    account.spend_max_cents > 0
+  );
+}
+
+export function formatChannelMoney(cents: number, locale: "en" | "fr" = "en"): string {
+  return new Intl.NumberFormat(locale === "fr" ? "fr-CA" : "en-CA", {
+    style: "currency",
+    currency: "CAD",
+  }).format(cents / 100);
+}
+
+export const SPEND_SUFFIX_COPY = " Set a spend limit before a paid post.";
+
+function effectiveCapTotal(
+  channelKey: DistributionChannel["key"],
+  account: ChannelTileAccount | null | undefined,
+  session: ChannelTileSession | null | undefined,
+): number | null {
+  if (typeof session?.cap_total === "number") return session.cap_total;
+  const constant = CHANNEL_FREE_CAP[channelKey];
+  if (typeof constant === "number") return constant;
+  if (channelKey === "kijiji" && kijijiTierOf(account) === "personal") return 1;
+  return null;
+}
+
+export type ChannelCapKey =
+  | "kijijiFreeAvailable"
+  | "kijijiFreeUsed"
+  | "rentalsUsed"
+  | "rentalsReached"
+  | "rentalsUnknown"
+  | "zumperUsed"
+  | "zumperReached"
+  | "zumperUnknown";
+export type ChannelCostKey =
+  | "free"
+  | "kijijiTierUnknown"
+  | "kijijiNext"
+  | "kijijiPerAd"
+  | "kijijiPerExtraAd";
+
+// Structured form of the cap/cost verdict: the page renders it through
+// next-intl (stage1.cap.*, stage1.cost.*), the pure English line below is the
+// same data rendered with the default strings.
+export type ChannelCostCap = {
+  cap: { key: ChannelCapKey; used: number | null } | null;
+  cost: { key: ChannelCostKey; priceCents: number | null } | null;
+  spendSuffix: boolean;
+  capReached: boolean;
+};
+
+export const EMPTY_COST_CAP: ChannelCostCap = {
+  cap: null,
+  cost: null,
+  spendSuffix: false,
+  capReached: false,
+};
+
+export function channelCostCap(
+  channelKey: unknown,
+  account: ChannelTileAccount | null | undefined,
+  session: ChannelTileSession | null | undefined,
+): ChannelCostCap {
+  const none = EMPTY_COST_CAP;
+  const channel = channelByKey(channelKey);
+  if (!channel) return none;
+
+  const capUsed = typeof session?.cap_used === "number" ? session.cap_used : null;
+  const capTotal = effectiveCapTotal(channel.key, account, session);
+  const capReached = capUsed != null && capTotal != null && capUsed >= capTotal;
+  const free = { key: "free" as const, priceCents: 0 };
+
+  switch (channel.key) {
+    case "kijiji": {
+      const priceCents = CHANNEL_COST_CENTS.kijiji ?? 0;
+      const spendSuffix = !spendReadyForAccount(account);
+      const tier = kijijiTierOf(account);
+      if (!tier) {
+        return {
+          cap: null,
+          cost: { key: "kijijiTierUnknown", priceCents: null },
+          spendSuffix: false,
+          capReached: false,
+        };
+      }
+      if (tier === "business") {
+        return {
+          cap: null,
+          cost: { key: "kijijiPerAd", priceCents },
+          spendSuffix,
+          capReached: false,
+        };
+      }
+      if (capReached) {
+        return {
+          cap: { key: "kijijiFreeUsed", used: capUsed },
+          cost: { key: "kijijiPerExtraAd", priceCents },
+          spendSuffix,
+          capReached: true,
+        };
+      }
+      return {
+        cap: { key: "kijijiFreeAvailable", used: capUsed },
+        cost: { key: "kijijiNext", priceCents },
+        spendSuffix: false,
+        capReached: false,
+      };
+    }
+    case "rentals_ca": {
+      if (capUsed == null) {
+        return { cap: { key: "rentalsUnknown", used: null }, cost: free, spendSuffix: false, capReached: false };
+      }
+      if (capReached) {
+        return { cap: { key: "rentalsReached", used: capUsed }, cost: free, spendSuffix: false, capReached: true };
+      }
+      return { cap: { key: "rentalsUsed", used: capUsed }, cost: free, spendSuffix: false, capReached: false };
+    }
+    case "zumper": {
+      if (capUsed == null) {
+        return { cap: { key: "zumperUnknown", used: null }, cost: free, spendSuffix: false, capReached: false };
+      }
+      if (capReached) {
+        return { cap: { key: "zumperReached", used: capUsed }, cost: free, spendSuffix: false, capReached: true };
+      }
+      return { cap: { key: "zumperUsed", used: capUsed }, cost: free, spendSuffix: false, capReached: false };
+    }
+    case "facebook_feed":
+    case "instagram":
+      return { cap: null, cost: free, spendSuffix: false, capReached: false };
+    default:
+      return none;
+  }
+}
+
+// English defaults, one per key. messages/en.json stage1.cap.* and
+// stage1.cost.* carry the same strings with ICU params.
+export const CHANNEL_CAP_COPY_EN: Record<ChannelCapKey, (used: number | null) => string> = {
+  kijijiFreeAvailable: () => "Your 1 free ad is available.",
+  kijijiFreeUsed: () => "Free slot used (1 of 1).",
+  rentalsUsed: (used) => `Free (Limited): ${used ?? 0} of 3 active listings used.`,
+  rentalsReached: () => "Free cap reached: 3 of 3 active. Disable one or pay for a plan.",
+  rentalsUnknown: () => "Free (Limited): up to 3 active listings per account.",
+  zumperUsed: (used) => `Free: ${used ?? 0} of 5 listings used.`,
+  zumperReached: () => "Free cap reached: 5 of 5 listings. Remove one first.",
+  zumperUnknown: () => "Free: up to 5 listings per account.",
+};
+export const CHANNEL_COST_COPY_EN: Record<ChannelCostKey, (price: string) => string> = {
+  free: () => "Free.",
+  kijijiTierUnknown: () => "Tell us if this is a personal or business Kijiji account.",
+  kijijiNext: (price) => `Free. The next ad after it is ${price}.`,
+  kijijiPerAd: (price) => `${price} per ad, paid at the last step.`,
+  kijijiPerExtraAd: (price) => `${price} per extra ad, paid at the last step.`,
 };
 
 /**
- * Presentation verdict for the future "Link Your Portals" tile. Pure: callers
- * pass the optional distribution_channel_accounts row; this function never reads
- * env, DB, or network state.
+ * The cap line and the cost line under a connect tile, English. Pure.
+ */
+export function channelCostCapLine(
+  channelKey: unknown,
+  account: ChannelTileAccount | null | undefined,
+  session: ChannelTileSession | null | undefined,
+): { capLine: string | null; costLine: string | null; capReached: boolean } {
+  const v = channelCostCap(channelKey, account, session);
+  const capLine = v.cap ? CHANNEL_CAP_COPY_EN[v.cap.key](v.cap.used) : null;
+  const costLine = v.cost
+    ? CHANNEL_COST_COPY_EN[v.cost.key](formatChannelMoney(v.cost.priceCents ?? 0)) +
+      (v.spendSuffix ? SPEND_SUFFIX_COPY : "")
+    : null;
+  return { capLine, costLine, capReached: v.capReached };
+}
+
+export const SESSION_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+// Same rule as the 0225 view's `stale` column, for callers that pass a row
+// without it (or tests that pin `now`).
+export function isSessionStale(
+  lastCheckedAt: string | null | undefined,
+  now: number = Date.now(),
+): boolean {
+  if (!lastCheckedAt) return true;
+  const at = Date.parse(lastCheckedAt);
+  if (Number.isNaN(at)) return true;
+  return at < now - SESSION_STALE_AFTER_MS;
+}
+
+// One-line reason for a dead session, keyed by last_check_code (rule 157).
+export function sessionCheckReason(code: string | null | undefined): string {
+  switch (code) {
+    case "needs_login":
+      return "signed out";
+    case "cloudflare":
+    case "captcha":
+      return "the site asked for a human check";
+    case "no_session":
+      return "no saved session";
+    case "timeout":
+      return "the site did not respond";
+    case "error":
+      return "an error";
+    default:
+      return "signed out";
+  }
+}
+
+/**
+ * Presentation verdict for the "Link your portals" tile. Pure: callers pass the
+ * optional distribution_channel_accounts row and the optional session-status
+ * view row; this function never reads env, DB, or network state. Resolution
+ * order is SPEC-S688 section 3.1, first hit wins.
  */
 export function channelTileStatus(
   channelKey: unknown,
   account?: ChannelTileAccount | null,
+  session?: ChannelTileSession | null,
+  now: number = Date.now(),
 ): ChannelTileStatus {
   const channel = channelByKey(channelKey);
+  const base = {
+    canConnect: false,
+    canReconnect: false,
+    needsCheck: false,
+    accountLabel: null,
+    alive: null,
+    lastCheckedAt: null,
+    lastCheckCode: null,
+    capLine: null,
+    costLine: null,
+    costCap: EMPTY_COST_CAP,
+    kijijiTier: null,
+  };
+
   if (!channel) {
     return {
+      ...base,
       state: "not_available_yet",
       headline: "This channel is not configured yet.",
-      canConnect: false,
     };
   }
 
   if (channel.integrationStatus === "mls_gated") {
     return {
+      ...base,
       state: "mls_only",
       headline: `${channel.label} requires an MLS or broker route.`,
-      canConnect: false,
     };
   }
 
   if (channel.integrationStatus === "planned") {
     return {
+      ...base,
       state: "not_available_yet",
       headline: channel.notes ?? `${channel.label} is not available yet.`,
-      canConnect: false,
     };
   }
 
-  const linked =
-    account?.account_status === "connected" &&
-    account?.automation_authorized === true;
-
-  if (linked) {
+  const accountStatus = account?.account_status ?? null;
+  if (accountStatus !== "connected" && accountStatus !== "needs_login") {
     return {
-      state: "linked",
-      headline: `${channel.label} is linked and authorized.`,
-      canConnect: false,
+      ...base,
+      state: "not_linked",
+      headline: `Link ${channel.label} to publish here.`,
+      canConnect: true,
+    };
+  }
+
+  // From here on the account exists; every verdict carries who it is and what
+  // it costs (a dead session still says who it was).
+  const sessionAware = session !== undefined;
+  const accountLabel =
+    session?.account_label ?? account?.external_account_label ?? null;
+  const labelForCopy = accountLabel ?? channel.label;
+  const costCap = channelCostCap(channel.key, account, session);
+  const { capLine, costLine, capReached } = channelCostCapLine(
+    channel.key,
+    account,
+    session,
+  );
+  const known = {
+    costCap,
+    kijijiTier: channel.key === "kijiji" ? kijijiTierOf(account) : null,
+    accountLabel,
+    alive: session?.alive ?? null,
+    lastCheckedAt: session?.last_checked_at ?? null,
+    lastCheckCode: session?.last_check_code ?? null,
+    capLine,
+    costLine,
+  };
+
+  // A verdict is current only if the worker looked AFTER the last session
+  // write; a reconnect (writeChannelSession bumps last_validated_at) must
+  // not stay "dead" on the strength of a probe that predates it.
+  const verdictCurrent =
+    !session?.last_validated_at ||
+    !session?.last_checked_at ||
+    Date.parse(session.last_checked_at) >= Date.parse(session.last_validated_at);
+  if ((session?.alive === false && verdictCurrent) || accountStatus === "needs_login") {
+    return {
+      ...base,
+      ...known,
+      state: "dead_session",
+      headline: `Reconnect ${labelForCopy}: ${sessionCheckReason(
+        session?.alive === false ? session?.last_check_code : "needs_login",
+      )}`,
+      canReconnect: true,
+    };
+  }
+
+  if (sessionAware && channel.connectKind !== "none") {
+    // No session row at all: nothing to probe, nothing that can post. The
+    // worker's own word for this is no_session; the tile reads Reconnect.
+    if (session === null) {
+      return {
+        ...base,
+        ...known,
+        state: "dead_session",
+        headline: `Reconnect ${labelForCopy}: ${sessionCheckReason("no_session")}`,
+        lastCheckCode: "no_session",
+        canReconnect: true,
+      };
+    }
+    const stale =
+      (typeof session.stale === "boolean"
+        ? session.stale
+        : isSessionStale(session.last_checked_at, now)) || !verdictCurrent;
+    if (stale) {
+      const pending = session?.check_pending === true;
+      return {
+        ...base,
+        ...known,
+        state: "checking",
+        headline: `Checking your ${channel.label} account...`,
+        needsCheck: !pending,
+      };
+    }
+  }
+
+  if (capReached) {
+    return {
+      ...base,
+      ...known,
+      state: "cap_reached",
+      headline: capLine ?? `${channel.label} free cap reached.`,
+    };
+  }
+
+  if (account?.automation_authorized !== true) {
+    return {
+      ...base,
+      ...known,
+      state: "connected_needs_authorization",
+      headline: `Connected as ${labelForCopy}. Authorize Vacantless before it can post here.`,
     };
   }
 
   return {
-    state: "not_linked",
-    headline: `Link ${channel.label} to publish here.`,
-    canConnect: true,
+    ...base,
+    ...known,
+    state: "linked",
+    headline: `${channel.label} is linked and authorized.`,
   };
 }
 

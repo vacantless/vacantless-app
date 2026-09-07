@@ -38,7 +38,14 @@ export type Stage3SendRow = {
 export function stage3SendableChannels(
   rows: readonly ChannelTileStatusRow[],
 ): ChannelTileStatusRow[] {
-  return rows.filter((row) => row.state === "linked");
+  // "checking" = connected + authorized, session not probed yet (Slice 1).
+  // Before the session model existed those rows read "linked", and the blast
+  // already handles a dead session with needs_login on the run item, so they
+  // stay sendable. dead_session / cap_reached / connected_needs_authorization
+  // are real blockers and drop out.
+  return rows.filter(
+    (row) => row.state === "linked" || row.state === "checking",
+  );
 }
 
 // A channel is LIVE only when its run item's own status is "live" AND a real

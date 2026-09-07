@@ -32,14 +32,61 @@
       "notAvailable": "PAS ENCORE DISPONIBLE",
       "notAvailableSub": "Nous construisons encore cette connexion. Rien à faire ici pour l'instant.",
       "mlsOnly": "AGENT / MLS SEULEMENT",
-      "mlsOnlySub": "Realtor.ca n'est pas une publication directe. Nous préparons la fiche pour votre agent."
+      "mlsOnlySub": "Realtor.ca n'est pas une publication directe. Nous préparons la fiche pour votre agent.",
+      "connectedNeedsAuth": "CONNECTÉ, NON AUTORISÉ",
+      "connectedNeedsAuthSub": "Connecté en tant que {label}. Autorisez Vacantless avant qu'il puisse publier ici.",
+      "checking": "VÉRIFICATION",
+      "checkingSub": "Nous regardons votre compte {name}. Cela prend moins d'une minute.",
+      "deadSession": "RECONNECTER",
+      "deadSessionSub": "Votre session {name} a pris fin ({reason}). Reconnectez-vous pour continuer.",
+      "capReached": "LIMITE GRATUITE ATTEINTE",
+      "capReachedSub": "{capLine}"
     },
     "buttons": {
       "login": "CLIQUEZ ICI POUR ENREGISTRER VOTRE COMPTE {name}",
       "connect": "CLIQUEZ ICI POUR CONNECTER VOTRE {name}",
-      "disconnect": "Déconnecter"
+      "disconnect": "Déconnecter",
+      "reconnect": "RECONNECTER VOTRE COMPTE {name}",
+      "authorize": "AUTORISER L'AUTOMATISATION"
     },
-    "igNote": "Nécessite une Page Facebook avec un compte Instagram Business relié."
+    "igNote": "Nécessite une Page Facebook avec un compte Instagram Business relié.",
+    "account": {
+      "connectedAs": "Connecté en tant que {label}",
+      "lastChecked": "Vérifié {ago}",
+      "neverChecked": "Pas encore vérifié"
+    },
+    "reason": {
+      "needs_login": "déconnecté",
+      "cloudflare": "le site a demandé une vérification humaine",
+      "captcha": "le site a demandé une vérification humaine",
+      "no_session": "aucune session enregistrée",
+      "timeout": "le site n'a pas répondu",
+      "error": "une erreur"
+    },
+    "cap": {
+      "kijijiTierUnknown": "Dites-nous s'il s'agit d'un compte Kijiji personnel ou d'entreprise.",
+      "kijijiFreeAvailable": "Votre annonce gratuite est disponible.",
+      "kijijiFreeUsed": "Place gratuite utilisée (1 sur 1).",
+      "rentalsUsed": "Gratuit (Limited) : {used} annonces actives sur 3.",
+      "rentalsReached": "Limite gratuite atteinte : 3 annonces actives sur 3. Désactivez-en une ou payez un forfait.",
+      "rentalsUnknown": "Gratuit (Limited) : jusqu'à 3 annonces actives par compte.",
+      "zumperUsed": "Gratuit : {used} annonces sur 5.",
+      "zumperReached": "Limite gratuite atteinte : 5 annonces sur 5. Retirez-en une d'abord.",
+      "zumperUnknown": "Gratuit : jusqu'à 5 annonces par compte."
+    },
+    "cost": {
+      "free": "Gratuit.",
+      "kijijiTierUnknown": "Dites-nous s'il s'agit d'un compte Kijiji personnel ou d'entreprise.",
+      "kijijiNext": "Gratuit. La prochaine annonce coûte {price}.",
+      "kijijiPerAd": "{price} par annonce, payé à la dernière étape.",
+      "kijijiPerExtraAd": "{price} par annonce supplémentaire, payé à la dernière étape.",
+      "spendSuffix": "Fixez une limite de dépenses avant une publication payante."
+    },
+    "kijijiTier": {
+      "personal": "Personnel : 1 annonce gratuite",
+      "business": "Entreprise : chaque annonce est payante",
+      "save": "Enregistrer"
+    }
   },
   "stage2": {
     "title": "Détails du logement",
