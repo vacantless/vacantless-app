@@ -19,7 +19,12 @@ import {
   portalRequirementsFor,
   recommendedFieldsFor,
   requiredFieldsFor,
+  hardBlockFieldsFor,
+  askedDefaultFieldsFor,
+  requiredQuestionFieldsFor,
+  type PortalRequirementFieldKey,
 } from "../lib/portal-requirements";
+import { MIN_PHOTOS_BY_CHANNEL } from "../lib/listing-feed";
 
 let passed = 0;
 let failed = 0;
@@ -257,6 +262,62 @@ for (const row of PORTAL_REQUIREMENTS) {
     );
   }
 }
+
+// --- S691: hardBlock / askedDefaults (SPEC-S688 Slice 2 section 3 + 7) -------
+for (const row of PORTAL_REQUIREMENTS) {
+  for (const key of row.hardBlock) {
+    ok(`${row.channel} hardBlock key ${key} is a known field key`, fieldKeySet.has(key));
+    ok(
+      `${row.channel} hardBlock key ${key} is not an orphan (required, recommended or askedDefaults)`,
+      row.required.includes(key) || row.recommended.includes(key) || row.askedDefaults.includes(key),
+    );
+    ok(`${row.channel} hardBlock key ${key} is not an operator field`, !isPortalOperatorField(key));
+  }
+  for (const key of row.askedDefaults) {
+    ok(`${row.channel} askedDefaults key ${key} is a known field key`, fieldKeySet.has(key));
+    ok(`${row.channel} askedDefaults key ${key} is not an operator field`, !isPortalOperatorField(key));
+  }
+  ok(`${row.channel} hardBlock has no duplicates`, new Set(row.hardBlock).size === row.hardBlock.length);
+  ok(`${row.channel} askedDefaults has no duplicates`, new Set(row.askedDefaults).size === row.askedDefaults.length);
+  const rq = requiredQuestionFieldsFor(row);
+  ok(`${row.channel} requiredQuestionFieldsFor = hardBlock ∪ required, no duplicates`, new Set(rq).size === rq.length && row.hardBlock.every((k) => rq.includes(k)) && row.required.every((k) => rq.includes(k)));
+}
+// The three worker-filled portals carry askedDefaults; the rest do not.
+for (const key of ["kijiji", "zumper", "rentals_ca"]) {
+  ok(`${key} has askedDefaults`, askedDefaultFieldsFor(key).length > 0);
+  ok(`${key} has hardBlock`, hardBlockFieldsFor(key).length > 0);
+}
+for (const key of ["rentfaster", "viewit", "spacelist", "costar_loopnet", "realtor_ca", "whatsapp", "linkedin", "snapchat"]) {
+  ok(`${key} has no askedDefaults (no worker compose)`, askedDefaultFieldsFor(key).length === 0);
+  ok(`${key} has no hardBlock (unverified by object)`, hardBlockFieldsFor(key).length === 0);
+}
+ok("kijiji hardBlock: square footage (submit-logic real-fact set)", hardBlockFieldsFor("kijiji").includes("square_footage"));
+ok("kijiji hardBlock: postal code stays sheet-only until proven by object", !hardBlockFieldsFor("kijiji").includes("postal_code"));
+ok("zumper hardBlock: availability date and description", hardBlockFieldsFor("zumper").includes("availability_date") && hardBlockFieldsFor("zumper").includes("description"));
+ok("rentals_ca hardBlock: pets (decision 4)", hardBlockFieldsFor("rentals_ca").includes("pets"));
+ok("rentals_ca hardBlock: contact phone + email (compose hard stop)", hardBlockFieldsFor("rentals_ca").includes("contact_phone") && hardBlockFieldsFor("rentals_ca").includes("contact_email"));
+ok("rentals_ca askedDefaults excludes pets", !askedDefaultFieldsFor("rentals_ca").includes("pets"));
+const KIJIJI_ONLY_ASKED = ["accessibility", "smoking", "for_rent_by"] as const satisfies readonly PortalRequirementFieldKey[];
+ok("kijiji askedDefaults includes accessibility, smoking, for_rent_by", KIJIJI_ONLY_ASKED.every((k) => askedDefaultFieldsFor("kijiji").includes(k)));
+ok("facebook_feed + instagram hardBlock = photos, caption, link", ["facebook_feed", "instagram"].every((c) => JSON.stringify(hardBlockFieldsFor(c)) === JSON.stringify(["photos", "post_caption", "tracked_link"])));
+// Spec 7 says "every channel with hasFillSheet has askedDefaults". In this
+// codebase hasFillSheet is true for all 14 channels (the operator field sheet,
+// FILL_SHEET_PORTALS), so the meaningful set is the channels the WORKER
+// composes a form for (compose.ts): those three must carry askedDefaults and
+// a hardBlock, and no other channel may carry askedDefaults.
+const WORKER_COMPOSED = ["kijiji", "zumper", "rentals_ca"] as const;
+for (const channel of DISTRIBUTION_CHANNELS) {
+  const composed = (WORKER_COMPOSED as readonly string[]).includes(channel.key);
+  ok(
+    `${channel.key}: askedDefaults present iff the worker composes it`,
+    (askedDefaultFieldsFor(channel.key).length > 0) === composed,
+  );
+  if (composed) ok(`${channel.key}: worker-composed channel has a hardBlock`, hardBlockFieldsFor(channel.key).length > 0);
+}
+ok("MIN_PHOTOS_BY_CHANNEL.rentals_ca === 2", MIN_PHOTOS_BY_CHANNEL.rentals_ca === 2);
+const NEW_FIELD_KEYS = ["postal_code", "smoking", "for_rent_by", "accessibility"] as const satisfies readonly PortalRequirementFieldKey[];
+ok("new field keys have labels", NEW_FIELD_KEYS.every((k) => portalRequirementFieldLabel(k).length > 0));
+ok("unknown channel has no hardBlock", hardBlockFieldsFor("not_real").length === 0);
 
 console.log(`portal-requirements: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

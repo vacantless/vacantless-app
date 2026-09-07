@@ -18,7 +18,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:session-status-readmodel": "tsx scripts/test-session-status-readmodel.ts",
-    "test:no-client-secret-imports": "tsx scripts/test-no-client-secret-imports.ts"
+    "test:no-client-secret-imports": "tsx scripts/test-no-client-secret-imports.ts",
+    "test:question-sheet": "tsx scripts/test-question-sheet.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

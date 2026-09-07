@@ -16,6 +16,7 @@ import {
   type PortalRequirementChannelKey,
   type PortalRequirementFieldKey,
   type PortalRequirementSourceLevel,
+  requiredQuestionFieldsFor,
 } from "./portal-requirements";
 
 export type ListingPacketFieldFacts = Partial<
@@ -122,8 +123,17 @@ export function buildListingPacketReadiness(input: {
       : PORTAL_REQUIREMENTS;
 
   const channels: ListingPacketChannelReadiness[] = rows.map((row) => {
-    const requiredListingFields = row.required.filter(isListingPacketField);
-    const recommendedListingFields = row.recommended.filter(isListingPacketField);
+    // hardBlock ∪ required (SPEC-S688 Slice 2 section 3): the verified form
+    // blockers count as required even where the partner doc says recommended.
+    const requiredListingFields = requiredQuestionFieldsFor(row).filter(
+      isListingPacketField,
+    );
+    // A field promoted to required by hardBlock must not also read as
+    // recommended for the same channel.
+    const requiredSet = new Set<PortalRequirementFieldKey>(requiredListingFields);
+    const recommendedListingFields = row.recommended.filter(
+      (field) => isListingPacketField(field) && !requiredSet.has(field),
+    );
     const missingRequired = requiredListingFields.filter(
       (field) => !fieldReady(input.fieldFacts, field),
     );

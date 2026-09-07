@@ -43,6 +43,11 @@ const strongPortalFacts: ListingPacketFieldFacts = {
   virtual_tour: true,
   floorplans: true,
   video: true,
+  // S691 keys (not yet computed by the property page; sheet-only for now)
+  postal_code: true,
+  smoking: true,
+  for_rent_by: true,
+  accessibility: true,
 };
 
 ok("rent is a listing packet field", isListingPacketField("rent"));
@@ -97,9 +102,12 @@ const missingContact = buildListingPacketReadiness({
   channels: ["rentals_ca", "rentfaster", "zumper", "viewit"],
   fieldFacts: { ...strongPortalFacts, contact_phone: false },
 });
-ok("Rentals.ca stays ready without phone because it is recommended there", missingContact.readyChannelCount === 1);
-ok("contact phone blocks three paid/feed portals", missingContact.missingRequired[0]?.field === "contact_phone");
-ok("contact phone appears recommended somewhere too", missingContact.missingRecommended.some((m) => m.field === "contact_phone"));
+// S691 (SPEC-S688 Slice 2): contact phone is a verified hard block on Rentals.ca
+// (worker compose.ts:724-734 hard-stops on org contact), so hardBlock ∪ required
+// now blocks all four; the partner doc still lists it as recommended there.
+ok("Rentals.ca is blocked without phone (hardBlock, compose.ts:724-734)", missingContact.readyChannelCount === 0);
+ok("contact phone blocks all four selected portals", missingContact.missingRequired[0]?.field === "contact_phone" && missingContact.missingRequired[0]?.channelCount === 4);
+ok("contact phone is not double-listed as recommended once it is required", !missingContact.missingRecommended.some((m) => m.field === "contact_phone"));
 
 const socialPacket = buildListingPacketReadiness({
   channels: ["facebook_feed", "instagram", "linkedin", "whatsapp", "snapchat"],
@@ -119,7 +127,10 @@ const weakPacket = buildListingPacketReadiness({
 ok("weak packet has missing required facts", weakPacket.missingRequired.length > 0);
 ok("weak packet missing facts are sorted by channel count", weakPacket.missingRequired[0]!.channelCount >= weakPacket.missingRequired.at(-1)!.channelCount);
 ok("description blocks Kijiji and RentFaster", weakPacket.missingRequired.some((m) => m.field === "description" && m.channelCount === 2));
-ok("beds/baths only blocks RentFaster in selected trio", weakPacket.missingRequired.some((m) => m.field === "beds_baths" && m.channelCount === 1));
+// S691: beds/baths is a real-fact hard block on Kijiji (submit-logic.ts:93-100)
+// and Rentals.ca (form), so all three of the trio block on it now.
+ok("beds/baths blocks all three in selected trio (hardBlock)", weakPacket.missingRequired.some((m) => m.field === "beds_baths" && m.channelCount === 3));
+ok("square footage blocks Kijiji in the trio (hardBlock)", weakPacket.missingRequired.some((m) => m.field === "square_footage" && m.channelCount === 1));
 
 console.log(`listing-packet-readiness: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -50,6 +50,25 @@ export const MAX_PHOTOS = 50;
 // aggregator silently dropping it downstream.
 export const MIN_DESCRIPTION_CHARS = 50;
 
+/**
+ * Per-channel photo floor where the portal enforces one above 1. Rentals.ca
+ * refuses to submit with fewer than 2 (worker phase-b-submit-rentals.ts:113-114,
+ * MIN_PHOTOS 2). Read by the question sheet's photos fact. SPEC-S688 Slice 2.
+ */
+export const MIN_PHOTOS_BY_CHANNEL: Readonly<Partial<Record<string, number>>> = {
+  rentals_ca: 2,
+};
+
+/** The photo floor for a channel selection: max(1, every selected channel's floor). */
+export function minPhotosForChannels(channels: readonly string[]): number {
+  let min = 1;
+  for (const channel of channels) {
+    const floor = MIN_PHOTOS_BY_CHANNEL[channel];
+    if (typeof floor === "number" && floor > min) min = floor;
+  }
+  return min;
+}
+
 // Default country for the address block. Ontario small-landlord ICP.
 export const DEFAULT_COUNTRY = "CA" as const;
 

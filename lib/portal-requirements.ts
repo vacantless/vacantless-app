@@ -41,6 +41,10 @@ export const PORTAL_REQUIREMENT_FIELD_KEYS = [
   "air_conditioning",
   "furnished",
   "square_footage",
+  "postal_code",
+  "smoking",
+  "for_rent_by",
+  "accessibility",
   "virtual_tour",
   "floorplans",
   "video",
@@ -89,6 +93,10 @@ export const PORTAL_REQUIREMENT_FIELD_LABELS: Record<
   air_conditioning: "Air conditioning",
   furnished: "Furnished",
   square_footage: "Square footage",
+  postal_code: "Postal code",
+  smoking: "Smoking",
+  for_rent_by: "For rent by",
+  accessibility: "Wheelchair accessible",
   virtual_tour: "Virtual tour",
   floorplans: "Floorplans",
   video: "Video",
@@ -165,6 +173,21 @@ export type PortalRequirements = {
   required: readonly PortalRequirementFieldKey[];
   recommended: readonly PortalRequirementFieldKey[];
   optional: readonly PortalRequirementFieldKey[];
+  /**
+   * Fields the live form or the worker compose refuses to proceed without,
+   * verified by OBJECT (a run outcome or a form error), separate from
+   * `required` (the partner doc). Evidence lives in `notes`. The question
+   * sheet and the packet card treat `hardBlock ∪ required` as "must answer".
+   * SPEC-S688 Slice 2 section 3.
+   */
+  hardBlock: readonly PortalRequirementFieldKey[];
+  /**
+   * Fields the portal form has as a control that the worker fills from a
+   * default when the record is null (compose.ts). The sheet asks these once
+   * ("answer once so we never guess") so a completed sheet never posts a
+   * silent default. SPEC-S688 Slice 2 section 3.
+   */
+  askedDefaults: readonly PortalRequirementFieldKey[];
   operatorSteps: readonly string[];
   topUps: readonly string[];
   proofRequired: boolean;
@@ -245,8 +268,31 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "utilities",
       "parking",
       "pets",
+      "square_footage",
     ],
     optional: ["video", "furnished"],
+    hardBlock: [
+      "address",
+      "rent",
+      "beds_baths",
+      "square_footage",
+      "photos",
+      "property_type",
+    ],
+    askedDefaults: [
+      "furnished",
+      "lease_term",
+      "pets",
+      "air_conditioning",
+      "smoking",
+      "parking",
+      "property_type",
+      "for_rent_by",
+      "utilities",
+      "laundry",
+      "availability_date",
+      "accessibility",
+    ],
     operatorSteps: [
       "Sign in to Kijiji.",
       "Review category, package, and posting location.",
@@ -258,6 +304,9 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     notes: [
       "Rentsync marks photos recommended for Kijiji, while Kijiji troubleshooting flags no photo as a common posting problem.",
       "Links are not allowed in the listing copy; keep the tracked inquiry link outside the description where the channel flow supports it.",
+      "postal_code is asked by the question sheet when Kijiji is selected (lib/question-sheet.ts SHEET_ONLY_REQUIRED, SPEC-S688 Slice 2 4.1); it stays out of this row until a run outcome proves the location step blocks on it, and until the property page derives its packet facts from the sheet.",
+      "hardBlock evidence (worker 9af7fc2, 2026-09-06): submit-logic.ts:93-100 real-fact set is rent, size, bedrooms, bathrooms, location, photo; kijiji.json:26-31 free-plan diagnostics; the unittype radio is REQUIRED (kijiji.json) and compose defaults it to apartment.",
+      "askedDefaults evidence (compose.ts): unfurnished :302, one-year :345, pets No :349, A/C No :355, non_smoking :359, 0 parking :331, apartment :337, owner :341, utilities unchecked :377-379, laundry unchecked :372-374, move-in today :292, accessibility No :365.",
     ],
   },
   {
@@ -290,6 +339,15 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "pets",
     ],
     optional: ["video", "tracked_link"],
+    hardBlock: [
+      "title",
+      "address",
+      "rent",
+      "photos",
+      "description",
+      "property_type",
+    ],
+    askedDefaults: [],
     operatorSteps: [
       "Use a personal Marketplace-eligible Facebook session.",
       "Review fair-housing-safe copy and photo order before posting.",
@@ -301,6 +359,7 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     notes: [
       "Facebook Help Center pages can require login or block unauthenticated reads, so the exact rental form field list remains session-verified before connector work.",
       "Marketplace is separate from Facebook Page feed; Page posting proof does not prove Marketplace reach.",
+      "hardBlock = required minus operator fields (operator assertion, assisted posting; no worker compose for Marketplace).",
     ],
   },
   {
@@ -335,6 +394,25 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "identity_verification",
     ],
     optional: ["video", "virtual_tour"],
+    hardBlock: [
+      "address",
+      "rent",
+      "beds_baths",
+      "photos",
+      "contact_phone",
+      "contact_email",
+      "property_type",
+      "availability_date",
+      "pets",
+    ],
+    askedDefaults: [
+      "lease_term",
+      "property_type",
+      "parking",
+      "utilities",
+      "furnished",
+      "air_conditioning",
+    ],
     operatorSteps: [
       "Sign in or confirm the feed/account route.",
       "Review lead contact and plan/add-on choice.",
@@ -346,6 +424,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     notes: [
       "Rentals.ca says the first three listings are free, with paid Promoted and Featured upgrades.",
       "Rentsync marks description and phone as recommended, not hard required, but Vacantless keeps them in the packet to improve lead handling.",
+      "hardBlock evidence (worker 9af7fc2, 2026-09-06): compose.ts:724-734 hard-stops on org contact phone/email; phase-b-submit-rentals.ts:113-114 MIN_PHOTOS 2; compose marks move-in missing with no fallback; pets is a required question because the Rentals.ca form defaults pets to Yes while our worker default posts No (decision 4, Noam 2026-09-07): never guess.",
+      "askedDefaults evidence (compose.ts): lease 1-year :601-606, Apartment :598, utilities not included :811-815, parking none :794-800, furnished No :807, A/C unchecked. Pets default No :805-806 applies to legacy records only.",
     ],
   },
   {
@@ -385,6 +465,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "square_footage",
     ],
     optional: ["video", "virtual_tour", "floorplans", "identity_verification"],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Sign in or create a RentFaster account.",
       "Choose single-unit or multi-unit package.",
@@ -433,6 +515,25 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "square_footage",
     ],
     optional: ["video", "virtual_tour", "floorplans"],
+    hardBlock: [
+      "address",
+      "rent",
+      "beds_baths",
+      "square_footage",
+      "photos",
+      "description",
+      "availability_date",
+      "property_type",
+    ],
+    askedDefaults: [
+      "lease_term",
+      "pets",
+      "property_type",
+      "parking",
+      "laundry",
+      "furnished",
+      "air_conditioning",
+    ],
     operatorSteps: [
       "Sign in or confirm an accepted feed route.",
       "Publish on Zumper or wait for feed display.",
@@ -444,6 +545,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     notes: [
       "Zumper says public listings should appear in search results within two to three hours after publishing.",
       "Rentsync lists Zumper and PadMapper as paid, with photos, descriptions, property type, phone number, and price required.",
+      "hardBlock evidence (worker 9af7fc2, 2026-09-06): listing-fill-sheet.ts:1026-1027 size blocks Listing details; compose.ts Zumper branch marks move-in and description missing with no fallback; zumper.json:141 photos required to advance.",
+      "askedDefaults evidence (compose.ts Zumper branch): lease '1 year', pets No, Apartment (4), parking none, laundry unchecked, furnished unchecked, A/C unchecked.",
     ],
   },
   {
@@ -471,6 +574,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     ],
     recommended: ["availability_date", "amenities", "utilities", "parking", "pets"],
     optional: ["video", "virtual_tour"],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Add or reactivate the rental on Viewit.ca.",
       "Approve the Viewit activation fee.",
@@ -517,6 +622,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "amenities",
     ],
     optional: ["video", "lease_type", "additional_rent"],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Sign in to SpaceList.",
       "Choose List A Space and select the matching address, transaction type, and property use.",
@@ -570,6 +677,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "additional_rent",
     ],
     optional: ["video"],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Use a verified owner, broker, or authorized representative account.",
       "Confirm the inventory is commercial CRE or a 5+ unit multifamily/multiplex investment listing before continuing.",
@@ -618,6 +727,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
       "square_footage",
     ],
     optional: ["video", "virtual_tour", "floorplans"],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Send the field sheet to a licensed broker or MLS route.",
       "Do not mark live until the real Realtor.ca listing URL exists.",
@@ -640,6 +751,12 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     required: ["photos", "post_caption", "tracked_link", "account_login", "proof_url"],
     recommended: ["address", "rent", "beds_baths", "availability_date"],
     optional: ["video"],
+    hardBlock: [
+      "photos",
+      "post_caption",
+      "tracked_link",
+    ],
+    askedDefaults: [],
     operatorSteps: [
       "Connect and authorize the Facebook Page.",
       "Approve the prepared organic Page post.",
@@ -662,6 +779,12 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     required: ["photos", "post_caption", "tracked_link", "account_login", "proof_url"],
     recommended: ["address", "rent", "beds_baths", "availability_date"],
     optional: ["video"],
+    hardBlock: [
+      "photos",
+      "post_caption",
+      "tracked_link",
+    ],
+    askedDefaults: [],
     operatorSteps: [
       "Connect an Instagram Business account.",
       "Approve image and caption before posting.",
@@ -684,6 +807,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     required: ["post_caption", "tracked_link", "audience", "proof_url"],
     recommended: ["photos", "address", "rent", "beds_baths", "availability_date"],
     optional: ["video"],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Choose the WhatsApp audience or broadcast list.",
       "Send the prepared share message.",
@@ -707,6 +832,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     required: ["post_caption", "tracked_link", "account_login", "proof_url"],
     recommended: ["photos", "address", "rent", "beds_baths", "availability_date"],
     optional: ["video"],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Sign in to the intended LinkedIn profile or Page.",
       "Post the prepared caption and tracked link.",
@@ -730,6 +857,8 @@ export const PORTAL_REQUIREMENTS: readonly PortalRequirements[] = [
     required: ["post_caption", "tracked_link", "account_login", "proof_url"],
     recommended: ["photos", "video", "address", "rent", "beds_baths"],
     optional: [],
+    hardBlock: [],
+    askedDefaults: [],
     operatorSteps: [
       "Sign in to the intended Snapchat account.",
       "Post the prepared story or message.",
@@ -1054,6 +1183,29 @@ export function recommendedFieldsFor(
   channel: PortalRequirementChannelKey | PortalKey | string | null | undefined,
 ): PortalRequirementFieldKey[] {
   return [...(portalRequirementsFor(channel)?.recommended ?? [])];
+}
+
+export function hardBlockFieldsFor(
+  channel: PortalRequirementChannelKey | PortalKey | string | null | undefined,
+): PortalRequirementFieldKey[] {
+  return [...(portalRequirementsFor(channel)?.hardBlock ?? [])];
+}
+
+export function askedDefaultFieldsFor(
+  channel: PortalRequirementChannelKey | PortalKey | string | null | undefined,
+): PortalRequirementFieldKey[] {
+  return [...(portalRequirementsFor(channel)?.askedDefaults ?? [])];
+}
+
+/**
+ * The fields a channel must have before a post can proceed: the verified
+ * hard blocks plus the partner-doc required list, deduplicated, hard blocks
+ * first. One list for the question sheet and the packet card alike.
+ */
+export function requiredQuestionFieldsFor(
+  row: PortalRequirements,
+): PortalRequirementFieldKey[] {
+  return unique([...row.hardBlock, ...row.required]);
 }
 
 export type OneListingPacketRequirements = {
