@@ -297,6 +297,28 @@ ok(
   publishEverywhereSource.includes("revokeChannelAutomation"),
 );
 
+// S692: the right rail is the third reader of "is this site live". It must use the
+// same one live rule as the "Post to these sites" card (forYouLiveState) and
+// count only sites that still need the landlord, so Manning (hand-posted Kijiji +
+// Facebook, both live) never reads "2 need sign-in" beside "Your ads are live".
+ok(
+  "rail rows receive the one live rule (live={liveStateFor(r)})",
+  (publishEverywhereSource.match(/live=\{liveStateFor\(r\)\}/g) ?? []).length >= 2,
+);
+ok(
+  "rail chip renders Live for a live row",
+  publishEverywhereSource.includes('? { label: "Live", cls: "bg-green-50 text-green-700" }'),
+);
+ok(
+  "rail need-sign-in count excludes live sites",
+  publishEverywhereSource.includes("forYou.filter((r) => forYouNeedsOperatorStep(r)).length} need sign-in") &&
+    !publishEverywhereSource.includes("{reach.for_you} need sign-in"),
+);
+ok(
+  "rail hides the cost line on a live row",
+  publishEverywhereSource.includes('isLive || row.key === "site" || row.key === "email" ? null : firstRunCostLine(row.key)'),
+);
+
 const channelPublishRailSource = readFileSync(
   "app/dashboard/properties/[id]/channel-publish-rail.tsx",
   "utf8",

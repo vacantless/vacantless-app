@@ -235,13 +235,19 @@ function ChannelRow({
   row,
   propertyId,
   wizardEnabled = false,
+  live = null,
 }: {
   row: ResolvedRow;
   propertyId?: string;
   wizardEnabled?: boolean;
+  /** S692: the one live rule (forYouLiveState) for this row, so the rail never
+   *  says "Sign in + post" about a site whose ad link is already saved. */
+  live?: { isLive: boolean; liveUrl: string | null } | null;
 }) {
-  const chip =
-    row.automationAction === "authorize"
+  const isLive = live?.isLive === true;
+  const chip = isLive
+    ? { label: "Live", cls: "bg-green-50 text-green-700" }
+    : row.automationAction === "authorize"
       ? { label: "Needs authorization", cls: "bg-amber-50 text-amber-700" }
       : MODE_CHIP[row.mode];
   // S691: "Connect once" was a dead chip; it now opens the Connect sites
@@ -251,7 +257,8 @@ function ChannelRow({
     row.mode === "needs_connection" && propertyId && wizardEnabled
       ? `/dashboard/link-portals?property=${encodeURIComponent(propertyId)}`
       : null;
-  const costLine = row.key === "site" || row.key === "email" ? null : firstRunCostLine(row.key);
+  const costLine =
+    isLive || row.key === "site" || row.key === "email" ? null : firstRunCostLine(row.key);
   return (
     <div className="py-1.5">
       <div className="flex items-center gap-3">
@@ -259,7 +266,16 @@ function ChannelRow({
           {CHANNEL_GLYPH[row.key] ?? "🏠"}
         </span>
         <span className="text-sm font-semibold text-gray-800">{row.label}</span>
-        {connectHref ? (
+        {isLive && live?.liveUrl ? (
+          <a
+            href={live.liveUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold underline-offset-2 hover:underline ${chip.cls}`}
+          >
+            Live ↗
+          </a>
+        ) : connectHref ? (
           <a
             href={connectHref}
             className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold underline-offset-2 hover:underline ${chip.cls}`}
@@ -385,11 +401,12 @@ export function PublishEverywhere({
   const runItemByChannel = new Map(runItems.map((item) => [item.channel, item]));
   // S691: one live rule for the whole page (lib/publish-everywhere.ts). A site
   // posted by hand has a live listing_posts row and no run item; it is live.
-  const forYouIsLive = (row: ResolvedRow) =>
+  const liveStateFor = (row: ResolvedRow) =>
     forYouLiveState({
       runItem: runItemByChannel.get(row.key) ?? null,
       liveProofUrl: row.liveProofUrl ?? null,
-    }).isLive;
+    });
+  const forYouIsLive = (row: ResolvedRow) => liveStateFor(row).isLive;
   const forYouNeedsOperatorStep = (row: ResolvedRow) => {
     // Live first: a hand-posted site has a live listing row and no run item.
     if (forYouIsLive(row)) return false;
@@ -713,7 +730,7 @@ export function PublishEverywhere({
                 {reach.instant} connected
               </span>
               <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                {reach.for_you} need sign-in
+                {forYou.filter((r) => forYouNeedsOperatorStep(r)).length} need sign-in
               </span>
               <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
                 {setupRows.length + comingSoonRows.length} later
@@ -742,7 +759,7 @@ export function PublishEverywhere({
             }}
           />
           {instantRows.map((r) => (
-            <ChannelRow key={r.key} row={r} propertyId={propertyId} />
+            <ChannelRow key={r.key} row={r} propertyId={propertyId} live={liveStateFor(r)} />
           ))}
         </div>
 
@@ -757,7 +774,7 @@ export function PublishEverywhere({
               </p>
             )}
             {forYou.map((r) => (
-              <ChannelRow key={r.key} row={r} propertyId={propertyId} />
+              <ChannelRow key={r.key} row={r} propertyId={propertyId} live={liveStateFor(r)} />
             ))}
           </div>
         )}
