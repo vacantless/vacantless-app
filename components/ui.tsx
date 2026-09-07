@@ -830,6 +830,8 @@ export function BackNext({
   nextLabel = "Next",
   ariaLabel = "Step navigation",
   className = "",
+  nextDisabled = false,
+  nextHint,
 }: {
   backHref: string;
   nextHref: string;
@@ -837,6 +839,9 @@ export function BackNext({
   nextLabel?: ReactNode;
   ariaLabel?: string;
   className?: string;
+  /** S692: the question sheet keeps Next inert until every required answer is in. */
+  nextDisabled?: boolean;
+  nextHint?: ReactNode;
 }) {
   return (
     <nav
@@ -852,13 +857,25 @@ export function BackNext({
       >
         {backLabel}
       </Link>
-      <Link
-        href={nextHref}
-        className="pointer-events-auto inline-flex min-h-12 items-center justify-center rounded-[var(--vl-radius-md)] px-6 py-3 text-base font-semibold text-white shadow-sm transition duration-vl-fast ease-vl-standard hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vl-focus-ring)] focus-visible:ring-offset-2"
-        style={{ background: "var(--brand-gradient, var(--brand-color))" }}
-      >
-        {nextLabel}
-      </Link>
+      <span className="pointer-events-auto flex flex-col items-end gap-1">
+        {nextDisabled && nextHint ? (
+          <span className="rounded-[var(--vl-radius-md)] bg-[var(--vl-surface-elevated)] px-2 py-1 text-xs font-medium text-[var(--vl-text-secondary)] shadow-sm">
+            {nextHint}
+          </span>
+        ) : null}
+        <Link
+          href={nextDisabled ? "#" : nextHref}
+          aria-disabled={nextDisabled ? true : undefined}
+          tabIndex={nextDisabled ? -1 : undefined}
+          className={cx(
+            "inline-flex min-h-12 items-center justify-center rounded-[var(--vl-radius-md)] px-6 py-3 text-base font-semibold text-white shadow-sm transition duration-vl-fast ease-vl-standard hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vl-focus-ring)] focus-visible:ring-offset-2",
+            nextDisabled && "pointer-events-none opacity-50",
+          )}
+          style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+        >
+          {nextLabel}
+        </Link>
+      </span>
     </nav>
   );
 }

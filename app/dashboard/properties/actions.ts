@@ -45,6 +45,13 @@ import {
   reservableTrackerId,
 } from "@/lib/listing-distribution";
 import { normalizeRunItemStatus } from "@/lib/distribution-run";
+import { loadQuestionSheet } from "@/lib/question-sheet-load";
+import {
+  applyQuestionSheetAnswers,
+  sheetFormValuesFromFormData,
+  type SheetFieldError,
+} from "@/lib/question-sheet-save";
+import type { QuestionKey } from "@/lib/question-sheet";
 import {
   loadReservedListingPostIds,
   visibleListingPostCount,
@@ -5007,4 +5014,105 @@ export async function requestConciergePublish(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?run=concierge#distribute-header`);
+}
+
+// ============================================================================
+// saveQuestionSheet (SPEC-S688 Slice 2 sections 4.2 + 4.4, S692). One form,
+// one submit. Loads the record, applies the answers through the pure layer,
+// writes the property (and the org when the caller may), and stamps
+// question_sheet_completed_at when the rebuilt sheet is complete. Returns a
+// result object (no redirect) so the client form can show field errors and the
+// "skipped org fields" note without a partial-failure state.
+// ============================================================================
+
+export type SaveQuestionSheetResult =
+  | { ok: false; reason: "forbidden" | "not_found" | "sheet_unavailable" | "write_failed"; message: string }
+  | {
+      ok: true;
+      errors: SheetFieldError[];
+      answeredKeys: QuestionKey[];
+      skippedOrgFields: QuestionKey[];
+      stamped: boolean;
+      mirroredFields: string[];
+      requiredRemaining: number;
+      answerOnceRemaining: number;
+      complete: boolean;
+    };
+
+export async function saveQuestionSheet(
+  propertyId: string,
+  formData: FormData,
+): Promise<SaveQuestionSheetResult> {
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, reason: "forbidden", message: "Sign in to continue." };
+  const role = await getRoleForOrg(org.id);
+  if (role == null || !roleCan(role, "manage_properties")) {
+    return { ok: false, reason: "forbidden", message: "You cannot edit listings in this organization." };
+  }
+  const callerCanEditOrg = roleCan(role, "manage_settings");
+  const id = propertyId.trim();
+  if (!id) return { ok: false, reason: "not_found", message: "No listing given." };
+
+  const supabase = createClient();
+  const channelsRaw = formData
+    .getAll("channels")
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  const loaded = await loadQuestionSheet(supabase, {
+    propertyId: id,
+    org,
+    callerCanEditOrg,
+    channels: channelsRaw.length > 0 ? channelsRaw : undefined,
+  });
+  if (!loaded.available) {
+    return {
+      ok: false,
+      reason: loaded.reason === "not_found" ? "not_found" : "sheet_unavailable",
+      message:
+        loaded.reason === "column_missing"
+          ? "The question sheet is not turned on for this workspace yet."
+          : loaded.message,
+    };
+  }
+
+  const applied = applyQuestionSheetAnswers({
+    sheet: loaded.sheet,
+    sheetInput: loaded.input,
+    values: sheetFormValuesFromFormData(formData),
+    now: new Date(),
+    propertyForRentBy: loaded.propertyForRentBy,
+  });
+
+  // Every answered field is written even when another field has an error
+  // (partial saves are fine, spec 4.2); the stamp only lands on a clean,
+  // complete sheet (the pure layer already withholds it on errors).
+  if (Object.keys(applied.orgPatch).length > 0) {
+    const { error } = await supabase
+      .from("organizations")
+      .update(applied.orgPatch)
+      .eq("id", org.id);
+    if (error) return { ok: false, reason: "write_failed", message: error.message };
+  }
+  if (Object.keys(applied.propertyPatch).length > 0) {
+    const { error } = await supabase
+      .from("properties")
+      .update(applied.propertyPatch)
+      .eq("id", id)
+      .eq("organization_id", org.id);
+    if (error) return { ok: false, reason: "write_failed", message: error.message };
+  }
+
+  revalidatePath(`/dashboard/properties/${id}`);
+  revalidatePath("/dashboard/add-details");
+  revalidatePath("/dashboard/properties");
+  return {
+    ok: true,
+    errors: applied.errors,
+    answeredKeys: applied.answeredKeys,
+    skippedOrgFields: applied.skippedOrgFields,
+    stamped: applied.stamped,
+    mirroredFields: applied.mirroredFields,
+    requiredRemaining: applied.rebuilt.requiredRemaining,
+    answerOnceRemaining: applied.rebuilt.answerOnceRemaining,
+    complete: applied.rebuilt.complete,
+  };
 }

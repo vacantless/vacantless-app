@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
+import { loadQuestionSheet } from "@/lib/question-sheet-load";
+import { questionSheetFieldFacts } from "@/lib/question-sheet";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -2578,9 +2580,32 @@ export default async function PropertyDetailPage({
     activeLaunchPortalChannels.length > 0
       ? activeLaunchPortalChannels
       : defaultLaunchPortalChannels;
+  // S692 (SPEC-S688 Slice 2 section 4.1): once the question sheet exists
+  // (wizard flag on AND migration 0226 applied), the packet facts the sheet can
+  // answer come from the sheet's own held-rules, so the card and the sheet
+  // never disagree. Before 0226 the loader answers column_missing and the S691
+  // facts above stand. Measured 2026-09-07 against live data: every Agile unit
+  // has unit_type null (structure_type only), so the day 0226 lands their cards
+  // read "property type missing" until the sheet is answered once per unit (or
+  // unit_type is set in bulk); recorded in STATUS-S692 as a decision for that day.
+  let sheetAwareFacts: ListingPacketFieldFacts = listingPacketFacts;
+  if (org && distributionWizardEnabled()) {
+    const loadedSheet = await loadQuestionSheet(supabase, {
+      propertyId: p.id,
+      org,
+      callerCanEditOrg: false,
+      channels: listingPacketChannels,
+    });
+    if (loadedSheet.available) {
+      sheetAwareFacts = {
+        ...listingPacketFacts,
+        ...questionSheetFieldFacts(loadedSheet.input),
+      };
+    }
+  }
   const listingPacketReadiness = buildListingPacketReadiness({
     channels: listingPacketChannels,
-    fieldFacts: listingPacketFacts,
+    fieldFacts: sheetAwareFacts,
   });
   // --- Listing quality (S412 Slice 5) -------------------------------------
   const hasFeatures = Object.values(

@@ -19,7 +19,9 @@
     "lint": "next lint",
     "test:session-status-readmodel": "tsx scripts/test-session-status-readmodel.ts",
     "test:no-client-secret-imports": "tsx scripts/test-no-client-secret-imports.ts",
-    "test:question-sheet": "tsx scripts/test-question-sheet.ts"
+    "test:question-sheet": "tsx scripts/test-question-sheet.ts",
+    "test:question-sheet-save": "tsx scripts/test-question-sheet-save.ts",
+    "test:question-sheet-page-half": "tsx scripts/test-question-sheet-page-half.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

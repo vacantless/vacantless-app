@@ -16,7 +16,13 @@ import {
   DEFAULT_INGEST_DOMAIN,
 } from "@/lib/email-ingest";
 import { assertSupportedLocale } from "@/lib/i18n/locale";
-import { withPropertyParam } from "@/lib/stage-wizard-nav";
+import { distributionWizardEnabled, withPropertyParam } from "@/lib/stage-wizard-nav";
+import { getCurrentRole } from "@/lib/membership";
+import { roleCan } from "@/lib/roles";
+import { loadQuestionSheet } from "@/lib/question-sheet-load";
+import { QUESTION_KEYS, type QuestionKey, type QuestionSheet } from "@/lib/question-sheet";
+import { portalRequirementsFor } from "@/lib/portal-requirements";
+import { QuestionSheetForm, type QuestionSheetCopy } from "./question-sheet-form";
 import {
   STAGE2_METHODS,
   stage2FieldStatusKey,
@@ -25,10 +31,14 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// Stage 2 "Add property details" (S584). DARK: new route, not linked from any
-// nav. Guided density on the S583a kit. The three cards route to the existing
-// intake rails; the read panel shows the honest empty state until a real
-// intake result is threaded in (a later slice).
+// Stage 2 "Add property details" (S584). Guided density on the S583a kit. The
+// three cards route to the existing intake rails; the read panel shows the
+// honest empty state until a real intake result is threaded in.
+//
+// S692 (SPEC-S688 Slice 2 sections 4.2 + 4.4): with the wizard flag on, an
+// owned `?property=` and migration 0226 applied, this page renders the
+// question sheet instead of the three cards. Pre-0226 the loader answers
+// "column_missing" and the cards stay, so this ships dark.
 export default async function AddDetailsPage({
   searchParams,
 }: {
@@ -75,6 +85,61 @@ export default async function AddDetailsPage({
     getTranslations("common"),
   ]);
 
+  // The question sheet (S692). Only for an owned property, only with the
+  // wizard on, only once 0226 exists; every other case falls through to the
+  // three cards exactly as before.
+  let sheet: QuestionSheet | null = null;
+  if (ownedPropertyId && distributionWizardEnabled()) {
+    const role = await getCurrentRole();
+    const loaded = await loadQuestionSheet(supabase, {
+      propertyId: ownedPropertyId,
+      org,
+      callerCanEditOrg: roleCan(role, "manage_settings"),
+    });
+    if (loaded.available) sheet = loaded.sheet;
+  }
+  const sheetCopy: QuestionSheetCopy | null = sheet
+    ? {
+        title: tStage2("sheet.title"),
+        sub: tStage2("sheet.sub"),
+        requiredTitle: tStage2("sheet.requiredTitle"),
+        requiredSub: tStage2("sheet.requiredSub"),
+        answerOnceTitle: tStage2("sheet.answerOnceTitle"),
+        answerOnceSub: tStage2("sheet.answerOnceSub"),
+        recommendedTitle: tStage2("sheet.recommendedTitle"),
+        recommendedSub: tStage2("sheet.recommendedSub"),
+        orgTitle: tStage2("sheet.orgTitle"),
+        orgSub: tStage2("sheet.orgSub"),
+        orgReadOnly: tStage2("sheet.orgReadOnly"),
+        choose: tStage2("sheet.choose"),
+        yes: tStage2("sheet.yes"),
+        no: tStage2("sheet.no"),
+        cats: tStage2("sheet.cats"),
+        dogs: tStage2("sheet.dogs"),
+        dogSize: tStage2("sheet.dogSize"),
+        petsNotes: tStage2("sheet.petsNotes"),
+        parkingType: tStage2("sheet.parkingType"),
+        parkingCount: tStage2("sheet.parkingCount"),
+        addPhotos: tStage2("sheet.addPhotos"),
+        save: tStage2("sheet.save"),
+        saving: tStage2("sheet.saving"),
+        saved: tStage2("sheet.saved"),
+        savedComplete: tStage2("sheet.savedComplete"),
+        skippedOrg: tStage2("sheet.skippedOrg", { fields: "{fields}" }),
+        fixErrors: tStage2("sheet.fixErrors"),
+        mirrored: tStage2("sheet.mirrored"),
+        neededBy: tStage2("sheet.neededBy", { sites: "{sites}" }),
+        wouldPost: tStage2("sheet.wouldPost", { value: "{value}" }),
+        photosLine: tStage2("sheet.photosLine", { current: "{current}", min: "{min}" }),
+        labels: Object.fromEntries(
+          QUESTION_KEYS.map((key) => [key, tStage2(`sheet.q.${key}`)]),
+        ) as Record<QuestionKey, string>,
+        siteLabels: Object.fromEntries(
+          sheet.channels.map((channel) => [channel, portalRequirementsFor(channel)?.label ?? channel]),
+        ),
+      }
+    : null;
+
   // No intake threaded into this dark screen yet -> honest empty preview.
   const preview = toStage2Preview(null);
 
@@ -104,6 +169,31 @@ export default async function AddDetailsPage({
           </span>
         </p>
       )}
+      {sheet && sheetCopy && ownedPropertyId ? (
+        <>
+          <Card className="space-y-2" padded>
+            <h2 className="text-xl font-bold leading-tight text-[var(--vl-text-primary)]">
+              {sheetCopy.title}
+            </h2>
+            <p className="text-[length:var(--vl-type-guided-body)] leading-relaxed text-[var(--vl-text-secondary)]">
+              {sheetCopy.sub}
+            </p>
+            <p className="text-sm font-semibold text-[var(--vl-text-primary)]">
+              {tStage2("sheet.requiredLeft", { count: sheet.requiredRemaining })}
+              {sheet.answerOnceRemaining > 0
+                ? ` · ${tStage2("sheet.answerOnceLeft", { count: sheet.answerOnceRemaining })}`
+                : ""}
+            </p>
+          </Card>
+          <QuestionSheetForm
+            propertyId={ownedPropertyId}
+            propertyPageHref={`/dashboard/properties/${ownedPropertyId}`}
+            sheet={sheet}
+            copy={sheetCopy}
+            todayIso={new Date().toISOString().slice(0, 10)}
+          />
+        </>
+      ) : (
       <div className="space-y-4">
         {STAGE2_METHODS.map((method) => {
           // Document + manual intake target THIS listing when one is in
@@ -133,7 +223,9 @@ export default async function AddDetailsPage({
           );
         })}
       </div>
+      )}
 
+      {sheet ? null : (
       <Card className="space-y-3" padded>
         <h2 className="text-[length:var(--vl-type-h2)] font-semibold leading-tight text-[var(--vl-text-primary)]">
           {tStage2("readTitle")}
@@ -175,6 +267,7 @@ export default async function AddDetailsPage({
           </>
         )}
       </Card>
+      )}
 
       <BackNext
         backHref={withPropertyParam("/dashboard/link-portals", ownedPropertyId)}
@@ -182,6 +275,8 @@ export default async function AddDetailsPage({
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}
         ariaLabel={tCommon("stepNavigation")}
+        nextDisabled={sheet != null && sheet.requiredRemaining > 0}
+        nextHint={sheet != null && sheet.requiredRemaining > 0 ? tStage2("sheet.nextBlocked") : undefined}
       />
     </StageShell>
   );
