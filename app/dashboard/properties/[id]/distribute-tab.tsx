@@ -300,7 +300,7 @@ const ONE_TAP_RUN_STATUSES: readonly PublishStatus[] = [
 const BLOCKED_STATUSES: readonly PublishStatus[] = ["blocked", "rejected"];
 
 const PUBLISH_CONTROL_ROOM_SAFETY_PROMISE =
-  "Nothing is posted automatically. You approve outside-site posts, paid steps, and live proof.";
+  "You approve every post. You pay a site only if it asks.";
 
 const CONTROL_ROOM_TONE_CLASS: Record<PublishControlRoomTone, string> = {
   positive: "bg-emerald-50 text-emerald-700",
@@ -380,15 +380,15 @@ function nextRunAction(items: RunItemView[]): { label: string } | null {
       : it.publishStatus === "needs_login"
         ? `Sign in on ${it.channelLabel} to post it`
         : it.publishStatus === "queued"
-        ? `Start ${it.channelLabel}`
+        ? `Open ${it.channelLabel}`
         : it.channel === "vacantless"
-          ? "Confirm your renter page"
+          ? "Check your Vacantless page"
           : it.channel === "org_feed"
-            ? "Confirm your listing feed"
+            ? "Check your partner sites"
             : it.mode === "broker"
               ? `Send ${it.channelLabel} to your agent`
               : it.mode === "feed_partner"
-                ? `Publish ${it.channelLabel} via your feed`
+                ? `Send ${it.channelLabel} to our partner sites`
                 : `Post on ${it.channelLabel} next`;
   return { label };
 }
@@ -587,19 +587,19 @@ export function buildPublishControlRoomBuckets({
       key: "needsSignIn",
       label: "Needs sign-in",
       value: needsSignIn,
-      detail: bucketDetail(needsSignIn, "login needed", "clear"),
+      detail: bucketDetail(needsSignIn, "sign-in needed", "clear"),
       tone: bucketTone(needsSignIn, "warning"),
     },
     {
       key: "needsProof",
       label: "Needs the ad link",
       value: needsProof,
-      detail: bucketDetail(needsProof, "save live URL", "clear"),
+      detail: bucketDetail(needsProof, "save the link", "clear"),
       tone: bucketTone(needsProof, "danger"),
     },
     {
       key: "refreshDue",
-      label: "Refresh due",
+      label: "Post it again",
       value: refreshDue,
       detail: bucketDetail(refreshDue, "refresh/repost", "current"),
       tone: bucketTone(refreshDue, "warning"),
@@ -730,7 +730,7 @@ export function DistributeTab({
   const publishEverywherePostingBlocker =
     firstListingPacketAction
       ? {
-          title: "Finish your listing details first.",
+          title: "Answer the missing questions first.",
           detail: `${firstListingPacketAction.detail} Sign-in, payment, and the ad link come after this.`,
           href: firstListingPacketAction.href,
           action: firstListingPacketAction.action,
@@ -822,9 +822,8 @@ export function DistributeTab({
               </span>
             </div>
             <p className="text-xs text-gray-600">
-              Vacantless prepares the copy, links, and checks. You still approve
-              any outside-site post or payment, and a site counts as Live only
-              after the real ad link is saved.
+              We write the ad and the links. You approve every post and every
+              fee. A site is Live once we have its link.
             </p>
           </div>
           <a
@@ -878,8 +877,8 @@ export function DistributeTab({
               <p className="text-xs text-gray-500">
                 {proofPostCount} saved
                 {proofIssueCount > 0
-                  ? ` · ${proofIssueCount} missing an ad URL`
-                  : " · live ad URLs and tracked inquiry links"}
+                  ? ` · ${proofIssueCount} still need a link`
+                  : " · links to your ads and inquiry links"}
               </p>
             </div>
             <span className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700">
@@ -922,7 +921,7 @@ export function DistributeTab({
                   Other live ad links
                 </p>
                 <p className="text-xs text-gray-500">
-                  {otherPosts.length} saved outside the main channel list
+                  {otherPosts.length} saved outside the main site list
                 </p>
               </div>
               <span className="text-xs font-semibold text-brand">Open</span>
@@ -960,12 +959,12 @@ export function DistributeTab({
         </div>
       </details>
 
-      {/* Performance & setup (Slice 1): listing quality + what's-working
+      {/* Results and setup (Slice 1): listing quality + what's-working
           analytics, collapsed. Present for power users, out of the first read
           (Codex #5). */}
       <details className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
         <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-gray-900">
-          Performance &amp; setup
+          Results and setup
           <span className="ml-2 text-xs font-normal text-gray-500">
             Listing quality and what&apos;s bringing renters back
           </span>
@@ -1016,7 +1015,7 @@ export function DistributeTab({
                   href="/dashboard/billing"
                   className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                 >
-                  Upgrade to Managed
+                  Let us do it for you
                 </a>
               </div>
             )}
@@ -1083,7 +1082,7 @@ function distributionStatusSummaryParts({
     `${automationSummary.oneTap} waiting on you`,
     refreshCount > 0
       ? `${refreshCount} ${refreshCount === 1 ? "needs" : "need"} refresh`
-      : "0 refresh due",
+      : "0 to post again",
     actionsNeeded > 0
       ? `${pluralize(actionsNeeded, "action")} needed`
       : "0 actions needed",
@@ -1091,7 +1090,7 @@ function distributionStatusSummaryParts({
 
   if (conciergeDeskEnabled) {
     parts.push(
-      `Done-for-you ${conciergeUsage.used}/${conciergeUsage.included} used`,
+      `We post it for you ${conciergeUsage.used}/${conciergeUsage.included} used`,
     );
   }
 
@@ -1177,7 +1176,7 @@ const PACKET_FIELD_HREF: Partial<Record<PortalRequirementFieldKey, string>> = {
 const PACKET_TIER_LABEL: Record<ListingPacketChannelReadiness["tier"], string> = {
   included: "Included",
   needs_tap: "Needs your tap",
-  top_up: "Top-up",
+  top_up: "Buy more",
   broker: "Broker",
 };
 
@@ -1223,7 +1222,7 @@ function portalRequirementFlagChips(
   if (plan.requiresFeedRoute) {
     chips.push({
       key: "feed",
-      label: "Feed route",
+      label: "Partner sites",
       className: "bg-cyan-50 text-cyan-700",
     });
   }
@@ -1255,7 +1254,7 @@ function packetFieldAction(
     return {
       href: packetFieldHref(missing.field, propertyId),
       action: "Choose property type",
-      detail: "Choose the property type in Unit details to unlock posting to rental sites.",
+      detail: "Choose the property type to unlock posting to rental sites.",
     };
   }
 
@@ -1302,7 +1301,7 @@ function ListingPacketCard({
     ? "Posting choices stay below: which sites, sign-in steps, and any site fees."
     : primaryMissing?.field === "property_type"
       ? primaryAction?.detail ??
-        "Choose the property type in Unit details to unlock posting to rental sites."
+        "Choose the property type to unlock posting to rental sites."
       : `Add ${missingText} to satisfy the remaining sites.`;
 
   return (
@@ -1434,7 +1433,7 @@ function ListingPacketChannelRow({
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
             {channel.ready
               ? primaryActionDetail
-              : `After the listing details are ready: ${primaryActionDetail}`}
+              : `Once the questions are answered: ${primaryActionDetail}`}
           </p>
         )}
       </div>
@@ -1456,15 +1455,15 @@ function ListingPacketChannelRow({
 
 function packetReadyDetail(channel: ListingPacketChannelReadiness): string {
   if (channel.tier === "included") {
-    return "Listing details ready; it can run after approval.";
+    return "Ready. We post it after you approve.";
   }
   if (channel.tier === "top_up") {
-    return "Listing details ready; payment comes later.";
+    return "Ready. You pay the site later.";
   }
   if (channel.tier === "broker") {
-    return "Listing details ready; your agent's ad link comes later.";
+    return "Ready. Your agent sends the link later.";
   }
-  return "Listing details ready; sign-in and the ad link come later.";
+  return "Ready. You sign in and send the link later.";
 }
 
 function conciergeRequestedDate(value: string | null | undefined): string | null {
@@ -1681,7 +1680,7 @@ function SimpleGetOnline({
   const launchSetupBlocker =
     firstPacketAction
       ? {
-          title: "Finish your listing details first.",
+          title: "Answer the missing questions first.",
           detail: `${firstPacketAction.detail} Sign-in, payment, and the ad link come after this.`,
           href: firstPacketAction.href,
           action: firstPacketAction.action,
@@ -1689,10 +1688,10 @@ function SimpleGetOnline({
       : setupOutstanding > 0
       ? {
           title: `Finish ${setupOutstanding} ${
-            setupOutstanding === 1 ? "listing detail" : "listing details"
+            setupOutstanding === 1 ? "answer" : "answers"
           } first.`,
           detail:
-            "After that, this queue will take you to the first site that needs your sign-in, approval, or ad link.",
+            "After that, we take you to the first site that needs you.",
           href: "#rental-details",
           action: "Finish details",
         }
@@ -1700,24 +1699,24 @@ function SimpleGetOnline({
         ? {
             title: "Add photos before posting to sites.",
             detail:
-              "After photos are added, this queue will take you to the first site that needs your sign-in, approval, or ad link.",
+              "Then we take you to the first site that needs you.",
             href: "#property-photos",
             action: "Add photos first",
           }
         : !linkIsLive
           ? {
-              title: "Set the renter page live before posting to sites.",
+              title: "Turn your Vacantless page on before posting to sites.",
               detail:
-                "After the renter page is live, this queue will take you to the first site that needs your sign-in, approval, or ad link.",
+                "Then we take you to the first site that needs you.",
               href: "#publish-action",
-              action: "Set Live first",
+              action: "Turn it on first",
             }
           : null;
 
   const photoNudge = !hasPhotos ? (
     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
       <span className="font-semibold">Photo boost:</span>
-      <span>Photos are optional for publishing, but they help renters trust the ad.</span>
+      <span>Photos are optional, but renters trust an ad with them.</span>
       <PhotoUploadLink
         className="font-semibold text-blue-900 underline decoration-blue-300 underline-offset-2"
       >
@@ -1728,8 +1727,8 @@ function SimpleGetOnline({
   const oneTapFooter = launchRun.conciergeDeskEnabled ? (
     <>
       <p>
-        Fallback help is included for destinations that still need a person.
-        Paid placements still need your approval, spend limit, and the ad link.
+        We can post the sites that still need a person. Paid sites need your
+        approval, your limit, and the link.
       </p>
       <p className="mt-1 font-semibold text-gray-900">
         {conciergeUsageLabel(launchRun.conciergeUsage)}
@@ -1761,16 +1760,15 @@ function SimpleGetOnline({
           href="#publish-checklist"
           className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
         >
-          {hasOneTapRunItems ? "Open launch queue" : "Choose destinations"}
+          {hasOneTapRunItems ? "Open your sites" : "Choose sites"}
         </a>
       )}
     </>
   ) : (
     <>
       <p>
-        Fallback help, paid placements, and extra manual reach stay as Growth or
-        top-up work. Paid placements still need your approval, spend limit, and
-        the ad link.
+        Paid sites and extra help are things you buy. They need your approval,
+        your limit, and the link.
       </p>
       {launchRun.conciergeDailyLostLabel && (
         <p className="mt-1 text-gray-600">
@@ -1781,7 +1779,7 @@ function SimpleGetOnline({
         href="/dashboard/billing"
         className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
       >
-        Review Growth / top-up
+        Review what you can buy
       </a>
     </>
   );
@@ -1793,10 +1791,10 @@ function SimpleGetOnline({
           <input type="hidden" name="channel" value={row.key} />
           <button
             type="submit"
-            aria-label={`Authorize Vacantless to post this listing to ${row.label} when you publish`}
+            aria-label={`Allow us to post this listing to ${row.label}`}
             className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
           >
-            Authorize auto-post
+            Allow us to post
           </button>
         </form>
       );
@@ -1808,7 +1806,7 @@ function SimpleGetOnline({
           <input type="hidden" name="channel" value={row.key} />
           <button
             type="submit"
-            aria-label={`Stop Vacantless from publishing this listing to ${row.label} automatically`}
+            aria-label={`Stop us posting this listing to ${row.label}`}
             className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
           >
             Turn off auto-post
@@ -1819,7 +1817,7 @@ function SimpleGetOnline({
     if (row.chip.canConnect) {
       const label =
         row.readinessState === "needs_spend_limit"
-          ? "Set spend limit"
+          ? "Set your limit"
           : "Connect account";
       return (
         <a
@@ -1856,8 +1854,8 @@ function SimpleGetOnline({
                 {linkIsLive
                   ? railBuckets.externalLiveCount > 0
                     ? "You're online"
-                    : "Renter page live"
-                  : "Ready to launch"}
+                    : "Your Vacantless page is on"
+                  : "Ready"}
               </span>
               <h3
                 className={`mt-3 text-2xl font-semibold ${
@@ -1866,11 +1864,11 @@ function SimpleGetOnline({
               >
                 {linkIsLive
                   ? railBuckets.externalLiveCount > 0
-                    ? `Your renter page is live, plus ${railBuckets.externalLiveCount} rental ${
+                    ? `Your Vacantless page is on, plus ${railBuckets.externalLiveCount} rental ${
                         railBuckets.externalLiveCount === 1 ? "site" : "sites"
                       }.`
-                    : "Your renter page is live. No rental sites are live yet."
-                  : `Publish ${addressLabel} everywhere renters are looking.`}
+                    : "Your Vacantless page is on. No rental sites yet."
+                  : `Post ${addressLabel} everywhere renters are looking.`}
               </h3>
               <p
                 className={`mt-2 max-w-3xl text-sm leading-relaxed ${
@@ -1879,9 +1877,9 @@ function SimpleGetOnline({
               >
                 {linkIsLive
                   ? railBuckets.externalLiveCount > 0
-                    ? "Ready destinations can sync from here, and sites still waiting on an ad link stay in the launch queue."
-                    : "Anyone with your link can inquire. Rental sites count as live only once the real ad URL is saved."
-                  : "Launch turns on the Vacantless renter page and email-alert reach first, then opens the queue for account, spend, broker, or ad-link exceptions."}
+                    ? "Post the changes from here. Sites still waiting stay in your list."
+                    : "Anyone with your link can ask. A site counts as Live once we have its link."
+                  : "This turns on your Vacantless page and email alerts first. Then it opens your sites."}
               </p>
             </div>
             <span
@@ -1911,7 +1909,7 @@ function SimpleGetOnline({
                 </div>
                 <a href="#publish-checklist" className={SECONDARY_BTN}>
                   <Icons.bolt className="h-4 w-4" />
-                  Sync updates / re-publish
+                  Post the changes
                 </a>
               </div>
               {publicLink ? (
@@ -1919,7 +1917,7 @@ function SimpleGetOnline({
                   <CopyLink url={publicLink} />
                   <div className="flex flex-wrap gap-2">
                     <a
-                      href={`sms:?&body=${encodeURIComponent(shareBody)}`}
+                      href={`sms:?body=${encodeURIComponent(shareBody)}`}
                       className={SECONDARY_BTN}
                     >
                       <Icons.chat className="h-4 w-4" />
@@ -1947,7 +1945,7 @@ function SimpleGetOnline({
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-green-800">
-                  The renter page is live; refresh if the share link has not
+                  Your Vacantless page is on. Refresh if the link has not
                   appeared yet.
                 </p>
               )}
@@ -1974,7 +1972,7 @@ function SimpleGetOnline({
                 </label>
                 <label className="sm:col-span-2">
                   <span className="mb-1 block text-xs font-medium text-gray-600">
-                    Rent ($/mo)
+                    Rent per month
                   </span>
                   <input
                     name="rent"
@@ -2023,7 +2021,7 @@ function SimpleGetOnline({
             <>
               <ConfirmPublishButton
                 propertyId={propertyId}
-                label="Launch everywhere"
+                label="Post everywhere"
                 formClassName="mt-5"
                 className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
                 style={{ backgroundColor: "var(--brand-color)" }}
@@ -2033,7 +2031,7 @@ function SimpleGetOnline({
                 <Icons.bolt className="h-4 w-4" />
               </ConfirmPublishButton>
               <p className="mt-2 text-xs text-gray-600">
-                Publishes instantly where connected. Opens 1-tap finish for the rest.
+                Posts now where you are signed in. The rest need one step.
               </p>
             </>
           ) : (
@@ -2064,12 +2062,12 @@ function SimpleGetOnline({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {packetBlocked ? "Next after your listing" : "Launch queue"}
+                {packetBlocked ? "Next after your listing" : "Your sites"}
               </p>
               <h3 className="mt-1 text-base font-semibold text-gray-950">
                 {packetBlocked
-                  ? "Posting opens after the listing details are ready."
-                  : "Vacantless launches ready destinations and shows only account, spend, or ad-link exceptions."}
+                  ? "Posting opens once the questions are answered."
+                  : "We post to every site marked Ready. The rest tell you what they need."}
               </h3>
             </div>
             <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
@@ -2103,7 +2101,7 @@ function SimpleGetOnline({
           <>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Outside-site inquiries
+                Inquiries from other sites
               </p>
               <p className="mt-1 text-2xl font-semibold text-gray-950">
                 {analyticsSummary.leads}
@@ -2119,7 +2117,7 @@ function SimpleGetOnline({
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Advanced leads
+                More on inquiries
               </p>
               <p className="mt-1 text-2xl font-semibold text-gray-950">
                 {analyticsSummary.advanced}
@@ -2133,7 +2131,7 @@ function SimpleGetOnline({
                 Reach
               </p>
               <p className="mt-1 text-sm text-gray-500">
-                Your reach shows here after you publish.
+                Your reach shows here after you post.
               </p>
             </div>
             <div>
@@ -2141,7 +2139,7 @@ function SimpleGetOnline({
                 Inquiries
               </p>
               <p className="mt-1 text-sm text-gray-500">
-                Tracked site links start attributing renters once live.
+                Your site links count renters once the ad is up.
               </p>
             </div>
             <div>
@@ -2149,7 +2147,7 @@ function SimpleGetOnline({
                 Follow-ups
               </p>
               <p className="mt-1 text-sm text-gray-500">
-                Viewings and applications surface from real lead progress.
+                Viewings and applications show up here.
               </p>
             </div>
           </>
@@ -2224,40 +2222,40 @@ function PublishControlRoom({
         ? "Add photos"
         : !linkIsLive
           ? canSetLive
-            ? "Set renter page live"
+            ? "Turn your Vacantless page on"
             : "Review status"
           : hasRun
             ? attentionCount > 0
               ? "Open next posting step"
               : "Review posting steps"
-            : "Start posting steps";
+            : "Open the posting steps";
   const launchLabel = packetBlocked
     ? `Your listing needs ${packetMissing.length} ${
         packetMissing.length === 1 ? "thing" : "things"
       } before every site can use it`
     : launchBlocked
-    ? "Set the renter page live before posting to sites"
+    ? "Turn your Vacantless page on before posting"
     : hasRun
       ? attentionCount > 0
-      ? "Publishing needs your next tap"
+      ? "One more step from you"
         : "Posting steps are ready to review"
-      : "Ready to choose sites and publish";
+      : "Ready to choose sites and post";
   const launchDetail = packetBlocked
-    ? `${firstPacketAction?.detail ?? "Start with the missing listing item."} Sign-in, payment, and the ad link come after this.`
+    ? `${firstPacketAction?.detail ?? "Begin with the missing answer."} Sign-in, payment, and the ad link come after this.`
     : launchBlocked
-    ? "Turn on the renter page first. A site counts as Live only after the link to your ad is saved."
+    ? "Turn your Vacantless page on first. A site is Live once we have its link."
     : hasRun
-      ? "Use one checklist to approve paid steps, finish sign-ins, refresh stale ads, and save the ad link."
-      : "Choose the sites once. Vacantless prepares the copy and shows only the sign-in, payment, or ad-link steps that need you.";
+      ? "One list for sign-ins, fees, old ads, and saving each link."
+      : "Choose the sites once. We write the ad and show only the steps that need you.";
   const blockers = [
     packetBlocked ? packetMissingText : null,
     !packetBlocked && setupOutstanding > 0
       ? `${setupOutstanding} ${
-          setupOutstanding === 1 ? "listing detail" : "listing details"
+          setupOutstanding === 1 ? "answer" : "answers"
         }`
       : null,
     !packetBlocked && !hasPhotos ? "photos" : null,
-    !linkIsLive ? "renter page not live" : null,
+    !linkIsLive ? "your Vacantless page is off" : null,
   ].filter((item): item is string => Boolean(item));
   const waitingSummary = attentionBuckets
     .map((bucket) => `${bucket.label.toLowerCase()} (${bucket.value})`)
@@ -2271,7 +2269,7 @@ function PublishControlRoom({
   }> = [
     {
       key: "renter-page",
-      label: "Renter page",
+      label: "Your Vacantless page",
       value: linkIsLive ? "Live" : "Not live",
       tone: linkIsLive ? "positive" : "warning",
     },
@@ -2308,7 +2306,7 @@ function PublishControlRoom({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand">
-            Get online checklist
+            Your posting steps
           </p>
           <h3 className="mt-1 text-lg font-semibold text-gray-950">
             {launchLabel}
@@ -2373,7 +2371,7 @@ function PublishControlRoom({
         </p>
       ) : (
         <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          Good to publish. Rental sites count as Live only after the ad link is saved.
+          Good to post. A rental site is Live once we have its link.
         </p>
       )}
     </section>
@@ -2409,9 +2407,9 @@ function DistributionBasicsPanel({
     setupOutstanding > 0
       ? "Finish details"
       : linkIsLive
-        ? "Public page works"
+        ? "Your Vacantless page works"
         : canSetLive
-          ? "Set Live next"
+          ? "Turn it on next"
           : "Review status";
   const propertyHref =
     setupOutstanding > 0
@@ -2427,7 +2425,7 @@ function DistributionBasicsPanel({
       : linkIsLive
         ? "Use listing"
         : canSetLive
-          ? "Set Live"
+          ? "Turn it on"
           : "Review";
   const cards = [
     {
@@ -2449,12 +2447,12 @@ function DistributionBasicsPanel({
       value: `${accountReadyCount}/${accountTotalCount} ready`,
       detail: "Credentials",
       href: "/dashboard/settings?tab=distribution",
-      action: "Open launch setup",
+      action: "Open site settings",
     },
     {
-      title: "Top-up help",
+      title: "Buy more help",
       value: "Optional",
-      detail: "Done-for-you",
+      detail: "We post it for you",
       href: "#posting-mode",
       action: "Review help",
     },
@@ -2505,7 +2503,7 @@ function PostingModePanel({
     : "";
   const doneForYouHeading = activeItem
     ? activeReferral
-      ? `A network agent is already handling ${activeItem.channelLabel}.`
+      ? `An agent is already handling ${activeItem.channelLabel}.`
       : `Vacantless is already posting ${activeItem.channelLabel}.`
     : target
       ? referralTarget
@@ -2515,17 +2513,17 @@ function PostingModePanel({
   const doneForYouBody = activeItem
     ? activeReferral
       ? `The referral is in progress.${activeRequestedSentence} It still needs the real Realtor.ca listing URL before it counts as Live.`
-      : `Vacantless has this channel in its queue.${activeRequestedSentence} No second click is needed; the link to your ad is still required before it counts as Live.`
+      : `This site is in our list.${activeRequestedSentence} We still need the link to your ad.`
     : target
       ? referralTarget
-        ? "A licensed network agent handles the Realtor.ca path through their brokerage."
+        ? "A licensed agent handles Realtor.ca through their brokerage."
         : "Vacantless takes over the site and records the live ad link here."
-      : "Choose sites first, then the done-for-you option appears here.";
+      : "Choose sites first. Then we can post them for you.";
   return (
     <section id="posting-mode" className="mb-4 scroll-mt-6 space-y-3">
       <div className="rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
-          Done-for-you / top-up
+          We post it for you
         </p>
         <p className="mt-1 text-lg font-semibold text-white">
           {doneForYouHeading}
@@ -2563,7 +2561,7 @@ function PostingModePanel({
                 className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
               >
                 {referralTarget
-                  ? "Dispatch a network agent"
+                  ? "Ask an agent to post it"
                   : "Ask Vacantless to post it"}
               </button>
             </form>
@@ -2581,7 +2579,7 @@ function PostingModePanel({
         <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-gray-900 [&::-webkit-details-marker]:hidden">
           Use a site yourself instead
           <span className="ml-2 text-xs font-normal text-gray-500">
-            Prepared copy, your login, your ad link
+            We write it, you sign in, you send the link
           </span>
         </summary>
         <div className="border-t border-gray-100 px-5 py-4">
@@ -2589,8 +2587,8 @@ function PostingModePanel({
             Write. Post. Save the link.
           </p>
           <p className="mt-1 text-xs text-gray-600">
-            Vacantless prepares the steps and keeps the ad link here,
-            but you sign in, post, and save the ad URL yourself.
+            We write the steps and keep the link here. You sign in, post, and
+            save the link yourself.
           </p>
           <a
             href="#publish-checklist"
@@ -2662,7 +2660,7 @@ function DistributionHealthPanel({ health }: { health: DistributionHealth }) {
           value={String(health.trackedPosts)}
         />
         <HealthMetric
-          label="Attributed leads"
+          label="Inquiries counted"
           value={String(health.attributedLeads)}
         />
         <HealthMetric
@@ -2670,7 +2668,7 @@ function DistributionHealthPanel({ health }: { health: DistributionHealth }) {
           value={String(health.advancedLeads)}
         />
         <HealthMetric
-          label="Refresh due"
+          label="Post it again"
           value={String(health.staleChannels)}
         />
         <HealthMetric
@@ -2720,16 +2718,16 @@ function AutomationStatusPanel({
     ? state === "one_tap"
       ? "One tap waiting"
       : state === "needs_refresh"
-        ? "Refresh due"
+        ? "Post it again"
         : state === "blocked"
           ? "Needs setup"
-          : "Automating"
+          : "We are posting"
     : readyToShare
-      ? "Ready to automate"
-      : "Waiting on setup";
+      ? "Ready"
+      : "Needs setup";
   const ownSurface = linkIsLive
-    ? "Vacantless renter page is live automatically."
-    : "Vacantless renter page turns on when this rental is Live.";
+    ? "Your Vacantless page is on."
+    : "Your Vacantless page turns on with this rental.";
 
   return (
     <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -2738,7 +2736,7 @@ function AutomationStatusPanel({
           <div className="mb-1 flex items-center gap-2">
             <AutomationDot state={hasRun ? state : "idle"} />
             <h3 className="text-sm font-semibold text-gray-900">
-              Automation status
+              What we are doing
             </h3>
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
               {label}
@@ -2748,8 +2746,8 @@ function AutomationStatusPanel({
             {hasRun
               ? summary.line
               : readyToShare
-                ? "Set it Live or start the checklist to stage the default sites."
-                : "Finish the required listing details before automation can start."}
+                ? "Turn it on, or open the steps to line up your sites."
+                : "Answer the required questions before we can post."}
           </p>
           <p className="mt-1 text-xs text-gray-500">{ownSurface}</p>
         </div>
@@ -2758,7 +2756,7 @@ function AutomationStatusPanel({
             href="#publish-checklist"
             className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
           >
-            Review &amp; post
+            Review and post
           </a>
         )}
         {summary.needsRefresh > 0 && (
@@ -2799,7 +2797,7 @@ function AnalyticsPanel({ rows }: { rows: ChannelAnalyticsRow[] }) {
           <thead>
             <tr className="border-b border-gray-200 text-left text-gray-500">
               <th className="py-1.5 pr-3 font-medium">Site</th>
-              <th className="py-1.5 pr-3 font-medium">Leads</th>
+              <th className="py-1.5 pr-3 font-medium">Inquiries</th>
               <th className="py-1.5 pr-3 font-medium">Booked+</th>
               <th className="py-1.5 pr-3 font-medium">Days live</th>
               <th className="py-1.5 font-medium">Next step</th>
@@ -2854,11 +2852,11 @@ function RentFasterPostingKit({
   const groups = fillSheet ? groupedFillSheetFields(fillSheet) : [];
   const gotchas = [
     "Set Province to Ontario before choosing the address.",
-    "Pick the Google address suggestion and confirm the community/map.",
+    "Pick the Google address suggestion and check the map.",
     "Review property type; use Fourplex for a unit in a fourplex.",
-    "Remove Credit Report and Zumper/PadMapper add-ons unless approved.",
+    "Take off the Credit Report and Zumper add-ons unless approved.",
     "Paid promotion is optional and owner-approved, not automatic.",
-    "Upload photos after payment, then paste the public RentFaster ad URL.",
+    "Upload photos after you pay, then paste the RentFaster link.",
   ];
 
   return (
@@ -2884,13 +2882,13 @@ function RentFasterPostingKit({
 
       <div className="mb-3 rounded-lg border border-amber-200 bg-white p-2.5">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-          Tracked inquiry link
+          Your inquiry link
         </p>
         {reservedTrackedUrl ? (
           <CopyLink url={reservedTrackedUrl} />
         ) : (
           <p className="text-xs text-amber-800">
-            Add RentFaster to the posting checklist to reserve the tracked link
+            Add RentFaster to your posting steps. That saves your inquiry link
             before you post.
           </p>
         )}
@@ -2917,7 +2915,7 @@ function RentFasterPostingKit({
                         {field.label}
                       </dt>
                       <dd className="mt-0.5 text-xs text-gray-900">
-                        {field.value ?? "Manual / review"}
+                        {field.value ?? "You do this one"}
                       </dd>
                       {field.hint && (
                         <dd className="mt-1 text-[11px] text-gray-500">
@@ -3053,14 +3051,14 @@ function ChannelCard({
       {status.value === "needs_refresh" && (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           {refreshAge != null
-            ? `Refresh due after about ${refreshAge} days live.`
-            : "Refresh due."}
+            ? `Post it again after about ${refreshAge} days live.`
+            : "Post it again."}
         </p>
       )}
 
       {status.value === "problem" && (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          Live status needs an ad URL.
+          Live needs the link to your ad.
         </p>
       )}
 
@@ -3087,7 +3085,7 @@ function ChannelCard({
           />
         ) : (
           <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Set this rental Live to create tracked links.
+            Turn this rental on to create your links.
           </p>
         )}
       </div>
@@ -3102,9 +3100,8 @@ function ChannelCard({
           {channel.key === "facebook_feed" && facebookPage?.enabled && (
             <div className="space-y-2 border-l-2 border-gray-200 pl-3 text-xs text-gray-600">
               <p>
-                Organic Page posts reach people who see or follow the Page. For
-                Facebook Marketplace renter traffic, keep using the Marketplace
-                channel; for paid reach, use Meta Ads.
+                A Page post reaches people who follow your Page. For renters
+                on Marketplace, use the Marketplace site instead.
               </p>
               {facebookPage.accountStatus === "connected" && facebookPage.pageName ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -3135,9 +3132,8 @@ function ChannelCard({
           {channel.key === "instagram" && instagramAccount?.enabled && (
             <div className="space-y-2 border-l-2 border-gray-200 pl-3 text-xs text-gray-600">
               <p>
-                Instagram v1 publishes one image with a caption through the
-                linked Business or Creator account on the connected Facebook
-                Page. Captions include the tracked inquiry link.
+                We post one photo with a caption to your Instagram. The
+                caption carries your inquiry link.
               </p>
               {instagramAccount.accountStatus === "connected" && instagramAccount.label ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -3194,9 +3190,9 @@ function ChannelCard({
 
           {feed && (
             <p className="text-xs text-gray-500">
-              <span className="font-medium text-gray-700">Listing feed:</span>{" "}
+              <span className="font-medium text-gray-700">Partner sites:</span>{" "}
               {feed.inFeed
-                ? "In the Vacantless feed; partner acceptance still decides live status."
+                ? "Sent on. Each partner site decides when to show it."
                 : feed.hint}
             </p>
           )}
@@ -3229,7 +3225,7 @@ function ChannelCard({
               href="#listing-copy-title"
               className="text-xs font-medium text-brand underline"
             >
-              Full copy &amp; field sheet →
+              Full wording and answers →
             </a>
           </div>
 
@@ -3319,13 +3315,13 @@ function PostRow({
       {post.trackedUrl ? (
         <>
           <p className="mb-1 text-xs font-medium text-gray-500">
-            Tracked inquiry link for this post
+            Your inquiry link for this post
           </p>
           <CopyLink url={post.trackedUrl} />
         </>
       ) : (
         <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-          Tracked links are hidden while this rental is not Live.
+          Your links appear once this rental is on.
         </p>
       )}
 
@@ -3335,7 +3331,7 @@ function PostRow({
 
       <details className="mt-2">
         <summary className="cursor-pointer text-xs font-medium text-brand">
-          Edit / remove
+          Edit or delete
         </summary>
         <form
           action={updateListingPost}
@@ -3388,7 +3384,7 @@ function AddPostForm({
   return (
     <details>
       <summary className="cursor-pointer text-sm font-medium text-brand">
-        Save live ad URL
+        Save the link to your ad
       </summary>
       <form
         // Remount on a successful add to clear the uncontrolled inputs
@@ -3466,7 +3462,7 @@ function PostFields({
           htmlFor={`${idPrefix}-url`}
           className="mb-1 block text-xs font-medium text-gray-600"
         >
-          Ad URL
+          The link to your ad
         </label>
         <input
           id={`${idPrefix}-url`}
@@ -3476,7 +3472,7 @@ function PostFields({
           className={FIELD_CLASS}
         />
         <p className="mt-1 text-xs text-gray-400">
-          Required once the post is Live, so its tracked link works.
+          We need this once the ad is up, so your link works.
         </p>
       </div>
       <div className="flex flex-wrap gap-3">
@@ -3567,7 +3563,7 @@ function ListingQualityPanel({ quality }: { quality: QualityView }) {
         {fairFlags.length > 0 && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-red-700">
-              Fair-housing wording (Ontario Human Rights Code)
+              Fair-housing wording under the Ontario Human Rights Code
             </p>
             <ul className="space-y-1.5">
               {fairFlags.map((f) => (
@@ -3630,7 +3626,7 @@ function PartnerSection({
     <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          Feed partner
+          Partner site
         </span>
         <span
           className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CHIP[tone]}`}
@@ -3641,7 +3637,7 @@ function PartnerSection({
       <p className="mb-2 text-xs text-gray-600">{nextStep}</p>
       <details>
         <summary className="cursor-pointer text-xs font-medium text-brand">
-          {partner ? "Update partner setup" : "Set up feed partner"}
+          {partner ? "Update partner setup" : "Set up a partner site"}
         </summary>
         <form
           action={upsertPartnerAccount}
@@ -3691,7 +3687,7 @@ function PartnerSection({
               htmlFor={`partner-${channelKey}-feed-url`}
               className="mb-1 block text-xs font-medium text-gray-600"
             >
-              Feed URL submitted to {channelLabel}
+              Link sent to {channelLabel}
             </label>
             <input
               id={`partner-${channelKey}-feed-url`}
@@ -3753,7 +3749,7 @@ function PartnerSection({
               htmlFor={`partner-${channelKey}-notes`}
               className="mb-1 block text-xs font-medium text-gray-600"
             >
-              Notes {partner?.status === "rejected" ? "(rejection reason)" : ""}
+              Notes {partner?.status === "rejected" ? "on why it was turned down" : ""}
             </label>
             <input
               id={`partner-${channelKey}-notes`}

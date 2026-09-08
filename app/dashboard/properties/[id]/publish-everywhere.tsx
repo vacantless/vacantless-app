@@ -92,7 +92,7 @@ const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
   instant_auto: { label: "Instant", cls: "bg-green-50 text-green-700" },
   copilot_fill: { label: "Sign in + post", cls: "bg-indigo-50 text-indigo-700" },
   paid_optin: { label: "Sign in + fee", cls: "bg-indigo-50 text-indigo-700" },
-  needs_connection: { label: "Connect once", cls: "bg-gray-100 text-gray-600" },
+  needs_connection: { label: "Sign in first", cls: "bg-gray-100 text-gray-600" },
   brokerage_gated: { label: "Via brokerage", cls: "bg-gray-100 text-gray-600" },
   planned: { label: "Coming soon", cls: "bg-gray-100 text-gray-600" },
 };
@@ -201,14 +201,14 @@ function ChannelAutomationAction({
         <input type="hidden" name="property_id" value={propertyId} />
         <input type="hidden" name="channel" value={row.key} />
         <p className="mb-1 text-[11px] leading-relaxed text-amber-800">
-          Authorize Vacantless to post this listing to this account when you
-          publish. You still approve the destinations before anything goes out.
+          Allow us to post this listing to this account. You approve every
+          site before anything goes out.
         </p>
         <button
           type="submit"
           className="rounded-lg bg-amber-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-700"
         >
-          Authorize auto-post
+          Allow us to post
         </button>
       </form>
     );
@@ -219,8 +219,7 @@ function ChannelAutomationAction({
         <input type="hidden" name="property_id" value={propertyId} />
         <input type="hidden" name="channel" value={row.key} />
         <p className="mb-1 text-[11px] leading-relaxed text-gray-500">
-          Auto-posting is authorized. Turn it off without disconnecting the
-          account.
+          We can post to this account. Turn that off and stay signed in.
         </p>
         <button
           type="submit"
@@ -251,7 +250,7 @@ function ChannelRow({
   const chip = isLive
     ? { label: "Live", cls: "bg-green-50 text-green-700" }
     : row.automationAction === "authorize"
-      ? { label: "Needs authorization", cls: "bg-amber-50 text-amber-700" }
+      ? { label: "Needs you", cls: "bg-amber-50 text-amber-700" }
       : MODE_CHIP[row.mode];
   // S691: "Connect once" was a dead chip; it now opens the Connect sites
   // screen for this property. Every row shows what the site costs so a
@@ -451,7 +450,7 @@ export function PublishEverywhere({
       setConfirmDestinations(await readInstantPublishDestinations(propertyId));
     } catch {
       setConfirmDestinationsError(
-        "We could not refresh the connected account list. Close this and try again before publishing.",
+        "We could not read your account list. Close this and try again.",
       );
     } finally {
       setConfirmDestinationsLoading(false);
@@ -470,7 +469,7 @@ export function PublishEverywhere({
                 : "bg-green-50 text-green-700"
             }`}
           >
-            {linkIsLive ? "✓ You're online" : "✓ Ready to publish"}
+            {linkIsLive ? "✓ You're online" : "✓ Ready to post"}
           </span>
           <h3 className="mt-2 text-xl font-semibold tracking-tight text-gray-950">
             {addressLabel}
@@ -495,9 +494,8 @@ export function PublishEverywhere({
                 {onlineHeadline}
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-                Your Vacantless page is live. Finish any rental site that still asks you
-                to sign in or pay, then leave it alone until the listing
-                changes.{" "}
+                Your Vacantless page is live. Finish any site that still needs
+                you.{" "}
                 {totalInquiryCount}{" "}
                 {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
                 this rental so far.
@@ -548,7 +546,7 @@ export function PublishEverywhere({
                       You&apos;re all set
                     </h4>
                     <p className="mt-0.5 text-sm text-green-800">
-                      Re-publish only when you change the listing.
+                      Post again only when the listing changes.
                     </p>
                   </div>
                 )}
@@ -563,7 +561,7 @@ export function PublishEverywhere({
                     className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
                   >
                     <Icons.bolt className="h-4 w-4" />
-                    Sync updates / re-publish
+                    Post the changes
                   </button>
                 )}
               </div>
@@ -577,8 +575,8 @@ export function PublishEverywhere({
               {onlineHeadline}
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-              Your Vacantless page is live. Connected sites stay in sync, and any rental
-              site that needs a sign-in or payment shows its next step below.{" "}
+              Your Vacantless page is live. Any site that needs you shows its
+              next step below.{" "}
               {totalInquiryCount}{" "}
               {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to this
               rental so far.
@@ -595,7 +593,7 @@ export function PublishEverywhere({
                 className="mt-4 inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
               >
                 <Icons.bolt className="h-4 w-4" />
-                Sync updates / re-publish
+                Post the changes
               </button>
             )}
           </section>
@@ -608,10 +606,10 @@ export function PublishEverywhere({
                   1
                 </span>
                 <b className="block text-[12.5px] text-emerald-50">
-                  Tap Publish
+                  Press Post
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  Renter page and connected channels go live.
+                  Your Vacantless page and your sites turn on.
                 </small>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
@@ -622,7 +620,7 @@ export function PublishEverywhere({
                   Sign in if asked
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  We fill the ad; you only handle login or site fees.
+                  We fill the ad. You sign in and pay any site fee.
                 </small>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
@@ -646,7 +644,7 @@ export function PublishEverywhere({
               >
                 <span className="inline-flex items-center gap-2">
                   <Icons.bolt className="h-5 w-5" />
-                  Publish everywhere
+                  Post everywhere
                 </span>
                 <small className="text-[12.5px] font-semibold opacity-80">
                   Then follow the short sign-in or fee list
@@ -671,7 +669,7 @@ export function PublishEverywhere({
               <div className="mx-auto max-w-md rounded-xl border border-amber-200 bg-white/95 px-4 py-3 text-left">
                 <p className="text-sm font-semibold text-amber-950">
                   Finish {setupOutstanding}{" "}
-                  {setupOutstanding === 1 ? "listing detail" : "listing details"}{" "}
+                  {setupOutstanding === 1 ? "answer" : "answers"}{" "}
                   first.
                 </p>
                 <a
@@ -695,7 +693,7 @@ export function PublishEverywhere({
               </div>
             )}
             <p className="mt-3 text-[12.5px] text-emerald-200">
-              Nothing posts or charges until you approve it.
+              You approve every post. You pay a site only if it asks.
             </p>
           </section>
         )}
@@ -811,14 +809,13 @@ export function PublishEverywhere({
         )}
 
         <div className="mt-2 border-t border-gray-100 pt-3 text-[11.5px] leading-relaxed text-gray-500">
-          <b className="text-gray-700">Connected now</b> means Vacantless can send it
-          when you tap Publish; it shows Live once the ad link comes back.
+          <b className="text-gray-700">Ready</b> means we post it when you press
+          Post. It shows Live once the link to your ad comes back.
           <br />
-          <b className="text-gray-700">Needs your sign-in</b> means Vacantless
-          fills the ad, then you sign in, cover any site fee, and tap post.
+          <b className="text-gray-700">Needs you</b> means we fill the ad. You
+          sign in, pay any fee, and press post.
           <br />
-          <b className="text-gray-700">Coming soon</b> is not included in this
-          publish yet.
+          <b className="text-gray-700">Not yet</b> means this site comes later.
         </div>
       </aside>
 
@@ -901,7 +898,7 @@ function ForYouHandoff({
           ? "Posting to rental sites opens once your listing has the details every site needs."
           : allSetSummary
           ? "The link to each ad is saved here. Reopen a site only when you change the listing."
-          : "Vacantless fills the ad. You sign in if the site asks, pay the site only if it asks, then save the link to your ad here."}
+          : "We fill the ad. You sign in and pay if the site asks. Then save the link to your ad here."}
       </p>
       {postingBlocker && (
         <a
@@ -927,8 +924,8 @@ function ForYouHandoff({
       </ul>
       {conciergeDeskEnabled && !postingBlocker && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
-          “Have us post it” uses one done-for-you publish from your plan. We record
-          a real live-ad link before it is marked live.
+          “Have us post it” uses one of your paid posts. We save the link to
+          your ad before it shows as Live.
         </p>
       )}
     </section>
@@ -982,7 +979,7 @@ function ForYouRow({
     : postingBlocked
       ? { label: "Waiting", cls: "bg-amber-50 text-amber-700" }
     : needsApproval
-      ? { label: "Ready — approve", cls: "bg-emerald-50 text-emerald-700" }
+      ? { label: "Ready. Approve it", cls: "bg-emerald-50 text-emerald-700" }
       : needsConnect
         ? { label: "Sign-in needed", cls: "bg-amber-50 text-amber-700" }
         : working
@@ -1013,9 +1010,8 @@ function ForYouRow({
 
       {paid && !isLive && (
         <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
-          {PAID_SITE_LABEL[row.key] ?? "This site"} charges a listing fee set by
-          the site. You approve it here and it is paid to them with your own card —
-          Vacantless never charges, fronts, or handles that fee.
+          {PAID_SITE_LABEL[row.key] ?? "This site"} charges its own fee. You
+          approve it here and pay the site with your own card.
         </p>
       )}
 
@@ -1049,18 +1045,18 @@ function ForYouRow({
               type="submit"
               className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
             >
-              Start this site →
+              Open this site →
             </button>
           </form>
         ) : (
           <p className="mt-2 text-[12px] text-gray-500">
-            Publish first, then open this posting step here.
+            Post first, then come back to this step.
           </p>
         )
       ) : needsApproval ? (
         <div className="mt-2">
           <p className="text-[12px] text-emerald-800">
-            We prepared your ad — approve to publish
+            Your ad is ready. Approve it to post
             {paid ? " and cover the fee" : ""}.
           </p>
           <button
@@ -1068,7 +1064,7 @@ function ForYouRow({
             onClick={() => setApproveOpen(true)}
             className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-700"
           >
-            Approve &amp; publish →
+            Approve and post →
           </button>
         </div>
       ) : needsConnect ? (
@@ -1082,7 +1078,7 @@ function ForYouRow({
             type="submit"
             className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
           >
-            Sign in &amp; continue →
+            Sign in and continue →
           </button>
           <span className="text-[11px] text-gray-500">
             A quick one-time sign-in, then we finish it.
@@ -1098,7 +1094,7 @@ function ForYouRow({
             href={`/dashboard/properties/${propertyId}/copilot/${item.id}`}
             className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
           >
-            Start this site →
+            Open this site →
           </a>
           {conciergeDeskEnabled && item.canConcierge && (
             <form action={requestConciergePublish}>
@@ -1161,22 +1157,20 @@ function ApprovalModal({
     >
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-          Ready to publish
+          Ready to post
         </span>
         <h3 className="mt-2 text-lg font-semibold tracking-tight text-gray-950">
-          Publish to {channelLabel}
+          Post to {channelLabel}
         </h3>
         <p className="mt-1 text-sm text-gray-600">
-          We prepared your {addressLabel} ad for {channelLabel}. Approve once to
-          publish it; the live link comes back to this page.
+          Your {addressLabel} ad is ready for {channelLabel}. Approve it once.
+          The link to your ad comes back here.
         </p>
 
         {paid && (
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-950">
-            {siteLabel} charges its own listing fee, paid directly to {siteLabel}{" "}
-            with your card on file there. Standing spend authorization and the
-            saved ceiling are checked before the worker can claim it. Vacantless
-            never sees, stores, or handles your card.
+            {siteLabel} charges its own fee. You pay {siteLabel} with the card
+            you keep there.
           </div>
         )}
 
@@ -1187,7 +1181,7 @@ function ApprovalModal({
             type="submit"
             className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
           >
-            {paid ? "Approve prepared post" : "Approve & publish"}
+            {paid ? "Approve the post" : "Approve and post"}
           </button>
           <button
             type="button"
@@ -1198,8 +1192,8 @@ function ApprovalModal({
           </button>
         </form>
         <p className="mt-3 text-center text-[11px] text-gray-400">
-          Nothing is posted or charged until you approve. We record a real live-ad
-          link before marking it live.
+          You approve every post. We save the link to your ad before it shows
+          as Live.
         </p>
       </div>
     </div>
@@ -1253,26 +1247,26 @@ function ConfirmModal({
     >
       <div className="max-h-[92vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
         <h3 className="text-lg font-semibold tracking-tight text-gray-950">
-          Publish {addressLabel}
+          Post {addressLabel}
         </h3>
         <p className="mt-1 text-sm text-gray-500">
-          {instantCount} connected sites go live now · {signInText} · {feeText}.
+          {instantCount} sites turn on now · {signInText} · {feeText}.
         </p>
         <p className="mt-1 text-xs text-gray-400">
-          Nothing posts or charges until you approve it.
+          You approve every post. You pay a site only if it asks.
         </p>
 
         <div className="my-3.5 rounded-xl border border-gray-200 px-3">
           <div className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]">
             🌐 Vacantless page
             <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
-              INSTANT
+              Instant
             </span>
           </div>
           <div className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]">
             ✉️ Email alerts
             <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
-              INSTANT
+              Instant
             </span>
           </div>
           {instantDestinationsLoading ? (
@@ -1287,13 +1281,13 @@ function ConfirmModal({
               >
                 {CHANNEL_GLYPH[r.key] ?? "🏠"} {r.label}
                 <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
-                  INSTANT
+                  Instant
                 </span>
               </div>
             ))
           ) : (
             <div className="border-b border-gray-100 py-2.5 text-[13px] text-gray-600">
-              No connected account posts are authorized right now.
+              No site posts yet.
             </div>
           )}
         </div>
@@ -1351,14 +1345,14 @@ function ConfirmModal({
                       {row.label}
                     </span>
                     <span className="block text-xs text-gray-500">
-                      {row.feeLabel} · added after you publish
+                      {row.feeLabel} · you add it after this
                     </span>
                   </span>
                 </div>
               ))}
               <p className="text-[11.5px] leading-relaxed text-gray-500">
-                Nothing is charged now. You add and pay these sites with your own
-                card after this publish; we never store your card.
+                You add and pay these sites yourself, with your own card,
+                after this step.
               </p>
             </div>
           </div>
@@ -1380,7 +1374,7 @@ function ConfirmModal({
             }
             className="flex-1 rounded-xl bg-gradient-to-b from-green-400 to-green-600 px-4 py-3 text-sm font-black text-emerald-950 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Publish everywhere
+            Post everywhere
           </button>
           <button
             type="button"
@@ -1392,8 +1386,8 @@ function ConfirmModal({
         </form>
 
         <p className="mt-3 text-center text-[11px] text-gray-400">
-          After this, any site that still needs work shows one button: sign in,
-          pay the site if needed, then save the live link.
+          After this, any site that needs you shows one button. Sign in, pay
+          the site, then save the link.
         </p>
       </div>
     </div>

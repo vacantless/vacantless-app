@@ -108,7 +108,7 @@ function buckets(opts: {
   ok(
     "rentfaster paid setup keeps spend honest",
     (b.gated.find((r) => r.key === "rentfaster")?.headline ?? "").includes(
-      "Connect",
+      "Sign in",
     ),
   );
   ok("viewit paid route remains gated", has(b.gated, "viewit"));
@@ -143,7 +143,7 @@ function buckets(opts: {
   eq("authorized facebook page can be revoked", facebook?.automationAction ?? null, "revoke");
   ok(
     "authorized facebook page copy keeps approval in the loop",
-    (facebook?.headline ?? "").includes("publish and approve"),
+    (facebook?.headline ?? "").includes("when you approve"),
   );
   eq("authorized live facebook page adds to live count", b.liveCount, 3);
   eq("authorized live facebook page adds to outside reach", b.externalLiveCount, 1);
@@ -163,7 +163,7 @@ function buckets(opts: {
   eq(
     "connected but unauthorized facebook page chip asks for authorization",
     facebook?.chip.label ?? "",
-    "Needs authorization",
+    "Needs you",
   );
   eq(
     "connected but unauthorized facebook page exposes authorize action",
@@ -176,7 +176,7 @@ function buckets(opts: {
   );
   ok(
     "connected but unauthorized facebook page copy states consent plainly",
-    (facebook?.headline ?? "").includes("when you publish"),
+    (facebook?.headline ?? "").includes("Allow us to post"),
   );
 }
 
@@ -269,7 +269,7 @@ function buckets(opts: {
   eq(
     "connected but unauthorized instagram chip asks for authorization",
     instagram?.chip.label ?? "",
-    "Needs authorization",
+    "Needs you",
   );
   eq(
     "connected but unauthorized instagram exposes authorize action",
@@ -289,7 +289,7 @@ const publishEverywhereSource = readFileSync(
 ok(
   "Publish Everywhere renders channel authorization consent copy",
   publishEverywhereSource.includes(
-    "Authorize Vacantless to post this listing to this account",
+    "Allow us to post this listing to this account",
   ),
 );
 ok(
@@ -329,20 +329,20 @@ ok(
 );
 ok(
   "paid channels keep spend limit copy",
-  channelPublishRailSource.includes("pass-through spend limit"),
+  channelPublishRailSource.includes("Set your limit before we can post"),
 );
 ok(
   "direct portal copy does not imply silent automation",
   !channelPublishRailSource.includes("prefer not to use the automated path") &&
     channelPublishRailSource.includes(
-      "needs native controls, sign-in, payment",
+      "Open the site when it needs you",
     ),
 );
 ok(
   "rail renders lifecycle summary below the readiness headline",
   channelPublishRailSource.includes("lifecycleSummary") &&
-    channelPublishRailSource.includes("Follows the renter page") &&
-    channelPublishRailSource.includes("turns off when the rental is leased or paused"),
+    channelPublishRailSource.includes("Follows your Vacantless page") &&
+    channelPublishRailSource.includes("turns off when the rental is rented"),
 );
 
 console.log(`\nchannel-publish-rail: ${passed} passed, ${failed} failed`);

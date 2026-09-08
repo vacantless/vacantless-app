@@ -22,9 +22,9 @@ export function ListingCopyCard({
   tabs,
   descriptionThin = false,
   notLive = false,
-  notLiveIntro = "Prepare it now; use Set Live at the top of the page before you post it.",
+  notLiveIntro = "Get it ready now. Set the rental live before you post it.",
   notLiveTitle = "This rental isn't live yet.",
-  notLiveBody = "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - use Set Live at the top of the page before you post it anywhere.",
+  notLiveBody = "You can copy this wording now. It has no link yet and takes no inquiries. Set the rental live first.",
 }: {
   tabs: CopyTab[];
   // True when the saved description is empty/very short. The channel copy below
@@ -72,7 +72,7 @@ export function ListingCopyCard({
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
           <h3 className="mb-1 text-sm font-semibold text-gray-900">
-            Listing copy for each channel
+            Ad wording for each site
           </h3>
           <p className="text-xs text-gray-500">
             {tabs.length} ready-to-paste{" "}
@@ -87,13 +87,11 @@ export function ListingCopyCard({
 
       <div className="border-t border-gray-100 p-4">
         <p className="mb-4 text-xs text-gray-500">
-          Ready-to-paste wording built from this rental&apos;s details,
-          formatted for each site - the title length, link placement, and
-          call-to-action are adjusted per platform.{" "}
+          Wording built from this rental, shaped for each site.{" "}
           {notLive
             ? notLiveIntro
-            : "Pick a channel, copy, and paste it into your ad."}{" "}
-          Edit the rental above and this updates automatically.
+            : "Pick a site, copy it, and paste it into your ad."}{" "}
+          Edit the rental above and this keeps up.
         </p>
 
       {notLive && (
@@ -104,10 +102,9 @@ export function ListingCopyCard({
 
       {descriptionThin && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          <span className="font-medium">Want a stronger listing?</span> The copy
-          below is built from your description, and right now it&apos;s mostly
-          just the basics. Add a few details about layout, light, special
-          features, and what&apos;s nearby and this turns into a real ad.{" "}
+          <span className="font-medium">Want a stronger listing?</span> The
+          wording below comes from your description, and it is thin. Add a few
+          details about layout, light and what is nearby.{" "}
           <a
             href="#listing-description"
             className="font-medium text-amber-900 underline hover:no-underline"

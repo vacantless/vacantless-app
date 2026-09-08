@@ -161,8 +161,9 @@ ok(
 );
 ok(
   "approval modal copy no longer says approve equals fee consent",
-  publishEverywhere.includes("standing spend authorization") &&
-    publishEverywhere.includes("Approve prepared post") &&
+  publishEverywhere.includes("charges its own fee") &&
+    publishEverywhere.includes("You pay") &&
+    publishEverywhere.includes("Approve the post") &&
     !publishEverywhere.includes("Approving authorizes that charge"),
 );
 

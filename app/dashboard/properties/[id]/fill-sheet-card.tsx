@@ -68,7 +68,7 @@ export function FillSheetCard({ sheets }: { sheets: FillSheet[] }) {
   return (
     <details className="mb-4 rounded-xl border border-gray-200 bg-gray-50/60">
       <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-sm font-medium text-gray-900">
-        <span>Fill sheet — field-by-field for each portal</span>
+        <span>Answers to copy, site by site</span>
         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
           {prefilled}/{fromListing} pre-filled
         </span>
@@ -80,7 +80,7 @@ export function FillSheetCard({ sheets }: { sheets: FillSheet[] }) {
             htmlFor="fill-sheet-portal"
             className="mb-1 block text-xs font-medium text-gray-600"
           >
-            Which portal are you filling out?
+            Which site are you filling out?
           </label>
           <select
             id="fill-sheet-portal"
@@ -132,9 +132,8 @@ export function FillSheetCard({ sheets }: { sheets: FillSheet[] }) {
         )}
 
         <p className="mt-3 text-xs text-gray-400">
-          A reference you copy from — you paste each value into the rental site
-          yourself. Nothing here is submitted for you. Edit the rental above and
-          this updates automatically.
+          Copy each answer and paste it into the rental site yourself. Edit
+          the rental above and this list keeps up.
         </p>
       </div>
     </details>
@@ -183,7 +182,7 @@ function FillRow({
         <p className="mt-2 rounded-md border border-dashed border-amber-200 bg-amber-50/50 px-2 py-1.5 text-xs text-amber-700">
           {field.source === "manual"
             ? "Enter this one yourself."
-            : "Not set on this rental yet — add it above to pre-fill here."}
+            : "Not on this rental yet. Add it above and we fill it here."}
         </p>
       )}
 

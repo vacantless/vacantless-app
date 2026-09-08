@@ -216,7 +216,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "operator guide explains proof before live",
-    panelSource.includes("rental sites only count as Live after the ad link is saved"),
+    panelSource.includes("A site counts as Live once we have it"),
   );
   ok(
     "priority (and concierge target) channel opens by default",
@@ -229,14 +229,14 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "browser co-pilot summary explains front-screen helper",
-    panelSource.includes("The helper opens in front of you"),
+    panelSource.includes("A window opens with the wording"),
   );
   ok(
     "site picker and active run list stay compact when sites grow",
       panelSource.includes("max-h-80 overflow-y-auto") &&
       panelSource.includes("max-h-[42rem]") &&
       panelSource.includes("Other tracking") &&
-      panelSource.includes("Launch setup"),
+      panelSource.includes("Site settings"),
   );
   ok(
     "site picker shows refresh and takedown lifecycle cues",
@@ -257,9 +257,8 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "next banner explains outside-site approval",
-    distributeSource.includes("You still approve") &&
-      distributeSource.includes("a site counts as Live") &&
-      distributeSource.includes("after the real ad link is saved"),
+    distributeSource.includes("You approve every post") &&
+      distributeSource.includes("A site is Live once we have its link"),
   );
   ok(
     "done-for-you posting is front of the collapsed status strip",
@@ -278,7 +277,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "already-queued desk work is labeled as in progress",
     distributeSource.includes("Vacantless is already posting") &&
       distributeSource.includes("View desk status") &&
-      distributeSource.includes("No second click is needed"),
+      distributeSource.includes("This site is in our list"),
   );
   ok(
     "distribution dashboard uses plain four-part model",
@@ -286,22 +285,22 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("Property") &&
       distributeSource.includes("Sites") &&
       distributeSource.includes("Account access") &&
-      distributeSource.includes("Top-up help"),
+      distributeSource.includes("Buy more help"),
   );
   ok(
     "posting choice treats self-serve as the fallback path",
-    distributeSource.includes("Done-for-you / top-up") &&
+    distributeSource.includes("We post it for you") &&
       distributeSource.includes("Pay Vacantless to post") &&
       distributeSource.includes("Use a site yourself instead") &&
       distributeSource.includes("Open posting checklist") &&
-      distributeSource.includes("Paid placements still need your") &&
-      distributeSource.includes("spend limit, and") && /the ad link\./.test(distributeSource),
+      distributeSource.includes("Paid sites need your") &&
+      /your limit, and the link\./.test(distributeSource),
   );
   ok(
     "fallback footer opens queue from all selected one-tap run items",
     distributeSource.includes("ONE_TAP_RUN_STATUSES") &&
       distributeSource.includes("selectedOneTapRunItems") &&
-      distributeSource.includes("hasOneTapRunItems ? \"Open launch queue\" : \"Choose destinations\"") &&
+      distributeSource.includes("hasOneTapRunItems ? \"Open your sites\" : \"Choose sites\"") &&
       !distributeSource.includes("hasReachRunItems ? \"Open 1-tap queue\" : \"Choose sites\""),
   );
   ok(
@@ -313,12 +312,12 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "posted links drawer is now a live-ad-link manager",
     distributeSource.includes("Live ad links") &&
       distributeSource.includes("Manage links") &&
-      distributeSource.includes("Save live ad URL"),
+      distributeSource.includes("Save the link to your ad"),
   );
   ok(
     "heavier channel tools sit behind per-channel disclosure",
     distributeSource.includes("Posting tools") &&
-      distributeSource.includes("Full copy &amp; field sheet"),
+      distributeSource.includes("Full wording and answers"),
   );
 }
 {
@@ -352,7 +351,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "posting assist primary CTA starts the flow",
     copilotSource.includes("Open helper window") &&
-      copilotSource.includes("If nothing opens, use the copy and steps below."),
+      copilotSource.includes("If the window does not open"),
   );
   ok(
     "posting assist explains front and back of screen",
@@ -362,12 +361,12 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "posting assist explains how completion is shown",
     copilotSource.includes("How you know it is done") &&
-      copilotSource.includes("checklist progress updates"),
+      copilotSource.includes("The row turns Live"),
   );
   ok(
     "posting assist stays honest about no silent automation",
-    copilotSource.includes("Nothing is posted or paid") &&
-      copilotSource.includes("does not log in, pay"),
+    copilotSource.includes("This site waits for you") &&
+      copilotSource.includes("You sign in, you pay if it asks"),
   );
 }
 {
@@ -496,21 +495,21 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "distribute tab leads with get online checklist buckets",
-    distributeSource.includes("Get online checklist") &&
-      distributeSource.includes("Start posting steps") &&
+    distributeSource.includes("Your posting steps") &&
+      distributeSource.includes("Open the posting steps") &&
       distributeSource.includes("Review posting steps") &&
       distributeSource.includes("Live on rental sites") &&
       distributeSource.includes("Ready now") &&
       distributeSource.includes("visibleBuckets") &&
-      distributeSource.includes("Renter page") &&
+      distributeSource.includes("Your Vacantless page") &&
       distributeSource.includes("Ads on rental sites") &&
       distributeSource.includes("Ready to post") &&
       distributeSource.includes("Needs payment") &&
       distributeSource.includes("Needs sign-in") &&
       distributeSource.includes("Needs the ad link") &&
-      distributeSource.includes("Refresh due") &&
+      distributeSource.includes("Post it again") &&
       distributeSource.includes("Blocked") &&
-      distributeSource.includes("Nothing is posted automatically. You approve outside-site posts"),
+      distributeSource.includes("You approve every post. You pay a site only if it asks."),
   );
   ok(
     "publish control room derives blocker buckets from raw publish status",
@@ -552,9 +551,9 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "publish control room replaces the duplicate get-online hero stack",
       distributeSource.includes("showSummaryCard={false}") &&
       distributeSource.includes('selectedChannelCount === 1 ? "site" : "sites"') &&
-      channelRailSource.includes("Launch plan") &&
-      channelRailSource.includes("Launch everywhere from one listing.") &&
-      channelRailSource.includes("Site access") &&
+      channelRailSource.includes("Your sites") &&
+      channelRailSource.includes("Post everywhere from here.") &&
+      channelRailSource.includes("Open the site") &&
       channelRailSource.includes("Open site") &&
       !distributeSource.includes("Get this listing online") &&
       !distributeSource.includes("Ready to syndicate"),
@@ -562,7 +561,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "launch queue defers to setup blockers before portal steps",
     distributeSource.includes("launchSetupBlocker") &&
-      distributeSource.includes("Finish your listing details first.") &&
+      distributeSource.includes("Answer the missing questions first.") &&
       distributeSource.includes("setupBlocker={launchSetupBlocker}") &&
       distributeSource.includes("showAction={false}") &&
       distributeSource.includes("No posting yet") &&
@@ -580,7 +579,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("?tab=setup#property-unit-type") &&
       distributeSource.includes("Choose property type") &&
       distributeSource.includes(
-        "Choose the property type in Unit details to unlock posting to rental sites.",
+        "Choose the property type to unlock posting to rental sites.",
       ) &&
       distributeSource.includes('primaryMissing?.field === "property_type"') &&
       distributeSource.includes("packetFieldAction(firstListingPacketMissing, propertyId)") &&

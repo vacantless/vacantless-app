@@ -68,7 +68,7 @@ export function ConfirmPublishButton({
       setFreshDestinations(await readInstantPublishDestinations(propertyId));
     } catch {
       setDestinationError(
-        "We could not refresh the connected account list. Close this and try again before publishing.",
+        "We could not read your account list. Close this and try again.",
       );
     } finally {
       setLoadingDestinations(false);
@@ -105,12 +105,12 @@ export function ConfirmPublishButton({
             >
               {showingInstantCommitment
                 ? "Approve connected account posts"
-                : "Publish rental"}
+                : "Post this rental"}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
               {showingInstantCommitment
-                ? "These operator-owned connected accounts will receive a public post as soon as you approve publishing."
-                : "This makes the public renter page live. No connected account posts are authorized right now."}
+                ? "These accounts get a public post as soon as you approve."
+                : "This puts your Vacantless page online. No site posts yet."}
             </p>
 
             <div className="mt-4 rounded-lg border border-gray-200">
@@ -132,13 +132,13 @@ export function ConfirmPublishButton({
                         {destination.label}
                       </span>
                       <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-green-700">
-                        INSTANT
+                        Instant
                       </span>
                     </li>
                   ))
                 ) : (
                   <li className="px-3 py-2.5 text-sm text-gray-600">
-                    No connected account posts are authorized right now.
+                    No site posts yet.
                   </li>
                 )}
               </ul>
@@ -156,7 +156,7 @@ export function ConfirmPublishButton({
                 disabled={loadingDestinations || Boolean(destinationError)}
                 className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {hasFreshDestinations ? "Approve & publish" : "Publish"}
+                {hasFreshDestinations ? "Approve and post" : "Post it"}
               </button>
               <button
                 type="button"

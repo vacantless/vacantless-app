@@ -16,7 +16,7 @@ export function MarketingKitCard({
   locked,
   notLive = false,
   notLiveTitle = "This rental isn't live yet.",
-  notLiveBody = "Use Set Live at the top of the page to get your public link and QR code; the channel wording below is ready to prepare now.",
+  notLiveBody = "Set the rental live to get your link and QR code. The wording below is ready now.",
   landingUrl,
   qrSvg,
   combinedText,
@@ -89,8 +89,7 @@ export function MarketingKitCard({
             </span>
           </div>
           <p className="text-xs text-gray-500">
-            QR code, share link, and bulk wording when you need printable or
-            offline material.
+            A QR code, your inquiry link, and all the wording in one place.
           </p>
         </div>
         <span className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
@@ -100,9 +99,8 @@ export function MarketingKitCard({
 
       <div className="border-t border-gray-100 p-4">
         <p className="mb-4 text-xs text-gray-500">
-          Everything you need to promote this rental yourself: a shareable link,
-          a QR code for flyers and signs, and all your channel wording in one
-          copy.
+          Everything you need to spread the word yourself. Your inquiry link,
+          a QR code for flyers and signs, and all the wording.
         </p>
 
       {locked ? (
@@ -111,15 +109,14 @@ export function MarketingKitCard({
             The marketing kit is on Growth and Premium.
           </p>
           <p className="mb-3">
-            Package your listing into a shareable link, a printable QR code, and
-            a one-tap copy of every channel&apos;s wording. Upgrade to turn an
-            active rental into a promotion in seconds.
+            Turn your listing into one link and a printable QR code. Every
+            site&apos;s wording comes with it.
           </p>
           <a
             href="/dashboard/billing"
             className="inline-block rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white"
           >
-            See plans -&gt;
+            See what it costs -&gt;
           </a>
         </div>
       ) : (
@@ -189,7 +186,7 @@ export function MarketingKitCard({
                 htmlFor={allWordingId}
                 className="text-xs font-medium text-gray-500"
               >
-                All channel wording
+                All the wording
               </label>
               <button
                 type="button"
@@ -202,14 +199,14 @@ export function MarketingKitCard({
             <textarea
               id={allWordingId}
               readOnly
-              aria-label="All channel wording"
+              aria-label="All the wording"
               rows={8}
               value={combinedText}
               onFocus={(e) => e.currentTarget.select()}
               className="w-full resize-y rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800"
             />
             <p className="mt-1 text-[11px] text-gray-400">
-              Need one channel at a time? Use the per-channel card below.
+              Need one site at a time? Use the card below.
             </p>
           </div>
 
@@ -241,13 +238,13 @@ export function MarketingKitCard({
                 />
                 <span className="text-xs font-medium text-gray-700">
                   {feedStatus.inFeed
-                    ? "In Vacantless listing feed"
-                    : "Not in the listing feed yet"}
+                    ? "Sent to our partner sites"
+                    : "Not sent to partner sites yet"}
                 </span>
               </div>
               <p className="mt-1 pl-4 text-[11px] text-gray-500">
                 {feedStatus.inFeed
-                  ? "This property is in your Vacantless feed. A partner site still needs to accept and show it before it is live there."
+                  ? "We sent this rental to our partner sites. Each one decides when to show it."
                   : feedStatus.hint}
               </p>
             </div>

@@ -92,22 +92,22 @@ function PostingAssistPromise({
       <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
         <p className="font-semibold text-gray-900">On your screen</p>
         <p className="mt-0.5">
-          A helper window opens beside {channelLabel} with the copy, steps,
-          tracked link, and final proof form.
+          A window opens beside {channelLabel}. It holds the wording, the
+          steps, and your inquiry link.
         </p>
       </div>
       <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
         <p className="font-semibold text-gray-900">Behind the scenes</p>
         <p className="mt-0.5">
-          Vacantless keeps this channel waiting on you. It does not log in, pay,
-          submit, or mark the post as Live.
+          This site waits for you. You sign in, you pay if it asks, and you
+          press post.
         </p>
       </div>
       <div className="rounded-lg border border-brand/20 bg-white px-3 py-2">
         <p className="font-semibold text-gray-900">How you know it is done</p>
         <p className="mt-0.5">
-          Paste the live ad URL; the row changes to Live, proof is saved here,
-          and checklist progress updates.
+          Paste the link to your ad. The row turns Live and the list moves
+          on.
         </p>
       </div>
     </div>
@@ -219,7 +219,7 @@ export function CopilotPanel({
     <div className="mb-3 rounded-xl border border-brand/30 bg-brand/5 p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-brand">
-          Posting assist - {script.channelLabel}
+          Post it on {script.channelLabel}
         </p>
         {script.portalUrl && (
           <a
@@ -235,9 +235,8 @@ export function CopilotPanel({
 
       <div className="space-y-3">
         <p className="text-xs text-gray-700">
-          Start once, then keep this checklist open. Vacantless prepares the post
-          and tracks the result; you still approve anything on{" "}
-          {script.channelLabel}.
+          Keep this list open as you go. We write the ad. You approve every
+          step on {script.channelLabel}.
         </p>
         <PostingAssistPromise channelLabel={script.channelLabel} />
 
@@ -275,10 +274,9 @@ export function CopilotPanel({
             Open helper window
           </button>
           <p className="mt-1.5 text-[11px] text-gray-600">
-            One click opens the helper window. Nothing is posted or paid until
-            you do it on {script.channelLabel}; Vacantless only marks this
-            channel complete after the live ad URL is saved.
-            If nothing opens, use the copy and steps below.
+            One click opens the window. You post it on {script.channelLabel},
+            then paste the link to your ad here. If the window does not open,
+            use the wording and steps below.
           </p>
         </div>
 
@@ -293,12 +291,12 @@ export function CopilotPanel({
               onClick={sendToExtension}
               className="rounded-lg border border-brand/40 bg-brand/5 px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/10"
             >
-              Send to Chrome extension (beta)
+              Send it to Chrome
             </button>
             <p className="mt-1 text-[11px] text-gray-500">
-              You have the Vacantless extension installed — this shows the copy
-              on the {script.channelLabel} post page and brings the live ad URL
-              back here. You still post it and mark it live yourself.
+              Your Vacantless add-on is installed. It puts the wording on the
+              {script.channelLabel} page and brings the link to your ad back
+              here. You still post it and mark it live.
             </p>
           </div>
         )}
@@ -342,7 +340,7 @@ export function CopilotPanel({
                     <span className="font-medium text-gray-800">{step.label}</span>
                     {step.stopGate && (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                        {stopGateLabel(step.stopGate)} — Vacantless stops here
+                        {stopGateLabel(step.stopGate)}. Over to you
                       </span>
                     )}
                   </div>
@@ -364,7 +362,7 @@ export function CopilotPanel({
           <input type="hidden" name="property_id" value={propertyId} />
           <div>
             <label className="mb-1 block text-[11px] font-medium text-gray-500">
-              Live ad URL (required — proof it is posted)
+              The link to your ad. We need it
             </label>
             <input
               name="external_url"
@@ -379,14 +377,14 @@ export function CopilotPanel({
             />
             {captured && (
               <p className="mt-1 text-[11px] font-medium text-brand">
-                Captured from the extension — review it, then mark it live.
+                Your add-on found this. Check it, then mark it live.
               </p>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
             <div className="min-w-[10rem] flex-1">
               <label className="mb-1 block text-[11px] font-medium text-gray-500">
-                Screenshot path (optional)
+                Screenshot path
               </label>
               <input
                 name="screenshot_path"
@@ -396,7 +394,7 @@ export function CopilotPanel({
             </div>
             <div className="min-w-[10rem] flex-1">
               <label className="mb-1 block text-[11px] font-medium text-gray-500">
-                Note (optional)
+                Note
               </label>
               <input
                 name="note"
@@ -410,12 +408,11 @@ export function CopilotPanel({
             className="rounded-lg px-4 py-2 text-sm font-medium text-white"
             style={{ backgroundColor: "var(--brand-color)" }}
           >
-            I posted it — mark live with this URL
+            I posted it. Mark it live
           </button>
           <p className="text-[11px] text-gray-500">
-            Saves proof and turns on the tracked inquiry link. Vacantless
-            never marks a channel live without a real ad URL. When this saves,
-            the checklist shows Live and the proof link stays on this channel.
+            This saves the link and turns on your inquiry link. The site then
+            shows as Live, and the link to your ad stays here.
           </p>
         </form>
       </div>

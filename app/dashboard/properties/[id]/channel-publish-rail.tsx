@@ -94,11 +94,11 @@ function syntheticRow(
     label,
     tier: "instant",
     chip: SYNTHETIC_CHIP,
-    headline: live ? "Live with the renter page." : "Turns on with Publish.",
+    headline: live ? "Live with your Vacantless page." : "Turns on when you post.",
     lifecycleSummary:
-      "Follows the renter page and turns off when the rental is leased or paused.",
+      "Follows your Vacantless page. It turns off when the rental is rented.",
     readinessState: "ready",
-    readinessReason: "Ready for launch.",
+    readinessReason: "Ready.",
     automationAction: null,
     reachesRenters: live,
     live,
@@ -162,15 +162,15 @@ function readinessChip(state: DistributionLaunchState): ConnectChip {
 
 function readyHeadline(contract: DistributionChannelContract): string {
   if (contract.executionKind === "api") {
-    return "Connected and authorized. Vacantless can launch this after you approve the listing.";
+    return "Ready. We post it when you press Post.";
   }
   if (contract.executionKind === "headless_worker") {
-    return "Account and authorization are ready. Vacantless can launch this behind the scenes after approval.";
+    return "Ready. We post it for you when you press Post.";
   }
   if (contract.executionKind === "feed") {
-    return "Feed route is ready. Partner acceptance is still tracked separately from live proof.";
+    return "Ready. Each partner site decides when to show it.";
   }
-  return "Ready for the launch action.";
+  return "Ready.";
 }
 
 function readinessHeadline(
@@ -180,13 +180,13 @@ function readinessHeadline(
 ): string {
   if (state === "ready") return readyHeadline(contract);
   if (state === "needs_account") {
-    return `Connect ${contract.label} once before this destination can launch.`;
+    return `Sign in to ${contract.label} once before we can post here.`;
   }
   if (state === "needs_authorization") {
-    return "Authorize Vacantless to post, refresh, or remove listings for this account.";
+    return "Allow us to post and take down ads on this account.";
   }
   if (state === "needs_spend_limit") {
-    return "Set the landlord pass-through spend limit before this paid channel can launch.";
+    return "Set your limit before we can post on this paid site.";
   }
   return reason;
 }
@@ -207,7 +207,7 @@ function bucketForChannel(input: {
           channel: "instagram" as PublishChannelKey,
           label: channel.label,
           state: "planned" as const,
-          reason: "Instagram publishing is dark until the channel is enabled for this org.",
+          reason: "Instagram is not turned on for you yet.",
         }
       : resolveDistributionLaunchReadiness(contract, {
           accountStatus,
@@ -226,7 +226,7 @@ function bucketForChannel(input: {
     needsAutomationAuthorization
       ? {
           state: "connected",
-          label: "Needs authorization",
+          label: "Needs you",
           tone: "warning",
           canConnect: false,
         }
@@ -248,11 +248,11 @@ function bucketForChannel(input: {
   const live = liveChannelKeys.has(channel.key);
   const headline =
     channel.key === "instagram" && !instagramEnabled
-      ? "Dark until Instagram publishing is enabled."
+      ? "Instagram is not turned on yet."
       : needsAutomationAuthorization
-        ? "Connected; authorize Vacantless to post this listing to this account when you publish."
+        ? "Signed in. Allow us to post to this account."
         : automationAction === "revoke"
-          ? "Authorized; this account receives a post when you publish and approve."
+          ? "Ready. This account gets a post when you approve."
           : readinessHeadline(
               contract,
               launchReadiness.state,
@@ -355,11 +355,10 @@ function ChannelRow({
       {row.portalUrl ? (
         <details className="mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
           <summary className="cursor-pointer list-none text-xs font-semibold text-gray-600 [&::-webkit-details-marker]:hidden">
-            Site access
+            Open the site
           </summary>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
-            Open the site only when it needs native controls, sign-in, payment,
-            final review, or removal proof.
+            Open the site when it needs you. Sign in, pay, or check the ad.
           </p>
           <a
             href={row.portalUrl}
@@ -429,7 +428,7 @@ export function ChannelPublishRail({
     {
       label: "Ready",
       value: buckets.instant.length,
-      detail: "launches after approval",
+      detail: "we post after you approve",
     },
     {
       label: "Fallback",
@@ -447,14 +446,14 @@ export function ChannelPublishRail({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Launch plan
+            Your sites
           </p>
           <h3 className="mt-1 text-lg font-semibold text-gray-950">
-            Launch everywhere from one listing.
+            Post everywhere from here.
           </h3>
           <p className="mt-1 text-sm leading-relaxed text-gray-600">
-            Ready destinations launch from Vacantless. Account, authorization,
-            spend, and proof exceptions stay explicit before anything posts.
+            We post to every site marked Ready. The rest tell you what they
+            need.
           </p>
         </div>
         <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4 border-green-600 text-green-700">
@@ -484,7 +483,7 @@ export function ChannelPublishRail({
 
       <div className="grid gap-3 xl:grid-cols-3">
         <TierCard
-          title="Ready to launch"
+          title="Ready"
           rows={buckets.instant}
           defaultOpen={false}
           actionForRow={actionForRow}
@@ -511,7 +510,7 @@ export function ChannelPublishRail({
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-800">
         <Icons.bolt className="h-4 w-4" />
         <span>
-          Nothing is posted, paid, or marked Live without approval and proof.
+          You approve every post. You pay a site only if it asks.
         </span>
       </div>
     </section>

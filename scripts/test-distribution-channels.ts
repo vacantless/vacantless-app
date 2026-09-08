@@ -293,7 +293,7 @@ ok(
 );
 ok(
   "feed copy says partner acceptance is still needed",
-  marketingKitSource.includes("A partner site still needs to accept and show it"),
+  marketingKitSource.includes("Each one decides when to show it"),
 );
 
 const distributeTabSource = readFileSync(
@@ -306,7 +306,7 @@ ok(
 );
 ok(
   "RentFaster card can copy a reserved tracked link",
-  distributeTabSource.includes("Tracked inquiry link") &&
+  distributeTabSource.includes("Your inquiry link") &&
     distributeTabSource.includes("reservedTrackedUrl"),
 );
 ok(
@@ -328,7 +328,7 @@ ok(
 );
 ok(
   "Blocked channel rows keep listing facts before operator actions",
-  distributeTabSource.includes("After the listing details are ready"),
+  distributeTabSource.includes("Once the questions are answered"),
 );
 
 const launchRunPanelSource = readFileSync(
@@ -337,8 +337,8 @@ const launchRunPanelSource = readFileSync(
 );
 ok(
   "launch run panel exposes posting-step rows",
-  launchRunPanelSource.includes("Open the") &&
-    launchRunPanelSource.includes("posting step"),
+  launchRunPanelSource.includes("Open ${item.channelLabel}") &&
+    launchRunPanelSource.includes("save the link to your ad"),
 );
 
 // --- labels ----------------------------------------------------------------

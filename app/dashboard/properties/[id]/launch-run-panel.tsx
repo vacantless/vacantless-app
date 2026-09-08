@@ -235,11 +235,11 @@ function LifecycleAttentionBox({ item }: { item: RunItemView }) {
 //    override to warning + "Submitted to feed - not live yet".
 //  - staleRefresh (needs_refresh) -> amber "Needs refresh".
 function displayStatus(item: RunItemView): { label: string; tone: PublishTone } {
-  if (isRemovedTakedownItem(item)) return { label: "Removed", tone: "positive" };
-  if (item.liveWithoutUrl) return { label: "Needs ad URL", tone: "danger" };
+  if (isRemovedTakedownItem(item)) return { label: "Taken down", tone: "positive" };
+  if (item.liveWithoutUrl) return { label: "Needs the link", tone: "danger" };
   if (item.staleRefresh) return { label: "Needs refresh", tone: "warning" };
   if (item.publishStatus === "submitted")
-    return { label: "Submitted to feed - not live yet", tone: "warning" };
+    return { label: "Sent. Not live yet", tone: "warning" };
   return { label: item.statusLabel, tone: item.statusTone };
 }
 
@@ -257,19 +257,19 @@ function isRemovedTakedownItem(item: RunItemView): boolean {
 
 function nextActionLabel(item: RunItemView): string {
   if (isTakedownItem(item)) return "Open the ad";
-  if (item.channel === "vacantless") return "Open renter page";
-  if (item.channel === "org_feed") return "Open listing feed";
+  if (item.channel === "vacantless") return "Open your Vacantless page";
+  if (item.channel === "org_feed") return "Open your partner sites";
   if (item.mode === "broker") return "Open broker page";
-  if (item.mode === "feed_partner") return "Open feed or partner page";
+  if (item.mode === "feed_partner") return "Open the partner page";
   return `Open ${item.channelLabel}`;
 }
 
 function urlFieldLabel(item: RunItemView): string {
-  if (item.channel === "vacantless") return "Renter page URL";
-  if (item.channel === "org_feed") return "Feed URL";
-  if (item.mode === "feed_partner") return "Feed or partner URL";
-  if (item.mode === "broker") return "Broker or MLS URL";
-  return "Live ad URL";
+  if (item.channel === "vacantless") return "Your Vacantless page link";
+  if (item.channel === "org_feed") return "Partner site link";
+  if (item.mode === "feed_partner") return "Partner site link";
+  if (item.mode === "broker") return "Broker or MLS link";
+  return "The link to your ad";
 }
 
 const OPERATOR_ACTION_WEIGHT: Partial<Record<PublishStatus, number>> = {
@@ -328,9 +328,9 @@ function operatorActionSummary(item: RunItemView): string {
     return item.keepLiveAction.detail;
   }
   if (isTakedownItem(item)) {
-    if (isRemovedTakedownItem(item)) return `${item.channelLabel} ad removal is recorded.`;
-    if (item.publishStatus === "queued") return `${item.channelLabel} ad removal is queued.`;
-    return `Remove the ${item.channelLabel} ad, then mark it removed.`;
+    if (isRemovedTakedownItem(item)) return `Your ${item.channelLabel} ad is down.`;
+    if (item.publishStatus === "queued") return `We will take the ${item.channelLabel} ad down.`;
+    return `Take the ${item.channelLabel} ad down, then mark it here.`;
   }
   if (item.lifecycleAttention?.kind === "takedown_needed") {
     return item.lifecycleAttention.detail;
@@ -345,37 +345,37 @@ function operatorActionSummary(item: RunItemView): string {
     return item.lifecycleAttention.detail;
   }
   if (item.liveWithoutUrl) {
-    return "Paste the real live ad URL before this site can count as Live.";
+    return "Paste the link to your ad before this site counts as Live.";
   }
   if (item.staleRefresh) {
-    return "Refresh this ad, then save the new ad link so renters do not hit an old listing.";
+    return "Post this ad again, then save the new link.";
   }
   if (item.mode === "browser_copilot") {
     switch (item.publishStatus) {
       case "needs_payment":
-        return `Open the ${item.channelLabel} posting step; you approve any payment, then save the live ad URL.`;
+        return `Open ${item.channelLabel}. Approve any fee, then save the link to your ad.`;
       case "needs_login":
-        return `Open the ${item.channelLabel} posting step; you sign in and post, then save the live ad URL.`;
+        return `Open ${item.channelLabel}. Sign in and post, then save the link to your ad.`;
       case "needs_operator":
       case "queued":
-        return `Open the ${item.channelLabel} posting step; Vacantless prepares the post and waits for your live ad URL.`;
+        return `Open ${item.channelLabel}. We write the ad and wait for your link.`;
     }
   }
   switch (item.publishStatus) {
     case "needs_payment":
-      return `Sign in or pay on ${item.channelLabel}, then paste the live ad URL here.`;
+      return `Sign in or pay on ${item.channelLabel}. Then paste the link here.`;
     case "needs_login":
-      return `Sign in on ${item.channelLabel}, finish the post, then paste the live ad URL here.`;
+      return `Sign in on ${item.channelLabel} and post. Then paste the link here.`;
     case "needs_operator":
-      return `Follow the ${item.channelLabel} steps, then save the ad link when the post is really live.`;
+      return `Follow the ${item.channelLabel} steps. Save the link when it is live.`;
     case "queued":
-      return `Start ${item.channelLabel} when you are ready to work this channel.`;
+      return `Open ${item.channelLabel} when you are ready.`;
     case "submitting":
-      return `${item.channelLabel} is being submitted. Check back for the ad link before calling it Live.`;
+      return `We are sending it to ${item.channelLabel}. Check back for the link.`;
     case "submitted":
-      return `${item.channelLabel} was submitted, but that does not mean it is live on the partner site yet.`;
+      return `Sent to ${item.channelLabel}. It decides when to show it.`;
     case "live":
-      return `${item.channelLabel} already has the ad link. No action needed unless the ad changes.`;
+      return `${item.channelLabel} has its link. You are done unless the ad changes.`;
     case "blocked":
       return `${item.channelLabel} is blocked. Fix the setup issue before posting.`;
     case "rejected":
@@ -389,46 +389,46 @@ function operatorOwnerLine(item: RunItemView): string {
   if (item.keepLiveAction) {
     switch (item.keepLiveAction.kind) {
       case "auto_refresh":
-        return "Vacantless handles the refresh behind the scenes, then waits for the link to your ad before restoring a Live state.";
+        return "We post it again, then wait for the link to your ad.";
       case "send_reminder":
-        return "Vacantless will use the existing reminder cycle instead of pretending it can safely refresh without the missing consent.";
+        return "We will remind you instead, because we do not have your go.";
       case "request_spend":
-        return "Paid refreshes stay blocked until the landlord pass-through limit is set.";
+        return "Set your limit before we post again on a paid site.";
       case "request_account":
       case "request_authorization":
-        return "This stays as one setup task, then future launch and refresh work can run from the connected account.";
+        return "One setup step. After that we can post from this account.";
       case "remove_ad":
-        return "Removal is part of the same listing lifecycle; the ad is not treated as removed until the ad link is saved.";
+        return "The ad counts as down once you save the link here.";
       case "save_proof":
-        return "Live needs a real destination URL or ad link before Vacantless counts this site.";
+        return "We count this site as Live once you save the link.";
       case "watching":
-        return "After the ad link exists, Vacantless keeps the expiry clock on this same row.";
+        return "Once the link is saved, we watch this row for the end date.";
       case "none":
         break;
     }
   }
   if (isTakedownItem(item)) {
-    return "Vacantless keeps the tracker row for attribution and records your removal confirmation here.";
+    return "We keep this row so your inquiries still add up.";
   }
   if (item.channel === "facebook_feed") {
-    return "Vacantless can post to the connected Facebook Page only after you authorize this item. It still needs the post link from Facebook before it counts as Live.";
+    return "Allow us to post to your Facebook Page. We then save the link.";
   }
   if (item.mode === "automatic") {
-    return "Vacantless can check this inside the app, then it saves the ad link here.";
+    return "We can check this in the app, then save the link here.";
   }
   if (item.mode === "feed_partner") {
-    return "Vacantless prepares the feed; a partner site may still need to accept it before it is truly live.";
+    return "We send it on. Each partner site decides when to show it.";
   }
   if (item.mode === "browser_copilot") {
-    return "The helper opens in front of you with copy and ad-link fields. Behind the scenes, Vacantless tracks this site as waiting until you save the real ad URL.";
+    return "A window opens with the wording and a box for your link. We wait for it.";
   }
   if (item.mode === "concierge") {
-    return "Vacantless can handle this fallback, but it still needs the link to your ad before it counts.";
+    return "We can do this one for you. We still need the link to your ad.";
   }
   if (item.mode === "broker") {
-    return "A licensed broker or agent must complete the listing on that site; Vacantless only tracks the ad link.";
+    return "A licensed agent posts on that site. We keep the link here.";
   }
-  return "Use this to track another place you posted, so leads can be counted correctly.";
+  return "Use this for anywhere else you posted, so inquiries add up.";
 }
 
 export function LaunchRunPanel({
@@ -483,7 +483,7 @@ export function LaunchRunPanel({
     selectableCoreChannels[0] ?? selectableChannelGroups[0]?.items[0] ?? selectable[0];
   const renderStartChannelRows = (channels: PublishChannelChoiceView[]) =>
     channels.map((c) => {
-      const brokerRail = c.key === "realtor_ca" || c.modeLabel === "Broker / MLS";
+      const brokerRail = c.key === "realtor_ca" || c.modeLabel === "Broker or MLS";
       return (
         <label
           key={c.key}
@@ -577,7 +577,7 @@ export function LaunchRunPanel({
       >
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-950">
-            Launch queue
+            Your sites
           </h3>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
             No posting yet
@@ -629,19 +629,19 @@ export function LaunchRunPanel({
                 href={guidedHref}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Portal setup
+                Site setup
               </Link>
             )}
             <Link
               href="/dashboard/settings?tab=distribution"
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Launch setup
+              Site settings
             </Link>
           </div>
         </div>
         <p className="mb-3 text-xs text-gray-500">
-          Pick the destinations Vacantless should launch from this listing.
+          Pick the sites we should post this listing to.
         </p>
         <form action={startDistributionRun}>
           <input type="hidden" name="property_id" value={propertyId} />
@@ -697,7 +697,7 @@ export function LaunchRunPanel({
       !item.liveWithoutUrl,
   ).length;
   const queueProgressLabel = renterPageDone
-    ? `Renter page done · ${outsideLiveProofCount} of ${outsideItems.length} rental sites live`
+    ? `Your Vacantless page is up · ${outsideLiveProofCount} of ${outsideItems.length} rental sites live`
     : `${outsideLiveProofCount} of ${outsideItems.length} rental sites live`;
 
   return (
@@ -714,7 +714,7 @@ export function LaunchRunPanel({
             href="/dashboard/settings?tab=distribution"
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Launch setup
+            Site settings
           </Link>
           <span className="text-xs font-medium text-gray-600">
             {queueProgressLabel}
@@ -736,17 +736,16 @@ export function LaunchRunPanel({
             <p className="mt-1 text-base font-semibold text-gray-900">
               {priorityItem
                 ? operatorActionSummary(priorityItem)
-                : "No urgent publishing step. Keep an eye on refresh due dates or add another site."}
+                : "You are all caught up. Watch the end dates or add a site."}
             </p>
             <p className="mt-2 text-xs text-gray-600">
               {priorityItem
                 ? operatorOwnerLine(priorityItem)
-                : "Your public page and finished sites stay tracked here. Submitted feed rows are not treated as Live until the real ad link exists."}
+                : "Your page and your finished sites are tracked here."}
             </p>
             <p className="mt-2 text-xs text-gray-500">
               {outsideLiveProofCount} of {outsideItems.length} rental sites
-              have a live ad link. The renter page is tracked separately, and
-              rental sites only count as Live after the ad link is saved.
+              have their link saved. A site counts as Live once we have it.
             </p>
           </div>
           {priorityItem && (
@@ -868,7 +867,7 @@ export function LaunchRunPanel({
             {item.trackedUrl && (
               <div className="mb-3">
                 <p className="mb-1 text-xs font-medium text-gray-500">
-                  Tracked inquiry link for this post
+                  Your inquiry link for this post
                 </p>
                 <CopyLink url={item.trackedUrl} />
               </div>
@@ -891,7 +890,7 @@ export function LaunchRunPanel({
                   type="submit"
                   className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
                 >
-                  Mark ad removed
+                  Mark it taken down
                 </button>
               </form>
             )}
@@ -913,13 +912,11 @@ export function LaunchRunPanel({
                     type="submit"
                     className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
                   >
-                    Dispatch a network agent
+                    Ask an agent to post it
                   </button>
                   <span className="ml-2 text-[11px] text-gray-500">
-                    A licensed real-estate agent is the principal and lists your
-                    rental through their own brokerage. Vacantless collects no
-                    referral fee and only marks it live with the real Realtor.ca
-                    link.
+                    A licensed agent lists your rental through their own
+                    brokerage. We mark it live with the real Realtor.ca link.
                   </span>
                 </form>
               )}
@@ -934,8 +931,8 @@ export function LaunchRunPanel({
                   Have Vacantless handle it
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
-                  Vacantless handles this fallback and still records real
-                  the ad link before it is marked Live.
+                  We do this one for you. We still save the link to your ad
+                  before it shows as Live.
                 </span>
               </form>
             )}
@@ -947,19 +944,18 @@ export function LaunchRunPanel({
                   type="submit"
                   className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs font-medium text-brand hover:bg-brand/10"
                 >
-                  Authorize autopilot to post
+                  Allow us to post
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
                   {item.channel === "facebook_feed"
-                    ? "Vacantless posts one organic Page-feed link through Graph API and reports back with the post link. Marketplace and paid ads stay separate."
-                    : `Vacantless posts this prepared ad to ${item.channelLabel} automatically and reports back. Paid channels require standing spend authorization before the worker can claim them.`}
+                    ? "We post one link to your Facebook Page and report back."
+                    : `We post this ad to ${item.channelLabel} and report back. Paid sites need your limit first.`}
                 </span>
               </form>
             )}
             {item.canAutopilot && item.autopilotApproved && (
               <p className="mb-3 text-xs font-medium text-brand">
-                Autopilot authorized — the worker will post {item.channelLabel}{" "}
-                and report back.
+                Thanks. We will post {item.channelLabel} and report back.
               </p>
             )}
             {item.canRelistRadarAutoRefresh && (
@@ -995,8 +991,8 @@ export function LaunchRunPanel({
                     />
                   </span>
                   {item.relistRadarAutoRefreshOn
-                    ? "Hands-off refreshes on"
-                    : "Turn on hands-off refreshes"}
+                    ? "We post it again for you"
+                    : "Let us post it again for you"}
                 </button>
                 <span className="text-[11px] text-emerald-900/70">
                   {item.relistRadarAutoRefreshOn
@@ -1021,11 +1017,11 @@ export function LaunchRunPanel({
                   className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   {item.channel === "vacantless"
-                    ? "Check renter page"
-                    : "Check listing feed"}
+                    ? "Check your Vacantless page"
+                    : "Check your partner sites"}
                 </button>
                 <span className="ml-2 text-[11px] text-gray-500">
-                  Saves proof for this channel.
+                  This saves the link for this site.
                 </span>
               </form>
             )}
@@ -1061,7 +1057,7 @@ export function LaunchRunPanel({
                   <input type="hidden" name="item_id" value={item.id} />
                   <div className="w-56">
                     <label className="mb-1 block text-[11px] font-medium text-gray-500">
-                      Live URL (if any)
+                      The link to your ad
                     </label>
                     <input
                       name="external_url"
