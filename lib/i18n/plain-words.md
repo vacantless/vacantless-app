@@ -31,6 +31,7 @@ One word per thing, everywhere, English and French. Source: ROADMAP-S693 section
 - Numbers as digits. Money as $29.95.
 - Say who does what with "we" and "you".
 - Never explain what does not happen. Say what happens.
+- One exception, in these words only: "never signs in as you", "we never see your password".
 - French is written, not translated. Every English key has a French sibling.
 
 ## The gate

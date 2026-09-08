@@ -241,6 +241,20 @@ export const ACRONYM_ALLOWLIST = [
  * section name, not the action word; "leading photo" is the first photo, not a
  * renter inquiry. Removed before ban matching, never before the other rules.
  */
+/**
+ * The one thing a landlord IS owed a negative promise about: their password.
+ * Section 11 bans copy that explains what does not happen, and it is aimed at
+ * the four "Nothing is posted, paid, or marked Live" paragraphs. A credential
+ * guarantee is a different animal: S691 established that the done-for-you
+ * service posts from its own account and never as the landlord, and the roadmap
+ * itself proposes "We never see your password" in section 6. Say it once, in
+ * these words, and nowhere else.
+ */
+export const EXEMPT_SENTENCES = [
+  "never signs in as you",
+  "we never see your password",
+];
+
 export const EXEMPT_PHRASES = [
   "getting started",
   "leading photo",
@@ -527,6 +541,7 @@ export function checkPlainLanguage(text: string): PlainLanguageFinding[] {
   }
 
   for (const sentence of sentences.length ? sentences : [trimmed]) {
+    if (EXEMPT_SENTENCES.some((e) => sentence.toLowerCase().includes(e))) continue;
     for (const pattern of NEGATIVE_PROMISE_PATTERNS) {
       if (pattern.re.test(sentence)) {
         findings.push({
@@ -575,6 +590,9 @@ export function plainWordsMarkdown(): string {
   lines.push("- Numbers as digits. Money as $29.95.");
   lines.push('- Say who does what with "we" and "you".');
   lines.push("- Never explain what does not happen. Say what happens.");
+  lines.push(
+    `- One exception, in these words only: ${EXEMPT_SENTENCES.map((e) => `"${e}"`).join(", ")}.`,
+  );
   lines.push("- French is written, not translated. Every English key has a French sibling.");
   lines.push("");
   lines.push("## The gate");

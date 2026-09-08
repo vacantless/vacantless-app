@@ -558,7 +558,12 @@ function runSeededAssertions() {
   );
 
   fires("nothing happens", "negative_promise", "Nothing is posted automatically. You approve outside-site posts, paid steps, and live proof.");
-  fires("never signs in", "negative_promise", "Vacantless writes the ad and keeps the link; it never signs in as you.");
+  fires("never stores", "negative_promise", "Vacantless never stores your card.");
+  // The one carved-out sentence: S691 requires this credential guarantee, and the
+  // roadmap proposes it in section 6. It must stay silent, and only in these words.
+  quiet("credential guarantee is exempt", "Vacantless never signs in as you.");
+  quiet("password guarantee is exempt", "We never see your password.");
+  fires("a different never is still caught", "negative_promise", "We never share your email.");
 
   // The replacements from sections 2 to 4 must be silent, or the gate is unusable.
   quiet("ready line", "We post it when you press Post.");
