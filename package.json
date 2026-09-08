@@ -22,7 +22,8 @@
     "test:question-sheet": "tsx scripts/test-question-sheet.ts",
     "test:question-sheet-save": "tsx scripts/test-question-sheet-save.ts",
     "test:listing-post-live-check": "tsx scripts/test-listing-post-live-check.ts",
-    "test:question-sheet-page-half": "tsx scripts/test-question-sheet-page-half.ts"
+    "test:question-sheet-page-half": "tsx scripts/test-question-sheet-page-half.ts",
+    "test:plain-language": "tsx scripts/test-plain-language.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
