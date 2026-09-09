@@ -2,7 +2,7 @@
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
   "generated": "2026-09-09",
-  "checksum": "f932830090b330807d903489ed74c25562b0db3e9835c4849a5a90b11318b9bb",
+  "checksum": "e0a54cbc94817bad399aa362b5d1c77bcbd14e2ec5d1d0216ea96db19ba12ea3",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -82,10 +82,10 @@
     "app/dashboard/properties/[id]/lifecycle-rail.tsx\u0000banned_word": 1,
     "app/dashboard/properties/[id]/page.tsx\u0000all_caps": 2,
     "app/dashboard/properties/[id]/page.tsx\u0000ampersand_or_slash": 7,
-    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 154,
+    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 117,
     "app/dashboard/properties/[id]/page.tsx\u0000em_dash": 7,
     "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 21,
-    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 43,
+    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 37,
     "app/dashboard/properties/[id]/qa-checker.tsx\u0000negative_promise": 1,
     "app/dashboard/properties/[id]/qa-checker.tsx\u0000sentence_length": 1,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
@@ -103,10 +103,10 @@
     "app/dashboard/send-live/page.tsx\u0000banned_word": 2,
     "app/dashboard/settings/page.tsx\u0000all_caps": 2,
     "app/dashboard/settings/page.tsx\u0000ampersand_or_slash": 7,
-    "app/dashboard/settings/page.tsx\u0000banned_word": 67,
+    "app/dashboard/settings/page.tsx\u0000banned_word": 66,
     "app/dashboard/settings/page.tsx\u0000em_dash": 6,
     "app/dashboard/settings/page.tsx\u0000parentheses": 15,
-    "app/dashboard/settings/page.tsx\u0000sentence_length": 20,
+    "app/dashboard/settings/page.tsx\u0000sentence_length": 19,
     "app/dashboard/today-lane.tsx\u0000banned_word": 1,
     "app/dashboard/today-lane.tsx\u0000negative_promise": 2,
     "lib/distribution-analytics.ts\u0000ampersand_or_slash": 1,
@@ -177,7 +177,7 @@
     "app/dashboard/add-details/page.tsx": 2,
     "app/dashboard/add-details/question-sheet-form.tsx": 2,
     "app/dashboard/after-live/page.tsx": 1,
-    "app/dashboard/automations/page.tsx": 65,
+    "app/dashboard/automations/page.tsx": 64,
     "app/dashboard/dashboard-nav.tsx": 28,
     "app/dashboard/facebook-connect/page.tsx": 8,
     "app/dashboard/getting-started-card.tsx": 6,
@@ -196,16 +196,16 @@
     "app/dashboard/properties/[id]/listing-copy-card.tsx": 21,
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 410,
+    "app/dashboard/properties/[id]/page.tsx": 389,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 130,
     "app/dashboard/properties/[id]/qa-checker.tsx": 6,
     "app/dashboard/properties/new/add-property-form.tsx": 96,
     "app/dashboard/properties/new/page.tsx": 5,
-    "app/dashboard/properties/page.tsx": 83,
+    "app/dashboard/properties/page.tsx": 81,
     "app/dashboard/properties/readiness-chips.tsx": 12,
-    "app/dashboard/properties/standard-policy/page.tsx": 66,
+    "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
-    "app/dashboard/settings/page.tsx": 288,
+    "app/dashboard/settings/page.tsx": 284,
     "app/dashboard/today-lane.tsx": 5,
     "lib/distribution-analytics.ts": 8,
     "lib/distribution-capabilities.ts": 21,
@@ -577,42 +577,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "{value} need live ad URLs before they count as live.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "{value} need payment before they can go live.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "{value} need sign-in before they can go live.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "{value} needs a live ad URL before it counts as live.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "{value} needs payment before it can go live.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "{value} needs sign-in before it can go live.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Add the rent and the bed and bath count on the Unit details tab, then use Set Live again.",
       "count": 2
     },
@@ -639,18 +603,6 @@
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Auto-posting can only be authorized after the Facebook Page or Instagram account is connected.",
       "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized, auto_submit_allowed, spend_authorized, spend_max_cents, spend_revoked_at",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "channel, status, feed_url, partner_contact, submitted_on, accepted_on, last_checked_on, notes",
-      "count": 1
     },
     {
       "rule": "banned_word",
@@ -692,19 +644,7 @@
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Get online",
-      "count": 5
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Get online shows the missing listing items first, then opens only the rental-site steps that need your sign-in or the ad link.",
       "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Get online shows the required listing details first, then opens only the channel choices that need your sign-in or the ad link.",
-      "count": 3
     },
     {
       "rule": "banned_word",
@@ -722,18 +662,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Hands-off refreshes are on.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "id, portal, label, url, status, posted_on, created_at, notes",
       "count": 1
     },
     {
@@ -765,24 +693,6 @@
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Leased rentals must be explicitly relisted before publishing.",
       "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "listing details",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Listing details missing",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Listing details ready",
-      "count": 1
     },
     {
       "rule": "banned_word",
@@ -829,12 +739,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Past post history can stay here for reporting, but tracked sharing is off while the rental is leased.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Paste an iGUIDE, Matterport, YouTube, or Vimeo link. It embeds on your listing page and rides along to the portals.",
       "count": 2
     },
@@ -877,12 +781,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Ready to turn on the renter page.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Refresh the channel row and try the authorization again.",
       "count": 2
     },
@@ -913,30 +811,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Rental sites still need posting, and each one counts as live only once its real ad URL is saved.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Renter page {value} . Your listing needs {value} {value} for the rental sites.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Renter page live",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Renter page not live",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Rides along to the portals (e.g. Kijiji posts it as this type).",
       "count": 2
     },
@@ -956,12 +830,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Set Live again",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Set the renter page live, then finish only the rental sites that need you to sign in or save the ad link.",
       "count": 1
     },
     {
@@ -1003,20 +871,8 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Start with {value} . Posting opens after the listing details are ready.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "The connected account stays connected, but Vacantless will not publish there automatically.",
       "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "The copy below does not include your public listing link, and the rental can't take inquiries or viewing bookings while it is leased.",
-      "count": 1
     },
     {
       "rule": "banned_word",
@@ -1089,18 +945,6 @@
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "This rental is a {value} . Its public page isn't live yet — anyone you share the link with will hit a \"not found\" page. Use Set Live at the top of the page before sharing.",
       "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This rental is leased and is not accepting inquiries.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This rental is leased.",
-      "count": 1
     },
     {
       "rule": "banned_word",
@@ -1207,26 +1051,8 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Your listing first. Sign-in and site fees wait inside Get online, and a site counts as Live only after the link to your ad is saved.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Your plan's live-rental limit is full. Pause another rental or upgrade before publishing.",
       "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Your renter page is live, plus {value} rental {value} .",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Your renter page is live. No rental sites are live yet.",
-      "count": 1
     },
     {
       "rule": "em_dash",
@@ -1393,36 +1219,6 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Get online shows the missing listing items first, then opens only the rental-site steps that need your sign-in or the ad link.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Get online shows the required listing details first, then opens only the channel choices that need your sign-in or the ad link.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "id, name, email, phone, beds_min, max_rent_cents, move_in_by, message, notes, source, status, created_at, last_notified_at, property_id, last_notified_property_id",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "It was left as Leased, so it isn't back on the market. Relisting shows it as available to rent while the current tenancy is still on file - only do this if the unit is genuinely turning over.",
       "count": 1
     },
@@ -1448,12 +1244,6 @@
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Only shown to a showing agent you assign a viewing to, on their private link. Not shown to renters.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Past post history can stay here for reporting, but tracked sharing is off while the rental is leased.",
       "count": 1
     },
     {
@@ -1495,12 +1285,6 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Rental sites still need posting, and each one counts as live only once its real ad URL is saved.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Sends the operator smart-lock battery reminder when that reminder is turned on for this company.",
       "count": 1
     },
@@ -1513,19 +1297,7 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Set the renter page live, then finish only the rental sites that need you to sign in or save the ad link.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Set this rental to Live (in the form above) to share its public link and start collecting inquiries.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "The copy below does not include your public listing link, and the rental can't take inquiries or viewing bookings while it is leased.",
       "count": 1
     },
     {
@@ -1598,12 +1370,6 @@
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - use Set Live at the top of the page before you post it anywhere.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Your listing first. Sign-in and site fees wait inside Get online, and a site counts as Live only after the link to your ad is saved.",
       "count": 1
     },
     {
@@ -1916,12 +1682,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Automatically release still-unconfirmed viewings",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "channel, account_status, automation_authorized, feed_url, manager_url, external_account_label, contact_name, contact_email, notes, last_setup_checked_at, last_successful_publish_at, last_verification_at, spend_authorized, spend_max_cents, spend_period_max_cents, spend_authorized_at, spend_authorized_by, spend_revoked_at",
       "count": 1
     },
     {
@@ -2360,12 +2120,6 @@
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Automated, branded emails that go to renters as they move through inquiry, viewing, and follow-up.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "channel, account_status, automation_authorized, feed_url, manager_url, external_account_label, contact_name, contact_email, notes, last_setup_checked_at, last_successful_publish_at, last_verification_at, spend_authorized, spend_max_cents, spend_period_max_cents, spend_authorized_at, spend_authorized_by, spend_revoked_at",
       "count": 1
     },
     {

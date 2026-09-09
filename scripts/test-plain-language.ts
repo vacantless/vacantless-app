@@ -304,6 +304,23 @@ export function looksLikeCopy(raw: string): boolean {
   if (noCapitals && classy.length >= Math.ceil(tokens.length * 0.5)) return false;
   // All snake_case identifiers.
   if (tokens.every((t) => /^[a-z0-9]+(_[a-z0-9]+)+$/.test(t))) return false;
+  // A Supabase select() column list is not copy, and "fixing" a banned word
+  // inside one would rename a database column. Deliberately narrow: several
+  // comma separated bare lower case identifiers, at least one of them
+  // snake_case, and no sentence punctuation. A real list a landlord reads,
+  // "beds, baths, parking, laundry", has no underscore and still counts.
+  const commaItems = text
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (
+    commaItems.length >= 4 &&
+    !/[.!?:;]/.test(text) &&
+    commaItems.every((t) => /^[a-z][a-z0-9_]*$/.test(t)) &&
+    commaItems.some((t) => t.includes("_"))
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -891,6 +908,22 @@ function runSeededAssertions() {
   const got = extractFromSource("sample.tsx", sample);
   ok("extractor finds the JSX sentence", got.some((c) => c.text.startsWith("Nothing is posted")));
   ok("extractor skips the class list", !got.some((c) => c.text.includes("items-center")));
+
+  // A select() column list is not copy. The guard is narrow on purpose: a real
+  // comma list a landlord reads must still be measured.
+  ok(
+    "select column list is not copy",
+    !looksLikeCopy("id, organization_id, address, rent_cents, beds, posted_on"),
+  );
+  ok(
+    "listing_posts select list is not copy",
+    !looksLikeCopy("id, portal, label, url, status, posted_on, created_at, notes"),
+  );
+  ok("a plain comma list is still copy", looksLikeCopy("beds, baths, parking, laundry"));
+  ok(
+    "a sentence with commas is still copy",
+    looksLikeCopy("Add rent, beds, baths, and photos now or later."),
+  );
 
   // The two newline kinds, held apart. A wrapped JSX paragraph must stay ONE
   // sentence or the length rule goes soft; a \n inside a string literal is a

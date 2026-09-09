@@ -409,8 +409,8 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "first screen leads with honest syndication status",
     propertyDetailSource.includes("SyndicationFirstCard") &&
       propertyDetailSource.includes("Your listing needs") &&
-      propertyDetailSource.includes("Posting opens after the listing details are ready.") &&
-      propertyDetailSource.includes("Your listing first. Sign-in and site fees wait inside Get online,") &&
+      propertyDetailSource.includes("Posting opens once your listing is ready.") &&
+      propertyDetailSource.includes("Your listing first. Sign-in and site fees wait inside Post,") &&
       propertyDetailSource.includes("and a site counts as Live only after the link to your ad is saved") &&
       propertyDetailSource.includes("a site counts as Live only after the link to your ad is saved"),
   );
@@ -434,7 +434,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "first screen keeps portal complexity compact",
-    propertyDetailSource.includes("Renter page live") &&
+    propertyDetailSource.includes("Your Vacantless page is live") &&
       propertyDetailSource.includes("sites ready") &&
       propertyDetailSource.includes("Not on any rental site") &&
       !propertyDetailSource.includes("places ready") &&
@@ -444,7 +444,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "first screen surfaces the specific human blocker",
     propertyDetailSource.includes("buildSyndicationBlockerSummary") &&
-      propertyDetailSource.includes("needs payment before it can go live") &&
+      propertyDetailSource.includes("needs payment before you can post it") &&
       propertyDetailSource.includes("blockerSummary={syndicationBlockerSummary}"),
   );
   ok(

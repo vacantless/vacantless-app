@@ -550,22 +550,22 @@ function buildSyndicationBlockerSummary({
       [...payment.values()],
       "needs payment",
       "need payment",
-      (label) => `${label} needs payment before it can go live.`,
-      (list) => `${list} need payment before they can go live.`,
+      (label) => `${label} needs payment before you can post it.`,
+      (list) => `${list} need payment before you can post them.`,
     ) ??
     summary(
       [...login.values()],
       "needs sign-in",
       "need sign-in",
-      (label) => `${label} needs sign-in before it can go live.`,
-      (list) => `${list} need sign-in before they can go live.`,
+      (label) => `${label} needs sign-in before you can post it.`,
+      (list) => `${list} need sign-in before you can post them.`,
     ) ??
     summary(
       [...proof.values()],
       "needs the ad link",
       "need the ad link",
-      (label) => `${label} needs a live ad URL before it counts as live.`,
-      (list) => `${list} need live ad URLs before they count as live.`,
+      (label) => `${label} needs the link to your ad before it counts as live.`,
+      (list) => `${list} need the link to your ad before they count as live.`,
     ) ??
     summary(
       [...refresh.values()],
@@ -663,50 +663,50 @@ function SyndicationFirstCard({
       ? "Choose property type"
       : firstListingPacketMissingLabel
         ? `Add ${firstListingPacketMissingLabel.toLowerCase()}`
-        : "Get online";
+        : "Post";
   const expiredOnly =
     linkIsLive && hasPostHistory && liveOutsideCount === 0 && !needsListingWork;
   const status = packetBlocked
-    ? `Renter page ${linkIsLive ? "live" : "not live"}. Your listing needs ${listingPacketMissingCount} ${
+    ? `Your Vacantless page is ${linkIsLive ? "live" : "not live"}. Your listing needs ${listingPacketMissingCount} ${
         listingPacketMissingCount === 1 ? "detail" : "details"
       } for the rental sites.`
     : !linkIsLive
     ? setupOutstanding > 0
       ? `${setupOutstanding} ${
-          setupOutstanding === 1 ? "listing detail" : "listing details"
+          setupOutstanding === 1 ? "detail" : "details"
         } before syndication.`
-      : "Ready to turn on the renter page."
+      : "Ready to turn on your Vacantless page."
     : liveOutsideCount > 0
-      ? `Your renter page is live, plus ${liveOutsideCount} rental ${
+      ? `Your Vacantless page is live, plus ${liveOutsideCount} rental ${
           liveOutsideCount === 1 ? "site" : "sites"
         }.`
-      : "Your renter page is live. No rental sites are live yet.";
+      : "Your Vacantless page is live. No rental sites are live yet.";
   const body = packetBlocked
-    ? `Start with ${
+    ? `Begin with ${
         firstListingPacketMissingLabel?.toLowerCase() ?? "the missing detail"
-      }. Posting opens after the listing details are ready.`
+      }. Posting opens once your listing is ready.`
     : !linkIsLive
     ? setupOutstanding > 0
-      ? "Get online shows the required listing details first, then opens only the channel choices that need your sign-in or the ad link."
-      : "Set the renter page live, then finish only the rental sites that need you to sign in or save the ad link."
+      ? "Post shows what your listing still needs. It then opens only the sites that need your sign-in or the link to your ad."
+      : "Turn on your Vacantless page. Then finish only the sites that need your sign-in or the link to your ad."
     : needsListingWork
-      ? "Get online shows the missing listing items first, then opens only the rental-site steps that need your sign-in or the ad link."
+      ? "Post shows what your listing still needs. It then opens only the steps that need your sign-in or the link to your ad."
     : expiredOnly
       ? "Previous ads on rental sites need refresh or repost before they count as live."
       : liveOutsideCount > 0
         ? `${totalInquiryCount} ${
             totalInquiryCount === 1 ? "inquiry is" : "inquiries are"
           } tied to this rental so far.`
-        : "Rental sites still need posting, and each one counts as live only once its real ad URL is saved.";
+        : "Rental sites still need posting. Each one counts as live once the link to your ad is saved.";
   const actionHref = packetBlocked ? firstMissingHref : distributeHref;
   const actionLabel = !linkIsLive
     ? packetBlocked
       ? packetActionLabel
-      : "Get online"
+      : "Post"
     : packetBlocked || needsListingWork
       ? packetBlocked
         ? packetActionLabel
-        : "Get online"
+        : "Post"
     : expiredOnly
       ? "Refresh or repost"
       : liveOutsideCount > 0
@@ -725,19 +725,19 @@ function SyndicationFirstCard({
     : needsListingWork
     ? !hasPhotos
       ? "Photos missing"
-      : "Listing details missing"
+      : "Your listing is missing details"
     : blockerSummary?.chip ?? outsideLabel;
   const missingBasicsLabel =
     packetBlocked
       ? `${listingPacketReadyChannelCount}/${listingPacketChannelCount} sites ready`
       : setupOutstanding > 0
       ? `${setupOutstanding} ${
-          setupOutstanding === 1 ? "listing detail" : "listing details"
+          setupOutstanding === 1 ? "detail" : "details"
         } missing`
       : hasPhotos
-        ? "Listing details ready"
+        ? "Your listing is ready"
         : "Photos missing";
-  const renterPageLabel = linkIsLive ? "Renter page live" : "Renter page not live";
+  const renterPageLabel = linkIsLive ? "Your Vacantless page is live" : "Your Vacantless page is not live";
   const outsideAdsLabel =
     liveOutsideCount > 0
       ? `${liveOutsideCount} ${
@@ -750,7 +750,7 @@ function SyndicationFirstCard({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
-            Get online
+            Post
           </p>
           <h3 className="mt-1 text-xl font-semibold tracking-tight">
             {status}
@@ -775,7 +775,7 @@ function SyndicationFirstCard({
             </p>
           ) : null}
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
-            Your listing first. Sign-in and site fees wait inside Get online,
+            Your listing first. Sign-in and site fees wait inside Post,
             and a site counts as Live only after the link to your ad is saved.
           </p>
         </div>
@@ -946,19 +946,19 @@ export default async function PropertyDetailPage({
     ? null
     : normalizedStatus === "leased"
       ? {
-          title: "This rental is leased.",
+          title: "This rental is rented.",
           intro:
             "Keep this wording for reference or relisting; relist the rental as Live before you post it again.",
           body:
-            "The copy below does not include your public listing link, and the rental can't take inquiries or viewing bookings while it is leased.",
+            "The copy below leaves out your public listing link. The rental cannot take inquiries or viewing bookings while it is rented.",
           kitBody:
             "Relist it as Live before sharing a public link, QR code, or bundled channel copy.",
           missingLinkText:
             "Relist this rental as Live before adding a public listing link.",
           copyFallbackCta:
-            "This rental is leased and is not accepting inquiries.",
+            "This rental is rented and is not accepting inquiries.",
           postingBody:
-            "Past post history can stay here for reporting, but tracked sharing is off while the rental is leased.",
+            "Past post history can stay here for reporting. Tracked sharing is off while the rental is rented.",
         }
       : normalizedStatus === "paused"
         ? {
