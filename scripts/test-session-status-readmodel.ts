@@ -76,7 +76,7 @@ eq("3b planned + selfPost (Marketplace) -> self_post", channelTileStatus("facebo
   ok("5 dead_session can reconnect", s.canReconnect === true);
   ok("5 dead_session cannot 'connect'", s.canConnect === false);
   ok("5 dead_session still says who", s.accountLabel === "Noam");
-  ok("5 headline names the reason", s.headline === "Reconnect Noam: signed out");
+  ok("5 headline names the reason", s.headline === "Sign in to Noam again: signed out");
   eq("5 account needs_login -> dead_session even with alive=true", channelTileStatus("rentals_ca", connected({ account_status: "needs_login" }), fresh(), NOW).state, "dead_session");
   eq("5 dead_session lastCheckCode carried", s.lastCheckCode, "needs_login");
 }
@@ -112,12 +112,12 @@ eq("3b planned + selfPost (Marketplace) -> self_post", channelTileStatus("facebo
 {
   const s = channelTileStatus("rentals_ca", connected({ automation_authorized: false }), fresh(), NOW);
   eq("8 authorized=false -> connected_needs_authorization", s.state, "connected_needs_authorization");
-  ok("8 headline names the account", s.headline.startsWith("Connected as Noam."));
+  ok("8 headline names the account", s.headline.startsWith("Signed in as Noam."));
 }
 {
   const s = channelTileStatus("rentals_ca", connected(), fresh({ cap_used: 1 }), NOW);
   eq("9 linked", s.state, "linked");
-  eq("9 linked cap line", s.capLine, "Free (Limited): 1 of 3 active listings used.");
+  eq("9 linked cap line", s.capLine, "Free for 3 listings. You use 1 of 3.");
   eq("9 linked cost line", s.costLine, "Free.");
   eq("9 linked lastCheckedAt carried", s.lastCheckedAt, fresh().last_checked_at);
   ok("9 linked alive true", s.alive === true);
@@ -162,7 +162,7 @@ eq("checking outranks cap_reached", channelTileStatus("rentals_ca", connected(),
   eq("model off: needs_login account -> dead_session", channelTileStatus("rentals_ca", connected({ account_status: "needs_login" })).state, "dead_session");
   eq("model off: no account -> not_linked", channelTileStatus("rentals_ca", null).state, "not_linked");
   eq("model off: oauth connected -> linked", channelTileStatus("facebook_feed", connected()).state, "linked");
-  eq("model off: cap line still renders the unknown case", s.capLine, "Free (Limited): up to 3 active listings per account.");
+  eq("model off: cap line still renders the unknown case", s.capLine, "Free for 3 listings per account.");
 }
 
 // --- label fallback ------------------------------------------------------------
@@ -187,8 +187,8 @@ const line = (key: string, account: ChannelTileAccount | null, session: ChannelT
   const rn = line("kijiji", connected(p), fresh({ cap_used: null }));
   eq("kijiji personal null cap", rn.capLine, "Your 1 free ad is available.");
   const r1 = line("kijiji", connected(p), fresh({ cap_used: 1 }));
-  eq("kijiji personal 1 cap", r1.capLine, "Free slot used (1 of 1).");
-  eq("kijiji personal 1 cost + spend suffix", r1.costLine, "$33.84 per extra ad, paid at the last step. Set a spend limit before a paid post.");
+  eq("kijiji personal 1 cap", r1.capLine, "You used your 1 free ad.");
+  eq("kijiji personal 1 cost + spend suffix", r1.costLine, "$33.84 per extra ad, paid at the last step. Set your limit before a paid post.");
   ok("kijiji personal 1 reached", r1.capReached === true);
   const r1s = line("kijiji", connected({ ...p, spend_authorized: true, spend_max_cents: 5000, spend_revoked_at: null }), fresh({ cap_used: 1 }));
   eq("kijiji personal 1 cost, spend ready", r1s.costLine, "$33.84 per extra ad, paid at the last step.");
@@ -197,20 +197,20 @@ const line = (key: string, account: ChannelTileAccount | null, session: ChannelT
   const b = { capabilities: { kijiji_tier: "business" } };
   const r = line("kijiji", connected(b), fresh({ cap_used: 4 }));
   eq("kijiji business cap", r.capLine, null);
-  eq("kijiji business cost", r.costLine, "$33.84 per ad, paid at the last step. Set a spend limit before a paid post.");
+  eq("kijiji business cost", r.costLine, "$33.84 per ad, paid at the last step. Set your limit before a paid post.");
   ok("kijiji business never reached", r.capReached === false);
-  eq("kijiji business revoked spend keeps suffix", line("kijiji", connected({ ...b, spend_authorized: true, spend_max_cents: 5000, spend_revoked_at: "2026-09-01T00:00:00Z" }), fresh()).costLine, "$33.84 per ad, paid at the last step. Set a spend limit before a paid post.");
+  eq("kijiji business revoked spend keeps suffix", line("kijiji", connected({ ...b, spend_authorized: true, spend_max_cents: 5000, spend_revoked_at: "2026-09-01T00:00:00Z" }), fresh()).costLine, "$33.84 per ad, paid at the last step. Set your limit before a paid post.");
 }
-eq("rentals n<3 cap", line("rentals_ca", connected(), fresh({ cap_used: 2 })).capLine, "Free (Limited): 2 of 3 active listings used.");
+eq("rentals n<3 cap", line("rentals_ca", connected(), fresh({ cap_used: 2 })).capLine, "Free for 3 listings. You use 2 of 3.");
 eq("rentals n<3 cost", line("rentals_ca", connected(), fresh({ cap_used: 2 })).costLine, "Free.");
 {
   const r = line("rentals_ca", connected(), fresh({ cap_used: 3 }));
-  eq("rentals 3 cap", r.capLine, "Free cap reached: 3 of 3 active. Disable one or pay for a plan.");
+  eq("rentals 3 cap", r.capLine, "You use all 3 free listings. Turn one off first.");
   ok("rentals 3 reached", r.capReached === true);
 }
-eq("rentals null cap", line("rentals_ca", connected(), fresh({ cap_used: null })).capLine, "Free (Limited): up to 3 active listings per account.");
+eq("rentals null cap", line("rentals_ca", connected(), fresh({ cap_used: null })).capLine, "Free for 3 listings per account.");
 eq("zumper n<5 cap", line("zumper", connected(), fresh({ cap_used: 4 })).capLine, "Free: 4 of 5 listings used.");
-eq("zumper 5 cap", line("zumper", connected(), fresh({ cap_used: 5 })).capLine, "Free cap reached: 5 of 5 listings. Remove one first.");
+eq("zumper 5 cap", line("zumper", connected(), fresh({ cap_used: 5 })).capLine, "You use all 5 free listings. Take one down first.");
 ok("zumper 5 reached", line("zumper", connected(), fresh({ cap_used: 5 })).capReached === true);
 eq("zumper null cap", line("zumper", connected(), fresh({ cap_used: null })).capLine, "Free: up to 5 listings per account.");
 eq("facebook_feed cap", line("facebook_feed", connected(), fresh()).capLine, null);
@@ -233,7 +233,7 @@ ok("spendReady mirrors contracts predicate", spendReadyForAccount({ spend_author
 eq("reason needs_login", sessionCheckReason("needs_login"), "signed out");
 eq("reason cloudflare", sessionCheckReason("cloudflare"), "the site asked for a human check");
 eq("reason captcha", sessionCheckReason("captcha"), "the site asked for a human check");
-eq("reason no_session", sessionCheckReason("no_session"), "no saved session");
+eq("reason no_session", sessionCheckReason("no_session"), "no saved sign-in");
 eq("reason timeout", sessionCheckReason("timeout"), "the site did not respond");
 eq("reason error", sessionCheckReason("error"), "an error");
 eq("reason unknown -> signed out", sessionCheckReason("what"), "signed out");

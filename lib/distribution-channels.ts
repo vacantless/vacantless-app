@@ -41,16 +41,16 @@ export const CHANNEL_MODES = [
 export type ChannelMode = (typeof CHANNEL_MODES)[number];
 
 const CHANNEL_MODE_LABELS: Record<ChannelMode, string> = {
-  assisted_manual: "Posting assist",
-  feed_or_assisted: "Feed candidate / assist",
+  assisted_manual: "We help you post",
+  feed_or_assisted: "Partner site or help",
   api_automatic: "API posting",
-  broker: "Broker / MLS",
+  broker: "Broker or MLS",
 };
 
 export function channelModeLabel(mode: unknown): string {
   return typeof mode === "string" && (CHANNEL_MODES as readonly string[]).includes(mode)
     ? CHANNEL_MODE_LABELS[mode as ChannelMode]
-    : "Posting assist";
+    : "We help you post";
 }
 
 // --- canonical channel registry fields ------------------------------------
@@ -193,7 +193,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "account_login",
     mode: "feed_or_assisted",
     blurb:
-      "Rentals.ca is a feed candidate, not a live Vacantless integration. Until a partner route is accepted, use the prepared copy, field sheet, and proof tracking.",
+      "We post it for you after you sign in once. Free for 3 listings.",
     copyKey: "rentals_ca",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -212,7 +212,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
       "RentFaster.ca remains proof-gated in Vacantless; do not show it as connected until a real account-backed posting route exists.",
     mode: "feed_or_assisted",
     blurb:
-      "RentFaster is a feed candidate and paid self-serve listing lane. Start logged in, choose Single Unit, review package/add-ons, then paste the live ad link.",
+      "Not yet. This site charges a fee.",
     copyKey: "rentfaster",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -229,7 +229,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "account_login",
     mode: "feed_or_assisted",
     blurb:
-      "Zumper is the managed posting path and can also reach PadMapper. Use posting assist until a partner route is accepted; submitted is not counted as live until proof comes back.",
+      "We post it for you after you sign in once. Free for 5 listings.",
     copyKey: "zumper",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -248,7 +248,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
       "Viewit.ca is a target portal, but Vacantless does not have a connected posting path for it yet.",
     mode: "assisted_manual",
     blurb:
-      "Viewit is a paid listing site. Vacantless prepares the copy and fields; you review any payment and paste the live ad link back here.",
+      "Not yet. This site charges a fee.",
     copyKey: "viewit",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -267,7 +267,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
       "SpaceList is the first commercial-only target channel. Vacantless does not have a connected posting path for it yet.",
     mode: "assisted_manual",
     blurb:
-      "SpaceList is a commercial-only listing lane. Vacantless prepares the commercial field sheet; a signed-in operator reviews the property use, lease facts, and proof URL.",
+      "For commercial buildings only. Not yet.",
     copyKey: null,
     hasFillSheet: true,
     hasGuardrails: true,
@@ -278,7 +278,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   },
   {
     key: "costar_loopnet",
-    label: "CoStar / LoopNet",
+    label: "CoStar and LoopNet",
     category: "portal",
     integrationStatus: "planned",
     connectKind: "none",
@@ -286,7 +286,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
       "CoStar and LoopNet stay one paid/operator-assisted CRE and 5+ multifamily candidate until account, price, and proof behavior are verified.",
     mode: "assisted_manual",
     blurb:
-      "CoStar / LoopNet is for commercial or 5+ multifamily investment inventory. Vacantless prepares the source packet, but login, verification, payment, and posting stay human-gated.",
+      "For commercial buildings only. Not yet.",
     copyKey: null,
     hasFillSheet: true,
     hasGuardrails: true,
@@ -316,13 +316,13 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
   },
   {
     key: "facebook_feed",
-    label: "Facebook Page feed",
+    label: "Facebook Page",
     category: "social",
     integrationStatus: "live",
     connectKind: "oauth",
     mode: "api_automatic",
     blurb:
-      "Vacantless can post a tracked listing link to a connected Facebook Business Page after you approve that item. Organic Page posts reach Page followers; Marketplace and ads are separate channels.",
+      "We post a link to your listing on your Facebook Page.",
     copyKey: "facebook_feed",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -339,7 +339,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "oauth",
     mode: "api_automatic",
     blurb:
-      "Vacantless can publish a single-image post to a linked Instagram Business account after you approve that item. Captions include the tracked inquiry link; Stories, Reels, and carousels stay separate.",
+      "We post one photo with your inquiry link on your Instagram.",
     copyKey: "instagram",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -358,7 +358,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
       "WhatsApp Business is in the target channel list, but there is no connected Vacantless posting or send path for this tile yet.",
     mode: "assisted_manual",
     blurb:
-      "Vacantless prepares a compact share message with the tracked inquiry link. Send it through WhatsApp or a broadcast list, then save a proof link or note.",
+      "We write a short message with your inquiry link. You send it.",
     copyKey: "whatsapp",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -377,7 +377,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
       "LinkedIn is listed for the roadmap, but Vacantless does not have a real connected posting path for it yet.",
     mode: "assisted_manual",
     blurb:
-      "Vacantless prepares a polished social caption and tracked inquiry link. Post from the connected LinkedIn account, then save the post URL as proof.",
+      "We write a short message with your inquiry link. You send it.",
     copyKey: "linkedin",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -396,7 +396,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
       "Snapchat is in the target channel list, but Vacantless does not have a real connected posting path for it yet.",
     mode: "assisted_manual",
     blurb:
-      "Vacantless prepares short social copy and the tracked inquiry link. Post from the connected Snapchat account, then save the post or story proof.",
+      "We write a short message with your inquiry link. You send it.",
     copyKey: "snapchat",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -415,7 +415,7 @@ export const DISTRIBUTION_CHANNEL_DISPLAY_GROUPS = [
   },
   {
     id: "share_social",
-    title: "Share & social",
+    title: "Share it yourself",
     categories: ["social", "chat"],
   },
 ] as const;
@@ -613,7 +613,7 @@ export function formatChannelMoney(cents: number, locale: "en" | "fr" = "en"): s
   }).format(cents / 100);
 }
 
-export const SPEND_SUFFIX_COPY = " Set a spend limit before a paid post.";
+export const SPEND_SUFFIX_COPY = " Set your limit before a paid post.";
 
 function effectiveCapTotal(
   channelKey: DistributionChannel["key"],
@@ -740,12 +740,12 @@ export function channelCostCap(
 // stage1.cost.* carry the same strings with ICU params.
 export const CHANNEL_CAP_COPY_EN: Record<ChannelCapKey, (used: number | null) => string> = {
   kijijiFreeAvailable: () => "Your 1 free ad is available.",
-  kijijiFreeUsed: () => "Free slot used (1 of 1).",
-  rentalsUsed: (used) => `Free (Limited): ${used ?? 0} of 3 active listings used.`,
-  rentalsReached: () => "Free cap reached: 3 of 3 active. Disable one or pay for a plan.",
-  rentalsUnknown: () => "Free (Limited): up to 3 active listings per account.",
+  kijijiFreeUsed: () => "You used your 1 free ad.",
+  rentalsUsed: (used) => `Free for 3 listings. You use ${used ?? 0} of 3.`,
+  rentalsReached: () => "You use all 3 free listings. Turn one off first.",
+  rentalsUnknown: () => "Free for 3 listings per account.",
   zumperUsed: (used) => `Free: ${used ?? 0} of 5 listings used.`,
-  zumperReached: () => "Free cap reached: 5 of 5 listings. Remove one first.",
+  zumperReached: () => "You use all 5 free listings. Take one down first.",
   zumperUnknown: () => "Free: up to 5 listings per account.",
 };
 export const CHANNEL_COST_COPY_EN: Record<ChannelCostKey, (price: string) => string> = {
@@ -845,7 +845,7 @@ export function sessionCheckReason(code: string | null | undefined): string {
     case "captcha":
       return "the site asked for a human check";
     case "no_session":
-      return "no saved session";
+      return "no saved sign-in";
     case "timeout":
       return "the site did not respond";
     case "error":
@@ -886,7 +886,7 @@ export function channelTileStatus(
     return {
       ...base,
       state: "not_available_yet",
-      headline: "This channel is not configured yet.",
+      headline: "This site is not set up yet.",
     };
   }
 
@@ -902,7 +902,7 @@ export function channelTileStatus(
     return {
       ...base,
       state: "self_post",
-      headline: `You post on ${channel.label} yourself from your own account; Vacantless writes the ad and keeps the link.`,
+      headline: `You post on ${channel.label} from your own account. We write the ad.`,
     };
   }
 
@@ -910,7 +910,7 @@ export function channelTileStatus(
     return {
       ...base,
       state: "not_available_yet",
-      headline: channel.notes ?? `${channel.label} is not available yet.`,
+      headline: channel.notes ?? `${channel.label} is not ready yet.`,
     };
   }
 
@@ -919,7 +919,7 @@ export function channelTileStatus(
     return {
       ...base,
       state: "not_linked",
-      headline: `Link ${channel.label} to publish here.`,
+      headline: `Sign in to ${channel.label} to post here.`,
       canConnect: true,
     };
   }
@@ -959,7 +959,7 @@ export function channelTileStatus(
       ...base,
       ...known,
       state: "dead_session",
-      headline: `Reconnect ${labelForCopy}: ${sessionCheckReason(
+      headline: `Sign in to ${labelForCopy} again: ${sessionCheckReason(
         session?.alive === false ? session?.last_check_code : "needs_login",
       )}`,
       canReconnect: true,
@@ -974,7 +974,7 @@ export function channelTileStatus(
         ...base,
         ...known,
         state: "dead_session",
-        headline: `Reconnect ${labelForCopy}: ${sessionCheckReason("no_session")}`,
+        headline: `Sign in to ${labelForCopy} again: ${sessionCheckReason("no_session")}`,
         lastCheckCode: "no_session",
         canReconnect: true,
       };
@@ -1000,7 +1000,7 @@ export function channelTileStatus(
       ...base,
       ...known,
       state: "cap_reached",
-      headline: capLine ?? `${channel.label} free cap reached.`,
+      headline: capLine ?? `You used every free ad on ${channel.label}.`,
     };
   }
 
@@ -1009,7 +1009,7 @@ export function channelTileStatus(
       ...base,
       ...known,
       state: "connected_needs_authorization",
-      headline: `Connected as ${labelForCopy}. Authorize Vacantless before it can post here.`,
+      headline: `Signed in as ${labelForCopy}. Allow us to post here.`,
     };
   }
 
@@ -1017,7 +1017,7 @@ export function channelTileStatus(
     ...base,
     ...known,
     state: "linked",
-    headline: `${channel.label} is linked and authorized.`,
+    headline: `${channel.label} is signed in and ready.`,
   };
 }
 
@@ -1078,7 +1078,7 @@ export function channelConnectionStage(input: {
       state: "broker_route",
       label: "Broker route",
       nextActionLabel: "Create broker handoff",
-      helper: "This channel needs an agent, MLS, or broker handoff; it is not a self-serve account connection.",
+      helper: "This site needs an agent, MLS, or broker. You cannot sign in here.",
       tone: "neutral",
       canConnect: false,
       countsAsReady: false,
@@ -1087,14 +1087,14 @@ export function channelConnectionStage(input: {
 
   if (input.integrationStatus === "planned") {
     const helper = input.requiresPayment
-      ? "No connected Vacantless account exists here yet. Treat this as paid posting assist: review any fee, approve before paying, and save the live ad URL as proof."
+      ? "Not yet. This site charges a fee, so you approve it and pay the site."
       : input.requiresLogin
-        ? "No connected Vacantless account exists here yet. Posting assist can prepare the listing, but a signed-in operator must review the post and save the live ad URL as proof."
-        : "This channel is listed for the roadmap, but there is no connected Vacantless posting path yet.";
+        ? "Not yet. We write the ad, then you sign in and post it."
+        : "Not yet. This site comes later.";
     return {
       state: "planned_or_unavailable",
       label: "Planned",
-      nextActionLabel: input.requiresPayment ? "Use paid posting assist" : "Use posting assist",
+      nextActionLabel: input.requiresPayment ? "See what it costs" : "See how it works",
       helper,
       tone: "neutral",
       canConnect: false,
@@ -1119,7 +1119,7 @@ export function channelConnectionStage(input: {
       state: "needs_sign_in",
       label: "Needs sign-in",
       nextActionLabel: "Refresh sign-in",
-      helper: "Sign in or refresh the saved session before Vacantless can continue this channel.",
+      helper: "Sign in again before we can carry on with this site.",
       tone: "warning",
       canConnect: true,
       countsAsReady: false,
@@ -1129,9 +1129,9 @@ export function channelConnectionStage(input: {
   if (input.accountStatus === "needs_payment") {
     return {
       state: "needs_payment_or_setup",
-      label: "Needs payment/setup",
-      nextActionLabel: "Finish setup/payment",
-      helper: "Finish the paid placement or setup step before this channel can move forward.",
+      label: "Needs you",
+      nextActionLabel: "Finish setup",
+      helper: "Finish the fee or the setup step before this site can move on.",
       tone: "warning",
       canConnect: true,
       countsAsReady: false,
@@ -1143,7 +1143,7 @@ export function channelConnectionStage(input: {
       state: "needs_payment_or_setup",
       label: "Review setup",
       nextActionLabel: "Review rejection",
-      helper: "The channel rejected or blocked this route. Review the setup before trying again.",
+      helper: "This site turned it down. Check the setup and try again.",
       tone: "danger",
       canConnect: true,
       countsAsReady: false,
@@ -1154,8 +1154,8 @@ export function channelConnectionStage(input: {
     return {
       state: "needs_payment_or_setup",
       label: "Paused",
-      nextActionLabel: "Resume channel",
-      helper: "Resume this channel before it can receive a listing.",
+      nextActionLabel: "Resume this site",
+      helper: "Resume this site before it can take a listing.",
       tone: "neutral",
       canConnect: true,
       countsAsReady: false,
@@ -1167,7 +1167,7 @@ export function channelConnectionStage(input: {
       state: "needs_payment_or_setup",
       label: "Submitted",
       nextActionLabel: "Check acceptance",
-      helper: "Setup was submitted and is waiting on the channel to accept the route.",
+      helper: "Setup is sent. The site decides when to accept it.",
       tone: "neutral",
       canConnect: false,
       countsAsReady: false,
@@ -1182,9 +1182,9 @@ export function channelConnectionStage(input: {
   if (connected && input.requiresAutomationAuthorization && !input.automationAuthorized) {
     return {
       state: "connected_needs_authorization",
-      label: "Connected - authorize posting",
-      nextActionLabel: "Authorize auto-post",
-      helper: "The account is connected. Authorize Vacantless before it can auto-post to this channel.",
+      label: "Signed in. Allow us to post",
+      nextActionLabel: "Allow us to post",
+      helper: "You are signed in. Allow us to post to this site.",
       tone: "warning",
       canConnect: false,
       countsAsReady: false,
@@ -1194,11 +1194,11 @@ export function channelConnectionStage(input: {
   if (connected) {
     return {
       state: "connected_ready",
-      label: input.requiresAutomationAuthorization ? "Connected + authorized" : "Connected",
-      nextActionLabel: "Use from Get online",
+      label: input.requiresAutomationAuthorization ? "Ready" : "Connected",
+      nextActionLabel: "Use it from your sites",
       helper: input.requiresAutomationAuthorization
-        ? "This account is connected and authorized for approved posts."
-        : "This account or feed route is ready for the next publishing step.",
+        ? "This account is signed in and ready for approved posts."
+        : "This account is ready for the next step.",
       tone: "positive",
       canConnect: false,
       countsAsReady: true,
@@ -1207,11 +1207,11 @@ export function channelConnectionStage(input: {
 
   return {
     state: "needs_payment_or_setup",
-    label: input.requiresPayment ? "Needs payment/setup" : "Needs setup",
+    label: input.requiresPayment ? "Needs you" : "Needs setup",
     nextActionLabel: input.requiresPayment ? "Set up payment rules" : "Set up account",
     helper: input.requiresPayment
-      ? "Finish account setup and confirm any paid-placement rules before using this channel."
-      : "Connect or record this channel once before using it from Get online.",
+      ? "Finish the account setup and any fee rules before using this site."
+      : "Sign in to this site once before you use it.",
     tone: "accent",
     canConnect: true,
     countsAsReady: false,
@@ -1221,28 +1221,28 @@ export function channelConnectionStage(input: {
 export const CHANNEL_CONNECTION_CHECKLIST_GROUPS = [
   {
     id: "authorization",
-    label: "Authorize",
-    helper: "Connected accounts waiting on posting or refresh consent.",
+    label: "Needs your go",
+    helper: "Signed in accounts waiting for you to allow posting.",
   },
   {
     id: "sign_in",
-    label: "Reconnect",
-    helper: "Saved sessions that need a fresh sign-in.",
+    label: "Needs sign-in",
+    helper: "Accounts that need a fresh sign-in.",
   },
   {
     id: "setup",
     label: "Account/spend",
-    helper: "Accounts, feed routes, or landlord spend limits to finish.",
+    helper: "Accounts, partner sites, or your limit to finish.",
   },
   {
     id: "ready",
     label: "Ready",
-    helper: "Destinations ready for launch.",
+    helper: "Sites ready to post.",
   },
   {
     id: "planned",
     label: "Fallback/planned",
-    helper: "Broker, fallback, and future destinations.",
+    helper: "Broker sites, extra help, and sites for later.",
   },
 ] as const;
 export type ChannelConnectionChecklistGroupId =
@@ -1338,7 +1338,7 @@ export function channelConnectChip(input: {
   hasFeedRoute: boolean;
 }): ConnectChip {
   if (input.integrationStatus === "mls_gated" || input.transport === "broker") {
-    return { state: "mls_route", label: "MLS / broker route", tone: "neutral", canConnect: false };
+    return { state: "mls_route", label: "MLS or broker route", tone: "neutral", canConnect: false };
   }
   if (input.integrationStatus === "planned") {
     return { state: "coming_soon", label: "Coming soon", tone: "neutral", canConnect: false };
@@ -1350,7 +1350,7 @@ export function channelConnectChip(input: {
     return { state: "connected", label: "Connected", tone: "positive", canConnect: false };
   }
   if (input.accountStatus === "needs_login") {
-    return { state: "needs_login", label: "Needs login", tone: "warning", canConnect: true };
+    return { state: "needs_login", label: "Needs sign-in", tone: "warning", canConnect: true };
   }
   if (input.accountStatus === "needs_payment") {
     return { state: "needs_payment", label: "Needs payment", tone: "warning", canConnect: true };
@@ -1386,7 +1386,7 @@ export const CHANNEL_STATUS_VALUES = [
 export type ChannelStatusValue = (typeof CHANNEL_STATUS_VALUES)[number];
 
 const CHANNEL_STATUS_LABELS: Record<ChannelStatusValue, string> = {
-  not_started: "Not started",
+  not_started: "Not posted yet",
   ready: "Ready to post",
   posted: "Posted",
   needs_refresh: "Needs refresh",
@@ -1397,7 +1397,7 @@ export function channelStatusLabel(value: unknown): string {
   return typeof value === "string" &&
     (CHANNEL_STATUS_VALUES as readonly string[]).includes(value)
     ? CHANNEL_STATUS_LABELS[value as ChannelStatusValue]
-    : "Not started";
+    : "Not posted yet";
 }
 
 // A visual tone hint for the status chip (green/amber/red/gray). Kept here so

@@ -57,9 +57,9 @@ function stageFor(
   });
   eq("connected Facebook Page feed waits for authorization", stage.state, "connected_needs_authorization");
   eq("authorization stage is warning", stage.tone, "warning");
-  eq("authorization next action is explicit", stage.nextActionLabel, "Authorize auto-post");
+  eq("authorization next action is explicit", stage.nextActionLabel, "Allow us to post");
   ok("authorization stage does not count as ready", stage.countsAsReady === false);
-  ok("authorization helper names authorization", stage.helper.includes("Authorize Vacantless"));
+  ok("authorization helper names authorization", stage.helper.includes("Allow us to post"));
 }
 
 {
@@ -68,8 +68,8 @@ function stageFor(
     automationAuthorized: true,
   });
   eq("authorized Facebook Page feed is ready", stage.state, "connected_ready");
-  eq("authorized label is explicit", stage.label, "Connected + authorized");
-  eq("authorized next action points to Get online", stage.nextActionLabel, "Use from Get online");
+  eq("authorized label is explicit", stage.label, "Ready");
+  eq("authorized next action points to Get online", stage.nextActionLabel, "Use it from your sites");
   ok("authorized stage counts as ready", stage.countsAsReady === true);
 }
 
@@ -99,7 +99,7 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
         accountStatus: "connected",
         automationAuthorized: false,
       }),
-      actionLabel: "Authorize auto-post",
+      actionLabel: "Allow us to post",
     },
     {
       channel: "kijiji",
@@ -111,13 +111,13 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
       channel: "zumper",
       label: "Zumper + PadMapper",
       stage: stageFor("zumper", { accountStatus: "needs_payment" }),
-      actionLabel: "Finish setup/payment",
+      actionLabel: "Finish setup",
     },
     {
       channel: "rentals_ca",
       label: "Rentals.ca",
       stage: stageFor("rentals_ca", { hasFeedRoute: true }),
-      actionLabel: "Use from Get online",
+      actionLabel: "Use it from your sites",
     },
     {
       channel: "realtor_ca",
@@ -136,8 +136,8 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
   );
   eq("authorization bucket preserves channel label", groups[0]?.items[0]?.label, "Facebook Page feed");
   eq("sign-in bucket next action is explicit", groups[1]?.items[0]?.stage.nextActionLabel, "Refresh sign-in");
-  eq("setup bucket next action is explicit", groups[2]?.items[0]?.stage.nextActionLabel, "Finish setup/payment");
-  eq("ready bucket points back to Get online", groups[3]?.items[0]?.stage.nextActionLabel, "Use from Get online");
+  eq("setup bucket next action is explicit", groups[2]?.items[0]?.stage.nextActionLabel, "Finish setup");
+  eq("ready bucket points back to Get online", groups[3]?.items[0]?.stage.nextActionLabel, "Use it from your sites");
   eq("planned bucket includes broker routes", groups[4]?.items[0]?.stage.state, "broker_route");
 }
 
@@ -147,7 +147,7 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
       channel: "rentals_ca",
       label: "Rentals.ca",
       stage: stageFor("rentals_ca", { hasFeedRoute: true }),
-      actionLabel: "Use from Get online",
+      actionLabel: "Use it from your sites",
     },
     {
       channel: "realtor_ca",
@@ -176,7 +176,7 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
         accountStatus: "connected",
         automationAuthorized: false,
       }),
-      actionLabel: "Authorize auto-post",
+      actionLabel: "Allow us to post",
     },
     {
       channel: "kijiji",
@@ -200,7 +200,7 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
       }),
       fallbackActionLabel: "Approve API post",
     }),
-    "Authorize auto-post",
+    "Allow us to post",
   );
   eq(
     "checklist points ready channels back to Get online",
@@ -208,7 +208,7 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
       stage: stageFor("rentals_ca", { hasFeedRoute: true }),
       fallbackActionLabel: "Confirm feed route",
     }),
-    "Use from Get online",
+    "Use it from your sites",
   );
   eq(
     "checklist uses portal action for planned routes",
@@ -222,18 +222,18 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
 
 {
   const stage = stageFor("rentfaster");
-  ok("planned RentFaster names paid assist", stage.helper.includes("paid posting assist"));
-  ok("planned RentFaster keeps payment approval gate", stage.helper.includes("approve before paying"));
-  ok("planned RentFaster keeps proof gate", stage.helper.includes("live ad URL as proof"));
+  ok("planned RentFaster names the fee", stage.helper.includes("charges a fee"));
+  ok("planned RentFaster keeps payment approval gate", stage.helper.includes("you approve it and pay the site"));
+  ok("planned RentFaster is not offered as ready", stage.helper.startsWith("Not yet"));
   ok("planned RentFaster cannot connect from Settings", stage.canConnect === false);
 }
 
 {
   const stage = stageFor("facebook");
-  ok("planned Marketplace names posting assist", stage.helper.includes("Posting assist can prepare"));
-  ok("planned Marketplace keeps operator sign-in gate", stage.helper.includes("signed-in operator"));
-  ok("planned Marketplace keeps proof gate", stage.helper.includes("live ad URL as proof"));
-  ok("planned Marketplace helper does not mention payment", !stage.helper.includes("paid posting assist"));
+  ok("planned Marketplace says we write the ad", stage.helper.includes("We write the ad"));
+  ok("planned Marketplace keeps operator sign-in gate", stage.helper.includes("you sign in and post it"));
+  ok("planned Marketplace is not offered as ready", stage.helper.startsWith("Not yet"));
+  ok("planned Marketplace helper does not mention payment", !stage.helper.includes("charges a fee"));
 }
 
 const settingsSource = readFileSync("app/dashboard/settings/page.tsx", "utf8");

@@ -132,7 +132,7 @@ async function main() {
     channelTileLine("nope", "not_available_yet") ===
       "This channel is not available for connected posting yet.",
   );
-  ok("channelByKey sanity", channelByKey("facebook_feed")?.label === "Facebook Page feed");
+  ok("channelByKey sanity", channelByKey("facebook_feed")?.label === "Facebook Page");
 
   console.log(`\nchannel-tile-status-readmodel: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

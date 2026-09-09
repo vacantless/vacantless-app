@@ -135,7 +135,7 @@ sameArray(
   sameArray(
     "destinations use distribution-channel display labels",
     rows.map((row) => row.label),
-    ["Instagram", "Facebook Page feed"],
+    ["Instagram", "Facebook Page"],
   );
 }
 

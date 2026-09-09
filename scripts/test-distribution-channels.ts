@@ -107,7 +107,7 @@ ok(
 );
 ok(
   "share and social group order",
-  displayGroups[1]?.group.title === "Share & social" &&
+  displayGroups[1]?.group.title === "Share it yourself" &&
     displayGroups[1]?.channels.map((channel) => channel.key).join("|") ===
       "facebook_feed|instagram|whatsapp|linkedin|snapchat",
 );
@@ -123,7 +123,7 @@ ok(
 ok(
   "whatsapp lands in share and social",
   distributionChannelDisplayGroupFor(channelByKey("whatsapp")!.category).title ===
-    "Share & social",
+    "Share it yourself",
 );
 
 // Every channel keeps its wiring coherent.
@@ -224,7 +224,7 @@ ok("facebook is assisted_manual", channelByKey("facebook")?.mode === "assisted_m
 ok("linkedin is assisted_manual", channelByKey("linkedin")?.mode === "assisted_manual");
 ok("instagram copyKey = instagram", channelByKey("instagram")?.copyKey === "instagram");
 ok("instagram is API posting", channelByKey("instagram")?.mode === "api_automatic");
-ok("facebook feed is separate from Marketplace", channelByKey("facebook_feed")?.label === "Facebook Page feed");
+ok("facebook feed is separate from Marketplace", channelByKey("facebook_feed")?.label === "Facebook Page");
 ok("facebook feed is API posting", channelByKey("facebook_feed")?.mode === "api_automatic");
 ok("whatsapp uses posting assist", channelByKey("whatsapp")?.mode === "assisted_manual");
 ok("snapchat is NOT feed-eligible", channelByKey("snapchat")?.feedEligible === false);
@@ -248,7 +248,7 @@ ok("spacelist is commercial-only planned assist", channelByKey("spacelist")?.int
 ok("spacelist has no residential copy profile", channelByKey("spacelist")?.copyKey === null);
 ok("costar_loopnet is paid-exposure planned assist", channelByKey("costar_loopnet")?.integrationStatus === "planned" && channelByKey("costar_loopnet")?.paid === true);
 ok("costar_loopnet has no residential copy profile", channelByKey("costar_loopnet")?.copyKey === null);
-ok("costar_loopnet names 5+ multifamily inventory", /5\+ multifamily/.test(channelByKey("costar_loopnet")?.blurb ?? ""));
+ok("costar_loopnet names commercial buildings only inventory", /commercial buildings only/.test(channelByKey("costar_loopnet")?.blurb ?? ""));
 ok(
   "facebook is explicit Get online posting assist",
   getOnlineAssistKindForChannel(channelByKey("facebook")!) ===
@@ -342,11 +342,11 @@ ok(
 );
 
 // --- labels ----------------------------------------------------------------
-ok("modeLabel broker", channelModeLabel("broker") === "Broker / MLS");
-ok("modeLabel junk -> default", channelModeLabel("???") === "Posting assist");
+ok("modeLabel broker", channelModeLabel("broker") === "Broker or MLS");
+ok("modeLabel junk -> default", channelModeLabel("???") === "We help you post");
 ok("statusLabel posted", channelStatusLabel("posted") === "Posted");
 ok("statusLabel needs_refresh", channelStatusLabel("needs_refresh") === "Needs refresh");
-ok("statusLabel junk -> Not started", channelStatusLabel("???") === "Not started");
+ok("statusLabel junk -> Not posted yet", channelStatusLabel("???") === "Not posted yet");
 ok("5 status values", CHANNEL_STATUS_VALUES.length === 5);
 ok("tone posted = positive", channelStatusTone("posted") === "positive");
 ok("tone needs_refresh = warning", channelStatusTone("needs_refresh") === "warning");
