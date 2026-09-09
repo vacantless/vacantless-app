@@ -398,8 +398,18 @@ export function extractFromSource(file: string, code: string): Candidate[] {
   const out: Candidate[] = [];
   const seen = new Set<string>();
 
-  const push = (node: ts.Node, text: string) => {
-    const trimmed = decodeEntities(text).replace(/\s+/g, " ").trim();
+  // A newline inside a string literal is a real line break the renter sees, so
+  // it must survive to the sentence splitter. A newline inside JSX text is just
+  // source wrapping, so collapsing it is what keeps a wrapped paragraph one
+  // sentence and stops the length rule going soft.
+  const push = (node: ts.Node, text: string, keepBreaks = false) => {
+    const decoded = decodeEntities(text);
+    const trimmed = keepBreaks
+      ? decoded
+          .replace(/[^\S\r\n]+/g, " ")
+          .replace(/[ \t]*\r?\n[ \t]*/g, "\n")
+          .trim()
+      : decoded.replace(/\s+/g, " ").trim();
     if (!looksLikeCopy(trimmed)) return;
     const where = `line ${lineOf(source, node)}`;
     const dedupe = `${where}|${trimmed}`;
@@ -420,13 +430,13 @@ export function extractFromSource(file: string, code: string): Candidate[] {
         isTypePosition(node) ||
         (attr !== null && TECH_JSX_ATTRS.has(attr)) ||
         (key !== null && TECH_PROP_KEYS.has(key));
-      if (!skip) push(node, node.text);
+      if (!skip) push(node, node.text, true);
     } else if (ts.isTemplateExpression(node)) {
       if (!isInsideConsoleCall(node)) {
         const joined = [node.head.text, ...node.templateSpans.map((s) => s.literal.text)].join(
           " {value} ",
         );
-        push(node, joined);
+        push(node, joined, true);
       }
     }
     ts.forEachChild(node, visit);
@@ -583,7 +593,25 @@ function runSeededAssertions() {
   eq("stripIcu collapses a plural block", stripIcu("{count, plural, one {# left} other {# left}} today"), "value today");
   eq("decimal is not a full stop", splitSentences("It costs $29.95 each time.").length, 1);
   eq("ellipsis is one break", splitSentences("Saving... Almost there.").length, 2);
+  const tooLongSentences = (text: string) =>
+    checkPlainLanguage(text).filter((f) => f.rule === "sentence_length");
   eq("two sentences split", splitSentences("Posted Sep 7. See your ad.").length, 2);
+  // A line break ends a sentence. A paste sample or a stacked label is not one
+  // run-on sentence, and measuring it as one gives the writer nothing to fix.
+  eq("line break ends a sentence", splitSentences("Address: 123 Main St\nRent: $1,950").length, 2);
+  eq(
+    "multi line sample is measured per line",
+    tooLongSentences("Paste it here, e.g.\nAddress: 123 Main St, Unit 4\nList Price: $1,950 Monthly\nBedrooms: 2").length,
+    0,
+  );
+  eq(
+    "a real run-on still fails across a line break",
+    tooLongSentences(
+      "This one sentence keeps going and going and going and going and going past the gate\nshort tail",
+    ).length,
+    1,
+  );
+  eq("blank lines do not make empty sentences", splitSentences("One.\n\n\nTwo.").length, 2);
   eq("word count ignores punctuation", countWords("Free for 5 listings."), 4);
   eq("acronym alone is not shouting", rulesOf("MLS").length, 0);
   eq("brand alone is quiet", rulesOf("Vacantless").length, 0);
@@ -863,6 +891,38 @@ function runSeededAssertions() {
   const got = extractFromSource("sample.tsx", sample);
   ok("extractor finds the JSX sentence", got.some((c) => c.text.startsWith("Nothing is posted")));
   ok("extractor skips the class list", !got.some((c) => c.text.includes("items-center")));
+
+  // The two newline kinds, held apart. A wrapped JSX paragraph must stay ONE
+  // sentence or the length rule goes soft; a \n inside a string literal is a
+  // real break the renter sees and must split.
+  {
+    const wrapped = extractFromSource(
+      "w.tsx",
+      "const A = () => (\n  <p>\n    This one paragraph is wrapped across several source lines and keeps\n    going well past the fourteen word gate on purpose.\n  </p>\n);\n",
+    );
+    const para = wrapped.find((c) => c.text.startsWith("This one paragraph"));
+    ok("wrapped JSX text is found", Boolean(para));
+    eq("wrapped JSX text stays one sentence", splitSentences(para?.text ?? "").length, 1);
+    eq(
+      "wrapped JSX run-on still fails the length rule",
+      tooLongSentences(para?.text ?? "").length,
+      1,
+    );
+  }
+  {
+    const literal = extractFromSource(
+      "s.tsx",
+      'const p = "Paste it here, e.g.\\nAddress: 123 Main St, Unit 4\\nRent: 1950 a month";\n',
+    );
+    const found = literal.find((c) => c.text.startsWith("Paste it here"));
+    ok("string literal candidate is found", Boolean(found));
+    ok("string literal keeps its line breaks", (found?.text ?? "").includes("\n"));
+    eq(
+      "string literal sample is measured per line",
+      tooLongSentences(found?.text ?? "").length,
+      0,
+    );
+  }
 }
 
 /**

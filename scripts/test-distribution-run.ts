@@ -462,8 +462,11 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "properties list opens mobile launch queue entry points",
-    propertiesSource.includes("Ready for Set Live") &&
-      propertiesSource.includes("Get online") &&
+    // S694 WP2: the labels moved to the word contract ("Ready to post", "Post").
+    // The thing guarded is unchanged: the list still surfaces the queue entry
+    // points, so the assertion is re-pointed rather than dropped.
+    propertiesSource.includes('label: "Ready to post"') &&
+      propertiesSource.includes('action: "Post"') &&
       propertiesSource.includes("Live on ${pluralize(livePostCount"),
   );
   const readinessChipsSource = readFileSync(

@@ -61,7 +61,7 @@ type RentalLaunchState = {
  * operator's behalf. Exact wording is Noam's.
  */
 const POSTING_SAFETY_PROMISE =
-  "Nothing is posted automatically. You approve outside-site posts, paid steps, and live proof.";
+  "You approve every post before it goes out. You also approve the site's fee and the link to your ad.";
 
 const LAUNCH_STATE_CLASS: Record<RentalLaunchState["tone"], string> = {
   ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -120,7 +120,7 @@ function rentalLaunchState({
 
   if (row.status === "leased") {
     return {
-      label: "Leased",
+      label: "Rented",
       detail: "Closed to inquiries",
       action: "Review",
       href: `/dashboard/properties/${row.id}`,
@@ -141,8 +141,8 @@ function rentalLaunchState({
   if (missing.length > 0) {
     return {
       label: `${pluralize(missing.length, "detail")} missing`,
-      detail: `${pluralize(missing.length, "detail")} before launch`,
-      action: "Get online",
+      detail: `${pluralize(missing.length, "detail")} before you post`,
+      action: "Post",
       href: distributionHref,
       tone: "warn",
     };
@@ -153,7 +153,7 @@ function rentalLaunchState({
     return {
       label: "Needs photos",
       detail: "Add photos on the way to posting",
-      action: "Get online",
+      action: "Post",
       href: distributionHref,
       tone: "warn",
     };
@@ -162,7 +162,7 @@ function rentalLaunchState({
   if (warning?.key === "viewings") {
     return {
       label: "Needs viewings",
-      detail: "Set viewing windows before launch",
+      detail: "Set viewing windows before you post",
       action: "Set viewings",
       href: "/dashboard/availability",
       tone: "warn",
@@ -171,9 +171,9 @@ function rentalLaunchState({
 
   if (warning?.key === "feed") {
     return {
-      label: "Needs listing details",
-      detail: "Fix the listing details before posting",
-      action: "Get online",
+      label: "Finish your listing",
+      detail: "Fix your listing before you post",
+      action: "Post",
       href: distributionHref,
       tone: "warn",
     };
@@ -181,9 +181,9 @@ function rentalLaunchState({
 
   if (!isPublicBookable(row.status)) {
     return {
-      label: "Ready for Set Live",
-      detail: "Set Live, then post it to the rental sites",
-      action: "Get online",
+      label: "Ready to post",
+      detail: "Post it to the rental sites",
+      action: "Post",
       href: distributionHref,
       tone: "ready",
     };
@@ -202,7 +202,7 @@ function rentalLaunchState({
   return {
     label: "Not on any rental site yet",
     detail: "Post it to the rental sites",
-    action: "Get online",
+    action: "Post",
     href: distributionHref,
     tone: "ready",
   };
@@ -367,7 +367,7 @@ export default async function PropertiesPage({
             ? {
                 tone: "amber",
                 text:
-                  "That listing now has inquiries or history — we archived nothing; use Archive instead.",
+                  "That listing now has inquiries or history. Use Archive instead.",
               }
             : null;
   const noticeClass =
@@ -397,16 +397,16 @@ export default async function PropertiesPage({
 
       {searchParams.added && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          Property added as a draft. Open it to add photos and details, then set
-          it Live to share its public inquiry page.
+          Property added as a draft. Open it to add photos and details. Post it
+          to share your inquiry link.
         </p>
       )}
 
       {searchParams.import === "empty" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Couldn&apos;t read any listing details from that text. Paste the
-          listing from MLS or realtor.ca (address, rent, beds, baths, remarks),
-          or add it manually with &ldquo;Start fresh.&rdquo;
+          Couldn&apos;t read your listing from that text. Paste the listing
+          from MLS or realtor.ca. Include address, rent, beds, baths and
+          remarks. You can also enter it yourself.
         </p>
       )}
       {searchParams.import === "failed" && (
@@ -416,27 +416,26 @@ export default async function PropertiesPage({
       )}
       {searchParams.import === "badimage" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Those files weren&apos;t usable images. Upload a JPG, PNG, WebP, or GIF
-          screenshot or photo of the listing (up to 8 MB each).
+          Those files weren&apos;t usable images. Upload a JPG, PNG, WebP or GIF
+          photo of the listing. Each one can be up to 8 MB.
         </p>
       )}
       {searchParams.import === "aiempty" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Couldn&apos;t read any listing details from those images. Try a clearer
-          shot, or add it manually with &ldquo;Start fresh.&rdquo;
+          Couldn&apos;t read your listing from those images. Try a clearer
+          shot, or enter it yourself.
         </p>
       )}
       {searchParams.import === "aifailed" && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           Reading the images didn&apos;t work just now. Please try again in a
-          moment, or add it manually with &ldquo;Start fresh.&rdquo;
+          moment, or enter it yourself.
         </p>
       )}
       {searchParams.import === "unavailable" && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Image import isn&apos;t available on your plan right now. Add it
-          manually with &ldquo;Start fresh,&rdquo; or import it from MLS or
-          realtor.ca.
+          Image import is not part of your subscription right now. Enter it
+          yourself, or import it from MLS or realtor.ca.
         </p>
       )}
       {notice && (
@@ -469,8 +468,8 @@ export default async function PropertiesPage({
               <span className="font-medium text-gray-900">
                 Building standard policy
               </span>{" "}
-              — set lease term, A/C, smoking, and on-site management once; every
-              unit inherits it.
+              . Set lease term, air conditioning, smoking and on-site
+              management once. Every unit inherits it.
             </span>
           </span>
           <span className="shrink-0 font-medium text-brand">Manage →</span>
@@ -500,7 +499,7 @@ export default async function PropertiesPage({
                 : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
             }`}
           >
-            Archived ({archivedRows.length})
+            Archived: {archivedRows.length}
           </Link>
         </nav>
       )}
@@ -590,7 +589,7 @@ export default async function PropertiesPage({
                   <>
                     <span className="text-xs text-gray-400">
                       {p.status === "leased"
-                        ? "Leased - page shows unavailable"
+                        ? "Rented - page shows unavailable"
                         : "Paused - not accepting inquiries"}
                     </span>
                     <Link
@@ -653,7 +652,7 @@ export default async function PropertiesPage({
           <EmptyState
             icon={<Icons.building />}
             title="No properties yet"
-            description="Add your first property to create its public inquiry page and start collecting inquiries - it takes a couple of minutes."
+            description="Add your first property to create your inquiry link. Renters can then write to you. It takes a couple of minutes."
             cta={{
               href: addPropertyV2Enabled ? "/dashboard/properties/new" : "#add-rental",
               label: "Add your first property",
@@ -689,7 +688,7 @@ export default async function PropertiesPage({
           <span>
             <span className="font-semibold text-gray-900">Add a property</span>
             <span className="ml-2 text-xs text-gray-500">
-              Start fresh or import MLS/realtor.ca
+              Enter it yourself, or import from MLS or realtor.ca
             </span>
           </span>
           <span className="shrink-0 text-xs font-semibold text-brand">
@@ -706,11 +705,11 @@ export default async function PropertiesPage({
           MLS / realtor.ca import is demoted to the collapsible below, one click
           away, never the only or the first way in. */}
       <p className="mb-1 text-sm font-medium text-gray-800">
-        Start fresh: enter the details yourself
+        Enter it yourself
       </p>
       <p className="mb-3 text-xs text-gray-500">
-        Just an address creates a Draft; add rent, beds, baths, and photos now or
-        later. Nothing goes public until you set it Live.
+        Just an address creates a draft. Add rent, beds, baths and photos now
+        or later. Your listing goes public only when you post it.
       </p>
 
       <form
@@ -735,7 +734,7 @@ export default async function PropertiesPage({
         </div>
         <div className="w-28">
           <label htmlFor="add_rent" className="mb-1 block text-xs font-medium text-gray-600">
-            Rent ($/mo)
+            Rent per month
           </label>
           <input
             id="add_rent"
@@ -776,8 +775,8 @@ export default async function PropertiesPage({
           <label htmlFor="add_photos" className="mb-1 block text-xs font-medium text-gray-600">
             Photos{" "}
             <span className="font-normal text-gray-400">
-              (optional — add them now so it&apos;s ready to share the moment you
-              publish, or add them later)
+              Optional. Add them now so it is ready to share when you post.
+              You can also add them later.
             </span>
           </label>
           <input
@@ -823,17 +822,16 @@ export default async function PropertiesPage({
               Drop the data sheet or paste the listing to prefill
             </label>
             <p className="mb-3 text-xs text-gray-500">
-              Drop the realtor data-sheet PDF you downloaded or emailed yourself,
-              or paste the listing text (address, rent, beds/baths, square
-              footage, remarks) — the whole realtor.ca page or a full MLS agent
-              data sheet both work. We&apos;ll create a Draft with the details
-              filled in for you to review; nothing goes public until you set it
-              Live. Photos don&apos;t come across, so you&apos;ll add those after.
-              Your own listing only; we don&apos;t pull from MLS.
+              Drop the realtor data sheet you saved, or paste the listing text.
+              Include address, rent, beds, baths, square footage and remarks.
+              A whole realtor.ca page works. A full MLS agent data sheet works
+              too. We create a draft for you to review. Your listing goes public
+              only when you post it. Photos do not come across, so add those
+              after. Use your own listing only. We do not pull from MLS.
             </p>
             <MlsPdfImport
               placeholder={
-                "Paste your MLS or realtor.ca listing here, e.g.\nAddress: 123 Main St, Unit 4\nList Price: $1,950/Monthly\nBedrooms: 2\nBathrooms: 1\nRemarks: Bright two-bedroom with in-suite laundry..."
+                "Paste your MLS or realtor.ca listing here, e.g.\nAddress: 123 Main St, Unit 4\nList Price: $1,950 a month\nBedrooms: 2\nBathrooms: 1\nRemarks: Bright two-bedroom with in-suite laundry..."
               }
             />
           </form>
@@ -852,10 +850,10 @@ export default async function PropertiesPage({
                 Only have a picture of the listing? Upload it to prefill
               </p>
               <p className="mb-3 text-xs text-gray-500">
-                A screenshot of a Facebook or Kijiji post, a photo of a flyer, or
-                a saved listing image, and we read the details into a Draft for
-                you to review. Photos don&apos;t come across, so you&apos;ll add
-                those after. Your own listing only.
+                Use a screenshot of a Facebook or Kijiji post. A photo of a
+                flyer works too, or a saved listing image. We read it into a
+                draft for you to review. Photos do not come across, so add those after. Use
+                your own listing only.
               </p>
               <ListingImageImport />
             </form>

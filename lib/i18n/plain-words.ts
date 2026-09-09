@@ -334,8 +334,21 @@ const ABBREVIATIONS = new Set([
   "no",
 ]);
 
+/**
+ * A line break ends a sentence. Without this every multi-line string (a paste
+ * sample, a stacked label, an address block) collapses into one run-on
+ * "sentence" and trips the length rule for reasons a writer cannot act on.
+ */
 export function splitSentences(text: string): string[] {
-  const normalized = stripIcu(text).replace(/\s+/g, " ").trim();
+  const out: string[] = [];
+  for (const line of stripIcu(text).split(/[\r\n]+/)) {
+    out.push(...splitLineSentences(line));
+  }
+  return out;
+}
+
+function splitLineSentences(text: string): string[] {
+  const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return [];
   const parts: string[] = [];
   let current = "";
