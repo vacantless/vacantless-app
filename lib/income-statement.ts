@@ -9,6 +9,13 @@
 // rent_payments (cash basis: paid_on). Costs come from work_orders + expenses
 // mapped to WorkOrderCostRow (actual basis: completed_on / incurred_on). No
 // rows are inserted, updated, or deleted here.
+//
+// v2 adds the BUILDING TIER. A cost scoped to a building (property tax, water,
+// gas, the roof) belongs to no single unit, so it is held out of the per-unit
+// rows and carried on its building instead, with the units nested underneath and
+// a subtotal of the two. It is deliberately NOT pro-rated across the units: an
+// allocated figure is an estimate, and every per-unit number here is meant to be
+// literally true. Same rule, same shape as buildOwnerStatement's `buildings`.
 
 import {
   describeRange,
@@ -28,6 +35,7 @@ import {
   workOrderScope,
   type WorkOrderCostRow,
 } from "./work-orders";
+import { splitAddressUnit } from "./address-unit";
 
 export type IncomeStatementRow = {
   propertyId: string | null;
@@ -49,16 +57,76 @@ export type IncomeStatementCategoryRow = {
   count: number;
 };
 
+/**
+ * The building-wide (shared) half of a building tier: costs that belong to the
+ * BUILDING and not to any one unit: property tax, water, gas, insurance, the
+ * roof. They are deliberately NOT pro-rated onto the units, for the same reason
+ * the owner statement does not pro-rate: an allocated figure is an estimate, and
+ * every per-unit number in this report is meant to be literally true. The unit
+ * rows and this line add up to the building subtotal.
+ */
+export type IncomeStatementShared = {
+  operatingExpensesCents: number;
+  interestCents: number;
+  principalCents: number;
+  expenseCount: number;
+};
+
+/**
+ * A building tier: the per-unit rows nested under one building, the building-wide
+ * shared line, and the subtotal of the two. `buildingKey == null` is the catch-all
+ * "Unassigned / overhead" bucket for rent or costs tied to neither a unit nor a
+ * building. A unit whose property carries no building key stands alone under a
+ * synthetic key so it is never merged into overhead.
+ */
+export type IncomeStatementBuildingRow = {
+  buildingKey: string | null;
+  label: string;
+  unitRows: IncomeStatementRow[];
+  shared: IncomeStatementShared;
+  revenueCents: number;
+  operatingExpensesCents: number;
+  noiCents: number;
+  interestCents: number;
+  netIncomeCents: number;
+  principalCents: number;
+  netCashCents: number;
+  rentCount: number;
+  expenseCount: number;
+};
+
 export type IncomeStatement = {
   range: DateRange;
   rows: IncomeStatementRow[];
+  /** Unit rows nested under their building, with the shared line and subtotal. */
+  buildings: IncomeStatementBuildingRow[];
   totals: IncomeStatementRow;
   operatingCategories: IncomeStatementCategoryRow[];
   financing: { interestCents: number; principalCents: number };
   hasUnassigned: boolean;
+  /** True when any building carries a building-wide cost this period. */
+  hasBuildingShared: boolean;
 };
 
+/**
+ * True when a building group is really just ONE standalone unit: a single unit
+ * row, no siblings, and no building-wide cost. Renderers show these as one column
+ * instead of a building header plus a nested unit column for identical figures.
+ * The overhead bucket (buildingKey == null) is excluded: it is a catch-all, not a
+ * building.
+ */
+export function isStandaloneUnit(b: IncomeStatementBuildingRow): boolean {
+  return (
+    b.buildingKey != null &&
+    b.unitRows.length === 1 &&
+    b.shared.operatingExpensesCents === 0 &&
+    b.shared.interestCents === 0 &&
+    b.shared.principalCents === 0
+  );
+}
+
 const UNASSIGNED_LABEL = "Unassigned";
+const OVERHEAD_LABEL = "Unassigned / overhead";
 const TOTAL_LABEL = "Total";
 
 type CostAccumulator = {
@@ -150,17 +218,31 @@ export function buildIncomeStatement(
   const rentBuckets = groupRentByProperty(rentRows, range);
   const rentByProperty = new Map(rentBuckets.map((b) => [b.propertyId, b]));
   const costByProperty = new Map<string | null, CostAccumulator>();
+  const sharedByBuilding = new Map<string, CostAccumulator>();
   const operatingByCategory = new Map<string, { totalCents: number; count: number }>();
 
   const totalsCost = emptyCostAccumulator();
   for (const row of costRows) {
     if (!costInRange(row, range)) continue;
     const cents = row.cost_cents ?? 0;
-    const key = statementPropertyKey(row);
-    const propertyCosts = costByProperty.get(key) ?? emptyCostAccumulator();
-    addCost(propertyCosts, row.category, cents);
     addCost(totalsCost, row.category, cents);
-    costByProperty.set(key, propertyCosts);
+
+    // A building-scoped cost is held OUT of the per-unit rows and carried on the
+    // building tier instead. Before v2 it fell into "Unassigned", which put a
+    // triplex's property tax and water bills in the same bucket as costs that
+    // belong to no property at all, and left every unit row showing revenue with
+    // no costs beneath it.
+    const buildingKey = typeof row.building_key === "string" ? row.building_key.trim() : "";
+    if (workOrderScope(row) === "building" && buildingKey) {
+      const sharedCosts = sharedByBuilding.get(buildingKey) ?? emptyCostAccumulator();
+      addCost(sharedCosts, row.category, cents);
+      sharedByBuilding.set(buildingKey, sharedCosts);
+    } else {
+      const key = statementPropertyKey(row);
+      const propertyCosts = costByProperty.get(key) ?? emptyCostAccumulator();
+      addCost(propertyCosts, row.category, cents);
+      costByProperty.set(key, propertyCosts);
+    }
 
     if (isOperatingCategory(row.category)) {
       const cur = operatingByCategory.get(row.category) ?? { totalCents: 0, count: 0 };
@@ -209,9 +291,97 @@ export function buildIncomeStatement(
     }))
     .sort((a, b) => b.totalCents - a.totalCents || categoryLabel(a.category).localeCompare(categoryLabel(b.category)));
 
+  // --- Building tier: nest the unit rows under their building, plus the shared
+  // line. Mirrors buildOwnerStatement's `buildings` tier so the two reports group
+  // the portfolio the same way. Shared costs are NOT pro-rated onto units.
+  const buildingLabelOf = new Map<string, string>();
+  for (const p of properties) {
+    const bk = p.buildingKey ?? null;
+    if (bk && !buildingLabelOf.has(bk)) {
+      buildingLabelOf.set(bk, splitAddressUnit(p.address).street ?? p.address);
+    }
+  }
+  const propBuildingKey = new Map(properties.map((p) => [p.id, p.buildingKey ?? null]));
+
+  type BuildingAcc = {
+    unitRows: IncomeStatementRow[];
+    shared: CostAccumulator;
+    label: string;
+  };
+  const buildingAcc = new Map<string | null, BuildingAcc>();
+  const ensureBuilding = (key: string | null, label: string): BuildingAcc => {
+    let a = buildingAcc.get(key);
+    if (!a) {
+      a = { unitRows: [], shared: emptyCostAccumulator(), label };
+      buildingAcc.set(key, a);
+    }
+    return a;
+  };
+
+  for (const row of rows) {
+    if (row.propertyId == null) {
+      ensureBuilding(null, OVERHEAD_LABEL).unitRows.push(row);
+      continue;
+    }
+    const bk = propBuildingKey.get(row.propertyId) ?? null;
+    if (bk) ensureBuilding(bk, buildingLabelOf.get(bk) ?? bk).unitRows.push(row);
+    // A unit with no building key stands alone under a synthetic key so it is
+    // never merged into the overhead bucket.
+    else ensureBuilding(`prop:${row.propertyId}`, row.address).unitRows.push(row);
+  }
+
+  for (const [bk, shared] of sharedByBuilding) {
+    ensureBuilding(bk, buildingLabelOf.get(bk) ?? bk).shared = shared;
+  }
+
+  const buildings: IncomeStatementBuildingRow[] = [...buildingAcc.entries()].map(([key, a]) => {
+    const unitRows = [...a.unitRows].sort((x, y) => {
+      if (x.propertyId == null) return 1;
+      if (y.propertyId == null) return -1;
+      return x.address.localeCompare(y.address);
+    });
+    const sum = (pick: (r: IncomeStatementRow) => number): number =>
+      unitRows.reduce((acc, r) => acc + pick(r), 0);
+
+    const revenueCents = sum((r) => r.revenueCents);
+    const operatingExpensesCents =
+      sum((r) => r.operatingExpensesCents) + a.shared.operatingExpensesCents;
+    const interestCents = sum((r) => r.interestCents) + a.shared.interestCents;
+    const principalCents = sum((r) => r.principalCents) + a.shared.principalCents;
+    const noiCents = revenueCents - operatingExpensesCents;
+    const netIncomeCents = noiCents - interestCents;
+
+    return {
+      buildingKey: key,
+      label: a.label,
+      unitRows,
+      shared: {
+        operatingExpensesCents: a.shared.operatingExpensesCents,
+        interestCents: a.shared.interestCents,
+        principalCents: a.shared.principalCents,
+        expenseCount: a.shared.expenseCount,
+      },
+      revenueCents,
+      operatingExpensesCents,
+      noiCents,
+      interestCents,
+      netIncomeCents,
+      principalCents,
+      netCashCents: netIncomeCents - principalCents,
+      rentCount: sum((r) => r.rentCount),
+      expenseCount: sum((r) => r.expenseCount) + a.shared.expenseCount,
+    };
+  });
+  buildings.sort((a, b) => {
+    if (a.buildingKey == null) return 1; // overhead bucket last
+    if (b.buildingKey == null) return -1;
+    return a.label.localeCompare(b.label);
+  });
+
   return {
     range,
     rows,
+    buildings,
     totals,
     operatingCategories,
     financing: {
@@ -219,6 +389,12 @@ export function buildIncomeStatement(
       principalCents: totals.principalCents,
     },
     hasUnassigned: rows.some((row) => row.propertyId == null),
+    hasBuildingShared: buildings.some(
+      (b) =>
+        b.shared.operatingExpensesCents !== 0 ||
+        b.shared.interestCents !== 0 ||
+        b.shared.principalCents !== 0,
+    ),
   };
 }
 
@@ -240,7 +416,7 @@ export function incomeStatementToCsv(statement: IncomeStatement): string {
   lines.push("");
 
   row([
-    "Property",
+    "Building / unit",
     "Rental revenue",
     "Operating expenses",
     "NOI",
@@ -251,9 +427,14 @@ export function incomeStatementToCsv(statement: IncomeStatement): string {
     "Rent payments",
     "Expense items",
   ]);
-  for (const r of statement.rows) {
+  // Grouped exactly like the table an owner reads: each building, its units
+  // indented beneath it, then the building-wide line. A single unit with no
+  // siblings and no shared cost is one line, not a header plus an identical
+  // child. The overhead bucket is a catch-all, not a building, so it gets no
+  // subtotal header. Building rows + overhead rows == TOTAL, so the table foots.
+  const csvRow = (label: string, r: IncomeStatementRow) =>
     row([
-      r.address,
+      label,
       dollars(r.revenueCents),
       dollars(r.operatingExpensesCents),
       dollars(r.noiCents),
@@ -264,6 +445,50 @@ export function incomeStatementToCsv(statement: IncomeStatement): string {
       r.rentCount,
       r.expenseCount,
     ]);
+
+  for (const b of statement.buildings) {
+    if (b.buildingKey == null) {
+      // Unassigned / overhead: flat, no subtotal line.
+      for (const u of b.unitRows) csvRow(u.address, u);
+      continue;
+    }
+    if (isStandaloneUnit(b)) {
+      csvRow(b.unitRows[0].address, b.unitRows[0]);
+      continue;
+    }
+    row([
+      b.label,
+      dollars(b.revenueCents),
+      dollars(b.operatingExpensesCents),
+      dollars(b.noiCents),
+      dollars(b.interestCents),
+      dollars(b.netIncomeCents),
+      dollars(b.principalCents),
+      dollars(b.netCashCents),
+      b.rentCount,
+      b.expenseCount,
+    ]);
+    for (const u of b.unitRows) csvRow(`  ${u.address}`, u);
+    if (
+      b.shared.operatingExpensesCents !== 0 ||
+      b.shared.interestCents !== 0 ||
+      b.shared.principalCents !== 0
+    ) {
+      const sharedNoi = -b.shared.operatingExpensesCents;
+      const sharedNet = sharedNoi - b.shared.interestCents;
+      row([
+        "  Building-wide (shared)",
+        dollars(0),
+        dollars(b.shared.operatingExpensesCents),
+        dollars(sharedNoi),
+        dollars(b.shared.interestCents),
+        dollars(sharedNet),
+        dollars(b.shared.principalCents),
+        dollars(sharedNet - b.shared.principalCents),
+        0,
+        b.shared.expenseCount,
+      ]);
+    }
   }
   row([
     "TOTAL",
@@ -277,6 +502,14 @@ export function incomeStatementToCsv(statement: IncomeStatement): string {
     statement.totals.rentCount,
     statement.totals.expenseCount,
   ]);
+
+  if (statement.hasBuildingShared) {
+    lines.push("");
+    row([
+      "Note",
+      "Building-wide costs are not split across the units; they sit on the building so every per-unit figure stays literally true.",
+    ]);
+  }
 
   lines.push("");
   row(["Operating expenses by category", "Amount", "Items"]);

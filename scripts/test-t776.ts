@@ -135,6 +135,31 @@ for (const row of statement.rows) {
   ok(`reconcile: ${row.address} T776 net = Slice B net income`, row.netBeforeAdjustmentsCents === incomeRow?.netIncomeCents);
 }
 
+// --- KNOWN DIVERGENCE: T776 has no building tier yet ------------------------
+// The loop above reconciles per property only because every cost in this
+// fixture is unit-scoped or unscoped. Once a BUILDING-scoped cost exists, the
+// income statement carries it on the building while T776 still buckets it into
+// its own Unassigned row, so the two files inside the accountant package
+// disagree per property even though the portfolio totals still agree. This is
+// pinned deliberately: it must be a decision to change it, not a drift.
+{
+  const BK = "77-shared-st";
+  const BPROP = "dddddddd-0000-0000-0000-000000000004";
+  const props: PropertyRef[] = [{ id: BPROP, address: "77 Shared St, Unit 1", buildingKey: BK }];
+  const rent: RentRow[] = [{ property_id: BPROP, amount_cents: 200000, paid_on: "2026-03-01" }];
+  const costs: WorkOrderCostRow[] = [
+    expenseToCostRow({ property_id: null, building_key: BK, category: "property_tax", amount_cents: 93819, incurred_on: "2026-03-02" }),
+  ];
+  const range = { from: "2026-01-01", to: "2026-12-31" };
+  const t = buildT776Statement(rent, costs, props, 2026);
+  const inc = buildIncomeStatement(rent, costs, props, range);
+
+  ok("divergence: portfolio net still reconciles", t.totals.netBeforeAdjustmentsCents === inc.totals.netIncomeCents);
+  ok("divergence: T776 puts the building cost in its Unassigned row", t.rows.some((r) => r.propertyId === null && r.totalExpensesCents === 93819));
+  ok("divergence: the income statement has no Unassigned row for it", !inc.rows.some((r) => r.propertyId === null));
+  ok("divergence: the income statement puts it on the building", inc.buildings.find((b) => b.buildingKey === BK)?.shared.operatingExpensesCents === 93819);
+}
+
 // --- CSV --------------------------------------------------------------------
 const csv = t776ToCsv(statement);
 ok("csv: title", csv.startsWith("T776 tax package"));

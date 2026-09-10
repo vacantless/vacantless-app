@@ -32,7 +32,10 @@ import {
 } from "@/lib/statements";
 import {
   buildIncomeStatement,
+  isStandaloneUnit,
   netMarginLabel,
+  type IncomeStatement,
+  type IncomeStatementBuildingRow,
   type IncomeStatementRow,
 } from "@/lib/income-statement";
 
@@ -82,7 +85,16 @@ function costInRange(row: WorkOrderCostRow, range: DateRange): boolean {
 }
 
 function propertyKey(row: WorkOrderCostRow): string {
-  return workOrderScope(row) === "unit" && row.property_id ? row.property_id : "__unassigned__";
+  if (workOrderScope(row) === "unit" && row.property_id) return row.property_id;
+  // A building-scoped cost belongs to its building's shared column, not to
+  // Unassigned. Must stay in step with the column keys built below.
+  if (workOrderScope(row) === "building" && row.building_key) {
+    // Trimmed to match the model, which buckets shared costs by the TRIMMED
+    // key. An untrimmed key here would look up a cell that does not exist and
+    // silently show zero on the category line while NOI showed the real cost.
+    return `shared:${row.building_key.trim()}`;
+  }
+  return "__unassigned__";
 }
 
 function categoryMatrix(costRows: WorkOrderCostRow[], range: DateRange): CategoryMatrix {
@@ -100,6 +112,51 @@ function categoryMatrix(costRows: WorkOrderCostRow[], range: DateRange): Categor
 
 function rowKey(row: IncomeStatementRow): string {
   return row.propertyId ?? "__unassigned__";
+}
+
+/**
+ * One column of the statement: a unit, a building's shared line, or the
+ * Unassigned catch-all. Columns come out grouped by building (each building's
+ * units, then its building-wide line), with Unassigned last, which is how the
+ * building tier reads in a table whose line items run down the side.
+ */
+type Column = { key: string; label: string; row: IncomeStatementRow };
+
+/** The building-wide costs presented as a column. No revenue lives here. */
+function sharedColumnRow(b: IncomeStatementBuildingRow): IncomeStatementRow {
+  const operatingExpensesCents = b.shared.operatingExpensesCents;
+  const noiCents = -operatingExpensesCents;
+  const netIncomeCents = noiCents - b.shared.interestCents;
+  return {
+    propertyId: null,
+    address: `${b.label} (building-wide)`,
+    revenueCents: 0,
+    operatingExpensesCents,
+    noiCents,
+    interestCents: b.shared.interestCents,
+    netIncomeCents,
+    principalCents: b.shared.principalCents,
+    netCashCents: netIncomeCents - b.shared.principalCents,
+    rentCount: 0,
+    expenseCount: b.shared.expenseCount,
+  };
+}
+
+function buildColumns(statement: IncomeStatement): Column[] {
+  const columns: Column[] = [];
+  for (const b of statement.buildings) {
+    for (const unit of b.unitRows) {
+      columns.push({ key: rowKey(unit), label: unit.address, row: unit });
+    }
+    if (b.buildingKey != null && !isStandaloneUnit(b)) {
+      columns.push({
+        key: `shared:${b.buildingKey}`,
+        label: `${b.label} (building-wide)`,
+        row: sharedColumnRow(b),
+      });
+    }
+  }
+  return columns;
 }
 
 function costCategoryLabel(category: string): string {
@@ -123,7 +180,7 @@ function MoneyCell({ cents, muted = false }: { cents: number; muted?: boolean })
 
 function LineRow({
   label,
-  rows,
+  columns,
   total,
   value,
   totalValue,
@@ -132,7 +189,7 @@ function LineRow({
   indented = false,
 }: {
   label: string;
-  rows: IncomeStatementRow[];
+  columns: Column[];
   total: IncomeStatementRow;
   value: (row: IncomeStatementRow) => number;
   totalValue?: number;
@@ -150,10 +207,38 @@ function LineRow({
       >
         {label}
       </td>
-      {rows.map((row) => (
-        <MoneyCell key={rowKey(row)} cents={value(row)} muted={muted} />
+      {columns.map((column) => (
+        <MoneyCell key={column.key} cents={value(column.row)} muted={muted} />
       ))}
       <MoneyCell cents={totalCents} muted={muted} />
+    </tr>
+  );
+}
+
+/**
+ * A per-category line. Cells are looked up by COLUMN key, not by the row's
+ * propertyId: a building-wide column carries propertyId null, which would
+ * otherwise collide with the Unassigned column and show one column's costs in
+ * both.
+ */
+function CategoryLineRow({
+  label,
+  columns,
+  cells,
+  totalCents,
+}: {
+  label: string;
+  columns: Column[];
+  cells: Map<string, number>;
+  totalCents: number;
+}) {
+  return (
+    <tr className="border-b border-gray-50 last:border-0">
+      <td className="sticky left-0 bg-white px-4 py-3 pl-8 text-sm text-gray-700">{label}</td>
+      {columns.map((column) => (
+        <MoneyCell key={column.key} cents={cells.get(column.key) ?? 0} />
+      ))}
+      <MoneyCell cents={totalCents} />
     </tr>
   );
 }
@@ -241,6 +326,7 @@ export default async function IncomeStatementPage({
   );
   const costRows: WorkOrderCostRow[] = [...woRows, ...expenseRows];
   const statement = buildIncomeStatement(rentRows, costRows, properties, range);
+  const columns = buildColumns(statement);
   const categoryCells = categoryMatrix(costRows, range);
 
   const showCustom = preset === "custom";
@@ -333,7 +419,7 @@ export default async function IncomeStatementPage({
             <EmptyState
               icon={<Icons.chart className="h-5 w-5" />}
               title="Nothing to report for this period"
-              description="No rent was collected and no expenses were logged in this range. Pick another period above, or log rent and expenses first — the statement fills in from what you record."
+              description="No rent was collected and no expenses were logged in this range. Pick another period above, or log rent and expenses first. The statement fills in from what you record."
               cta={{ href: "/dashboard/expenses", label: "Log expenses" }}
             />
           </div>
@@ -372,9 +458,9 @@ export default async function IncomeStatementPage({
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
                 <th className="sticky left-0 bg-white px-4 py-3 font-medium">Line item</th>
-                {statement.rows.map((row) => (
-                  <th key={rowKey(row)} className="px-4 py-3 text-right font-medium">
-                    {row.address}
+                {columns.map((column) => (
+                  <th key={column.key} className="px-4 py-3 text-right font-medium">
+                    {column.label}
                   </th>
                 ))}
                 <th className="px-4 py-3 text-right font-medium">Portfolio Total</th>
@@ -383,28 +469,26 @@ export default async function IncomeStatementPage({
             <tbody>
               <LineRow
                 label="Rental revenue"
-                rows={statement.rows}
+                columns={columns}
                 total={statement.totals}
                 value={(row) => row.revenueCents}
               />
               {statement.operatingCategories.map((category) => {
                 const cells = categoryCells.get(category.category) ?? new Map<string, number>();
                 return (
-                  <LineRow
+                  <CategoryLineRow
                     key={category.category}
                     label={costCategoryLabel(category.category)}
-                    rows={statement.rows}
-                    total={statement.totals}
-                    value={(row) => cells.get(rowKey(row)) ?? 0}
-                    totalValue={category.totalCents}
-                    indented
+                    columns={columns}
+                    cells={cells}
+                    totalCents={category.totalCents}
                   />
                 );
               })}
               {statement.operatingCategories.length === 0 && (
                 <LineRow
                   label="Operating expenses"
-                  rows={statement.rows}
+                  columns={columns}
                   total={statement.totals}
                   value={() => 0}
                   indented
@@ -412,34 +496,34 @@ export default async function IncomeStatementPage({
               )}
               <LineRow
                 label="Net operating income"
-                rows={statement.rows}
+                columns={columns}
                 total={statement.totals}
                 value={(row) => row.noiCents}
                 strong
               />
               <LineRow
                 label="Mortgage interest"
-                rows={statement.rows}
+                columns={columns}
                 total={statement.totals}
                 value={(row) => row.interestCents}
               />
               <LineRow
                 label="Net income"
-                rows={statement.rows}
+                columns={columns}
                 total={statement.totals}
                 value={(row) => row.netIncomeCents}
                 strong
               />
               <LineRow
                 label="Mortgage principal"
-                rows={statement.rows}
+                columns={columns}
                 total={statement.totals}
                 value={(row) => row.principalCents}
                 muted
               />
               <LineRow
                 label="Net cash after debt service"
-                rows={statement.rows}
+                columns={columns}
                 total={statement.totals}
                 value={(row) => row.netCashCents}
                 muted
@@ -448,11 +532,14 @@ export default async function IncomeStatementPage({
           </table>
         </Card>
         <p className="mt-2 text-xs text-gray-500">
-          Mortgage principal is a capital repayment, not an expense — only interest reduces net
+          Mortgage principal is a capital repayment, not an expense. Only interest reduces net
           income. If your mortgage payments include interest, split them with a category rule so
           your net income and T776 are accurate.
+          {statement.hasBuildingShared
+            ? " A building-wide column holds costs that belong to the whole building, such as property tax, water and gas. They are not split across the units, so every per-unit figure stays literally true."
+            : ""}
           {statement.hasUnassigned
-            ? " Unassigned includes rent or costs not tied to a unit; building-wide costs are bucketed there in this version."
+            ? " Unassigned holds rent or costs tied to neither a unit nor a building."
             : ""}
         </p>
       </div>
