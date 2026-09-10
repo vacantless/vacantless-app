@@ -397,8 +397,11 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   );
   ok(
     "posting proof missing URL return notice is explicit",
-    propertyDetailSource.includes("Live ad URL needed.") &&
-      propertyDetailSource.includes("Vacantless did not mark this channel Live"),
+    // S694g: wording moved to the word contract (ad URL -> the link to your
+    // ad, channel -> site). What is guarded, an explicit missing-link notice,
+    // is unchanged.
+    propertyDetailSource.includes("Live link to your ad needed.") &&
+      propertyDetailSource.includes("Vacantless did not mark this site Live"),
   );
   ok(
     "concierge rows do not render a broken posting-assist sidecar",

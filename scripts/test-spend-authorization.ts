@@ -157,7 +157,8 @@ ok(
 ok(
   "property page explains spend authorization failure",
   propertyPage.includes('searchParams.dist === "autopilot_spend_auth"') &&
-    propertyPage.includes("Authorize a standing paid-channel ceiling in Settings"),
+    // S694g: same notice, contract wording.
+    propertyPage.includes("Set a standing limit for site fees in Settings"),
 );
 ok(
   "approval modal copy no longer says approve equals fee consent",

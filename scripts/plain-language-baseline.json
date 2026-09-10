@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-09-09",
-  "checksum": "e0a54cbc94817bad399aa362b5d1c77bcbd14e2ec5d1d0216ea96db19ba12ea3",
+  "generated": "2026-09-10",
+  "checksum": "233b50211530a9159198c29701d44af9ae8f1c4d367f0bc1c74a454d5d15c1fd",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -82,10 +82,10 @@
     "app/dashboard/properties/[id]/lifecycle-rail.tsx\u0000banned_word": 1,
     "app/dashboard/properties/[id]/page.tsx\u0000all_caps": 2,
     "app/dashboard/properties/[id]/page.tsx\u0000ampersand_or_slash": 7,
-    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 117,
+    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 81,
     "app/dashboard/properties/[id]/page.tsx\u0000em_dash": 7,
     "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 21,
-    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 37,
+    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 36,
     "app/dashboard/properties/[id]/qa-checker.tsx\u0000negative_promise": 1,
     "app/dashboard/properties/[id]/qa-checker.tsx\u0000sentence_length": 1,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
@@ -589,12 +589,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Authorize a standing paid-channel ceiling in Settings, then approve this prepared post again.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Auto-posting authorized.",
       "count": 2
     },
@@ -603,12 +597,6 @@
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Auto-posting can only be authorized after the Facebook Page or Instagram account is connected.",
       "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Choose an eligible manual channel before handing it to Vacantless.",
-      "count": 1
     },
     {
       "rule": "banned_word",
@@ -685,12 +673,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Kijiji refreshes can run with the free worker path. Paid channels still need a separate approval.",
-      "count": 3
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Leased rentals must be explicitly relisted before publishing.",
       "count": 2
     },
@@ -698,12 +680,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Listing post removed.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Live ad URL needed.",
       "count": 1
     },
     {
@@ -733,12 +709,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Paid portals and unsupported channels still use the normal approval flow.",
-      "count": 4
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Paste an iGUIDE, Matterport, YouTube, or Vimeo link. It embeds on your listing page and rides along to the portals.",
       "count": 2
     },
@@ -757,18 +727,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Posting assist is not available here.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Posting assist is paused because this channel was handed to Vacantless for done-for-you posting.",
-      "count": 3
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Prepare it now; use Set Live at the top of the page before you post it.",
       "count": 1
     },
@@ -776,18 +734,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Prepare your posting reference here. Posting and tracking turn on in Get online once this property is Live and accepting inquiries.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Refresh the channel row and try the authorization again.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Refresh the checklist and check the channel status before saving the ad link again.",
       "count": 1
     },
     {
@@ -865,24 +811,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Start or reopen a publish checklist before saving the ad link.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "The connected account stays connected, but Vacantless will not publish there automatically.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "The desk owns this channel now.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "The external ad is marked removed in Vacantless and the take-down task is closed.",
       "count": 1
     },
@@ -895,43 +823,7 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This account will receive a post when you publish this listing and approve the destinations.",
-      "count": 3
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This channel cannot be auto-posted.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This channel is already being updated.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This channel is not ready for the desk.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This channel is now marked Live because a real ad URL was saved. The checklist progress and ad link update here.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "This public page can be previewed, but it tells renters the unit is unavailable and does not accept inquiries or viewing bookings.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This publish run is closed.",
       "count": 1
     },
     {
@@ -979,12 +871,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Try again from the Kijiji channel row.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Unit details",
       "count": 1
     },
@@ -1003,31 +889,7 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Use the checklist action for this channel, then save the ad link when the ad is live on the site.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Vacancy start unknown",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Vacantless did not mark this channel Live. After you post on the rental site, paste the real public ad URL.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Vacantless left the channel unfinished so it does not look Live without the ad link. Try saving the live ad URL again.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Vacantless will post this channel and keep the checklist updated.",
       "count": 1
     },
     {
@@ -1321,12 +1183,6 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "This account will receive a post when you publish this listing and approve the destinations.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "This public page can be previewed, but it tells renters the unit is unavailable and does not accept inquiries or viewing bookings.",
       "count": 1
     },
@@ -1352,18 +1208,6 @@
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Use Set Live at the top of the page to get your public link and QR code; the channel wording below is ready to prepare now.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Use the checklist action for this channel, then save the ad link when the ad is live on the site.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Vacantless left the channel unfinished so it does not look Live without the ad link. Try saving the live ad URL again.",
       "count": 1
     },
     {

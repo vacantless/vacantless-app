@@ -2283,14 +2283,14 @@ export default async function PropertyDetailPage({
           tone: "success",
           title: "Your ad is live.",
           body:
-            "This channel is now marked Live because a real ad URL was saved. The checklist progress and ad link update here.",
+            "This site is now marked Live because a real link to your ad was saved. The checklist progress and ad link update here.",
         }
       : searchParams.dist === "copilot_needsurl"
         ? {
             tone: "warning",
-            title: "Live ad URL needed.",
+            title: "Live link to your ad needed.",
             body:
-              "Vacantless did not mark this channel Live. After you post on the rental site, paste the real public ad URL.",
+              "Vacantless did not mark this site Live. After you post on the rental site, paste the real public link to your ad.",
           }
         : searchParams.dist === "copilot_prooffail" ||
             searchParams.dist === "copilot_trackerfail"
@@ -2298,35 +2298,35 @@ export default async function PropertyDetailPage({
               tone: "danger",
               title: "The ad link was not saved.",
               body:
-                "Vacantless left the channel unfinished so it does not look Live without the ad link. Try saving the live ad URL again.",
+                "Vacantless left the site unfinished so it does not look Live. Try saving the link to your ad again.",
             }
           : searchParams.dist === "copilot_run_closed"
             ? {
                 tone: "warning",
-                title: "This publish run is closed.",
+                title: "This posting run is closed.",
                 body:
-                  "Start or reopen a publish checklist before saving the ad link.",
+                  "Open or reopen a posting checklist before saving the link to your ad.",
               }
             : searchParams.dist === "copilot_concierge"
               ? {
                   tone: "info",
-                  title: "The desk owns this channel now.",
+                  title: "The desk owns this site now.",
                   body:
-                    "Posting assist is paused because this channel was handed to Vacantless for done-for-you posting.",
+                    "We post this site for you now, so the checklist action is paused here.",
                 }
               : searchParams.dist === "copilot_already"
                 ? {
                     tone: "info",
-                    title: "This channel is already being updated.",
+                    title: "This site is already being updated.",
                     body:
-                      "Refresh the checklist and check the channel status before saving the ad link again.",
+                      "Refresh the checklist and check the site status before saving the ad link again.",
                   }
                 : searchParams.dist === "copilot_channel"
                   ? {
                       tone: "warning",
-                      title: "Posting assist is not available here.",
+                      title: "We cannot post this one for you.",
                       body:
-                        "Use the checklist action for this channel, then save the ad link when the ad is live on the site.",
+                        "Use the checklist action for this site. Save the ad link once the ad is live.",
                     }
                   : null;
   const distributeRunNotice: DistributeRunNotice | null =
@@ -2336,14 +2336,14 @@ export default async function PropertyDetailPage({
           tone: "success",
           title: "Auto-posting authorized.",
           body:
-            "This account will receive a post when you publish this listing and approve the destinations.",
+            "This account gets a post when you post this listing and approve the sites.",
         }
       : searchParams.dist === "channel_auto_off"
         ? {
             tone: "info",
             title: "Auto-posting turned off.",
             body:
-              "The connected account stays connected, but Vacantless will not publish there automatically.",
+              "The account stays connected. Vacantless will not post there for you.",
           }
         : searchParams.dist === "channel_auto_connectfirst"
           ? {
@@ -2355,7 +2355,7 @@ export default async function PropertyDetailPage({
           : searchParams.dist === "channel_auto_badchannel"
             ? {
                 tone: "warning",
-                title: "This channel cannot be auto-posted.",
+                title: "This site cannot be auto-posted.",
                 body:
                   "Only Facebook Page feed and Instagram can use this authorization.",
               }
@@ -2363,14 +2363,14 @@ export default async function PropertyDetailPage({
               ? {
                   tone: "danger",
                   title: "Auto-posting was not saved.",
-                  body: "Refresh the channel row and try the authorization again.",
+                  body: "Refresh the site row and try the authorization again.",
                 }
               : searchParams.dist === "autopilot_spend_auth"
                 ? {
                     tone: "warning",
                     title: "Spend authorization needed.",
                     body:
-                      "Authorize a standing paid-channel ceiling in Settings, then approve this prepared post again.",
+                      "Set a standing limit for site fees in Settings. Then approve this prepared post again.",
                   }
               : searchParams.dist === "already_posted"
                 ? {
@@ -2384,7 +2384,7 @@ export default async function PropertyDetailPage({
           tone: "success",
           title: "Hands-off refreshes are on.",
           body:
-            "Kijiji refreshes can run with the free worker path. Paid channels still need a separate approval.",
+            "Kijiji refreshes can run on the free path. Paid sites still need your approval.",
         }
       : searchParams.dist === "radar_auto_off"
         ? {
@@ -2404,14 +2404,14 @@ export default async function PropertyDetailPage({
             ? {
                 tone: "danger",
                 title: "Refresh setting was not saved.",
-                body: "Try again from the Kijiji channel row.",
+                body: "Try again from the Kijiji site row.",
               }
             : searchParams.dist === "radar_badchannel"
               ? {
                   tone: "warning",
                   title: "Hands-off refresh is free Kijiji only.",
                   body:
-                    "Paid portals and unsupported channels still use the normal approval flow.",
+                    "Paid portals and unsupported sites still use the normal approval flow.",
                 }
               : searchParams.dist === "takedown_removed"
       ? {
@@ -2432,7 +2432,7 @@ export default async function PropertyDetailPage({
           tone: "success",
           title: "Handed to the desk.",
           body:
-            "Vacantless will post this channel and keep the checklist updated.",
+            "Vacantless will post this site and keep the checklist updated.",
         }
       : searchParams.run === "conciergeupgrade"
         ? {
@@ -2444,9 +2444,9 @@ export default async function PropertyDetailPage({
         : searchParams.run === "conciergeineligible"
           ? {
               tone: "warning",
-              title: "This channel is not ready for the desk.",
+              title: "This site is not ready for the desk.",
               body:
-                "Choose an eligible manual channel before handing it to Vacantless.",
+                "Choose an eligible manual site before handing it to Vacantless.",
             }
           : searchParams.run === "conciergeatcap"
             ? {
