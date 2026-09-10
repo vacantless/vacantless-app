@@ -113,10 +113,36 @@ Noam, after settling that he wanted a subscription rather than per-vacancy prici
 | `bank_connections` | 2 | 2 | 2026-07-05 |
 | `bank_transactions` | **112** | 2 | 2026-07-05 |
 | `categorization_rules` | **1** | 1 | 2026-07-05 |
-| `categorization_import_batches` | **0** | 0 | never |
+| `categorization_import_batches` | **0** | 0 | never (but 63 transactions carry `source='import'`, so the upload path DID run) |
 | `expenses` | 11 | 1 | 2026-07-20 |
 
-**The diagnosis.** On one day in July, two orgs connected banks and 112 real transactions arrived. Eleven became unit-tagged expenses. The other hundred sat. **The bottleneck is TRIAGE, not capture:** turning a bank line into a unit-tagged, categorized expense. With exactly one categorization rule on file, every transaction required a human decision, which is the data-entry problem the feed was supposed to remove. **The rules engine is the part that was never really built out.** The OFX upload path, the answer to the card-coverage gap, has never been used once.
+**CORRECTION 2, same day, after reading the ROWS instead of the counts.** The table above is true and the conclusion drawn from it was not. Breaking the 112 transactions down by org [verified 2026-09-10 via SQL]:
+
+| Org | `source` | Rows | Plaid sandbox fixtures | Canadian bank descriptors |
+|---|---|---|---|---|
+| Agile Real Estate Group | `live` | 49 | **27** | 0 |
+| Davis Muscovitch Rentals | `import` | 63 | 0 | 5+ |
+
+- **Agile's connection is marked `live` and is carrying Plaid SANDBOX data.** Madison Bicycle Shop, Touchstone Climbing, Gusto Pay 123456, United Airlines, KFC, Starbucks, "CD DEPOSIT .INITIAL." are Plaid's demo fixture set. **Agile has no real bank data in the system.**
+- **The only real transactions are 63 rows in Davis Muscovitch Rentals** (e-Transfers, mortgage, cheques, utility and insurance payments), and they arrived through **the file import path**, `source = 'import'`.
+- **An earlier claim in this doc that the OFX / upload path "has never been used once" was WRONG.** It was inferred from `categorization_import_batches` being empty without reading the transaction rows. The upload path works and carried 63 transactions. Withdrawn.
+
+**The corrected diagnosis.** There is no reservoir of real untriaged expense data. There is a working file-import path, a sandbox Plaid connection on the wrong org, 63 real rows in Noam's personal org, and 11 hand-assigned expenses from a July test. **The spine is unproven, not neglected.**
+
+**CORRECTION 3, and it is a segmentation finding, not a detail.** An earlier version of this line said to export a month of Agile's bank activity and triage ten Agile doors. **That is wrong and it violates a standing rule set 2026-07-29** ([[project_vacantless_agile_buildium_exclusion]]): **Agile Real Estate Group is property-managed through Buildium.** Noam runs their books there, not here. Agile is deliberately excluded from Vacantless landlord lifecycle work (compliance calendar, rent-increase nudges, landlord campaigns) and uses Vacantless for **leasing and showings only**. Noam, 2026-09-10: "I don't deal with Agile's expenses, Buildium does."
+
+**This splits the customer base, and the tiering above assumed one customer.**
+
+| | Segment A: managed portfolio | Segment B: self-managing landlord |
+|---|---|---|
+| Example | Agile Real Estate Group (10 doors, Buildium, staff) | Davis Muscovitch Rentals, Abbas Husain, Mahmood |
+| Already has | a PMS for money | nothing |
+| Buys | leasing, showings, **syndication** | **rent collection, expenses, year-end**, and leasing |
+| Evidence | Noam would pay $99 for ads handled | the only real bank rows in the system are in his own org |
+
+**The money spine cannot be tested on Agile at all.** Its pilots are non-Agile by necessity: **Davis Muscovitch Rentals**, which already holds the only 63 real imported transactions and 506 Manning, and **Mahmood at 1 Bloor 3701** for rent collection in January.
+
+**The corrected next move:** run triage against **Davis Muscovitch Rentals**, on the 63 real transactions already loaded, and see whether it produces a clean per-unit income statement for 506 Manning. No import needed, no Plaid, no credentials, no build. Everything required is already in the database.
 
 **Do not rebuild FreshBooks, and do not rebuild this either.** What FreshBooks and QuickBooks do badly for landlords is the only part needed: they organize around clients and invoices, and a landlord needs expenses per door. That slice is already coded.
 
