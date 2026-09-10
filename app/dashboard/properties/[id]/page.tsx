@@ -29,7 +29,6 @@ import {
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { DescriptionGuide } from "@/components/description-guide";
-import { BeforeYouPost } from "@/components/before-you-post";
 import {
   updateProperty,
   relistLeasedProperty,
@@ -47,8 +46,6 @@ import { MarketingKitCard } from "./marketing-kit-card";
 import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
 import { qrSvg } from "@/lib/qr-svg";
 import { loadReservedListingPostIds } from "@/lib/listing-post-reservations";
-import { buildAllFillSheets } from "@/lib/listing-fill-sheet";
-import { FillSheetCard } from "./fill-sheet-card";
 import { PhotoManager } from "./photo-manager";
 import { PhotoUploadLink, PhotoUploadModal } from "./photo-upload-modal";
 import { buildShareReadiness } from "@/lib/share-readiness";
@@ -90,8 +87,6 @@ import {
   formatRentLabel,
 } from "@/lib/price-drop";
 import {
-  daysVacant,
-  dollarsLostSoFar,
   vacancyStripModel,
 } from "@/lib/vacancy-cost";
 import {
@@ -156,7 +151,6 @@ import {
 } from "@/lib/distribution-channels";
 import {
   buildRunSteps,
-  runProgress,
   type RunItemStatus,
 } from "@/lib/distribution-run";
 import {
@@ -168,7 +162,6 @@ import {
   normalizePublishChannel,
   normalizePublishMode,
   normalizePublishStatus,
-  preparePublishChannel,
   publishChannelChoices,
   publishChannelMeta,
   publishModeLabel,
@@ -176,18 +169,7 @@ import {
   canRequestConcierge,
   publishStatusLabel,
   publishStatusTone,
-  type PublishChannelContext,
-  type PublishChannelKey,
-  type PublishPartnerState,
 } from "@/lib/distribution-publish";
-import { guardrailsForPortal } from "@/lib/listing-guardrails";
-import { computeChannelAnalytics } from "@/lib/distribution-analytics";
-import {
-  scoreListing,
-  fairHousingLint,
-  missingDetails,
-} from "@/lib/listing-quality";
-import type { QaExpected } from "@/lib/post-publish-qa";
 import {
   DistributeTab,
   type DistributeChannelCard,
@@ -197,14 +179,9 @@ import {
   type LaunchRunData,
   type ReplyInputs,
   type PartnerAccountView,
-  type QualityView,
 } from "./distribute-tab";
 import { normalizePartnerStatus } from "@/lib/distribution-partner";
-import type { RunItemView } from "./launch-run-panel";
-import {
-  buildCopilotScript,
-  isCopilotChannel,
-} from "@/lib/distribution-copilot";
+import type { RunItemView } from "./distribute-tab";
 import {
   type ChannelAccountStatus,
 } from "@/lib/distribution-capabilities";
@@ -221,11 +198,7 @@ import {
 import {
   distributionChannelContract,
   distributionExecutionLabel,
-  distributionLifecycleSummary,
-  distributionLaunchStateLabel,
-  distributionLaunchStateTone,
   resolveDistributionKeepLiveAction,
-  resolveDistributionLaunchReadiness,
 } from "@/lib/distribution-channel-contracts";
 import { authorizedInstantPublishDestinations } from "@/lib/auto-distribution";
 import { ConfirmPublishButton } from "./confirm-publish-button";
@@ -647,7 +620,7 @@ function SyndicationFirstCard({
   firstListingPacketMissingLabel: string | null;
 }) {
   const encodedPropertyId = encodeURIComponent(propertyId);
-  const distributeHref = `/dashboard/properties/${encodedPropertyId}?tab=distribute#publish-control-room`;
+  const distributeHref = `/dashboard/properties/${encodedPropertyId}?tab=distribute#distribute-header`;
   const hasPostHistory = postHistoryCount > 0;
   const needsListingWork = setupOutstanding > 0 || !hasPhotos;
   const packetBlocked = listingPacketMissingCount > 0;
@@ -996,30 +969,6 @@ export default async function PropertyDetailPage({
   // never embeds a dead or unavailable URL; closed statuses get a safe fallback
   // line that does not invite bookings.
   const org = await getCurrentOrg();
-  const loadedOrgMode = (org as { distribution_view_mode?: unknown } | null)
-    ?.distribution_view_mode;
-  let orgDefaultMode: "simple" | "advanced" | null =
-    loadedOrgMode === "simple" || loadedOrgMode === "advanced"
-      ? loadedOrgMode
-      : null;
-  if (!orgDefaultMode && org?.id) {
-    const { data: viewModeOrg } = await supabase
-      .from("organizations")
-      .select("distribution_view_mode")
-      .eq("id", org.id)
-      .maybeSingle();
-    const viewMode = (
-      viewModeOrg as { distribution_view_mode?: unknown } | null
-    )?.distribution_view_mode;
-    orgDefaultMode =
-      viewMode === "simple" || viewMode === "advanced" ? viewMode : null;
-  }
-  const orgFeedUrl =
-    org?.slug && host
-      ? `${proto}://${host}/api/feed/${org.slug}`
-      : org?.slug
-        ? `/api/feed/${org.slug}`
-        : null;
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
@@ -1564,26 +1513,6 @@ export default async function PropertyDetailPage({
     hint: feedSignalResult.hint,
   };
 
-  // Field-by-field "fill sheet" per portal (S262, syndication step 2). Same
-  // listing input as the channel copy (title + body are reused from it), plus
-  // the inquiry contact a couple of portals make you re-enter per listing
-  // (Rentals.ca's Lead Contact). Built server-side; the card is presentational.
-  const fillSheets = buildAllFillSheets({
-    businessName: org?.name ?? null,
-    address: p.address,
-    rentCents: p.rent_cents,
-    beds: p.beds,
-    baths: p.baths,
-    description: p.description,
-    publicUrl: linkIsLive ? publicUrl : null,
-    trackedUrlByPortal,
-    leadContactEmail: org?.public_contact_email ?? org?.reply_to_email ?? null,
-    leadContactPhone: org?.public_contact_phone ?? null,
-    virtualTourUrl: p.virtual_tour_url,
-    features: effectiveFeatures,
-    inheritedPolicyFields,
-  });
-
   // Share-readiness checklist (QA Should-Fix #5): before the operator pastes
   // the public link onto Kijiji/Facebook, surface what's in place and what's
   // still missing. Shown for the states where you'd be prepping/sharing a unit
@@ -1639,11 +1568,7 @@ export default async function PropertyDetailPage({
       "Your plan's live-rental limit is full. Pause another rental or upgrade before publishing.",
     );
   }
-  const canPublishPublicPage =
-    !linkIsLive && canPublishFromStatus && publicPageBlockers.length === 0;
-  const publishShareBlockers = readinessBlockerLabels({ includeLive: false });
 
-  // --- Distribute command center (S412, Slice 1) --------------------------
   // Fold the per-channel copy + the where-posted tracker + share-readiness into
   // one channel-card model. Pure lib (lib/distribution-channels) decides the
   // status; here we just gather the inputs it needs. No new tables/actions.
@@ -1788,12 +1713,6 @@ export default async function PropertyDetailPage({
     facebookOAuthConfigured() && fbPageChannelEnabled();
   const instagramGraphEnabled =
     facebookPageEnabled && igChannelEnabledForOrg(propertyOrgId);
-  const launchReadinessToneFor = (
-    state: ReturnType<typeof resolveDistributionLaunchReadiness>["state"],
-  ): "positive" | "warning" | "danger" | "neutral" => {
-    const tone = distributionLaunchStateTone(state);
-    return tone === "accent" ? "neutral" : tone;
-  };
   const accountStatusForChannel = (key: string): ChannelAccountStatus | null => {
     const acct = channelAccountByKey.get(key);
     if (acct) return acct.status as ChannelAccountStatus;
@@ -1802,21 +1721,6 @@ export default async function PropertyDetailPage({
     // a subset of the channel-account statuses.
     return partner ? (partner.status as ChannelAccountStatus) : null;
   };
-  const launchReadinessForChannel = (channel: PublishChannelKey) => {
-    const account = channelAccountByKey.get(channel) ?? null;
-    return resolveDistributionLaunchReadiness(
-      distributionChannelContract(channel),
-      {
-        accountStatus: accountStatusForChannel(channel),
-        automationAuthorized: account?.automationAuthorized === true,
-        spendAuthorized: account?.spendAuthorized === true,
-        spendMaxCents: account?.spendMaxCents ?? null,
-        spendRevokedAt: account?.spendRevokedAt ?? null,
-        feedAccepted: Boolean(account?.feedUrl),
-      },
-    );
-  };
-  const fillSheetByPortal = new Map(fillSheets.map((sheet) => [sheet.portal, sheet]));
   const distributeChannelCards: DistributeChannelCard[] =
     DISTRIBUTION_CHANNELS.map((channel) => {
       const posts = (postsByPortal.get(channel.key) ?? []).map(toDistributePost);
@@ -1836,7 +1740,6 @@ export default async function PropertyDetailPage({
         channel,
         status,
         copy: copyTab ? { title: copyTab.title, body: copyTab.body } : null,
-        fillSheet: fillSheetByPortal.get(channel.key) ?? null,
         feed: channel.feedEligible
           ? { inFeed: distributeFeedStatus.inFeed, hint: distributeFeedStatus.hint }
           : null,
@@ -1881,23 +1784,6 @@ export default async function PropertyDetailPage({
   const distributeOtherPosts = (postsByPortal.get("other") ?? []).map(
     toDistributePost,
   );
-  const channelPublishAccounts = DISTRIBUTION_CHANNELS.map((channel) => {
-    const account = channelAccountByKey.get(channel.key);
-    const partner = partnerByChannel.get(channel.key);
-    return {
-      channel: channel.key,
-      accountStatus: account?.status ?? partner?.status ?? null,
-      transport: account?.transport ?? null,
-      automationAuthorized: account?.automationAuthorized ?? false,
-      autoSubmitAllowed: account?.autoSubmitAllowed ?? false,
-      spendAuthorized: account?.spendAuthorized ?? false,
-      spendMaxCents: account?.spendMaxCents ?? null,
-      spendRevokedAt: account?.spendRevokedAt ?? null,
-      hasFeedRoute: Boolean(
-        account?.feedUrl || (partner?.status === "accepted" && partner.feedUrl),
-      ),
-    };
-  });
   // Slice 1 (S488): fold the where-posted grid's per-channel status into the
   // command center so a run row shows ONE merged status. computeChannelStatus
   // already derives needs_refresh (a live ad gone stale/expired) and problem (a
@@ -1911,46 +1797,6 @@ export default async function PropertyDetailPage({
 
   // --- One-click publish run (S467, built on S412 run primitives) ----------
   const networkFeedEnabled = Boolean(process.env.NETWORK_FEED_TOKEN?.trim());
-  const livePostForPublishChannel = (channel: PublishChannelKey) => {
-    if (!isPortalKey(channel)) return null;
-    const live = (postsByPortal.get(channel) ?? [])
-      .filter((post) => post.status === "live" && post.url)
-      .sort((a, b) => (b.posted_on ?? "").localeCompare(a.posted_on ?? ""));
-    return live[0] ?? null;
-  };
-  const publishContextForChannel = (
-    channel: PublishChannelKey,
-  ): PublishChannelContext => {
-    const livePost = livePostForPublishChannel(channel);
-    const partner = partnerByChannel.get(channel);
-    const partnerState: PublishPartnerState | null = partner
-      ? { status: partner.status, feedUrl: partner.feedUrl }
-      : null;
-    return {
-      linkIsLive,
-      canPublishPublicPage,
-      publicPageBlockers,
-      shareBlockers: publishShareBlockers,
-      feedInFeed: distributeFeedStatus.inFeed,
-      feedHint: distributeFeedStatus.hint,
-      publicUrl,
-      orgFeedUrl,
-      networkFeedEnabled,
-      partner: partnerState,
-      channelAccountStatus: accountStatusForChannel(channel),
-      existingLiveUrl: livePost?.url ?? null,
-      existingListingPostId: livePost?.id ?? null,
-    };
-  };
-  const distributionChannelDisplayMeta = new Map<
-    string,
-    { category: (typeof DISTRIBUTION_CHANNELS)[number]["category"]; displayOrder: number }
-  >(
-    DISTRIBUTION_CHANNELS.map((channel, displayOrder) => [
-      channel.key,
-      { category: channel.category, displayOrder },
-    ]),
-  );
   const publishChannelMetas = publishChannelChoices({
     includeNetworkFeed: networkFeedEnabled,
   });
@@ -1958,38 +1804,6 @@ export default async function PropertyDetailPage({
     .filter((meta) => meta.defaultSelected)
     .map((meta) => meta.key)
     .filter(isPortalRequirementChannelKey);
-  const publishStartChannels = publishChannelMetas.map((meta) => {
-    const plan = preparePublishChannel(
-      meta.key,
-      publishContextForChannel(meta.key),
-    );
-    const displayMeta = distributionChannelDisplayMeta.get(plan.key) ?? null;
-    const contract = distributionChannelContract(meta.key);
-    const launchReadiness = launchReadinessForChannel(meta.key);
-    const lifecycle = distributionLifecycleSummary(contract);
-    return {
-      key: plan.key,
-      label: plan.label,
-      category: displayMeta?.category ?? null,
-      displayOrder: displayMeta?.displayOrder ?? null,
-      modeLabel: distributionExecutionLabel(contract.executionKind),
-      status: plan.status,
-      statusLabel: publishStatusLabel(plan.status),
-      statusTone: publishStatusTone(plan.status),
-      description: contract.note,
-      blockers: plan.blockers,
-      lifecycleSummary: lifecycle.detail,
-      defaultSelected:
-        plan.defaultSelected &&
-        plan.status !== "blocked" &&
-        launchReadiness.state === "ready",
-      readinessLabel: distributionLaunchStateLabel(launchReadiness.state),
-      readinessTone: launchReadinessToneFor(launchReadiness.state),
-      setupBlockers:
-        launchReadiness.state === "ready" ? [] : [launchReadiness.reason],
-    };
-  });
-
   const { data: activeRunRow } = await supabase
     .from("distribution_runs")
     .select("id")
@@ -2113,15 +1927,6 @@ export default async function PropertyDetailPage({
       }
     }
   }
-  const conciergeDaysVacant = daysVacant({
-    status: p.status,
-    availableSince: p.available_since,
-    now: nowMs,
-  });
-  const conciergeDailyLostLabel =
-    conciergeDaysVacant == null
-      ? null
-      : formatMoney(dollarsLostSoFar({ rentCents: p.rent_cents, days: 1 }));
   const lifecycleNowISO = new Date(nowMs).toISOString();
   const runItems: RunItemView[] = runItemRows.map((r) => {
     const publishKey = normalizePublishChannel(r.channel);
@@ -2132,28 +1937,6 @@ export default async function PropertyDetailPage({
       r.publish_status ?? publishStatusFromLegacyStatus(r.status),
     );
     const mode = normalizePublishMode(r.mode ?? meta?.mode);
-    const copilotScript =
-      mode === "browser_copilot" && publishKey && isCopilotChannel(publishKey)
-        ? buildCopilotScript({
-            channel: publishKey,
-            copy: {
-              businessName: org?.name ?? null,
-              address: p.address ?? "",
-              rentCents: p.rent_cents,
-              beds: p.beds,
-              baths: p.baths,
-              description: p.description,
-              features: effectiveFeatures,
-            },
-            trackedUrl:
-              linkIsLive && r.listing_post_id
-                ? buildTrackedLink(publicUrl, r.listing_post_id)
-                : linkIsLive
-                  ? publicUrl
-                  : null,
-            publicPageLive: linkIsLive,
-          })
-        : null;
     const channelLabel = meta?.label ?? channelLabelByKey.get(r.channel) ?? r.channel;
     const liveWithoutUrl = channelStatusValueByKey.get(r.channel) === "problem";
     const staleRefresh = runItemHasFreshnessState({
@@ -2223,9 +2006,7 @@ export default async function PropertyDetailPage({
             attention: lifecycleAttention,
           })
         : null,
-      steps: buildRunSteps(r.channel, {
-        guardrailCount: guardrailsForPortal(r.channel).length,
-      }),
+      steps: buildRunSteps(r.channel),
       canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
       canAutopilot:
         r.transport !== "takedown" &&
@@ -2237,35 +2018,19 @@ export default async function PropertyDetailPage({
         channelAccount?.status === "connected" &&
         channelAccount.automationAuthorized === true,
       relistRadarAutoRefreshOn: channelAccount?.autoSubmitAllowed === true,
-      copilotScript,
       // S543: explicit item freshness state wins; only older rows without it
       // fall back to the where-posted tracker's coarse posted_on age.
       staleRefresh,
       liveWithoutUrl,
     };
   });
-  const reservedTrackedLinksByChannel: Record<string, string> = {};
-  for (const item of runItems) {
-    if (!item.trackedUrl || item.publishStatus === "live") continue;
-    reservedTrackedLinksByChannel[item.channel] ??= item.trackedUrl;
-  }
-  const alreadyInRun = new Set(runItems.map((i) => i.channel));
   // Distribution Lane B: the RECO referral firewall. Realtor.ca's "dispatch a
   // network agent" option stays dark until a RECO referral agreement + partner
   // brokerage are in place. Mirrors the REFERRALS_ENABLED "1" idiom.
-  const realtorReferralEnabled = process.env.REALTOR_REFERRAL_ENABLED === "1";
   const launchRun: LaunchRunData = {
-    run: activeRun,
     items: runItems,
-    progress: runProgress(runItems),
-    selectable: publishStartChannels.filter((c) => !alreadyInRun.has(c.key)),
-    startChannels: publishStartChannels,
-    conciergeEnabled,
     conciergeDeskEnabled,
     conciergeUsage,
-    conciergeDailyLostLabel,
-    realtorReferralEnabled,
-    leaseupTakedownEnabled: process.env.LEASEUP_TAKEDOWN_ENABLED === "true",
   };
   const syndicationBlockerSummary = buildSyndicationBlockerSummary({
     channelCards: distributeChannelCards,
@@ -2277,60 +2042,7 @@ export default async function PropertyDetailPage({
       ]),
     ),
   });
-  const copilotNotice: DistributeRunNotice | null =
-    searchParams.dist === "copilot_live"
-      ? {
-          tone: "success",
-          title: "Your ad is live.",
-          body:
-            "This site is now marked Live because a real link to your ad was saved. The checklist progress and ad link update here.",
-        }
-      : searchParams.dist === "copilot_needsurl"
-        ? {
-            tone: "warning",
-            title: "Live link to your ad needed.",
-            body:
-              "Vacantless did not mark this site Live. After you post on the rental site, paste the real public link to your ad.",
-          }
-        : searchParams.dist === "copilot_prooffail" ||
-            searchParams.dist === "copilot_trackerfail"
-          ? {
-              tone: "danger",
-              title: "The ad link was not saved.",
-              body:
-                "Vacantless left the site unfinished so it does not look Live. Try saving the link to your ad again.",
-            }
-          : searchParams.dist === "copilot_run_closed"
-            ? {
-                tone: "warning",
-                title: "This posting run is closed.",
-                body:
-                  "Open or reopen a posting checklist before saving the link to your ad.",
-              }
-            : searchParams.dist === "copilot_concierge"
-              ? {
-                  tone: "info",
-                  title: "The desk owns this site now.",
-                  body:
-                    "We post this site for you now, so the checklist action is paused here.",
-                }
-              : searchParams.dist === "copilot_already"
-                ? {
-                    tone: "info",
-                    title: "This site is already being updated.",
-                    body:
-                      "Refresh the checklist and check the site status before saving the ad link again.",
-                  }
-                : searchParams.dist === "copilot_channel"
-                  ? {
-                      tone: "warning",
-                      title: "We cannot post this one for you.",
-                      body:
-                        "Use the checklist action for this site. Save the ad link once the ad is live.",
-                    }
-                  : null;
   const distributeRunNotice: DistributeRunNotice | null =
-    copilotNotice ??
     (searchParams.dist === "channel_auto_on"
       ? {
           tone: "success",
@@ -2607,50 +2319,6 @@ export default async function PropertyDetailPage({
     channels: listingPacketChannels,
     fieldFacts: sheetAwareFacts,
   });
-  // --- Listing quality (S412 Slice 5) -------------------------------------
-  const hasFeatures = Object.values(
-    (effectiveFeatures ?? {}) as Record<string, unknown>,
-  ).some((v) => v !== null && v !== undefined && v !== false && v !== "");
-  const listingQuality: QualityView = {
-    listing: scoreListing({
-      description: p.description,
-      photoCount: photoRows.length,
-      beds: p.beds,
-      baths: typeof p.baths === "number" ? p.baths : null,
-      rentCents: p.rent_cents,
-      hasFeatures,
-    }),
-    fairFlags: fairHousingLint(p.description),
-    missing: missingDetails(p.description),
-  };
-  // --- Post-publish QA expected values (S412 Slice 6) ---------------------
-  const addressParts = p.address.split(",").map((s) => s.trim());
-  const qaCity = addressParts.length >= 2 ? addressParts[1] : null;
-  const qaExpected: QaExpected = {
-    city: qaCity && /[a-z]/i.test(qaCity) ? qaCity : null,
-    rentLabel: formatRentLabel(p.rent_cents),
-    requireHydroDisclosure: true,
-    requireUnfurnishedDisclosure: true,
-    bookingUrl: linkIsLive ? publicUrl : null,
-    phone: org?.public_contact_phone ?? null,
-    email: org?.public_contact_email ?? org?.reply_to_email ?? null,
-  };
-
-  // --- Distribution analytics (S412 Slice 4) ------------------------------
-  const distributionAnalytics = computeChannelAnalytics({
-    leads: leadRows.map((l) => ({
-      listing_post_id: l.listing_post_id,
-      status: l.status,
-    })),
-    posts: postRows.map((post) => ({
-      id: post.id,
-      portal: post.portal,
-      status: post.status,
-      posted_on: post.posted_on,
-    })),
-    today: distributeToday,
-  });
-
   // Status-aware guardrail for the share tools (S226 QA-audit): warn the
   // operator before they hand out a link that won't behave the way they expect.
   //   available           -> fully bookable, no notice
@@ -2725,8 +2393,6 @@ export default async function PropertyDetailPage({
     process.env.PUBLISH_EVERYWHERE_ENABLED === "true";
   const publishEverywhereCopilotEnabled =
     process.env.PUBLISH_EVERYWHERE_COPILOT_ENABLED === "true";
-  const publishSimpleDefaultEnabled =
-    process.env.PUBLISH_SIMPLE_DEFAULT_ENABLED === "true";
   const relistOneTapEnabled =
     process.env.RELIST_ONE_TAP_ENABLED === "true";
   const relistAnchor = publishEverywhereEnabled
@@ -4143,71 +3809,6 @@ export default async function PropertyDetailPage({
         storageUpsell={storageUpsell}
       />
 
-      {/* --- Posting reference (S412): the copy + fill sheet + gotchas live here
-          as asset prep; WHERE the listing goes (channel cards + tracked posts)
-          moved to the Distribute tab. --- */}
-      <details className="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <IconTile size="sm"><Icons.list className="h-4 w-4" /></IconTile>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-gray-900">
-                What to paste on each site
-              </h3>
-              <p className="text-xs text-gray-500">
-                Portal field sheet, gotchas, and manual posting reference.
-              </p>
-            </div>
-          </div>
-          <span className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
-            Open
-          </span>
-        </summary>
-
-        <div className="border-t border-gray-100 p-5">
-          <p className="mb-4 text-xs text-gray-500">
-            {linkIsLive
-              ? "The field-by-field values and the per-portal gotchas to have open while you post. When you're ready to market this property and track where it's live, head to Get online."
-              : "Prepare your posting reference here. Posting and tracking turn on in Get online once this property is Live and accepting inquiries."}
-          </p>
-
-          {!linkIsLive && promotionGuard && (
-            <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              <span className="font-medium">{promotionGuard.title}</span>{" "}
-              {promotionGuard.postingBody}
-            </p>
-          )}
-
-          {/* Per-portal "before you post" gotcha checklist (S260). Content, not
-              automation — the operator still posts by hand. */}
-          {linkIsLive && <BeforeYouPost />}
-
-          {/* Per-portal field-by-field fill sheet (S262). The values to paste into
-              each portal's form, resolved from this rental, with the gotcha on
-              each field. Still a reference — nothing is submitted. */}
-          {linkIsLive && <FillSheetCard sheets={fillSheets} />}
-
-          {/* Bridge to the Distribute command center (S412). */}
-          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-gray-900">
-                Ready to post?
-              </p>
-              <p className="text-xs text-gray-600">
-                Use Get online to pick rental sites, copy the listing text, and
-                finish posting.
-              </p>
-            </div>
-            <a
-              href="?tab=distribute#publish-control-room"
-              className={SECONDARY_ACTION_CLASS}
-            >
-              Open Get online →
-            </a>
-          </div>
-        </div>
-      </details>
-
       {showBlastCard && (
         <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <h3 className="mb-1 text-sm font-semibold text-amber-900">
@@ -4262,14 +3863,10 @@ export default async function PropertyDetailPage({
         <DistributeTab
           propertyId={p.id}
           basics={getOnlineBasics}
-          orgDefaultMode={orgDefaultMode}
           linkIsLive={linkIsLive}
           addFormKey={String(searchParams.pn ?? "new")}
           today={distributeToday}
-          readyToShare={readiness.readyToShare}
-          requiredOutstanding={readiness.requiredOutstanding}
           setupOutstanding={setupOutstandingCount}
-          hasPhotos={hasListingPhotos}
           canSetLive={normalizedStatus !== "leased"}
           listingPacket={listingPacketReadiness}
           channelCards={distributeChannelCards}
@@ -4277,17 +3874,9 @@ export default async function PropertyDetailPage({
           promotionNote={promotionGuard?.postingBody ?? null}
           launchRun={launchRun}
           replyInputs={replyInputs}
-          analytics={distributionAnalytics}
-          quality={listingQuality}
-          qaExpected={qaExpected}
-          reservedTrackedLinksByChannel={reservedTrackedLinksByChannel}
           runNotice={distributeRunNotice}
           totalInquiryCount={leadRows.length}
-          channelAccounts={channelPublishAccounts}
-          instantPublishDestinations={instantPublishDestinations}
-          publishEverywhereEnabled={publishEverywhereEnabled}
           publishEverywhereCopilotEnabled={publishEverywhereCopilotEnabled}
-          publishSimpleDefaultEnabled={publishSimpleDefaultEnabled}
           stepClarityLiveEnabled={stepClarityLiveEnabled}
           wizardEnabled={distributionWizardEnabled()}
         />

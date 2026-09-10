@@ -30,16 +30,19 @@ const distributeSource = readFileSync(
 
 // Positive markers only. Do NOT gate on the absence of the old expression:
 // a future refactor can reintroduce the defect with different wording.
+// S695: the two layout branches collapsed into one (the pre-Publish-Everywhere
+// simple surface is gone), so exactly one call site remains and it must wire
+// the advanced surface.
 const advancedWirings = distributeSource.split("advanced={advancedTools}").length - 1;
 ok(
-  "every layout branch wires the advanced surface (2 GetOnlineView call sites)",
-  advancedWirings === 2,
+  "the one layout branch wires the advanced surface",
+  advancedWirings === 1,
 );
 
 const getOnlineViewRenders = distributeSource.split("<GetOnlineView").length - 1;
 ok(
-  "both layout branches render GetOnlineView, which owns the simple/advanced toggle",
-  getOnlineViewRenders === 2,
+  "the layout renders GetOnlineView, which owns the simple/advanced toggle",
+  getOnlineViewRenders === 1,
 );
 
 ok(

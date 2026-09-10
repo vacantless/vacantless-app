@@ -222,8 +222,64 @@ ok(
 
 ok(
   "validate: live + url ok",
-  validateListingPost({ portal: "kijiji", status: "live", url: "https://k.ca/x" })
+  validateListingPost({ portal: "zumper", status: "live", url: "https://z.ca/x" })
     .ok === true,
+);
+// S695: the three sites a person posts on take only a real ad link (the allowlist
+// that gated completeCopilotPost, now in validateListingPost).
+ok(
+  "validate: kijiji live needs a /v-.../<id> ad link",
+  validateListingPost({
+    portal: "kijiji",
+    status: "live",
+    url: "https://www.kijiji.ca/v-apartments-condos/windsor-area-on/bright-1-bed/1742970091",
+  }).ok === true,
+);
+for (const bad of [
+  "https://www.kijiji.ca/",
+  "https://www.kijiji.ca/b-apartments-condos/windsor/c37l1700239",
+  "https://www.kijiji.ca/t-login.html",
+  "https://google.com/",
+]) {
+  const r = validateListingPost({ portal: "kijiji", status: "live", url: bad });
+  ok(`validate: kijiji refuses ${bad}`, !r.ok && r.code === "kijiji_url_required");
+}
+ok(
+  "validate: facebook live needs a /marketplace/item/<id> link",
+  validateListingPost({
+    portal: "facebook",
+    status: "live",
+    url: "https://www.facebook.com/marketplace/item/2351921432302721/",
+  }).ok === true,
+);
+for (const bad of [
+  "https://www.facebook.com/marketplace/",
+  "https://www.facebook.com/share/1BYLMy84Fo/",
+  "https://www.kijiji.ca/v-apartments-condos/x/1742970091",
+]) {
+  const r = validateListingPost({ portal: "facebook", status: "live", url: bad });
+  ok(`validate: facebook refuses ${bad}`, !r.ok && r.code === "facebook_url_required");
+}
+ok(
+  "validate: viewit live accepts a numeric id segment",
+  validateListingPost({ portal: "viewit", status: "live", url: "https://viewit.ca/26049" }).ok ===
+    true,
+);
+ok(
+  "validate: viewit live accepts the VIT= slug form",
+  validateListingPost({
+    portal: "viewit",
+    status: "live",
+    url: "https://www.viewit.ca/3015SandwichSt-Windsor-1bdrm-VIT=22134",
+  }).ok === true,
+);
+{
+  const r = validateListingPost({ portal: "viewit", status: "live", url: "https://viewit.ca/login" });
+  ok("validate: viewit refuses the login page", !r.ok && r.code === "viewit_url_required");
+}
+ok(
+  "validate: a draft kijiji row still takes any web link",
+  validateListingPost({ portal: "kijiji", status: "draft", url: "https://www.kijiji.ca/" }).ok === true,
 );
 const liveNoUrl = validateListingPost({
   portal: "kijiji",

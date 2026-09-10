@@ -37,7 +37,7 @@
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
-import { publishProperty, requestConciergePublish, openGuidedPosting } from "../actions";
+import { publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import {
   authorizeAutopilotSubmit,
   authorizeChannelAutomation,
@@ -90,7 +90,7 @@ export type PublishEverywherePostingBlocker = {
 // north-star and the rest of the tab already use).
 const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
   instant_auto: { label: "Instant", cls: "bg-green-50 text-green-700" },
-  copilot_fill: { label: "Sign in + post", cls: "bg-indigo-50 text-indigo-700" },
+  copilot_fill: { label: "We post it", cls: "bg-indigo-50 text-indigo-700" },
   paid_optin: { label: "Sign in + fee", cls: "bg-indigo-50 text-indigo-700" },
   needs_connection: { label: "Sign in first", cls: "bg-gray-100 text-gray-600" },
   brokerage_gated: { label: "Via brokerage", cls: "bg-gray-100 text-gray-600" },
@@ -699,8 +699,8 @@ export function PublishEverywhere({
         )}
 
         {/* Slice 3: the real for-you handoff. Only with the flag on AND at least
-            one co-pilot channel resolved; reuses the existing sidecar +
-            requestConciergePublish, so with the flag off nothing new renders. */}
+            one person-posted channel resolved; reuses requestConciergePublish
+            (S695: the sidecar is gone), so with the flag off nothing new renders. */}
         {copilotEnabled && forYou.length > 0 && (
           <ForYouHandoff
             propertyId={propertyId}
@@ -709,6 +709,7 @@ export function PublishEverywhere({
             runItems={runItems}
             linkIsLive={linkIsLive}
             conciergeDeskEnabled={conciergeDeskEnabled}
+            wizardEnabled={wizardEnabled}
             allSetSummary={liveForYouAllSet}
             postingBlocker={postingBlocker}
           />
@@ -868,6 +869,7 @@ function ForYouHandoff({
   runItems,
   linkIsLive,
   conciergeDeskEnabled,
+  wizardEnabled = false,
   allSetSummary,
   postingBlocker,
 }: {
@@ -877,6 +879,7 @@ function ForYouHandoff({
   runItems: PublishEverywhereRunItem[];
   linkIsLive: boolean;
   conciergeDeskEnabled: boolean;
+  wizardEnabled?: boolean;
   allSetSummary: boolean;
   postingBlocker?: PublishEverywherePostingBlocker | null;
 }) {
@@ -898,7 +901,7 @@ function ForYouHandoff({
           ? "Posting to rental sites opens once your listing has the details every site needs."
           : allSetSummary
           ? "The link to each ad is saved here. Reopen a site only when you change the listing."
-          : "We fill the ad. You sign in and pay if the site asks. Then save the link to your ad here."}
+          : "We write the ad and post it for you. You pay a site only if it asks."}
       </p>
       {postingBlocker && (
         <a
@@ -918,6 +921,7 @@ function ForYouHandoff({
             addressLabel={addressLabel}
             linkIsLive={linkIsLive}
             conciergeDeskEnabled={conciergeDeskEnabled}
+            wizardEnabled={wizardEnabled}
             postingBlocked={Boolean(postingBlocker)}
           />
         ))}
@@ -945,6 +949,7 @@ function ForYouRow({
   addressLabel,
   linkIsLive,
   conciergeDeskEnabled,
+  wizardEnabled = false,
   postingBlocked,
 }: {
   row: ResolvedRow;
@@ -953,6 +958,7 @@ function ForYouRow({
   addressLabel: string;
   linkIsLive: boolean;
   conciergeDeskEnabled: boolean;
+  wizardEnabled?: boolean;
   postingBlocked?: boolean;
 }) {
   const [approveOpen, setApproveOpen] = useState(false);
@@ -985,8 +991,8 @@ function ForYouRow({
         : working
           ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
           : paid
-            ? { label: "Sign in + fee", cls: "bg-indigo-50 text-indigo-700" }
-            : { label: "Sign in + post", cls: "bg-indigo-50 text-indigo-700" };
+            ? { label: "We post it + fee", cls: "bg-indigo-50 text-indigo-700" }
+            : { label: "We post it", cls: "bg-indigo-50 text-indigo-700" };
 
   return (
     <li
@@ -1036,7 +1042,7 @@ function ForYouRow({
       ) : item == null ? (
         linkIsLive ? (
           <form
-            action={openGuidedPosting}
+            action={startSitePost}
             className="mt-2 flex flex-wrap items-center gap-2"
           >
             <input type="hidden" name="property_id" value={propertyId} />
@@ -1045,7 +1051,7 @@ function ForYouRow({
               type="submit"
               className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
             >
-              Open this site →
+              Add this site →
             </button>
           </form>
         ) : (
@@ -1068,45 +1074,45 @@ function ForYouRow({
           </button>
         </div>
       ) : needsConnect ? (
-        <form
-          action={openGuidedPosting}
-          className="mt-2 flex flex-wrap items-center gap-2"
-        >
-          <input type="hidden" name="property_id" value={propertyId} />
-          <input type="hidden" name="channel" value={row.key} />
-          <button
-            type="submit"
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <a
+            href={
+              wizardEnabled
+                ? `/dashboard/link-portals?property=${encodeURIComponent(propertyId)}`
+                : `/dashboard/settings?tab=distribution#channel-${row.key}`
+            }
             className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
           >
-            Sign in and continue →
-          </button>
+            Sign in once →
+          </a>
           <span className="text-[11px] text-gray-500">
-            A quick one-time sign-in, then we finish it.
+            Then we post it for you.
           </span>
-        </form>
+        </div>
       ) : working ? (
         <p className="mt-2 text-[12px] text-amber-800">
           We&apos;re posting this now and will bring back the live link here.
         </p>
       ) : (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <a
-            href={`/dashboard/properties/${propertyId}/copilot/${item.id}`}
-            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
-          >
-            Open this site →
-          </a>
-          {conciergeDeskEnabled && item.canConcierge && (
+          {conciergeDeskEnabled && item.canConcierge ? (
             <form action={requestConciergePublish}>
               <input type="hidden" name="property_id" value={propertyId} />
               <input type="hidden" name="item_id" value={item.id} />
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50"
+                className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
               >
-                Have us post it
+                Have us post it →
               </button>
             </form>
+          ) : (
+            <p className="text-[12px] text-gray-500">
+              We post this site for you.{" "}
+              <a href="/dashboard/billing" className="font-semibold text-indigo-700 hover:underline">
+                Turn that on →
+              </a>
+            </p>
           )}
         </div>
       )}

@@ -97,7 +97,7 @@ function rentalLaunchState({
   archived: boolean;
   wizardEnabled: boolean;
 }): RentalLaunchState {
-  const controlRoomHref = `/dashboard/properties/${row.id}?tab=distribute#publish-control-room`;
+  const controlRoomHref = `/dashboard/properties/${row.id}?tab=distribute#distribute-header`;
   // S691 (first-time walk): a rental that has never been on any site opens
   // the guided wizard (Connect sites -> Add details -> Send live), which
   // explains each site in plain words. Once one ad is live, the control room

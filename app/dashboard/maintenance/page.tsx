@@ -35,7 +35,7 @@ import {
   directoryErrorMessage,
   type DirectoryListing,
 } from "@/lib/directory";
-import { splitAddressUnit } from "@/lib/listing-fill-sheet";
+import { splitAddressUnit } from "@/lib/address-unit";
 import { getCurrentOrg } from "@/lib/org";
 import {
   isFeatureEnabledForOrg,

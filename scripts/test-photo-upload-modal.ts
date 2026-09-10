@@ -220,34 +220,19 @@ ok(
   /cta\.href\.endsWith\("#property-photos"\)/.test(nextActionCardSource) &&
     /<PhotoUploadLink/.test(nextActionCardSource),
 );
+// S695 (DECISION-S694): the Get online tab no longer carries a photo nudge, a
+// checklist or a control room; the photo modal is reached from the property
+// page itself. Guard that the tab did not grow a raw #property-photos anchor
+// back, and that the removed surfaces stay removed.
 ok(
-  "distribute photo nudge and checklist use the modal trigger",
-  count(distributeSource, /<PhotoUploadLink/g) === 2,
-);
-// S670: the old assertion here required the SimplePostingPlan `steps` array
-// (label/href/action/done) to still exist in distribute-tab.tsx. That array was
-  // DELETED on purpose when the first-read publishing card replaced SimplePostingPlan, so the
-// test was asserting the presence of code the redesign removed, and it made this
-// branch red on its own. Do NOT restore SimplePostingPlan to satisfy it.
-//
-// The invariant actually worth protecting is unchanged and is what this now
-// checks: when the card's primary action is "add photos", it must go through the
-// modal trigger rather than a raw anchor, so the deeplink opener can skip it.
-ok(
-  "publish control room can make photos its primary action",
-  /primaryHref =[\s\S]{0,400}?"#property-photos"/.test(distributeSource) &&
-    /primaryAction =[\s\S]{0,400}?"Add photos"/.test(distributeSource),
+  "distribute tab has no raw photo anchor outside the modal trigger",
+  !/href="#property-photos"/.test(distributeSource),
 );
 ok(
-  "publish control room routes the photo primary action through the modal trigger",
-  /primaryHref === "#property-photos" \?\s*\(\s*<PhotoUploadLink/.test(
-    distributeSource,
-  ),
-);
-ok(
-  "SimplePostingPlan stays deleted",
+  "SimplePostingPlan and PublishControlRoom stay deleted",
   !/function SimplePostingPlan/.test(distributeSource) &&
-    /function PublishControlRoom/.test(distributeSource),
+    !/function PublishControlRoom/.test(distributeSource) &&
+    !/function SimpleGetOnline/.test(distributeSource),
 );
 ok(
   "tabbed panels stay mounted with hidden attribute",

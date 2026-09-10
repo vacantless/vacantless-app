@@ -1,6 +1,6 @@
 // Unit tests for the pure distribution-channels matrix + status reducer.
 // Run: npx tsx scripts/test-distribution-channels.ts
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import {
   CANONICAL_CHANNEL_REGISTRY,
   CHANNEL_CATEGORIES,
@@ -300,14 +300,13 @@ const distributeTabSource = readFileSync(
   "app/dashboard/properties/[id]/distribute-tab.tsx",
   "utf8",
 );
+// S695 (DECISION-S694): the RentFaster posting kit (field sheet + gotchas) is
+// gone. Guard the removal, not the comment that records it.
 ok(
-  "RentFaster card exposes its posting kit",
-  distributeTabSource.includes("RentFaster posting kit"),
-);
-ok(
-  "RentFaster card can copy a reserved tracked link",
-  distributeTabSource.includes("Your inquiry link") &&
-    distributeTabSource.includes("reservedTrackedUrl"),
+  "RentFaster posting kit is no longer rendered",
+  !distributeTabSource.includes("<RentFasterPostingKit") &&
+    !distributeTabSource.includes("groupedFillSheetFields(") &&
+    !distributeTabSource.includes("listing-fill-sheet"),
 );
 ok(
   "Distribute channel rows consume portal requirement action plans",
@@ -331,14 +330,10 @@ ok(
   distributeTabSource.includes("Once the questions are answered"),
 );
 
-const launchRunPanelSource = readFileSync(
-  "app/dashboard/properties/[id]/launch-run-panel.tsx",
-  "utf8",
-);
+// S695 (DECISION-S694): the assisted launch run panel is gone.
 ok(
-  "launch run panel exposes posting-step rows",
-  launchRunPanelSource.includes("Open ${item.channelLabel}") &&
-    launchRunPanelSource.includes("save the link to your ad"),
+  "launch run panel stays deleted",
+  !existsSync("app/dashboard/properties/[id]/launch-run-panel.tsx"),
 );
 
 // --- labels ----------------------------------------------------------------

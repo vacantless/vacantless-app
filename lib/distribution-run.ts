@@ -78,12 +78,8 @@ export type RunStep = {
 // The ordered step list for a channel. Derived from the matrix so a broker
 // channel (Realtor.ca — no self-serve copy) and the assisted-manual channels
 // read differently, and Facebook carries its unique-photo reminder inline.
-export function buildRunSteps(
-  channelKey: string,
-  opts?: { guardrailCount?: number },
-): RunStep[] {
+export function buildRunSteps(channelKey: string): RunStep[] {
   const channel = channelByKey(channelKey);
-  const guardrailCount = opts?.guardrailCount ?? 0;
 
   if (channelKey === "vacantless") {
     return [
@@ -135,14 +131,14 @@ export function buildRunSteps(
     ];
   }
 
-  // Realtor.ca / broker route: no self-serve copy — hand the field sheet off.
+  // Realtor.ca / broker route: no self-serve copy; the agent lists it.
   if (channel && channel.mode === "broker") {
     return [
       {
         key: "brief_agent",
-        label: `Send the field sheet to your agent`,
+        label: `Send the listing to your agent`,
         detail:
-          "Realtor.ca is populated through the agent or MLS route, so your agent lists it. The field sheet in Photos & listing copy has everything they need.",
+          "Realtor.ca is populated through the agent or MLS route, so your agent lists it. The listing text and photos here have everything they need.",
       },
       {
         key: "confirm_live",
@@ -164,7 +160,7 @@ export function buildRunSteps(
     {
       key: "fields",
       label: "Fill the listing fields",
-      detail: "The field sheet in Photos & listing copy lists each field in order.",
+      detail: "Rent, beds, baths, address and move-in date, as shown on this rental.",
     },
     {
       key: "photos",
@@ -175,15 +171,6 @@ export function buildRunSteps(
           : "Cover photo first, then the rest.",
     },
   ];
-  if (guardrailCount > 0) {
-    steps.push({
-      key: "gotchas",
-      label: `Confirm the ${guardrailCount} ${
-        guardrailCount === 1 ? "gotcha" : "gotchas"
-      } for this channel`,
-      detail: "The 'Before you post' list flags the traps that cost money or hide the ad.",
-    });
-  }
   steps.push({
     key: "paste_url",
     label: "Paste the live ad URL below and mark this channel done",

@@ -26,7 +26,7 @@ import {
 import { formatMoneyCents } from "@/lib/payments";
 import { isRentFromBankEnabled, prefillRentSplit, rentFromBankErrorMessage } from "@/lib/rent-from-bank";
 import { classifyCredit, railPaymentLinkCandidatesForTransaction } from "@/lib/rent-classify";
-import { splitAddressUnit } from "@/lib/listing-fill-sheet";
+import { splitAddressUnit } from "@/lib/address-unit";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { PlaidConnectButton } from "./PlaidConnectButton";
 import {

@@ -63,7 +63,6 @@ import {
   isResolvedPublishStatus,
   legacyRunStatusForPublishStatus,
   normalizePublishChannel,
-  isPublishChannelKey,
   normalizePublishStatus,
   normalizePublishMode,
   canRequestConcierge,
@@ -79,7 +78,8 @@ import {
   type ChannelPublishAutofireRunItem,
 } from "@/lib/channel-publish-autofire";
 import type { ChannelAccountStatus } from "@/lib/distribution-capabilities";
-import { isCopilotChannel } from "@/lib/distribution-copilot";
+import { isCopilotChannel } from "@/lib/distribution-capabilities";
+import { recordVerificationAndAttempt } from "@/lib/distribution-verification-write";
 import {
   postFacebookPageNow,
   postInstagramNow,
@@ -1724,6 +1724,80 @@ async function ownedProperty(
   return (data as { id: string; organization_id: string } | null) ?? null;
 }
 
+/**
+ * S695: a tracked ad saved by hand is the landlord's proof that a site is live.
+ * The run item for that site (when one exists) follows it: the same
+ * verified_live row the desk writes, then publish_status = live. Before this
+ * only the deleted co-pilot and launch checklist flipped run items, so a
+ * hand-recorded Kijiji ad read "posted" on the property page and "still
+ * posting" on the send-live stage. Best effort: a failed proof write leaves the
+ * tracked post in place and the item untouched (never a partial flip).
+ */
+async function syncRunItemFromListingPost(input: {
+  supabase: ReturnType<typeof createClient>;
+  orgId: string;
+  propertyId: string;
+  portal: string;
+  url: string | null;
+  listingPostId: string | null;
+}): Promise<void> {
+  const { supabase, orgId, propertyId, portal, url, listingPostId } = input;
+  if (!url) return;
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const runId = (run?.id as string | undefined) ?? null;
+  if (!runId) return;
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("id, publish_status")
+    .eq("run_id", runId)
+    .eq("channel", portal)
+    .maybeSingle();
+  if (!item || item.publish_status === "live") return;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const now = new Date().toISOString();
+  const verId = await recordVerificationAndAttempt(supabase, {
+    orgId,
+    userId: user?.id ?? null,
+    channel: portal,
+    verificationType: "external_url",
+    result: "verified_live",
+    propertyId,
+    runId,
+    runItemId: item.id as string,
+    listingPostId,
+    transport: null,
+    externalUrl: url,
+    screenshotPath: null,
+    matchedFields: { operatorConfirmed: true },
+    failureReason: null,
+    actorType: "operator",
+    nowISO: now,
+  });
+  if (!verId) return;
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      status: "done",
+      publish_status: "live",
+      external_url: url,
+      listing_post_id: listingPostId,
+      last_verified_at: now,
+      error_code: null,
+      error_message: null,
+      updated_at: now,
+    })
+    .eq("id", item.id as string);
+}
+
 export async function addListingPost(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
@@ -1744,16 +1818,31 @@ export async function addListingPost(formData: FormData) {
   // The property must belong to the caller's org (guards a tampered property_id).
   const prop = await ownedProperty(supabase, propertyId);
   if (!prop) redirect("/dashboard/properties?forbidden=1");
-  await supabase.from("listing_posts").insert({
-    organization_id: prop.organization_id,
-    property_id: propertyId,
-    portal,
-    label: listingPostLabelForPortal(formData.get("label"), portal),
-    url,
-    status,
-    posted_on: normalizeDate(formData.get("posted_on")),
-    notes: normalizeText(formData.get("notes")),
-  });
+  const notes = normalizeText(formData.get("notes"));
+  const { data: inserted } = await supabase
+    .from("listing_posts")
+    .insert({
+      organization_id: prop.organization_id,
+      property_id: propertyId,
+      portal,
+      label: listingPostLabelForPortal(formData.get("label"), portal),
+      url,
+      status,
+      posted_on: normalizeDate(formData.get("posted_on")),
+      notes,
+    })
+    .select("id")
+    .maybeSingle();
+  if (status === "live" && isPortalKey(portal)) {
+    await syncRunItemFromListingPost({
+      supabase,
+      orgId: prop.organization_id as string,
+      propertyId,
+      portal,
+      url,
+      listingPostId: (inserted?.id as string | undefined) ?? null,
+    });
+  }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   // `pn` is a fresh nonce so the add-post form REMOUNTS and its uncontrolled
@@ -1778,8 +1867,9 @@ export async function updateListingPost(formData: FormData) {
   }
 
   const supabase = createClient();
+  const notes = normalizeText(formData.get("notes"));
   // RLS scopes the update to the caller's org; .eq("id") targets one post.
-  await supabase
+  const { data: updated } = await supabase
     .from("listing_posts")
     .update({
       portal,
@@ -1787,9 +1877,23 @@ export async function updateListingPost(formData: FormData) {
       url,
       status,
       posted_on: normalizeDate(formData.get("posted_on")),
-      notes: normalizeText(formData.get("notes")),
+      notes,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("organization_id, property_id")
+    .maybeSingle();
+  if (status === "live" && isPortalKey(portal) && updated?.organization_id) {
+    await syncRunItemFromListingPost({
+      supabase,
+      orgId: updated.organization_id as string,
+      // The row's own property, not the form's, so a tampered property_id
+      // cannot point the flip at another rental.
+      propertyId: updated.property_id as string,
+      portal,
+      url,
+      listingPostId: id,
+    });
+  }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?post=saved`);
@@ -2448,22 +2552,13 @@ export async function updateRunItem(formData: FormData) {
   const propertyId = run.property_id as string;
   const orgId = run.organization_id as string;
 
-  // Co-pilot channels (Facebook/Kijiji/Viewit) go live ONLY through
-  // completeCopilotPost, which records durable proof + a browser_copilot attempt
-  // and the tracked listing_post. Refuse a live flip via the generic form so they
-  // can't be marked live without proof (Codex S482 P1).
-  if (
-    publishStatus === "live" &&
-    isPublishChannelKey(item.channel) &&
-    isCopilotChannel(item.channel)
-  ) {
-    redirect(
-      `/dashboard/properties/${propertyId}?runerr=copilot_use_panel#distribute-header`,
-    );
-  }
+  // S695: the co-pilot panel and completeCopilotPost are gone (DECISION-S694).
+  // Facebook / Kijiji / Viewit items now go live through the same gate as every
+  // other portal: the block below refuses a live flip without a valid ad URL for
+  // that portal, so the S482 P1 promise (never live without proof) still holds.
 
-  // Non-co-pilot portal channels (RentFaster / Realtor.ca / Rentals.ca / Zumper /
-  // Viewit) marked live via the generic status form must carry a VALID listing URL
+  // Portal channels (RentFaster / Realtor.ca / Rentals.ca / Zumper / Kijiji /
+  // Facebook / Viewit) marked live via the generic status form must carry a VALID listing URL
   // for that portal. validateListingPost enforces the per-portal proof shape (the
   // S489 realtor_ca + rentfaster gates, plus the baseline "live needs a real web
   // URL"). Refuse the live flip when it fails, so the item's own publish_status
@@ -2478,6 +2573,43 @@ export async function updateRunItem(formData: FormData) {
     if (!proof.ok) {
       redirect(
         `/dashboard/properties/${propertyId}?runerr=needs_valid_url#distribute-header`,
+      );
+    }
+  }
+
+  // S695: a portal item flipped live through this form now writes the same
+  // durable proof row the deleted completeCopilotPost wrote (verified_live +
+  // an operator attempt). Without it the send-live stage never counts the site
+  // as live (lib/stage3-send-live.ts needs the verified_live row). Fail-closed
+  // and FIRST, before the tracker write, so a failed proof leaves no live
+  // listing_posts row behind; the proof carries the existing tracker id when
+  // there is one, as completeCopilotPost did.
+  const now = new Date().toISOString();
+  if (publishStatus === "live" && isPortalKey(item.channel) && url) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const verId = await recordVerificationAndAttempt(supabase, {
+      orgId,
+      userId: user?.id ?? null,
+      channel: item.channel,
+      verificationType: "external_url",
+      result: "verified_live",
+      propertyId,
+      runId: item.run_id,
+      runItemId: itemId,
+      listingPostId: (item.listing_post_id as string | null) ?? null,
+      transport: null,
+      externalUrl: url,
+      screenshotPath: null,
+      matchedFields: { operatorConfirmed: true },
+      failureReason: notes,
+      actorType: "operator",
+      nowISO: now,
+    });
+    if (!verId) {
+      redirect(
+        `/dashboard/properties/${propertyId}?runerr=prooffail#distribute-header`,
       );
     }
   }
@@ -2527,7 +2659,6 @@ export async function updateRunItem(formData: FormData) {
     }
   }
 
-  const now = new Date().toISOString();
   const clockUpdate =
     publishStatus === "live"
       ? buildRelistRadarClockUpdate({
@@ -2692,16 +2823,15 @@ export async function addRunChannel(formData: FormData) {
 }
 
 /**
- * S631 Slice 3 polish: open the posting-assist co-pilot for a for-you channel
- * straight from the Publish Everywhere surface, creating the distribution run +
- * run item ON DEMAND when none exists yet (a live rental whose run never included
- * this co-pilot channel — e.g. Facebook Marketplace). Ensures the run/item via the
- * same stageDistributionRunForProperty the launcher uses (scoped to this one
- * channel), then routes to the EXISTING co-pilot sidecar. No new posting behaviour:
- * the sidecar still stops at every human gate (login/payment/review), and the
- * extension only auto-fills. Restricted to channels with a real co-pilot mechanism.
+ * Start a site post from the Publish Everywhere surface for a channel a person
+ * posts on (Facebook Marketplace, Kijiji, Viewit), creating the distribution run +
+ * run item ON DEMAND when none exists yet. Ensures the run/item via the same
+ * stageDistributionRunForProperty the launcher uses (scoped to this one channel),
+ * then returns to the property page, where the row now carries the item and its
+ * "we post it for you" (concierge) action. S695: this used to route to the
+ * co-pilot sidecar; DECISION-S694 removed the self-guided path.
  */
-export async function openGuidedPosting(formData: FormData) {
+export async function startSitePost(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) redirect("/dashboard/properties?forbidden=1");
@@ -2733,7 +2863,7 @@ export async function openGuidedPosting(formData: FormData) {
       channels: [channel],
     });
   } catch (err) {
-    console.error("openGuidedPosting: staging failed", {
+    console.error("startSitePost: staging failed", {
       propertyId,
       channel,
       error: err instanceof Error ? err.message : String(err),
@@ -2741,7 +2871,7 @@ export async function openGuidedPosting(formData: FormData) {
     redirect(`/dashboard/properties/${propertyId}?runerr=claimfailed#distribute-header`);
   }
 
-  // Resolve the run item id for the sidecar deep-link.
+  // Confirm the item exists before returning to the page.
   const { data: run } = await supabase
     .from("distribution_runs")
     .select("id")
@@ -2763,7 +2893,8 @@ export async function openGuidedPosting(formData: FormData) {
   if (!itemId) {
     redirect(`/dashboard/properties/${propertyId}?runerr=notfound#distribute-header`);
   }
-  redirect(`/dashboard/properties/${propertyId}/copilot/${itemId}`);
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?run=saved#distribute-header`);
 }
 
 export async function cancelDistributionRun(formData: FormData) {

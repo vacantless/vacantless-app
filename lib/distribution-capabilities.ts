@@ -186,6 +186,17 @@ export function allChannelCapabilities(): ChannelCapability[] {
   return Object.values(CHANNEL_CAPABILITIES);
 }
 
+/**
+ * Channels a person posts on (Facebook Marketplace, Kijiji, Viewit): no posting
+ * API, so the transport is a human at a browser. Until S695 that human was the
+ * landlord, walked by a co-pilot script; DECISION-S694 makes it the desk. The
+ * predicate outlived the script (it drives tracked-link reservation and the
+ * concierge hand-off), so it lives here with the matrix it reads.
+ */
+export function isCopilotChannel(channel: PublishChannelKey): boolean {
+  return channelCapability(channel).transport === "browser_copilot";
+}
+
 // --- account readiness ------------------------------------------------------
 
 // The durable account states (distribution_channel_accounts.account_status).

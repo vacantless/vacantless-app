@@ -223,7 +223,10 @@ export type ListingPostError =
   | "rentfaster_url_required"
   | "spacelist_url_required"
   | "costar_loopnet_url_required"
-  | "realtor_url_required";
+  | "realtor_url_required"
+  | "kijiji_url_required"
+  | "facebook_url_required"
+  | "viewit_url_required";
 
 /** True when a string is a plausible absolute http(s) URL. */
 export function isWebUrl(value: string | null | undefined): boolean {
@@ -250,6 +253,50 @@ export function isRealtorCaListingUrl(value: string | null | undefined): boolean
   } catch {
     return false;
   }
+}
+
+// S695: the positive per-portal listing shapes for the three sites a person
+// posts on. They lived in lib/distribution-copilot.ts (Codex S485 P2) and gated
+// completeCopilotPost only; with that action gone, validateListingPost is the one
+// gate every live flip goes through, so the allowlist moves here. A root, browse,
+// login or search page has no listing id and is refused. Every live Kijiji and
+// Facebook row in PROD on 2026-09-10 matched these shapes.
+//   kijiji   /v-<category>/<...>/<numeric ad id>
+//   facebook /marketplace/item/<numeric item id>
+//   viewit   a numeric listing id as its own segment, or VIT=<id> / VIT%3D<id>
+function hostMatches(host: string, base: string): boolean {
+  return host === base || host.endsWith("." + base);
+}
+
+function listingUrlMatches(
+  value: string | null | undefined,
+  hosts: readonly string[],
+  path: RegExp,
+): boolean {
+  if (!isWebUrl(value)) return false;
+  try {
+    const u = new URL(String(value).trim());
+    const host = u.hostname.toLowerCase();
+    if (!hosts.some((base) => hostMatches(host, base))) return false;
+    return path.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** True for a public Kijiji ad page (/v-.../<numeric ad id>), not a browse or login page. */
+export function isKijijiListingUrl(value: string | null | undefined): boolean {
+  return listingUrlMatches(value, ["kijiji.ca"], /^\/v-.+\/\d{6,}\/?$/i);
+}
+
+/** True for a public Facebook Marketplace item (/marketplace/item/<id>), not a profile, share or browse page. */
+export function isFacebookMarketplaceListingUrl(value: string | null | undefined): boolean {
+  return listingUrlMatches(value, ["facebook.com"], /\/marketplace\/item\/\d{6,}(?:\/|$)/i);
+}
+
+/** True for a public Viewit listing (numeric id segment or VIT=<id>), not the home or login page. */
+export function isViewitListingUrl(value: string | null | undefined): boolean {
+  return listingUrlMatches(value, ["viewit.ca"], /\/\d{5,}(?:\/|$)|VIT(?:=|%3D)\d{5,}/i);
 }
 
 /** True for a public RentFaster listing URL, not a search/manage/pricing page. */
@@ -363,6 +410,19 @@ export function validateListingPost(
   ) {
     return { ok: false, field: "url", code: "realtor_url_required" };
   }
+  if (input.status === "live" && input.portal === "kijiji" && !isKijijiListingUrl(url)) {
+    return { ok: false, field: "url", code: "kijiji_url_required" };
+  }
+  if (
+    input.status === "live" &&
+    input.portal === "facebook" &&
+    !isFacebookMarketplaceListingUrl(url)
+  ) {
+    return { ok: false, field: "url", code: "facebook_url_required" };
+  }
+  if (input.status === "live" && input.portal === "viewit" && !isViewitListingUrl(url)) {
+    return { ok: false, field: "url", code: "viewit_url_required" };
+  }
   return { ok: true };
 }
 
@@ -381,6 +441,12 @@ export function listingPostErrorMessage(code: unknown): string {
       return "Use the live LoopNet/CoStar listing link with a listing id, not a search, product, or login page, before marking CoStar / LoopNet Live.";
     case "realtor_url_required":
       return "Use the live Realtor.ca listing link, like https://www.realtor.ca/real-estate/123456/..., before marking Realtor.ca Live.";
+    case "kijiji_url_required":
+      return "Use the link to your Kijiji ad, like https://www.kijiji.ca/v-apartments-condos/.../1234567890, not a search or sign-in page.";
+    case "facebook_url_required":
+      return "Use the link to your Marketplace ad, like https://www.facebook.com/marketplace/item/1234567890/, not a profile or share link.";
+    case "viewit_url_required":
+      return "Use the link to your Viewit listing. It has a listing number. Not the home or sign-in page.";
     default:
       return "Please check the post details and try again.";
   }

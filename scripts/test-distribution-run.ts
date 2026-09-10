@@ -1,6 +1,6 @@
 // Unit tests for the pure distribution-run helpers.
 // Run: npx tsx scripts/test-distribution-run.ts
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import {
   RUN_ITEM_STATUSES,
   activeRunChannelCount,
@@ -40,25 +40,16 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 
 // --- steps -----------------------------------------------------------------
 {
-  const fb = buildRunSteps("facebook", { guardrailCount: 5 });
+  const fb = buildRunSteps("facebook");
   ok("facebook has an open step first", fb[0].key === "open");
   ok("facebook has a copy-title step", fb.some((s) => s.key === "title"));
   ok(
     "facebook photo step mentions duplicate/QR",
     fb.some((s) => s.key === "photos" && /duplicate|QR/.test(s.detail ?? "")),
   );
-  ok(
-    "facebook includes a gotchas step when guardrails > 0",
-    fb.some((s) => s.key === "gotchas" && s.label.includes("5")),
-  );
+  // S695: the gotchas step went with the guardrails (DECISION-S694).
+  ok("facebook has no gotchas step", !fb.some((s) => s.key === "gotchas"));
   ok("facebook ends with paste_url", fb[fb.length - 1].key === "paste_url");
-}
-{
-  const fbNoGuard = buildRunSteps("facebook", { guardrailCount: 0 });
-  ok(
-    "no gotchas step when guardrailCount 0",
-    !fbNoGuard.some((s) => s.key === "gotchas"),
-  );
 }
 {
   const realtor = buildRunSteps("realtor_ca");
@@ -87,7 +78,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok("org feed has feed-ready step", orgFeed[0].key === "check_feed_ready");
 }
 {
-  const noEmDash = buildRunSteps("kijiji", { guardrailCount: 2 })
+  const noEmDash = buildRunSteps("kijiji")
     .flatMap((s) => [s.label, s.detail ?? ""])
     .join(" ");
   ok("no em dashes in step copy", !/[—–]/.test(noEmDash));
@@ -204,109 +195,38 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
 }
 
 // --- operator UI source checks ---------------------------------------------
+// S695 (DECISION-S694): the assisted launch checklist (launch-run-panel.tsx),
+// the pre-Publish-Everywhere simple surface, the control-room summary and the
+// basics / posting-mode / health / automation / analytics panels are gone.
+// Guard the removal; the surviving Get online tab is Publish Everywhere plus
+// the channel cards behind "Advanced".
 {
-  const panelSource = readFileSync(
-    "app/dashboard/properties/[id]/launch-run-panel.tsx",
+  ok(
+    "the assisted launch checklist no longer exists",
+    !existsSync("app/dashboard/properties/[id]/launch-run-panel.tsx"),
+  );
+  const distributeSource = readFileSync(
+    "app/dashboard/properties/[id]/distribute-tab.tsx",
     "utf8",
   );
-  ok("operator guide leads with what to do next", panelSource.includes("What to do next"));
   ok(
-    "operator guide links to the priority item by site name",
-    panelSource.includes("Go to {priorityItem.channelLabel} step"),
+    "the Get online tab renders no launch panel or control room",
+    !distributeSource.includes("<LaunchRunPanel") &&
+      !distributeSource.includes("<PublishControlRoom") &&
+      !distributeSource.includes("<PostingModePanel") &&
+      !distributeSource.includes("<DistributionStatusStrip") &&
+      !distributeSource.includes("function SimpleGetOnline"),
   );
   ok(
-    "operator guide explains proof before live",
-    panelSource.includes("A site counts as Live once we have it"),
-  );
-  ok(
-    "priority (and concierge target) channel opens by default",
-    panelSource.includes("priorityItem?.id === item.id") &&
-      panelSource.includes("conciergeAnchorItem?.id === item.id"),
-  );
-  ok(
-    "channel rows have stable run-item anchors",
-    panelSource.includes("id={`run-item-${item.id}`}"),
-  );
-  ok(
-    "browser co-pilot summary explains front-screen helper",
-    panelSource.includes("A window opens with the wording"),
-  );
-  ok(
-    "site picker and active run list stay compact when sites grow",
-      panelSource.includes("max-h-80 overflow-y-auto") &&
-      panelSource.includes("max-h-[42rem]") &&
-      panelSource.includes("Other tracking") &&
-      panelSource.includes("Site settings"),
-  );
-  ok(
-    "site picker shows refresh and takedown lifecycle cues",
-    panelSource.includes("lifecycleSummary") &&
-      panelSource.includes("{c.lifecycleSummary}"),
-  );
-  ok(
-    "active run rows surface lifecycle attention chips",
-    panelSource.includes("lifecycleAttention") &&
-      panelSource.includes("ATTENTION_BOX") &&
-      panelSource.includes("takedown_needed"),
+    "Publish Everywhere is the one simple surface",
+    distributeSource.includes("simple={publishEverywhereSurface}") &&
+      distributeSource.includes("<PublishEverywhere"),
   );
 }
 {
   const distributeSource = readFileSync(
     "app/dashboard/properties/[id]/distribute-tab.tsx",
     "utf8",
-  );
-  ok(
-    "next banner explains outside-site approval",
-    distributeSource.includes("You approve every post") &&
-      distributeSource.includes("A site is Live once we have its link"),
-  );
-  ok(
-    "done-for-you posting is front of the collapsed status strip",
-    distributeSource.indexOf("<PostingModePanel") > -1 &&
-      distributeSource.indexOf("<DistributionStatusStrip") > -1 &&
-      distributeSource.indexOf("<PostingModePanel") <
-        distributeSource.indexOf("<DistributionStatusStrip"),
-  );
-  ok(
-    "front done-for-you CTA submits instead of only jumping",
-    distributeSource.includes("form action={requestConciergePublish}") &&
-      distributeSource.includes("target={conciergeTarget ?? null}") &&
-      distributeSource.includes("Handle {target.channelLabel}"),
-  );
-  ok(
-    "already-queued desk work is labeled as in progress",
-    distributeSource.includes("Vacantless is already posting") &&
-      distributeSource.includes("View desk status") &&
-      distributeSource.includes("This site is in our list"),
-  );
-  ok(
-    "distribution dashboard uses plain four-part model",
-      distributeSource.includes("Distribution") &&
-      distributeSource.includes("Property") &&
-      distributeSource.includes("Sites") &&
-      distributeSource.includes("Account access") &&
-      distributeSource.includes("Buy more help"),
-  );
-  ok(
-    "posting choice treats self-serve as the fallback path",
-    distributeSource.includes("We post it for you") &&
-      distributeSource.includes("Pay Vacantless to post") &&
-      distributeSource.includes("Use a site yourself instead") &&
-      distributeSource.includes("Open posting checklist") &&
-      distributeSource.includes("Paid sites need your") &&
-      /your limit, and the link\./.test(distributeSource),
-  );
-  ok(
-    "fallback footer opens queue from all selected one-tap run items",
-    distributeSource.includes("ONE_TAP_RUN_STATUSES") &&
-      distributeSource.includes("selectedOneTapRunItems") &&
-      distributeSource.includes("hasOneTapRunItems ? \"Open your sites\" : \"Choose sites\"") &&
-      !distributeSource.includes("hasReachRunItems ? \"Open 1-tap queue\" : \"Choose sites\""),
-  );
-  ok(
-    "already-queued desk work shows request date when available",
-    distributeSource.includes("conciergeRequestedDate") &&
-      distributeSource.includes("activeItem?.conciergeRequestedAt"),
   );
   ok(
     "posted links drawer is now a live-ad-link manager",
@@ -343,70 +263,27 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       adminConciergeSource.includes("Unclaimed, requested"),
   );
 }
-{
-  const copilotSource = readFileSync(
-    "app/dashboard/properties/[id]/copilot-panel.tsx",
-    "utf8",
-  );
-  ok(
-    "posting assist primary CTA starts the flow",
-    copilotSource.includes("Open helper window") &&
-      copilotSource.includes("If the window does not open"),
-  );
-  ok(
-    "posting assist explains front and back of screen",
-    copilotSource.includes("On your screen") &&
-      copilotSource.includes("Behind the scenes"),
-  );
-  ok(
-    "posting assist explains how completion is shown",
-    copilotSource.includes("How you know it is done") &&
-      copilotSource.includes("The row turns Live"),
-  );
-  ok(
-    "posting assist stays honest about no silent automation",
-    copilotSource.includes("This site waits for you") &&
-      copilotSource.includes("You sign in, you pay if it asks"),
-  );
-}
-{
-  const sidecarSource = readFileSync(
-    "app/dashboard/properties/[id]/copilot/[itemId]/sidecar-copilot.tsx",
-    "utf8",
-  );
-  ok(
-    "sidecar repeats the three-step posting assist model",
-    sidecarSource.includes("1. Open the posting page") &&
-      sidecarSource.includes("2. You approve the post") &&
-      sidecarSource.includes("3. Save the live ad URL"),
-  );
-  ok(
-    "sidecar explains the main checklist update",
-    sidecarSource.includes("the main checklist shows Live"),
-  );
-}
+// S695: the co-pilot panel and sidecar source assertions were removed with
+// the files (DECISION-S694).
 {
   const propertyDetailSource = readFileSync(
     "app/dashboard/properties/[id]/page.tsx",
     "utf8",
   );
+  // S695: every dist=copilot_* / runerr=needs_valid_url / prooffail notice is
+  // gone with its producers (completeCopilotPost, the launch checklist form).
   ok(
-    "posting proof success return notice is explicit",
-    propertyDetailSource.includes("Your ad is live.") &&
-      propertyDetailSource.includes("checklist progress and ad link update here"),
+    "no orphan posting-proof notice is left on the property page",
+    !propertyDetailSource.includes('searchParams.dist === "copilot_') &&
+      !propertyDetailSource.includes("proofNotice"),
   );
+  // S695 (DECISION-S694): the co-pilot script is gone from the run-item view
+  // model; no row can render a sidecar link because there is no sidecar.
   ok(
-    "posting proof missing URL return notice is explicit",
-    // S694g: wording moved to the word contract (ad URL -> the link to your
-    // ad, channel -> site). What is guarded, an explicit missing-link notice,
-    // is unchanged.
-    propertyDetailSource.includes("Live link to your ad needed.") &&
-      propertyDetailSource.includes("Vacantless did not mark this site Live"),
-  );
-  ok(
-    "concierge rows do not render a broken posting-assist sidecar",
-    propertyDetailSource.includes('mode === "browser_copilot" &&') &&
-      propertyDetailSource.includes("isCopilotChannel(publishKey)"),
+    "run items no longer build a co-pilot script",
+    !propertyDetailSource.includes("buildCopilotScript(") &&
+      !propertyDetailSource.includes("copilotScript") &&
+      !propertyDetailSource.includes("/copilot/"),
   );
   ok(
     "first screen leads with honest syndication status",
@@ -487,46 +364,16 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     "app/dashboard/properties/[id]/distribute-tab.tsx",
     "utf8",
   );
-  const channelRailSource = readFileSync(
-    "app/dashboard/properties/[id]/channel-publish-rail.tsx",
-    "utf8",
-  );
-  const launchRunPanelSource = readFileSync(
-    "app/dashboard/properties/[id]/launch-run-panel.tsx",
-    "utf8",
-  );
   const publishEverywhereSource = readFileSync(
     "app/dashboard/properties/[id]/publish-everywhere.tsx",
     "utf8",
   );
+  // S695: the site-picker lifecycle summary went with the launch checklist;
+  // the property page no longer builds start channels at all.
   ok(
-    "distribute tab leads with get online checklist buckets",
-    distributeSource.includes("Your posting steps") &&
-      distributeSource.includes("Open the posting steps") &&
-      distributeSource.includes("Review posting steps") &&
-      distributeSource.includes("Live on rental sites") &&
-      distributeSource.includes("Ready now") &&
-      distributeSource.includes("visibleBuckets") &&
-      distributeSource.includes("Your Vacantless page") &&
-      distributeSource.includes("Ads on rental sites") &&
-      distributeSource.includes("Ready to post") &&
-      distributeSource.includes("Needs payment") &&
-      distributeSource.includes("Needs sign-in") &&
-      distributeSource.includes("Needs the ad link") &&
-      distributeSource.includes("Post it again") &&
-      distributeSource.includes("Blocked") &&
-      distributeSource.includes("You approve every post. You pay a site only if it asks."),
-  );
-  ok(
-    "publish control room derives blocker buckets from raw publish status",
-    distributeSource.includes("buildPublishControlRoomBuckets") &&
-      distributeSource.includes("choice.status") &&
-      propertyDetailSource.includes("status: plan.status"),
-  );
-  ok(
-    "property page derives launch lifecycle from the source contract",
-    propertyDetailSource.includes("distributionLifecycleSummary") &&
-      propertyDetailSource.includes("lifecycleSummary: lifecycle.detail"),
+    "property page no longer builds a launch site picker",
+    !propertyDetailSource.includes("publishStartChannels") &&
+      !propertyDetailSource.includes("lifecycleSummary: lifecycle.detail"),
   );
   ok(
     "property page scopes packet blockers to active or default launch portals",
@@ -548,37 +395,6 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       propertyDetailSource.includes("resolveDistributionKeepLiveAction"),
   );
   ok(
-    "publish control room is the first distribute-tab action surface",
-    distributeSource.includes('id="publish-control-room"') &&
-      distributeSource.indexOf("<PublishControlRoom") <
-      distributeSource.indexOf('id="distribute-header"'),
-  );
-  ok(
-    "publish control room replaces the duplicate get-online hero stack",
-      distributeSource.includes("showSummaryCard={false}") &&
-      distributeSource.includes('selectedChannelCount === 1 ? "site" : "sites"') &&
-      channelRailSource.includes("Your sites") &&
-      channelRailSource.includes("Post everywhere from here.") &&
-      channelRailSource.includes("Open the site") &&
-      channelRailSource.includes("Open site") &&
-      !distributeSource.includes("Get this listing online") &&
-      !distributeSource.includes("Ready to syndicate"),
-  );
-  ok(
-    "launch queue defers to setup blockers before portal steps",
-    distributeSource.includes("launchSetupBlocker") &&
-      distributeSource.includes("Answer the missing questions first.") &&
-      distributeSource.includes("setupBlocker={launchSetupBlocker}") &&
-      distributeSource.includes("showAction={false}") &&
-      distributeSource.includes("No posting yet") &&
-      distributeSource.includes("Fallback help included") &&
-      distributeSource.includes("{!packetBlocked && (") &&
-      launchRunPanelSource.includes("Finish your listing first") &&
-      launchRunPanelSource.indexOf("if (setupBlocker)") <
-        launchRunPanelSource.indexOf("if (!run)") &&
-      launchRunPanelSource.includes("{setupBlocker.action}"),
-  );
-  ok(
     "property type blocker is one tap from Get online to Unit details",
     distributeSource.includes("function packetFieldAction") &&
       distributeSource.includes('field === "property_type" && propertyId') &&
@@ -589,11 +405,8 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       ) &&
       distributeSource.includes('primaryMissing?.field === "property_type"') &&
       distributeSource.includes("packetFieldAction(firstListingPacketMissing, propertyId)") &&
-      distributeSource.includes("packetFieldAction(firstPacketMissing, propertyId)") &&
       distributeSource.includes("<ListingPacketCard readiness={listingPacket} propertyId={propertyId} />") &&
-      distributeSource.includes("propertyId={propertyId}") &&
-      distributeSource.includes("action: firstListingPacketAction.action") &&
-      distributeSource.includes("action: firstPacketAction.action"),
+      distributeSource.includes("action: firstListingPacketAction.action"),
   );
   ok(
     "packet blockers win before relist and outside-site actions",
@@ -614,10 +427,13 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
         publishEverywhereSource.indexOf("item == null ? (") &&
       publishEverywhereSource.includes("conciergeDeskEnabled && !postingBlocker"),
   );
+  // S695: the control room is gone; entry links land on the tab header.
   ok(
-    "mobile entry links land on the publish control room",
-    propertiesSource.includes("tab=distribute#publish-control-room") &&
-      propertyDetailSource.includes("tab=distribute#publish-control-room"),
+    "mobile entry links land on the Get online header",
+    propertiesSource.includes("tab=distribute#distribute-header") &&
+      propertyDetailSource.includes("tab=distribute#distribute-header") &&
+      !propertiesSource.includes("#publish-control-room") &&
+      !propertyDetailSource.includes("#publish-control-room"),
   );
 }
 

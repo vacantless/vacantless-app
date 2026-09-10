@@ -201,11 +201,11 @@ export function derivePublishPreflight(
   return { signInNeeded, feeChannels };
 }
 
-// S631 Slice 3: the channels that have a real co-pilot mechanism today (the
-// vacantless-extension fill sheet + the no-install pop-out sidecar). Kept in
-// lockstep with EXTENSION_CHANNELS (lib/extension-kit.ts) and the extension's
-// config.js CHANNEL_BY_HOST. The surface only sets copilotSupported for these,
-// and only when the Slice-3 handoff flag is on.
+// S631 Slice 3: the channels a person posts on that the "we post it for you"
+// bucket can take (Kijiji, Facebook Marketplace). S695: the co-pilot mechanism
+// behind them (extension kit + pop-out sidecar) is gone (DECISION-S694); the
+// person behind the button is now the desk. The surface only sets
+// copilotSupported for these, and only when the Slice-3 handoff flag is on.
 export const COPILOT_SUPPORTED_KEYS: readonly string[] = ["kijiji", "facebook"];
 
 export function isCopilotSupportedKey(key: string): boolean {

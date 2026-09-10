@@ -51,13 +51,10 @@ type Surface = { file: string; mode: "json" | "ui" };
 const SURFACES: Surface[] = [
   { file: "messages/en.json", mode: "json" },
   { file: "messages/fr.json", mode: "json" },
-  // The seven property-page files (ROADMAP section 1).
+  // The property-page files that survive DECISION-S694 (the seven of ROADMAP
+  // section 1, minus the four self-guided ones listed in BEING_REMOVED).
   { file: "app/dashboard/properties/[id]/publish-everywhere.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/[id]/distribute-tab.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/channel-publish-rail.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/[id]/launch-run-panel.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/[id]/copilot-panel.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/[id]/fill-sheet-card.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
   // The wizard.
   { file: "app/dashboard/link-portals/page.tsx", mode: "ui" },
@@ -96,7 +93,6 @@ const SURFACES: Surface[] = [
   { file: "lib/distribution-analytics.ts", mode: "ui" },
   { file: "lib/distribution-capabilities.ts", mode: "ui" },
   { file: "lib/distribution-channel-contracts.ts", mode: "ui" },
-  { file: "lib/distribution-copilot.ts", mode: "ui" },
   { file: "lib/distribution-freshness.ts", mode: "ui" },
   { file: "lib/distribution-launch-coverage.ts", mode: "ui" },
   { file: "lib/distribution-partner.ts", mode: "ui" },
@@ -107,16 +103,12 @@ const SURFACES: Surface[] = [
   { file: "lib/listing-copy.ts", mode: "ui" },
   { file: "lib/listing-description.ts", mode: "ui" },
   { file: "lib/listing-distribution.ts", mode: "ui" },
-  { file: "lib/listing-fill-sheet.ts", mode: "ui" },
-  { file: "lib/listing-guardrails.ts", mode: "ui" },
   { file: "lib/listing-health.ts", mode: "ui" },
   { file: "lib/listing-quality.ts", mode: "ui" },
   { file: "lib/listing-state.ts", mode: "ui" },
   // Found by the recursive discovery sweep: syndication screens one directory
   // deeper than the first walk could see.
   { file: "app/dashboard/settings/page.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/[id]/copilot/[itemId]/sidecar-copilot.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/[id]/qa-checker.tsx", mode: "ui" },
   { file: "app/dashboard/automations/page.tsx", mode: "ui" },
   { file: "app/dashboard/properties/new/add-property-form.tsx", mode: "ui" },
   { file: "app/dashboard/facebook-connect/page.tsx", mode: "ui" },
@@ -187,6 +179,31 @@ const OUT_OF_SCOPE: Record<string, string> = {
   "lib/listing-feed.ts": "machine readable XML feed template",
   "lib/listing-post-live-check.ts":
     "operator log lines for the S693 live check; roadmap section 8 says never show them",
+};
+
+/**
+ * The self-guided posting path, which DECISION-S694 deletes. S695 cut the first
+ * seven files (the per-portal paste sheet, "before you post" gotchas, the
+ * browser co-pilot lib, panel and sidecar, the paste-your-ad checker: 447 of
+ * the 1140 offenders sat there, DECISION-S695-SYNDICATION-SURFACES-THAT-SURVIVE).
+ * The assisted launch checklist followed later the same session. What is left
+ * here is the slimmed command centre: its channel cards own the only Connect /
+ * Disconnect Facebook Page controls (fa4a808) and stay until the Meta verdict
+ * (2026-09-22), then move to Settings with the tracked-post rows. Their copy is not swept and not counted: polishing words on a screen
+ * about to be removed is wasted work. While a file still exists it is excused
+ * from discovery like OUT_OF_SCOPE; once it is deleted its entry here must go
+ * too, so the list can never quietly outlive the code.
+ *
+ * What survives is listed in SURFACES: the intake (the question sheet), the
+ * sign-in tiles, the one button, the after-live status, the catalog, the tile
+ * states, the property page and the engine modules that build the sentences a
+ * landlord still reads. `lib/distribution-run.ts` stays gated on purpose: its
+ * run-item state machine feeds the worker, only its `buildRunSteps` checklist
+ * copy belongs to the removed path.
+ */
+const BEING_REMOVED: Record<string, string> = {
+  "app/dashboard/properties/[id]/distribute-tab.tsx":
+    "assisted-manual command centre; its tracked-post rows move to the after-live status",
 };
 
 /**
@@ -814,6 +831,36 @@ function runSeededAssertions() {
   {
     eq("a dropped surface is detected", droppedSurfaces(["a.ts", "b.ts"], ["a.ts"]).length, 1);
     eq("no drop when everything is still gated", droppedSurfaces(["a.ts"], ["a.ts", "b.ts"]).length, 0);
+    {
+      const files: Record<string, string> = {
+        "app/x/page.tsx": 'import { a } from "@/lib/gone";\nimport { b } from "./rail";\n',
+        "app/x/rail.tsx": 'import { c } from "../../lib/gone";\n',
+        "lib/keep.ts": 'import type { T } from "@/lib/gone";\nexport const k = 1;\n',
+        "lib/other.ts": 'import { z } from "@/lib/zed";\n',
+      };
+      const read = (f: string) => {
+        if (!(f in files)) throw new Error(f);
+        return files[f];
+      };
+      const got = survivorsImportingRemoved(Object.keys(files), ["lib/gone.ts"], read);
+      eq("survivors importing a removed module are found", got.length, 3);
+      ok("an alias import is resolved", got.some((r) => r.file === "app/x/page.tsx"));
+      ok("a relative import is resolved", got.some((r) => r.file === "app/x/rail.tsx"));
+      ok("an unrelated import is not reported", !got.some((r) => r.file === "lib/other.ts"));
+      eq(
+        "the removed module is named, once, per importer",
+        got.find((r) => r.file === "app/x/page.tsx")?.imports.join(","),
+        "lib/gone.ts",
+      );
+      eq(
+        "a root-level file resolves its relative import",
+        survivorsImportingRemoved(["root.ts"], ["gone.ts"], () => 'import { a } from "./gone";\nimport { b } from "./gone";\n')
+          .map((r) => r.imports.join(","))
+          .join("|"),
+        "gone.ts",
+      );
+      eq("an unreadable survivor is skipped", survivorsImportingRemoved(["nope.ts"], ["lib/gone.ts"], read).length, 0);
+    }
 
     eq("pawl fires on a clean improvement", shouldTighten({ excess: 0, failed: 0, dropped: 0, improved: 3 }), true);
     eq(
@@ -998,7 +1045,7 @@ function assertSurfaceCoverage() {
 
   const duplicates: string[] = [];
   for (const file of candidates) {
-    if (gated.has(file) || file in OUT_OF_SCOPE) continue;
+    if (gated.has(file) || file in OUT_OF_SCOPE || file in BEING_REMOVED) continue;
     if (Object.keys(OUT_OF_SCOPE_DIRS).some((d) => file.startsWith(`${d}/`))) continue;
     if (isDuplicateArtifact(file)) {
       duplicates.push(file);
@@ -1040,6 +1087,45 @@ function assertSurfaceCoverage() {
   for (const file of Object.keys(OUT_OF_SCOPE)) {
     ok(`excused file is not also gated: ${file}`, !gated.has(file));
     ok(`excused file still exists: ${file}`, existsSync(resolve(ROOT, file)));
+  }
+  for (const file of Object.keys(BEING_REMOVED)) {
+    ok(`file being removed is not also gated: ${file}`, !gated.has(file));
+    ok(`file being removed is not also excused: ${file}`, !(file in OUT_OF_SCOPE));
+    const stillThere = existsSync(resolve(ROOT, file));
+    ok(`file being removed has an entry only while it exists: ${file}`, stillThere);
+    if (!stillThere) console.error("    it is gone: delete its BEING_REMOVED entry");
+  }
+  // The deletion checklist: every source file, gated or not, that still imports
+  // a module being removed. Wider than the gate on purpose: the gate reads copy,
+  // the deletion has to find every caller.
+  const everything: string[] = [];
+  const walkAll = (dir: string, depth: number) => {
+    if (depth > DISCOVERY_MAX_DEPTH) return;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(resolve(ROOT, dir), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const rel = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        walkAll(rel, depth + 1);
+      } else if (/\.tsx?$/.test(entry.name) && !isDuplicateArtifact(entry.name)) {
+        everything.push(rel);
+      }
+    }
+  };
+  for (const top of ["app", "lib", "components"]) walkAll(top, 0);
+  const stillImported = survivorsImportingRemoved(
+    everything.filter((f) => !(f in BEING_REMOVED)),
+    Object.keys(BEING_REMOVED),
+    (f) => readFileSync(resolve(ROOT, f), "utf8"),
+  );
+  if (stillImported.length) {
+    console.log(`note: ${stillImported.length} file(s) still import a module being removed (the deletion checklist):`);
+    for (const row of stillImported) console.log(`      ${row.file} -> ${row.imports.join(", ")}`);
   }
   for (const dir of Object.keys(OUT_OF_SCOPE_DIRS)) {
     ok(`excused directory still exists: ${dir}`, existsSync(resolve(ROOT, dir)));
@@ -1273,6 +1359,50 @@ export function belowFloor(found: number, min: number | null): boolean {
 export function droppedSurfaces(baselineSurfaces: string[], gatedNow: string[]): string[] {
   const now = new Set(gatedNow);
   return baselineSurfaces.filter((f) => !now.has(f));
+}
+
+/**
+ * Which files still import a module on the BEING_REMOVED list. Printed as
+ * a note, never a failure: it is the deletion checklist, and it goes quiet on
+ * its own as the self-guided path is cut out.
+ */
+export function survivorsImportingRemoved(
+  survivors: string[],
+  removed: string[],
+  read: (file: string) => string,
+): { file: string; imports: string[] }[] {
+  const out: { file: string; imports: string[] }[] = [];
+  const stems = removed.map((r) => r.replace(/\.tsx?$/, ""));
+  for (const file of survivors) {
+    let code: string;
+    try {
+      code = read(file);
+    } catch {
+      continue;
+    }
+    const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
+    const hits = new Set<string>();
+    for (const m of code.matchAll(/from\s+["']([^"']+)["']/g)) {
+      const spec = m[1];
+      let target: string | null = null;
+      if (spec.startsWith("@/")) target = spec.slice(2);
+      else if (spec.startsWith("./") || spec.startsWith("../")) {
+        const parts = `${dir}/${spec}`.split("/");
+        const norm: string[] = [];
+        for (const p of parts) {
+          if (p === "." || p === "") continue;
+          if (p === "..") norm.pop();
+          else norm.push(p);
+        }
+        target = norm.join("/");
+      }
+      if (!target) continue;
+      const i = stems.indexOf(target);
+      if (i >= 0) hits.add(removed[i]);
+    }
+    if (hits.size) out.push({ file, imports: [...hits].sort() });
+  }
+  return out;
 }
 
 /** The pawl fires on cause, never on size: no excess, no failure, no dropped surface. */

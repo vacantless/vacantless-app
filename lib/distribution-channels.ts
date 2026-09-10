@@ -4,10 +4,9 @@
 // (see scripts/test-distribution-channels.ts).
 //
 // This is the CONSOLIDATION layer the "best-in-class syndication" plan asks for:
-// the app already has per-portal copy (lib/listing-copy), fill sheets
-// (lib/listing-fill-sheet), guardrails (lib/listing-guardrails), an org XML feed
+// the app already has per-portal copy (lib/listing-copy), an org XML feed
 // (lib/listing-feed), and where-posted tracking (lib/listing-distribution +
-// listing_posts). None of those knew about each other. The matrix here ties one
+// listing_posts); the fill sheets and guardrails went in S695 (DECISION-S694). None of those knew about each other. The matrix here ties one
 // CHANNEL to all of its assets and computes a single operator-facing STATUS +
 // blocker list from the data that already exists. NO new integrations, NO new
 // tables — static config + a pure reducer over listing_posts + share-readiness.

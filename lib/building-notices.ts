@@ -21,7 +21,7 @@
 // building notice renders {{first_name}}/{{property_address}}/{{org_name}} per
 // recipient exactly like a per-tenancy message. See migration 0064.
 
-import { splitAddressUnit } from "@/lib/listing-fill-sheet";
+import { splitAddressUnit } from "@/lib/address-unit";
 import type { TenantContact } from "@/lib/tenant-comms";
 import {
   workOrderCategoryLabel,

@@ -1,6 +1,6 @@
 // Unit/source tests for S642 Relist Radar Slice 3 free execution.
 // Run: npx tsx scripts/test-relist-radar-execute.ts
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { getNotificationEvent } from "../lib/notifications";
 import {
   RELIST_RADAR_AUTOPILOT_RECAP_EVENT_KEY,
@@ -132,12 +132,11 @@ ok("toggle limited to Kijiji", actionSource.includes('channelMeta.key !== "kijij
 ok("toggle requires connected account", actionSource.includes('acct.account_status !== "connected"'));
 ok("toggle requires automation authorization", actionSource.includes("acct.automation_authorized !== true"));
 
-const panelSource = readFileSync(
-  "app/dashboard/properties/[id]/launch-run-panel.tsx",
-  "utf8",
-);
-ok("UI renders standing refresh toggle", panelSource.includes("setRelistRadarStandingAutoRefresh"));
-ok("UI names free Kijiji only", panelSource.includes("Free Kijiji only."));
+// S695 (DECISION-S694): the launch run panel that rendered the standing
+// refresh toggle is gone; the action survives and waits for a Settings home.
+// auto_submit_allowed was false on every account in PROD on 2026-09-10.
+ok("standing refresh toggle action survives", actionSource.includes("export async function setRelistRadarStandingAutoRefresh"));
+ok("the panel that rendered the toggle stays deleted", !existsSync("app/dashboard/properties/[id]/launch-run-panel.tsx"));
 
 const migration = readFileSync("supabase/migrations/0213_relist_radar_free_execution.sql", "utf8");
 ok("migration adds item backup", migration.includes("relist_radar_backup jsonb"));

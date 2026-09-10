@@ -15,7 +15,7 @@ import {
   DOG_SIZE_OPTIONS,
   dogSizeLabel,
 } from "@/lib/property-features";
-import { splitAddressUnit } from "@/lib/listing-fill-sheet";
+import { splitAddressUnit } from "@/lib/address-unit";
 import { BrandBanner, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 

@@ -12,24 +12,16 @@
 // and CopyTextButton (channel wording). Nothing here posts to a portal or logs
 // into anything: assisted-manual only, honest by design.
 
-import type { ReactNode } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import { CopyTextButton } from "@/components/copy-text-button";
 import {
   addListingPost,
-  updateProperty,
-  uploadPropertyPhotos,
   updateListingPost,
   removeListingPost,
   upsertPartnerAccount,
-  requestConciergePublish,
 } from "../actions";
-import {
-  authorizeChannelAutomation,
-  disconnectFacebookPage,
-  revokeChannelAutomation,
-} from "../distribution-actions";
+import { disconnectFacebookPage } from "../distribution-actions";
 import { startConciergePackCheckout } from "../../billing/actions";
 import {
   PARTNER_STATUSES,
@@ -44,6 +36,7 @@ import {
   channelStatusTone,
   daysBetween,
   groupByDistributionChannelDisplayGroup,
+  type ChannelCategory,
   type DistributionChannel,
   type ChannelStatus,
   type StatusTone,
@@ -54,47 +47,23 @@ import {
   type ListingPostStatus,
 } from "@/lib/listing-distribution";
 import {
-  conciergeUsageLabel,
   CONCIERGE_PACK_PRICE_CENTS,
   CONCIERGE_PACK_QUANTITY,
   formatAmount,
 } from "@/lib/billing";
 import {
-  LaunchRunPanel,
-  type PublishChannelChoiceView,
-  type RunItemView,
-} from "./launch-run-panel";
-import {
-  CONCIERGE_OPEN_STATUSES,
+  type PublishMode,
   type PublishStatus,
+  type PublishTone,
 } from "@/lib/distribution-publish";
 import {
-  activeRunChannelCount,
-  automationStatusSummary,
-  type AutomationStatusState,
-  type AutomationStatusSummary,
-  type RunProgress,
+  type RunItemStatus,
+  type RunStep,
 } from "@/lib/distribution-run";
+import type { DistributionKeepLiveAction } from "@/lib/distribution-channel-contracts";
+import type { DistributionLifecycleAttention } from "@/lib/distribution-freshness";
 import { buildReplySnippets } from "@/lib/reply-snippets";
-import {
-  analyticsTotals,
-  type ChannelAnalyticsRow,
-} from "@/lib/distribution-analytics";
-import { QaChecker } from "./qa-checker";
-import type { QaExpected } from "@/lib/post-publish-qa";
-import {
-  gradeLabel,
-  type ListingQuality,
-  type FairHousingFlag,
-} from "@/lib/listing-quality";
-import type { FillSheet } from "@/lib/listing-fill-sheet";
 import { GetOnlineView } from "./get-online-view";
-import {
-  ChannelPublishRail,
-  buildChannelPublishRailBuckets,
-  type ChannelPublishAccountRow,
-  type ChannelPublishRailRow,
-} from "./channel-publish-rail";
 import type {
   ListingPacketChannelReadiness,
   ListingPacketMissingField,
@@ -106,32 +75,78 @@ import {
   type PortalRequirementFieldKey,
 } from "@/lib/portal-requirements";
 import { PublishEverywhere } from "./publish-everywhere";
-import {
-  ConfirmPublishButton,
-  type InstantDestination,
-} from "./confirm-publish-button";
-import { PhotoUploadLink } from "./photo-upload-modal";
 
-export type QualityView = {
-  listing: ListingQuality;
-  fairFlags: FairHousingFlag[];
-  missing: string[];
+
+// S695: the run-item view types moved here from launch-run-panel.tsx when the
+// assisted checklist was removed; page.tsx still builds them for Publish
+// Everywhere (run items) and the desk hand-off.
+export type RunItemView = {
+  id: string;
+  channel: string;
+  channelLabel: string;
+  status: RunItemStatus;
+  publishStatus: PublishStatus;
+  statusLabel: string;
+  statusTone: PublishTone;
+  mode: PublishMode;
+  modeLabel: string;
+  blockers: string[];
+  operatorActionUrl: string | null;
+  auditMessage: string | null;
+  errorMessage: string | null;
+  externalUrl: string | null;
+  trackedUrl: string | null;
+  notes: string | null;
+  steps: RunStep[];
+  // S474b: this human-action item can be handed to the Vacantless publishing
+  // desk ("Publish for me"). Computed with the operator's plan entitlement.
+  canConcierge: boolean;
+  // S570: org-owner approval for a prepared autopilot item; independent from
+  // canConcierge because concierge-mode items cannot request concierge again.
+  canAutopilot?: boolean;
+  autopilotApproved?: boolean;
+  canRelistRadarAutoRefresh?: boolean;
+  relistRadarAutoRefreshOn?: boolean;
+  // S480: honest transport + durable verification state + latest proof link.
+  transport: string | null;
+  verificationStatus: string | null;
+  proofUrl: string | null;
+  conciergeRequestedAt: string | null;
+  lifecycleAttention?: DistributionLifecycleAttention | null;
+  keepLiveAction?: DistributionKeepLiveAction | null;
+  // S488 Slice 1: merged from the retired where-posted grid so the command
+  // center carries one status vocabulary. Both are derived in page.tsx from the
+  // channel's listing_posts (no schema change):
+  //  - staleRefresh: a live ad exists but is stale/expired/removed (needs_refresh).
+  //  - liveWithoutUrl: a row is marked live but has no ad URL (the grid's
+  //    "problem" state). Codex P3: must render red "Needs ad URL", never as Live.
+  staleRefresh?: boolean;
+  liveWithoutUrl?: boolean;
+};
+
+export type PublishChannelChoiceView = {
+  key: string;
+  label: string;
+  category: ChannelCategory | null;
+  displayOrder: number | null;
+  modeLabel: string;
+  status: PublishStatus;
+  statusLabel: string;
+  statusTone: PublishTone;
+  description: string;
+  blockers: string[];
+  defaultSelected: boolean;
+  lifecycleSummary: string;
+  // S480: pre-Publish channel setup readiness.
+  readinessLabel: string;
+  readinessTone: PublishTone;
+  setupBlockers: string[];
 };
 
 export type LaunchRunData = {
-  run: { id: string } | null;
   items: RunItemView[];
-  progress: RunProgress;
-  selectable: PublishChannelChoiceView[];
-  startChannels: PublishChannelChoiceView[];
-  conciergeEnabled: boolean;
   conciergeDeskEnabled: boolean;
   conciergeUsage: { used: number; included: number };
-  conciergeDailyLostLabel: string | null;
-  // Distribution Lane B: REALTOR_REFERRAL_ENABLED firewall, threaded to the
-  // Realtor.ca "dispatch a network agent" referral option in the run panel.
-  realtorReferralEnabled: boolean;
-  leaseupTakedownEnabled?: boolean;
 };
 
 export type ReplyInputs = {
@@ -224,7 +239,6 @@ export type DistributeChannelCard = {
   channel: DistributionChannel;
   status: ChannelStatus;
   copy: { title: string; body: string } | null;
-  fillSheet: FillSheet | null;
   feed: { inFeed: boolean; hint: string } | null;
   partner: PartnerAccountView | null;
   facebookPage?: FacebookPageAccountView | null;
@@ -246,69 +260,6 @@ const PRIMARY_BTN =
 const SECONDARY_BTN =
   "inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50";
 
-type DistributionHealth = {
-  totalChannels: number;
-  activeChannels: number;
-  liveChannels: number;
-  submittedChannels: number;
-  attentionChannels: number;
-  staleChannels: number;
-  proofIssueChannels: number;
-  trackedPosts: number;
-  attributedLeads: number;
-  advancedLeads: number;
-};
-
-type PublishControlRoomBucketKey =
-  | "liveOutside"
-  | "readyNow"
-  | "needsPayment"
-  | "needsSignIn"
-  | "needsProof"
-  | "refreshDue"
-  | "blocked";
-
-type PublishControlRoomTone = "positive" | "warning" | "danger" | "neutral" | "info";
-
-type PublishControlRoomBucket = {
-  key: PublishControlRoomBucketKey;
-  label: string;
-  value: number;
-  detail: string;
-  tone: PublishControlRoomTone;
-};
-
-type PublishControlRoomSource = {
-  key: string;
-  status: PublishStatus;
-  liveWithoutUrl?: boolean;
-  staleRefresh?: boolean;
-};
-
-const READY_NOW_STATUSES: readonly PublishStatus[] = [
-  "queued",
-  "needs_operator",
-];
-const NEEDS_PAYMENT_STATUSES: readonly PublishStatus[] = ["needs_payment"];
-const NEEDS_SIGN_IN_STATUSES: readonly PublishStatus[] = ["needs_login"];
-const ONE_TAP_RUN_STATUSES: readonly PublishStatus[] = [
-  "queued",
-  "needs_operator",
-  "needs_login",
-  "needs_payment",
-];
-const BLOCKED_STATUSES: readonly PublishStatus[] = ["blocked", "rejected"];
-
-const PUBLISH_CONTROL_ROOM_SAFETY_PROMISE =
-  "You approve every post. You pay a site only if it asks.";
-
-const CONTROL_ROOM_TONE_CLASS: Record<PublishControlRoomTone, string> = {
-  positive: "bg-emerald-50 text-emerald-700",
-  warning: "bg-amber-50 text-amber-700",
-  danger: "bg-red-50 text-red-700",
-  neutral: "bg-gray-100 text-gray-600",
-  info: "bg-blue-50 text-blue-700",
-};
 
 export type DistributeRunNotice = {
   tone: "success" | "warning" | "danger" | "info";
@@ -324,307 +275,16 @@ const RUN_NOTICE_CLASS: Record<DistributeRunNotice["tone"], string> = {
   info: "border-blue-200 bg-blue-50 text-blue-800",
 };
 
-const AUTOMATION_DOT_CLASS: Record<AutomationStatusState, string> = {
-  live_auto: "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.16)]",
-  processing: "bg-emerald-500",
-  one_tap: "bg-amber-500",
-  needs_refresh: "bg-blue-500",
-  blocked: "bg-red-500",
-  idle: "bg-gray-400",
-};
-
-function AutomationDot({ state }: { state: AutomationStatusState }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="relative inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center"
-    >
-      {state === "processing" && (
-        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 motion-safe:animate-ping" />
-      )}
-      <span
-        className={`relative inline-flex h-2.5 w-2.5 rounded-full ${AUTOMATION_DOT_CLASS[state]}`}
-      />
-    </span>
-  );
-}
-
-// --- next-action banner (Slice 1) ------------------------------------------
-// One prioritized "do this next" line across all run channels, so the command
-// center leads with a single obvious step (Codex #1/#4). Pure — derived only
-// from the run items' publish status. Resolved states (live / submitted /
-// skipped) and attention states handled inside the row (blocked / rejected)
-// don't drive the banner; it points at the next thing to DO.
-const NEXT_ACTION_WEIGHT: Record<string, number> = {
-  needs_login: 1,
-  needs_payment: 1,
-  needs_operator: 2,
-  queued: 3,
-};
-function nextRunAction(items: RunItemView[]): { label: string } | null {
-  let best: { weight: number; item: RunItemView } | null = null;
-  for (const item of items) {
-    const weight = NEXT_ACTION_WEIGHT[item.publishStatus];
-    if (weight == null) continue;
-    if (!best || weight < best.weight) best = { weight, item };
-  }
-  if (!best) return null;
-  const it = best.item;
-  const label =
-    it.transport === "takedown" && it.publishStatus === "needs_operator"
-      ? `Remove ${it.channelLabel} ad`
-      : it.transport === "takedown" && it.publishStatus === "queued"
-        ? `Waiting on ${it.channelLabel} removal`
-        : it.publishStatus === "needs_payment"
-      ? `Sign in or pay on ${it.channelLabel} to post it`
-      : it.publishStatus === "needs_login"
-        ? `Sign in on ${it.channelLabel} to post it`
-        : it.publishStatus === "queued"
-        ? `Open ${it.channelLabel}`
-        : it.channel === "vacantless"
-          ? "Check your Vacantless page"
-          : it.channel === "org_feed"
-            ? "Check your partner sites"
-            : it.mode === "broker"
-              ? `Send ${it.channelLabel} to your agent`
-              : it.mode === "feed_partner"
-                ? `Send ${it.channelLabel} to our partner sites`
-                : `Post on ${it.channelLabel} next`;
-  return { label };
-}
-
-function distributionHealth({
-  channelCards,
-  otherPosts,
-  launchRun,
-  analytics,
-}: {
-  channelCards: DistributeChannelCard[];
-  otherPosts: DistributePostRow[];
-  launchRun: LaunchRunData;
-  analytics: ChannelAnalyticsRow[];
-}): DistributionHealth {
-  const runItems = launchRun.items;
-  const activeChannels = activeRunChannelCount({
-    hasRun: Boolean(launchRun.run),
-    runItemCount: runItems.length,
-  });
-  const submittedChannels = runItems.filter(
-    (item) => item.publishStatus === "submitted",
-  ).length;
-  const attentionChannels = runItems.filter(
-    (item) =>
-      item.publishStatus === "blocked" ||
-      item.publishStatus === "rejected" ||
-      item.publishStatus === "needs_login" ||
-      item.publishStatus === "needs_payment" ||
-      item.publishStatus === "needs_operator" ||
-      item.liveWithoutUrl ||
-      item.staleRefresh,
-  ).length;
-  const staleChannels = channelCards.filter(
-    (card) => card.status.value === "needs_refresh",
-  ).length;
-  const proofIssueChannels = channelCards.filter(
-    (card) => card.status.value === "problem",
-  ).length;
-  const allPosts = [
-    ...channelCards.flatMap((card) => card.posts),
-    ...otherPosts,
-  ];
-  const totals = analyticsTotals(analytics);
-
-  return {
-    totalChannels: channelCards.length,
-    activeChannels,
-    // S533: only "posted" counts as live. A needs_refresh channel is a stale
-    // posting — it already shows under "refreshes due", and counting it as
-    // live coverage overstated the health line (proof-before-Live honesty).
-    liveChannels: channelCards.filter(
-      (card) => card.status.value === "posted",
-    ).length,
-    submittedChannels,
-    attentionChannels,
-    staleChannels,
-    proofIssueChannels,
-    trackedPosts: allPosts.length,
-    attributedLeads: totals.leads,
-    advancedLeads: totals.advanced,
-  };
-}
-
-function countUniqueChannels(
-  sources: PublishControlRoomSource[],
-  predicate: (source: PublishControlRoomSource) => boolean,
-) {
-  return new Set(sources.filter(predicate).map((source) => source.key)).size;
-}
-
-function countStatuses(
-  sources: PublishControlRoomSource[],
-  statuses: readonly PublishStatus[],
-) {
-  return countUniqueChannels(sources, (source) =>
-    statuses.includes(source.status),
-  );
-}
-
-function controlRoomSources(launchRun: LaunchRunData): PublishControlRoomSource[] {
-  if (launchRun.run) {
-    return launchRun.items.map((item) => ({
-      key: item.channel,
-      status: item.publishStatus,
-      liveWithoutUrl: item.liveWithoutUrl,
-      staleRefresh: item.staleRefresh,
-    }));
-  }
-  return launchRun.startChannels
-    .filter((choice) => choice.defaultSelected)
-    .map((choice) => ({
-      key: choice.key,
-      status: choice.status,
-    }));
-}
-
-function proofIssueCount({
-  channelCards,
-  sources,
-}: {
-  channelCards: DistributeChannelCard[];
-  sources: PublishControlRoomSource[];
-}) {
-  const keys = new Set<string>(
-    channelCards
-      .filter((card) => card.status.value === "problem")
-      .map((card) => card.channel.key),
-  );
-  for (const source of sources) {
-    if (source.liveWithoutUrl) keys.add(source.key);
-  }
-  return keys.size;
-}
-
-function refreshDueCount({
-  channelCards,
-  sources,
-}: {
-  channelCards: DistributeChannelCard[];
-  sources: PublishControlRoomSource[];
-}) {
-  const keys = new Set<string>(
-    channelCards
-      .filter((card) => card.status.value === "needs_refresh")
-      .map((card) => card.channel.key),
-  );
-  for (const source of sources) {
-    if (source.staleRefresh) keys.add(source.key);
-  }
-  return keys.size;
-}
-
-function bucketTone(
-  count: number,
-  active: PublishControlRoomTone,
-  empty: PublishControlRoomTone = "neutral",
-) {
-  return count > 0 ? active : empty;
-}
-
-function bucketDetail(
-  count: number,
-  active: string,
-  empty: string,
-) {
-  return count > 0 ? active : empty;
-}
-
-export function buildPublishControlRoomBuckets({
-  channelCards,
-  launchRun,
-  liveOutsideCount,
-}: {
-  channelCards: DistributeChannelCard[];
-  launchRun: LaunchRunData;
-  liveOutsideCount: number;
-}): PublishControlRoomBucket[] {
-  const sources = controlRoomSources(launchRun);
-  const readyNow = countUniqueChannels(
-    sources,
-    (source) =>
-      READY_NOW_STATUSES.includes(source.status) &&
-      !source.liveWithoutUrl &&
-      !source.staleRefresh,
-  );
-  const needsPayment = countStatuses(sources, NEEDS_PAYMENT_STATUSES);
-  const needsSignIn = countStatuses(sources, NEEDS_SIGN_IN_STATUSES);
-  const needsProof = proofIssueCount({ channelCards, sources });
-  const refreshDue = refreshDueCount({ channelCards, sources });
-  const blocked = countStatuses(sources, BLOCKED_STATUSES);
-
-  return [
-    {
-      key: "liveOutside",
-      label: "Live on rental sites",
-      value: liveOutsideCount,
-      detail: bucketDetail(liveOutsideCount, "ad link saved", "none live"),
-      tone: bucketTone(liveOutsideCount, "positive"),
-    },
-    {
-      key: "readyNow",
-      label: "Ready now",
-      value: readyNow,
-      detail: bucketDetail(readyNow, "ready", "none"),
-      tone: bucketTone(readyNow, "positive"),
-    },
-    {
-      key: "needsPayment",
-      label: "Needs payment",
-      value: needsPayment,
-      detail: bucketDetail(needsPayment, "pay to post", "clear"),
-      tone: bucketTone(needsPayment, "warning"),
-    },
-    {
-      key: "needsSignIn",
-      label: "Needs sign-in",
-      value: needsSignIn,
-      detail: bucketDetail(needsSignIn, "sign-in needed", "clear"),
-      tone: bucketTone(needsSignIn, "warning"),
-    },
-    {
-      key: "needsProof",
-      label: "Needs the ad link",
-      value: needsProof,
-      detail: bucketDetail(needsProof, "save the link", "clear"),
-      tone: bucketTone(needsProof, "danger"),
-    },
-    {
-      key: "refreshDue",
-      label: "Post it again",
-      value: refreshDue,
-      detail: bucketDetail(refreshDue, "refresh/repost", "current"),
-      tone: bucketTone(refreshDue, "warning"),
-    },
-    {
-      key: "blocked",
-      label: "Blocked",
-      value: blocked,
-      detail: bucketDetail(blocked, "fix first", "clear"),
-      tone: bucketTone(blocked, "danger"),
-    },
-  ];
-}
+// S695: the control-room summary, health, automation and next-action helpers
+// went with the assisted launch checklist (DECISION-S694).
 
 export function DistributeTab({
   propertyId,
   basics,
-  orgDefaultMode,
   linkIsLive,
   addFormKey,
   today,
-  readyToShare,
-  requiredOutstanding,
   setupOutstanding,
-  hasPhotos,
   canSetLive,
   listingPacket,
   channelCards,
@@ -632,30 +292,18 @@ export function DistributeTab({
   promotionNote,
   launchRun,
   replyInputs,
-  analytics,
-  quality,
-  qaExpected,
-  reservedTrackedLinksByChannel,
   runNotice,
   totalInquiryCount,
-  channelAccounts,
-  instantPublishDestinations,
-  publishEverywhereEnabled,
   publishEverywhereCopilotEnabled,
-  publishSimpleDefaultEnabled,
   stepClarityLiveEnabled,
   wizardEnabled,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
-  orgDefaultMode?: "simple" | "advanced" | null;
   linkIsLive: boolean;
   addFormKey: string;
   today: string;
-  readyToShare: boolean;
-  requiredOutstanding: number;
   setupOutstanding: number;
-  hasPhotos: boolean;
   canSetLive: boolean;
   listingPacket: ListingPacketReadiness;
   channelCards: DistributeChannelCard[];
@@ -663,50 +311,12 @@ export function DistributeTab({
   promotionNote: string | null;
   launchRun: LaunchRunData;
   replyInputs: ReplyInputs;
-  analytics: ChannelAnalyticsRow[];
-  quality: QualityView;
-  qaExpected: QaExpected;
-  reservedTrackedLinksByChannel: Record<string, string>;
   runNotice: DistributeRunNotice | null;
   totalInquiryCount: number;
-  channelAccounts: ChannelPublishAccountRow[];
-  instantPublishDestinations: InstantDestination[];
-  publishEverywhereEnabled: boolean;
   publishEverywhereCopilotEnabled: boolean;
-  publishSimpleDefaultEnabled: boolean;
   stepClarityLiveEnabled: boolean;
   wizardEnabled: boolean;
 }) {
-  // S533: posted only — a stale (needs_refresh) channel is not "posted" for
-  // the header chip either; it surfaces via the health panel's refresh count.
-  const liveChannels = channelCards.filter(
-    (c) => c.status.value === "posted",
-  ).length;
-  const nextAction = launchRun.run ? nextRunAction(launchRun.items) : null;
-  const conciergeTarget = launchRun.items.find(
-    (item) =>
-      item.canConcierge &&
-      (item.channel !== "realtor_ca" || launchRun.realtorReferralEnabled),
-  );
-  const activeConciergeItem = launchRun.items.find(
-    (item) =>
-      item.mode === "concierge" &&
-      CONCIERGE_OPEN_STATUSES.includes(item.publishStatus),
-  );
-  const health = distributionHealth({
-    channelCards,
-    otherPosts,
-    launchRun,
-    analytics,
-  });
-  const publishControlRoomBuckets = buildPublishControlRoomBuckets({
-    channelCards,
-    launchRun,
-    liveOutsideCount: liveChannels,
-  });
-  const automationSummary = automationStatusSummary(launchRun.items);
-  const instagramCard =
-    channelCards.find((card) => card.channel.key === "instagram") ?? null;
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
     otherPosts.length;
@@ -717,12 +327,6 @@ export function DistributeTab({
     channelCards,
     (card) => card.channel.category,
   );
-  const selectedChannelCount = launchRun.run
-    ? launchRun.items.length
-    : launchRun.startChannels.filter((channel) => channel.defaultSelected).length;
-  const accountReadyCount = launchRun.startChannels.filter(
-    (channel) => channel.readinessTone === "positive",
-  ).length;
   const firstListingPacketMissing = listingPacket.missingRequired[0] ?? null;
   const firstListingPacketAction = firstListingPacketMissing
     ? packetFieldAction(firstListingPacketMissing, propertyId)
@@ -765,106 +369,8 @@ export function DistributeTab({
       />
     </div>
   );
-  const simpleGetOnlineSurface = (
-    <SimpleGetOnline
-      propertyId={propertyId}
-      basics={basics}
-      linkIsLive={linkIsLive}
-      setupOutstanding={setupOutstanding}
-      hasPhotos={hasPhotos}
-      canSetLive={canSetLive}
-      listingPacket={listingPacket}
-      launchRun={launchRun}
-      instagramCard={instagramCard}
-      replyInputs={replyInputs}
-      totalInquiryCount={totalInquiryCount}
-      channelCards={channelCards}
-      channelAccounts={channelAccounts}
-      instantPublishDestinations={instantPublishDestinations}
-      analytics={analytics}
-      showSummaryCard={false}
-    />
-  );
   const advancedTools = (
     <>
-      <DistributionBasicsPanel
-        linkIsLive={linkIsLive}
-        setupOutstanding={setupOutstanding}
-        canSetLive={canSetLive}
-        selectedChannelCount={selectedChannelCount}
-        liveChannels={liveChannels}
-        accountReadyCount={accountReadyCount}
-        accountTotalCount={launchRun.startChannels.length}
-        hasRun={Boolean(launchRun.run)}
-      />
-
-      {launchRun.conciergeDeskEnabled && (
-        <PostingModePanel
-          propertyId={propertyId}
-          target={conciergeTarget ?? null}
-          activeItem={activeConciergeItem ?? null}
-          usage={launchRun.conciergeUsage}
-          dailyLostLabel={launchRun.conciergeDailyLostLabel}
-        />
-      )}
-
-      {/* Next-action banner (Slice 1): one prioritized step across all channels,
-          so the command center leads with a single obvious action (Codex #1/#4). */}
-      {nextAction && (
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-5 py-4">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
-                Next
-              </span>
-              <span className="text-sm font-semibold text-gray-900">
-                {nextAction.label}
-              </span>
-            </div>
-            <p className="text-xs text-gray-600">
-              We write the ad and the links. You approve every post and every
-              fee. A site is Live once we have its link.
-            </p>
-          </div>
-          <a
-            href="#publish-checklist"
-            className="shrink-0 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
-          >
-            Show checklist
-          </a>
-        </div>
-      )}
-
-      <DistributionStatusStrip
-        health={health}
-        automationSummary={automationSummary}
-        conciergeDeskEnabled={launchRun.conciergeDeskEnabled}
-        conciergeUsage={launchRun.conciergeUsage}
-      >
-        <DistributionHealthPanel health={health} />
-
-        <AutomationStatusPanel
-          summary={automationSummary}
-          hasRun={Boolean(launchRun.run)}
-          readyToShare={readyToShare}
-          linkIsLive={linkIsLive}
-        />
-      </DistributionStatusStrip>
-
-      {/* THE command center — one assisted surface: pick channels, follow one next
-          action per channel, paste the live URL. After the Slice 1 merge this is
-          the single action surface (Codex #2). */}
-      <LaunchRunPanel
-        propertyId={propertyId}
-        run={launchRun.run}
-        items={launchRun.items}
-        progress={launchRun.progress}
-        selectable={launchRun.selectable}
-        startChannels={launchRun.startChannels}
-        realtorReferralEnabled={launchRun.realtorReferralEnabled}
-        leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
-      />
-
       {/* Proof links (Slice 1): keep source-of-truth live ad URLs easy to save;
           tuck heavier posting tools behind per-channel disclosure rows. */}
       <details className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -903,10 +409,6 @@ export function DistributeTab({
                       addFormKey={addFormKey}
                       today={today}
                       replyInputs={replyInputs}
-                      qaExpected={qaExpected}
-                      reservedTrackedUrl={
-                        reservedTrackedLinksByChannel[card.channel.key] ?? null
-                      }
                     />
                   ))}
                 </div>
@@ -959,37 +461,11 @@ export function DistributeTab({
         </div>
       </details>
 
-      {/* Results and setup (Slice 1): listing quality + what's-working
-          analytics, collapsed. Present for power users, out of the first read
-          (Codex #5). */}
-      <details className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-gray-900">
-          Results and setup
-          <span className="ml-2 text-xs font-normal text-gray-500">
-            Listing quality and what&apos;s bringing renters back
-          </span>
-        </summary>
-        <div className="border-t border-gray-100 px-5 py-4">
-          <ListingQualityPanel quality={quality} />
-          <AnalyticsPanel rows={analytics} />
-        </div>
-      </details>
     </>
   );
 
   return (
     <div>
-      <PublishControlRoom
-        propertyId={propertyId}
-        linkIsLive={linkIsLive}
-        setupOutstanding={setupOutstanding}
-        hasPhotos={hasPhotos}
-        canSetLive={canSetLive}
-        listingPacket={listingPacket}
-        hasRun={Boolean(launchRun.run)}
-        selectedChannelCount={selectedChannelCount}
-        buckets={publishControlRoomBuckets}
-      />
 
       <div
         id="distribute-header"
@@ -1028,126 +504,13 @@ export function DistributeTab({
         )}
       </div>
 
-      {publishSimpleDefaultEnabled ? (
-        <GetOnlineView
-          orgDefaultMode="simple"
-          linkIsLive={linkIsLive}
-          simple={publishEverywhereSurface}
-          advanced={advancedTools}
-        />
-      ) : (
-        <GetOnlineView
-          orgDefaultMode={orgDefaultMode}
-          linkIsLive={linkIsLive}
-          simple={
-            publishEverywhereEnabled
-              ? publishEverywhereSurface
-              : simpleGetOnlineSurface
-          }
-          advanced={advancedTools}
-        />
-      )}
+      <GetOnlineView
+        orgDefaultMode="simple"
+        linkIsLive={linkIsLive}
+        simple={publishEverywhereSurface}
+        advanced={advancedTools}
+      />
     </div>
-  );
-}
-
-function pluralize(count: number, singular: string, plural = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function distributionStatusSummaryParts({
-  health,
-  automationSummary,
-  conciergeDeskEnabled,
-  conciergeUsage,
-}: {
-  health: DistributionHealth;
-  automationSummary: AutomationStatusSummary;
-  conciergeDeskEnabled: boolean;
-  conciergeUsage: { used: number; included: number };
-}) {
-  const refreshCount = Math.max(
-    health.staleChannels,
-    automationSummary.needsRefresh,
-  );
-  const actionsNeeded = Math.max(
-    health.attentionChannels,
-    automationSummary.oneTap +
-      automationSummary.needsRefresh +
-      automationSummary.blocked +
-      health.proofIssueChannels,
-  );
-  const parts = [
-    `Live ${health.liveChannels}/${health.totalChannels}`,
-    `${automationSummary.oneTap} waiting on you`,
-    refreshCount > 0
-      ? `${refreshCount} ${refreshCount === 1 ? "needs" : "need"} refresh`
-      : "0 to post again",
-    actionsNeeded > 0
-      ? `${pluralize(actionsNeeded, "action")} needed`
-      : "0 actions needed",
-  ];
-
-  if (conciergeDeskEnabled) {
-    parts.push(
-      `We post it for you ${conciergeUsage.used}/${conciergeUsage.included} used`,
-    );
-  }
-
-  return parts;
-}
-
-function DistributionStatusStrip({
-  health,
-  automationSummary,
-  conciergeDeskEnabled,
-  conciergeUsage,
-  children,
-}: {
-  health: DistributionHealth;
-  automationSummary: AutomationStatusSummary;
-  conciergeDeskEnabled: boolean;
-  conciergeUsage: { used: number; included: number };
-  children: ReactNode;
-}) {
-  const summaryParts = distributionStatusSummaryParts({
-    health,
-    automationSummary,
-    conciergeDeskEnabled,
-    conciergeUsage,
-  });
-
-  return (
-    <details className="group mb-4">
-      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-sm hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-        <IconTile>
-          <Icons.list className="h-4 w-4" />
-        </IconTile>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-900">
-            Posting status
-          </p>
-          <p className="truncate text-xs text-gray-600">
-            {summaryParts.join(" · ")}
-          </p>
-        </div>
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 20 20"
-          className="h-4 w-4 shrink-0 text-gray-400 transition-transform group-open:rotate-90"
-          fill="none"
-        >
-          <path
-            d="m7 4 6 6-6 6"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </summary>
-      <div className="mt-3">{children}</div>
-    </details>
   );
 }
 
@@ -1290,7 +653,7 @@ function ListingPacketCard({
     ? packetFieldAction(primaryMissing, propertyId)
     : null;
   const missingText = shortMissingList(missingRequired);
-  const actionHref = primaryAction?.href ?? "#publish-checklist";
+  const actionHref = primaryAction?.href ?? "#distribute-header";
   const actionLabel = primaryAction?.action ?? "Choose sites";
   const headline = ready
     ? "Your listing has what every site needs."
@@ -1466,1492 +829,17 @@ function packetReadyDetail(channel: ListingPacketChannelReadiness): string {
   return "Ready. You sign in and send the link later.";
 }
 
-function conciergeRequestedDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const time = Date.parse(value);
-  if (!Number.isFinite(time)) return null;
-  return new Date(time).toISOString().slice(0, 10);
-}
-
-function centsToDollars(value: number | null): string {
-  return value == null ? "" : String(value / 100);
-}
-
-function numberValue(value: number | null): string {
-  return value == null ? "" : String(value);
-}
-
-function textValue(value: string | null): string {
-  return value ?? "";
-}
-
-function triBoolValue(value: boolean | null): string {
-  return value == null ? "" : value ? "true" : "false";
-}
-
-function HiddenPreservedPropertyFields({ basics }: { basics: GetOnlineBasics }) {
-  return (
-    <>
-      <input type="hidden" name="status" value={basics.status} />
-      <input type="hidden" name="parking" value={textValue(basics.parking)} />
-      <input
-        type="hidden"
-        name="description"
-        value={textValue(basics.description)}
-      />
-      <input
-        type="hidden"
-        name="showing_instructions"
-        value={textValue(basics.showingInstructions)}
-      />
-      <input
-        type="hidden"
-        name="showing_arrival_phone"
-        value={textValue(basics.showingArrivalPhone)}
-      />
-      <input
-        type="hidden"
-        name="address_display_mode"
-        value={textValue(basics.addressDisplayMode)}
-      />
-      <input
-        type="hidden"
-        name="available_date"
-        value={textValue(basics.availableDate)}
-      />
-      <input
-        type="hidden"
-        name="virtual_tour_url"
-        value={textValue(basics.virtualTourUrl)}
-      />
-      <input type="hidden" name="sqft" value={numberValue(basics.sqft)} />
-      <input type="hidden" name="floor" value={textValue(basics.floor)} />
-      <input type="hidden" name="unit_type" value={textValue(basics.unitType)} />
-      <input
-        type="hidden"
-        name="for_rent_by"
-        value={textValue(basics.forRentBy)}
-      />
-      <input
-        type="hidden"
-        name="structure_type"
-        value={textValue(basics.structureType)}
-      />
-      <input type="hidden" name="laundry" value={textValue(basics.laundry)} />
-      {basics.airConditioning && (
-        <input type="hidden" name="air_conditioning" value="on" />
-      )}
-      {basics.balcony && <input type="hidden" name="balcony" value="on" />}
-      {basics.furnished && <input type="hidden" name="furnished" value="on" />}
-      <input
-        type="hidden"
-        name="pets_cats"
-        value={triBoolValue(basics.petsCats)}
-      />
-      <input
-        type="hidden"
-        name="pets_dogs"
-        value={triBoolValue(basics.petsDogs)}
-      />
-      <input
-        type="hidden"
-        name="pets_dog_size"
-        value={textValue(basics.petsDogSize)}
-      />
-      <input
-        type="hidden"
-        name="pets_notes"
-        value={textValue(basics.petsNotes)}
-      />
-      <input
-        type="hidden"
-        name="heat_included"
-        value={triBoolValue(basics.heatIncluded)}
-      />
-      <input
-        type="hidden"
-        name="hydro_included"
-        value={triBoolValue(basics.hydroIncluded)}
-      />
-      <input
-        type="hidden"
-        name="water_included"
-        value={triBoolValue(basics.waterIncluded)}
-      />
-      {basics.hasSmartLock && (
-        <input type="hidden" name="has_smart_lock" value="on" />
-      )}
-      {basics.photosReady && (
-        <input type="hidden" name="photos_ready" value="on" />
-      )}
-      <input
-        type="hidden"
-        name="lease_term"
-        value={textValue(basics.leaseTerm)}
-      />
-      <input type="hidden" name="smoking" value={textValue(basics.smoking)} />
-      <input type="hidden" name="ac_type" value={textValue(basics.acType)} />
-      <input
-        type="hidden"
-        name="on_site_management"
-        value={triBoolValue(basics.onSiteManagement)}
-      />
-    </>
-  );
-}
-
-function SimpleGetOnline({
-  propertyId,
-  basics,
-  linkIsLive,
-  setupOutstanding,
-  hasPhotos,
-  canSetLive,
-  listingPacket,
-  launchRun,
-  instagramCard,
-  replyInputs,
-  totalInquiryCount,
-  channelCards,
-  channelAccounts,
-  instantPublishDestinations,
-  analytics,
-  showLaunchRunPanel = true,
-  showSummaryCard = true,
-}: {
-  propertyId: string;
-  basics: GetOnlineBasics;
-  linkIsLive: boolean;
-  setupOutstanding: number;
-  hasPhotos: boolean;
-  canSetLive: boolean;
-  listingPacket: ListingPacketReadiness;
-  launchRun: LaunchRunData;
-  instagramCard: DistributeChannelCard | null;
-  replyInputs: ReplyInputs;
-  totalInquiryCount: number;
-  channelCards: DistributeChannelCard[];
-  channelAccounts: ChannelPublishAccountRow[];
-  instantPublishDestinations: InstantDestination[];
-  analytics: ChannelAnalyticsRow[];
-  showLaunchRunPanel?: boolean;
-  showSummaryCard?: boolean;
-}) {
-  const addressLabel = basics.address || replyInputs.address || "this rental";
-  const publicLink = replyInputs.bookingUrl;
-  const rentShareLabel = replyInputs.rentLabel
-    ? ` (${replyInputs.rentLabel})`
-    : "";
-  const shareBody = publicLink
-    ? `${addressLabel}${rentShareLabel} is online and taking inquiries: ${publicLink}`
-    : "";
-  const shareSubject = `${addressLabel} rental`;
-  const reachChannels = launchRun.items.filter(
-    (item) => item.channel === "facebook" || item.channel === "kijiji",
-  );
-  const activeReachConcierge = reachChannels.find(
-    (item) =>
-      item.mode === "concierge" &&
-      CONCIERGE_OPEN_STATUSES.includes(item.publishStatus),
-  );
-  const conciergeTargets = reachChannels.filter((item) => item.canConcierge);
-  const selectedOneTapRunItems = launchRun.items.filter(
-    (item) =>
-      item.mode !== "automatic" &&
-      ONE_TAP_RUN_STATUSES.includes(item.publishStatus),
-  );
-  const hasOneTapRunItems = selectedOneTapRunItems.length > 0;
-  const publishBlockedByBasics = setupOutstanding > 0;
-  const railBuckets = buildChannelPublishRailBuckets({
-    channels: channelCards.map((card) => card.channel),
-    accountRows: channelAccounts,
-    linkIsLive,
-    liveChannelKeys: channelCards
-      .filter((card) => card.status.value === "posted")
-      .map((card) => card.channel.key),
-    instagramEnabled: instagramCard?.instagramAccount?.enabled === true,
-  });
-  const analyticsSummary = analyticsTotals(analytics);
-  const firstPacketMissing = listingPacket.missingRequired[0] ?? null;
-  const firstPacketAction = firstPacketMissing
-    ? packetFieldAction(firstPacketMissing, propertyId)
-    : null;
-  const packetBlocked = listingPacket.missingRequired.length > 0;
-  const launchSetupBlocker =
-    firstPacketAction
-      ? {
-          title: "Answer the missing questions first.",
-          detail: `${firstPacketAction.detail} Sign-in, payment, and the ad link come after this.`,
-          href: firstPacketAction.href,
-          action: firstPacketAction.action,
-        }
-      : setupOutstanding > 0
-      ? {
-          title: `Finish ${setupOutstanding} ${
-            setupOutstanding === 1 ? "answer" : "answers"
-          } first.`,
-          detail:
-            "After that, we take you to the first site that needs you.",
-          href: "#rental-details",
-          action: "Finish details",
-        }
-      : !hasPhotos
-        ? {
-            title: "Add photos before posting to sites.",
-            detail:
-              "Then we take you to the first site that needs you.",
-            href: "#property-photos",
-            action: "Add photos first",
-          }
-        : !linkIsLive
-          ? {
-              title: "Turn your Vacantless page on before posting to sites.",
-              detail:
-                "Then we take you to the first site that needs you.",
-              href: "#publish-action",
-              action: "Turn it on first",
-            }
-          : null;
-
-  const photoNudge = !hasPhotos ? (
-    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-      <span className="font-semibold">Photo boost:</span>
-      <span>Photos are optional, but renters trust an ad with them.</span>
-      <PhotoUploadLink
-        className="font-semibold text-blue-900 underline decoration-blue-300 underline-offset-2"
-      >
-        Add photos
-      </PhotoUploadLink>
-    </div>
-  ) : null;
-  const oneTapFooter = launchRun.conciergeDeskEnabled ? (
-    <>
-      <p>
-        We can post the sites that still need a person. Paid sites need your
-        approval, your limit, and the link.
-      </p>
-      <p className="mt-1 font-semibold text-gray-900">
-        {conciergeUsageLabel(launchRun.conciergeUsage)}
-      </p>
-      {activeReachConcierge ? (
-        <a
-          href={`#run-item-${activeReachConcierge.id}`}
-          className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
-        >
-          View desk status
-        </a>
-      ) : conciergeTargets.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {conciergeTargets.map((target) => (
-            <form key={target.id} action={requestConciergePublish}>
-              <input type="hidden" name="property_id" value={propertyId} />
-              <input type="hidden" name="item_id" value={target.id} />
-              <button
-                type="submit"
-                className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
-              >
-                Handle {target.channelLabel}
-              </button>
-            </form>
-          ))}
-        </div>
-      ) : (
-        <a
-          href="#publish-checklist"
-          className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
-        >
-          {hasOneTapRunItems ? "Open your sites" : "Choose sites"}
-        </a>
-      )}
-    </>
-  ) : (
-    <>
-      <p>
-        Paid sites and extra help are things you buy. They need your approval,
-        your limit, and the link.
-      </p>
-      {launchRun.conciergeDailyLostLabel && (
-        <p className="mt-1 text-gray-600">
-          Every day vacant costs about {launchRun.conciergeDailyLostLabel}.
-        </p>
-      )}
-      <a
-        href="/dashboard/billing"
-        className="mt-3 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-800 hover:bg-gray-50"
-      >
-        Review what you can buy
-      </a>
-    </>
-  );
-  const railActionForRow = (row: ChannelPublishRailRow): ReactNode => {
-    if (row.automationAction === "authorize") {
-      return (
-        <form action={authorizeChannelAutomation}>
-          <input type="hidden" name="property_id" value={propertyId} />
-          <input type="hidden" name="channel" value={row.key} />
-          <button
-            type="submit"
-            aria-label={`Allow us to post this listing to ${row.label}`}
-            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
-          >
-            Allow us to post
-          </button>
-        </form>
-      );
-    }
-    if (row.automationAction === "revoke") {
-      return (
-        <form action={revokeChannelAutomation}>
-          <input type="hidden" name="property_id" value={propertyId} />
-          <input type="hidden" name="channel" value={row.key} />
-          <button
-            type="submit"
-            aria-label={`Stop us posting this listing to ${row.label}`}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Turn off auto-post
-          </button>
-        </form>
-      );
-    }
-    if (row.chip.canConnect) {
-      const label =
-        row.readinessState === "needs_spend_limit"
-          ? "Set your limit"
-          : "Connect account";
-      return (
-        <a
-          href={`/dashboard/settings?tab=distribution#channel-${row.key}`}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          {label}
-        </a>
-      );
-    }
-    return null;
-  };
-
-  return (
-    <div className="space-y-4">
-      {showSummaryCard && (
-        <section
-          id={linkIsLive ? "simple-live" : "simple-publish"}
-          className={`rounded-2xl border p-6 shadow-sm ${
-            linkIsLive
-              ? "border-green-200 bg-green-50"
-              : "border-brand/20 bg-brand/[0.04]"
-          }`}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  linkIsLive
-                    ? "bg-green-600 text-white"
-                    : "bg-brand text-white"
-                }`}
-              >
-                {linkIsLive
-                  ? railBuckets.externalLiveCount > 0
-                    ? "You're online"
-                    : "Your Vacantless page is on"
-                  : "Ready"}
-              </span>
-              <h3
-                className={`mt-3 text-2xl font-semibold ${
-                  linkIsLive ? "text-green-950" : "text-gray-950"
-                }`}
-              >
-                {linkIsLive
-                  ? railBuckets.externalLiveCount > 0
-                    ? `Your Vacantless page is on, plus ${railBuckets.externalLiveCount} rental ${
-                        railBuckets.externalLiveCount === 1 ? "site" : "sites"
-                      }.`
-                    : "Your Vacantless page is on. No rental sites yet."
-                  : `Post ${addressLabel} everywhere renters are looking.`}
-              </h3>
-              <p
-                className={`mt-2 max-w-3xl text-sm leading-relaxed ${
-                  linkIsLive ? "text-green-800" : "text-gray-600"
-                }`}
-              >
-                {linkIsLive
-                  ? railBuckets.externalLiveCount > 0
-                    ? "Post the changes from here. Sites still waiting stay in your list."
-                    : "Anyone with your link can ask. A site counts as Live once we have its link."
-                  : "This turns on your Vacantless page and email alerts first. Then it opens your sites."}
-              </p>
-            </div>
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                linkIsLive
-                  ? "bg-green-100 text-green-800"
-                  : "bg-white text-gray-700"
-              }`}
-            >
-              {railBuckets.externalLiveCount}/{railBuckets.externalTotalCount}{" "}
-              rental sites live
-            </span>
-          </div>
-
-          {linkIsLive ? (
-            <div className="mt-5 rounded-xl border border-green-200 bg-white/80 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-green-900">
-                    Shareable renter link
-                  </p>
-                  <p className="mt-1 text-sm text-green-800">
-                    {totalInquiryCount}{" "}
-                    {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
-                    this rental.
-                  </p>
-                </div>
-                <a href="#publish-checklist" className={SECONDARY_BTN}>
-                  <Icons.bolt className="h-4 w-4" />
-                  Post the changes
-                </a>
-              </div>
-              {publicLink ? (
-                <div className="mt-3 space-y-3">
-                  <CopyLink url={publicLink} />
-                  <div className="flex flex-wrap gap-2">
-                    <a
-                      href={`sms:?body=${encodeURIComponent(shareBody)}`}
-                      className={SECONDARY_BTN}
-                    >
-                      <Icons.chat className="h-4 w-4" />
-                      Text
-                    </a>
-                    <a
-                      href={`mailto:?subject=${encodeURIComponent(
-                        shareSubject,
-                      )}&body=${encodeURIComponent(shareBody)}`}
-                      className={SECONDARY_BTN}
-                    >
-                      <Icons.mail className="h-4 w-4" />
-                      Email
-                    </a>
-                    <a
-                      href={publicLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={SECONDARY_BTN}
-                    >
-                      <Icons.link className="h-4 w-4" />
-                      Preview
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-green-800">
-                  Your Vacantless page is on. Refresh if the link has not
-                  appeared yet.
-                </p>
-              )}
-            </div>
-          ) : publishBlockedByBasics ? (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-white p-4">
-              <p className="mb-3 text-sm font-semibold text-amber-950">
-                Finish {setupOutstanding}{" "}
-                {setupOutstanding === 1 ? "detail" : "details"} first.
-              </p>
-              <form action={updateProperty} className="grid gap-3 sm:grid-cols-6">
-                <input type="hidden" name="id" value={propertyId} />
-                <HiddenPreservedPropertyFields basics={basics} />
-                <label className="sm:col-span-6">
-                  <span className="mb-1 block text-xs font-medium text-gray-600">
-                    Address
-                  </span>
-                  <input
-                    name="address"
-                    defaultValue={basics.address}
-                    required
-                    className={FIELD_CLASS}
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className="mb-1 block text-xs font-medium text-gray-600">
-                    Rent per month
-                  </span>
-                  <input
-                    name="rent"
-                    type="number"
-                    step="0.01"
-                    defaultValue={centsToDollars(basics.rentCents)}
-                    className={FIELD_CLASS}
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className="mb-1 block text-xs font-medium text-gray-600">
-                    Beds
-                  </span>
-                  <input
-                    name="beds"
-                    type="number"
-                    step="1"
-                    defaultValue={numberValue(basics.beds)}
-                    className={FIELD_CLASS}
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className="mb-1 block text-xs font-medium text-gray-600">
-                    Baths
-                  </span>
-                  <input
-                    name="baths"
-                    type="number"
-                    step="0.5"
-                    defaultValue={numberValue(basics.baths)}
-                    className={FIELD_CLASS}
-                  />
-                </label>
-                <div className="sm:col-span-6">
-                  <button
-                    type="submit"
-                    className={PRIMARY_BTN}
-                    style={{ backgroundColor: "var(--brand-color)" }}
-                  >
-                    Save details
-                  </button>
-                </div>
-              </form>
-            </div>
-          ) : canSetLive ? (
-            <>
-              <ConfirmPublishButton
-                propertyId={propertyId}
-                label="Post everywhere"
-                formClassName="mt-5"
-                className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-                style={{ backgroundColor: "var(--brand-color)" }}
-                destinations={instantPublishDestinations}
-                address={addressLabel}
-              >
-                <Icons.bolt className="h-4 w-4" />
-              </ConfirmPublishButton>
-              <p className="mt-2 text-xs text-gray-600">
-                Posts now where you are signed in. The rest need one step.
-              </p>
-            </>
-          ) : (
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-semibold text-amber-950">
-                Review the listing status before this rental can go online.
-              </p>
-              <a
-                href="#rental-details"
-                className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-              >
-                Review listing
-              </a>
-            </div>
-          )}
-          {photoNudge}
-        </section>
-      )}
-
-      <ListingPacketCard
-        readiness={listingPacket}
-        propertyId={propertyId}
-        showAction={false}
-      />
-
-      {showLaunchRunPanel && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {packetBlocked ? "Next after your listing" : "Your sites"}
-              </p>
-              <h3 className="mt-1 text-base font-semibold text-gray-950">
-                {packetBlocked
-                  ? "Posting opens once the questions are answered."
-                  : "We post to every site marked Ready. The rest tell you what they need."}
-              </h3>
-            </div>
-            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
-              {packetBlocked ? "No posting yet" : "Fallback help included"}
-            </span>
-          </div>
-          <LaunchRunPanel
-            propertyId={propertyId}
-            run={launchRun.run}
-            items={launchRun.items}
-            progress={launchRun.progress}
-            selectable={launchRun.selectable}
-            startChannels={launchRun.startChannels}
-            realtorReferralEnabled={launchRun.realtorReferralEnabled}
-            leaseupTakedownEnabled={Boolean(launchRun.leaseupTakedownEnabled)}
-            setupBlocker={launchSetupBlocker}
-          />
-        </section>
-      )}
-
-      {!packetBlocked && (
-        <ChannelPublishRail
-          buckets={railBuckets}
-          oneTapFooter={oneTapFooter}
-          actionForRow={railActionForRow}
-        />
-      )}
-
-      <section className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm md:grid-cols-3">
-        {linkIsLive ? (
-          <>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Inquiries from other sites
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-gray-950">
-                {analyticsSummary.leads}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Total inquiries
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-gray-950">
-                {totalInquiryCount}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                More on inquiries
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-gray-950">
-                {analyticsSummary.advanced}
-              </p>
-            </div>
-          </>
-        ) : (
-          <>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Reach
-              </p>
-              <p className="mt-1 text-sm text-gray-500">
-                Your reach shows here after you post.
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Inquiries
-              </p>
-              <p className="mt-1 text-sm text-gray-500">
-                Your site links count renters once the ad is up.
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Follow-ups
-              </p>
-              <p className="mt-1 text-sm text-gray-500">
-                Viewings and applications show up here.
-              </p>
-            </div>
-          </>
-        )}
-      </section>
-
-    </div>
-  );
-}
-
-function PublishControlRoom({
-  propertyId,
-  linkIsLive,
-  setupOutstanding,
-  hasPhotos,
-  canSetLive,
-  listingPacket,
-  hasRun,
-  selectedChannelCount,
-  buckets,
-}: {
-  propertyId: string;
-  linkIsLive: boolean;
-  setupOutstanding: number;
-  hasPhotos: boolean;
-  canSetLive: boolean;
-  listingPacket: ListingPacketReadiness;
-  hasRun: boolean;
-  selectedChannelCount: number;
-  buckets: PublishControlRoomBucket[];
-}) {
-  const packetMissing = listingPacket.missingRequired;
-  const firstPacketMissing = packetMissing[0] ?? null;
-  const firstPacketAction = firstPacketMissing
-    ? packetFieldAction(firstPacketMissing, propertyId)
-    : null;
-  const packetMissingText = shortMissingList(packetMissing);
-  const packetBlocked = packetMissing.length > 0;
-  const launchBlocked = packetBlocked || setupOutstanding > 0 || !hasPhotos || !linkIsLive;
-  const attentionBuckets = buckets.filter(
-    (bucket) =>
-      bucket.value > 0 &&
-      bucket.key !== "liveOutside" &&
-      bucket.key !== "readyNow",
-  );
-  const liveOutsideBucket = buckets.find(
-    (bucket) => bucket.key === "liveOutside",
-  );
-  const readyNowBucket = buckets.find((bucket) => bucket.key === "readyNow");
-  const attentionCount = attentionBuckets.reduce(
-    (sum, bucket) => sum + bucket.value,
-    0,
-  );
-  const primaryHref =
-    firstPacketAction
-      ? firstPacketAction.href
-      : setupOutstanding > 0
-      ? "#rental-details"
-      : !hasPhotos
-        ? "#property-photos"
-        : !linkIsLive
-          ? canSetLive
-            ? "#publish-action"
-            : "#rental-details"
-          : "#publish-checklist";
-  const primaryAction =
-    firstPacketAction
-      ? firstPacketAction.action
-      : setupOutstanding > 0
-      ? "Add details"
-      : !hasPhotos
-        ? "Add photos"
-        : !linkIsLive
-          ? canSetLive
-            ? "Turn your Vacantless page on"
-            : "Review status"
-          : hasRun
-            ? attentionCount > 0
-              ? "Open next posting step"
-              : "Review posting steps"
-            : "Open the posting steps";
-  const launchLabel = packetBlocked
-    ? `Your listing needs ${packetMissing.length} ${
-        packetMissing.length === 1 ? "thing" : "things"
-      } before every site can use it`
-    : launchBlocked
-    ? "Turn your Vacantless page on before posting"
-    : hasRun
-      ? attentionCount > 0
-      ? "One more step from you"
-        : "Posting steps are ready to review"
-      : "Ready to choose sites and post";
-  const launchDetail = packetBlocked
-    ? `${firstPacketAction?.detail ?? "Begin with the missing answer."} Sign-in, payment, and the ad link come after this.`
-    : launchBlocked
-    ? "Turn your Vacantless page on first. A site is Live once we have its link."
-    : hasRun
-      ? "One list for sign-ins, fees, old ads, and saving each link."
-      : "Choose the sites once. We write the ad and show only the steps that need you.";
-  const blockers = [
-    packetBlocked ? packetMissingText : null,
-    !packetBlocked && setupOutstanding > 0
-      ? `${setupOutstanding} ${
-          setupOutstanding === 1 ? "answer" : "answers"
-        }`
-      : null,
-    !packetBlocked && !hasPhotos ? "photos" : null,
-    !linkIsLive ? "your Vacantless page is off" : null,
-  ].filter((item): item is string => Boolean(item));
-  const waitingSummary = attentionBuckets
-    .map((bucket) => `${bucket.label.toLowerCase()} (${bucket.value})`)
-    .join(", ");
-  const visibleBuckets: Array<{
-    key: string;
-    label: string;
-    value: string | number;
-    detail?: string;
-    tone: PublishControlRoomTone;
-  }> = [
-    {
-      key: "renter-page",
-      label: "Your Vacantless page",
-      value: linkIsLive ? "Live" : "Not live",
-      tone: linkIsLive ? "positive" : "warning",
-    },
-    ...(liveOutsideBucket
-      ? [
-          {
-            key: liveOutsideBucket.key,
-            label: "Ads on rental sites",
-            value: liveOutsideBucket.value,
-            detail: liveOutsideBucket.detail,
-            tone: liveOutsideBucket.tone,
-          },
-        ]
-      : []),
-    ...(!launchBlocked && readyNowBucket && readyNowBucket.value > 0
-      ? [
-          {
-            key: readyNowBucket.key,
-            label: "Ready to post",
-            value: readyNowBucket.value,
-            detail: readyNowBucket.detail,
-            tone: readyNowBucket.tone,
-          },
-        ]
-      : []),
-    ...attentionBuckets,
-  ];
-
-  return (
-    <section
-      id="publish-control-room"
-      className="mb-4 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand">
-            Your posting steps
-          </p>
-          <h3 className="mt-1 text-lg font-semibold text-gray-950">
-            {launchLabel}
-          </h3>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-600">
-            {launchDetail}
-          </p>
-          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-gray-500">
-            {PUBLISH_CONTROL_ROOM_SAFETY_PROMISE}
-          </p>
-          <p className="mt-2 text-xs font-medium text-gray-500">
-            {selectedChannelCount}{" "}
-            {selectedChannelCount === 1 ? "site" : "sites"} selected.
-          </p>
-        </div>
-        {primaryHref === "#property-photos" ? (
-          <PhotoUploadLink
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
-          >
-            <Icons.bolt className="h-4 w-4" />
-            {primaryAction}
-          </PhotoUploadLink>
-        ) : (
-          <a
-            href={primaryHref}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 sm:w-auto"
-          >
-            <Icons.bolt className="h-4 w-4" />
-            {primaryAction}
-          </a>
-        )}
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {visibleBuckets.map((bucket) => (
-          <span
-            key={bucket.key}
-            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs"
-          >
-            <span className="font-semibold uppercase tracking-wide text-gray-500">
-              {bucket.label}
-            </span>
-            <span className="font-semibold text-gray-950">{bucket.value}</span>
-            {bucket.detail && (
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CONTROL_ROOM_TONE_CLASS[bucket.tone]}`}
-              >
-                {bucket.detail}
-              </span>
-            )}
-          </span>
-        ))}
-      </div>
-
-      {blockers.length > 0 ? (
-        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Before the rental sites: {blockers.join(", ")}.
-        </p>
-      ) : attentionBuckets.length > 0 ? (
-        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Still needs you: {waitingSummary}.
-        </p>
-      ) : (
-        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          Good to post. A rental site is Live once we have its link.
-        </p>
-      )}
-    </section>
-  );
-}
-
-function DistributionBasicsPanel({
-  linkIsLive,
-  setupOutstanding,
-  canSetLive,
-  selectedChannelCount,
-  liveChannels,
-  accountReadyCount,
-  accountTotalCount,
-  hasRun,
-}: {
-  linkIsLive: boolean;
-  setupOutstanding: number;
-  canSetLive: boolean;
-  selectedChannelCount: number;
-  liveChannels: number;
-  accountReadyCount: number;
-  accountTotalCount: number;
-  hasRun: boolean;
-}) {
-  const propertyValue =
-    setupOutstanding > 0
-      ? `${setupOutstanding} left`
-      : linkIsLive
-        ? "Live"
-        : "Ready";
-  const propertyDetail =
-    setupOutstanding > 0
-      ? "Finish details"
-      : linkIsLive
-        ? "Your Vacantless page works"
-        : canSetLive
-          ? "Turn it on next"
-          : "Review status";
-  const propertyHref =
-    setupOutstanding > 0
-      ? "#rental-details"
-      : linkIsLive
-        ? "#publish-checklist"
-        : canSetLive
-          ? "#publish-action"
-          : "#rental-details";
-  const propertyAction =
-    setupOutstanding > 0
-      ? "Finish"
-      : linkIsLive
-        ? "Use listing"
-        : canSetLive
-          ? "Turn it on"
-          : "Review";
-  const cards = [
-    {
-      title: "Property",
-      value: propertyValue,
-      detail: propertyDetail,
-      href: propertyHref,
-      action: propertyAction,
-    },
-    {
-      title: "Sites",
-      value: `${selectedChannelCount} selected`,
-      detail: hasRun ? `${liveChannels} live` : "Pick sites",
-      href: "#publish-checklist",
-      action: hasRun ? "Open sites" : "Choose sites",
-    },
-    {
-      title: "Account access",
-      value: `${accountReadyCount}/${accountTotalCount} ready`,
-      detail: "Credentials",
-      href: "/dashboard/settings?tab=distribution",
-      action: "Open site settings",
-    },
-    {
-      title: "Buy more help",
-      value: "Optional",
-      detail: "We post it for you",
-      href: "#posting-mode",
-      action: "Review help",
-    },
-  ];
-
-  return (
-    <section className="mb-4 grid gap-3 md:grid-cols-4">
-      {cards.map((card) => (
-        <a
-          key={card.title}
-          href={card.href}
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-            {card.title}
-          </p>
-          <p className="mt-1 text-xl font-semibold text-gray-950">
-            {card.value}
-          </p>
-          <p className="mt-1 text-xs text-gray-600">{card.detail}</p>
-          <p className="mt-3 text-xs font-semibold text-brand">{card.action}</p>
-        </a>
-      ))}
-    </section>
-  );
-}
-
-function PostingModePanel({
-  propertyId,
-  target,
-  activeItem,
-  usage,
-  dailyLostLabel,
-}: {
-  propertyId: string;
-  target: RunItemView | null;
-  activeItem: RunItemView | null;
-  usage: { used: number; included: number };
-  dailyLostLabel: string | null;
-}) {
-  const referralTarget = target?.channel === "realtor_ca";
-  const activeReferral = activeItem?.channel === "realtor_ca";
-  const activeRequestedDate = conciergeRequestedDate(
-    activeItem?.conciergeRequestedAt,
-  );
-  const activeRequestedSentence = activeRequestedDate
-    ? ` Requested ${activeRequestedDate}.`
-    : "";
-  const doneForYouHeading = activeItem
-    ? activeReferral
-      ? `An agent is already handling ${activeItem.channelLabel}.`
-      : `Vacantless is already posting ${activeItem.channelLabel}.`
-    : target
-      ? referralTarget
-        ? "Pay a licensed agent to handle Realtor.ca"
-        : `Pay Vacantless to post ${target.channelLabel}`
-      : "Pay Vacantless to post";
-  const doneForYouBody = activeItem
-    ? activeReferral
-      ? `The referral is in progress.${activeRequestedSentence} It still needs the real Realtor.ca listing URL before it counts as Live.`
-      : `This site is in our list.${activeRequestedSentence} We still need the link to your ad.`
-    : target
-      ? referralTarget
-        ? "A licensed agent handles Realtor.ca through their brokerage."
-        : "Vacantless takes over the site and records the live ad link here."
-      : "Choose sites first. Then we can post them for you.";
-  return (
-    <section id="posting-mode" className="mb-4 scroll-mt-6 space-y-3">
-      <div className="rounded-2xl border border-slate-900 bg-slate-950 p-5 text-white shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
-          We post it for you
-        </p>
-        <p className="mt-1 text-lg font-semibold text-white">
-          {doneForYouHeading}
-        </p>
-        <p className="mt-1 text-xs text-slate-300">{doneForYouBody}</p>
-        <p className="mt-1 text-xs font-medium text-emerald-300">
-          {conciergeUsageLabel(usage)}
-        </p>
-        {dailyLostLabel && (
-          <p className="mt-1 text-xs text-slate-300">
-            Every day vacant costs about {dailyLostLabel}.
-          </p>
-        )}
-        <div className="mt-4">
-          {activeItem ? (
-            <a
-              href={`#run-item-${activeItem.id}`}
-              className="inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
-            >
-              {activeReferral ? "View referral status" : "View desk status"}
-            </a>
-          ) : target ? (
-            <form action={requestConciergePublish}>
-              <input type="hidden" name="property_id" value={propertyId} />
-              <input type="hidden" name="item_id" value={target.id} />
-              {referralTarget && (
-                <input
-                  type="hidden"
-                  name="referral"
-                  value="realtor_network_agent"
-                />
-              )}
-              <button
-                type="submit"
-                className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
-              >
-                {referralTarget
-                  ? "Ask an agent to post it"
-                  : "Ask Vacantless to post it"}
-              </button>
-            </form>
-          ) : (
-            <a
-              href="#publish-checklist"
-              className="inline-flex rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-slate-100"
-            >
-              Choose sites
-            </a>
-          )}
-        </div>
-      </div>
-      <details className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-gray-900 [&::-webkit-details-marker]:hidden">
-          Use a site yourself instead
-          <span className="ml-2 text-xs font-normal text-gray-500">
-            We write it, you sign in, you send the link
-          </span>
-        </summary>
-        <div className="border-t border-gray-100 px-5 py-4">
-          <p className="text-sm font-semibold text-gray-950">
-            Write. Post. Save the link.
-          </p>
-          <p className="mt-1 text-xs text-gray-600">
-            We write the steps and keep the link here. You sign in, post, and
-            save the link yourself.
-          </p>
-          <a
-            href="#publish-checklist"
-            className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Open posting checklist
-          </a>
-        </div>
-      </details>
-    </section>
-  );
-}
-
-function DistributionHealthPanel({ health }: { health: DistributionHealth }) {
-  const coverageLabel =
-    health.totalChannels > 0
-      ? `${health.liveChannels}/${health.totalChannels}`
-      : "0/0";
-  const attentionTone =
-    health.proofIssueChannels > 0
-      ? "danger"
-      : health.attentionChannels > 0 || health.staleChannels > 0
-        ? "warning"
-        : "positive";
-  const attentionLabel =
-    health.proofIssueChannels > 0
-      ? `${health.proofIssueChannels} missing ad link${
-          health.proofIssueChannels === 1 ? "" : "s"
-        }`
-      : health.attentionChannels > 0
-        ? `${health.attentionChannels} action${
-            health.attentionChannels === 1 ? "" : "s"
-          } needed`
-        : health.staleChannels > 0
-          ? `${health.staleChannels} refresh${
-              health.staleChannels === 1 ? "" : "es"
-            } due`
-          : "Clean";
-
-  return (
-    <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <IconTile>
-            <Icons.list className="h-4 w-4" />
-          </IconTile>
-          <h3 className="text-sm font-semibold text-gray-900">
-            Posting details
-          </h3>
-        </div>
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONE_CHIP[attentionTone]}`}
-        >
-          {attentionLabel}
-        </span>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <HealthMetric label="Live coverage" value={coverageLabel} />
-        <HealthMetric
-          label="In active run"
-          value={String(health.activeChannels)}
-        />
-        <HealthMetric
-          label="Submitted, not live"
-          value={String(health.submittedChannels)}
-        />
-        <HealthMetric
-          label="Tracked posts"
-          value={String(health.trackedPosts)}
-        />
-        <HealthMetric
-          label="Inquiries counted"
-          value={String(health.attributedLeads)}
-        />
-        <HealthMetric
-          label="Booked or advanced"
-          value={String(health.advancedLeads)}
-        />
-        <HealthMetric
-          label="Post it again"
-          value={String(health.staleChannels)}
-        />
-        <HealthMetric
-          label="Missing ad links"
-          value={String(health.proofIssueChannels)}
-        />
-      </div>
-    </section>
-  );
-}
-
-function HealthMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-      <p className="text-[11px] font-medium uppercase text-gray-500">
-        {label}
-      </p>
-      <p className="mt-1 text-base font-semibold text-gray-900">{value}</p>
-    </div>
-  );
-}
-
-function AutomationStatusPanel({
-  summary,
-  hasRun,
-  readyToShare,
-  linkIsLive,
-}: {
-  summary: AutomationStatusSummary;
-  hasRun: boolean;
-  readyToShare: boolean;
-  linkIsLive: boolean;
-}) {
-  const state: AutomationStatusState =
-    summary.needsRefresh > 0
-      ? "needs_refresh"
-      : summary.oneTap > 0
-        ? "one_tap"
-        : summary.processing > 0
-          ? "processing"
-          : summary.liveAuto > 0
-            ? "live_auto"
-            : summary.blocked > 0
-              ? "blocked"
-              : "idle";
-  const label = hasRun
-    ? state === "one_tap"
-      ? "One tap waiting"
-      : state === "needs_refresh"
-        ? "Post it again"
-        : state === "blocked"
-          ? "Needs setup"
-          : "We are posting"
-    : readyToShare
-      ? "Ready"
-      : "Needs setup";
-  const ownSurface = linkIsLive
-    ? "Your Vacantless page is on."
-    : "Your Vacantless page turns on with this rental.";
-
-  return (
-    <section className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2">
-            <AutomationDot state={hasRun ? state : "idle"} />
-            <h3 className="text-sm font-semibold text-gray-900">
-              What we are doing
-            </h3>
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-              {label}
-            </span>
-          </div>
-          <p className="text-xs text-gray-600">
-            {hasRun
-              ? summary.line
-              : readyToShare
-                ? "Turn it on, or open the steps to line up your sites."
-                : "Answer the required questions before we can post."}
-          </p>
-          <p className="mt-1 text-xs text-gray-500">{ownSurface}</p>
-        </div>
-        {summary.oneTap > 0 && (
-          <a
-            href="#publish-checklist"
-            className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
-          >
-            Review and post
-          </a>
-        )}
-        {summary.needsRefresh > 0 && (
-          <a
-            href="#publish-checklist"
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            Refresh
-          </a>
-        )}
-      </div>
-    </section>
-  );
-}
-
-// --- distribution analytics (Slice 4) --------------------------------------
-
-function AnalyticsPanel({ rows }: { rows: ChannelAnalyticsRow[] }) {
-  if (rows.length === 0) return null;
-  const totals = analyticsTotals(rows);
-  return (
-    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-2 flex items-center gap-2.5">
-        <IconTile><Icons.list className="h-4 w-4" /></IconTile>
-        <h3 className="text-sm font-semibold text-gray-900">
-          What&apos;s working
-        </h3>
-      </div>
-      <p className="mb-4 text-xs text-gray-500">
-        See which places actually produced renters: {totals.leads}{" "}
-        {totals.leads === 1 ? "inquiry" : "inquiries"} across{" "}
-        {totals.channelsWithLeads}{" "}
-        {totals.channelsWithLeads === 1 ? "site" : "sites"},{" "}
-        {totals.advanced} that booked or progressed.
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
-              <th className="py-1.5 pr-3 font-medium">Site</th>
-              <th className="py-1.5 pr-3 font-medium">Inquiries</th>
-              <th className="py-1.5 pr-3 font-medium">Booked+</th>
-              <th className="py-1.5 pr-3 font-medium">Days live</th>
-              <th className="py-1.5 font-medium">Next step</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.channel} className="border-b border-gray-100 align-top">
-                <td className="py-2 pr-3 font-medium text-gray-800">{r.label}</td>
-                <td className="py-2 pr-3 text-gray-700">{r.leads}</td>
-                <td className="py-2 pr-3 text-gray-700">{r.advanced}</td>
-                <td className="py-2 pr-3 text-gray-500">
-                  {r.daysLive != null ? r.daysLive : r.hasLivePost ? "-" : "not live"}
-                </td>
-                <td className="py-2 text-gray-500">{r.suggestion}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+// S695: SimpleGetOnline (the pre-Publish-Everywhere simple surface, never
+// rendered under the PROD flags), PublishControlRoom and the basics / posting
+// mode / health / automation / analytics panels were removed with the
+// self-guided path (DECISION-S694). What stays behind "Advanced" is the
+// channel card list: it owns the only Connect / Disconnect Facebook Page
+// controls (fa4a808, held until the Meta verdict) and the tracked ad links.
 
 // --- one channel card ------------------------------------------------------
 
-function groupedFillSheetFields(sheet: FillSheet): Array<{
-  step: string;
-  fields: FillSheet["fields"];
-}> {
-  const groups: Array<{ step: string; fields: FillSheet["fields"] }> = [];
-  const byStep = new Map<string, FillSheet["fields"]>();
-  for (const field of sheet.fields) {
-    const step = field.step ?? "Fields";
-    const fields = byStep.get(step) ?? [];
-    fields.push(field);
-    byStep.set(step, fields);
-  }
-  for (const [step, fields] of byStep) groups.push({ step, fields });
-  return groups;
-}
-
-function RentFasterPostingKit({
-  copy,
-  fillSheet,
-  reservedTrackedUrl,
-}: {
-  copy: { title: string; body: string } | null;
-  fillSheet: FillSheet | null;
-  reservedTrackedUrl: string | null;
-}) {
-  const groups = fillSheet ? groupedFillSheetFields(fillSheet) : [];
-  const gotchas = [
-    "Set Province to Ontario before choosing the address.",
-    "Pick the Google address suggestion and check the map.",
-    "Review property type; use Fourplex for a unit in a fourplex.",
-    "Take off the Credit Report and Zumper add-ons unless approved.",
-    "Paid promotion is optional and owner-approved, not automatic.",
-    "Upload photos after you pay, then paste the RentFaster link.",
-  ];
-
-  return (
-    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold text-amber-950">
-            RentFaster posting kit
-          </p>
-          <p className="text-[11px] text-amber-800">
-            Use this while logged in on the RentFaster add-listing page.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {copy && (
-            <>
-              <CopyTextButton value={copy.title} label="Copy title" />
-              <CopyTextButton value={copy.body} label="Copy description" />
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="mb-3 rounded-lg border border-amber-200 bg-white p-2.5">
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-          Your inquiry link
-        </p>
-        {reservedTrackedUrl ? (
-          <CopyLink url={reservedTrackedUrl} />
-        ) : (
-          <p className="text-xs text-amber-800">
-            Add RentFaster to your posting steps. That saves your inquiry link
-            before you post.
-          </p>
-        )}
-      </div>
-
-      {fillSheet && (
-        <details className="mb-3 rounded-lg border border-amber-200 bg-white p-2.5">
-          <summary className="cursor-pointer text-xs font-semibold text-amber-950">
-            RentFaster field sheet
-          </summary>
-          <div className="mt-2 space-y-3">
-            {groups.map((group) => (
-              <div key={group.step}>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  {group.step}
-                </p>
-                <dl className="space-y-1">
-                  {group.fields.map((field) => (
-                    <div
-                      key={field.id}
-                      className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2"
-                    >
-                      <dt className="text-[11px] font-semibold text-gray-700">
-                        {field.label}
-                      </dt>
-                      <dd className="mt-0.5 text-xs text-gray-900">
-                        {field.value ?? "You do this one"}
-                      </dd>
-                      {field.hint && (
-                        <dd className="mt-1 text-[11px] text-gray-500">
-                          {field.hint}
-                        </dd>
-                      )}
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-
-      <div>
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-          RentFaster gotchas
-        </p>
-        <ul className="space-y-1">
-          {gotchas.map((gotcha) => (
-            <li
-              key={gotcha}
-              className="flex items-start gap-1.5 text-xs text-amber-900"
-            >
-              <span aria-hidden className="mt-px">
-                ○
-              </span>
-              <span>{gotcha}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
+// S695: the RentFaster posting kit (field sheet + gotchas, S262/S412) was
+// removed with the self-guided posting path (DECISION-S694).
 
 function ChannelCard({
   card,
@@ -2960,8 +848,6 @@ function ChannelCard({
   addFormKey,
   today,
   replyInputs,
-  qaExpected,
-  reservedTrackedUrl,
 }: {
   card: DistributeChannelCard;
   propertyId: string;
@@ -2969,10 +855,8 @@ function ChannelCard({
   addFormKey: string;
   today: string;
   replyInputs: ReplyInputs;
-  qaExpected: QaExpected;
-  reservedTrackedUrl: string | null;
 }) {
-  const { channel, status, copy, fillSheet, feed, partner } = card;
+  const { channel, status, copy, feed, partner } = card;
   const facebookPage = card.facebookPage;
   const instagramAccount = card.instagramAccount;
   const tone = channelStatusTone(status.value);
@@ -3229,14 +1113,6 @@ function ChannelCard({
             </a>
           </div>
 
-          {channel.key === "rentfaster" && (
-            <RentFasterPostingKit
-              copy={copy}
-              fillSheet={fillSheet}
-              reservedTrackedUrl={reservedTrackedUrl}
-            />
-          )}
-
           {replySnippets.length > 0 && (
             <details>
               <summary className="cursor-pointer text-xs font-medium text-brand">
@@ -3261,7 +1137,6 @@ function ChannelCard({
             </details>
           )}
 
-          <QaChecker channelKey={channel.key} expected={qaExpected} />
         </div>
       </details>
     </div>
@@ -3509,96 +1384,6 @@ function PostFields({
         </div>
       </div>
     </>
-  );
-}
-
-// --- listing quality (Slice 5) ---------------------------------------------
-
-function ListingQualityPanel({ quality }: { quality: QualityView }) {
-  const { listing, fairFlags, missing } = quality;
-  const toneClass =
-    listing.grade === "strong"
-      ? "bg-green-50 text-green-700"
-      : listing.grade === "fair"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-red-50 text-red-700";
-  const weakChecks = listing.checks.filter((c) => !c.ok);
-
-  return (
-    <details className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <summary className="flex cursor-pointer flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold text-gray-900">
-          Listing quality
-        </span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${toneClass}`}
-        >
-          {gradeLabel(listing.grade)} · {listing.score}/100
-        </span>
-        {fairFlags.length > 0 && (
-          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-            {fairFlags.length} wording{" "}
-            {fairFlags.length === 1 ? "flag" : "flags"}
-          </span>
-        )}
-      </summary>
-
-      <div className="mt-3 space-y-3">
-        {weakChecks.length > 0 && (
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-              Strengthen
-            </p>
-            <ul className="space-y-1">
-              {weakChecks.map((c) => (
-                <li key={c.key} className="flex items-start gap-2 text-xs text-gray-600">
-                  <span aria-hidden className="mt-px text-amber-500">○</span>
-                  <span>{c.hint}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {fairFlags.length > 0 && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-red-700">
-              Fair-housing wording under the Ontario Human Rights Code
-            </p>
-            <ul className="space-y-1.5">
-              {fairFlags.map((f) => (
-                <li key={f.key} className="text-xs text-red-800">
-                  <span className="font-medium">{f.ground}:</span> {f.message}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-[11px] text-red-600">
-              Guidance, not legal advice.
-            </p>
-          </div>
-        )}
-
-        {missing.length > 0 && (
-          <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-              Details that make ads convert
-            </p>
-            <p className="text-xs text-gray-500">
-              Your description doesn&apos;t mention: {missing.join(", ")}.{" "}
-              <a href="#listing-description" className="font-medium text-brand underline">
-                Add a few in the description →
-              </a>
-            </p>
-          </div>
-        )}
-
-        {weakChecks.length === 0 && fairFlags.length === 0 && missing.length === 0 && (
-          <p className="text-xs text-gray-500">
-            This listing is strong across the board - nothing to fix.
-          </p>
-        )}
-      </div>
-    </details>
   );
 }
 
