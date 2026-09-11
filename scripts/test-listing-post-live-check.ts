@@ -10,7 +10,10 @@ import {
   listingPostLiveCheckTarget,
   liveCheckNoteLine,
   liveCheckRowPatch,
+  liveCheckProof,
+  LIVE_CHECK_PROOF_INTERVAL_DAYS,
   type LiveCheckFacts,
+  type LiveCheckOutcome,
 } from "../lib/listing-post-live-check";
 
 let passed = 0;
@@ -440,6 +443,54 @@ for (const code of [429, 503] as const) {
   );
   eq("zumper 410 = unknown (unmeasured)", o.verdict, "unknown");
   eq("zumper 410 reason", o.reason, "zumper_http_410_unmeasured");
+}
+
+// --- The proof half (S696d) -----------------------------------------------
+// The check used to write only when an ad was GONE. These pin the other half:
+// a confirmed-live machine read is recorded, and nothing weaker ever is.
+{
+  const NOW = "2026-09-11T12:00:00.000Z";
+  const URL_ = "https://www.kijiji.ca/v-apartments-condos/windsor-area-on/x/1742970091";
+  const live: LiveCheckOutcome = { verdict: "live", reason: "kijiji_ad_page", evidence: URL_ };
+  const row = { status: "live", portal: "kijiji" };
+
+  const p = liveCheckProof(row, live, URL_, null, NOW);
+  ok("proof: a live read with no prior proof IS recorded", p != null);
+  eq("proof: channel is the portal", p?.channel, "kijiji");
+  eq("proof: type is external_url", p?.verificationType, "external_url");
+  eq("proof: result is verified_live", p?.result, "verified_live");
+  eq("proof: it carries the url actually fetched", p?.externalUrl, URL_);
+
+  // Nothing short of a positive read is proof. This is the assertion that
+  // stops the check manufacturing the very claim provenness exists to refuse.
+  for (const v of ["challenge", "needs_login", "unknown", "unreachable", "removed"] as const) {
+    const o: LiveCheckOutcome = { verdict: v, reason: `t_${v}`, evidence: null };
+    ok(`proof: a ${v} verdict is NEVER proof`, liveCheckProof(row, o, URL_, null, NOW) === null);
+  }
+
+  ok("proof: a row that is not live is never proof", liveCheckProof({ status: "removed", portal: "kijiji" }, live, URL_, null, NOW) === null);
+  ok("proof: no url means nothing to stand behind", liveCheckProof(row, live, "  ", null, NOW) === null);
+  ok("proof: no portal means no channel to credit", liveCheckProof({ status: "live", portal: " " }, live, URL_, null, NOW) === null);
+
+  // Cadence: daily runs must not inflate the count a landlord reads.
+  const yesterday = "2026-09-10T12:00:00.000Z";
+  ok("proof: a proof from yesterday suppresses today's", liveCheckProof(row, live, URL_, yesterday, NOW) === null);
+  const old = "2026-08-01T12:00:00.000Z";
+  ok("proof: a proof older than the interval records again", liveCheckProof(row, live, URL_, old, NOW) != null);
+  const edge = new Date(Date.parse(NOW) - LIVE_CHECK_PROOF_INTERVAL_DAYS * 86400000 - 1000).toISOString();
+  ok("proof: exactly past the interval records", liveCheckProof(row, live, URL_, edge, NOW) != null);
+  const justInside = new Date(Date.parse(NOW) - LIVE_CHECK_PROOF_INTERVAL_DAYS * 86400000 + 60000).toISOString();
+  ok("proof: just inside the interval does not", liveCheckProof(row, live, URL_, justInside, NOW) === null);
+
+  // A clock skew putting the last proof in the future must not read as due.
+  const future = "2027-01-01T00:00:00.000Z";
+  ok("proof: a future timestamp does not open the window", liveCheckProof(row, live, URL_, future, NOW) === null);
+  ok("proof: an unparseable timestamp records rather than blocking", liveCheckProof(row, live, URL_, "not-a-date", NOW) != null);
+
+  // And the removal write is untouched by any of this.
+  const removed: LiveCheckOutcome = { verdict: "removed", reason: "kijiji_ad_removed", evidence: null };
+  ok("removal write still fires on removed", liveCheckRowPatch({ status: "live", notes: null }, removed, NOW) != null);
+  ok("removal write still refuses a live verdict", liveCheckRowPatch({ status: "live", notes: null }, live, NOW) === null);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

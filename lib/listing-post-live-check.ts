@@ -443,3 +443,78 @@ export function liveCheckRowPatch(
   const prior = (row.notes ?? "").replace(/\s+$/, "");
   return { status: "removed", notes: prior ? `${prior}\n${line}` : line };
 }
+
+// ============================================================================
+// THE OTHER HALF OF THE CHECK (S696d): recording that the ad WAS there.
+//
+// Until now this check only ever wrote when a portal said an ad was GONE. A
+// machine fetched a live ad, confirmed it, and left no trace, so the strongest
+// evidence the product generates was thrown away every single day. That is why
+// `lib/channel-provenness` could not call Kijiji proven while two paid Kijiji
+// ads were live: the proof existed, nobody wrote it down.
+//
+// A recorded proof is a `distribution_verifications` row with `checked_by`
+// null, which is what MACHINE means to the provenness rule. So this must never
+// be called for a verdict short of `live`: a challenge page, a login wall or an
+// unknown shape is not a confirmation, and writing one as if it were would
+// manufacture exactly the false claim the provenness module exists to refuse.
+// ============================================================================
+
+/** Only a positive read is proof. Not `challenge`, not `unknown`, not `needs_login`. */
+export const LIVE_CHECK_PROOF_VERDICTS: readonly LiveCheckVerdict[] = ["live"] as const;
+
+/**
+ * How often one listing post may record a fresh proof. The check runs daily; a
+ * row per ad per day would turn "confirmed live 4 times" into "confirmed live
+ * 87 times", which is volume, not evidence, and it is shown to a landlord.
+ */
+export const LIVE_CHECK_PROOF_INTERVAL_DAYS = 7;
+
+export type LiveCheckProof = {
+  channel: string;
+  verificationType: "external_url";
+  result: "verified_live";
+  externalUrl: string;
+  reason: string;
+};
+
+/**
+ * Whether this outcome should be recorded as proof, and what to record.
+ *
+ * `lastProofAt` is the most recent MACHINE proof already on file for this
+ * listing post, or null when there is none. Null always records: a channel with
+ * no proof at all is the case this exists for.
+ */
+export function liveCheckProof(
+  row: { status: string | null | undefined; portal: string | null | undefined },
+  outcome: LiveCheckOutcome,
+  checkedUrl: string | null | undefined,
+  lastProofAt: string | null | undefined,
+  nowISO: string,
+): LiveCheckProof | null {
+  if (row.status !== "live") return null;
+  if (!LIVE_CHECK_PROOF_VERDICTS.includes(outcome.verdict)) return null;
+  const portal = typeof row.portal === "string" ? row.portal.trim() : "";
+  if (!portal) return null;
+  const url = typeof checkedUrl === "string" ? checkedUrl.trim() : "";
+  if (!url) return null;
+
+  if (lastProofAt) {
+    const last = Date.parse(lastProofAt);
+    const now = Date.parse(nowISO);
+    if (Number.isFinite(last) && Number.isFinite(now)) {
+      // A clock skew that puts the last proof in the future must not be read as
+      // "due again"; only real elapsed time opens the window.
+      const days = (now - last) / 86_400_000;
+      if (days < LIVE_CHECK_PROOF_INTERVAL_DAYS) return null;
+    }
+  }
+
+  return {
+    channel: portal,
+    verificationType: "external_url",
+    result: "verified_live",
+    externalUrl: url,
+    reason: outcome.reason,
+  };
+}

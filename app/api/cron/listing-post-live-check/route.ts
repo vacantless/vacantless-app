@@ -7,6 +7,7 @@ import {
   isLiveCheckPortal,
   listingPostLiveCheckTarget,
   liveCheckRowPatch,
+  liveCheckProof,
   type LiveCheckFacts,
   type LiveCheckOutcome,
 } from "@/lib/listing-post-live-check";
@@ -69,6 +70,7 @@ type Detail = {
   end: string | null;
   http: number | null;
   wrote: boolean;
+  proved?: boolean;
   error?: string;
 };
 
@@ -87,6 +89,8 @@ type Summary = {
   unknown: number;
   unsupported: number;
   wrote: number;
+  /** Confirmed-live reads recorded as machine proof this run (S696d). */
+  proved: number;
   errors: number;
   details: Detail[];
 };
@@ -224,6 +228,7 @@ export async function GET(req: NextRequest) {
     unknown: 0,
     unsupported: 0,
     wrote: 0,
+    proved: 0,
     errors: 0,
     details: [],
   };
@@ -252,6 +257,25 @@ export async function GET(req: NextRequest) {
       { ...summary, ok: false, reason: safeErrorMessage(err) },
       { status: 500 },
     );
+  }
+
+  // The most recent MACHINE proof already on file per listing post, read once
+  // rather than per row. Only checked_by NULL counts: a person's confirmation
+  // is a different kind of evidence and must not suppress a machine's.
+  const lastProofByPost = new Map<string, string>();
+  if (rows.length > 0) {
+    const { data: priorProofs } = await admin
+      .from("distribution_verifications")
+      .select("listing_post_id, checked_at")
+      .in("listing_post_id", rows.map((r) => r.id))
+      .is("checked_by", null)
+      .eq("result", "verified_live")
+      .order("checked_at", { ascending: false });
+    for (const p of (priorProofs ?? []) as { listing_post_id: string | null; checked_at: string | null }[]) {
+      if (!p.listing_post_id || !p.checked_at) continue;
+      // Ordered newest first, so the first one seen per post is the latest.
+      if (!lastProofByPost.has(p.listing_post_id)) lastProofByPost.set(p.listing_post_id, p.checked_at);
+    }
   }
 
   const nowISO = new Date().toISOString();
@@ -301,6 +325,7 @@ export async function GET(req: NextRequest) {
       end: facts.endUrl,
       http: facts.httpStatus,
       wrote: false,
+      proved: false,
     };
 
     const patch = liveCheckRowPatch(row, outcome, nowISO);
@@ -322,6 +347,37 @@ export async function GET(req: NextRequest) {
         detail.wrote = true;
       } else {
         detail.error = "row_no_longer_live_at_write";
+      }
+    }
+
+    // THE OTHER HALF (S696d). A confirmed-live read is the strongest evidence
+    // this product generates and it used to be discarded every run. Recorded as
+    // a distribution_verifications row with checked_by NULL, which is what
+    // MACHINE means to lib/channel-provenness. Same write gate as the removal
+    // above, so a dry run still writes nothing.
+    if (write) {
+      const proof = liveCheckProof(row, outcome, target.url, lastProofByPost.get(row.id) ?? null, nowISO);
+      if (proof) {
+        const { error: proofErr } = await admin.from("distribution_verifications").insert({
+          organization_id: row.organization_id,
+          property_id: row.property_id,
+          listing_post_id: row.id,
+          channel: proof.channel,
+          verification_type: proof.verificationType,
+          result: proof.result,
+          external_url: proof.externalUrl,
+          checked_by: null,
+          matched_fields: {},
+          failure_reason: null,
+          metadata: { source: "listing_post_live_check", reason: proof.reason },
+        });
+        if (proofErr) {
+          summary.errors++;
+          detail.error = safeErrorMessage(proofErr);
+        } else {
+          summary.proved++;
+          detail.proved = true;
+        }
       }
     }
 
