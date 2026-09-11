@@ -1,26 +1,77 @@
 name: Listing-post live check
 
 # Daily check that every `live` listing_posts row on Kijiji, Zumper and
-# Rentals.ca still points at an ad (S693). The route is report-only until
-# LISTING_POST_LIVE_CHECK_ENABLED=true is set in Vercel; with the flag off the
-# run prints verdicts and writes nothing. Uses the same repo secret CRON_SECRET
-# as reminders.yml. Deliberately NOT in the 15-minute pinger: one fetch per row
-# per day is enough and keeps Vercel's egress off the portals' radar.
+# Rentals.ca still points at an ad (S693), and, since S696d, a record that it
+# DID when the ad is there: a confirmed-live read is written as machine proof
+# (distribution_verifications, checked_by NULL), which is what makes a channel
+# `proven` to lib/channel-provenness.
+#
+# Both writes are gated on LISTING_POST_LIVE_CHECK_ENABLED in Vercel. With the
+# flag off this run prints verdicts and writes nothing, whatever inputs it gets.
+#
+# S696d adds hand-run inputs so the FIRST armed run can be scoped to one portal
+# or one row. The removal write has never run in production, so arming it across
+# every portal at once is a bigger first step than it needs to be. Run
+# portal=kijiji first, read the result, then widen. Empty inputs reproduce the
+# daily behaviour exactly.
 #
 # Run it by hand: Actions tab -> "Listing-post live check" -> Run workflow.
 
 on:
   schedule:
     - cron: "30 14 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      portal:
+        description: "Limit to one portal (kijiji, zumper, rentals_ca). Blank = all."
+        required: false
+        default: ""
+      post:
+        description: "Limit to one listing_posts id. Blank = all."
+        required: false
+        default: ""
+      dry:
+        description: "Report only, never write, even if the flag is on."
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - name: Listing-post live check
+        env:
+          PORTAL: ${{ github.event.inputs.portal }}
+          POST: ${{ github.event.inputs.post }}
+          DRY: ${{ github.event.inputs.dry }}
         run: |
+          set -euo pipefail
+          # if/then, not `[ ... ] && ...`: under `set -e` a false test returns 1
+          # and kills the run, so an EMPTY input would abort the daily check.
+          QS=""
+          if [ -n "${PORTAL:-}" ]; then QS="${QS}&portal=${PORTAL}"; fi
+          if [ -n "${POST:-}" ]; then QS="${QS}&post=${POST}"; fi
+          if [ "${DRY:-false}" = "true" ]; then QS="${QS}&dry=1"; fi
+          URL="https://vacantless-app.vercel.app/api/cron/listing-post-live-check"
+          if [ -n "$QS" ]; then URL="${URL}?${QS#&}"; fi
+          echo "calling: $URL"
           curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://vacantless-app.vercel.app/api/cron/listing-post-live-check" \
-            -w "\nHTTP %{http_code}\n"
+            "$URL" -o /tmp/out.json -w "\nHTTP %{http_code}\n"
+          echo "--- summary ---"
+          # Print the counters on their own lines so the run is readable in the
+          # Actions log without expanding a wall of JSON.
+          python3 - <<'PY'
+          import json
+          d = json.load(open("/tmp/out.json"))
+          for k in ("ok","mode","scanned","live","removed","challenge","needs_login",
+                    "unreachable","unknown","unsupported","wrote","proved","errors","reason"):
+              if k in d:
+                  print(f"{k}: {d[k]}")
+          print("--- per row ---")
+          for x in d.get("details", []):
+              print(f"  {x.get('portal')} {x.get('post')} verdict={x.get('verdict')} "
+                    f"reason={x.get('reason')} wrote={x.get('wrote')} proved={x.get('proved')}"
+                    + (f" error={x['error']}" if x.get("error") else ""))
+          PY
