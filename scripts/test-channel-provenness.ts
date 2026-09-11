@@ -258,9 +258,23 @@ const of = (c: string) => ev.find((e) => e.channel === c)!;
       showOnlyProvenChannelsEnabled("True"),
   );
   ok(
-    "the non-production list carries both of our own orgs",
-    NON_PRODUCTION_ORGANIZATION_IDS.length === 2 &&
-      new Set(NON_PRODUCTION_ORGANIZATION_IDS).size === 2,
+    "the non-production list carries every org we run, with no duplicates",
+    NON_PRODUCTION_ORGANIZATION_IDS.length === 6 &&
+      new Set(NON_PRODUCTION_ORGANIZATION_IDS).size === 6,
+  );
+  ok(
+    "the two orgs that actually hold our own verified_live rows are listed",
+    NON_PRODUCTION_ORGANIZATION_IDS.includes("8ea1da48-0cd2-45a4-bfba-023b31a67884") &&
+      NON_PRODUCTION_ORGANIZATION_IDS.includes("b733a191-30fd-47fe-bd21-731404148026"),
+  );
+  // Widened: the const tuple's literal union would otherwise make a negative
+  // membership check a COMPILE error rather than a test that can fail.
+  const nonProd: readonly string[] = NON_PRODUCTION_ORGANIZATION_IDS;
+  ok(
+    "the customer orgs whose evidence makes channels proven are NOT listed",
+    !nonProd.includes("921f7c08-98af-428f-a238-36f4a781b0de") &&
+      !nonProd.includes("b2cb4eab-9a29-4972-8fca-564dc8ca6a61") &&
+      !nonProd.includes("9315e41e-1c03-43e3-9c8f-78563512f302"),
   );
   ok(
     "every id in the list is a uuid, so a typo cannot silently match nothing",

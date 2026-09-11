@@ -262,6 +262,22 @@ export const NON_PRODUCTION_ORGANIZATION_IDS = [
   "8ea1da48-0cd2-45a4-bfba-023b31a67884",
   // North Star Rentals QA
   "b733a191-30fd-47fe-bd21-731404148026",
+  // S696f: four more of ours, found by enumerating organizations rather than
+  // by waiting for one of them to produce a row. All four hold ZERO
+  // verifications and ZERO live posts today [verified 2026-09-11 via SQL], so
+  // adding them changes no current verdict. That is the point: the list has to
+  // be right BEFORE one of them posts, not after. The first version of this
+  // module shipped with two ids and called our own QA work a customer win.
+  "5853b472-7121-4374-bbf0-c2115cef05a5", // Smoke Test Realty S167
+  "569e23f6-2929-4e78-abd0-546c1dcbb3c7", // Premium Test
+  "606a2cc4-cbd8-44c9-987c-36e392c92bca", // Org A
+  "50b496d5-0e17-4756-be1a-559d2a9c9d78", // Org B
+  // NOT LISTED, AND IT IS A REAL QUESTION: Maple Door Rentals
+  // (a0e2e45c-f2be-427e-b8db-30535a821daa), plan `pilot`, 3 properties, 6
+  // leads. It reads like a real pilot customer, and excluding a real customer
+  // suppresses true evidence, so it is left counting as production. It holds no
+  // verifications and no live posts either, so nothing turns on it today. Ask
+  // Noam before moving it.
 ] as const;
 
 /** The channel keys a landlord may see. Unproven channels are simply absent. */

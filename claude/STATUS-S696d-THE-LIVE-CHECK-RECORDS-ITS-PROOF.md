@@ -58,9 +58,26 @@ The removal side is the one that deserves the care. Its signals were measured on
 - Plain-language gate unchanged. Full suite: the same 3 known reds.
 - No em dashes.
 
+## THE DRY RUN, and it settles both open questions [measured 2026-09-11, Actions run #5, `ca627da`, mode=dry, nothing written]
+
+```
+scanned 11   live 8   challenge 3   removed 0   errors 0
+```
+
+| portal | rows | verdict | reason |
+|---|---|---|---|
+| Zumper | 6 of 6 | **live** | `zumper_inquiry_cta_present` |
+| Kijiji | 2 of 2 | **live** | `kijiji_ad_page_200` |
+| Rentals.ca | 3 of 3 | challenge | `bot_wall_page` |
+
+**Zumper self-confirms from Vercel's own egress, all six rows.** The doubt recorded above was that Zumper stores the login-walled `/manage/` URL and that the live marker might be injected by JavaScript and absent from server-rendered HTML. Neither happened. The derived `/listings/<id>` URL returns the inquiry CTA to a plain fetch. **Zumper moves from assisted to proven on the first armed run, alongside Kijiji.**
+
+**`removed: 0`, which retires the one real risk in arming the flag.** The removal write has never run in production and it is the half that changes landlord-visible rows. Today nothing classifies as removed, so an armed run flips no row at all: its only effect is 8 proof inserts. The scoped `portal=` input built in S696e is therefore belt-and-braces rather than necessary, and is worth keeping for the next time this is not true.
+
+**Rentals.ca stays behind a Cloudflare bot wall** and will not self-confirm. It is already `proven` from 4 machine `external_url` checks written by another route, so this changes nothing for it. If those decay past the freshness window, Rentals.ca drops to unproven with no way to re-earn proof by this path. **That is the next real gap.**
+
 ## Follow-ups
 
-1. **Dry-run the check from production and read the verdicts** before enabling the flag.
-2. Then enable, let one run write, and confirm Kijiji flips to proven.
-3. **Zumper is the bigger prize, and this is a prediction, not a result.** It is `assisted` today because only people have ever confirmed it, and it is a `LIVE_CHECK_PORTALS` member with 6 live ads across three organizations. If those rows read `live` from Vercel, the same run earns Zumper machine proof and moves it to proven. **Not measured. The dry run in follow-up 1 is what settles it**, and Zumper rows store the login-walled `/manage/` URL, so a `needs_login` verdict is a real possibility.
-4. Rentals.ca answered `challenge` (Cloudflare) from Vercel in S693 and may never self-confirm; its existing machine checks came another way.
+1. **Set `LISTING_POST_LIVE_CHECK_ENABLED=true` in Vercel and redeploy** (env bakes at build), then run the workflow unscoped. Expect `proved: 8`, `wrote: 0`.
+2. Confirm in SQL that Kijiji and Zumper both carry fresh machine proof, and that `channelEvidence` returns both as `proven`.
+3. **Rentals.ca has no self-confirming path.** Cloudflare answers the Vercel fetch with a bot wall, so its proof has to keep coming from the route that produced its existing four checks, or the channel decays to unproven on its own in 90 days.
