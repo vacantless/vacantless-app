@@ -297,6 +297,7 @@ export function DistributeTab({
   publishEverywhereCopilotEnabled,
   stepClarityLiveEnabled,
   wizardEnabled,
+  shownChannelKeys = null,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -316,6 +317,9 @@ export function DistributeTab({
   publishEverywhereCopilotEnabled: boolean;
   stepClarityLiveEnabled: boolean;
   wizardEnabled: boolean;
+  /** SHOW_ONLY_PROVEN_CHANNELS. Display only, and passed straight through to
+   *  PublishEverywhere. Null leaves every channel listed, as today. */
+  shownChannelKeys?: readonly string[] | null;
 }) {
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
@@ -366,6 +370,7 @@ export function DistributeTab({
           externalUrl: it.externalUrl,
         }))}
         postingBlocker={publishEverywherePostingBlocker}
+        shownChannelKeys={shownChannelKeys}
       />
     </div>
   );

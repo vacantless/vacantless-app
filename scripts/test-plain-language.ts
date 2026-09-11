@@ -155,6 +155,9 @@ const OUT_OF_SCOPE: Record<string, string> = {
   // The property page's other tabs. Real landlord copy, but not syndication:
   // the word contract reaches them after the roadmap, not during it.
   "app/dashboard/properties/[id]/appliances-section.tsx": "unit facts tab, not syndication",
+  // S696c. A server-side loader. Its only strings are SQL column names in a
+  // select list; it renders nothing and returns channel keys, never copy.
+  "app/dashboard/properties/[id]/provenness-load.ts": "server loader, column names only, renders no landlord copy",
   "app/dashboard/properties/[id]/detectors-section.tsx": "unit facts tab, not syndication",
   "app/dashboard/properties/[id]/documents-section.tsx": "documents tab, not syndication",
   "app/dashboard/properties/[id]/dropbox-folder-import.tsx": "photo import tool, not syndication",

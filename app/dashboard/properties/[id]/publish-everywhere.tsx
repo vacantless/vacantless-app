@@ -334,6 +334,7 @@ export function PublishEverywhere({
   runItems = [],
   postingBlocker = null,
   wizardEnabled = false,
+  shownChannelKeys = null,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -351,6 +352,17 @@ export function PublishEverywhere({
   postingBlocker?: PublishEverywherePostingBlocker | null;
   /** DISTRIBUTION_WIZARD_ENABLED: "Connect →" links to the wizard only when it is on. */
   wizardEnabled?: boolean;
+  /**
+   * SHOW_ONLY_PROVEN_CHANNELS: the channels that have actually placed an ad for
+   * a customer (lib/channel-provenness). DISPLAY ONLY. Null means the rule is
+   * off or could not be measured, and every channel renders as before.
+   *
+   * Filtering here and not at the source is deliberate: a landlord who has
+   * already connected a site must still be able to post to it, and connecting
+   * is how a channel earns its evidence in the first place. This hides what we
+   * cannot yet stand behind; it removes nobody's account and no posting path.
+   */
+  shownChannelKeys?: readonly string[] | null;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDestinations, setConfirmDestinations] = useState<
@@ -369,8 +381,16 @@ export function PublishEverywhere({
       : null;
   const publicLink = replyInputs.bookingUrl;
 
+  // The record decides what is listed. An unproven channel is absent, not
+  // greyed out: a disabled tile still advertises something we cannot do.
+  const shownSet = shownChannelKeys == null ? null : new Set(shownChannelKeys);
+  const visibleCards =
+    shownSet == null
+      ? channelCards
+      : channelCards.filter((card) => shownSet.has(card.channel.key));
+
   // Resolve every channel once, then group + tally.
-  const resolved: ResolvedRow[] = channelCards.map((card) => {
+  const resolved: ResolvedRow[] = visibleCards.map((card) => {
     const { mode, bucket } = resolvePublishMode(
       toPublishInput(card, copilotEnabled),
     );
@@ -427,7 +447,10 @@ export function PublishEverywhere({
     forYou.find((row) => forYouNeedsOperatorStep(row)) ?? null;
   const liveForYouAllSet =
     stepClarityLiveEnabled && linkIsLive && firstOutstandingForYou == null;
-  const proofSavedCount = channelCards.filter(
+  // Count only what the landlord can actually see. A hidden channel with a
+  // saved ad must not appear in "Live on N sites", or the headline points at
+  // something the page does not list.
+  const proofSavedCount = visibleCards.filter(
     (card) => card.status.value === "posted",
   ).length;
   const onlineHeadline =

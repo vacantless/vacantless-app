@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
+import { showOnlyProvenChannelsEnabled } from "@/lib/channel-provenness";
+import { loadShownChannelKeys } from "./provenness-load";
 import { loadQuestionSheet } from "@/lib/question-sheet-load";
 import { questionSheetFieldFacts } from "@/lib/question-sheet";
 import { headers } from "next/headers";
@@ -1784,6 +1786,14 @@ export default async function PropertyDetailPage({
   const distributeOtherPosts = (postsByPortal.get("other") ?? []).map(
     toDistributePost,
   );
+  // SHOW_ONLY_PROVEN_CHANNELS (S696). Dark by default. When on, the publish
+  // surface lists only channels that have placed an ad for a customer; when off
+  // or unmeasurable it is null and every channel renders as before. Display
+  // only: distributeChannelCards itself is untouched, so posting, connecting
+  // and the proof grid all keep working for every channel.
+  const shownChannelKeys = showOnlyProvenChannelsEnabled()
+    ? await loadShownChannelKeys(distributeToday)
+    : null;
   // Slice 1 (S488): fold the where-posted grid's per-channel status into the
   // command center so a run row shows ONE merged status. computeChannelStatus
   // already derives needs_refresh (a live ad gone stale/expired) and problem (a
@@ -3879,6 +3889,7 @@ export default async function PropertyDetailPage({
           publishEverywhereCopilotEnabled={publishEverywhereCopilotEnabled}
           stepClarityLiveEnabled={stepClarityLiveEnabled}
           wizardEnabled={distributionWizardEnabled()}
+          shownChannelKeys={shownChannelKeys}
         />
       </TabPanel>
 
