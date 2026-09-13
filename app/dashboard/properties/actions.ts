@@ -1176,13 +1176,15 @@ export async function publishProperty(formData: FormData) {
   } | null;
   if (!prop) redirect("/dashboard/properties?forbidden=1");
 
-  // Only publish from a not-yet-public state. Already-live -> nothing to do;
-  // leased -> don't silently pull a unit off its tenancy via this path.
+  // Draft/off-market rentals can be published; already-live rentals can post
+  // listing changes to authorized instant channels from the same CTA. Leased
+  // units still need the explicit relist path below.
+  const alreadyLive = prop.status === "available";
   const publishable =
     prop.status === "draft" ||
     prop.status === "paused" ||
     prop.status === "off_market";
-  if (!publishable) redirect(`/dashboard/properties/${id}`);
+  if (!publishable && !alreadyLive) redirect(`/dashboard/properties/${id}`);
 
   // Gate the one-click path on the required-to-share basics (mirrors the
   // required checks in lib/share-readiness). Beds/baths can legitimately be 0.
@@ -1201,7 +1203,7 @@ export async function publishProperty(formData: FormData) {
   // never fires for them — e.g. Agile (premium) with several live units.
   const org = await getCurrentOrg();
   const cap = listingCapForPlan(org?.plan);
-  if (cap != null) {
+  if (!alreadyLive && cap != null) {
     const { count: liveCount } = await supabase
       .from("properties")
       .select("id", { count: "exact", head: true })
@@ -1213,10 +1215,12 @@ export async function publishProperty(formData: FormData) {
     }
   }
 
-  await supabase
-    .from("properties")
-    .update({ status: "available" })
-    .eq("id", id);
+  if (!alreadyLive) {
+    await supabase
+      .from("properties")
+      .update({ status: "available" })
+      .eq("id", id);
+  }
 
   if (org) {
     await maybePrepareAvailableListing(supabase, org, id);
