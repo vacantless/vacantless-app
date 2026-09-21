@@ -272,6 +272,11 @@ export const NON_PRODUCTION_ORGANIZATION_IDS = [
   "569e23f6-2929-4e78-abd0-546c1dcbb3c7", // Premium Test
   "606a2cc4-cbd8-44c9-987c-36e392c92bca", // Org A
   "50b496d5-0e17-4756-be1a-559d2a9c9d78", // Org B
+  // S697: the dress-rehearsal org, created through the public signup to walk
+  // onboarding as a stranger. It pressed Post, so it holds a staged Kijiji run
+  // item and briefly showed Rentals.ca and Zumper as connected. Listed BEFORE
+  // any of that could count as a customer proving a channel.
+  "695ebb66-273c-4261-b6e2-2cea9643987e", // Rehearsal Rentals S697
   // NOT LISTED, AND IT IS A REAL QUESTION: Maple Door Rentals
   // (a0e2e45c-f2be-427e-b8db-30535a821daa), plan `pilot`, 3 properties, 6
   // leads. It reads like a real pilot customer, and excluding a real customer

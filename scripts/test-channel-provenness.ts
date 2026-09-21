@@ -259,8 +259,8 @@ const of = (c: string) => ev.find((e) => e.channel === c)!;
   );
   ok(
     "the non-production list carries every org we run, with no duplicates",
-    NON_PRODUCTION_ORGANIZATION_IDS.length === 6 &&
-      new Set(NON_PRODUCTION_ORGANIZATION_IDS).size === 6,
+    NON_PRODUCTION_ORGANIZATION_IDS.length === 7 &&
+      new Set(NON_PRODUCTION_ORGANIZATION_IDS).size === 7,
   );
   ok(
     "the two orgs that actually hold our own verified_live rows are listed",
