@@ -40,11 +40,41 @@
 export const RENTALS_CA_LEAD_SENDER = "contact@rentals.ca";
 export const RENTALS_CA_TOUR_SENDER = "no-reply@rentals.ca";
 
+// KIJIJI (S697). One fixed sender for every enquiry and every customer. Read off
+// two real 2026 messages in rentals@agileonline.ca, uids 3613 and 3268, one with
+// a renter display name and one without, because that difference is the only
+// thing that reveals the label shape below.
+//
+// KIJIJI IS THE GENEROUS ONE, MORE SO THAN RENTALS.CA, AND IT IS ALL IN HEADERS:
+//   Reply-To:                   the renter's REAL email
+//   X-Adid-Horizontal:          the ad id, bare integer
+//   X-Vip-Url:                  the canonical ad url, carrying the same id
+//   X-Conversation-Id:          stable across a conversation
+//   X-Kijiji-Re-Requestviewing: "2026-07-31, 2026-08-01, 2026-08-02"
+//                               ONLY on the "request a viewing" template
+//
+// SO THE SUBJECT IS NEVER PARSED FOR CONTACT DETAILS, even though it carries
+// them. Kijiji's sender label is literally "Dee Dee(dnowlan8@gmail.com)",
+// parentheses included, and degrades to the bare email when the renter has no
+// profile name. Splitting the subject on "(" breaks on a name containing a
+// bracket and splitting on 'about "' breaks on an ad title containing it.
+// Reply-To has neither failure mode. The label is used for the renter's NAME and
+// to locate the message block, nothing else.
+//
+// AN OLDER FORMAT EXISTS AND IS NOT HANDLED HERE. Before roughly 2023 Kijiji
+// sent from a per-conversation masked relay (b-<token>@rts.kijiji.ca), subject
+// 'Reply to your "<ad>" Ad on Kijiji', with the renter's email masked and no
+// X- headers at all. Anything that backfills an archive needs a second parser;
+// going forward from today does not. See
+// claude/VERIFIED-S697-KIJIJI-LEAD-EMAIL-READ-FROM-TWO-REAL-2026-MESSAGES.md
+export const KIJIJI_LEAD_SENDER = "noreply@rts.kijiji.ca";
+
 /** Senders whose mail this parser understands. The route's per-org allow-list
  *  is a separate, stricter gate — this is only "can we read it at all". */
 export const PORTAL_LEAD_SENDERS: readonly string[] = [
   RENTALS_CA_LEAD_SENDER,
   RENTALS_CA_TOUR_SENDER,
+  KIJIJI_LEAD_SENDER,
 ];
 
 /** The template versions this parser was written against. Anything else still
@@ -53,8 +83,12 @@ export const KNOWN_RENTALS_TEMPLATE_VERSIONS: readonly string[] = ["1"];
 
 export type PortalLeadKind = "inquiry" | "tour_request";
 
+/** Which portal a parsed lead came off. Mirrors PortalKey in portal-senders.ts;
+ *  kept as its own type so this module stays pure and dependency-free. */
+export type ParsedLeadPortal = "rentals_ca" | "kijiji";
+
 export type ParsedPortalLead = {
-  portal: "rentals_ca";
+  portal: ParsedLeadPortal;
   kind: PortalLeadKind;
   name: string | null;
   email: string | null;
@@ -70,8 +104,13 @@ export type ParsedPortalLead = {
    *  into a timestamp here — an operator reads them; guessing a date from
    *  "Evening (6 PM - 9 PM)" would invent precision the renter did not give. */
   requestedTimes: string[];
-  /** Address as it appeared in the subject line. A weak hint, last-resort only. */
+  /** Address as it appeared in the subject line. A weak hint, last-resort only.
+   *  Null for Kijiji: its subject carries an AD TITLE, not an address, and
+   *  feeding a title to an address search invents a match that was never there. */
   subjectAddress: string | null;
+  /** The ad's own title, when the portal gives one. Operator context only; the
+   *  ad id is what resolves the unit. */
+  adTitle: string | null;
   templateVersion: string | null;
   /** "exact" = straight off the portal's own structured payload.
    *  "derived" = scraped out of human-facing text and worth less trust. */
@@ -326,6 +365,14 @@ export function classifyPortalLeadEmail(
 ): PortalLeadKind | null {
   const from = bareAddress(input.from);
   const subject = (input.subject ?? "").trim();
+  if (from === KIJIJI_LEAD_SENDER) {
+    // Kijiji sends ONE message type. What varies is whether the renter used the
+    // "request a viewing" template, and that shows up as a header, never in the
+    // subject, so the header is what decides the kind.
+    return header(input.headers, "X-Kijiji-Re-Requestviewing")
+      ? "tour_request"
+      : "inquiry";
+  }
   if (from === RENTALS_CA_LEAD_SENDER || /tenant lead for/i.test(subject)) {
     return "inquiry";
   }
@@ -350,6 +397,9 @@ export function parsePortalLeadEmail(
 ): PortalLeadParseResult {
   const kind = classifyPortalLeadEmail(input);
   if (!kind) return { ok: false, reason: "not_a_recognized_portal_lead" };
+  if (bareAddress(input.from) === KIJIJI_LEAD_SENDER) {
+    return parseKijijiLeadEmail(input, kind);
+  }
 
   const warnings: string[] = [];
   const json = extractRentalsLeadJson(input.htmlBody);
@@ -431,8 +481,170 @@ export function parsePortalLeadEmail(
       adUrl,
       requestedTimes,
       subjectAddress: subjectAddressFor(kind, input.subject),
+      adTitle: null,
       templateVersion,
       confidence: json ? "exact" : "derived",
+      warnings,
+    },
+  };
+}
+
+// --- Kijiji ------------------------------------------------------------------
+
+/** The renter's display name out of Kijiji's sender label. The label is either
+ *  "Dee Dee(dnowlan8@gmail.com)" or a bare "simarjot.0001@gmail.com"; only the
+ *  first carries a name. Split on the LAST "(" so a name containing a bracket
+ *  survives, and never return something that is itself an address. */
+export function kijijiNameFromLabel(label: string | null | undefined): string | null {
+  if (!label) return null;
+  const open = label.lastIndexOf("(");
+  const raw = open > 0 ? label.slice(0, open) : label;
+  const name = raw.trim();
+  if (!name || name.includes("@")) return null;
+  return name;
+}
+
+/** Kijiji's requested viewing dates, verbatim and in order. The header is
+ *  "2026-07-31, 2026-08-01, 2026-08-02". Never turned into timestamps here: the
+ *  renter gave dates, not times, and inventing a time is inventing precision. */
+export function kijijiRequestedDates(
+  headers: Record<string, string> | null | undefined,
+): string[] {
+  const raw = header(headers, "X-Kijiji-Re-Requestviewing");
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0);
+}
+
+/** The ad id, preferring the header, falling back to the trailing integer of an
+ *  ad url. Kijiji ad urls end ".../<slug>/<id>". */
+export function kijijiAdIdFrom(
+  headers: Record<string, string> | null | undefined,
+  adUrl: string | null,
+): string | null {
+  const fromHeader = header(headers, "X-Adid-Horizontal");
+  if (fromHeader && /^\d{4,}$/.test(fromHeader.trim())) return fromHeader.trim();
+  if (adUrl) {
+    const m = /\/(\d{4,})(?:[/?#]|$)/.exec(adUrl);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Parse one Kijiji enquiry. Trust order, highest first:
+ *   1. headers (Reply-To, X-Adid-Horizontal, X-Vip-Url) -> "exact"
+ *   2. the body's own "<label> is interested in "<ad title>"" line, for the
+ *      renter's name and the ad title
+ *   3. the subject, only if the body line is missing
+ * The subject is NEVER used for the renter's email. See the header comment.
+ */
+export function parseKijijiLeadEmail(
+  input: PortalLeadParseInput,
+  kind: PortalLeadKind,
+): PortalLeadParseResult {
+  const warnings: string[] = [];
+
+  const htmlLines = input.htmlBody
+    ? htmlToLines(decodeQuotedPrintableIfNeeded(input.htmlBody))
+    : "";
+  const plain = input.textBody
+    ? decodeQuotedPrintableIfNeeded(input.textBody).replace(/\r/g, "")
+    : "";
+  const body = htmlLines.length >= plain.length ? htmlLines : plain;
+  const lines = body.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+
+  // The body is the authority for the label, because it appears there on its own
+  // line rather than wedged between two pieces of free text as it is in the
+  // subject.
+  let label: string | null = null;
+  let adTitle: string | null = null;
+  for (const line of lines) {
+    const m = /^(.*\S)\s+is interested in\s+"(.+)"\s*$/.exec(line);
+    if (m) {
+      label = m[1].trim();
+      adTitle = m[2].trim();
+      break;
+    }
+  }
+  if (!label) {
+    const m = /^New message from\s+(.+?)\s+about\s+"(.+)"\s*$/.exec((input.subject ?? "").trim());
+    if (m) {
+      label = m[1].trim();
+      adTitle = m[2].trim();
+      warnings.push("fell back to the subject line for the renter label and ad title");
+    }
+  }
+
+  const replyAddr = bareAddress(input.replyTo);
+  let email = replyAddr;
+  // Reply-To IS the renter on every sample. If it ever points back at Kijiji the
+  // message is not what we think it is, and filing the portal as the renter is
+  // the quiet failure this whole module exists to avoid.
+  if (email && /(^|[.@])kijiji\.ca$/.test(email.split("@")[1] ?? "")) {
+    warnings.push(`discarded portal-owned email ${email}`);
+    email = null;
+  }
+  if (!email && label && label.includes("@")) {
+    const m = /\(?([^\s()<>]+@[^\s()<>]+)\)?/.exec(label);
+    if (m) {
+      email = m[1].toLowerCase();
+      warnings.push("no Reply-To; took the renter email from the sender label");
+    }
+  }
+
+  const adUrl = header(input.headers, "X-Vip-Url");
+  const adId = kijijiAdIdFrom(input.headers, adUrl);
+  const name = kijijiNameFromLabel(label);
+  const requestedTimes = kijijiRequestedDates(input.headers);
+
+  // The renter's own words: the lines after the "<label>:" line, stopping at
+  // Kijiji's own footer blocks.
+  let message: string | null = null;
+  if (label) {
+    const start = lines.findIndex((l) => l === `${label}:`);
+    if (start >= 0) {
+      const out: string[] = [];
+      for (const line of lines.slice(start + 1)) {
+        if (
+          /^Other options:?$/i.test(line) ||
+          /^Want more eyes on your listing\??$/i.test(line) ||
+          /^You can respond to /i.test(line)
+        ) {
+          break;
+        }
+        out.push(line);
+      }
+      const joined = out.join("\n").trim();
+      if (joined) message = joined;
+    }
+  }
+  if (!message) warnings.push("could not isolate the renter's message from the body");
+
+  if (!email) return { ok: false, reason: "no_contact_details_found" };
+  if (!adId && !adUrl) {
+    warnings.push("no ad id or ad url; the unit must be resolved another way");
+  }
+
+  return {
+    ok: true,
+    lead: {
+      portal: "kijiji",
+      kind,
+      name,
+      email,
+      phone: null, // Kijiji never sends one; it only appears if typed into the message.
+      message,
+      unit: null,
+      adId,
+      adUrl,
+      requestedTimes,
+      subjectAddress: null,
+      adTitle,
+      templateVersion: null,
+      confidence: adId && replyAddr ? "exact" : "derived",
       warnings,
     },
   };
@@ -446,12 +658,26 @@ export function parsePortalLeadEmail(
 export function portalLeadNote(lead: ParsedPortalLead): string {
   const parts: string[] = [];
   if (lead.message) parts.push(lead.message);
-  const facts: string[] = [
-    `Received from Rentals.ca (${lead.kind === "tour_request" ? "tour request" : "tenant lead"}).`,
-  ];
+  const portalName = lead.portal === "kijiji" ? "Kijiji" : "Rentals.ca";
+  const kindWord =
+    lead.kind === "tour_request"
+      ? lead.portal === "kijiji"
+        ? "viewing request"
+        : "tour request"
+      : lead.portal === "kijiji"
+        ? "enquiry"
+        : "tenant lead";
+  const facts: string[] = [`Received from ${portalName} (${kindWord}).`];
   if (lead.requestedTimes.length > 0) {
-    facts.push(`Requested tour times: ${lead.requestedTimes.join("; ")}.`);
+    // Kijiji gives DATES, not times. Labelling them "times" would tell the
+    // operator the renter picked an hour they never picked.
+    facts.push(
+      lead.portal === "kijiji"
+        ? `Renter asked to view on: ${lead.requestedTimes.join("; ")}.`
+        : `Requested tour times: ${lead.requestedTimes.join("; ")}.`,
+    );
   }
+  if (lead.adTitle) facts.push(`Ad title: ${lead.adTitle}`);
   if (lead.unit) facts.push(`Unit as listed: ${lead.unit}.`);
   if (lead.adUrl) facts.push(`Ad: ${lead.adUrl}`);
   else if (lead.adId) facts.push(`Ad id: ${lead.adId}`);

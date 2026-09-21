@@ -21,6 +21,7 @@ import {
   isTrustedPortalSender,
   isKnownPortalSender,
   parseInboundAuthResults,
+  portalKeyForSender,
 } from "@/lib/portal-senders";
 
 // ============================================================================
@@ -219,13 +220,28 @@ async function resolveTarget(
   }
 
   if (lead.adId) {
-    // The worker writes "rentals_ca listing 1455352 (posted by ...)" into notes.
-    const { data } = await admin
-      .from("listing_posts")
-      .select("id, property_id")
-      .eq("organization_id", orgId)
-      .eq("portal", "rentals_ca")
-      .ilike("notes", `%listing ${lead.adId}%`)
+    // WHERE THE AD ID LIVES DIFFERS BY PORTAL, so the lookup does too.
+    //   rentals_ca: the worker writes "rentals_ca listing 1455352 (posted by ...)"
+    //               into notes, so the id is matched there.
+    //   kijiji:     the id is the tail of the ad url itself
+    //               (.../bright-renovated-1-bedroom-at-833-pillette-rd/1739552585),
+    //               so it is matched inside the stored url. This catches rows the
+    //               exact-url match above misses because the stored link differs
+    //               by a query string or a trailing slash.
+    const { data } = await (lead.portal === "kijiji"
+      ? admin
+          .from("listing_posts")
+          .select("id, property_id")
+          .eq("organization_id", orgId)
+          .eq("portal", "kijiji")
+          .ilike("url", `%/${lead.adId}%`)
+      : admin
+          .from("listing_posts")
+          .select("id, property_id")
+          .eq("organization_id", orgId)
+          .eq("portal", "rentals_ca")
+          .ilike("notes", `%listing ${lead.adId}%`)
+    )
       .neq("status", "removed")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -269,7 +285,11 @@ async function resolveTarget(
   // company is worse than one that bounced, because nobody goes looking for it.
   if (lead.adUrl || lead.adId) {
     let q = admin.from("listing_posts").select("organization_id").neq("status", "removed").limit(1);
-    q = lead.adUrl ? q.eq("url", lead.adUrl) : q.ilike("notes", `%listing ${lead.adId}%`);
+    q = lead.adUrl
+      ? q.eq("url", lead.adUrl)
+      : lead.portal === "kijiji"
+        ? q.ilike("url", `%/${lead.adId}%`)
+        : q.ilike("notes", `%listing ${lead.adId}%`);
     const { data: elsewhere } = await q.maybeSingle();
     const ownerOrg = (elsewhere?.organization_id as string | undefined) ?? null;
     if (ownerOrg && ownerOrg !== orgId) {
@@ -404,6 +424,15 @@ export async function handleInboundLeadPost(
   // hand-added contact@rentals.ca can never bypass authentication (Codex P1a).
   // Any other sender uses the org's own verified-sender allow-list (confirm flow).
   const knownPortal = isKnownPortalSender(from);
+  // DARK BY DEFAULT, per portal. A registry entry is global the moment it ships,
+  // so a new portal would start admitting leads for every org on deploy, before
+  // anyone has seen one arrive. The flag keeps the code in PROD and the behaviour
+  // off until a first real delivery is watched. Registering a sender and trusting
+  // it are deliberately two decisions.
+  if (portalKeyForSender(from) === "kijiji" && process.env.KIJIJI_LEAD_INGEST_ENABLED !== "true") {
+    console.warn("inbound/lead: kijiji ingest is off", { flag: "KIJIJI_LEAD_INGEST_ENABLED" });
+    return NextResponse.json({ ok: true, handled: "portal_disabled", portal: "kijiji" });
+  }
   if (knownPortal) {
     if (!isTrustedPortalSender(from, headers)) {
       // Enforcement is gated. Until a first real delivery confirms Postmark's auth
@@ -556,8 +585,10 @@ export async function handleInboundLeadPost(
   }
 
   const source = target.listingPostId
-    ? sourceLabelForPost({ portal: "rentals_ca" })
-    : "Rentals.ca";
+    ? sourceLabelForPost({ portal: lead.portal })
+    : lead.portal === "kijiji"
+      ? "Kijiji"
+      : "Rentals.ca";
   const directLead = {
     organization_id: orgId,
     property_id: target.propertyId,

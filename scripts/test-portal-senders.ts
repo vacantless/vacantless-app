@@ -14,6 +14,7 @@ import {
   parseInboundAuthResults,
   domainAligns,
   KNOWN_PORTAL_SENDERS,
+  portalKeyForSender,
 } from "../lib/portal-senders";
 import { isAllowedSenderEmail } from "../lib/email-ingest";
 
@@ -131,6 +132,71 @@ ok("CASE4: trust decision has no org input (orthogonal to attribution)", isTrust
 // --- CODEX CASE 5 (regression): the shared per-org primitive is unchanged -----
 ok("CASE5: a genuinely verified per-org sender is still admitted (capture flow intact)", isAllowedSenderEmail("landlord@example.com", ["landlord@example.com"]));
 ok("CASE5: per-org allow-list still rejects a non-member", !isAllowedSenderEmail("stranger@example.com", ["landlord@example.com"]));
+
+
+// ---------------------------------------------------------------------------
+// KIJIJI (S697). These lock in the ONE thing that decides whether a customer's
+// Kijiji leads arrive or vanish. Header values are copied from a real message
+// (rentals@agileonline.ca uid 3613, 2026-07-31).
+// ---------------------------------------------------------------------------
+
+ok("kijiji: the sender is registered", isKnownPortalSender("noreply@rts.kijiji.ca"));
+ok("kijiji: registry key resolves", portalKeyForSender("noreply@rts.kijiji.ca") === "kijiji");
+ok(
+  "kijiji: a display name and odd casing still match",
+  isKnownPortalSender('"Kijiji" <NoReply@RTS.Kijiji.CA>'),
+);
+
+// THE LOAD-BEARING CASE. Kijiji signs with d=rts.kijiji.ca, a SUBDOMAIN of the
+// registered organizational domain. If alignment were exact-match this would
+// fail and every Kijiji lead would be silently refused.
+ok(
+  "kijiji: DKIM on the rts. subdomain aligns and is trusted",
+  isTrustedPortalSender("noreply@rts.kijiji.ca", {
+    "Authentication-Results": "spf=fail smtp.mailfrom=agileonline.ca; dkim=pass header.d=rts.kijiji.ca; dmarc=fail header.from=rts.kijiji.ca",
+  }),
+);
+
+// The forwarding reality: SRS rewrites the envelope to the forwarder, so SPF
+// authenticates the WRONG domain. A bare spf=pass must not buy trust.
+ok(
+  "kijiji: an SRS-rewritten spf=pass alone is NOT trusted",
+  !isTrustedPortalSender("noreply@rts.kijiji.ca", {
+    "Authentication-Results": "spf=pass smtp.mailfrom=agileonline.ca",
+  }),
+);
+
+// A forward that rewrites the body breaks the signature. This is the failure
+// that would look like "the integration is on and nobody ever enquires".
+ok(
+  "kijiji: a broken DKIM signature is refused, not tolerated",
+  !isTrustedPortalSender("noreply@rts.kijiji.ca", {
+    "Authentication-Results": "dkim=fail header.d=rts.kijiji.ca; spf=pass smtp.mailfrom=agileonline.ca",
+  }),
+);
+
+// Netfirms stamps no verdict at all. Postmark does, but fail-closed must hold if
+// a provider ever hands us nothing.
+ok(
+  "kijiji: no auth verdict at all is refused",
+  !isTrustedPortalSender("noreply@rts.kijiji.ca", {}),
+);
+
+// Alignment must not be fooled by a lookalike domain.
+ok(
+  "kijiji: a lookalike domain does not align",
+  !isTrustedPortalSender("noreply@rts.kijiji.ca", {
+    "Authentication-Results": "dkim=pass header.d=notkijiji.ca",
+  }),
+);
+ok("kijiji: evilkijiji.ca is not a subdomain of kijiji.ca", !domainAligns("evilkijiji.ca", "kijiji.ca"));
+
+// The relay senders of Kijiji's OLDER template are per-conversation and must NOT
+// be trusted by accident: they are not in the registry, and cannot be.
+ok(
+  "kijiji: the legacy masked relay sender is not registered",
+  !isKnownPortalSender("b-j0v4fhbwx5zd3@rts.kijiji.ca"),
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

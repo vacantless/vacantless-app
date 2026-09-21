@@ -38,7 +38,7 @@
 
 import { normalizeSenderEmail } from "./email-ingest";
 
-export type PortalKey = "rentals_ca";
+export type PortalKey = "rentals_ca" | "kijiji";
 
 type PortalEntry = { addresses: string[]; domain: string };
 
@@ -50,11 +50,34 @@ export const PORTAL_REGISTRY: Record<PortalKey, PortalEntry> = {
     addresses: ["contact@rentals.ca", "no-reply@rentals.ca"],
     domain: "rentals.ca",
   },
+  // KIJIJI (S697). Read off two real 2026 messages in rentals@agileonline.ca,
+  // not guessed: a single fixed sender for every enquiry, every customer.
+  //   From:           noreply@rts.kijiji.ca
+  //   DKIM-Signature: d=rts.kijiji.ca; s=pic
+  // `domain` is the ORGANIZATIONAL domain, and domainAligns() below is relaxed
+  // (exact, or a subdomain of), so d=rts.kijiji.ca aligns to kijiji.ca and the
+  // DKIM clause carries the trust decision.
+  //
+  // SPF WILL NOT CARRY IT, and that is expected rather than a misconfiguration.
+  // Kijiji sends through Mailgun, and this mail reaches an operator inbox before
+  // it reaches us, so the envelope sender is rewritten (SRS) to the forwarding
+  // domain. A bare spf=pass therefore authenticates the forwarder, never
+  // kijiji.ca, and the alignment check is what stops us from trusting it.
+  //
+  // CONSEQUENCE FOR ONBOARDING: only a forward that leaves the body BYTE-FOR-BYTE
+  // intact keeps DKIM valid. A mail-server redirect does; a webmail "Forward"
+  // button rewrites the body and breaks the signature, after which this guard
+  // fail-closes and the org silently receives no leads at all.
+  kijiji: {
+    addresses: ["noreply@rts.kijiji.ca"],
+    domain: "kijiji.ca",
+  },
 };
 
 // Back-compat flat list (some callers/tests want just the addresses).
 export const KNOWN_PORTAL_SENDERS: Record<PortalKey, string[]> = {
   rentals_ca: PORTAL_REGISTRY.rentals_ca.addresses,
+  kijiji: PORTAL_REGISTRY.kijiji.addresses,
 };
 
 const ADDRESS_TO_ENTRY: ReadonlyMap<string, PortalEntry> = new Map(
@@ -62,6 +85,21 @@ const ADDRESS_TO_ENTRY: ReadonlyMap<string, PortalEntry> = new Map(
     e.addresses.map((a) => [a.toLowerCase(), e] as [string, PortalEntry]),
   ),
 );
+
+const ADDRESS_TO_KEY: ReadonlyMap<string, PortalKey> = new Map(
+  (Object.entries(PORTAL_REGISTRY) as Array<[PortalKey, PortalEntry]>).flatMap(
+    ([key, e]) => e.addresses.map((a) => [a.toLowerCase(), key] as [string, PortalKey]),
+  ),
+);
+
+/** Which portal `from` belongs to, or null. Callers that must gate one portal
+ *  (a dark launch, a per-portal kill switch) branch on this rather than on the
+ *  address, so the registry stays the single source of truth for both. */
+export function portalKeyForSender(from: unknown): PortalKey | null {
+  const sender = normalizeSenderEmail(from);
+  if (!sender) return null;
+  return ADDRESS_TO_KEY.get(sender) ?? null;
+}
 
 /** The portal entry for `from`, or null. Uses the SAME normalization as the
  *  per-org allow-list so '"Rentals.ca" <Contact@Rentals.CA>' matches. */

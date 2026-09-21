@@ -17,6 +17,7 @@ import {
   extractRequestedTimes,
   header,
   htmlToLines,
+  kijijiNameFromLabel,
   labelledField,
   parsePortalLeadEmail,
   portalLeadNote,
@@ -287,6 +288,148 @@ const newVersion = parsePortalLeadEmail({
   htmlBody: LEAD_HTML.replace('"email_template_version_code": "1"', '"email_template_version_code": "9"'),
 });
 ok("an unknown template version warns", newVersion.ok && newVersion.lead.warnings.some((w) => w.includes("unknown rentals.ca template version")));
+
+
+// ---------------------------------------------------------------------------
+// KIJIJI FIXTURES (S697). Two REAL messages, read 2026-09-15 out of
+// rentals@agileonline.ca, uids 3613 and 3268. They are a deliberate pair: 3613
+// has NO renter display name (the label is the bare email) and 3268 HAS one
+// (the label is "Dee Dee(dnowlan8@gmail.com)"). Parsers that looked right
+// against either one alone get the name wrong on the other.
+//
+// Do not tidy these. The label appearing THREE times in the body, the
+// parenthesised email inside the display name, the "·" bullets in the renter's
+// own text, and the fact that 3268 has no X-Kijiji-Re-Requestviewing header at
+// all are the things that decide the code.
+// ---------------------------------------------------------------------------
+
+const KIJIJI_NO_NAME_HTML = `
+<div><img src="kijiji.png"></div>
+<p><b>Good news, Agile Real Estate Group!</b></p>
+<p>simarjot.0001@gmail.com is interested in "<a href="https://www.kijiji.ca/v-apartments-condos/windsor-area-on/bright-renovated-1-bedroom-at-833-pillette-rd/1739552585">Bright Renovated 1-Bedroom at 833 Pillette Rd</a>"</p>
+<div><p><b>simarjot.0001@gmail.com:</b></p>
+<p>Hi,</p>
+<p>I'd like to request a viewing of this property. My preferred dates are:</p>
+<p>&#183; Jul. 31</p><p>&#183; Aug. 1</p><p>&#183; Aug. 2</p>
+<p>Thank you.</p><p>Simarjot</p></div>
+<p>Other options:</p>
+<p>Want more eyes on your listing?</p><p><a href="https://www.kijiji.ca/m-my-ads/active/1">Promote it</a></p>
+<p>You can respond to simarjot.0001@gmail.com by replying to this email.</p>
+`;
+
+const KIJIJI_NO_NAME = {
+  subject:
+    'New message from simarjot.0001@gmail.com about "Bright Renovated 1-Bedroom at 833 Pillette Rd"',
+  from: "noreply@rts.kijiji.ca",
+  replyTo: "simarjot.0001@gmail.com",
+  htmlBody: KIJIJI_NO_NAME_HTML,
+  headers: {
+    "X-Adid-Horizontal": "1739552585",
+    "X-Vip-Url":
+      "https://www.kijiji.ca/v-apartments-condos/windsor-area-on/bright-renovated-1-bedroom-at-833-pillette-rd/1739552585",
+    "X-Conversation-Id": "20v8:1d2p71c:2pm8qmt2n",
+    "X-Kijiji-Re-Requestviewing": "2026-07-31, 2026-08-01, 2026-08-02",
+    "X-Mailgun-Tag": "Selling",
+    Sender: "noreply@rts.kijiji.ca",
+  },
+};
+
+const KIJIJI_WITH_NAME = {
+  subject:
+    'New message from Dee Dee(dnowlan8@gmail.com) about "Move-In-Ready 2nd-Floor 1BR, Fully Tiled - 833 Pillette Rd"',
+  from: "noreply@rts.kijiji.ca",
+  replyTo: "dnowlan8@gmail.com",
+  htmlBody: `
+<p><b>Good news, Agile Real Estate Group!</b></p>
+<p>Dee Dee(dnowlan8@gmail.com) is interested in "Move-In-Ready 2nd-Floor 1BR, Fully Tiled - 833 Pillette Rd"</p>
+<div><p><b>Dee Dee(dnowlan8@gmail.com):</b></p><p>Hi, I'm interested. Please contact me.</p></div>
+<p>Other options:</p>
+<p>You can respond to Dee Dee(dnowlan8@gmail.com) by replying to this email.</p>
+`,
+  headers: {
+    "X-Adid-Horizontal": "1739185705",
+    "X-Vip-Url":
+      "https://www.kijiji.ca/v-apartments-condos/windsor-area-on/move-in-ready-2nd-floor-1br-fully-tiled-833-pillette-rd/1739185705",
+    "X-Conversation-Id": "1s90:41hhknl:2phx892nd",
+    "X-Mailgun-Tag": "Selling",
+  },
+};
+
+const kNoName = parsePortalLeadEmail(KIJIJI_NO_NAME);
+ok("kijiji: parses", kNoName.ok, kNoName);
+if (kNoName.ok) {
+  const l = kNoName.lead;
+  ok("kijiji: portal is kijiji", l.portal === "kijiji", l.portal);
+  ok("kijiji: the viewing-request header makes it a tour_request", l.kind === "tour_request", l.kind);
+  ok("kijiji: email comes off Reply-To", l.email === "simarjot.0001@gmail.com", l.email);
+  ok("kijiji: NO name when the label is a bare email", l.name === null, l.name);
+  ok("kijiji: ad id off the header", l.adId === "1739552585", l.adId);
+  ok("kijiji: ad url off X-Vip-Url", (l.adUrl ?? "").endsWith("/1739552585"), l.adUrl);
+  ok("kijiji: ad title off the body", l.adTitle === "Bright Renovated 1-Bedroom at 833 Pillette Rd", l.adTitle);
+  ok(
+    "kijiji: requested DATES, in order, verbatim",
+    l.requestedTimes.join("|") === "2026-07-31|2026-08-01|2026-08-02",
+    l.requestedTimes,
+  );
+  ok("kijiji: header-sourced ad id + Reply-To is exact", l.confidence === "exact", l.confidence);
+  ok("kijiji: subjectAddress stays null (the subject is an ad TITLE)", l.subjectAddress === null);
+  ok("kijiji: the renter's own words survive", (l.message ?? "").startsWith("Hi,"), l.message);
+  ok("kijiji: ...and stop before Kijiji's footer", !(l.message ?? "").includes("Other options"), l.message);
+  ok("kijiji: ...and keep the renter's sign-off", (l.message ?? "").includes("Simarjot"), l.message);
+  ok("kijiji: no spurious warnings", l.warnings.length === 0, l.warnings);
+  const note = portalLeadNote(l);
+  ok("kijiji note: names the portal", note.includes("Received from Kijiji"), note);
+  ok("kijiji note: calls them dates, not times", note.includes("Renter asked to view on:"), note);
+  ok("kijiji note: carries the ad title", note.includes("Ad title:"), note);
+}
+
+const kName = parsePortalLeadEmail(KIJIJI_WITH_NAME);
+ok("kijiji(named): parses", kName.ok, kName);
+if (kName.ok) {
+  const l = kName.lead;
+  ok("kijiji(named): name is the label minus the (email)", l.name === "Dee Dee", l.name);
+  ok("kijiji(named): email still off Reply-To", l.email === "dnowlan8@gmail.com", l.email);
+  ok("kijiji(named): ad id", l.adId === "1739185705", l.adId);
+  ok("kijiji(named): no viewing header means a plain enquiry", l.kind === "inquiry", l.kind);
+  ok("kijiji(named): no requested dates", l.requestedTimes.length === 0, l.requestedTimes);
+  ok("kijiji(named): message isolated", l.message === "Hi, I'm interested. Please contact me.", l.message);
+  ok("kijiji(named): phone is null, kijiji never sends one", l.phone === null);
+}
+
+// The ad id must survive a missing header: the url tail is the same id.
+const kNoHeaderId = parsePortalLeadEmail({
+  ...KIJIJI_NO_NAME,
+  headers: { ...KIJIJI_NO_NAME.headers, "X-Adid-Horizontal": "" },
+});
+ok(
+  "kijiji: ad id falls back to the url tail",
+  kNoHeaderId.ok && kNoHeaderId.lead.adId === "1739552585",
+  kNoHeaderId.ok ? kNoHeaderId.lead.adId : kNoHeaderId,
+);
+
+// THE QUIET FAILURE, kijiji edition: a Reply-To pointing back at the portal must
+// never be filed as the renter.
+const kPortalOwned = parsePortalLeadEmail({
+  ...KIJIJI_WITH_NAME,
+  subject: 'New message from Someone(x@rts.kijiji.ca) about "An ad"',
+  replyTo: "noreply@rts.kijiji.ca",
+  htmlBody: '<p>Someone is interested in "An ad"</p><p><b>Someone:</b></p><p>hello</p>',
+});
+ok(
+  "kijiji: a portal-owned Reply-To is never the renter",
+  kPortalOwned.ok === false && kPortalOwned.reason === "no_contact_details_found",
+  kPortalOwned,
+);
+
+// A renter whose display name contains a bracket must not lose half their name.
+ok("kijiji: a name containing a bracket survives", kijijiNameFromLabel("Dee (D) Dee(a@b.com)") === "Dee (D) Dee");
+ok("kijiji: a bare email label yields no name", kijijiNameFromLabel("a@b.com") === null);
+
+// Classification must not claim a message it cannot read.
+ok(
+  "a stranger's mail is still not a portal lead",
+  classifyPortalLeadEmail({ subject: "hello", from: "someone@example.com" }) === null,
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
