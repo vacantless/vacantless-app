@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { KIJIJI_TIERS, type KijijiTier } from "@/lib/distribution-channels";
+import { generateIngestToken } from "@/lib/email-ingest";
 import { buildLinkPortalsViewModel, type LinkPortalsVM } from "./view-model";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
@@ -59,4 +60,34 @@ export async function setKijijiTier(
 
   revalidatePath("/dashboard/link-portals");
   return { ok: true, tier: tier as KijijiTier };
+}
+
+// S697c. Mint the org's inquiry address from the "Get your inquiries here" card.
+// Deliberately NOT gated on the capture email-in plan: that gate belongs to the
+// Premium document capture feature, and inquiries are the core funnel (the same
+// reasoning the lead webhook gives). Idempotent: the 0086 partial-unique index
+// allows one active email address per org, so a double submit is a no-op.
+export async function provisionInquiryAddress(): Promise<void> {
+  await requireCapability("manage_settings", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const { data: existing } = await supabase
+    .from("org_ingest_addresses")
+    .select("id")
+    .eq("organization_id", org.id)
+    .eq("channel", "email")
+    .eq("active", true)
+    .maybeSingle();
+  if (!existing?.id) {
+    const { error } = await supabase.from("org_ingest_addresses").insert({
+      organization_id: org.id,
+      channel: "email",
+      token: generateIngestToken(),
+      active: true,
+    });
+    if (error) console.warn("link-portals: inquiry address not created", { message: error.message });
+  }
+  revalidatePath("/dashboard/link-portals");
+  redirect("/dashboard/link-portals#inquiries");
 }

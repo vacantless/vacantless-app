@@ -8,9 +8,11 @@ import { useState } from "react";
 export function CopyTextButton({
   value,
   label = "Copy",
+  copiedLabel = "Copied!",
 }: {
   value: string;
   label?: string;
+  copiedLabel?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -30,7 +32,7 @@ export function CopyTextButton({
       onClick={copy}
       className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
     >
-      {copied ? "Copied!" : label}
+      {copied ? copiedLabel : label}
     </button>
   );
 }

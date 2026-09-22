@@ -23,6 +23,14 @@ import {
   parseInboundAuthResults,
   portalKeyForSender,
 } from "@/lib/portal-senders";
+import {
+  isGmailForwardingSender,
+  isTrustedGoogleMail,
+  parseGmailForwardingCode,
+  portalIngestEnabled,
+  type PortalInboxOutcome,
+  type PortalInboxSource,
+} from "@/lib/portal-inbox";
 
 // ============================================================================
 // Inbound PORTAL LEAD webhook (S567). The last link in the syndication chain.
@@ -85,7 +93,28 @@ type InboundLeadDeps = {
   secret?: string;
   now?: () => number;
   notifyOperators?: typeof notifyOperatorsOfNewLeadById;
+  recordPortalEvent?: RecordPortalEvent;
 };
+
+export type PortalEventRow = {
+  organization_id: string;
+  source: PortalInboxSource;
+  outcome: PortalInboxOutcome;
+  detail: string | null;
+};
+type RecordPortalEvent = (admin: AdminClient, row: PortalEventRow) => Promise<void>;
+
+// S697c. What happened to each rental-site email, for the landlord's own
+// "is my rule working" card. Best-effort: a missing table (0227 not applied) or
+// any write error must never cost a renter, so this swallows everything.
+async function recordPortalEventInDb(admin: AdminClient, row: PortalEventRow): Promise<void> {
+  try {
+    const { error } = await admin.from("inbound_portal_events").insert(row);
+    if (error) console.warn("inbound/lead: portal event not recorded", { message: error.message });
+  } catch (e) {
+    console.warn("inbound/lead: portal event not recorded", { message: (e as Error)?.message });
+  }
+}
 
 type IngestMessageKeyLookup =
   | { supported: true; leadId: string | null }
@@ -308,6 +337,7 @@ export async function handleInboundLeadPost(
   const admin = deps.admin ?? createAdminClient();
   const now = deps.now ?? Date.now;
   const notifyOperators = deps.notifyOperators ?? notifyOperatorsOfNewLeadById;
+  const recordPortalEvent = deps.recordPortalEvent ?? recordPortalEventInDb;
   // Unconfigured => dark. Don't reveal the endpoint exists; don't act.
   if (!secret || !admin) {
     return new NextResponse("Not found", { status: 404 });
@@ -395,6 +425,39 @@ export async function handleInboundLeadPost(
     return NextResponse.json({ ok: true, handled: "org_unresolved" });
   }
 
+  // Every outcome for a known site's email is recorded for the org's own card.
+  const portalKey = portalKeyForSender(from);
+  const note = async (outcome: PortalInboxOutcome) => {
+    if (!portalKey || !orgId) return;
+    await recordPortalEvent(admin, { organization_id: orgId, source: portalKey, outcome, detail: null });
+  };
+
+  // ---- Gmail's forwarding confirmation (S697c) -------------------------------
+  // Gmail emails a code to a new forwarding address before it forwards anything.
+  // That address is this org's token, so keep the code (digits only, aligned
+  // google.com auth only) and show it on the org's card. Checked BEFORE the loop
+  // guard because Gmail may mark it auto-generated.
+  if (isGmailForwardingSender(from)) {
+    if (!isTrustedGoogleMail(headers)) {
+      console.warn("inbound/lead: gmail forwarding code failed aligned auth");
+      return NextResponse.json({ ok: true, handled: "forward_confirmation_unverified" });
+    }
+    const code = parseGmailForwardingCode({
+      subject: str(payload.Subject),
+      textBody: str(payload.TextBody) || null,
+    });
+    if (!code) {
+      return NextResponse.json({ ok: true, handled: "forward_confirmation_unparsed" });
+    }
+    await recordPortalEvent(admin, {
+      organization_id: orgId,
+      source: "gmail_forwarding",
+      outcome: "confirmation_code",
+      detail: code,
+    });
+    return NextResponse.json({ ok: true, handled: "forward_confirmation" });
+  }
+
   // ---- Layer 3: per-org verified-sender allow-list + loop detection ---------
   // NOTE: deliberately NOT gated on the capture email-in plan entitlement. That
   // gate belongs to the Premium document-capture feature; inbound leads are the
@@ -409,7 +472,13 @@ export async function handleInboundLeadPost(
     .map((s) => (typeof s.address === "string" ? s.address : null))
     .filter((a): a is string => a != null);
 
-  if (isAutoReplyOrLoop(loopHeaders)) {
+  // A KNOWN site sender skips the loop guard (S697c). Every site sends from a
+  // system address, and the guard's sender test drops any "noreply": that was
+  // silently discarding every Kijiji inquiry (noreply@rts.kijiji.ca) and
+  // Rentals.ca's no-reply@ as auto-replies before the site code ever ran.
+  // These addresses never auto-reply to us, so there is no loop to break, and
+  // they are held to the aligned auth guard below instead.
+  if (!isKnownPortalSender(from) && isAutoReplyOrLoop(loopHeaders)) {
     return NextResponse.json({ ok: true, handled: "auto_reply" });
   }
   // Sender trust, two independent grants (S568 lane B). Either the org verified
@@ -429,9 +498,9 @@ export async function handleInboundLeadPost(
   // anyone has seen one arrive. The flag keeps the code in PROD and the behaviour
   // off until a first real delivery is watched. Registering a sender and trusting
   // it are deliberately two decisions.
-  if (portalKeyForSender(from) === "kijiji" && process.env.KIJIJI_LEAD_INGEST_ENABLED !== "true") {
-    console.warn("inbound/lead: kijiji ingest is off", { flag: "KIJIJI_LEAD_INGEST_ENABLED" });
-    return NextResponse.json({ ok: true, handled: "portal_disabled", portal: "kijiji" });
+  if (portalKey && !portalIngestEnabled(portalKey)) {
+    console.warn("inbound/lead: site ingest is off", { portal: portalKey });
+    return NextResponse.json({ ok: true, handled: "portal_disabled", portal: portalKey });
   }
   if (knownPortal) {
     if (!isTrustedPortalSender(from, headers)) {
@@ -451,6 +520,7 @@ export async function handleInboundLeadPost(
         dmarc: v.dmarc,
       });
       if (enforce) {
+        await note("auth_unverified");
         return NextResponse.json({ ok: true, handled: "portal_sender_auth_unverified" });
       }
       // observe mode: fall through and file the lead.
@@ -471,6 +541,7 @@ export async function handleInboundLeadPost(
   });
   if (!parsed.ok) {
     console.warn("inbound/lead: not parsed", { reason: parsed.reason });
+    await note("not_parsed");
     return NextResponse.json({ ok: true, handled: "not_parsed", reason: parsed.reason });
   }
   const lead = parsed.lead;
@@ -483,6 +554,7 @@ export async function handleInboundLeadPost(
       forwardedToOrg: orgId,
       adId: lead.adId,
     });
+    await note("cross_org_refused");
     return NextResponse.json({ ok: true, handled: "cross_org_refused" });
   }
   const notes = portalLeadNote(lead);
@@ -500,6 +572,7 @@ export async function handleInboundLeadPost(
     const existing = await findLeadByIngestMessageKey(admin, orgId, messageKey);
     messageKeySupported = existing.supported;
     if (existing.leadId) {
+      await note("duplicate");
       return NextResponse.json({ ok: true, handled: "duplicate", lead_id: existing.leadId });
     }
   }
@@ -524,6 +597,7 @@ export async function handleInboundLeadPost(
           wanted.length > 0,
       );
     if (dupe) {
+      await note("duplicate");
       return NextResponse.json({ ok: true, handled: "duplicate", lead_id: dupe.id });
     }
   }
@@ -550,6 +624,7 @@ export async function handleInboundLeadPost(
       if (leadId && messageKeySupported) {
         const stamped = await stampLeadIngestMessageKey(admin, orgId, leadId, messageKey);
         if (stamped === "duplicate") {
+          await note("duplicate");
           const existing = await findLeadByIngestMessageKey(admin, orgId, messageKey);
           return NextResponse.json({
             ok: true,
@@ -560,6 +635,7 @@ export async function handleInboundLeadPost(
       }
       // Tell the leasing team — the SAME alert a public /r lead fires, routed
       // through the same per-org recipients (S568). Best-effort, never throws.
+      await note("lead_created");
       if (leadId) {
         await notifyOperators(admin, {
           orgId,
@@ -617,6 +693,7 @@ export async function handleInboundLeadPost(
   };
   let { data: inserted, error: insertError } = await insertDirectLead(messageKeySupported);
   if (insertError && messageKeySupported && isUniqueViolation(insertError)) {
+    await note("duplicate");
     const existing = await findLeadByIngestMessageKey(admin, orgId, messageKey);
     return NextResponse.json({
       ok: true,
@@ -636,6 +713,8 @@ export async function handleInboundLeadPost(
     console.error("inbound/lead: insert failed", { message: insertError?.message });
     return new NextResponse("Storage error", { status: 503 });
   }
+
+  await note("lead_created");
 
   // Filed via direct insert — either the RPC refused (unit leased since the ad
   // went up) or the lead matched no unit and was filed unattributed. Notify

@@ -92,5 +92,21 @@ Message : I came across your listing for 50 Glenrose Avenue and would be interes
   ok("known portal sender token mail routes to lead", result.target === "lead", result);
 }
 
+{
+  const result = routePostmarkInbound(basePayload({
+    FromFull: { Email: "forwarding-noreply@google.com" },
+    Subject: "(#123456789) Gmail Forwarding Confirmation",
+  }));
+  ok("gmail forwarding code on a token routes to lead", result.target === "lead", result);
+}
+
+{
+  const result = routePostmarkInbound(basePayload({
+    ToFull: [{ Email: "someone@example.com" }],
+    FromFull: { Email: "forwarding-noreply@google.com" },
+  }));
+  ok("gmail code without a token is not a lead", result.target !== "lead", result);
+}
+
 console.log(`\ninbound-postmark-dispatch: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -5,6 +5,7 @@ import {
   handleInboundLeadPost,
   isMissingIngestMessageKeyColumnError,
   portalLeadMessageKey,
+  type PortalEventRow,
 } from "../lib/portal-lead-ingest-server";
 
 let passed = 0;
@@ -266,13 +267,20 @@ function req(body: Record<string, unknown>) {
   };
 }
 
-async function post(admin: FakeAdmin, body: Record<string, unknown>) {
+async function post(
+  admin: FakeAdmin,
+  body: Record<string, unknown>,
+  events: PortalEventRow[] = [],
+) {
   const response = await handleInboundLeadPost(req(body) as never, {
     admin: admin as never,
     secret: SECRET,
     now: () => NOW,
     notifyOperators: async () => {
       admin.notifications++;
+    },
+    recordPortalEvent: async (_admin, row) => {
+      events.push(row);
     },
   });
   return response.json() as Promise<Record<string, unknown>>;
@@ -341,6 +349,121 @@ async function main() {
   const result = await post(admin, payload({ messageId: "mid-race" }));
   ok("unique race returns duplicate instead of storage error", result.handled === "duplicate", result);
   ok("unique race returns the existing lead id", result.lead_id === "lead_existing", result);
+  }
+
+  // ---- S697c: the landlord's own inquiry card -------------------------------
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const res = await post(admin, payload({ messageId: "mid-fwd" }), events);
+  ok("a self-verified forwarder records no site event", res.handled === "lead_created" && events.length === 0, { res, events });
+  }
+
+  const gmail = (overrides: Record<string, unknown> = {}) => ({
+    MessageID: "mid-gmail",
+    ToFull: [{ Email: `u-${TOKEN}@in.vacantless.com` }],
+    FromFull: { Email: "forwarding-noreply@google.com" },
+    Subject: "(#123456789) Gmail Forwarding Confirmation - Receive Mail from landlord@gmail.com",
+    TextBody: "Confirmation code: 123456789",
+    Headers: [{ Name: "Authentication-Results", Value: "mx; dkim=pass header.d=google.com; dmarc=pass header.from=google.com" }],
+    ...overrides,
+  });
+
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const res = await post(admin, gmail(), events);
+  ok("gmail code kept", res.handled === "forward_confirmation", res);
+  ok("gmail code recorded for the org, digits only", events.length === 1 && events[0].source === "gmail_forwarding" && events[0].detail === "123456789" && events[0].organization_id === ORG_ID, events);
+  ok("gmail code files no lead", admin.leads.length === 0);
+  }
+
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const res = await post(admin, gmail({ Headers: [{ Name: "Authentication-Results", Value: "mx; dkim=pass header.d=evil.io" }] }), events);
+  ok("spoofed gmail code refused", res.handled === "forward_confirmation_unverified" && events.length === 0, { res, events });
+  }
+
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const res = await post(admin, gmail({ Subject: "Gmail Forwarding Confirmation", TextBody: "no code here" }), events);
+  ok("gmail mail without a code records nothing", res.handled === "forward_confirmation_unparsed" && events.length === 0, { res, events });
+  }
+
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const auth = [{ Name: "Authentication-Results", Value: "mx; dkim=pass header.d=rentals.ca; dmarc=pass header.from=rentals.ca" }];
+  const first = await post(admin, { ...payload({ messageId: "mid-site" }), FromFull: { Email: "contact@rentals.ca" }, Headers: auth }, events);
+  const second = await post(admin, { ...payload({ messageId: "mid-site" }), FromFull: { Email: "contact@rentals.ca" }, Headers: auth }, events);
+  ok("site lead recorded as created", first.handled === "lead_created" && events[0]?.outcome === "lead_created" && events[0]?.source === "rentals_ca", { first, events });
+  ok("site redelivery recorded as duplicate", second.handled === "duplicate" && events[1]?.outcome === "duplicate", { second, events });
+  ok("site events carry no detail", events.every((e) => e.detail === null), events);
+  }
+
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const prev = process.env.KIJIJI_LEAD_INGEST_ENABLED;
+  delete process.env.KIJIJI_LEAD_INGEST_ENABLED;
+  const res = await post(admin, { ...payload({ messageId: "mid-kij" }), FromFull: { Email: "noreply@rts.kijiji.ca" } }, events);
+  if (prev !== undefined) process.env.KIJIJI_LEAD_INGEST_ENABLED = prev;
+  ok("kijiji off still refuses, records nothing", res.handled === "portal_disabled" && res.portal === "kijiji" && events.length === 0, { res, events });
+  }
+
+  // THE S697c BUG: the loop guard dropped every "noreply" site sender.
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const prev = process.env.KIJIJI_LEAD_INGEST_ENABLED;
+  process.env.KIJIJI_LEAD_INGEST_ENABLED = "true";
+  const res = await post(admin, {
+    MessageID: "mid-kij-real",
+    ToFull: [{ Email: `u-${TOKEN}@in.vacantless.com` }],
+    FromFull: { Email: "noreply@rts.kijiji.ca" },
+    ReplyTo: "simarjot.0001@gmail.com",
+    Subject: 'New message from simarjot.0001@gmail.com about "Bright Renovated 1-Bedroom at 833 Pillette Rd"',
+    TextBody: 'Good news, Agile Real Estate Group!\nsimarjot.0001@gmail.com is interested in "Bright Renovated 1-Bedroom at 833 Pillette Rd"\nsimarjot.0001@gmail.com:\n\n    Hi, I would like to see it.\n\nYou can respond to simarjot.0001@gmail.com by replying to this email.',
+    Headers: [
+      { Name: "Authentication-Results", Value: "mx; spf=fail smtp.mailfrom=agileonline.ca; dkim=pass header.d=rts.kijiji.ca; dmarc=fail header.from=rts.kijiji.ca" },
+      { Name: "X-Adid-Horizontal", Value: "1739552585" },
+      { Name: "Precedence", Value: "bulk" },
+      { Name: "Auto-Submitted", Value: "auto-generated" },
+    ],
+  }, events);
+  if (prev === undefined) delete process.env.KIJIJI_LEAD_INGEST_ENABLED;
+  else process.env.KIJIJI_LEAD_INGEST_ENABLED = prev;
+  ok("a real-shape kijiji inquiry from noreply@ is FILED, not dropped as an auto-reply", res.handled === "lead_created", res);
+  ok("it lands as a kijiji inquiry with the renter's email", admin.leads[0]?.source === "Kijiji" && admin.leads[0]?.email === "simarjot.0001@gmail.com", admin.leads[0]);
+  ok("and the card hears about it", events[0]?.source === "kijiji" && events[0]?.outcome === "lead_created", events);
+  }
+
+  {
+  const admin = new FakeAdmin();
+  const res = await post(admin, { ...payload({ messageId: "mid-rca-noreply" }), FromFull: { Email: "no-reply@rentals.ca" }, Headers: [{ Name: "Authentication-Results", Value: "mx; dmarc=pass header.from=rentals.ca" }] });
+  ok("rentals.ca no-reply@ is filed too", res.handled === "lead_created", res);
+  }
+
+  {
+  const admin = new FakeAdmin();
+  const res = await post(admin, { ...payload({ messageId: "mid-loop" }), FromFull: { Email: "mailer-daemon@example.com" } });
+  ok("a non-site noreply-style sender is still dropped by the loop guard", res.handled === "auto_reply", res);
+  }
+
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const res = await post(admin, {
+    MessageID: "mid-bad",
+    ToFull: [{ Email: `u-${TOKEN}@in.vacantless.com` }],
+    FromFull: { Email: "contact@rentals.ca" },
+    Subject: "Something else entirely",
+    TextBody: "Nothing a parser can use.",
+    Headers: [{ Name: "Authentication-Results", Value: "mx; dmarc=pass header.from=rentals.ca" }],
+  }, events);
+  ok("unreadable site mail recorded as not_parsed", res.handled === "not_parsed" && events[0]?.outcome === "not_parsed", { res, events });
   }
 
   ok(

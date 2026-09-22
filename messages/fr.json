@@ -205,5 +205,27 @@
     "badgeLive": "En ligne",
     "badgeRemoving": "Retrait en cours...",
     "badgeRemoved": "Retirée"
+  },
+  "portalInbox": {
+    "title": "Recevez vos demandes ici",
+    "sub": "{sites} vous écrivent quand un locataire pose une question. Envoyez-nous une copie. Chaque locataire apparaît alors dans Vacantless.",
+    "addressLabel": "Votre adresse courriel Vacantless",
+    "getAddress": "Obtenir mon adresse",
+    "copy": "Copier",
+    "copied": "Copié",
+    "howTitle": "Réglez ceci une fois dans votre courriel",
+    "step1": "Créez une règle pour les courriels de ces expéditeurs.",
+    "step2": "La règle transfère chaque courriel à votre adresse Vacantless.",
+    "step3": "Utilisez une règle. Un courriel transféré à la main ne passe pas.",
+    "gmailTip": "Sur Gmail, ajoutez d'abord votre adresse Vacantless pour le transfert. Gmail vous envoie ensuite un code. Il apparaît ici.",
+    "gmailCode": "Votre code Gmail est {code}. Entrez-le dans Gmail pour terminer.",
+    "statusTitle": "Ce qui est arrivé",
+    "ready": "Prêt",
+    "needsYou": "À vous",
+    "notYet": "Pas encore",
+    "readyLine": "Votre dernière demande est arrivée {ago}.",
+    "unreadableLine": "Un courriel arrivé {ago} n'a pas pu être lu.",
+    "unverifiedLine": "Un courriel arrivé {ago} a été transféré à la main. Utilisez une règle.",
+    "notYetLine": "Aucune demande pour l'instant."
   }
 }

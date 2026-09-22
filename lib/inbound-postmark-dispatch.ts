@@ -1,6 +1,7 @@
 import { DEFAULT_INGEST_DOMAIN, parseIngestAlias, pickIngestToken } from "./email-ingest";
 import { parsePortalLeadEmail } from "./portal-lead-email";
 import { isKnownPortalSender } from "./portal-senders";
+import { isGmailForwardingSender } from "./portal-inbox";
 
 const MAIN_MAIL_DOMAIN = "vacantless.com";
 
@@ -85,6 +86,9 @@ function looksLikePortalLead(payload: Record<string, unknown>): boolean {
   const headers = collectPostmarkHeaders(payload);
   const from = postmarkFrom(payload);
   if (isKnownPortalSender(from)) return true;
+  // Gmail's forwarding code for a portal rule goes to the lead handler, which
+  // keeps it for the org's card (S697c).
+  if (isGmailForwardingSender(from)) return true;
   const replyTo = str(payload.ReplyTo) || headerValue(headers, "Reply-To") || null;
   return parsePortalLeadEmail({
     subject: str(payload.Subject),

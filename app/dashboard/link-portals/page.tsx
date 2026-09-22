@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assertSupportedLocale } from "@/lib/i18n/locale";
 import { withPropertyParam } from "@/lib/stage-wizard-nav";
 import { ConnectTiles } from "./connect-tiles";
+import { PortalInboxCard } from "./portal-inbox-card";
 import { buildLinkPortalsViewModel } from "./view-model";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +79,8 @@ export default async function LinkPortalsPage({
       )}
 
       <ConnectTiles initial={vm} />
+
+      <PortalInboxCard orgId={org.id} />
 
       <BackNext
         backHref="/dashboard"

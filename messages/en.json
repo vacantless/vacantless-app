@@ -205,5 +205,27 @@
     "badgeLive": "Live",
     "badgeRemoving": "Taking down...",
     "badgeRemoved": "Taken down"
+  },
+  "portalInbox": {
+    "title": "Get your inquiries here",
+    "sub": "{sites} email you when a renter writes. Send us a copy. Each renter then shows up in Vacantless.",
+    "addressLabel": "Your Vacantless email address",
+    "getAddress": "Get my address",
+    "copy": "Copy",
+    "copied": "Copied",
+    "howTitle": "Set this up once in your email",
+    "step1": "Make a rule for email from these senders.",
+    "step2": "Have the rule forward each one to your Vacantless email address.",
+    "step3": "Use a rule. An email you forward by hand will not come through.",
+    "gmailTip": "On Gmail, add your Vacantless email address for forwarding first. Gmail then sends you a code. It shows up right here.",
+    "gmailCode": "Your Gmail code is {code}. Type it into Gmail to finish.",
+    "statusTitle": "What came in",
+    "ready": "Ready",
+    "needsYou": "Needs you",
+    "notYet": "Not yet",
+    "readyLine": "Your last inquiry came in {ago}.",
+    "unreadableLine": "An email came in {ago} that we could not read.",
+    "unverifiedLine": "An email came in {ago} forwarded by hand. Use a rule instead.",
+    "notYetLine": "No inquiry has come in yet."
   }
 }
