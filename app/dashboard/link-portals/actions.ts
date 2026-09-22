@@ -89,5 +89,8 @@ export async function provisionInquiryAddress(): Promise<void> {
     if (error) console.warn("link-portals: inquiry address not created", { message: error.message });
   }
   revalidatePath("/dashboard/link-portals");
-  redirect("/dashboard/link-portals#inquiries");
+  // A new query string, not just the hash: a hash-only redirect to the page the
+  // landlord is already on is treated as an in-page jump and never re-renders,
+  // so the button looked dead until a manual reload (seen live S697c).
+  redirect("/dashboard/link-portals?address=ready#inquiries");
 }
