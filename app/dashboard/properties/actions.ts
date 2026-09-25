@@ -172,6 +172,7 @@ import { parseAssetImage, isVisionImageType } from "@/lib/asset-capture-vision";
 import { plateFieldsToQuery, normalizePendingDocId, type AssetDraft } from "@/lib/asset-capture";
 import { validateExpenseInput } from "@/lib/expenses";
 import { parseMoneyToCents } from "@/lib/tenancy";
+import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import {
   listChannelTileStatuses as listChannelTileStatusesFromAccounts,
@@ -1052,6 +1053,13 @@ export async function updateProperty(formData: FormData) {
 
   if (priorStatus !== "leased" && effectiveStatus === "leased" && orgAfterSave) {
     await handleLeaseupAdLifecycle({ supabase, org: orgAfterSave, propertyId: id });
+    // A leased unit's outstanding "post this for me" requests are no longer
+    // work. Takedown items are exempt - those the lease-up just created.
+    await closeStaleConciergeItems(supabase, {
+      organizationId: orgAfterSave.id,
+      propertyId: id,
+      trigger: "leased",
+    });
   }
 
   revalidatePath(`/dashboard/properties/${id}`);
@@ -1548,6 +1556,14 @@ export async function archiveProperty(formData: FormData) {
     .eq("id", id)
     .eq("organization_id", org.id);
 
+  // Archiving takes the rental out of circulation, so any request still
+  // waiting on the publishing desk closes with it.
+  await closeStaleConciergeItems(supabase, {
+    organizationId: org.id,
+    propertyId: id,
+    trigger: "archived",
+  });
+
   revalidatePropertyList();
   redirect("/dashboard/properties?archived=1");
 }
@@ -1846,6 +1862,15 @@ export async function addListingPost(formData: FormData) {
       url,
       listingPostId: (inserted?.id as string | undefined) ?? null,
     });
+    // syncRunItemFromListingPost only reaches the newest active run. A request
+    // for this same site parked on an older run is what left Unit 3's Kijiji
+    // item open for six weeks after the ad went live, so close those too.
+    await closeStaleConciergeItems(supabase, {
+      organizationId: prop.organization_id as string,
+      propertyId,
+      trigger: "already_live",
+      channel: portal,
+    });
   }
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
@@ -1896,6 +1921,12 @@ export async function updateListingPost(formData: FormData) {
       portal,
       url,
       listingPostId: id,
+    });
+    await closeStaleConciergeItems(supabase, {
+      organizationId: updated.organization_id as string,
+      propertyId: updated.property_id as string,
+      trigger: "already_live",
+      channel: portal,
     });
   }
 

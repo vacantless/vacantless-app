@@ -32,6 +32,7 @@ import { formatRentCents } from "@/lib/tenancy";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import type { N1Snapshot } from "@/lib/n1-render";
+import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import {
   resolveRentReconciliation,
@@ -322,6 +323,12 @@ export async function createTenancy(formData: FormData) {
       .maybeSingle();
     if (leasedProperty?.id) {
       await handleLeaseupAdLifecycle({ supabase, org, propertyId });
+      // Same as the properties-page lease-up: close what nobody needs posted.
+      await closeStaleConciergeItems(supabase, {
+        organizationId: org.id,
+        propertyId,
+        trigger: "leased",
+      });
     }
     revalidatePath(`/dashboard/properties/${propertyId}`);
     revalidatePath("/dashboard/properties");

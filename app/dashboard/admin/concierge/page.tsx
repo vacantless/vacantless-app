@@ -406,16 +406,21 @@ export default async function ConciergeDeskPage({
                         : ""}
                     </p>
                     {prep.composedValues ? (
-                      <dl className="space-y-0.5 text-[11px] text-violet-900">
-                        {Object.entries(prep.composedValues).map(([k, v]) => (
-                          <div key={k} className="flex gap-1">
-                            <dt className="shrink-0 font-medium">
-                              {k.replace(/^kijiji-/, "")}:
-                            </dt>
-                            <dd className="truncate">{v}</dd>
-                          </div>
-                        ))}
-                      </dl>
+                      <details className="text-[11px] text-violet-900">
+                        <summary className="cursor-pointer font-medium text-violet-800">
+                          See what it filled in
+                        </summary>
+                        <dl className="mt-1 space-y-0.5">
+                          {Object.entries(prep.composedValues).map(([k, v]) => (
+                            <div key={k} className="flex gap-1">
+                              <dt className="shrink-0 font-medium">
+                                {k.replace(/^kijiji-/, "")}:
+                              </dt>
+                              <dd className="truncate">{v}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </details>
                     ) : prep.fillResults.length > 0 ? (
                       <p className="text-[11px] text-violet-700">
                         Filled:{" "}
