@@ -662,12 +662,16 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Viewing availability dropped",
     description:
-      "Same-day alert when your next few days of bookable viewing times drop to zero or thin. Owner admins are always copied so a staffing gap cannot be hidden by custom recipients.",
-    tokens: ["org_name", "open_slots", "open_days", "window_days", "viewing_times_url"],
+      "Same-day alert when renters can book viewings on only one day (or very few times) in the coming week. Owner admins are always copied so a staffing gap cannot be hidden by custom recipients.",
+    tokens: ["org_name", "open_slots", "open_days", "open_day_list", "window_days", "availability_headline", "availability_summary", "viewing_times_url"],
+    // S699: the old copy said "almost no bookable viewing times" next to "12
+    // slots across 1 day", which read as a contradiction. The alert fires on
+    // DAYS as well as slots (classifyTripwire: openDays <= 1 is thin), so the
+    // copy is one sentence per case, built by describeTripwire.
     defaultSubject:
-      "Heads up — {{org_name}} has almost no bookable viewing times",
+      "{{org_name}}: {{availability_headline}}",
     defaultBody:
-      "{{org_name}} currently has {{open_slots}} bookable viewing slot(s) across {{open_days}} day(s) in the next {{window_days}} days. Renters may be hitting the booking page and finding nothing that works. Open more times so viewings keep flowing.",
+      "{{availability_summary}}\n\nAdd viewing times: {{viewing_times_url}}",
     active: true,
   },
   // Rent-increase autopilot (the FREE compliance wedge — S339). The proactive

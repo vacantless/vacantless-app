@@ -9,6 +9,8 @@ import {
   classifyTripwire,
   countOpenBookableSlots,
   openBookableDays,
+  describeTripwire,
+  formatOpenDayList,
   shouldAlertTripwire,
   type TripwireSeverity,
 } from "../lib/availability-tripwire";
@@ -88,6 +90,26 @@ ok(
 {
   const r = decision({ severity: "thin", lastState: "zero", lastAlertOn: "2026-07-18" });
   ok("alert: zero -> thin improvement suppresses", !r.alert && r.nextLastState === "thin" && r.nextLastAlertOn === "2026-07-18");
+}
+
+// S699: the alert email names the open days.
+ok("dayList: empty reads none", formatOpenDayList([]) === "none");
+ok("dayList: one day", formatOpenDayList(["2026-10-02"]) === "Fri, Oct 2");
+ok("dayList: two days", formatOpenDayList(["2026-10-02", "2026-10-03"]) === "Fri, Oct 2 and Sat, Oct 3");
+ok("dayList: three days", formatOpenDayList(["2026-10-02", "2026-10-03", "2026-10-05"]) === "Fri, Oct 2; Sat, Oct 3 and Mon, Oct 5");
+ok("dayList: junk ignored", formatOpenDayList(["nope"]) === "none");
+
+{
+  const d = describeTripwire({ open: 12, dayKeys: ["2026-10-02"], windowDays: 7 });
+  ok("describe: one day headline", d.headline === "viewings can be booked on only 1 day in the next 7 days");
+  ok("describe: one day names the day and count", d.summary.includes("Fri, Oct 2 (12 open viewing times)"));
+  const z = describeTripwire({ open: 0, dayKeys: [], windowDays: 7 });
+  ok("describe: zero", z.headline === "no viewing times renters can book in the next 7 days" && !z.summary.includes("none"));
+  const f = describeTripwire({ open: 2, dayKeys: ["2026-10-02", "2026-10-03"], windowDays: 7 });
+  ok("describe: few times", f.headline === "only 2 open viewing times left in the next 7 days" && f.summary.endsWith("on Fri, Oct 2 and Sat, Oct 3."));
+  const one = describeTripwire({ open: 1, dayKeys: ["2026-10-02"], windowDays: 1 });
+  ok("describe: singulars", one.summary.includes("the next 1 day:") && one.summary.includes("(1 open viewing time)"));
+  ok("describe: no em dashes", ![d, z, f, one].some((x) => /\u2014/.test(x.headline + x.summary)));
 }
 
 console.log(`\navailability-tripwire: ${passed} passed, ${failed} failed`);

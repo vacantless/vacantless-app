@@ -16,6 +16,8 @@ import type {
   AvailabilityRule,
 } from "@/lib/booking";
 import {
+  describeTripwire,
+  formatOpenDayList,
   classifyTripwire,
   countOpenBookableSlots,
   openBookableDays,
@@ -287,11 +289,19 @@ export async function GET(req: NextRequest) {
       const alert = force || decision.alert;
 
       const viewingTimesUrl = `${APP_URL}/dashboard/availability`;
+      const described = describeTripwire({
+        open,
+        dayKeys: openDayKeys,
+        windowDays: lookaheadDays,
+      });
       const vars: Record<string, string> = {
         org_name: org.name ?? "",
         property_address: "",
         open_slots: String(open),
         open_days: String(openDays),
+        open_day_list: formatOpenDayList(openDayKeys),
+        availability_headline: described.headline,
+        availability_summary: described.summary,
         window_days: String(lookaheadDays),
         viewing_times_url: viewingTimesUrl,
       };
