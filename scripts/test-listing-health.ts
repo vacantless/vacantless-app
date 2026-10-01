@@ -37,7 +37,8 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
     label: over.label ?? null,
     status: over.status ?? "live",
     url: over.url ?? "https://kijiji.ca/ad",
-    postedOn: over.postedOn ?? "2026-07-01",
+    // S699: Kijiji is stale at 28 days, so the default fixture is 31 days old.
+    postedOn: over.postedOn ?? "2026-06-20",
     lastHealthAlertedAt: over.lastHealthAlertedAt ?? null,
   };
 }
@@ -45,7 +46,7 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
 // Stale live posts reuse the canonical distribution-channels threshold.
 {
   const channels = listingHealthChannels({
-    posts: [post({ postedOn: "2026-07-01" })],
+    posts: [post({ postedOn: "2026-06-20" })],
     today: TODAY,
     nowISO: NOW,
   });
@@ -153,6 +154,61 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
     ) === true,
   );
   ok("digest details include unit and channel", digest.detailsText.includes("12 Donwoods Dr: RentFaster.ca"));
+}
+
+// --- S699: each site has its own refresh window --------------------------------
+{
+  const twentyDaysOld = "2026-07-01";
+  const quiet = (portal: string) =>
+    listingHealthChannels({
+      posts: [post({ id: `${portal}-20d`, portal, postedOn: twentyDaysOld, url: `https://example.com/${portal}` })],
+      today: TODAY,
+      nowISO: NOW,
+    }).length === 0;
+  ok("S699: a 20-day-old Kijiji ad is not stale yet (28-day window)", quiet("kijiji"));
+  ok("S699: a 20-day-old Zumper ad is never stale on age", quiet("zumper"));
+  ok("S699: a 20-day-old Rentals.ca ad is never stale on age", quiet("rentals_ca"));
+  ok("S699: a 20-day-old Facebook ad is stale (7-day window)", !quiet("facebook"));
+  ok("S699: other sites keep the 14-day default", !quiet("rentfaster"));
+  const old = listingHealthChannels({
+    posts: [post({ id: "z", portal: "zumper", postedOn: "2026-01-01", url: "https://zumper.com/x" })],
+    today: TODAY,
+    nowISO: NOW,
+  });
+  ok("S699: even a 6-month-old Zumper ad is quiet while live", old.length === 0);
+}
+
+// --- S699: an ad that is no longer live is reported once -------------------------
+{
+  const removedNeverAlerted = listingHealthChannels({
+    posts: [post({ id: "r1", portal: "rentals_ca", status: "removed", url: "https://rentals.ca/x" })],
+    today: TODAY,
+    nowISO: NOW,
+  });
+  ok("S699: a removed ad alerts the first time", alertableListingHealthChannels(removedNeverAlerted).length === 1);
+
+  const removedAlertedLongAgo = listingHealthChannels({
+    posts: [
+      post({
+        id: "r2",
+        portal: "rentals_ca",
+        status: "removed",
+        url: "https://rentals.ca/x",
+        lastHealthAlertedAt: "2026-06-01T12:00:00.000Z",
+      }),
+    ],
+    today: TODAY,
+    nowISO: NOW,
+  });
+  ok("S699: a removed ad already reported never re-alerts", alertableListingHealthChannels(removedAlertedLongAgo).length === 0);
+  ok("S699: a removed ad already reported drops out of the snapshot count", removedAlertedLongAgo.length === 0);
+
+  const liveStaleAlertedLongAgo = listingHealthChannels({
+    posts: [post({ id: "k", lastHealthAlertedAt: "2026-07-01T12:00:00.000Z" })],
+    today: TODAY,
+    nowISO: NOW,
+  });
+  ok("S699: a live stale ad still re-alerts after the 7-day cooldown", alertableListingHealthChannels(liveStaleAlertedLongAgo).length === 1);
 }
 
 // Snapshot line is honest-zero and links to Distribute only when there is work.

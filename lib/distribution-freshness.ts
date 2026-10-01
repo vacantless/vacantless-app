@@ -12,8 +12,8 @@
 // ============================================================================
 
 import {
-  DEFAULT_REFRESH_DAYS,
   daysBetween,
+  refreshDaysForChannel,
 } from "./distribution-channels";
 import {
   scheduleNextVerification,
@@ -332,10 +332,14 @@ export function portalFreshnessDecision(
   const ageAnchor = postedOn ?? createdAt;
   const today = input.nowISO.slice(0, 10);
   const age = daysBetween(ageAnchor, today);
+  // S699: each site has its own window; null (Zumper, Rentals.ca) never
+  // flags on age, because the listing-post live check covers removal.
+  const refreshDays = input.refreshDays ?? refreshDaysForChannel(input.channel);
   if (
     status === "live" &&
+    refreshDays != null &&
     age != null &&
-    age >= (input.refreshDays ?? DEFAULT_REFRESH_DAYS)
+    age >= refreshDays
   ) {
     return {
       shouldFlag: true,

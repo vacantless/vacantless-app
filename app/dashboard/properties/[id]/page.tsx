@@ -546,8 +546,10 @@ function buildSyndicationBlockerSummary({
       [...refresh.values()],
       "needs refresh",
       "need refresh",
-      (label) => `${label} needs refresh or repost before it counts as live.`,
-      (list) => `${list} need refresh or repost before they count as live.`,
+      // S699: a live ad that is due a refresh still counts as live; the old
+      // "before it counts as live" contradicted "4 ads live" on the same card.
+      (label) => `${label} is due a refresh or repost.`,
+      (list) => `${list} are due a refresh or repost.`,
     )
   );
 }
@@ -1736,6 +1738,8 @@ export default async function PropertyDetailPage({
           inquiryCount: p.inquiryCount,
         })),
         today: distributeToday,
+        // S699: each site's own refresh window.
+        channel: channel.key,
       });
       const copyTab = channel.copyKey ? copyByKey.get(channel.copyKey) : null;
       return {
@@ -1949,13 +1953,20 @@ export default async function PropertyDetailPage({
     const mode = normalizePublishMode(r.mode ?? meta?.mode);
     const channelLabel = meta?.label ?? channelLabelByKey.get(r.channel) ?? r.channel;
     const liveWithoutUrl = channelStatusValueByKey.get(r.channel) === "problem";
+    // S699: for an outside rental site the freshness sweep never opens the
+    // site (it only re-applies the age rule), so its saved "stale" flag could
+    // disagree with the channel card ("4 ads live" next to "4 need refresh").
+    // The card's status (per-site rule + the live check) is the one source.
+    const portalChannel = isPortalKey(r.channel);
+    const freshnessVerificationStatus = portalChannel ? null : r.verification_status;
+    const freshnessStaleAfter = portalChannel ? null : r.stale_after;
     const staleRefresh = runItemHasFreshnessState({
-      verificationStatus: r.verification_status,
-      staleAfter: r.stale_after,
+      verificationStatus: freshnessVerificationStatus,
+      staleAfter: freshnessStaleAfter,
     })
       ? runItemNeedsRefresh({
-          verificationStatus: r.verification_status,
-          staleAfter: r.stale_after,
+          verificationStatus: freshnessVerificationStatus,
+          staleAfter: freshnessStaleAfter,
           nowISO: lifecycleNowISO,
         })
       : channelStatusValueByKey.get(r.channel) === "needs_refresh";
@@ -1965,8 +1976,8 @@ export default async function PropertyDetailPage({
       propertyStatus: normalizedStatus,
       publishStatus,
       transport: r.transport,
-      verificationStatus: r.verification_status,
-      staleAfter: r.stale_after,
+      verificationStatus: freshnessVerificationStatus,
+      staleAfter: freshnessStaleAfter,
       externalExpiresAt: r.external_expires_at,
       externalUrl: r.external_url,
       proofUrl: r.proof_url,

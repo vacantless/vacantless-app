@@ -121,6 +121,7 @@ type ListingHealthPostRow = {
   url: string | null;
   status: string;
   posted_on: string | null;
+  last_health_alerted_at?: string | null;
   properties:
     | { id: string; address: string | null; status: string | null }
     | { id: string; address: string | null; status: string | null }[]
@@ -187,7 +188,7 @@ async function loadListingHealthSummary({
   const { data, error } = await admin
     .from("listing_posts")
     .select(
-      "id, property_id, portal, label, url, status, posted_on, properties!inner(id, address, status, archived_at)",
+      "id, property_id, portal, label, url, status, posted_on, last_health_alerted_at, properties!inner(id, address, status, archived_at)",
     )
     .eq("organization_id", orgId)
     .eq("properties.status", "available")
@@ -205,7 +206,9 @@ async function loadListingHealthSummary({
       status: row.status,
       url: row.url,
       postedOn: row.posted_on,
-      lastHealthAlertedAt: null,
+      // S699: needed so a not-live ad that was already reported once drops
+      // out of the snapshot count, matching the alert email.
+      lastHealthAlertedAt: row.last_health_alerted_at ?? null,
     };
   });
   const channels = listingHealthChannels({

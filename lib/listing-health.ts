@@ -4,7 +4,6 @@
 // and proactive alerts share one stale/expired rule.
 
 import {
-  DEFAULT_REFRESH_DAYS,
   computeChannelStatus,
   type ChannelPost,
 } from "./distribution-channels";
@@ -111,7 +110,6 @@ function reasonFor(posts: ListingHealthPost[]): ListingHealthReason {
 
 export function listingHealthChannels(input: ListingHealthInput): ListingHealthChannel[] {
   const cooldownDays = input.cooldownDays ?? LISTING_HEALTH_COOLDOWN_DAYS;
-  const refreshDays = input.refreshDays ?? DEFAULT_REFRESH_DAYS;
   const groups = new Map<string, ListingHealthPost[]>();
   for (const post of input.posts) {
     if (!post.id || !post.propertyId) continue;
@@ -132,7 +130,10 @@ export function listingHealthChannels(input: ListingHealthInput): ListingHealthC
       blockers: [],
       posts: channelPosts,
       today: input.today,
-      refreshDays,
+      // Explicit override if the caller set one; otherwise the site's own
+      // rule (S699: Kijiji 28 days, Facebook 7, Zumper / Rentals.ca never).
+      refreshDays: input.refreshDays,
+      channel: posts[0].portal,
     });
     if (status.value !== "needs_refresh") continue;
 
@@ -142,8 +143,27 @@ export function listingHealthChannels(input: ListingHealthInput): ListingHealthC
         p.status === "removed" ||
         (p.status === "live" && status.liveUrl !== null),
     );
+    const reason = reasonFor(actionablePosts);
+    // S699: an ad that is no longer live (taken down on purpose, or dropped
+    // by the site and caught by the live check) is reported ONCE. The status
+    // alone cannot tell a deliberate removal from a site removal, and before
+    // this a vacant unit's removed ad asked for a repost every 7 days forever
+    // (506 Manning was never live on Rentals.ca and still nagged). Once every
+    // post on the channel has been alerted, the channel drops out of both the
+    // alert email and the daily snapshot count.
+    if (
+      reason === "expired_or_removed" &&
+      actionablePosts.length > 0 &&
+      actionablePosts.every((p) => Boolean(p.lastHealthAlertedAt))
+    ) {
+      continue;
+    }
     const alertablePostIds = actionablePosts
-      .filter((p) => alertable(p, input.nowISO, cooldownDays))
+      .filter((p) =>
+        reason === "expired_or_removed"
+          ? !p.lastHealthAlertedAt
+          : alertable(p, input.nowISO, cooldownDays),
+      )
       .map((p) => p.id);
     const first = posts[0];
     channels.push({
@@ -151,7 +171,7 @@ export function listingHealthChannels(input: ListingHealthInput): ListingHealthC
       address: fallbackAddress(first.address),
       channel: first.portal,
       channelLabel: channelLabelFor(first),
-      reason: reasonFor(actionablePosts),
+      reason,
       postIds: actionablePosts.map((p) => p.id),
       alertablePostIds,
       liveUrl: status.liveUrl,

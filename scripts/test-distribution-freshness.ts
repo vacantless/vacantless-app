@@ -255,7 +255,7 @@ eq(
     channel: "kijiji",
     listingPostStatus: "live",
     listingPostUrl: "https://www.kijiji.ca/v-apartments-condos/windsor/123",
-    listingPostPostedOn: "2026-07-01",
+    listingPostPostedOn: "2026-06-20",
     staleAfter: null,
     nextRetryAt: null,
     nowISO: NOW,
@@ -313,7 +313,7 @@ eq(
     channel: "kijiji",
     listingPostStatus: "live",
     listingPostUrl: "https://www.kijiji.ca/v-apartments-condos/windsor/123",
-    listingPostPostedOn: "2026-07-01",
+    listingPostPostedOn: "2026-06-20",
     listingPostCreatedAt: "2026-07-19 08:00:00+00",
     staleAfter: null,
     nextRetryAt: null,
@@ -374,6 +374,28 @@ eq(
   }).reason,
   "missing_live_url",
 );
+
+// --- S699: per-site refresh windows -------------------------------------------
+for (const [channel, wantFlag] of [
+  ["kijiji", false],
+  ["zumper", false],
+  ["rentals_ca", false],
+  ["facebook", true],
+] as const) {
+  eq(
+    `S699: 20-day-old live ${channel} ad flags=${wantFlag}`,
+    portalFreshnessDecision({
+      channel,
+      listingPostStatus: "live",
+      listingPostUrl: `https://example.com/${channel}/1`,
+      listingPostPostedOn: "2026-07-01",
+      staleAfter: null,
+      nextRetryAt: null,
+      nowISO: NOW,
+    }).shouldFlag,
+    wantFlag,
+  );
+}
 
 // --- UI driver --------------------------------------------------------------
 ok(

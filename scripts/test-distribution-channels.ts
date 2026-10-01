@@ -18,6 +18,7 @@ import {
   DEFAULT_REFRESH_DAYS,
   daysBetween,
   computeChannelStatus,
+  refreshDaysForChannel,
   distributionChannelDisplayGroupFor,
   getOnlineAssistKindForChannel,
   groupDistributionChannelsForDisplay,
@@ -526,6 +527,21 @@ ok("realtor_ca through an agent", firstRunCostLine("realtor_ca") === "Through yo
 ok("rentfaster + viewit paid", firstRunCostLine("rentfaster") === "Paid site." && firstRunCostLine("viewit") === "Paid site.");
 ok("unknown channel has no line", firstRunCostLine("nope") === null && firstRunCostLine("other") === null);
 ok("free set = the six free lanes", ["facebook", "kijiji", "rentals_ca", "zumper", "facebook_feed", "instagram"].every(firstRunIsFree) && !firstRunIsFree("rentfaster") && !firstRunIsFree("realtor_ca"));
+
+// --- S699: per-site refresh windows --------------------------------------------
+ok("S699: kijiji window 28", refreshDaysForChannel("kijiji") === 28);
+ok("S699: facebook window 7", refreshDaysForChannel("facebook") === 7);
+ok("S699: zumper never on age", refreshDaysForChannel("zumper") === null);
+ok("S699: rentals_ca never on age", refreshDaysForChannel("rentals_ca") === null);
+ok("S699: others keep the default", refreshDaysForChannel("rentfaster") === DEFAULT_REFRESH_DAYS);
+{
+  const old: ChannelPost = { status: "live", url: "https://x", posted_on: "2026-01-01", inquiryCount: 0 };
+  const base = { linkIsLive: true, blockers: [], posts: [old], today: "2026-07-01" };
+  ok("S699: old live zumper ad reads posted", computeChannelStatus({ ...base, channel: "zumper" }).value === "posted");
+  ok("S699: old live kijiji ad reads needs_refresh", computeChannelStatus({ ...base, channel: "kijiji" }).value === "needs_refresh");
+  ok("S699: no channel keeps the 14-day default", computeChannelStatus(base).value === "needs_refresh");
+  ok("S699: explicit refreshDays still wins", computeChannelStatus({ ...base, channel: "zumper", refreshDays: 14 }).value === "needs_refresh");
+}
 
 // ---------------------------------------------------------------------------
 console.log(`\ndistribution-channels: ${passed} passed, ${failed} failed`);

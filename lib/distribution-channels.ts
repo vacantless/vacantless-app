@@ -1421,6 +1421,29 @@ export function channelStatusTone(value: unknown): StatusTone {
 // fall down the feed). Configurable per call.
 export const DEFAULT_REFRESH_DAYS = 14;
 
+// S699: one 14-day rule for every site flagged live, healthy ads as "needs a
+// refresh" (free Zumper and Rentals.ca ads stay up and the daily live check
+// proves it). Each site now has its own rule:
+//   - kijiji: a paid Lite ad runs 31 days, so flag it 3 days before it ends.
+//   - facebook (Marketplace): renewing after a week bumps the ad back up.
+//   - zumper, rentals_ca: never on age. These are free ads that stay up; the
+//     listing-post live check marks them removed when the site drops them.
+// Anything else keeps DEFAULT_REFRESH_DAYS. null means "never stale by age".
+export const CHANNEL_REFRESH_DAYS: Readonly<Record<string, number | null>> = {
+  kijiji: 28,
+  facebook: 7,
+  zumper: null,
+  rentals_ca: null,
+};
+
+/** Days after posting when a live ad on this channel needs a refresh; null = never by age. */
+export function refreshDaysForChannel(channel: string | null | undefined): number | null {
+  if (channel && Object.prototype.hasOwnProperty.call(CHANNEL_REFRESH_DAYS, channel)) {
+    return CHANNEL_REFRESH_DAYS[channel];
+  }
+  return DEFAULT_REFRESH_DAYS;
+}
+
 // One tracked post that belongs to a channel (the subset of listing_posts the
 // status reducer needs). inquiryCount is the leads-through-this-post tally.
 export type ChannelPost = {
@@ -1440,7 +1463,11 @@ export type ChannelStatusInput = {
   posts: ChannelPost[];
   // Org-local "today" as "YYYY-MM-DD" (caller passes it; keeps this pure).
   today: string;
+  // Explicit override. When absent the channel's own rule applies
+  // (refreshDaysForChannel); with no channel either, DEFAULT_REFRESH_DAYS.
   refreshDays?: number;
+  // The channel key (listing_posts.portal), so each site gets its own rule.
+  channel?: string;
 };
 
 export type ChannelStatus = {
@@ -1471,14 +1498,19 @@ function isYmd(v: string | null | undefined): v is string {
  * Reduce a channel's tracked posts + the listing's share-readiness into one
  * status. Precedence (a live ad wins over unmet blockers — the operator may have
  * posted anyway, but we still surface the blockers as warnings):
- *   1. a LIVE post  -> posted, or needs_refresh when it's older than refreshDays
+ *   1. a LIVE post  -> posted, or needs_refresh when it's older than the
+ *      channel's refresh window (never, for channels whose window is null)
  *      (problem if a live post somehow has no url — can't be tracked/reopened)
  *   2. an expired/removed post (nothing live) -> needs_refresh (repost)
  *   3. a draft post (nothing live) -> ready (a plan noted)
  *   4. no posts -> not_started when there are blockers, else ready
  */
 export function computeChannelStatus(input: ChannelStatusInput): ChannelStatus {
-  const refreshDays = input.refreshDays ?? DEFAULT_REFRESH_DAYS;
+  const refreshDays =
+    input.refreshDays ??
+    (input.channel !== undefined
+      ? refreshDaysForChannel(input.channel)
+      : DEFAULT_REFRESH_DAYS);
   const blockers = [...input.blockers];
   if (!input.linkIsLive) {
     // The single most important blocker: the public page must be Live before any
@@ -1507,7 +1539,7 @@ export function computeChannelStatus(input: ChannelStatusInput): ChannelStatus {
       };
     }
     const age = daysBetween(live.posted_on, input.today);
-    const stale = age != null && age >= refreshDays;
+    const stale = refreshDays != null && age != null && age >= refreshDays;
     return {
       value: stale ? "needs_refresh" : "posted",
       blockers,
