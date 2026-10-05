@@ -14,8 +14,9 @@ import type { NotifyMember } from "@/lib/incident-reports";
 // link scanners (Outlook SafeLinks, Gmail prefetch) fetch GET URLs, so a GET that
 // cancelled would auto-cancel real viewings (KI585). The page GET only renders;
 // this POST cancels via the SECURITY DEFINER cancel_showing_from_token RPC (which
-// re-derives showing + org server-side, marks it cancelled, logs a note, and
-// leaves the lead stage unchanged) and then fires leasing.showing_cancelled to
+// re-derives showing + org server-side, marks it cancelled and logs a note; since
+// 0228 a trigger moves a still-'booked' lead with no other scheduled viewing back
+// to 'contacted' with a follow-up for today) and then fires leasing.showing_cancelled to
 // the operator recipient list - the structured signal that replaces a free-text
 // "I can't make it" reply that dead-ends at reply_to_email.
 

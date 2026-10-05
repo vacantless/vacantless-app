@@ -172,9 +172,9 @@ export default async function LeadDetailPage({
   }
 
   // Cancelled-booking cue (S447 Codex P3): a lead can sit at "Booked" after its
-  // only viewing was cancelled - the cancel path deliberately leaves the stage to
-  // the operator, so surface it clearly rather than let "Booked" read as an active
-  // booking. Active viewing == still 'scheduled' (not cancelled/attended/no_show).
+  // only viewing was cancelled. Since 0228 a trigger moves such leads back to
+  // 'contacted' on cancel, so this cue now only catches rows that predate it or
+  // were set back to Booked by hand. Active viewing == still 'scheduled' (not cancelled/attended/no_show).
   const hasScheduledShowing = showings.some((s) => s.outcome === "scheduled");
   const hasCancelledShowing = showings.some((s) => s.outcome === "cancelled");
   const bookedWithNoActiveViewing =
