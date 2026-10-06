@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-09-10",
-  "checksum": "d2fb8f60901f2855cba1e7970e2a68cf6de1eb2bd62202d3c45dba00b2e5b953",
+  "generated": "2026-10-05",
+  "checksum": "3b040ca1e5e7a636c5057e26a955d3eb178070668c75cff60a69b5d91c01f5c1",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -70,7 +70,7 @@
     "app/dashboard/properties/[id]/page.tsx\u0000ampersand_or_slash": 7,
     "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 75,
     "app/dashboard/properties/[id]/page.tsx\u0000em_dash": 7,
-    "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 21,
+    "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 20,
     "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 32,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
     "app/dashboard/properties/new/add-property-form.tsx\u0000banned_word": 3,
@@ -157,8 +157,8 @@
     "app/dashboard/properties/[id]/listing-copy-card.tsx": 21,
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 367,
-    "app/dashboard/properties/[id]/publish-everywhere.tsx": 131,
+    "app/dashboard/properties/[id]/page.tsx": 372,
+    "app/dashboard/properties/[id]/publish-everywhere.tsx": 138,
     "app/dashboard/properties/new/add-property-form.tsx": 96,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 81,
@@ -185,8 +185,8 @@
     "lib/listing-health.ts": 12,
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
-    "messages/en.json": 172,
-    "messages/fr.json": 172
+    "messages/en.json": 192,
+    "messages/fr.json": 192
   },
   "entries": [
     {
@@ -811,12 +811,6 @@
       "rule": "parentheses",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "(shared with the assigned agent)",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "(top of this page) to make its public listing page live.",
       "count": 1
     },
     {

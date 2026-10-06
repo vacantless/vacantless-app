@@ -1262,7 +1262,7 @@ function AddPostForm({
   showLabel?: boolean;
 }) {
   return (
-    <details>
+    <details id={`save-link-${portal}`}>
       <summary className="cursor-pointer text-sm font-medium text-brand">
         Save the link to your ad
       </summary>

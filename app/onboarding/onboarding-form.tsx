@@ -8,6 +8,7 @@ import {
 } from "@/lib/brand-theme";
 import BrandColorField from "@/components/brand-color-field";
 import { AUTH_BUTTON_CLASS, AUTH_INPUT_CLASS } from "@/components/auth-shell";
+import { SubmitButton } from "@/components/submit-button";
 
 /**
  * Create-workspace form with a live renter-brand preview. The brand can be a
@@ -106,9 +107,11 @@ export function OnboardingForm({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <button type="submit" className={AUTH_BUTTON_CLASS}>
+      {/* S700 (dress rehearsal F2): the plain button gave no feedback during the
+          create, so people clicked twice. Disable it and say what is happening. */}
+      <SubmitButton className={AUTH_BUTTON_CLASS} pendingLabel="Creating your business...">
         Save and continue
-      </button>
+      </SubmitButton>
     </form>
   );
 }

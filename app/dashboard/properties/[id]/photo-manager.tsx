@@ -189,16 +189,17 @@ export function PhotoUploadWorkspace({
       return;
     }
 
-    setPicked((items) => [
-      ...items,
-      ...files.map((file, index) => ({
-        localId: `${Date.now()}-${index}-${file.name}-${file.size}`,
-        file,
-        status: "queued" as const,
-        progress: 0,
-      })),
-    ]);
+    const newItems: PickedPhoto[] = files.map((file, index) => ({
+      localId: `${Date.now()}-${index}-${file.name}-${file.size}`,
+      file,
+      status: "queued" as const,
+      progress: 0,
+    }));
+    setPicked((items) => [...items, ...newItems]);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    // S700 (dress rehearsal F10): choosing files used to only queue them, and
+    // nothing saved until a second "Upload photos" click. Upload straight away.
+    void uploadPicked([...picked.filter((i) => i.status === "queued"), ...newItems]);
   }
 
   function removePicked(localId: string) {
@@ -206,9 +207,10 @@ export function PhotoUploadWorkspace({
     setPicked((items) => items.filter((item) => item.localId !== localId));
   }
 
-  async function uploadPicked() {
+  async function uploadPicked(itemsArg?: PickedPhoto[]) {
     if (uploading) return;
-    if (picked.length === 0) {
+    const items = itemsArg ?? picked.filter((i) => i.status === "queued" || i.status === "error");
+    if (items.length === 0) {
       setError("Please choose at least one photo to upload.");
       return;
     }
@@ -216,13 +218,16 @@ export function PhotoUploadWorkspace({
     setUploading(true);
     setError(null);
     setSuccess(null);
-    setPicked((items) =>
-      items.map((item) => ({ ...item, status: "signing", progress: 0 })),
+    const ids = new Set(items.map((i) => i.localId));
+    setPicked((all) =>
+      all.map((item) =>
+        ids.has(item.localId) ? { ...item, status: "signing", progress: 0, error: undefined } : item,
+      ),
     );
 
     const targetResult = await createPhotoUploadTargets(
       propertyId,
-      picked.map((item) => ({
+      items.map((item) => ({
         name: item.file.name,
         type: item.file.type,
         sizeBytes: item.file.size,
@@ -230,12 +235,12 @@ export function PhotoUploadWorkspace({
     );
     if (!targetResult.ok) {
       setUploading(false);
-      setPicked((items) =>
-        items.map((item) => ({
-          ...item,
-          status: "error",
-          error: uploadActionMessage(targetResult.reason, photoCap),
-        })),
+      setPicked((all) =>
+        all.map((item) =>
+          ids.has(item.localId)
+            ? { ...item, status: "error", error: uploadActionMessage(targetResult.reason, photoCap) }
+            : item,
+        ),
       );
       setError(uploadActionMessage(targetResult.reason, photoCap));
       return;
@@ -249,7 +254,7 @@ export function PhotoUploadWorkspace({
     const uploaded: { storagePath: string; order: number }[] = [];
     await Promise.all(
       targetResult.targets.map(async (target, index) => {
-        const item = picked[index];
+        const item = items[index];
         if (!item) return;
         updatePicked(item.localId, { status: "uploading", progress: 1 });
         try {
@@ -287,7 +292,7 @@ export function PhotoUploadWorkspace({
     }
 
     setPhotos(confirmed.photos);
-    setPicked([]);
+    setPicked((all) => all.filter((item) => !ids.has(item.localId) || item.status === "error"));
     setSuccess(
       confirmed.added === 0
         ? "Photos already saved."
@@ -529,15 +534,17 @@ export function PhotoUploadWorkspace({
               onChange={onPickFiles}
               className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 disabled:opacity-60"
             />
+            {picked.some((i) => i.status === "error") && (
             <button
               type="button"
-              disabled={picked.length === 0 || uploading}
-              onClick={uploadPicked}
+              disabled={!picked.some((i) => i.status === "error" || i.status === "queued") || uploading}
+              onClick={() => uploadPicked()}
               className={PRIMARY_ACTION_CLASS}
               style={{ backgroundColor: "var(--brand-color)" }}
             >
-              {uploading ? "Uploading…" : "Upload photos"}
+              {uploading ? "Uploading…" : "Retry upload"}
             </button>
+            )}
           </div>
 
           {picked.length > 0 && (
@@ -554,7 +561,7 @@ export function PhotoUploadWorkspace({
                         {formatBytes(item.file.size)}
                       </span>
                     </span>
-                    {item.status === "queued" && !uploading ? (
+                    {(item.status === "queued" || item.status === "error") && !uploading ? (
                       <button
                         type="button"
                         onClick={() => removePicked(item.localId)}

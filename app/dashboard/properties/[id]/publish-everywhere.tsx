@@ -57,7 +57,7 @@ import {
   type PublishChannelInput,
 } from "@/lib/publish-everywhere";
 import { conciergeUsageLabel } from "@/lib/billing";
-import { firstRunCostLine, firstRunIsFree } from "@/lib/distribution-channels";
+import { channelByKey, firstRunCostLine, firstRunIsFree } from "@/lib/distribution-channels";
 import type {
   DistributeChannelCard,
   GetOnlineBasics,
@@ -90,7 +90,7 @@ export type PublishEverywherePostingBlocker = {
 // north-star and the rest of the tab already use).
 const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
   instant_auto: { label: "Instant", cls: "bg-green-50 text-green-700" },
-  copilot_fill: { label: "We post it", cls: "bg-indigo-50 text-indigo-700" },
+  copilot_fill: { label: "Needs you", cls: "bg-indigo-50 text-indigo-700" },
   paid_optin: { label: "Sign in + fee", cls: "bg-indigo-50 text-indigo-700" },
   needs_connection: { label: "Sign in first", cls: "bg-gray-100 text-gray-600" },
   brokerage_gated: { label: "Via brokerage", cls: "bg-gray-100 text-gray-600" },
@@ -551,17 +551,49 @@ export function PublishEverywhere({
                       <h4 className="text-base font-semibold text-green-950">
                         Finish {firstOutstandingForYou.label}
                       </h4>
-                      <p className="mt-0.5 text-sm text-green-800">
-                        Sign in and post. Vacantless fills the ad; you handle
-                        only the site&apos;s sign-in or fee step.
-                      </p>
+                      {/* S700 (dress rehearsal F16): this button used to be an
+                          anchor to its own card, so it scrolled to itself. The
+                          real self-serve path is: copy the ad wording, post it
+                          on the site, save the link here. Say exactly that. */}
+                      <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm text-green-800">
+                        <li>
+                          <a href="#ad-wording" className="font-semibold underline">
+                            Copy the ad wording
+                          </a>{" "}
+                          for {firstOutstandingForYou.label}.
+                        </li>
+                        <li>
+                          Sign in to {firstOutstandingForYou.label} and paste it
+                          in. Add the photos and pay any fee the site asks for.
+                        </li>
+                        <li>
+                          <a
+                            href={`#save-link-${firstOutstandingForYou.key}`}
+                            className="font-semibold underline"
+                          >
+                            Save the link to your ad
+                          </a>{" "}
+                          here so we can check it stays up.
+                        </li>
+                      </ol>
                     </div>
-                    <a
-                      href={`#for-you-${firstOutstandingForYou.key}`}
-                      className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-                    >
-                      Finish {firstOutstandingForYou.label} →
-                    </a>
+                    {channelByKey(firstOutstandingForYou.key)?.portalUrl ? (
+                      <a
+                        href={channelByKey(firstOutstandingForYou.key)?.portalUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Open {firstOutstandingForYou.label} ↗
+                      </a>
+                    ) : (
+                      <a
+                        href="#ad-wording"
+                        className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Copy the ad wording →
+                      </a>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-1">
@@ -836,8 +868,8 @@ export function PublishEverywhere({
           <b className="text-gray-700">Ready</b> means we post it when you press
           Post. It shows Live once the link to your ad comes back.
           <br />
-          <b className="text-gray-700">Needs you</b> means we fill the ad. You
-          sign in, pay any fee, and press post.
+          <b className="text-gray-700">Needs you</b> means we write the ad. You
+          sign in to the site, paste it, pay any fee, and press post.
           <br />
           <b className="text-gray-700">Not yet</b> means this site comes later.
         </div>
@@ -924,7 +956,7 @@ function ForYouHandoff({
           ? "Posting to rental sites opens once your listing has the details every site needs."
           : allSetSummary
           ? "The link to each ad is saved here. Reopen a site only when you change the listing."
-          : "We write the ad and post it for you. You pay a site only if it asks."}
+          : "We write the ad. You sign in, post it, and pay a site only if it asks."}
       </p>
       {postingBlocker && (
         <a
@@ -1014,8 +1046,8 @@ function ForYouRow({
         : working
           ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
           : paid
-            ? { label: "We post it + fee", cls: "bg-indigo-50 text-indigo-700" }
-            : { label: "We post it", cls: "bg-indigo-50 text-indigo-700" };
+            ? { label: "Needs you + fee", cls: "bg-indigo-50 text-indigo-700" }
+            : { label: "Needs you", cls: "bg-indigo-50 text-indigo-700" };
 
   return (
     <li
@@ -1109,7 +1141,11 @@ function ForYouRow({
             Sign in once →
           </a>
           <span className="text-[11px] text-gray-500">
-            Then we post it for you.
+            Or{" "}
+            <a href="#ad-wording" className="underline">
+              copy the ad wording
+            </a>{" "}
+            and post it on the site.
           </span>
         </div>
       ) : working ? (

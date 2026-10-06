@@ -914,6 +914,12 @@ export default async function PropertyDetailPage({
   // inquiries/bookings and therefore get copyable links, QR codes, or tracked
   // posting URLs.
   const normalizedStatus = normalizePropertyStatus(p.status);
+  // S700 (dress rehearsal F9): the draft banner used to list rent, beds/baths
+  // and photos even after they were done. Read what is actually missing.
+  const draftMissing: string[] = [];
+  if (!(typeof p.rent_cents === "number" && p.rent_cents > 0)) draftMissing.push("the rent");
+  if (p.beds == null || p.baths == null) draftMissing.push("the bed and bath count");
+  if (photoRows.length === 0) draftMissing.push("at least one photo");
   const publicPageIsBookable = isPublicBookable(normalizedStatus);
   const publicPageIsVisible = isPubliclyVisible(normalizedStatus);
   const publicPageShowsUnavailable =
@@ -2606,9 +2612,13 @@ export default async function PropertyDetailPage({
         searchParams.publish !== "needs" && (
           <p className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
             <strong>This rental is a private draft.</strong> Renters can&apos;t
-            see it yet. Add the rent, bed and bath count, and a few photos, then
-            use <strong>Set Live</strong> (top of this page) to make its public
-            listing page live.
+            see it yet.{" "}
+            {draftMissing.length > 0 ? (
+              <>Still needed: {draftMissing.join(", ")}. Then press </>
+            ) : (
+              <>When you&apos;re ready, press </>
+            )}
+            <strong>Set Live</strong> at the top of this page.
           </p>
         )}
 

@@ -68,7 +68,10 @@ export function ListingCopyCard({
   const descriptionId = "listing-copy-description";
 
   return (
-    <details className="mb-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <details
+      id="ad-wording"
+      className="mb-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
           <h3 className="mb-1 text-sm font-semibold text-gray-900">
