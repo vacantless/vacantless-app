@@ -107,7 +107,21 @@ function Field({
   );
 }
 
-function ReadinessMeter({ entries }: { entries: ChannelReadiness[] }) {
+// S700 (dress rehearsal F4): this panel listed WhatsApp, LinkedIn and Snapchat
+// as green "Ready" while the Get online tab calls them Coming soon. Show only
+// the sites a new customer can actually use today.
+const READINESS_SHOWN = new Set<ChannelReadiness["channel"]>([
+  "vacantless_page",
+  "kijiji",
+  "facebook_marketplace",
+  "rentals_ca",
+  "zumper",
+  "facebook_page",
+  "instagram",
+]);
+
+function ReadinessMeter({ entries: allEntries }: { entries: ChannelReadiness[] }) {
+  const entries = allEntries.filter((entry) => READINESS_SHOWN.has(entry.channel));
   return (
     <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:sticky lg:top-4">
       <div className="mb-4 flex items-start justify-between gap-3">

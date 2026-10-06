@@ -82,6 +82,8 @@ export type PublishEverywherePostingBlocker = {
   detail: string;
   href: string;
   action: string;
+  /** S700 (dress rehearsal F12): every missing detail at once, each with its own link. */
+  items?: { label: string; href: string }[];
 };
 
 // --- per-channel presentation (mode -> chip) -------------------------------
@@ -166,7 +168,11 @@ function toPublishInput(
       card.facebookPage?.automationAuthorized === true ||
       card.instagramAccount?.automationAuthorized === true,
     feedAccepted:
-      card.feed?.inFeed === true || card.partner?.status === "accepted",
+      // S700 (dress rehearsal F17): a rental being IN our own feed is not the
+      // site accepting the feed. inFeed flips true the moment the rental goes
+      // live, which turned Rentals.ca and Zumper "Instant" for every org with
+      // no partner accepted (none has, as of 2026-10-05). Only acceptance counts.
+      card.partner?.status === "accepted",
     copilotSupported: copilotEnabled && isCopilotSupportedKey(ch.key),
   };
 }
@@ -537,6 +543,20 @@ export function PublishEverywhere({
                       <p className="mt-0.5 text-sm text-green-800">
                         {postingBlocker.detail}
                       </p>
+                      {postingBlocker.items && postingBlocker.items.length > 1 ? (
+                        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                          {postingBlocker.items.map((item) => (
+                            <li key={item.href + item.label}>
+                              <a
+                                href={item.href}
+                                className="inline-flex rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-50"
+                              >
+                                {item.label} →
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                     <a
                       href={postingBlocker.href}
@@ -847,6 +867,9 @@ export function PublishEverywhere({
                 row={r}
                 propertyId={propertyId}
                 wizardEnabled={wizardEnabled}
+                // S700: Rentals.ca / Zumper now sit here until a feed is
+                // accepted; a hand-posted ad must still read Live.
+                live={liveStateFor(r)}
               />
             ))}
           </div>

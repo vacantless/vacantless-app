@@ -128,5 +128,18 @@ ok("leasing-only -> two steps", leasingOnly.totalCount === 2 && leasingOnly.step
 ok("leasing-only -> complete once live", leasingOnly.isComplete === true && leasingOnly.shouldShowCard === false);
 ok("postLeaseEnabled omitted keeps four steps", fresh.totalCount === 4);
 
+// S700 (dress rehearsal F14): with the new add page on, "Add rental" opens it.
+const v2 = computeOnboardingState({
+  hasProperty: false,
+  hasLiveListing: false,
+  hasTenancy: false,
+  wizardEnabled: true,
+  railStepDoneAt: null,
+  dismissedAt: null,
+  addPropertyV2Enabled: true,
+});
+ok("add page on -> Add rental opens /dashboard/properties/new", v2.steps[0].href === "/dashboard/properties/new");
+ok("add page off -> legacy anchor kept", fresh.steps[0].href === "/dashboard/properties#add-rental");
+
 console.log(`\nonboarding-wizard: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

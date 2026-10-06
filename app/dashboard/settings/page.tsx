@@ -936,6 +936,7 @@ export default async function SettingsPage({
                   Contact phone
                 </span>
                 <input
+                  id="public-contact-phone"
                   name="public_contact_phone"
                   type="tel"
                   inputMode="tel"
@@ -953,6 +954,7 @@ export default async function SettingsPage({
                   Contact email <span className="text-gray-400">(optional)</span>
                 </span>
                 <input
+                  id="public-contact-email"
                   name="public_contact_email"
                   type="email"
                   inputMode="email"

@@ -77,6 +77,7 @@ export default async function GettingStartedPage({
     wizardEnabled: distributionWizardEnabled(),
     hasTenancy: (tenancyCount ?? 0) > 0,
     postLeaseEnabled: await orgShowsPostLease(supabase, org.id),
+    addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
     dismissedAt: row?.dismissed_at ?? null,
     railStepDoneAt: row?.rail_step_done_at ?? null,
   });

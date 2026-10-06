@@ -42,6 +42,8 @@ export type OnboardingWizardInput = {
   dismissedAt: string | null;
   /** S700: false drops the post-lease steps (tenancy, rent collection). Default true. */
   postLeaseEnabled?: boolean;
+  /** ADD_PROPERTY_V2_ENABLED: "Add rental" opens the add page; the old #add-rental anchor is not rendered then (dress rehearsal F14). */
+  addPropertyV2Enabled?: boolean;
 };
 
 type StepDef = Omit<OnboardingWizardStep, "status">;
@@ -110,6 +112,9 @@ export function computeOnboardingState(
       currentAssigned = true;
     } else {
       status = "todo";
+    }
+    if (def.key === "property" && input.addPropertyV2Enabled) {
+      return { ...def, href: "/dashboard/properties/new", status };
     }
     if (def.key === "get_online" && input.wizardEnabled) {
       return { ...def, href: "/dashboard/link-portals", status };

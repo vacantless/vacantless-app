@@ -390,6 +390,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
         postLeaseEnabled: onboardingPostLease,
+        addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
         hasProperty: (propertyCount ?? 0) > 0,
         hasLiveListing: (listingOnlineCount ?? 0) > 0,
         wizardEnabled: distributionWizardEnabled(),

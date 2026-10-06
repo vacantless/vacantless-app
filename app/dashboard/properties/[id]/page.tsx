@@ -400,7 +400,11 @@ function relistPublishInputForCard(
       card.facebookPage?.automationAuthorized === true ||
       card.instagramAccount?.automationAuthorized === true,
     feedAccepted:
-      card.feed?.inFeed === true || card.partner?.status === "accepted",
+      // S700 (dress rehearsal F17): a rental being IN our own feed is not the
+      // site accepting the feed. inFeed flips true the moment the rental goes
+      // live, which turned Rentals.ca and Zumper "Instant" for every org with
+      // no partner accepted (none has, as of 2026-10-05). Only acceptance counts.
+      card.partner?.status === "accepted",
     copilotSupported: copilotEnabled && isCopilotSupportedKey(channel.key),
   };
 }
@@ -3165,11 +3169,13 @@ export default async function PropertyDetailPage({
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-gray-900">
-                Optional details for stronger ads
+                More details for your ads
               </h3>
+              {/* S700 (dress rehearsal F13): square footage lives here and some
+                  sites will not take the ad without it, so do not call it optional. */}
               <p className="mt-1 text-xs text-gray-500">
-                Add unit type, available date, pets, utilities, amenities, and
-                internal flags when they matter.
+                Some rental sites need square footage. Add it here with unit
+                type, available date, pets, utilities and amenities.
               </p>
             </div>
             <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">

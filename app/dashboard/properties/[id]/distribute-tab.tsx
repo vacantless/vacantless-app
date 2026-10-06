@@ -335,13 +335,27 @@ export function DistributeTab({
   const firstListingPacketAction = firstListingPacketMissing
     ? packetFieldAction(firstListingPacketMissing, propertyId)
     : null;
+  // S700 (dress rehearsal F12): name every missing detail at once, not just
+  // the first. The customer used to find them one lap of the app at a time.
+  const listingPacketMissingItems = listingPacket.missingRequired.map(
+    (missing) => {
+      const action = packetFieldAction(missing, propertyId);
+      return { label: action.action, href: action.href };
+    },
+  );
   const publishEverywherePostingBlocker =
     firstListingPacketAction
       ? {
           title: "Answer the missing questions first.",
-          detail: `${firstListingPacketAction.detail} Sign-in, payment, and the ad link come after this.`,
+          detail:
+            listingPacket.missingRequired.length > 1
+              ? `Still needed: ${listingPacket.missingRequired
+                  .map((m) => m.label.toLowerCase())
+                  .join(", ")}. Sign-in and any site fee come after.`
+              : `${firstListingPacketAction.detail} Sign-in and any site fee come after.`,
           href: firstListingPacketAction.href,
           action: firstListingPacketAction.action,
+          items: listingPacketMissingItems,
         }
       : null;
   const publishEverywhereSurface = (
@@ -526,8 +540,9 @@ const PACKET_FIELD_HREF: Partial<Record<PortalRequirementFieldKey, string>> = {
   photos: "#property-photos",
   description: "#listing-description",
   property_type: "#property-unit-type",
-  contact_phone: "/dashboard/settings",
-  contact_email: "/dashboard/settings",
+  // S700 (dress rehearsal F14): land on the field itself, not the top of Settings.
+  contact_phone: "/dashboard/settings?tab=brand#public-contact-phone",
+  contact_email: "/dashboard/settings?tab=brand#public-contact-email",
   availability_date: "#property-available-date",
   lease_term: "#rental-details",
   utilities: "#rental-details",
