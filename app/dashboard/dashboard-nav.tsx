@@ -79,6 +79,13 @@ const ACCOUNT: NavItem[] = [
   { href: "/dashboard/me", label: "My settings" },
 ];
 
+// S700: the post-lease surfaces a leasing-only customer does not see.
+const POST_LEASE_HREFS = new Set([
+  "/dashboard/maintenance",
+  "/dashboard/money",
+  "/dashboard/tenants",
+]);
+
 // Referral surface (Slice 2). Ships dark: the /dashboard/referrals page is
 // always reachable by URL, but this link only appears when REFERRALS_ENABLED is
 // set (read in the layout, passed as the referralsEnabled prop).
@@ -130,6 +137,7 @@ export function DashboardNav({
   referralsEnabled = false,
   capturesEnabled = false,
   distributionWizardEnabled = false,
+  postLeaseEnabled = true,
 }: {
   orgName: string;
   orgs?: { id: string; name: string }[];
@@ -138,6 +146,8 @@ export function DashboardNav({
   referralsEnabled?: boolean;
   capturesEnabled?: boolean;
   distributionWizardEnabled?: boolean;
+  /** S700: false hides Repairs, Money and Tenants & leases (lib/post-lease-surface.ts). */
+  postLeaseEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -159,9 +169,13 @@ export function DashboardNav({
     });
   }
 
-  const primary = PRIMARY;
+  const primary = postLeaseEnabled
+    ? PRIMARY
+    : PRIMARY.filter((item) => !POST_LEASE_HREFS.has(item.href));
   const account = [
-    ...ACCOUNT,
+    ...(postLeaseEnabled
+      ? ACCOUNT
+      : ACCOUNT.filter((item) => !POST_LEASE_HREFS.has(item.href))),
     ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
     ...(showAgentBook ? [AGENT_BOOK] : []),
     ...(referralsEnabled ? [REFERRALS] : []),

@@ -113,5 +113,20 @@ ok("dismissed -> not complete", dismissed.isComplete === false);
 ok("dismissed -> card hidden", dismissed.shouldShowCard === false);
 ok("dismissed keeps next step for route", dismissed.nextIncompleteStep?.key === "get_online");
 
+// S700: a leasing-only org (LEASING_ONLY_NAV, no post-lease data) sees two steps,
+// and finishing them completes the checklist.
+const leasingOnly = computeOnboardingState({
+  hasProperty: true,
+  hasLiveListing: true,
+  hasTenancy: false,
+  wizardEnabled: true,
+  railStepDoneAt: null,
+  dismissedAt: null,
+  postLeaseEnabled: false,
+});
+ok("leasing-only -> two steps", leasingOnly.totalCount === 2 && leasingOnly.steps.map((s) => s.key).join(",") === "property,get_online");
+ok("leasing-only -> complete once live", leasingOnly.isComplete === true && leasingOnly.shouldShowCard === false);
+ok("postLeaseEnabled omitted keeps four steps", fresh.totalCount === 4);
+
 console.log(`\nonboarding-wizard: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

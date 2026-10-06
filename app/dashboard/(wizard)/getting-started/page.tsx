@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import {
   computeOnboardingState,
   type OnboardingWizardStep,
@@ -75,6 +76,7 @@ export default async function GettingStartedPage({
     hasLiveListing: (liveListingCount ?? 0) > 0,
     wizardEnabled: distributionWizardEnabled(),
     hasTenancy: (tenancyCount ?? 0) > 0,
+    postLeaseEnabled: await orgShowsPostLease(supabase, org.id),
     dismissedAt: row?.dismissed_at ?? null,
     railStepDoneAt: row?.rail_step_done_at ?? null,
   });

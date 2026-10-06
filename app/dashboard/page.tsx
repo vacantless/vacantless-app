@@ -13,6 +13,7 @@ import {
 } from "@/lib/onboarding";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { computeOnboardingState } from "@/lib/onboarding-wizard";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { isSubscriptionActive, pilotStatus } from "@/lib/billing";
 import {
@@ -383,8 +384,12 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     checklist.completedCount === 0;
   const showCompactChecklist =
     !onboardingWizardEnabled && setupStarted;
+  const onboardingPostLease = onboardingWizardEnabled
+    ? await orgShowsPostLease(supabase, org.id)
+    : true;
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
+        postLeaseEnabled: onboardingPostLease,
         hasProperty: (propertyCount ?? 0) > 0,
         hasLiveListing: (listingOnlineCount ?? 0) > 0,
         wizardEnabled: distributionWizardEnabled(),

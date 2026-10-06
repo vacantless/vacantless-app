@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg, listMyOrgs } from "@/lib/org";
 import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { DashboardNav } from "./dashboard-nav";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { VacantlessMark } from "@/components/vacantless-mark";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function DashboardLayout({
   // The caller's orgs, for the multi-org switcher. Only agents/users who belong
   // to more than one org see any switcher UI; single-org users are unaffected.
   const orgs = await listMyOrgs();
+  const postLeaseEnabled = await orgShowsPostLease(supabase, org.id);
 
   // Guardrail: a pale tenant brand color makes the white header text + the
   // white-on-brand buttons unreadable. Derive an accessible (darkened-as-needed)
@@ -84,6 +86,7 @@ export default async function DashboardLayout({
             distributionWizardEnabled={
               process.env.DISTRIBUTION_WIZARD_ENABLED === "1"
             }
+            postLeaseEnabled={postLeaseEnabled}
           />
         </div>
       </header>

@@ -40,6 +40,8 @@ export type OnboardingWizardInput = {
   wizardEnabled: boolean;
   railStepDoneAt: string | null;
   dismissedAt: string | null;
+  /** S700: false drops the post-lease steps (tenancy, rent collection). Default true. */
+  postLeaseEnabled?: boolean;
 };
 
 type StepDef = Omit<OnboardingWizardStep, "status">;
@@ -95,7 +97,11 @@ export function computeOnboardingState(
   };
 
   let currentAssigned = false;
-  const steps = STEP_DEFS.map((def) => {
+  const defs =
+    input.postLeaseEnabled === false
+      ? STEP_DEFS.filter((def) => def.key !== "tenancy" && def.key !== "rent_rail")
+      : STEP_DEFS;
+  const steps = defs.map((def) => {
     let status: OnboardingWizardStepStatus;
     if (done[def.key]) {
       status = "complete";
