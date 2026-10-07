@@ -740,9 +740,13 @@ function SyndicationFirstCard({
             {body}
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-            <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-100">
-              {renterPageLabel}
-            </span>
+            {/* S700 (dress rehearsal F8): the headline already says when the
+                page is not live; the chip only repeats it. Show it when live. */}
+            {linkIsLive ? (
+              <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-100">
+                {renterPageLabel}
+              </span>
+            ) : null}
             <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-100">
               {missingBasicsLabel}
             </span>
@@ -755,10 +759,14 @@ function SyndicationFirstCard({
               {blockerSummary.body}
             </p>
           ) : null}
-          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
-            Your listing first. Sign-in and site fees wait inside Post,
-            and a site counts as Live only after the link to your ad is saved.
-          </p>
+          {/* S700 (dress rehearsal F11): explain sign-in and fees when they
+              are next, not while the customer is still filling in the listing. */}
+          {!packetBlocked ? (
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
+              Sign-in and site fees wait inside Post, and a site counts as Live
+              only after the link to your ad is saved.
+            </p>
+          ) : null}
         </div>
         <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:shrink-0 sm:items-end">
           <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-slate-100">
@@ -2369,7 +2377,7 @@ export default async function PropertyDetailPage({
           tone: "warning" as const,
           text: `This rental is a ${propertyStatusLabel(
             p.status,
-          )}. Its public page isn't live yet — anyone you share the link with will hit a "not found" page. Use Set Live at the top of the page before sharing.`,
+          )}. Anyone you share the link with now will see a "not found" page.`,
         };
 
   // Lifecycle rail (IA Step 4 slice 1): derive where this unit sits, empty ->
