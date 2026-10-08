@@ -9,6 +9,7 @@ import {
   daysParked,
   parkedSinceMs,
   orgLastAlertedMs,
+  propertyWantsPosting,
   selectStuckToAlert,
   shouldAlert,
   stuckKind,
@@ -224,6 +225,30 @@ ok(
   const m = orgLastAlertedMs(rows);
   ok("per-org last-alert takes the MOST RECENT stamp", m.get("o1") === Date.parse(daysAgo(1)));
   ok("an org with no stamp is absent from the map", !m.has("o2"));
+}
+
+// --- S700k: units no longer advertised -----------------------------------
+ok("available unit wants posting", propertyWantsPosting("available"));
+ok("off-market unit does not", !propertyWantsPosting("off_market"));
+ok("leased unit does not", !propertyWantsPosting("leased"));
+ok("draft unit does not", !propertyWantsPosting("draft"));
+ok("unknown status stays eligible", propertyWantsPosting(null) && propertyWantsPosting(undefined));
+{
+  const rows: StuckCandidate[] = [
+    row({ id: "dead", organization_id: "o1", last_stuck_alerted_at: null }),
+    row({ id: "live", organization_id: "o2", last_stuck_alerted_at: null }),
+  ];
+  const picked = selectStuckToAlert(rows, NOW, 5, new Set(["dead"])).map((r) => r.id);
+  ok("an excluded (dead) item is never alerted", !picked.includes("dead"));
+  ok("other orgs still alert", picked.includes("live"));
+}
+{
+  const rows: StuckCandidate[] = [
+    row({ id: "dead", organization_id: "o1", last_stuck_alerted_at: daysAgo(2) }),
+    row({ id: "live", organization_id: "o1", last_stuck_alerted_at: null }),
+  ];
+  const picked = selectStuckToAlert(rows, NOW, 5, new Set(["dead"])).map((r) => r.id);
+  ok("an excluded item's stamp still rate-limits its org", picked.length === 0);
 }
 
 // --- copy ------------------------------------------------------------------

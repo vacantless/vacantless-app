@@ -127,10 +127,26 @@ export function orgLastAlertedMs(
  * backlog would have gone out as ~33 emails in about two hours. A per-invocation
  * cap is not a rate limit. The org's own last-alert timestamp is.
  */
+/**
+ * S700k: a parked post for a unit that is no longer advertised is dead work,
+ * not a stuck job. Measured 2026-10-08: Agile's Unit 30 (off market since it
+ * leased) still had three parked posts from 2026-08-08, and the sweep emailed
+ * "A Instagram post ... is ready for you" about it every week. Only a unit that
+ * is Available is worth a nudge. Unknown status (no run or property found)
+ * stays eligible, so a lookup gap never silences a real item.
+ */
+export function propertyWantsPosting(status: string | null | undefined): boolean {
+  if (status === null || status === undefined) return true;
+  return status === "available";
+}
+
 export function selectStuckToAlert(
   rows: readonly StuckCandidate[],
   nowMs: number,
   max: number = MAX_ALERTS_PER_SWEEP,
+  // Items that must not be alerted on (their unit is no longer advertised).
+  // They still count toward the per-org rate limit through their stamps.
+  excludeIds: ReadonlySet<string> = new Set(),
 ): StuckCandidate[] {
   const lastByOrg = orgLastAlertedMs(rows);
   const orgIsQuiet = (orgId: string) => {
@@ -139,7 +155,12 @@ export function selectStuckToAlert(
   };
 
   const due = rows
-    .filter((row) => shouldAlert(row, nowMs) && orgIsQuiet(row.organization_id))
+    .filter(
+      (row) =>
+        !excludeIds.has(row.id) &&
+        shouldAlert(row, nowMs) &&
+        orgIsQuiet(row.organization_id),
+    )
     .sort((a, b) => (parkedSinceMs(a) ?? 0) - (parkedSinceMs(b) ?? 0));
 
   const seenOrgs = new Set<string>();

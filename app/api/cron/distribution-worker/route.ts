@@ -35,6 +35,7 @@ import {
 import { composePostWithAgent } from "@/lib/distribution-worker-ai";
 import {
   daysParked,
+  propertyWantsPosting,
   selectStuckToAlert,
   stuckKind,
   STUCK_GATE_LABEL,
@@ -191,7 +192,29 @@ async function runStuckSweep(admin: AdminClient): Promise<SweepResult> {
 
     const nowMs = Date.now();
     const nowISO = new Date(nowMs).toISOString();
-    const due = selectStuckToAlert(data as unknown as StuckCandidate[], nowMs);
+    const candidates = data as unknown as StuckCandidate[];
+    // S700k: never nudge about a unit that is no longer advertised.
+    const runIds = Array.from(new Set(candidates.map((c) => c.run_id)));
+    const statusByRun = new Map<string, string | null>();
+    if (runIds.length > 0) {
+      const { data: runRows } = await admin
+        .from("distribution_runs")
+        .select("id, properties(status)")
+        .in("id", runIds);
+      for (const r of (runRows ?? []) as unknown as {
+        id: string;
+        properties: { status: string | null } | { status: string | null }[] | null;
+      }[]) {
+        const prop = Array.isArray(r.properties) ? r.properties[0] : r.properties;
+        statusByRun.set(r.id, prop?.status ?? null);
+      }
+    }
+    const deadIds = new Set(
+      candidates
+        .filter((c) => !propertyWantsPosting(statusByRun.get(c.run_id)))
+        .map((c) => c.id),
+    );
+    const due = selectStuckToAlert(candidates, nowMs, undefined, deadIds);
 
     let delivered = 0;
     let considered = 0;

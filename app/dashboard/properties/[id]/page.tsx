@@ -1424,7 +1424,9 @@ export default async function PropertyDetailPage({
       .map((ch) => ch.copyKey as string)
       .filter((key) =>
         DISTRIBUTION_CHANNELS.filter((ch) => ch.copyKey === key).every(
-          (ch) => ch.integrationStatus === "planned",
+          // Facebook Marketplace is "planned" as an integration but is a
+          // working self-post site (selfPost), so its wording stays.
+          (ch) => ch.integrationStatus === "planned" && !ch.selfPost,
         ),
       ),
   );
