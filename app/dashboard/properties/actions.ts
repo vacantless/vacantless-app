@@ -94,6 +94,8 @@ import {
   descriptionNeedsAutoDraft,
   deterministicAutoDescription,
   envFlagEnabled,
+  descriptionLocation,
+  missingDescriptionDetails,
 } from "@/lib/auto-listing-copy";
 import {
   autoDistributionChannels,
@@ -377,7 +379,13 @@ export type AddPropertyV2PrefillResult =
   | { ok: false; message: string };
 
 export type AddPropertyV2DescriptionResult =
-  | { ok: true; description: string; source: "ai" | "deterministic" }
+  | {
+      ok: true;
+      description: string;
+      source: "ai" | "deterministic";
+      /** S701: details the form collects that were blank, in plain words. */
+      missing: string[];
+    }
   | { ok: false; message: string };
 
 export async function addProperty(formData: FormData) {
@@ -770,7 +778,9 @@ export async function draftAddPropertyV2Description(
   const draft = addPropertyV2DraftFromFormData(formData);
   const facts = draftFactsFromAddPropertyV2(draft);
   const fallback = deterministicAutoDescription(facts);
-  const aiDescription = await draftAutoListingDescriptionWithAi(facts, fallback);
+  const aiDescription = await draftAutoListingDescriptionWithAi(facts, fallback, {
+    location: descriptionLocation(draft.address),
+  });
   const decision = chooseAutoListingCopy({
     enabled: true,
     currentDescription: null,
@@ -787,6 +797,7 @@ export async function draftAddPropertyV2Description(
     ok: true,
     description: decision.description,
     source: decision.source === "ai" ? "ai" : "deterministic",
+    missing: missingDescriptionDetails(facts),
   };
 }
 
@@ -2083,7 +2094,9 @@ async function maybeAutoDraftDescription(
   }
   const facts = autoCopyFacts(prop);
   const fallback = deterministicAutoDescription(facts);
-  const aiDescription = await draftAutoListingDescriptionWithAi(facts, fallback);
+  const aiDescription = await draftAutoListingDescriptionWithAi(facts, fallback, {
+    location: descriptionLocation(prop.address),
+  });
   const decision = chooseAutoListingCopy({
     enabled,
     currentDescription: prop.description,

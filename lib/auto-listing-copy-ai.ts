@@ -11,7 +11,15 @@ const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 500;
 const TIMEOUT_MS = 12_000;
 
-function factLines(facts: DraftFacts): string[] {
+export type AutoListingContext = {
+  /** Approximate location only (street name and city). See descriptionLocation. */
+  location?: string | null;
+};
+
+export function autoListingFactLines(
+  facts: DraftFacts,
+  context: AutoListingContext = {},
+): string[] {
   const lines: string[] = [];
   const add = (label: string, value: unknown) => {
     if (value == null || value === "") return;
@@ -22,6 +30,7 @@ function factLines(facts: DraftFacts): string[] {
     lines.push(`${label}: ${String(value)}`);
   };
 
+  add("Location", context.location);
   add("Bedrooms", facts.beds);
   add("Bathrooms", facts.baths);
   add("Unit type", facts.unit_type);
@@ -51,12 +60,18 @@ function factLines(facts: DraftFacts): string[] {
   return lines;
 }
 
-function buildPrompt(facts: DraftFacts, fallbackDraft: string | null): string {
-  const lines = factLines(facts);
+export function buildAutoListingPrompt(
+  facts: DraftFacts,
+  fallbackDraft: string | null,
+  context: AutoListingContext = {},
+): string {
+  const lines = autoListingFactLines(facts, context);
   return [
     "Write a concise residential rental listing description from ONLY the facts below.",
     "Do not add or imply any feature, renovation, neighbourhood, amenity, policy, price, or claim that is not supplied.",
     "Do not target or exclude people. Describe the unit, not the renter.",
+    "Use every fact listed below; do not leave any out.",
+    "The location is a street name and city only: never add a house number, unit, or neighbourhood.",
     "No links. No em dashes. Plain text only. Two or three short paragraphs.",
     "If the facts are too thin, lightly polish the fallback draft without adding facts.",
     "",
@@ -71,6 +86,7 @@ function buildPrompt(facts: DraftFacts, fallbackDraft: string | null): string {
 export async function draftAutoListingDescriptionWithAi(
   facts: DraftFacts,
   fallbackDraft: string | null,
+  context: AutoListingContext = {},
 ): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey || !isAsciiApiKey(apiKey)) return null;
@@ -93,7 +109,7 @@ export async function draftAutoListingDescriptionWithAi(
         messages: [
           {
             role: "user",
-            content: buildPrompt(facts, fallbackDraft),
+            content: buildAutoListingPrompt(facts, fallbackDraft, context),
           },
         ],
       }),

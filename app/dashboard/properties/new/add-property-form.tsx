@@ -446,10 +446,14 @@ export function AddPropertyV2Form({
         return;
       }
       update("description", result.description);
-      setDescriptionMessage(
+      const base =
         result.source === "ai"
           ? "AI draft added. Review before saving."
-          : "Draft added from the structured fields.",
+          : "Draft added from the structured fields.";
+      setDescriptionMessage(
+        result.missing.length > 0
+          ? `${base} For a fuller description, add ${joinPlain(result.missing)}, then draft again.`
+          : base,
       );
     });
   }
@@ -1191,4 +1195,10 @@ export function AddPropertyV2Form({
       <ReadinessMeter entries={readiness} />
     </div>
   );
+}
+
+// S701: "a", "a and b", "a, b and c". Plain words for the draft nudge.
+function joinPlain(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }

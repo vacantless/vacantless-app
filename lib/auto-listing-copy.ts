@@ -10,6 +10,7 @@ import {
   clampDescription,
   MIN_DESCRIPTION_CHARS,
 } from "./listing-feed";
+import { publicAddressLabel } from "./address-privacy";
 
 export type AutoListingCopySource = "disabled" | "existing" | "ai" | "deterministic";
 
@@ -72,4 +73,38 @@ export function chooseAutoListingCopy({
     return { shouldWrite: false, description: null, source: "deterministic" };
   }
   return { shouldWrite: true, description: fallback, source: "deterministic" };
+}
+
+// S701: the description is copied onto every site, so its location line is
+// always the APPROXIMATE address (street name and city, no civic number, no
+// unit), whatever the page's own display setting. Null when nothing usable.
+export function descriptionLocation(
+  address: string | null | undefined,
+): string | null {
+  const label = publicAddressLabel({
+    address: address ?? null,
+    mode: "approximate",
+  }).trim();
+  return label || null;
+}
+
+// S701: a thin draft comes from thin inputs, and the fix is to ask for the
+// missing details, never to invent them. Plain names, in the order a renter
+// asks about them. Only details the add-rental form actually collects.
+export function missingDescriptionDetails(facts: DraftFacts): string[] {
+  const out: string[] = [];
+  const blank = (v: unknown) => v == null || (typeof v === "string" && v.trim() === "");
+  if (blank(facts.sqft)) out.push("square feet");
+  if (blank(facts.laundry)) out.push("laundry");
+  if (blank(facts.parking)) out.push("parking");
+  if (
+    facts.heat_included == null &&
+    facts.hydro_included == null &&
+    facts.water_included == null
+  ) {
+    out.push("utilities");
+  }
+  if (facts.pets_cats == null && facts.pets_dogs == null) out.push("pets");
+  if (blank(facts.available_date)) out.push("move-in date");
+  return out;
 }
