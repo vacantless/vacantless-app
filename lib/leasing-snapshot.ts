@@ -16,10 +16,7 @@
 // "today" / "this week" / "start of shift" match the operator's day, not UTC.
 
 import type { LeasingHealth, LeasingHealthStatus } from "./leasing-health";
-import {
-  buildListingHealthSnapshotLine,
-  type ListingHealthSnapshotSummary,
-} from "./listing-health";
+import type { ListingHealthSnapshotSummary } from "./listing-health";
 
 // --- Row shapes the route passes in (already fetched + flattened) ------------
 export type SnapshotLead = {
@@ -211,10 +208,12 @@ export function snapshotHasContent(
   health?: LeasingHealth | null,
   listingHealth?: ListingHealthSnapshotSummary | null,
 ): boolean {
+  // S701c: viewing-calendar health no longer forces a send. Agile opens
+  // times one day at a time on purpose, so "offline" was noise every day;
+  // the weekly availability alert (S700l) covers an empty calendar.
+  void health;
   return (
     (listingHealth?.adCount ?? 0) > 0 ||
-    health?.status === "black" ||
-    health?.status === "red" ||
     b.newLeads.length > 0 ||
     b.showingsToday.length > 0 ||
     b.showingsWeek.length > 0 ||
@@ -228,21 +227,6 @@ export function snapshotHasContent(
 // <br>. So: separate the two lines of a lead block with ONE newline, separate
 // blocks/sections with a BLANK line. Never rely on leading-space indentation
 // (HTML collapses it) — use "•" bullets and "·" separators instead.
-
-function cleanName(name: string | null): string {
-  const t = (name ?? "").trim();
-  return t || "(no name on file)";
-}
-
-function cleanUnit(addr: string | null): string {
-  const t = (addr ?? "").trim();
-  return t || "(no unit specified)";
-}
-
-function cleanPhone(phone: string | null): string {
-  const t = (phone ?? "").trim();
-  return t || "no phone on file";
-}
 
 /** "Mon Jul 6, 2:30pm" in the org timezone, or a graceful fallback. */
 export function formatSnapshotTime(iso: string | null, tz: string): string {
@@ -275,31 +259,6 @@ export function formatSnapshotTime(iso: string | null, tz: string): string {
   } catch {
     return "time TBD";
   }
-}
-
-function leadBlock(l: SnapshotLead): string {
-  const moveIn = (l.move_in ?? "").trim() || "not given";
-  const source = (l.source ?? "").trim() || "Unknown";
-  const line1 = `• ${cleanName(l.name)} — ${cleanUnit(l.property_address)}`;
-  const line2 = `Move-in: ${moveIn} · Source: ${source} · Phone: ${cleanPhone(l.phone)}`;
-  return `${line1}\n${line2}`;
-}
-
-function showingBlock(s: SnapshotShowing, tz: string): string {
-  const line1 = `• ${cleanName(s.name)} — ${cleanUnit(s.property_address)}`;
-  const line2 = `Viewing: ${formatSnapshotTime(s.scheduled_at, tz)} · Phone: ${cleanPhone(s.phone)}`;
-  return `${line1}\n${line2}`;
-}
-
-function section(title: string, blocks: string[], emptyMsg: string): string {
-  const shown = blocks.slice(0, SNAPSHOT_SECTION_CAP);
-  const header = `${title} (${blocks.length})`;
-  if (blocks.length === 0) return `${header}\n\n${emptyMsg}`;
-  const parts = [header, ...shown];
-  if (blocks.length > SNAPSHOT_SECTION_CAP) {
-    parts.push(`…and ${blocks.length - SNAPSHOT_SECTION_CAP} more not shown.`);
-  }
-  return parts.join("\n\n");
 }
 
 const HEALTH_LABELS: Record<LeasingHealthStatus, string> = {
@@ -353,11 +312,131 @@ export function buildLeasingHealthBlock(
   return parts.join("\n");
 }
 
+// --- S701c layout: short, named, nothing that is not actionable -------------
+// Noam 2026-10-08: the snapshot was "almost unusable, so cluttered and filled
+// with useless info". It led with a calendar-health block (five identical
+// unnamed "Live and un-bookable" lines and weekend/evening advice for an
+// operator who opens one day at a time on purpose), printed full postal
+// addresses, "Move-in: not given" filler, empty sections and a footer. Now:
+// one count line, then only the sections that have rows, each row naming the
+// unit in short form, and ads to refresh named by unit and site.
+
+/** "1551 Assumption St, Unit 9, Windsor, ON N9A 3E2" -> "1551 Assumption St, Unit 9". */
+export function shortUnitLabel(addr: string | null): string {
+  const parts = (addr ?? "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "no unit on file";
+  const second = parts[1] ?? "";
+  if (/^(unit|suite|apt|apartment|#)\s*\S+/i.test(second)) {
+    return `${parts[0]}, ${second}`;
+  }
+  return parts[0];
+}
+
+/** "+13828800724" / "2263506690" -> "382-880-0724"; anything else as typed. */
+export function snapshotPhone(phone: string | null): string | null {
+  const raw = (phone ?? "").trim();
+  if (!raw) return null;
+  let digits = raw.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return raw;
+}
+
+function shortDate(value: string | null, tz: string, dateOnly: boolean): string | null {
+  const v = (value ?? "").trim();
+  if (!v) return null;
+  const ms = dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(v) ? Date.parse(`${v}T12:00:00Z`) : Date.parse(v);
+  if (Number.isNaN(ms)) return null;
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: dateOnly ? "UTC" : tz,
+      month: "short",
+      day: "numeric",
+    }).format(new Date(ms));
+  } catch {
+    return null;
+  }
+}
+
+function leadLines(l: SnapshotLead, tz: string, withSince: boolean): string {
+  const name = (l.name ?? "").trim() || "No name";
+  const details = [
+    snapshotPhone(l.phone),
+    (() => {
+      const src = (l.source ?? "").trim();
+      return src ? src.charAt(0).toUpperCase() + src.slice(1) : null;
+    })(),
+    (() => {
+      const d = shortDate(l.move_in, tz, true);
+      return d ? `move-in ${d}` : null;
+    })(),
+    withSince
+      ? (() => {
+          const d = shortDate(l.created_at, tz, false);
+          return d ? `asked ${d}` : null;
+        })()
+      : null,
+  ].filter((x): x is string => Boolean(x));
+  const line1 = `• ${name}, ${shortUnitLabel(l.property_address)}`;
+  return details.length > 0 ? `${line1}\n${details.join(" · ")}` : line1;
+}
+
+function showingLines(s: SnapshotShowing, tz: string): string {
+  const name = (s.name ?? "").trim() || "No name";
+  const phone = snapshotPhone(s.phone);
+  const line1 = `• ${formatSnapshotTime(s.scheduled_at, tz)}: ${name}, ${shortUnitLabel(s.property_address)}`;
+  return phone ? `${line1}\n${phone}` : line1;
+}
+
+function capped(title: string, blocks: string[]): string {
+  const shown = blocks.slice(0, SNAPSHOT_SECTION_CAP);
+  const parts = [`${title} (${blocks.length})`, ...shown];
+  if (blocks.length > SNAPSHOT_SECTION_CAP) {
+    parts.push(`And ${blocks.length - SNAPSHOT_SECTION_CAP} more.`);
+  }
+  return parts.join("\n\n");
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function adsSection(listingHealth: ListingHealthSnapshotSummary): string {
+  const items = listingHealth.items ?? [];
+  if (items.length === 0) {
+    const line = `${plural(listingHealth.adCount, "ad needs", "ads need")} a refresh across ${plural(listingHealth.unitCount, "unit", "units")}.`;
+    return listingHealth.firstDistributeUrl
+      ? `ADS TO REFRESH (${listingHealth.adCount})\n\n${line}\n${listingHealth.firstDistributeUrl}`
+      : `ADS TO REFRESH (${listingHealth.adCount})\n\n${line}`;
+  }
+  const byUnit = new Map<string, { address: string; url: string; sites: string[] }>();
+  for (const item of items) {
+    const entry = byUnit.get(item.propertyId) ?? {
+      address: item.address,
+      url: item.distributeUrl,
+      sites: [],
+    };
+    const why = item.reason === "stale" ? "old" : "expired";
+    entry.sites.push(`${item.channelLabel} (${why})`);
+    byUnit.set(item.propertyId, entry);
+  }
+  const blocks = [...byUnit.values()].map(
+    (u) => `• ${shortUnitLabel(u.address)}: ${u.sites.join(", ")}\n${u.url}`,
+  );
+  // Header counts ads, matching the count line; rows are one per unit.
+  return [`ADS TO REFRESH (${items.length})`, ...blocks].join("\n\n");
+}
+
 /**
- * The `{{snapshot}}` token value: the four labeled sections as plain text,
- * ready for the substrate's branded shell. Pure. The route fetches the rows;
- * this lays them out. Always returns all four sections (with counts) so the
- * digest reads as a status view even when a section is empty.
+ * The `{{snapshot}}` token value. Pure. One count line, then only the
+ * sections that have rows. Viewings always shows, because "none booked" is
+ * the one empty state worth knowing. `health` is accepted for call-site
+ * compatibility and deliberately not rendered (S701c).
  */
 export function buildSnapshotBlock(
   b: SnapshotBuckets,
@@ -365,31 +444,29 @@ export function buildSnapshotBlock(
   health?: LeasingHealth | null,
   listingHealth?: ListingHealthSnapshotSummary | null,
 ): string {
-  const sections = [
-    section(
-      "NEW INQUIRIES — LAST 24 HOURS",
-      b.newLeads.map(leadBlock),
-      "No new inquiries in the last 24 hours.",
-    ),
-    section(
-      "VIEWINGS TODAY",
-      b.showingsToday.map((s) => showingBlock(s, tz)),
-      "No viewings booked for today.",
-    ),
-    section(
-      "VIEWINGS LATER THIS WEEK",
-      b.showingsWeek.map((s) => showingBlock(s, tz)),
-      "No viewings booked for the rest of the week.",
-    ),
-    section(
-      "CAME IN THIS WEEK, NO VIEWING BOOKED YET",
-      b.noShowing.map(leadBlock),
-      "Every inquiry from this week has a viewing booked. Nice.",
-    ),
-  ];
-  if (health) sections.unshift(buildLeasingHealthBlock(health, tz));
-  const listingHealthLine = buildListingHealthSnapshotLine(listingHealth);
-  if (listingHealthLine) sections.unshift(listingHealthLine);
+  void health;
+  const viewings = [...b.showingsToday, ...b.showingsWeek];
+  const adCount = listingHealth?.adCount ?? 0;
+  const summary = [
+    plural(b.newLeads.length, "new inquiry", "new inquiries"),
+    plural(viewings.length, "viewing this week", "viewings this week"),
+    plural(b.noShowing.length, "waiting for a viewing", "waiting for a viewing"),
+    ...(adCount > 0 ? [plural(adCount, "ad to refresh", "ads to refresh")] : []),
+  ].join(" · ");
+
+  const sections: string[] = [summary];
+  if (b.newLeads.length > 0) {
+    sections.push(capped("NEW IN THE LAST 24 HOURS", b.newLeads.map((l) => leadLines(l, tz, false))));
+  }
+  sections.push(
+    viewings.length > 0
+      ? capped("VIEWINGS THIS WEEK", viewings.map((s) => showingLines(s, tz)))
+      : "VIEWINGS THIS WEEK (0)\n\nNone booked.",
+  );
+  if (b.noShowing.length > 0) {
+    sections.push(capped("WAITING FOR A VIEWING", b.noShowing.map((l) => leadLines(l, tz, true))));
+  }
+  if (listingHealth && adCount > 0) sections.push(adsSection(listingHealth));
   return sections.join("\n\n");
 }
 

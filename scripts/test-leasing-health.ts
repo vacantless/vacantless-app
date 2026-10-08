@@ -247,17 +247,14 @@ const emptyBuckets: SnapshotBuckets = {
   showingsWeek: [],
   noShowing: [],
 };
-ok("snapshotHasContent: black health forces send", snapshotHasContent(emptyBuckets, black) === true);
-ok("snapshotHasContent: red health forces send", snapshotHasContent(emptyBuckets, red) === true);
+// S701c: calendar health no longer forces a send (Agile opens one day at a time on purpose).
+ok("snapshotHasContent: black health alone stays quiet", snapshotHasContent(emptyBuckets, black) === false);
+ok("snapshotHasContent: red health alone stays quiet", snapshotHasContent(emptyBuckets, red) === false);
 ok("snapshotHasContent: yellow health stays quiet without buckets", snapshotHasContent(emptyBuckets, yellowByCount) === false);
 ok("snapshotHasContent: green health stays quiet without buckets", snapshotHasContent(emptyBuckets, green) === false);
 
 const snapshot = buildSnapshotBlock(emptyBuckets, TZ, red);
-ok(
-  "snapshot: health block is prepended above new inquiries",
-  snapshot.indexOf("LEASING HEALTH") >= 0 &&
-    snapshot.indexOf("LEASING HEALTH") < snapshot.indexOf("NEW INQUIRIES — LAST 24 HOURS"),
-);
+ok("snapshot: health block is no longer rendered (S701c)", !snapshot.includes("LEASING HEALTH") && !snapshot.includes("NEEDS ATTENTION"));
 
 // --- S513-H1 verification fixes (Cowork, 2026-07-18) -----------------------
 const emptyAvail: Availability = {

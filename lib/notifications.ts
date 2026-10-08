@@ -628,9 +628,8 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "dashboard_url",
     ],
     defaultSubject:
-      "Leasing snapshot — {{snapshot_date}}: {{new_count}} new (24h), {{showings_today_count}} showing(s) today",
-    defaultBody:
-      "Here is today's leasing snapshot for {{snapshot_date}}.\n\n{{snapshot}}\n\nThis is a daily status view, not a to-do backlog — nothing here is overdue. One email per weekday at the start of your shift.\n\nOpen your inquiries: {{dashboard_url}}",
+      "Leasing snapshot, {{snapshot_date}}: {{new_count}} new, {{showings_today_count}} viewings today",
+    defaultBody: "{{snapshot}}\n\nOpen your inquiries: {{dashboard_url}}",
     active: true,
   },
   // Weekly viewing-times reminder (S500). Audience operator; one email on the

@@ -118,7 +118,7 @@ const preS548QuietBlock = buildSnapshotBlock(empty, TZ);
 const notOptedListingHealth: ListingHealthSnapshotSummary | null = null;
 ok("content: non-opted listing health stays empty", snapshotHasContent(empty, null, notOptedListingHealth) === false);
 ok("block: non-opted listing health is byte-unchanged", buildSnapshotBlock(empty, TZ, null, notOptedListingHealth) === preS548QuietBlock);
-ok("block: non-opted listing health omits line", !buildSnapshotBlock(empty, TZ, null, notOptedListingHealth).includes("LISTING HEALTH"));
+ok("block: non-opted listing health omits ads", !buildSnapshotBlock(empty, TZ, null, notOptedListingHealth).includes("ADS TO REFRESH"));
 ok("content: opted listing health has content", snapshotHasContent(empty, null, listingHealth) === true);
 const zeroListingHealth: ListingHealthSnapshotSummary = {
   adCount: 0,
@@ -126,7 +126,7 @@ const zeroListingHealth: ListingHealthSnapshotSummary = {
   firstDistributeUrl: null,
 };
 ok("content: opted zero listing health stays empty", snapshotHasContent(empty, null, zeroListingHealth) === false);
-ok("block: opted zero listing health omits line", !buildSnapshotBlock(empty, TZ, null, zeroListingHealth).includes("LISTING HEALTH"));
+ok("block: opted zero listing health omits ads", !buildSnapshotBlock(empty, TZ, null, zeroListingHealth).includes("ADS TO REFRESH"));
 
 const counts = snapshotCounts({
   newLeads: [lead(), lead()],
@@ -142,39 +142,70 @@ ok(
     counts.noShowingCount === 1,
 );
 
-// --- buildSnapshotBlock ------------------------------------------------------
+// --- buildSnapshotBlock (S701c layout) ---------------------------------------
 const block = buildSnapshotBlock(
   { newLeads: [lead()], showingsToday: [showing()], showingsWeek: [], noShowing: [] },
   TZ,
 );
-ok("block: new-leads header with count", block.includes("NEW INQUIRIES — LAST 24 HOURS (1)"));
-ok("block: lead name+unit line", block.includes("• Jane Doe — 22 King St W #602"));
-ok("block: lead detail line", block.includes("Move-in: 2026-07-01 · Source: kijiji · Phone: 519-555-1234"));
-ok("block: showings-today header", block.includes("VIEWINGS TODAY (1)"));
-ok("block: showing time line", block.includes("Viewing: Thu Jun 25, 2:30pm · Phone: 519-555-9999"));
-ok("block: empty week section message", block.includes("No viewings booked for the rest of the week."));
-ok("block: empty nudge section message", block.includes("Every inquiry from this week has a viewing booked. Nice."));
-// blocks separate with a blank line so the branded shell renders paragraphs
+ok("block: count line first", block.startsWith("1 new inquiry · 1 viewing this week · 0 waiting for a viewing"));
+ok("block: new header with count", block.includes("NEW IN THE LAST 24 HOURS (1)"));
+ok("block: lead name+unit line", block.includes("• Jane Doe, 22 King St W #602"));
+ok("block: lead detail line", block.includes("519-555-1234 · Kijiji · move-in Jul 1"));
+ok("block: viewing line names time, renter and unit", block.includes("• Thu Jun 25, 2:30pm: John Roe, 1440 Queen St E"));
+ok("block: empty waiting section omitted", !block.includes("WAITING FOR A VIEWING ("));
+ok("block: no filler", !block.includes("not given") && !block.includes("Nice.") && !block.includes("no phone on file"));
+ok("block: no em dash", !block.includes("\u2014"));
 ok("block: blank-line separated", block.includes("\n\n"));
 
+const quiet = buildSnapshotBlock(empty, TZ);
+ok("block: empty viewings says none booked", quiet.includes("VIEWINGS THIS WEEK (0)\n\nNone booked."));
+
+const agile = buildSnapshotBlock(
+  {
+    newLeads: [],
+    showingsToday: [],
+    showingsWeek: [],
+    noShowing: [
+      lead({ name: "Avani Panchal", phone: "+13828800724", source: "Facebook Marketplace", move_in: "2026-11-01", property_address: "1551 Assumption St, Unit 9, Windsor, ON N9A 3E2", created_at: "2026-10-05T14:00:00Z" }),
+    ],
+  },
+  TZ,
+);
+ok("block: short unit drops city and postal code", agile.includes("• Avani Panchal, 1551 Assumption St, Unit 9\n") && !agile.includes("N9A 3E2"));
+ok("block: phone normalized", agile.includes("382-880-0724"));
+ok("block: waiting row says when they asked", agile.includes("move-in Nov 1 · asked Oct 5"));
+
 const listingHealthBlock = buildSnapshotBlock(empty, TZ, null, listingHealth);
-ok("block: listing health line appears", listingHealthBlock.includes("LISTING HEALTH: 2 ads need a refresh across 1 unit."));
-ok("block: listing health line links Distribute", listingHealthBlock.includes("?tab=distribute"));
+ok("block: ads section falls back to the count line", listingHealthBlock.includes("ADS TO REFRESH (2)") && listingHealthBlock.includes("2 ads need a refresh across 1 unit."));
+ok("block: ads fallback links Distribute", listingHealthBlock.includes("?tab=distribute"));
+const named = buildSnapshotBlock(empty, TZ, null, {
+  adCount: 3,
+  unitCount: 2,
+  firstDistributeUrl: "https://x/p1",
+  items: [
+    { propertyId: "p1", address: "1195 Bruce Ave, Unit 303, Windsor, ON N9A 4Y5", channelLabel: "Facebook Marketplace", reason: "stale", distributeUrl: "https://x/p1" },
+    { propertyId: "p1", address: "1195 Bruce Ave, Unit 303, Windsor, ON N9A 4Y5", channelLabel: "Zumper", reason: "stale", distributeUrl: "https://x/p1" },
+    { propertyId: "p2", address: "833 Pillette Rd, Unit 3, Windsor, ON N8Y 3B4", channelLabel: "Kijiji", reason: "expired_or_removed", distributeUrl: "https://x/p2" },
+  ],
+});
+ok("block: ads grouped by unit with sites", named.includes("• 1195 Bruce Ave, Unit 303: Facebook Marketplace (old), Zumper (old)\nhttps://x/p1"));
+ok("block: expired ad named", named.includes("• 833 Pillette Rd, Unit 3: Kijiji (expired)\nhttps://x/p2"));
+ok("block: ads header counts ads", named.includes("ADS TO REFRESH (3)"));
+ok("block: ads count in summary", named.startsWith("0 new inquiries · 0 viewings this week · 0 waiting for a viewing · 3 ads to refresh"));
 
 // missing fields degrade gracefully (no name/phone/unit)
 const sparse = buildSnapshotBlock(
   { newLeads: [lead({ name: null, phone: "", move_in: null, source: null, property_address: null })], showingsToday: [], showingsWeek: [], noShowing: [] },
   TZ,
 );
-ok("block: missing name fallback", sparse.includes("(no name on file)"));
-ok("block: missing unit fallback", sparse.includes("(no unit specified)"));
-ok("block: missing move-in/source/phone fallbacks", sparse.includes("Move-in: not given · Source: Unknown · Phone: no phone on file"));
+ok("block: missing name fallback", sparse.includes("• No name, no unit on file"));
+ok("block: missing details print nothing", !sparse.includes("not given") && !sparse.includes("Unknown"));
 
 // cap: more than SNAPSHOT_SECTION_CAP leads -> overflow line
 const many = Array.from({ length: SNAPSHOT_SECTION_CAP + 5 }, (_, i) => lead({ name: `Lead ${i}` }));
 const capped = buildSnapshotBlock({ newLeads: many, showingsToday: [], showingsWeek: [], noShowing: [] }, TZ);
-ok("block: caps long section", capped.includes(`NEW INQUIRIES — LAST 24 HOURS (${SNAPSHOT_SECTION_CAP + 5})`));
-ok("block: shows overflow count", capped.includes("…and 5 more not shown."));
+ok("block: caps long section", capped.includes(`NEW IN THE LAST 24 HOURS (${SNAPSHOT_SECTION_CAP + 5})`));
+ok("block: shows overflow count", capped.includes("And 5 more."));
 
 // --- snapshotDateLabel -------------------------------------------------------
 ok("date label: human readable", snapshotDateLabel(thuAfternoon, TZ) === "Thursday, June 25");

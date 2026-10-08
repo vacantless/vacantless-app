@@ -50,10 +50,20 @@ export type ListingHealthDigest = {
   detailsText: string;
 };
 
+export type ListingHealthSnapshotItem = {
+  propertyId: string;
+  address: string;
+  channelLabel: string;
+  reason: ListingHealthReason;
+  distributeUrl: string;
+};
+
 export type ListingHealthSnapshotSummary = {
   adCount: number;
   unitCount: number;
   firstDistributeUrl: string | null;
+  /** S701c: one row per ad, so the snapshot can name the unit and the site. */
+  items?: ListingHealthSnapshotItem[];
 };
 
 type ListingHealthInput = {
@@ -241,6 +251,13 @@ export function listingHealthSnapshotSummary(
     adCount: digest.adCount,
     unitCount: digest.unitCount,
     firstDistributeUrl: digest.firstDistributeUrl,
+    items: channels.map((channel) => ({
+      propertyId: channel.propertyId,
+      address: channel.address,
+      channelLabel: channel.channelLabel,
+      reason: channel.reason,
+      distributeUrl: distributeUrl(appUrl, channel.propertyId),
+    })),
   };
 }
 
