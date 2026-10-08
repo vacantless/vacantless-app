@@ -73,11 +73,19 @@ ok(
 }
 {
   const r = decision({ severity: "thin", lastState: "thin", lastAlertOn: "2026-07-17" });
-  ok("alert: thin -> thin next day re-alerts", r.alert && r.nextLastState === "thin" && r.nextLastAlertOn === "2026-07-18");
+  ok("alert: thin -> thin next day stays quiet (S700l weekly)", !r.alert && r.nextLastState === "thin" && r.nextLastAlertOn === "2026-07-17");
 }
 {
-  const r = decision({ severity: "zero", lastState: "thin", lastAlertOn: "2026-07-18" });
-  ok("alert: thin -> zero escalates", r.alert && r.nextLastState === "zero" && r.nextLastAlertOn === "2026-07-18");
+  const r = decision({ severity: "thin", lastState: "thin", lastAlertOn: "2026-07-11" });
+  ok("alert: thin -> thin after 7 days re-alerts", r.alert && r.nextLastAlertOn === "2026-07-18");
+}
+{
+  const r = decision({ severity: "zero", lastState: "zero", lastAlertOn: "2026-07-12" });
+  ok("alert: zero -> zero after 6 days stays quiet", !r.alert);
+}
+{
+  const r = decision({ severity: "zero", lastState: "thin", lastAlertOn: "2026-07-16" });
+  ok("alert: thin -> zero within the week stays quiet (one-day-at-a-time pattern)", !r.alert && r.nextLastState === "zero" && r.nextLastAlertOn === "2026-07-16");
 }
 {
   const r = decision({ severity: "ok", lastState: "zero", lastAlertOn: "2026-07-18" });

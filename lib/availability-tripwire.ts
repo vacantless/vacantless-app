@@ -24,6 +24,17 @@ export function classifyTripwire(args: {
   return "ok";
 }
 
+/** While the calendar stays thin or zero, repeat the alert at most this often. */
+export const REALERT_AFTER_DAYS = 7;
+
+/** Whole days from one YYYY-MM-DD to another (local calendar dates). */
+export function daysBetween(fromYmd: string, toYmd: string): number {
+  const a = Date.parse(`${fromYmd}T00:00:00Z`);
+  const b = Date.parse(`${toYmd}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.POSITIVE_INFINITY;
+  return Math.round((b - a) / 86_400_000);
+}
+
 export function shouldAlertTripwire(args: {
   severity: TripwireSeverity;
   lastState: string | null;
@@ -38,13 +49,17 @@ export function shouldAlertTripwire(args: {
   let alert = false;
 
   if (args.severity === "thin" || args.severity === "zero") {
+    // S700l: turned down from daily to weekly. Agile opens viewing times one
+    // day at a time on purpose, so the calendar sits at thin or zero most of
+    // the week and the old rule (re-alert every day, and again on each
+    // thin -> zero drop) sent this email daily, sometimes twice. Now: alert
+    // when the calendar first goes thin or zero after being covered, then at
+    // most once every REALERT_AFTER_DAYS while it stays that way.
     alert =
       lastState === null ||
       lastState === "ok" ||
-      (lastState === "thin" && args.severity === "zero") ||
-      (lastState === args.severity &&
-        args.lastAlertOn !== null &&
-        args.lastAlertOn < args.todayLocal);
+      args.lastAlertOn === null ||
+      daysBetween(args.lastAlertOn, args.todayLocal) >= REALERT_AFTER_DAYS;
   }
 
   return {

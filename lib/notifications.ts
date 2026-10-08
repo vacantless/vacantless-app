@@ -662,7 +662,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Viewing availability dropped",
     description:
-      "Same-day alert when renters can book viewings on only one day (or very few times) in the coming week. Owner admins are always copied so a staffing gap cannot be hidden by custom recipients.",
+      "Alert when renters can book viewings on only one day (or very few times) in the coming week. It repeats at most once a week while that lasts. Owner admins are always copied so a staffing gap cannot be hidden by custom recipients.",
     tokens: ["org_name", "open_slots", "open_days", "open_day_list", "window_days", "availability_headline", "availability_summary", "viewing_times_url"],
     // S699: the old copy said "almost no bookable viewing times" next to "12
     // slots across 1 day", which read as a contradiction. The alert fires on
