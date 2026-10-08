@@ -68,6 +68,10 @@ export type AutoReplyPayload = {
   rent_cents: number | null;
   template_subject: string | null;
   template_body: string | null;
+  // S702: the public booking page, set only when the listing has open viewing
+  // times right now. The default auto-reply then invites the renter to pick a
+  // time instead of promising a callback; operator templates get {{booking_url}}.
+  booking_url?: string | null;
 };
 
 export type SendResult = { sent: boolean; reason?: string; subject?: string };
@@ -119,11 +123,19 @@ function defaultHtml(p: AutoReplyPayload): string {
       )};font-weight:600;">${escapeHtml(directEmail)}</a>`
     : "";
 
-  const propLine = addr
-    ? `<p style="margin:0 0 16px;">We received your inquiry about <strong>${addr}</strong>${
+  const bookingUrl = p.booking_url?.trim() || null;
+  const about = addr
+    ? `We received your inquiry about <strong>${addr}</strong>${
         rent ? ` (${escapeHtml(rent)})` : ""
-      } and someone from our team will be in touch shortly to arrange a viewing.</p>`
-    : `<p style="margin:0 0 16px;">We received your inquiry and someone from our team will be in touch shortly to arrange a viewing.</p>`;
+      }`
+    : "We received your inquiry";
+  const propLine = bookingUrl
+    ? `<p style="margin:0 0 16px;">${about}. You can book a viewing yourself right now:</p>
+      <p style="margin:0 0 16px;"><a href="${escapeHtml(bookingUrl)}" style="display:inline-block;background:${escapeHtml(
+        brand,
+      )};color:#ffffff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:8px;">Pick a viewing time</a></p>
+      <p style="margin:0 0 16px;">If none of the times work for you, reply to this email and we will find one.</p>`
+    : `<p style="margin:0 0 16px;">${about} and someone from our team will be in touch shortly to arrange a viewing.</p>`;
 
   const logo = p.logo_url
     ? `<img src="${escapeHtml(
@@ -2125,6 +2137,7 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
     org_name: p.org_name || "our team",
     property_address: p.property_address || "the property",
     rent: formatRent(p.rent_cents) || "",
+    booking_url: p.booking_url?.trim() || "",
   };
 
   const subject = p.template_subject

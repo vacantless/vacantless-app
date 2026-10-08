@@ -29,6 +29,11 @@ export type TodayItem = {
 export type TodayInput = {
   /** Leads whose status means the operator still owes a reply. */
   inquiriesNeedingReply: number;
+  /**
+   * S702: renters already contacted whose next follow-up is due today or
+   * earlier (a cancelled viewing sets one). Optional for older callers.
+   */
+  followUpsDue?: number;
   /** Viewings scheduled for today (operator timezone). */
   viewingsToday: number;
   /** Tenant-message drafts pending approval (approve-to-send drip). */
@@ -58,6 +63,17 @@ export function buildTodayLane(input: TodayInput): TodayItem[] {
       detail: "Renters waiting to hear back. Fast replies book more viewings.",
       href: "/dashboard/leads",
       tone: "urgent",
+    });
+  }
+
+  if ((input.followUpsDue ?? 0) > 0) {
+    const n = input.followUpsDue ?? 0;
+    items.push({
+      key: "follow-ups",
+      label: `${plural(n, "renter", "renters")} to follow up`,
+      detail: "Their viewing was cancelled or they are waiting on a next step. A quick message can rebook them.",
+      href: "/dashboard/leads",
+      tone: "action",
     });
   }
 

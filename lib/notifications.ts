@@ -238,7 +238,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "screening",
       "dashboard_url",
     ],
-    defaultSubject: "New inquiry from {{lead_name}} — {{property_address}}",
+    defaultSubject: "New inquiry from {{lead_name}} for {{property_address}}",
     // {{screening}} expands to a labeled, multi-line block of whatever the org
     // collected (occupants / pets / income / custom questions like Employment +
     // Other units) so an email-first operator (Aaliyah) sees the screening
@@ -262,7 +262,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "When a renter books a viewing from your public listing, your leasing team is notified in real time with the time and contact so whoever's covering can plan. Defaults to members who manage inquiries; edit the recipients below.",
     tokens: [...COMMON_TOKENS, "lead_name", "lead_phone", "showing_time", "dashboard_url"],
-    defaultSubject: "Viewing booked: {{lead_name}} — {{showing_time}}",
+    defaultSubject: "Viewing booked: {{lead_name}}, {{showing_time}}",
     defaultBody:
       "{{lead_name}} booked a viewing at {{property_address}}.\n\nWhen: {{showing_time}}\nPhone: {{lead_phone}}\n\nOpen the inquiry: {{dashboard_url}}",
     active: true,

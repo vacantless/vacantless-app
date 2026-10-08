@@ -81,6 +81,9 @@ export type InquiryFormProps = {
   rentMonthly: number | null;
   moveInPills: MoveInPill[];
   petFriendly: boolean;
+  // S702: false when the landlord never set a pet policy. The "isn't
+  // pet-friendly" note only shows for a policy that was actually set.
+  petPolicySet?: boolean;
   // S629: when true, this org requires a phone number before a renter can submit
   // an inquiry/booking. Default false (surfaced from get_public_listing) so every
   // org that never flips it behaves exactly as before.
@@ -121,6 +124,7 @@ export function InquiryForm({
   rentMonthly,
   moveInPills,
   petFriendly,
+  petPolicySet = true,
   requirePhone,
 }: InquiryFormProps) {
   const hasSlots = days.length > 0;
@@ -545,7 +549,7 @@ export function InquiryForm({
           <div>
             <p className="mb-1.5 text-sm text-gray-600">
               Pets?{" "}
-              {!petFriendly && (
+              {petPolicySet && !petFriendly && (
                 <span className="text-xs font-normal text-gray-400">
                   This home isn&apos;t pet-friendly, but let us know.
                 </span>

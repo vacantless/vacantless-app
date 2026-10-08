@@ -57,6 +57,7 @@ type Listing = {
   balcony: boolean;
   furnished: boolean;
   pet_friendly: boolean;
+  pet_policy_set?: boolean;
   pets_cats: boolean;
   pets_dogs: boolean;
   pets_dog_size: string | null;
@@ -758,6 +759,7 @@ export default async function PublicListingPage({
               rentMonthly={rentMonthly}
               moveInPills={moveInPills}
               petFriendly={l.pet_friendly}
+              petPolicySet={l.pet_policy_set ?? true}
               requirePhone={l.inquiry_require_phone ?? false}
             />
           )}

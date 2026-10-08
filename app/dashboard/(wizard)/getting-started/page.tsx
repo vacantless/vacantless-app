@@ -48,6 +48,8 @@ export default async function GettingStartedPage({
     { count: liveListingCount },
     { count: tenancyCount },
     { data: onboarding },
+    { count: ruleCount },
+    { count: overrideCount },
   ] = await Promise.all([
       supabase
         .from("properties")
@@ -68,6 +70,15 @@ export default async function GettingStartedPage({
         .select("dismissed_at, rail_step_done_at")
         .eq("organization_id", org.id)
         .maybeSingle(),
+      // S702: any weekly window or custom date counts as viewing times.
+      supabase
+        .from("availability_rules")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id),
+      supabase
+        .from("availability_overrides")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id),
     ]);
 
   const row = onboarding as OnboardingRow | null;
@@ -77,6 +88,7 @@ export default async function GettingStartedPage({
     hasLiveListing: (liveListingCount ?? 0) > 0,
     wizardEnabled: distributionWizardEnabled(),
     hasTenancy: (tenancyCount ?? 0) > 0,
+    hasViewingTimes: (ruleCount ?? 0) > 0 || (overrideCount ?? 0) > 0,
     postLeaseEnabled,
     addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
     dismissedAt: row?.dismissed_at ?? null,

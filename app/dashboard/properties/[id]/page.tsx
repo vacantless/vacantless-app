@@ -2581,8 +2581,16 @@ export default async function PropertyDetailPage({
           operator straight at the link to share. */}
       {searchParams.published && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          <strong>Your rental is now Live.</strong> Its public listing page is
-          open to renters - copy the link below to start sharing it.
+          <strong>Your rental is now Live.</strong> Share this link with
+          renters so they can book a viewing:{" "}
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all font-semibold underline"
+          >
+            {publicUrl}
+          </a>
         </p>
       )}
 

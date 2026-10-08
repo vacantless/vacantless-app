@@ -49,6 +49,7 @@ type LeadRow = {
   created_at: string;
   property_id: string | null;
   qualified_out: boolean;
+  next_action_at?: string | null;
   property: { address: string } | null;
 };
 
@@ -176,11 +177,12 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     { count: listingOnlineCount },
     { count: onboardingTenancyCount },
     { data: onboardingRow },
+    { count: availabilityOverrideCount },
   ] = await Promise.all([
     supabase
       .from("leads")
       .select(
-        "id, name, email, source, status, created_at, property_id, qualified_out, property:properties(address)",
+        "id, name, email, source, status, created_at, property_id, qualified_out, next_action_at, property:properties(address)",
       )
       .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
@@ -250,6 +252,12 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .eq("status", "live"),
     onboardingTenancyCountQuery,
     onboardingRowQuery,
+    // S702: custom-date viewing hours count as viewing times for the setup
+    // checklist (Agile opens one day at a time and has no weekly rule).
+    supabase
+      .from("availability_overrides")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id),
   ]);
 
   // Open + urgent work-order counts for the Overview tile.
@@ -349,6 +357,14 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   ).length;
   const todayItems = buildTodayLane({
     inquiriesNeedingReply: allLeads.filter((l) => needsReply(l.status)).length,
+    // S702: a renter whose viewing was cancelled goes back to "contacted" with a
+    // follow-up due today; without this the lane said "all caught up".
+    followUpsDue: allLeads.filter(
+      (l) =>
+        (l.status === "contacted" || l.status === "replied") &&
+        !!l.next_action_at &&
+        l.next_action_at.slice(0, 10) <= today,
+    ).length,
     viewingsToday,
     messagesAwaitingApproval: pendingMessageCount ?? 0,
     rentIncreasesOverdue: rentIncreaseAlerts.filter(
@@ -395,6 +411,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         hasLiveListing: (listingOnlineCount ?? 0) > 0,
         wizardEnabled: distributionWizardEnabled(),
         hasTenancy: (onboardingTenancyCount ?? 0) > 0,
+        hasViewingTimes:
+          (availabilityCount ?? 0) > 0 || (availabilityOverrideCount ?? 0) > 0,
         railStepDoneAt:
           (onboardingRow as { rail_step_done_at: string | null } | null)
             ?.rail_step_done_at ?? null,

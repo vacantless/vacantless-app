@@ -141,5 +141,25 @@ const v2 = computeOnboardingState({
 ok("add page on -> Add rental opens /dashboard/properties/new", v2.steps[0].href === "/dashboard/properties/new");
 ok("add page off -> legacy anchor kept", fresh.steps[0].href === "/dashboard/properties#add-rental");
 
+
+// S702: the stranger walk went live with nothing bookable. Viewing times is a
+// step when the caller passes hasViewingTimes; omitted keeps old callers intact.
+const vtBase = {
+  hasProperty: true,
+  hasLiveListing: false,
+  hasTenancy: false,
+  wizardEnabled: true,
+  railStepDoneAt: null,
+  dismissedAt: null,
+  postLeaseEnabled: false,
+};
+const vtNone = computeOnboardingState({ ...vtBase, hasViewingTimes: false });
+ok("viewing times -> three leasing steps in order", vtNone.steps.map((s) => s.key).join(",") === "property,viewing_times,get_online");
+ok("no viewing times -> it is the current step", vtNone.nextIncompleteStep?.key === "viewing_times");
+ok("viewing times step links to availability", vtNone.steps[1].href === "/dashboard/availability");
+const vtSet = computeOnboardingState({ ...vtBase, hasViewingTimes: true });
+ok("viewing times set -> posting is next", vtSet.nextIncompleteStep?.key === "get_online");
+ok("hasViewingTimes omitted -> no step", leasingOnly.steps.every((s) => s.key !== "viewing_times"));
+
 console.log(`\nonboarding-wizard: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

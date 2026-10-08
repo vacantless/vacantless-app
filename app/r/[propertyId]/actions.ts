@@ -12,7 +12,12 @@ import {
 import { sendSms, bookingConfirmationSms, smsLive } from "@/lib/sms";
 import { canUseRenterSms } from "@/lib/billing";
 import { parseBeds, parseRentToCents, parseDateOrNull } from "@/lib/waitlist";
-import { isValidSlot, formatSlotLong, type Availability } from "@/lib/booking";
+import {
+  isValidSlot,
+  formatSlotLong,
+  generateSlots,
+  type Availability,
+} from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import {
@@ -804,7 +809,27 @@ export async function submitLead(formData: FormData) {
   // --- Auto-reply path (no slot, or booking failed) -----------------------
   if (effects.sendAutoReply) {
     try {
-      const result = await sendAutoReply(payload);
+      // S702: when the listing has open viewing times, the auto-reply carries
+      // the booking page (with this lead's tracking) so the renter can book
+      // without waiting for a callback. No open times -> the old wording.
+      let bookingUrl: string | null = null;
+      try {
+        const { data: avData } = await supabase.rpc("get_public_availability", {
+          p_property_id: propertyId,
+        });
+        const av = avData as Availability | null;
+        if (av && generateSlots(av).some((d) => d.slots.length > 0)) {
+          bookingUrl = `${APP_URL}${withTracking(
+            `/r/${propertyId}`,
+            listingPostId,
+            sourceHint,
+            utmSource,
+          )}`;
+        }
+      } catch {
+        bookingUrl = null;
+      }
+      const result = await sendAutoReply({ ...payload, booking_url: bookingUrl });
       if (result.sent) {
         await supabase.rpc("record_auto_reply", {
           p_lead_id: payload.lead_id,

@@ -154,5 +154,15 @@ const ZERO: TodayInput = {
   );
 }
 
+
+// S702: a cancelled viewing leaves a renter "contacted" with a follow-up due.
+{
+  const items = buildTodayLane({ ...ZERO, followUpsDue: 1 });
+  ok("follow-up due -> one item", items.length === 1 && items[0].key === "follow-ups");
+  ok("follow-up label singular", items[0].label === "1 renter to follow up");
+  ok("follow-ups plural", buildTodayLane({ ...ZERO, followUpsDue: 3 })[0].label === "3 renters to follow up");
+  ok("followUpsDue omitted -> nothing", buildTodayLane({ ...ZERO }).length === 0);
+}
+
 console.log(`\ndashboard-today: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
