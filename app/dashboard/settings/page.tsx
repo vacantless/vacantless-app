@@ -37,6 +37,7 @@ import { logoUploadErrorMessage } from "@/lib/logo";
 import BrandColorField from "@/components/brand-color-field";
 import { RenterPagePreview } from "@/components/renter-page-preview";
 import { SettingsTabs, type SettingsTab } from "@/components/settings-tabs";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { PageHeader, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import RotessaSettingsCard, {
@@ -338,6 +339,7 @@ export default async function SettingsPage({
   // see exactly what renters get from the shared intake URL, for ANY listing
   // (F2 fix, S225: this used to surface only the newest property).
   const supabase = createClient();
+  const postLeaseEnabled = await orgShowsPostLease(supabase, org.id);
   // Only listings that actually render a public /r page belong in the picker.
   // get_public_listing 404s 'draft' + 'off_market' (migration 0020), so a draft
   // (e.g. a freshly duplicated rental) would lead to a 404 - exclude both here.
@@ -660,7 +662,7 @@ export default async function SettingsPage({
         subtitle="Control how your brand appears to renters and how automated messages behave."
       />
 
-      <SettingsTabs active={tab} />
+      <SettingsTabs active={tab} hidden={postLeaseEnabled ? [] : ["banking"]} />
 
       {/* ================= Tab 1 — Public Page & Brand ================= */}
       {tab === "brand" && (

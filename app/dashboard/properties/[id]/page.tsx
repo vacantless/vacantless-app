@@ -1415,6 +1415,20 @@ export default async function PropertyDetailPage({
     title: c.title,
     body: c.body,
   }));
+  // S700i (stranger test 2): the ad wording card showed LinkedIn, WhatsApp and
+  // Snapchat tabs although none of them can be posted to yet. Show only copy
+  // for sites with a working path (plus the generic master copy). copyTabs
+  // itself stays complete for the marketing kit and fill sheets.
+  const plannedOnlyCopyKeys = new Set(
+    DISTRIBUTION_CHANNELS.filter((ch) => ch.copyKey)
+      .map((ch) => ch.copyKey as string)
+      .filter((key) =>
+        DISTRIBUTION_CHANNELS.filter((ch) => ch.copyKey === key).every(
+          (ch) => ch.integrationStatus === "planned",
+        ),
+      ),
+  );
+  const shownCopyTabs = copyTabs.filter((t) => !plannedOnlyCopyKeys.has(t.key));
   // The channel copy is only as good as the description it's built from. Flag a
   // thin/empty one so the card can nudge the operator into the Description Helper
   // instead of shipping a field-summary ad.
@@ -3852,7 +3866,7 @@ export default async function PropertyDetailPage({
 
       {/* --- Listing copy for each channel --- */}
       <ListingCopyCard
-        tabs={copyTabs}
+        tabs={shownCopyTabs}
         descriptionThin={descriptionThin}
         notLive={!linkIsLive}
         notLiveIntro={promotionGuard?.intro}

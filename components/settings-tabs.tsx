@@ -31,14 +31,24 @@ const TABS: {
   { key: "account", label: "Plan & admin", icon: "key" },
 ];
 
-export function SettingsTabs({ active }: { active: SettingsTab }) {
+// S700i: leasing-only orgs (no post-lease data) do not see "Banking & rent".
+// A hidden tab still shows while it is the active one, so a direct link or a
+// banking redirect never lands on a page with no matching tab.
+export function SettingsTabs({
+  active,
+  hidden = [],
+}: {
+  active: SettingsTab;
+  hidden?: SettingsTab[];
+}) {
+  const shown = TABS.filter((t) => t.key === active || !hidden.includes(t.key));
   return (
     <div className="sticky top-0 z-10 -mx-1 mt-4 bg-white/95 px-1 pt-1 backdrop-blur">
       <nav
         aria-label="Settings sections"
         className="flex gap-1 overflow-x-auto border-b border-gray-200 pb-px"
       >
-        {TABS.map((t) => {
+        {shown.map((t) => {
           const Icon = Icons[t.icon];
           const isActive = t.key === active;
           return (
