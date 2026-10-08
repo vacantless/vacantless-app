@@ -11,7 +11,9 @@ import {
   type IngestLoopHeaders,
 } from "@/lib/email-ingest";
 import {
+  addressMatchesZumperProperty,
   parsePortalLeadEmail,
+  parseZumperPropertyLine,
   portalLeadNote,
   type ParsedPortalLead,
 } from "@/lib/portal-lead-email";
@@ -83,7 +85,13 @@ function normalizeForCompare(value: string | null | undefined): string {
 type ResolvedTarget = {
   propertyId: string | null;
   listingPostId: string | null;
-  how: "ad_url" | "ad_id" | "subject_address" | "unresolved" | "other_org";
+  how:
+    | "ad_url"
+    | "ad_id"
+    | "subject_address"
+    | "zumper_property"
+    | "unresolved"
+    | "other_org";
 };
 
 type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
@@ -219,6 +227,94 @@ async function stampLeadIngestMessageKey(
   return "skipped";
 }
 
+/** Zumper's stored listing urls end in the listing id, sometimes with a letter
+ *  suffix ("/listings/65446440b", "/manage/properties/listing/65274298"). */
+function zumperUrlHasId(url: unknown, id: string): boolean {
+  return typeof url === "string" && new RegExp(`/${id}(?:[a-z])?(?:[/?#]|$)`, "i").test(url);
+}
+
+/**
+ * Zumper (S701d). Zumper's own "Property" line is the authority, because the
+ * listing link in the email is not always the ad's own id. Order:
+ *   1. the property line names exactly one unit in this org
+ *   2. else the listing id matches one of this org's Zumper rows
+ *   3. else, if that id is positively another org's Zumper row, refuse
+ * Never widens past the org the token resolved to.
+ */
+async function resolveZumperTarget(
+  admin: AdminClient,
+  orgId: string,
+  lead: ParsedPortalLead,
+): Promise<ResolvedTarget> {
+  const zumperPostFor = async (propertyId: string): Promise<string | null> => {
+    const { data } = await admin
+      .from("listing_posts")
+      .select("id")
+      .eq("organization_id", orgId)
+      .eq("property_id", propertyId)
+      .eq("portal", "zumper")
+      .neq("status", "removed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return ((data as { id?: string } | null)?.id as string | undefined) ?? null;
+  };
+
+  const key = parseZumperPropertyLine(lead.subjectAddress);
+  if (key) {
+    const { data } = await admin
+      .from("properties")
+      .select("id, address")
+      .eq("organization_id", orgId)
+      .ilike("address", `${key.civic} ${key.streetWord}%`)
+      .limit(50);
+    const rows = ((data ?? []) as Array<{ id: string; address: string | null }>).filter((r) =>
+      addressMatchesZumperProperty(r.address, key),
+    );
+    if (rows.length === 1) {
+      return {
+        propertyId: rows[0].id,
+        listingPostId: await zumperPostFor(rows[0].id),
+        how: "zumper_property",
+      };
+    }
+  }
+
+  if (lead.adId) {
+    const { data } = await admin
+      .from("listing_posts")
+      .select("id, property_id, url")
+      .eq("organization_id", orgId)
+      .eq("portal", "zumper")
+      .ilike("url", `%/${lead.adId}%`)
+      .neq("status", "removed")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const hit = ((data ?? []) as Array<{ id: string; property_id: string | null; url: string | null }>).find(
+      (r) => r.property_id && zumperUrlHasId(r.url, lead.adId as string),
+    );
+    if (hit?.property_id) {
+      return { propertyId: hit.property_id, listingPostId: hit.id, how: "ad_id" };
+    }
+
+    const { data: elsewhere } = await admin
+      .from("listing_posts")
+      .select("organization_id, url")
+      .eq("portal", "zumper")
+      .ilike("url", `%/${lead.adId}%`)
+      .neq("status", "removed")
+      .limit(5);
+    const owner = ((elsewhere ?? []) as Array<{ organization_id: string; url: string | null }>).find(
+      (r) => zumperUrlHasId(r.url, lead.adId as string),
+    );
+    if (owner && owner.organization_id !== orgId) {
+      return { propertyId: null, listingPostId: null, how: "other_org" };
+    }
+  }
+
+  return { propertyId: null, listingPostId: null, how: "unresolved" };
+}
+
 /**
  * Resolve the unit this lead is about, scoped to the org the token resolved to.
  * Never widens past that org: a portal ad id is not globally unique to us, and a
@@ -229,6 +325,7 @@ async function resolveTarget(
   orgId: string,
   lead: ParsedPortalLead,
 ): Promise<ResolvedTarget> {
+  if (lead.portal === "zumper") return resolveZumperTarget(admin, orgId, lead);
   if (lead.adUrl) {
     const { data } = await admin
       .from("listing_posts")
@@ -664,7 +761,9 @@ export async function handleInboundLeadPost(
     ? sourceLabelForPost({ portal: lead.portal })
     : lead.portal === "kijiji"
       ? "Kijiji"
-      : "Rentals.ca";
+      : lead.portal === "zumper"
+        ? "Zumper"
+        : "Rentals.ca";
   const directLead = {
     organization_id: orgId,
     property_id: target.propertyId,

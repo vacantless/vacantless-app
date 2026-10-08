@@ -47,6 +47,8 @@ type Filter = { type: "eq" | "neq" | "gte" | "ilike" | "not" | "is"; column: str
 
 class FakeAdmin {
   leads: LeadRow[] = [];
+  properties: Record<string, unknown>[] = [];
+  listingPosts: Record<string, unknown>[] = [];
   notifications = 0;
   missingIngestMessageKeyColumn = false;
   keyLookupMissesRemaining = 0;
@@ -196,8 +198,8 @@ class FakeQuery {
     if (this.table === "org_ingest_senders") {
       return [{ organization_id: ORG_ID, channel: "email", verified_at: new Date(NOW).toISOString(), address: FROM }];
     }
-    if (this.table === "properties") return [];
-    if (this.table === "listing_posts") return [];
+    if (this.table === "properties") return this.admin.properties;
+    if (this.table === "listing_posts") return this.admin.listingPosts;
     if (this.table === "leads") return this.admin.leads;
     return [];
   }
@@ -489,6 +491,66 @@ async function main() {
   ok("migration creates per-org partial unique index", migrationSource.includes("on public.leads (organization_id, ingest_message_key)"));
   ok("migration ignores null ingest keys", migrationSource.includes("where ingest_message_key is not null"));
 
+
+  // ZUMPER (S701d): dark by default, then a real-shaped lead files against the
+  // unit Zumper's property line names, linked to the org's Zumper post.
+  {
+  const zumperPayload = (messageId: string) => ({
+    MessageID: messageId,
+    ToFull: [{ Email: `u-${TOKEN}@in.vacantless.com` }],
+    FromFull: { Email: "noreply@zumperchat.com", Name: "Jane Renter via Zumper" },
+    From: '"Jane Renter via Zumper" <noreply@zumperchat.com>',
+    ReplyTo: "Jane Renter <jane.renter@example.com>",
+    Subject: "Zumper tenant lead for 1551 Assumption Street #9: 1 Bed 1 Bath",
+    HtmlBody:
+      "<p>Reply to renter</p><p>Jane Renter</p><p>jane.renter@example.com</p><p>519.555.0142</p>" +
+      "<p>Estimated Move Date Move-in Date</p><p>October 06, 2026</p><p>Property</p>" +
+      "<p>1551 Assumption Street #9: 1 Bed 1 Bath</p><p>Jane asked:</p><p>Is it still available?</p>" +
+      "<p>Zumper Listing: https://www.zumper.com/listings/65446440/x</p><p>Reply to renter</p>",
+    Headers: [{ Name: "Authentication-Results", Value: "mx; dkim=pass header.d=zumperchat.com" }],
+  });
+  const seed = (admin: FakeAdmin) => {
+    admin.properties = [
+      { id: "p9", organization_id: ORG_ID, address: "1551 Assumption St, Unit 9, Windsor, ON N9A 3E2" },
+      { id: "p10", organization_id: ORG_ID, address: "1551 Assumption St, Unit 10, Windsor, ON N9A 3E2" },
+    ];
+    admin.listingPosts = [
+      { id: "lp9", organization_id: ORG_ID, property_id: "p9", portal: "zumper", status: "live", url: "https://www.zumper.com/listings/65446440b" },
+    ];
+  };
+  const prev = process.env.ZUMPER_LEAD_INGEST_ENABLED;
+
+  delete process.env.ZUMPER_LEAD_INGEST_ENABLED;
+  const offAdmin = new FakeAdmin();
+  seed(offAdmin);
+  const offEvents: PortalEventRow[] = [];
+  const off = await post(offAdmin, zumperPayload("mid-z-off"), offEvents);
+  ok("zumper off refuses, files nothing", off.handled === "portal_disabled" && off.portal === "zumper" && offAdmin.leads.length === 0, off);
+
+  process.env.ZUMPER_LEAD_INGEST_ENABLED = "true";
+  const admin = new FakeAdmin();
+  seed(admin);
+  const events: PortalEventRow[] = [];
+  const on = await post(admin, zumperPayload("mid-z-on"), events);
+  const row = admin.leads[0];
+  ok("zumper on files a lead", on.handled === "lead_created" && admin.leads.length === 1, { on, leads: admin.leads });
+  ok("zumper lead lands on Unit 9, not Unit 10", row?.property_id === "p9", row);
+  ok("zumper lead links the org's Zumper post", row?.listing_post_id === "lp9", row);
+  ok("zumper lead keeps the renter's contact", row?.email === "jane.renter@example.com" && row?.phone === "519.555.0142", row);
+  ok("zumper event recorded under zumper", events[0]?.source === "zumper" && events[0]?.outcome === "lead_created", events);
+
+  // A unit this org does not have, whose id belongs to another org: refused.
+  const crossAdmin = new FakeAdmin();
+  crossAdmin.properties = [];
+  crossAdmin.listingPosts = [
+    { id: "lpX", organization_id: "other-org", property_id: "pX", portal: "zumper", status: "live", url: "https://www.zumper.com/manage/properties/listing/65446440" },
+  ];
+  const cross = await post(crossAdmin, zumperPayload("mid-z-x"), []);
+  ok("zumper ad owned by another org is refused", cross.handled === "cross_org_refused" && crossAdmin.leads.length === 0, cross);
+
+  if (prev === undefined) delete process.env.ZUMPER_LEAD_INGEST_ENABLED;
+  else process.env.ZUMPER_LEAD_INGEST_ENABLED = prev;
+  }
   console.log(`\nportal-lead-ingest: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

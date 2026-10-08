@@ -54,14 +54,17 @@ export function portalIngestEnabled(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (key === "kijiji") return env.KIJIJI_LEAD_INGEST_ENABLED === "true";
+  // Zumper (S701d): dark until a real forwarded delivery has been watched.
+  if (key === "zumper") return env.ZUMPER_LEAD_INGEST_ENABLED === "true";
   return true;
 }
 
-export const PORTAL_INBOX_ORDER: PortalKey[] = ["kijiji", "rentals_ca"];
+export const PORTAL_INBOX_ORDER: PortalKey[] = ["kijiji", "rentals_ca", "zumper"];
 
 export const PORTAL_INBOX_LABEL: Record<PortalKey, string> = {
   kijiji: "Kijiji",
   rentals_ca: "Rentals.ca",
+  zumper: "Zumper",
 };
 
 export type PortalInboxSite = { key: PortalKey; label: string; senders: string[] };

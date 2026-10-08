@@ -22,6 +22,8 @@ import {
   parsePortalLeadEmail,
   portalLeadNote,
   subjectAddressFor,
+  parseZumperPropertyLine,
+  addressMatchesZumperProperty,
 } from "../lib/portal-lead-email";
 
 let passed = 0;
@@ -430,6 +432,114 @@ ok(
   "a stranger's mail is still not a portal lead",
   classifyPortalLeadEmail({ subject: "hello", from: "someone@example.com" }) === null,
 );
+
+
+// ZUMPER FIXTURES (S701d). The STRUCTURE is copied line for line from six real
+// messages read 2026-10-08 in rentals@agileonline.ca (uids 4144-4181): the
+// "Reply to renter" contact block, the dotted phone, "Estimated Move Date
+// Move-in Date", the "Property" label, "<First> asked:", the message lines and
+// the trailing "Zumper Listing:" link, with &#39; entities and tracking anchors.
+// Renter names, emails and phones are REPLACED with invented ones on purpose:
+// these renters never consented to sit in a repository.
+const ZUMPER_HTML = `
+<table><tr><td>96</td></tr></table>
+<div>NEW MESSAGE</div><div>NEW MESSAGE</div>
+<p>Jane sent you a new message!</p>
+<p>Lead via Zumper</p>
+<p><a href="mailto:jane.renter@example.com">Reply to renter</a></p>
+<p>Jane Renter</p>
+<p><a href="mailto:jane.renter@example.com">jane.renter@example.com</a></p>
+<p><a href="tel:5195550142">519.555.0142</a></p>
+<p>Estimated Move Date Move-in Date</p>
+<p>October 06, 2026</p>
+<p>Property</p>
+<p><a href="https://post.spmailtechno.com/f/a/xyz~~/abc">1551 Assumption Street #9: 1 Bed 1 Bath</a></p>
+<p>Floorplan of Interest</p>
+<p>$1,095 | 1 Bed | 1 Bath</p>
+<p>Jane asked:</p>
+<p>Info Request: Move-in 2026/10/06</p>
+<p>Hello! I came across this listing on Zumper and would love to learn more.</p>
+<p>Zumper Listing: https://www.zumper.com/listings/65446440/1-bedroom-walkerville-windsor-on</p>
+<p><a href="mailto:jane.renter@example.com">Reply to renter</a></p>
+<p>Jane's preferences:</p><p>Prices searched</p><p>$750-$1,900</p>
+<p>You can also respond to</p><p>Jane by replying directly to this email.</p>
+<p>All of your leads, in one place.</p>
+<p><a href="https://post.spmailtechno.com/f/a/support">Contact support</a></p>
+<p>Zumper Inc.</p><p>95 Third St, 2nd Floor</p><p>San Francisco, CA 94103</p>`;
+const ZUMPER = {
+  subject: "Zumper tenant lead for 1551 Assumption Street #9: 1 Bed 1 Bath",
+  from: '"Jane Renter via Zumper" <noreply@zumperchat.com>',
+  replyTo: "Jane Renter <jane.renter@example.com>",
+  htmlBody: ZUMPER_HTML,
+  textBody: null,
+  headers: { "DKIM-Signature": "v=1; a=rsa-sha256; d=zumperchat.com; s=x" },
+};
+const z = parsePortalLeadEmail(ZUMPER);
+ok("zumper: parses", z.ok, z);
+if (z.ok) {
+  const l = z.lead;
+  ok("zumper: portal is zumper", l.portal === "zumper", l.portal);
+  ok("zumper: inquiry", l.kind === "inquiry");
+  ok("zumper: renter name from Reply-To", l.name === "Jane Renter", l.name);
+  ok("zumper: renter email from Reply-To", l.email === "jane.renter@example.com", l.email);
+  ok("zumper: phone off the contact block", l.phone === "519.555.0142", l.phone);
+  ok("zumper: property line, unit kept", l.subjectAddress === "1551 Assumption Street #9", l.subjectAddress);
+  ok("zumper: move-in date verbatim", l.moveIn === "October 06, 2026", l.moveIn);
+  ok("zumper: listing id is a second signal", l.adId === "65446440", l.adId);
+  ok("zumper: no ad url (anchors are tracking redirects)", l.adUrl === null);
+  ok(
+    "zumper: message is the renter's words, link cut, footer excluded",
+    l.message === "Info Request: Move-in 2026/10/06\nHello! I came across this listing on Zumper and would love to learn more.",
+    l.message,
+  );
+  ok("zumper: exact confidence", l.confidence === "exact");
+  const note = portalLeadNote(l);
+  ok("zumper: note names the site", note.includes("Received from Zumper (enquiry)."), note);
+  ok("zumper: note carries the move-in date", note.includes("Move-in date given: October 06, 2026."), note);
+}
+
+// The 4158 shape: a multi-line message, &#39; entities, and a listing link whose
+// id ("29700085p") is NOT the ad's own id. The property line still decides.
+const z2 = parsePortalLeadEmail({
+  ...ZUMPER,
+  subject: "Zumper tenant lead for 1195 Bruce Avenue #303: 1 Bed 1 Bath",
+  htmlBody: ZUMPER_HTML
+    .replace("1551 Assumption Street #9", "1195 Bruce Avenue #303")
+    .replace(
+      /<p>Info Request[\s\S]*?Zumper Listing: [^<]*<\/p>/,
+      "<p>Hi,</p><p>I found your listing on Zumper and I&#39;m interested.</p><p>Can you let me know if it&#39;s still available?</p><p>Thanks</p><p>Zumper Listing: https://www.zumper.com/listings/29700085p/1-bedroom-downtown-windsor-windsor-on</p>",
+    ),
+});
+ok("zumper 4158: parses", z2.ok, z2);
+if (z2.ok) {
+  ok("zumper 4158: entities decoded in the message", z2.lead.message === "Hi,\nI found your listing on Zumper and I'm interested.\nCan you let me know if it's still available?\nThanks", z2.lead.message);
+  ok("zumper 4158: suffix-lettered id still read", z2.lead.adId === "29700085", z2.lead.adId);
+  ok("zumper 4158: property line read", z2.lead.subjectAddress === "1195 Bruce Avenue #303", z2.lead.subjectAddress);
+}
+
+// A Reply-To pointing back at Zumper must never be filed as the renter.
+const z3 = parsePortalLeadEmail({ ...ZUMPER, replyTo: "noreply@zumperchat.com", htmlBody: ZUMPER_HTML.replace(/jane\.renter@example\.com/g, "x").replace(/519\.555\.0142/, "call me") });
+ok("zumper: a portal-owned Reply-To and no phone is not a lead", z3.ok === false, z3);
+
+// No Reply-To at all: name off the From label, email off the body.
+const z4 = parsePortalLeadEmail({ ...ZUMPER, replyTo: null });
+ok("zumper: no Reply-To falls back to the body email", z4.ok && z4.lead.email === "jane.renter@example.com", z4);
+ok("zumper: no Reply-To falls back to the From label name", z4.ok && z4.lead.name === "Jane Renter", z4);
+
+ok("zumper: classified without reading the subject", classifyPortalLeadEmail({ from: "noreply@zumperchat.com", subject: "anything" }) === "inquiry");
+
+// The unit matcher: civic + first street word + unit, never Unit 3 for Unit 33.
+const k9 = parseZumperPropertyLine("1551 Assumption Street #9: 1 Bed 1 Bath");
+ok("zumper key: parsed", JSON.stringify(k9) === JSON.stringify({ civic: "1551", streetWord: "assumption", unit: "9" }), k9);
+ok("zumper key: St vs Street matches", k9 != null && addressMatchesZumperProperty("1551 Assumption St, Unit 9, Windsor, ON N9A 3E2", k9));
+ok("zumper key: Unit 10 is not Unit 9", k9 != null && !addressMatchesZumperProperty("1551 Assumption St, Unit 10, Windsor, ON", k9));
+const k3 = parseZumperPropertyLine("833 Pillette Road #3: 1 Bed 1 Bath");
+ok("zumper key: Unit 33 is not Unit 3", k3 != null && !addressMatchesZumperProperty("833 Pillette Rd, Unit 33, Windsor, ON N8Y 3B4", k3));
+ok("zumper key: Unit 3 is Unit 3", k3 != null && addressMatchesZumperProperty("833 Pillette Rd, Unit 3, Windsor, ON N8Y 3B4", k3));
+ok("zumper key: another civic number never matches", k3 != null && !addressMatchesZumperProperty("8333 Pillette Rd, Unit 3, Windsor", k3));
+const kLower = parseZumperPropertyLine("506 Manning Avenue #Lower");
+ok("zumper key: a named unit", kLower?.unit === "lower", kLower);
+ok("zumper key: no civic number is no key", parseZumperPropertyLine("Somewhere nice") === null);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

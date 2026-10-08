@@ -69,12 +69,31 @@ export const RENTALS_CA_TOUR_SENDER = "no-reply@rentals.ca";
 // claude/VERIFIED-S697-KIJIJI-LEAD-EMAIL-READ-FROM-TWO-REAL-2026-MESSAGES.md
 export const KIJIJI_LEAD_SENDER = "noreply@rts.kijiji.ca";
 
+// ZUMPER (S701d). Read off six real messages in rentals@agileonline.ca
+// (2026-09-29 to 2026-10-06), never guessed. One fixed sender, one template:
+//   From:     "<Renter> via Zumper" <noreply@zumperchat.com>
+//   Reply-To: the renter's real email, display name = renter's full name
+//   Subject:  "Zumper tenant lead for <street> #<unit>: <beds> Bed <baths> Bath"
+//   Body:     HTML only (no text part). Visible lines, in order:
+//               "Reply to renter" / <full name> / <email> / <phone 519.555.0142>
+//               "Estimated Move Date Move-in Date" / "October 06, 2026"
+//               "Property" / "1551 Assumption Street #9: 1 Bed 1 Bath"
+//               "<First> asked:" / <the renter's message lines>
+//               "Zumper Listing: https://www.zumper.com/listings/<id>/<slug>"
+// NO X- HEADERS carry the listing, and every anchor is a click-tracking
+// redirect, so the unit is resolved from Zumper's own "Property" line (street,
+// civic number, unit) and the listing id is only a second signal: on one of the
+// six real messages the "Zumper Listing" link carried an id that was not the
+// ad's own id.
+export const ZUMPER_LEAD_SENDER = "noreply@zumperchat.com";
+
 /** Senders whose mail this parser understands. The route's per-org allow-list
  *  is a separate, stricter gate — this is only "can we read it at all". */
 export const PORTAL_LEAD_SENDERS: readonly string[] = [
   RENTALS_CA_LEAD_SENDER,
   RENTALS_CA_TOUR_SENDER,
   KIJIJI_LEAD_SENDER,
+  ZUMPER_LEAD_SENDER,
 ];
 
 /** The template versions this parser was written against. Anything else still
@@ -85,7 +104,7 @@ export type PortalLeadKind = "inquiry" | "tour_request";
 
 /** Which portal a parsed lead came off. Mirrors PortalKey in portal-senders.ts;
  *  kept as its own type so this module stays pure and dependency-free. */
-export type ParsedLeadPortal = "rentals_ca" | "kijiji";
+export type ParsedLeadPortal = "rentals_ca" | "kijiji" | "zumper";
 
 export type ParsedPortalLead = {
   portal: ParsedLeadPortal;
@@ -116,6 +135,9 @@ export type ParsedPortalLead = {
    *  "derived" = scraped out of human-facing text and worth less trust. */
   confidence: "exact" | "derived";
   warnings: string[];
+  /** Zumper only (S701d): the renter's stated move-in date, verbatim
+   *  ("October 06, 2026"). Kept as text for the note; never re-parsed here. */
+  moveIn?: string | null;
 };
 
 export type PortalLeadParseInput = {
@@ -365,6 +387,7 @@ export function classifyPortalLeadEmail(
 ): PortalLeadKind | null {
   const from = bareAddress(input.from);
   const subject = (input.subject ?? "").trim();
+  if (from === ZUMPER_LEAD_SENDER) return "inquiry";
   if (from === KIJIJI_LEAD_SENDER) {
     // Kijiji sends ONE message type. What varies is whether the renter used the
     // "request a viewing" template, and that shows up as a header, never in the
@@ -399,6 +422,9 @@ export function parsePortalLeadEmail(
   if (!kind) return { ok: false, reason: "not_a_recognized_portal_lead" };
   if (bareAddress(input.from) === KIJIJI_LEAD_SENDER) {
     return parseKijijiLeadEmail(input, kind);
+  }
+  if (bareAddress(input.from) === ZUMPER_LEAD_SENDER) {
+    return parseZumperLeadEmail(input);
   }
 
   const warnings: string[] = [];
@@ -650,6 +676,169 @@ export function parseKijijiLeadEmail(
   };
 }
 
+// --- Zumper (S701d) -----------------------------------------------------------
+
+export type ZumperPropertyKey = { civic: string; streetWord: string; unit: string | null };
+
+/**
+ * "1551 Assumption Street #9: 1 Bed 1 Bath" -> { civic "1551", streetWord
+ * "assumption", unit "9" }. The street TYPE is dropped on purpose: Zumper
+ * writes "Street"/"Avenue"/"Road" where our records say "St"/"Ave"/"Rd", so
+ * civic number + first street word + unit is the comparable part. Null when
+ * the line does not start with a civic number.
+ */
+export function parseZumperPropertyLine(line: string | null | undefined): ZumperPropertyKey | null {
+  if (!line) return null;
+  const head = line.split(":")[0].trim();
+  const m = /^(\d+[a-z]?)\s+([a-z][a-z'.-]*)\b[^#]*?(?:#\s*([a-z0-9-]+))?\s*$/i.exec(head);
+  if (!m) return null;
+  return {
+    civic: m[1].toLowerCase(),
+    streetWord: m[2].toLowerCase().replace(/[.']/g, ""),
+    unit: m[3] ? m[3].toLowerCase() : null,
+  };
+}
+
+/**
+ * Does one of our property addresses ("1551 Assumption St, Unit 9, Windsor,
+ * ON N9A 3E2") name the same unit as Zumper's line? Civic number and first
+ * street word must lead the address; when Zumper names a unit, our address
+ * must name the SAME unit as a whole token (Unit 3 must never match Unit 33).
+ */
+export function addressMatchesZumperProperty(
+  address: string | null | undefined,
+  key: ZumperPropertyKey,
+): boolean {
+  const a = (address ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!a.startsWith(`${key.civic} ${key.streetWord}`)) return false;
+  if (!key.unit) return true;
+  const unit = escapeRe(key.unit);
+  return new RegExp(`(?:\\bunit|\\bsuite|\\bapt\\.?|#)\\s*0*${unit}(?![a-z0-9])`, "i").test(a);
+}
+
+/** The renter's phone off Zumper's contact block, as digits-with-dots kept
+ *  verbatim. Only a line that is nothing but a phone number qualifies. */
+function zumperPhoneLine(line: string): string | null {
+  const t = line.trim();
+  if (!/^\+?[\d][\d .()-]{8,}\d$/.test(t)) return null;
+  const digits = t.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 11 ? t : null;
+}
+
+export function parseZumperLeadEmail(input: PortalLeadParseInput): PortalLeadParseResult {
+  const warnings: string[] = [];
+  const html = input.htmlBody ? decodeQuotedPrintableIfNeeded(input.htmlBody) : "";
+  const htmlLines = html ? htmlToLines(html) : "";
+  const plain = input.textBody
+    ? decodeQuotedPrintableIfNeeded(input.textBody).replace(/\r/g, "")
+    : "";
+  const body = htmlLines.length >= plain.length ? htmlLines : plain;
+  const lines = body.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+
+  // Contact: Reply-To is the renter. If it ever points back at Zumper the
+  // message is not what we think it is.
+  let email = bareAddress(input.replyTo);
+  if (email && /(^|\.)zumper(chat)?\.com$/.test(email.split("@")[1] ?? "")) {
+    warnings.push(`discarded portal-owned email ${email}`);
+    email = null;
+  }
+  let name = displayName(input.replyTo);
+  if (!name) {
+    const label = displayName(input.from);
+    const m = label ? /^(.*\S)\s+via Zumper$/i.exec(label) : null;
+    if (m) name = m[1].replace(/\s+/g, " ").trim();
+  }
+
+  // Phone: inside the "Reply to renter" contact block, before "Property".
+  let phone: string | null = null;
+  const contactStart = lines.findIndex((l) => /^reply to renter$/i.test(l));
+  const propertyIdx = lines.findIndex((l) => /^property$/i.test(l));
+  if (contactStart >= 0) {
+    const end = propertyIdx > contactStart ? propertyIdx : Math.min(lines.length, contactStart + 8);
+    for (const line of lines.slice(contactStart + 1, end)) {
+      const p = zumperPhoneLine(line);
+      if (p) {
+        phone = p;
+        break;
+      }
+    }
+  }
+  if (!email) {
+    const m = lines
+      .slice(Math.max(0, contactStart), propertyIdx > 0 ? propertyIdx : undefined)
+      .map((l) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.exec(l)?.[0] ?? null)
+      .find((x) => x != null);
+    if (m && !/zumper(chat)?\.com$/i.test(m)) {
+      email = m.toLowerCase();
+      warnings.push("no Reply-To; took the renter email from the body");
+    }
+  }
+
+  // Property line: Zumper's own field, the authority for the unit.
+  let propertyLine: string | null = propertyIdx >= 0 ? lines[propertyIdx + 1] ?? null : null;
+  if (!propertyLine || !/^\d/.test(propertyLine)) {
+    const m = /tenant lead for\s+(.+)$/i.exec((input.subject ?? "").trim());
+    propertyLine = m ? m[1].trim() : null;
+    if (propertyLine) warnings.push("fell back to the subject line for the property");
+  }
+  const subjectAddress = propertyLine ? cleanText(propertyLine.split(":")[0]) : null;
+
+  // Move-in date: the line after the "Move-in Date" label, verbatim.
+  let moveIn: string | null = null;
+  const moveIdx = lines.findIndex((l) => /move-in date$/i.test(l));
+  if (moveIdx >= 0) {
+    const next = lines[moveIdx + 1] ?? "";
+    if (/^[A-Za-z]+\s+\d{1,2},\s+\d{4}/.test(next)) moveIn = next.replace(/\s*\(.*\)\s*$/, "").trim();
+  }
+
+  // Message: the lines after "<First> asked:" up to Zumper's own footer.
+  let message: string | null = null;
+  const askedIdx = lines.findIndex((l) => /\basked:$/i.test(l));
+  if (askedIdx >= 0) {
+    const out: string[] = [];
+    for (const line of lines.slice(askedIdx + 1)) {
+      if (/^reply to renter$/i.test(line) || /'s preferences:$|’s preferences:$/i.test(line) || /^you can also respond to/i.test(line)) break;
+      const cut = line.replace(/\s*Zumper Listing:.*$/i, "").trim();
+      if (cut) out.push(cut);
+      if (/Zumper Listing:/i.test(line)) break;
+    }
+    const joined = out.join("\n").trim();
+    if (joined) message = joined;
+  }
+  if (!message) warnings.push("could not isolate the renter's message from the body");
+
+  // Listing id: a second signal only (see the header comment).
+  const idMatch = /zumper\.com\/listings\/(\d{6,})/i.exec(html || body);
+  const adId = idMatch ? idMatch[1] : null;
+
+  if (!email && !phone) return { ok: false, reason: "no_contact_details_found" };
+  if (!subjectAddress && !adId) {
+    warnings.push("no property line and no listing id; the unit must be resolved another way");
+  }
+
+  return {
+    ok: true,
+    lead: {
+      portal: "zumper",
+      kind: "inquiry",
+      name,
+      email,
+      phone,
+      message,
+      unit: null,
+      adId,
+      adUrl: null,
+      requestedTimes: [],
+      subjectAddress,
+      adTitle: null,
+      templateVersion: null,
+      confidence: email && subjectAddress ? "exact" : "derived",
+      warnings,
+      moveIn,
+    },
+  };
+}
+
 /**
  * The note stored on the lead. Keeps the renter's own words first, then the
  * facts an operator needs to act, then anything the parser was unsure about.
@@ -658,13 +847,14 @@ export function parseKijijiLeadEmail(
 export function portalLeadNote(lead: ParsedPortalLead): string {
   const parts: string[] = [];
   if (lead.message) parts.push(lead.message);
-  const portalName = lead.portal === "kijiji" ? "Kijiji" : "Rentals.ca";
+  const portalName =
+    lead.portal === "kijiji" ? "Kijiji" : lead.portal === "zumper" ? "Zumper" : "Rentals.ca";
   const kindWord =
     lead.kind === "tour_request"
       ? lead.portal === "kijiji"
         ? "viewing request"
         : "tour request"
-      : lead.portal === "kijiji"
+      : lead.portal === "kijiji" || lead.portal === "zumper"
         ? "enquiry"
         : "tenant lead";
   const facts: string[] = [`Received from ${portalName} (${kindWord}).`];
@@ -677,6 +867,7 @@ export function portalLeadNote(lead: ParsedPortalLead): string {
         : `Requested tour times: ${lead.requestedTimes.join("; ")}.`,
     );
   }
+  if (lead.moveIn) facts.push(`Move-in date given: ${lead.moveIn}.`);
   if (lead.adTitle) facts.push(`Ad title: ${lead.adTitle}`);
   if (lead.unit) facts.push(`Unit as listed: ${lead.unit}.`);
   if (lead.adUrl) facts.push(`Ad: ${lead.adUrl}`);

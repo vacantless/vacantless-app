@@ -38,7 +38,7 @@
 
 import { normalizeSenderEmail } from "./email-ingest";
 
-export type PortalKey = "rentals_ca" | "kijiji";
+export type PortalKey = "rentals_ca" | "kijiji" | "zumper";
 
 type PortalEntry = { addresses: string[]; domain: string };
 
@@ -72,12 +72,24 @@ export const PORTAL_REGISTRY: Record<PortalKey, PortalEntry> = {
     addresses: ["noreply@rts.kijiji.ca"],
     domain: "kijiji.ca",
   },
+  // ZUMPER (S701d). Read off six real messages in rentals@agileonline.ca
+  // (2026-09-29 to 10-06), not guessed: one fixed sender for every renter.
+  //   From:           "<Renter> via Zumper" <noreply@zumperchat.com>
+  //   Reply-To:       the renter's REAL email
+  //   DKIM-Signature: d=zumperchat.com
+  // Same forwarding caveat as Kijiji: the envelope is SRS-rewritten by the
+  // operator's mail host, so SPF never aligns and DKIM carries the decision.
+  zumper: {
+    addresses: ["noreply@zumperchat.com"],
+    domain: "zumperchat.com",
+  },
 };
 
 // Back-compat flat list (some callers/tests want just the addresses).
 export const KNOWN_PORTAL_SENDERS: Record<PortalKey, string[]> = {
   rentals_ca: PORTAL_REGISTRY.rentals_ca.addresses,
   kijiji: PORTAL_REGISTRY.kijiji.addresses,
+  zumper: PORTAL_REGISTRY.zumper.addresses,
 };
 
 const ADDRESS_TO_ENTRY: ReadonlyMap<string, PortalEntry> = new Map(
