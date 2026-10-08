@@ -695,7 +695,7 @@ export function PublishEverywhere({
                   Sign in if asked
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  We fill the ad. You sign in and pay any site fee.
+                  We write the ad. You sign in, post it, and pay any site fee.
                 </small>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
@@ -1405,7 +1405,7 @@ function ConfirmModal({
               ))}
             </div>
             <p className="mt-2 text-[11.5px] leading-relaxed text-indigo-900/80">
-              We fill the post; you sign in and tap post. We never see your
+              We write the ad; you sign in and post it. We never see your
               password.
             </p>
           </div>

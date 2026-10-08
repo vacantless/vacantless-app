@@ -414,7 +414,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         icon={<Icons.home />}
         eyebrow="Daily work"
         title="Today"
-        subtitle="What needs your attention now, across rentals, renters, viewings, repairs, and money."
+        subtitle="What needs your attention now across your rentals, renters, and viewings."
       />
 
       {onboardingWizardState && (

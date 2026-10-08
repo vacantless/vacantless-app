@@ -573,8 +573,9 @@ const SYNDICATION_PACKET_FIELD_TARGETS: Partial<
   photos: { tab: "market", hash: "#property-photos" },
   description: { tab: "setup", hash: "#listing-description" },
   property_type: { tab: "setup", hash: "#property-unit-type" },
-  contact_phone: { href: "/dashboard/settings" },
-  contact_email: { href: "/dashboard/settings" },
+  // S700g (stranger test 2): land on the field, not the top of Settings.
+  contact_phone: { href: "/dashboard/settings?tab=brand#public-contact-phone" },
+  contact_email: { href: "/dashboard/settings?tab=brand#public-contact-email" },
   availability_date: { tab: "setup", hash: "#property-available-date" },
   lease_term: { tab: "setup", hash: "#rental-details" },
   utilities: { tab: "setup", hash: "#rental-details" },
@@ -612,6 +613,7 @@ function SyndicationFirstCard({
   listingPacketChannelCount,
   firstListingPacketMissingField,
   firstListingPacketMissingLabel,
+  listingPacketMissingLabels = [],
 }: {
   propertyId: string;
   linkIsLive: boolean;
@@ -626,6 +628,8 @@ function SyndicationFirstCard({
   listingPacketChannelCount: number;
   firstListingPacketMissingField: ListingPacketMissingField["field"] | null;
   firstListingPacketMissingLabel: string | null;
+  /** S700g: every missing detail, so the card names them all at once. */
+  listingPacketMissingLabels?: string[];
 }) {
   const encodedPropertyId = encodeURIComponent(propertyId);
   const distributeHref = `/dashboard/properties/${encodedPropertyId}?tab=distribute#distribute-header`;
@@ -662,10 +666,16 @@ function SyndicationFirstCard({
           liveOutsideCount === 1 ? "site" : "sites"
         }.`
       : "Your Vacantless page is live. No rental sites are live yet.";
+  // S700g (stranger test 2): this card used to name only the first missing
+  // detail, so photo, then phone, then square footage surfaced one at a time.
   const body = packetBlocked
-    ? `Begin with ${
-        firstListingPacketMissingLabel?.toLowerCase() ?? "the missing detail"
-      }. Posting opens once your listing is ready.`
+    ? listingPacketMissingLabels.length > 1
+      ? `Still needed: ${listingPacketMissingLabels
+          .map((l) => l.toLowerCase())
+          .join(", ")}. Posting opens once these are in.`
+      : `Begin with ${
+          firstListingPacketMissingLabel?.toLowerCase() ?? "the missing detail"
+        }. Posting opens once your listing is ready.`
     : !linkIsLive
     ? setupOutstanding > 0
       ? "Post shows what your listing still needs. It then opens only the sites that need your sign-in or the link to your ad."
@@ -2835,6 +2845,9 @@ export default async function PropertyDetailPage({
         firstListingPacketMissingLabel={
           listingPacketReadiness.missingRequired[0]?.label ?? null
         }
+        listingPacketMissingLabels={listingPacketReadiness.missingRequired.map(
+          (m) => m.label,
+        )}
       />
 
       <PhotoUploadModal

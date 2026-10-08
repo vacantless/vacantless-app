@@ -15,6 +15,7 @@ import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 import { rentConfirmUrl } from "@/lib/rent-confirm-public";
+import { isQuietNotificationOrg } from "@/lib/quiet-orgs";
 import {
   buildAnniversaryRentConfirmPlan,
   buildRentConfirmUnits,
@@ -760,6 +761,8 @@ async function runLandlordCampaign(
   }
 
   for (const org of orgs) {
+    // S700g: Noam's test/demo orgs stay silent (lib/quiet-orgs.ts).
+    if (isQuietNotificationOrg(org.id)) continue;
     try {
       if (
         !isFeatureEnabledForOrg(

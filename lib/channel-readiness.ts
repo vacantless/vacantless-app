@@ -259,6 +259,15 @@ function commonPortalRequired(input: ChannelReadinessInput): string[] {
   return missing;
 }
 
+// S700g (stranger test 2): Kijiji and Zumper refuse the ad without a size
+// (portal-requirements hardBlock), but this panel never said so, so the
+// customer met it only after Save, one screen later.
+function withSquareFootage(input: ChannelReadinessInput, missing: string[]): string[] {
+  const sqft = (input as { sqft?: number | null }).sqft;
+  if (!(typeof sqft === "number" && sqft > 0)) addMissing(missing, ["Square footage"]);
+  return missing;
+}
+
 function directPortalChoices(...choices: string[]): {
   manualChoices: string[];
   directPortalSupported: true;
@@ -306,7 +315,7 @@ export function buildChannelReadiness(
   );
 
   out.push(
-    result("kijiji", commonPortalRequired(input), classifiedsRecommended(input), {
+    result("kijiji", withSquareFootage(input, commonPortalRequired(input)), classifiedsRecommended(input), {
       ...directPortalChoices(
         "Category, location, and postal code",
         "Package and cart review",
@@ -362,7 +371,7 @@ export function buildChannelReadiness(
   );
 
   out.push(
-    result("zumper", commonPortalRequired(input), classifiedsRecommended(input), {
+    result("zumper", withSquareFootage(input, commonPortalRequired(input)), classifiedsRecommended(input), {
       ...directPortalChoices(
         "Address autocomplete",
         "Size/sqft value",

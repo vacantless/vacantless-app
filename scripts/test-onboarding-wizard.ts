@@ -30,7 +30,7 @@ ok(
   fresh.steps.map((step) => step.key).join(",") === "property,get_online,tenancy,rent_rail",
 );
 ok("get_online step is not optional and links to the wizard", fresh.steps[1].optional !== true && fresh.steps[1].href === "/dashboard/link-portals");
-ok("get_online step names the free sites first", /free sites/.test(fresh.steps[1].description) && /Paid sites come after/.test(fresh.steps[1].description));
+ok("get_online step names the free sites first", /Facebook Marketplace \(free\)/.test(fresh.steps[1].description) && /Paid sites come after/.test(fresh.steps[1].description));
 ok("tenancy and rent steps say they come after a tenant", fresh.steps[2].description.startsWith("After you find a tenant") && fresh.steps[3].description.startsWith("After you find a tenant"));
 
 const withProperty = computeOnboardingState({

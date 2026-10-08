@@ -55,6 +55,7 @@ export function OnboardingForm({
         <input
           name="name"
           required
+          autoComplete="organization"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Your rental business"

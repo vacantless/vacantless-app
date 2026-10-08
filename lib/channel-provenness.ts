@@ -277,6 +277,9 @@ export const NON_PRODUCTION_ORGANIZATION_IDS = [
   // item and briefly showed Rentals.ca and Zumper as connected. Listed BEFORE
   // any of that could count as a customer proving a channel.
   "695ebb66-273c-4261-b6e2-2cea9643987e", // Rehearsal Rentals S697
+  // S700g: the second stranger sign-up (Noam's +stranger2 alias). It pressed
+  // Post once and was set back to Draft.
+  "a16362bb-126e-4438-a62d-71b67929f1ca", // nmuscovitch+stranger2 test org
   // NOT LISTED, AND IT IS A REAL QUESTION: Maple Door Rentals
   // (a0e2e45c-f2be-427e-b8db-30535a821daa), plan `pilot`, 3 properties, 6
   // leads. It reads like a real pilot customer, and excluding a real customer

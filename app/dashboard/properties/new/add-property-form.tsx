@@ -779,10 +779,13 @@ export function AddPropertyV2Form({
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="mb-1 text-sm font-semibold text-gray-900">
-            Photos <span className="font-normal text-gray-400">(optional but recommended)</span>
+            Photos <span className="font-normal text-gray-400">(needed for rental sites)</span>
           </h2>
+          {/* S700g (stranger test 2): every rental site blocks on a photo, so
+              "optional" sent the customer back here after Save. */}
           <p className="mb-4 text-xs text-gray-500">
-            Add photos now so the listing is ready to share, or add them later.
+            Every rental site needs at least one photo. You can save the draft
+            without one and add photos later.
           </p>
           <Field label="Photos" htmlFor="photos">
             <input
@@ -798,8 +801,8 @@ export function AddPropertyV2Form({
         </section>
 
         <p className="text-xs text-gray-500">
-          Optional — you don&apos;t need any of these to get online. Add them now
-          or anytime later.
+          These make your ads stronger. Kijiji and Zumper also need square
+          footage. It is under Size, layout, and amenities.
         </p>
 
         <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

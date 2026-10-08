@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-07",
-  "checksum": "9416e69aea2d347c321324c6d146c2018f6416bde37afae302fce3ae75ad2438",
+  "generated": "2026-10-08",
+  "checksum": "fb73507be6e889b869dd5d702bae5108e26990337e391d0864e7d3c69c13d544",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -73,8 +73,7 @@
     "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 20,
     "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 31,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
-    "app/dashboard/properties/new/add-property-form.tsx\u0000banned_word": 3,
-    "app/dashboard/properties/new/add-property-form.tsx\u0000em_dash": 1,
+    "app/dashboard/properties/new/add-property-form.tsx\u0000banned_word": 2,
     "app/dashboard/properties/new/add-property-form.tsx\u0000parentheses": 4,
     "app/dashboard/properties/new/page.tsx\u0000banned_word": 1,
     "app/dashboard/properties/readiness-chips.tsx\u0000banned_word": 3,
@@ -139,7 +138,7 @@
     "lib/listing-state.ts\u0000banned_word": 3
   },
   "strings": {
-    "app/dashboard/(wizard)/getting-started/page.tsx": 21,
+    "app/dashboard/(wizard)/getting-started/page.tsx": 22,
     "app/dashboard/add-details/page.tsx": 2,
     "app/dashboard/add-details/question-sheet-form.tsx": 2,
     "app/dashboard/after-live/page.tsx": 1,
@@ -157,7 +156,7 @@
     "app/dashboard/properties/[id]/listing-copy-card.tsx": 21,
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 372,
+    "app/dashboard/properties/[id]/page.tsx": 373,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 138,
     "app/dashboard/properties/new/add-property-form.tsx": 96,
     "app/dashboard/properties/new/page.tsx": 5,
@@ -1038,12 +1037,6 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Your listing first. Sign-in and site fees wait inside Post, and a site counts as Live only after the link to your ad is saved.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Your pasted listing didn't include any — and listings with photos get far more inquiries on Kijiji, Facebook, and Zumper.",
       "count": 1
     },
@@ -1068,25 +1061,7 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/new/add-property-form.tsx",
-      "text": "Optional — you don't need any of these to get online. Add them now or anytime later.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/new/add-property-form.tsx",
       "text": "Start fresh",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/properties/new/add-property-form.tsx",
-      "text": "Optional — you don't need any of these to get online. Add them now or anytime later.",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/properties/new/add-property-form.tsx",
-      "text": "(optional but recommended)",
       "count": 1
     },
     {

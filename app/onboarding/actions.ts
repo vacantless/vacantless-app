@@ -49,6 +49,14 @@ export async function createOrganization(formData: FormData) {
   if (!name) {
     redirect("/onboarding?error=Name+is+required");
   }
+  // S700g (stranger test 2): a business name that is an email address shows up
+  // as the header, the email sender name and the renter page title. Ask again.
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) {
+    redirect(
+      "/onboarding?error=" +
+        encodeURIComponent("Enter your business name, not an email address. Your own name works too."),
+    );
+  }
 
   const supabase = createClient();
   const slug = `${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`;

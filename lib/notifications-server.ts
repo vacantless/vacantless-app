@@ -28,6 +28,7 @@
 // (transition notifications) simply ignore the return, as before.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isQuietNotificationOrg } from "./quiet-orgs";
 import {
   getNotificationEvent,
   isEventEnabled,
@@ -84,7 +85,7 @@ export type SendOrgNotificationResult = {
   /** How many recipient sends were attempted. */
   attempted: number;
   /** Why nothing was attempted (when attempted === 0). */
-  skipped?: "event_inactive" | "event_disabled" | "no_recipients" | "threw";
+  skipped?: "event_inactive" | "event_disabled" | "no_recipients" | "threw" | "quiet_org";
   /** Exact recipients resolved for this send. Stored by inbound relays as metadata. */
   recipients: string[];
 };
@@ -93,6 +94,9 @@ export async function sendOrgNotification(
   args: SendOrgNotificationArgs,
 ): Promise<SendOrgNotificationResult> {
   try {
+    // S700g: Noam's test/demo orgs stay silent (lib/quiet-orgs.ts).
+    if (isQuietNotificationOrg(args.org.id))
+      return { delivered: false, sentCount: 0, attempted: 0, skipped: "quiet_org", recipients: [] };
     const event = getNotificationEvent(args.eventKey);
     if (!event || !event.active)
       return { delivered: false, sentCount: 0, attempted: 0, skipped: "event_inactive", recipients: [] };

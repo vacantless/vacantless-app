@@ -61,7 +61,7 @@ const STEP_DEFS: StepDef[] = [
     key: "get_online",
     label: "Put it on the rental sites",
     description:
-      "Start with the free sites: Facebook Marketplace, Kijiji, Rentals.ca and Zumper. Paid sites come after. Done when one ad is live, or when the unit already has a tenant.",
+      "Start with Facebook Marketplace (free) and Kijiji (one free ad per personal account). Paid sites come after. Done when one ad is live, or when the unit already has a tenant.",
     href: "/dashboard/properties",
     cta: "Post my rental",
   },

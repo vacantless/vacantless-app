@@ -28,6 +28,7 @@ const full: ChannelReadinessInput = {
   baths: 1.5,
   address: "12 Donwoods Dr, Toronto ON",
   photoCount: 3,
+  sqft: 1100,
   availabilityWindowCount: 2,
   replyToEmail: "rentals@example.com",
   description:
@@ -53,6 +54,11 @@ ok("facebook ready", fullByChannel.facebook_marketplace.status === "ready");
 ok("rentals.ca ready", fullByChannel.rentals_ca.status === "ready");
 ok("rentfaster ready", fullByChannel.rentfaster.status === "ready");
 ok("zumper ready", fullByChannel.zumper.status === "ready");
+// S700g: Kijiji and Zumper block on square footage, so the add panel says so.
+const noSqft = readinessByChannel({ ...full, sqft: null });
+ok("kijiji needs square footage", noSqft.kijiji.missingRequired.includes("Square footage"));
+ok("zumper needs square footage", noSqft.zumper.missingRequired.includes("Square footage"));
+ok("facebook does not need square footage", !noSqft.facebook_marketplace.missingRequired.includes("Square footage"));
 ok("viewit ready", fullByChannel.viewit.status === "ready");
 ok("spacelist waits for commercial fields", fullByChannel.spacelist.status === "missing_required");
 ok("costar_loopnet waits for CRE or multifamily fields", fullByChannel.costar_loopnet.status === "missing_required");

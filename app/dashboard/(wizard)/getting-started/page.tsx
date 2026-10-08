@@ -71,12 +71,13 @@ export default async function GettingStartedPage({
     ]);
 
   const row = onboarding as OnboardingRow | null;
+  const postLeaseEnabled = await orgShowsPostLease(supabase, org.id);
   const state = computeOnboardingState({
     hasProperty: (propertyCount ?? 0) > 0,
     hasLiveListing: (liveListingCount ?? 0) > 0,
     wizardEnabled: distributionWizardEnabled(),
     hasTenancy: (tenancyCount ?? 0) > 0,
-    postLeaseEnabled: await orgShowsPostLease(supabase, org.id),
+    postLeaseEnabled,
     addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
     dismissedAt: row?.dismissed_at ?? null,
     railStepDoneAt: row?.rail_step_done_at ?? null,
@@ -100,7 +101,11 @@ export default async function GettingStartedPage({
         icon={<Icons.check />}
         eyebrow="Getting started"
         title="Set up your first rental"
-        subtitle="Add the first rental, record the tenancy when you are ready, and choose how rent will be collected."
+        subtitle={
+          postLeaseEnabled
+            ? "Add the first rental, record the tenancy when you are ready, and choose how rent will be collected."
+            : "Add your first rental, then put it on the rental sites."
+        }
         action={
           !state.isDismissed && !state.isComplete ? (
             <form action={dismissGettingStarted}>
