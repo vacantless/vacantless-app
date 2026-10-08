@@ -2308,16 +2308,16 @@ export default async function SettingsPage({
                 <span className="block text-xs text-gray-400">
                   {smsTransportReady ? (
                     <>
-                      When a renter leaves a phone number, we send a short text
-                      confirming their booking and reminders about 24 hours and
-                      2 hours before the viewing, alongside the emails.
+                      When a renter leaves a phone number, we text their booking
+                      confirmation. We text a reminder a few hours before the
+                      viewing. The day-before reminder still goes by email.
                     </>
                   ) : (
                     <>
-                      Once your account&apos;s SMS is connected: when a renter
-                      leaves a phone number, we&apos;ll send a short text
-                      confirming their booking and reminders about 24 hours and
-                      2 hours before the viewing, alongside the emails.
+                      Once your account&apos;s SMS is connected, we&apos;ll text
+                      renters who leave a phone number. We text their booking
+                      confirmation and a reminder a few hours before the viewing.
+                      The day-before reminder still goes by email.
                     </>
                   )}{" "}
                   Every text includes &quot;Reply STOP to opt out,&quot; and a

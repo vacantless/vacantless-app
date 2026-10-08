@@ -2,7 +2,7 @@
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
   "generated": "2026-10-08",
-  "checksum": "fb73507be6e889b869dd5d702bae5108e26990337e391d0864e7d3c69c13d544",
+  "checksum": "527caf65d7a1e89b7a79f4fbdee65e77e954c14b00be5ebf9da22b2d34b3af0b",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -89,7 +89,7 @@
     "app/dashboard/settings/page.tsx\u0000banned_word": 66,
     "app/dashboard/settings/page.tsx\u0000em_dash": 6,
     "app/dashboard/settings/page.tsx\u0000parentheses": 15,
-    "app/dashboard/settings/page.tsx\u0000sentence_length": 19,
+    "app/dashboard/settings/page.tsx\u0000sentence_length": 17,
     "app/dashboard/today-lane.tsx\u0000banned_word": 1,
     "app/dashboard/today-lane.tsx\u0000negative_promise": 2,
     "lib/distribution-analytics.ts\u0000ampersand_or_slash": 1,
@@ -1787,12 +1787,6 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "Once your account's SMS is connected: when a renter leaves a phone number, we'll send a short text confirming their booking and reminders about 24 hours and 2 hours before the viewing, alongside the emails.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/settings/page.tsx",
       "text": "Open the live page renters see when you share a listing link — pick any listing to preview its branded inquiry and booking page.",
       "count": 1
     },
@@ -1842,12 +1836,6 @@
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Turn on the organization-level calendar for Vacant Home Tax deadlines, seasonal water shutoff and turn-on, winter walkways and ice, furnace service and filters, smoke and CO alarms, and rent-increase timing reminders.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "When a renter leaves a phone number, we send a short text confirming their booking and reminders about 24 hours and 2 hours before the viewing, alongside the emails.",
       "count": 1
     },
     {
