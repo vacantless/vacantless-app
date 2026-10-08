@@ -150,6 +150,31 @@ console.log("kijiji");
   eq("200 on the ad url, no redirect = live", o.verdict, "live");
   eq("kijiji live reason", o.reason, "kijiji_ad_page_200");
 }
+// S701: expired ads stay on their url with 200 (measured on Units 3 and 33).
+{
+  const expired = '<h1 class="sc-82669b63-0 gfpNZs">No Longer Available - 3rd Floor (Top) 1 Bedroom, Renov... $1,225</h1> ... "youtubeVideoId":null,"status":"EXPIRED","endDate":"2026-10-04T13:09:30.000Z"';
+  const o = classifyListingPostLiveCheck(
+    facts({ portal: "kijiji", requestedUrl: KIJIJI_U33, bodyText: expired }),
+    { externalId: "1742946283" },
+  );
+  eq("expired kijiji ad on its own url = removed", o.verdict, "removed");
+  eq("kijiji expired reason", o.reason, "kijiji_ad_expired");
+  const h1Only = classifyListingPostLiveCheck(
+    facts({ portal: "kijiji", requestedUrl: KIJIJI_U33, bodyText: '<h1 class="x">No Longer Available - t</h1> "status":"ACTIVE"' }),
+    { externalId: "1742946283" },
+  );
+  eq("h1 marker alone = unknown, not live", h1Only.verdict, "unknown");
+  const statusOnly = classifyListingPostLiveCheck(
+    facts({ portal: "kijiji", requestedUrl: KIJIJI_U33, bodyText: '<h1 class="x">3rd Floor</h1> "status":"EXPIRED"' }),
+    { externalId: "1742946283" },
+  );
+  eq("status marker alone = unknown, not live", statusOnly.verdict, "unknown");
+  const active = classifyListingPostLiveCheck(
+    facts({ portal: "kijiji", requestedUrl: KIJIJI_U33, bodyText: '<h1 class="x"> </h1> "status":"ACTIVE" No Longer Available - {{title}}' }),
+    { externalId: "1742946283" },
+  );
+  eq("active ad with the i18n template string = live", active.verdict, "live");
+}
 {
   const o = classifyListingPostLiveCheck(
     facts({ portal: "kijiji", requestedUrl: KIJIJI_U33, endUrl: "https://www.kijiji.ca/b-apartments-condos/windsor-area-on/c37l1700220" }),

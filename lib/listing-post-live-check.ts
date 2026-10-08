@@ -21,6 +21,10 @@
 //                      `adRemoved=<ad id>` in the query
 //                      (kijiji.ca/b-apartments-condos/city-of-toronto/c37l1700273?...&adRemoved=1743093990)
 //   Kijiji live     -> 200, no redirect, end url still `/v-.../<ad id>`
+//   Kijiji expired  -> (measured S701, 2026-10-08) ALSO 200, no redirect, same
+//                      url; the page h1 reads "No Longer Available - <title>"
+//                      and the listing JSON carries "status":"EXPIRED". Before
+//                      S701 this was classified live and wrote live proofs.
 //   Zumper removed  -> 200 on `/listings/<id>/<slug>`, text carries
 //                      "Alert me when this rental is available." + "Notify me",
 //                      MONTHLY RENT renders "-" (the <title> still names a price;
@@ -195,6 +199,10 @@ function isChallenge(f: LiveCheckFacts): LiveCheckOutcome | null {
   return null;
 }
 
+// S701 measured markers for an expired ad that stays on its own url.
+const KIJIJI_EXPIRED_H1_RE = /<h1[^>]*>\s*No Longer Available\b/i;
+const KIJIJI_EXPIRED_STATUS_RE = /"status"\s*:\s*"EXPIRED"/;
+
 function classifyKijiji(f: LiveCheckFacts, adId: string | null): LiveCheckOutcome {
   const end = parseUrl(f.endUrl);
   if (!end) return { verdict: "unknown", reason: "no_end_url", evidence: null };
@@ -236,6 +244,28 @@ function classifyKijiji(f: LiveCheckFacts, adId: string | null): LiveCheckOutcom
     adId &&
     endPath.endsWith(`/${adId}`)
   ) {
+    // S701: an EXPIRED Kijiji ad does not redirect. It stays on its own url,
+    // answers 200, and only the page says it is gone. Both markers below were
+    // measured on 2026-10-08 on Units 3 and 33 (1742970091, 1742946283), past
+    // their 31-day run; a live ad carries "status":"ACTIVE" and no such h1.
+    // Both markers = removed. Exactly one = unknown (never a live proof).
+    const body = f.bodyText ?? "";
+    const expiredH1 = KIJIJI_EXPIRED_H1_RE.test(body);
+    const expiredStatus = KIJIJI_EXPIRED_STATUS_RE.test(body);
+    if (expiredH1 && expiredStatus) {
+      return {
+        verdict: "removed",
+        reason: "kijiji_ad_expired",
+        evidence: `Kijiji ad ${adId} page reads "No Longer Available" with status EXPIRED`,
+      };
+    }
+    if (expiredH1 || expiredStatus) {
+      return {
+        verdict: "unknown",
+        reason: "kijiji_ad_expired_partial_signal",
+        evidence: `HTTP 200 on the ad url, ${expiredH1 ? "h1" : "status"} marker only`,
+      };
+    }
     return {
       verdict: "live",
       reason: "kijiji_ad_page_200",
