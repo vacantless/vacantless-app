@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg, type Org } from "@/lib/org";
+import { localDateString } from "@/lib/leasing-snapshot";
 import { requireCapability, getRoleForOrg } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
 import { PROPERTY_STATUSES } from "@/lib/pipeline";
@@ -1943,6 +1944,34 @@ export async function updateListingPost(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?post=saved`);
+}
+
+/**
+ * S702g: "I renewed it today". Facebook and Kijiji ads go stale on a timer and
+ * the daily snapshot lists them as old until their posted date moves. Before
+ * this the only way to clear one was to edit the ad's posted date by hand
+ * inside "Live ad links". This resets the posted date of every LIVE ad for one
+ * site on one rental to today, in the org's own timezone.
+ */
+export async function markAdsRenewed(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const portal = normalizePortal(formData.get("portal"));
+  if (!propertyId || !isPortalKey(portal)) return;
+
+  const org = await getCurrentOrg();
+  const today = localDateString(Date.now(), org?.booking_timezone || "America/Toronto");
+  const supabase = createClient();
+  // RLS scopes the update to the caller's org.
+  await supabase
+    .from("listing_posts")
+    .update({ posted_on: today })
+    .eq("property_id", propertyId)
+    .eq("portal", portal)
+    .eq("status", "live");
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?tab=distribute&post=renewed#distribute`);
 }
 
 export async function removeListingPost(formData: FormData) {

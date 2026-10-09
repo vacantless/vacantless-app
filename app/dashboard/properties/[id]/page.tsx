@@ -46,6 +46,7 @@ import {
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
 import { MessageReplyCard } from "./message-reply-card";
+import { RenewAdsCard } from "./renew-ads-card";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
 import { qrSvg } from "@/lib/qr-svg";
@@ -152,6 +153,7 @@ import { MarketRentPanel } from "./market-rent-panel";
 import {
   DISTRIBUTION_CHANNELS,
   computeChannelStatus,
+  daysBetween,
 } from "@/lib/distribution-channels";
 import {
   buildRunSteps,
@@ -1773,14 +1775,19 @@ export default async function PropertyDetailPage({
   };
   const distributeChannelCards: DistributeChannelCard[] =
     DISTRIBUTION_CHANNELS.map((channel) => {
-      const posts = (postsByPortal.get(channel.key) ?? []).map(toDistributePost);
+      const rawPosts = postsByPortal.get(channel.key) ?? [];
+      const posts = rawPosts.map(toDistributePost);
       const status = computeChannelStatus({
         linkIsLive,
         blockers: channelBlockers,
-        posts: posts.map((p) => ({
+        // S702f/g: a blank posted date ages from the day the ad was saved,
+        // the same rule the daily snapshot uses.
+        posts: posts.map((p, i) => ({
           status: p.status,
           url: p.url,
-          posted_on: p.posted_on,
+          posted_on:
+            p.posted_on ??
+            (rawPosts[i]?.created_at ? rawPosts[i].created_at.slice(0, 10) : null),
           inquiryCount: p.inquiryCount,
         })),
         today: distributeToday,
@@ -2747,7 +2754,9 @@ export default async function PropertyDetailPage({
             ? "Listing post added."
             : searchParams.post === "removed"
               ? "Listing post removed."
-              : "Listing post saved."}
+              : searchParams.post === "renewed"
+                ? "Marked as renewed today. We will remind you again when it gets old."
+                : "Listing post saved."}
         </p>
       )}
 
@@ -3953,6 +3962,17 @@ export default async function PropertyDetailPage({
             c.status.value === "posted" || c.status.value === "needs_refresh",
         )}
       >
+        <RenewAdsCard
+          propertyId={p.id}
+          items={distributeChannelCards
+            .filter((c) => c.status.value === "needs_refresh" && c.status.liveUrl)
+            .map((c) => ({
+              portal: c.channel.key,
+              label: c.channel.label,
+              days: daysBetween(c.status.lastPostedOn, distributeToday),
+              liveUrl: c.status.liveUrl as string,
+            }))}
+        />
         <DistributeTab
           propertyId={p.id}
           basics={getOnlineBasics}
