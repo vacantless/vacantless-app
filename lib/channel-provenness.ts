@@ -280,6 +280,10 @@ export const NON_PRODUCTION_ORGANIZATION_IDS = [
   // S700g: the second stranger sign-up (Noam's +stranger2 alias). It pressed
   // Post once and was set back to Draft.
   "a16362bb-126e-4438-a62d-71b67929f1ca", // nmuscovitch+stranger2 test org
+  // S702: the third stranger walk (noam+stranger3). Booked, attended and
+  // closed its own account on 2026-10-09; listed so it never counts as a
+  // customer or reaches a real Page.
+  "3a7f13dc-139a-4a82-8eb9-941be3f3dae4", // Stranger Three Rentals
   // NOT LISTED, AND IT IS A REAL QUESTION: Maple Door Rentals
   // (a0e2e45c-f2be-427e-b8db-30535a821daa), plan `pilot`, 3 properties, 6
   // leads. It reads like a real pilot customer, and excluding a real customer
