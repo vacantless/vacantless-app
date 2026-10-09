@@ -1,0 +1,22 @@
+name: New-account watch
+
+# S702: one email a day to Noam listing every account that signed up in the
+# last 14 days and how far it got. Stalled accounts are flagged so he can email
+# that landlord the same day. Sends nothing on a day with no new accounts.
+# Run it by hand: Actions tab -> "New-account watch" -> Run workflow.
+
+on:
+  schedule:
+    - cron: "15 12 * * *" # 8:15 AM Toronto in summer, 7:15 AM in winter
+  workflow_dispatch: {}
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: New-account watch
+        run: |
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/new-account-watch" \
+            -w "\nHTTP %{http_code}\n"
