@@ -1994,6 +1994,63 @@ export async function markAdsRenewed(formData: FormData) {
   redirect(`/dashboard/properties/${propertyId}?tab=distribute&post=renewed#distribute`);
 }
 
+/**
+ * S702i: turn weekly Facebook Page posts on or off for the whole account.
+ * Turning on needs a connected Page and counts as the go-ahead to post to it,
+ * so it also sets automation_authorized on the Page connection.
+ */
+export async function setPageWeeklyPosts(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const turnOn = formData.get("on") === "1";
+  const back = propertyId
+    ? `/dashboard/properties/${propertyId}?tab=distribute`
+    : "/dashboard/properties";
+  const org = await getCurrentOrg();
+  const admin = createAdminClient();
+  if (!org || !admin) redirect(`${back}&pageposts=error#distribute`);
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const nowISO = new Date().toISOString();
+
+  if (turnOn) {
+    const { data: account } = await admin
+      .from("distribution_channel_accounts")
+      .select("account_status")
+      .eq("organization_id", org.id)
+      .eq("channel", "facebook_feed")
+      .maybeSingle();
+    if (!account || account.account_status !== "connected") {
+      redirect(`${back}&pageposts=connect#distribute`);
+    }
+    await admin
+      .from("distribution_channel_accounts")
+      .update({
+        automation_authorized: true,
+        automation_authorized_at: nowISO,
+        automation_authorized_by: user?.id ?? null,
+        updated_at: nowISO,
+      })
+      .eq("organization_id", org.id)
+      .eq("channel", "facebook_feed");
+  }
+
+  await admin
+    .from("organizations")
+    .update({
+      page_weekly_posts: turnOn,
+      page_weekly_posts_at: nowISO,
+      page_weekly_posts_by: user?.id ?? null,
+    })
+    .eq("id", org.id);
+
+  if (propertyId) revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`${back}&pageposts=${turnOn ? "on" : "off"}#distribute`);
+}
+
 export async function removeListingPost(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");

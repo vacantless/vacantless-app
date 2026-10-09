@@ -47,6 +47,7 @@ import {
 import { ListingCopyCard } from "./listing-copy-card";
 import { MessageReplyCard } from "./message-reply-card";
 import { RenewAdsCard } from "./renew-ads-card";
+import { PageWeeklyPostsCard } from "./page-weekly-posts-card";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
 import { qrSvg } from "@/lib/qr-svg";
@@ -804,6 +805,7 @@ export default async function PropertyDetailPage({
 }: {
   params: { id: string };
   searchParams: {
+    pageposts?: string;
     tab?: string;
     saved?: string;
     created?: string;
@@ -1763,6 +1765,17 @@ export default async function PropertyDetailPage({
   });
   const facebookPageEnabled =
     facebookOAuthConfigured() && fbPageChannelEnabled();
+  // S702i: read on its own so the page still loads before migration 0233.
+  let pageWeeklyPostsOn = false;
+  if (org?.id) {
+    const { data: pw, error: pwErr } = await supabase
+      .from("organizations")
+      .select("page_weekly_posts")
+      .eq("id", org.id)
+      .maybeSingle();
+    pageWeeklyPostsOn =
+      !pwErr && (pw as { page_weekly_posts?: boolean } | null)?.page_weekly_posts === true;
+  }
   const instagramGraphEnabled =
     facebookPageEnabled && igChannelEnabledForOrg(propertyOrgId);
   const accountStatusForChannel = (key: string): ChannelAccountStatus | null => {
@@ -3962,6 +3975,15 @@ export default async function PropertyDetailPage({
             c.status.value === "posted" || c.status.value === "needs_refresh",
         )}
       >
+        {facebookPageEnabled && (
+          <PageWeeklyPostsCard
+            propertyId={p.id}
+            accountStatus={channelAccountByKey.get("facebook_feed")?.status ?? null}
+            pageName={channelAccountByKey.get("facebook_feed")?.externalAccountLabel ?? null}
+            on={pageWeeklyPostsOn}
+            flash={searchParams.pageposts}
+          />
+        )}
         <RenewAdsCard
           propertyId={p.id}
           items={distributeChannelCards
