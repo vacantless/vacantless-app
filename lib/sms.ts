@@ -243,6 +243,57 @@ export function waitlistVacancySms(p: {
 }
 
 /**
+ * S702: the one text a renter gets after they called or left a voicemail and
+ * the landlord forwarded it. It carries the booking link, and an answer to
+ * their question when the rental's facts answer it.
+ */
+export function callBackSms(p: {
+  org_name: string | null;
+  property_address: string | null;
+  booking_url: string | null;
+  answer?: string | null;
+}): string {
+  const org = (p.org_name || "Our leasing team").trim();
+  const what = p.property_address ? p.property_address.trim() : "our rental";
+  const answer = p.answer ? ` ${p.answer.trim()}` : "";
+  const action = p.booking_url
+    ? ` Book a viewing here: ${p.booking_url.trim()}`
+    : " Reply here and we will get back to you.";
+  return noEmDash(`${org}: thanks for calling about ${what}.${answer}${action} ${OPT_OUT_LINE}`);
+}
+
+export type OpenPhoneInboundCall = {
+  kind: "call_completed";
+  from: string;
+  to: string;
+  status: string | null;
+  answered: boolean;
+  voicemail: boolean;
+};
+
+/**
+ * S702: an incoming call to our texting number (a renter calling back the
+ * number our reminders come from). Nobody answers that number, so the route
+ * logs the call on the renter's record and tells the landlord.
+ */
+export function parseOpenPhoneCall(payload: unknown): OpenPhoneInboundCall | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as any;
+  if (root.type !== "call.completed") return null;
+  const object = root.data?.object;
+  if (!object || typeof object !== "object") return null;
+  if (object.direction !== "incoming") return null;
+  const from = stringValue(object.from);
+  const rawTo = object.to;
+  const to = Array.isArray(rawTo) ? stringValue(rawTo[0]) : stringValue(rawTo);
+  if (!from || !to) return null;
+  const status = stringValue(object.status);
+  const answered = Boolean(object.answeredAt) || status === "completed";
+  const voicemail = Boolean(object.voicemail && (object.voicemail.url || object.voicemail.duration));
+  return { kind: "call_completed", from, to, status, answered, voicemail };
+}
+
+/**
  * Rough SMS segment count. GSM-7 packs 160 chars (153 per part when concatenated);
  * any non-GSM char forces UCS-2 at 70 (67 per part). Used in tests to keep our
  * transactional copy within a sane (<=2) segment budget.

@@ -20,6 +20,7 @@ import {
 import { PageHeader, EmptyState } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { TriageQueue } from "./triage-queue";
+import { ScreenshotLeadCard } from "./screenshot-lead-card";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export default async function LeadsPage({
     segment?: string;
     screen?: string;
     property?: string;
+    screenshot?: string;
   };
 }) {
   const supabase = createClient();
@@ -106,6 +108,19 @@ export default async function LeadsPage({
 
   // The screening filter row only appears once the (scoped) set actually has
   // flagged leads — orgs that never enabled screening never see the cue.
+  const { data: openRentals } = await supabase
+    .from("properties")
+    .select("id, address")
+    .eq("organization_id", org.id)
+    .is("archived_at", null)
+    .in("status", ["available", "draft"])
+    .order("address")
+    .limit(60);
+  const screenshotRentals = ((openRentals ?? []) as { id: string; address: string | null }[]).map((r) => ({
+    id: r.id,
+    address: r.address ?? "Rental",
+  }));
+
   const mismatchCount = scoped.filter((l) => l.qualified_out).length;
   const fitCount = scoped.length - mismatchCount;
   const showScreenFilter = mismatchCount > 0;
@@ -117,6 +132,17 @@ export default async function LeadsPage({
         eyebrow="Renters"
         title="Inquiries"
         subtitle="Every renter who has reached out about one of your rentals."
+      />
+
+      <ScreenshotLeadCard
+        rentals={screenshotRentals}
+        notice={
+          searchParams.screenshot === "need_contact"
+            ? "Add a phone or an email so you can reach the renter."
+            : searchParams.screenshot === "failed"
+              ? "We could not save that renter. Try again."
+              : null
+        }
       />
 
       {propertyId && (

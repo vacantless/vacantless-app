@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parseOpenPhoneInbound, verifyOpenPhoneSignature } from "@/lib/sms";
-import { applyInboundSms } from "@/lib/sms-inbound";
+import { parseOpenPhoneCall, parseOpenPhoneInbound, verifyOpenPhoneSignature } from "@/lib/sms";
+import { applyInboundSms, logInboundCall } from "@/lib/sms-inbound";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,15 @@ export async function POST(req: NextRequest) {
   }
 
   const inbound = parseOpenPhoneInbound(payload);
-  if (!inbound) return NextResponse.json({ ok: true, handled: "ignored_event" });
+  if (!inbound) {
+    // S702: a missed call to the texting number lands on the renter's record.
+    const call = parseOpenPhoneCall(payload);
+    if (!call) return NextResponse.json({ ok: true, handled: "ignored_event" });
+    const callAdmin = createAdminClient();
+    if (!callAdmin) return NextResponse.json({ ok: true, handled: "unconfigured_admin" });
+    const summary = await logInboundCall(callAdmin, call);
+    return NextResponse.json({ ok: true, handled: "call_logged", summary });
+  }
 
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: true, handled: "unconfigured_admin" });

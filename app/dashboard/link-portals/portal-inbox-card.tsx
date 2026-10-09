@@ -134,6 +134,7 @@ export async function PortalInboxCard({ orgId }: { orgId: string }) {
             <li>{t("step3")}</li>
           </ol>
           <p className="text-base leading-relaxed text-[var(--vl-text-secondary)]">{t("gmailTip")}</p>
+          <p className="text-base leading-relaxed text-[var(--vl-text-secondary)]">{t("voicemailTip")}</p>
         </div>
       )}
 

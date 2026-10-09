@@ -161,3 +161,34 @@ export async function applyInboundSms(
     updatedTenants: tenantIds.length,
   };
 }
+
+/**
+ * S702: a renter called our texting number. Nobody answers it, so the call is
+ * logged on each matching renter's record for the landlord to call back.
+ * Unknown callers are ignored: the number is shared, so we cannot tell whose
+ * renter they are.
+ */
+export async function logInboundCall(
+  admin: SmsInboundClient,
+  input: { from: string | null | undefined; answered: boolean; voicemail: boolean },
+): Promise<{ matchedLeads: number; messagesInserted: number }> {
+  const senderE164 = normalizePhoneE164(input.from);
+  if (!senderE164 || input.answered) return { matchedLeads: 0, messagesInserted: 0 };
+  const { data: leadRows } = await admin
+    .from("leads")
+    .select("id, organization_id")
+    .eq("phone_e164", senderE164);
+  const leads = ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id && l.organization_id);
+  const body = input.voicemail
+    ? "Renter called the texting number and left a voicemail. Call them back."
+    : "Renter called the texting number. Nobody answered. Call them back.";
+  const rows = leads.map((l) => ({
+    organization_id: l.organization_id,
+    lead_id: l.id,
+    channel: "call",
+    direction: "inbound",
+    body,
+  }));
+  if (rows.length > 0) await admin.from("messages").insert(rows);
+  return { matchedLeads: leads.length, messagesInserted: rows.length };
+}

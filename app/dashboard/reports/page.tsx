@@ -21,6 +21,7 @@ import {
   type PropertyLite,
   type FeedbackLite,
 } from "@/lib/reports";
+import { buildPostingAdvice } from "@/lib/posting-advice";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,7 @@ export default async function ReportsPage({
 
   const funnel = buildFunnel(leads);
   const channels = buildChannelReport(leads);
+  const advice = buildPostingAdvice(channels);
   const propertyRows = filterReportableProperties(
     buildPropertyReport(properties, leads, showings),
   );
@@ -198,6 +200,31 @@ export default async function ReportsPage({
           </div>
         )}
       </Section>
+
+      {/* S702: where to post, from this landlord's own numbers */}
+      {advice.length > 0 && (
+        <Section
+          title="Where to post next"
+          subtitle="Advice from where your renters came from in this window."
+        >
+          <ul className="space-y-2">
+            {advice.map((a) => (
+              <li
+                key={a.text}
+                className={`rounded-xl border px-4 py-3 text-base ${
+                  a.tone === "good"
+                    ? "border-green-200 bg-green-50 text-green-900"
+                    : a.tone === "fix"
+                      ? "border-amber-200 bg-amber-50 text-amber-900"
+                      : "border-gray-200 bg-gray-50 text-gray-800"
+                }`}
+              >
+                {a.text}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       {/* By channel */}
       <Section
