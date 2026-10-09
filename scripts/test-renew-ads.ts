@@ -29,7 +29,10 @@ ok("renewed flash", page.includes('searchParams.post === "renewed"'));
 
 const card = readFileSync("app/dashboard/properties/[id]/renew-ads-card.tsx", "utf8");
 ok("no em dash", !card.includes("—"));
-ok("button copy", card.includes("I renewed it today"));
+ok("renew-and-open button", card.includes('name="then" value="open"') && card.includes("Renew on {item.label}"));
+ok("already-renewed button", card.includes("I already renewed it"));
+ok("redirect uses the saved ad url, not the form", body.includes('.select("url")') && !body.includes('formData.get("url")'));
+ok("redirect only to facebook or kijiji", body.includes("facebook") && body.includes("kijiji"));
 
 console.log(`\nrenew-ads: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

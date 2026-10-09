@@ -1971,6 +1971,26 @@ export async function markAdsRenewed(formData: FormData) {
     .eq("status", "live");
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
+
+  // S702h: "Renew on Facebook" records the renewal and then opens the ad
+  // itself, where the site's own Renew button is. The ad link comes from the
+  // saved post row, never from the form, so the redirect can only go to the
+  // landlord's own ad.
+  if (formData.get("then") === "open") {
+    const { data: live } = await supabase
+      .from("listing_posts")
+      .select("url")
+      .eq("property_id", propertyId)
+      .eq("portal", portal)
+      .eq("status", "live")
+      .not("url", "is", null)
+      .limit(1)
+      .maybeSingle();
+    const adUrl = typeof live?.url === "string" ? live.url : "";
+    if (/^https:\/\/([a-z0-9-]+\.)*(facebook\.com|kijiji\.ca)\//i.test(adUrl)) {
+      redirect(adUrl);
+    }
+  }
   redirect(`/dashboard/properties/${propertyId}?tab=distribute&post=renewed#distribute`);
 }
 

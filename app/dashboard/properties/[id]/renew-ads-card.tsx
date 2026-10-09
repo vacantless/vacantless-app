@@ -9,7 +9,7 @@ export type RenewAdItem = {
 
 /**
  * S702g: the top of "Get online" names every live ad that has gone old, with
- * a link to the ad and one button to say it was renewed. The daily snapshot's
+ * a button that marks it renewed and opens the ad on the site (S702h). The daily snapshot's
  * "Ads to refresh" link lands here, so the fix is one tap from the email.
  */
 export function RenewAdsCard({
@@ -29,8 +29,8 @@ export function RenewAdsCard({
         {items.length === 1 ? "1 ad is old" : `${items.length} ads are old`}
       </p>
       <p className="mt-1 text-xs text-amber-800">
-        Old ads sink lower on the site. Renew the ad there. Then tap the
-        button next to it.
+        Old ads sink lower on the site. Tap Renew to open the ad, then tap
+        Renew on the site.
       </p>
       <ul className="mt-3 space-y-2">
         {items.map((item) => (
@@ -44,23 +44,26 @@ export function RenewAdsCard({
                 <span className="text-gray-500">, posted {item.days} days ago</span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <a
-                href={item.liveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                Open the ad
-              </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <form action={markAdsRenewed}>
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="portal" value={item.portal} />
+                <input type="hidden" name="then" value="open" />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  Renew on {item.label}
+                </button>
+              </form>
               <form action={markAdsRenewed}>
                 <input type="hidden" name="property_id" value={propertyId} />
                 <input type="hidden" name="portal" value={item.portal} />
                 <button
                   type="submit"
-                  className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
                 >
-                  I renewed it today
+                  I already renewed it
                 </button>
               </form>
             </div>
