@@ -72,6 +72,13 @@ export type AutoReplyPayload = {
   // times right now. The default auto-reply then invites the renter to pick a
   // time instead of promising a callback; operator templates get {{booking_url}}.
   booking_url?: string | null;
+  // S702: a one or two sentence answer to the renter's own question, written
+  // from the rental's facts only (lib/ai-enquiry). Null when the facts do not
+  // answer it. Templates get {{answer}}.
+  answer_text?: string | null;
+  // S702: set when the enquiry came from another website (forwarded email),
+  // so the footer does not claim they used our listing page.
+  via_site?: string | null;
 };
 
 export type SendResult = { sent: boolean; reason?: string; subject?: string };
@@ -124,6 +131,10 @@ function defaultHtml(p: AutoReplyPayload): string {
     : "";
 
   const bookingUrl = p.booking_url?.trim() || null;
+  const answer = p.answer_text?.trim() || null;
+  const answerLine = answer
+    ? `<p style="margin:0 0 16px;">${escapeHtml(answer)}</p>`
+    : "";
   const about = addr
     ? `We received your inquiry about <strong>${addr}</strong>${
         rent ? ` (${escapeHtml(rent)})` : ""
@@ -149,12 +160,17 @@ function defaultHtml(p: AutoReplyPayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      ${answerLine}
       ${propLine}
       <p style="margin:0 0 16px;">In the meantime, feel free to reply to this email with any questions${directReplyCopy}. We look forward to helping you find your next home.</p>
       <p style="margin:24px 0 0;color:#52525b;">Warm regards,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you submitted an inquiry on our listing page.
+      ${
+        p.via_site
+          ? `You are receiving this because you asked about our listing on ${escapeHtml(p.via_site)}.`
+          : "You are receiving this because you submitted an inquiry on our listing page."
+      }
     </div>
   </div>
 </body></html>`;
@@ -2138,6 +2154,7 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
     property_address: p.property_address || "the property",
     rent: formatRent(p.rent_cents) || "",
     booking_url: p.booking_url?.trim() || "",
+    answer: p.answer_text?.trim() || "",
   };
 
   const subject = p.template_subject

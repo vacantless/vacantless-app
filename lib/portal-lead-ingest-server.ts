@@ -19,6 +19,8 @@ import {
 } from "@/lib/portal-lead-email";
 import { sourceLabelForPost } from "@/lib/listing-distribution";
 import { notifyOperatorsOfNewLeadById } from "@/lib/notify-new-lead-server";
+import { autoReplyIngestedLead, fileAiEnquiry, type ReadEnquiry } from "@/lib/ai-enquiry-ingest";
+import type { AutoReplyPayload } from "@/lib/email";
 import {
   isTrustedPortalSender,
   isKnownPortalSender,
@@ -102,6 +104,8 @@ type InboundLeadDeps = {
   now?: () => number;
   notifyOperators?: typeof notifyOperatorsOfNewLeadById;
   recordPortalEvent?: RecordPortalEvent;
+  /** S702: the AI enquiry reader (injected in tests). */
+  readEnquiry?: ReadEnquiry;
 };
 
 export type PortalEventRow = {
@@ -569,6 +573,51 @@ export async function handleInboundLeadPost(
     .map((s) => (typeof s.address === "string" ? s.address : null))
     .filter((a): a is string => a != null);
 
+  // S702: the AI reader, for forwarded enquiries no site reader understands.
+  // Returns a response when it filed (or deduped) a lead, else null so the
+  // caller keeps its original outcome.
+  const tryAiEnquiry = async (untrusted: boolean): Promise<NextResponse | null> => {
+    if (isAutoReplyOrLoop(loopHeaders) && !isKnownPortalSender(from)) return null;
+    try {
+      const res = await fileAiEnquiry(
+        admin,
+        {
+          orgId: orgId as string,
+          subject: str(payload.Subject),
+          from,
+          replyTo,
+          textBody: str(payload.TextBody) || str(payload.StrippedTextReply) || null,
+          htmlBody: str(payload.HtmlBody) || null,
+          untrustedSender: untrusted,
+          blockedEmails: [...allowlist, ...(from ? [from] : [])],
+          messageKey: portalLeadMessageKey(messageId, `${orgId}:ai`),
+        },
+        {
+          read: deps.readEnquiry,
+          notify: async (leadId) => {
+            await notifyOperators(admin, { orgId: orgId as string, leadId, propertyAddressFallback: null });
+          },
+        },
+      );
+      if (res.handled === "ai_lead_created") {
+        return NextResponse.json({
+          ok: true,
+          handled: "lead_created",
+          via: "ai_reader",
+          lead_id: res.leadId,
+          matched: res.propertyId != null,
+        });
+      }
+      if (res.handled === "ai_duplicate") {
+        return NextResponse.json({ ok: true, handled: "duplicate", lead_id: res.leadId ?? null });
+      }
+      return null;
+    } catch (err) {
+      console.error("inbound/lead: ai reader failed", { error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  };
+
   // A KNOWN site sender skips the loop guard (S697c). Every site sends from a
   // system address, and the guard's sender test drops any "noreply": that was
   // silently discarding every Kijiji inquiry (noreply@rts.kijiji.ca) and
@@ -623,6 +672,10 @@ export async function handleInboundLeadPost(
       // observe mode: fall through and file the lead.
     }
   } else if (!isAllowedSenderEmail(from, allowlist)) {
+    // S702: an unknown sender is read by the AI, held to a stricter bar and a
+    // daily cap. The org's secret forwarding address is still the boundary.
+    const ai = await tryAiEnquiry(true);
+    if (ai) return ai;
     console.warn("inbound/lead: sender not allowed", { orgResolved: true });
     return NextResponse.json({ ok: true, handled: "sender_not_allowed" });
   }
@@ -637,6 +690,9 @@ export async function handleInboundLeadPost(
     headers,
   });
   if (!parsed.ok) {
+    // S702: no hand-built reader fits this site; let the AI read it.
+    const ai = await tryAiEnquiry(false);
+    if (ai) return ai;
     console.warn("inbound/lead: not parsed", { reason: parsed.reason });
     await note("not_parsed");
     return NextResponse.json({ ok: true, handled: "not_parsed", reason: parsed.reason });
@@ -739,6 +795,19 @@ export async function handleInboundLeadPost(
           leadId,
           propertyAddressFallback: lead.subjectAddress,
         });
+        // S702: the renter who wrote through a site gets the same instant
+        // reply as a website renter (booking link + an answer to their
+        // question), unless the account answers renters itself.
+        if (rpcData && typeof rpcData === "object") {
+          await autoReplyIngestedLead(admin, {
+            orgId,
+            propertyId: target.propertyId,
+            listingPostId: target.listingPostId,
+            payload: rpcData as AutoReplyPayload,
+            question: lead.message ?? null,
+            site: lead.portal === "kijiji" ? "Kijiji" : lead.portal === "zumper" ? "Zumper" : "Rentals.ca",
+          });
+        }
       }
       return NextResponse.json({
         ok: true,

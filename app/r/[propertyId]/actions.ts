@@ -39,6 +39,7 @@ import {
   type SuggestCandidate,
 } from "@/lib/showing-agents";
 import { publicLeadSubmitEffects } from "@/lib/public-lead-dedup";
+import { answerRenterQuestion } from "@/lib/ai-enquiry-server";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -829,7 +830,19 @@ export async function submitLead(formData: FormData) {
       } catch {
         bookingUrl = null;
       }
-      const result = await sendAutoReply({ ...payload, booking_url: bookingUrl });
+      // S702: answer the renter's own question from the rental's facts.
+      let answerText: string | null = null;
+      try {
+        const admin = createAdminClient();
+        if (admin && notes) answerText = await answerRenterQuestion(admin, propertyId, notes);
+      } catch {
+        answerText = null;
+      }
+      const result = await sendAutoReply({
+        ...payload,
+        booking_url: bookingUrl,
+        answer_text: answerText,
+      });
       if (result.sent) {
         await supabase.rpc("record_auto_reply", {
           p_lead_id: payload.lead_id,

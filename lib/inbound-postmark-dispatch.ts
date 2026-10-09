@@ -2,6 +2,7 @@ import { DEFAULT_INGEST_DOMAIN, parseIngestAlias, pickIngestToken } from "./emai
 import { parsePortalLeadEmail } from "./portal-lead-email";
 import { isKnownPortalSender } from "./portal-senders";
 import { isGmailForwardingSender } from "./portal-inbox";
+import { looksLikeEnquiryText } from "./ai-enquiry";
 
 const MAIN_MAIL_DOMAIN = "vacantless.com";
 
@@ -111,6 +112,19 @@ export function routePostmarkInbound(
 
   if (token) {
     if (looksLikePortalLead(payload)) return { target: "lead", token, alias: null };
+    // S702: any other forwarded email that reads like a rental enquiry, with
+    // no attachments, goes to the lead path where the AI reader handles it.
+    // Receipts and documents (attachments) keep the capture path.
+    const attachments = Array.isArray(payload.Attachments) ? payload.Attachments.length : 0;
+    if (
+      attachments === 0 &&
+      looksLikeEnquiryText(
+        str(payload.Subject),
+        str(payload.TextBody) || str(payload.StrippedTextReply) || str(payload.HtmlBody),
+      )
+    ) {
+      return { target: "lead", token, alias: null };
+    }
     return { target: "asset", token, alias: null };
   }
 
