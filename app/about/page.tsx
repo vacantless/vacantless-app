@@ -41,8 +41,8 @@ function SiteHeader() {
           <Link href="/#product" className="hover:text-[#15211d]">
             What you get
           </Link>
-          <Link href="/#rent" className="hover:text-[#15211d]">
-            Rent collection
+          <Link href="/#how" className="hover:text-[#15211d]">
+            How it works
           </Link>
           <Link href="/#pricing" className="hover:text-[#15211d]">
             Pricing
@@ -167,19 +167,12 @@ function Body() {
   );
 }
 
+// S702: counted from the database 2026-10-09 (since 2026-06-26), same as the
+// home page. Update from the database, never from memory.
 const STATS: { value: string; label: string }[] = [
-  {
-    value: "~9 in 10",
-    label: "viewings self-booked by renters, without phone tag.",
-  },
-  {
-    value: "~100 / mo",
-    label: "renter inquiries handled through the workflow.",
-  },
-  {
-    value: "50+ / mo",
-    label: "viewings booked and coordinated in one place.",
-  },
+  { value: "258", label: "renter enquiries, all in one list." },
+  { value: "107", label: "viewings booked." },
+  { value: "8 in 10", label: "viewings booked by the renter, with no phone tag." },
 ];
 
 const PRINCIPLES: string[] = [
