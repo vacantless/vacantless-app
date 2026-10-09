@@ -23,7 +23,7 @@ import {
   validatePolicyProfileSettings,
   validateBuildingPolicySettings,
 } from "@/lib/policy-profile";
-import { sendTestEmail } from "@/lib/email";
+import { sendTestEmail, sendNotificationEmail } from "@/lib/email";
 import {
   expectedMailAliasIngestEmail,
   mailAliasProvisionForwardingReset,
@@ -31,6 +31,8 @@ import {
   validateMailAliasProvisionRequest,
 } from "@/lib/mail-alias-provisioning";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { decideAccountClosure, OPEN_RENTAL_STATUSES } from "@/lib/account-closure";
+import { adminEmails } from "@/lib/provisioning-server";
 import { canUseRenterSms } from "@/lib/billing";
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import {
@@ -1080,4 +1082,89 @@ export async function removeOrgLogo() {
     .eq("id", org.id);
 
   redirect("/dashboard/settings?tab=brand&logo=removed");
+}
+
+
+// S702: self-serve account closure (the stranger walk found no way to leave;
+// Noam approved this soft-close design 2026-10-08). Rentals come off the
+// market, logins are removed, and Vacantless is told so the data is deleted
+// within 30 days (the /data-deletion promise). Blocked while a paid plan is
+// live or viewings are still booked. Writes use the admin client AFTER the
+// owner check, because removing the caller's own membership part-way would
+// strip their RLS access to the remaining steps.
+export async function closeAccount(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  const role = await getRoleForOrg(org.id);
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { count: upcoming } = await supabase
+    .from("showings")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .eq("outcome", "scheduled")
+    .gte("scheduled_at", new Date().toISOString());
+
+  const decision = decideAccountClosure({
+    role,
+    orgName: org.name,
+    confirmText: String(formData.get("confirm_name") ?? ""),
+    subscriptionStatus: org.subscription_status ?? null,
+    upcomingViewings: upcoming ?? 0,
+  });
+  if (!decision.ok) {
+    redirect(`/dashboard/settings?tab=account&close=${decision.reason}`);
+  }
+
+  const admin = createAdminClient();
+  if (!admin) redirect("/dashboard/settings?tab=account&close=error");
+  const closedAt = new Date().toISOString();
+
+  const { error: propErr } = await admin
+    .from("properties")
+    .update({ status: "off_market" })
+    .eq("organization_id", org.id)
+    .in("status", [...OPEN_RENTAL_STATUSES]);
+  if (propErr) redirect("/dashboard/settings?tab=account&close=error");
+
+  const { error: orgErr } = await admin
+    .from("organizations")
+    .update({ closed_at: closedAt, closed_by: user.id })
+    .eq("id", org.id);
+  if (orgErr) redirect("/dashboard/settings?tab=account&close=error");
+
+  // Tell us, so the 30-day deletion happens. Best-effort: a failed email must
+  // not leave the landlord half-closed.
+  const closureRecipients = adminEmails();
+  if (closureRecipients.length === 0) closureRecipients.push("hello@vacantless.com");
+  for (const to of closureRecipients) {
+    try {
+      await sendNotificationEmail({
+        to_email: to,
+        subject: `Account closed: ${org.name ?? org.id}`,
+        body:
+          `${org.name ?? "An organization"} was closed by ${user.email ?? user.id}.\nOrg id: ${org.id}\nClosed at: ${closedAt}\n\n` +
+          "Rentals are off the market. Nobody can sign in. Delete the stored data within 30 days.",
+        org_name: "Vacantless",
+        brand_color: null,
+        logo_url: null,
+        reply_to_email: null,
+      });
+    } catch {
+      // swallow
+    }
+  }
+
+  const { error: memErr } = await admin
+    .from("memberships")
+    .delete()
+    .eq("organization_id", org.id);
+  if (memErr) redirect("/dashboard/settings?tab=account&close=error");
+
+  await supabase.auth.signOut();
+  redirect("/account-closed");
 }

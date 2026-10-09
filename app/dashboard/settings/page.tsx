@@ -26,7 +26,9 @@ import {
   sendTestEmailAction,
   uploadOrgLogo,
   removeOrgLogo,
+  closeAccount,
 } from "./actions";
+import { ACCOUNT_CLOSURE_MESSAGES } from "@/lib/account-closure";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   summarizeFeed,
@@ -326,6 +328,7 @@ export default async function SettingsPage({
     autoclose?: string; // Communications → Showing auto-close flash
     compliance?: string; // Communications → Compliance calendar flash
     features?: string; // Plan & admin → Feature access flash
+    close?: string; // Plan & admin → Close this account flash (S702)
     feed?: string; // Public Page & Brand → syndication contact flash
     distribution?: string; // Distribution → channel account/setup flash
   };
@@ -2592,6 +2595,51 @@ export default async function SettingsPage({
               .
             </p>
           </div>
+
+          {canManageOwnerSettings && (
+            <div id="close-account" className="rounded-2xl border border-red-200 bg-white p-5">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-red-700">
+                Close this account
+              </h3>
+              <p className="mt-1 text-sm text-gray-600">
+                Closing takes every rental off the market. Renters can no
+                longer find or book them. Nobody can sign in to{" "}
+                <strong>{org.name}</strong> after that. We delete your stored
+                data within 30 days. Changed your mind? Email
+                hello@vacantless.com before then.
+              </p>
+              {searchParams.close &&
+                searchParams.close in ACCOUNT_CLOSURE_MESSAGES && (
+                  <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                    {
+                      ACCOUNT_CLOSURE_MESSAGES[
+                        searchParams.close as keyof typeof ACCOUNT_CLOSURE_MESSAGES
+                      ]
+                    }
+                  </div>
+                )}
+              <form action={closeAccount} className="mt-4 space-y-3">
+                <label htmlFor="confirm_name" className="block text-sm font-medium text-gray-700">
+                  Type your business name to confirm: <strong>{org.name}</strong>
+                </label>
+                <input
+                  id="confirm_name"
+                  name="confirm_name"
+                  autoComplete="off"
+                  required
+                  className="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <div>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                  >
+                    Close this account
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       )}
     </div>
