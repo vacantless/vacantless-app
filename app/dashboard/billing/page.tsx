@@ -60,11 +60,15 @@ export default async function BillingPage({
   // S702j: the product on sale is the leasing part at CA$99 (Growth). Premium
   // stays hidden unless the org is already on it, so nobody is sold a tier
   // whose extras are walled off.
+  // S702p: Managed (done-for-you posting) is a later upgrade too, so it is
+  // hidden the same way unless the org is already on it.
   const visibleTierKeys = TIER_KEYS.filter(
     (key) =>
-      (key !== "managed" || conciergeDeskEnabled) &&
+      (key !== "managed" || (conciergeDeskEnabled && org?.plan === "managed")) &&
       (key !== "premium" || org?.plan === "premium"),
   );
+  // A canceled subscription is not a current plan: offer to restart it.
+  const subscriptionEnded = org?.subscription_status === "canceled";
   // Honor the plan the visitor picked on the pricing page (?plan=growth|premium|
   // managed, carried through signup -> onboarding -> here). We never silently
   // drop that intent: acknowledge it and highlight the tier, while keeping the
@@ -392,7 +396,7 @@ export default async function BillingPage({
       )}
       <div
         className={`mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3 ${
-          conciergeDeskEnabled ? "xl:grid-cols-4" : ""
+          visibleTierKeys.length > 3 ? "xl:grid-cols-4" : ""
         }`}
       >
         {visibleTierKeys.map((key) => {
@@ -408,7 +412,7 @@ export default async function BillingPage({
           const isCurrent = isFree
             ? view.planKey === "free" ||
               (!view.isPaid && !view.isPilot && view.planKey === "trial")
-            : view.planKey === key && view.isPaid;
+            : view.planKey === key && view.isPaid && !subscriptionEnded;
           return (
             <div
               key={key}
@@ -461,6 +465,8 @@ export default async function BillingPage({
                     >
                       {!tierConfigured
                         ? "Billing not configured"
+                        : subscriptionEnded && view.planKey === key
+                        ? `Restart ${tier.name}`
                         : view.isPaid
                         ? `Switch to ${tier.name}`
                         : view.isPilot
