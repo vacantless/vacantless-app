@@ -57,8 +57,13 @@ export default async function BillingPage({
   const pilot = searchParams.pilot;
   const deposit = searchParams.deposit;
   const conciergeDeskEnabled = process.env.CONCIERGE_DESK_ENABLED === "true";
+  // S702j: the product on sale is the leasing part at CA$99 (Growth). Premium
+  // stays hidden unless the org is already on it, so nobody is sold a tier
+  // whose extras are walled off.
   const visibleTierKeys = TIER_KEYS.filter(
-    (key) => key !== "managed" || conciergeDeskEnabled,
+    (key) =>
+      (key !== "managed" || conciergeDeskEnabled) &&
+      (key !== "premium" || org?.plan === "premium"),
   );
   // Honor the plan the visitor picked on the pricing page (?plan=growth|premium|
   // managed, carried through signup -> onboarding -> here). We never silently
@@ -76,7 +81,7 @@ export default async function BillingPage({
     not_configured:
       "Card subscriptions aren't available yet. Your pilot access is unaffected - you can start a pilot with full access below.",
     plan:
-      "That plan isn't recognized. Please choose Growth, Premium, or Managed and try again.",
+      "That plan isn't recognized. Please choose Growth and try again.",
     checkout: "Couldn't start checkout. Please try again.",
     portal:
       "No billing account yet. Subscribe to a plan first, then you can manage it here.",

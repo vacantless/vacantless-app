@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // Unit tests for the pure billing helpers. Run: npx tsx scripts/test-billing.ts
 import {
   formatPlanPrice,
@@ -735,8 +736,9 @@ ok("Managed is config-shape purchasable", isTierPurchasable(TIERS.managed) === t
 ok("Free is $0 and never purchasable", isTierPurchasable(TIERS.free) === false);
 const freeTierCopy = `${TIERS.free.blurb} ${TIERS.free.features.join(" ")}`.toLowerCase();
 const growthTierCopy = `${TIERS.growth.blurb} ${TIERS.growth.features.join(" ")}`.toLowerCase();
-ok("Free tier card shows rent collection", freeTierCopy.includes("rent collection"));
-ok("Free tier card names unlimited units", freeTierCopy.includes("unlimited units"));
+// S702j: Free and Growth read like the homepage pricing (leasing first).
+ok("Free tier card offers one live rental", freeTierCopy.includes("one live rental"));
+ok("Growth tier card offers renter texts", growthTierCopy.includes("texts to renters"));
 ok("Growth tier card no longer lists rent collection", !growthTierCopy.includes("rent collection"));
 ok("Growth blurb no longer says collect rent", !TIERS.growth.blurb.toLowerCase().includes("collect rent"));
 
@@ -810,6 +812,16 @@ ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREM
   const neg = storageUpsellNote("free", -5);
   ok("storageUpsell: negative count -> used 0", neg.used === 0);
   ok("storageUpsell: negative count remaining = cap", neg.remaining === BASE_PHOTO_CAP);
+}
+
+// S702j: paid checkout switches renter texts on; Premium hidden on billing.
+{
+  const hook = readFileSync("app/api/stripe/webhook/route.ts", "utf8");
+  const i = hook.indexOf('case "checkout.session.completed"');
+  const block = hook.slice(i, hook.indexOf("break;", hook.indexOf("applySubscription(admin, sub, false)", i)));
+  ok("checkout turns renter texts on", block.includes("canUseRenterSms(applied.plan)") && block.includes("sms_enabled: true"));
+  const billingPage = readFileSync("app/dashboard/billing/page.tsx", "utf8");
+  ok("premium hidden unless current", billingPage.includes('key !== "premium" || org?.plan === "premium"'));
 }
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);

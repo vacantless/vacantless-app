@@ -2,7 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, priceMap } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { planForPriceId, subscriptionPeriodEndSeconds, shouldApplyStatus } from "@/lib/billing";
+import {
+  canUseRenterSms,
+  planForPriceId,
+  subscriptionPeriodEndSeconds,
+  shouldApplyStatus,
+} from "@/lib/billing";
 import {
   isRentReconcileEvent,
   rentStatusFromEvent,
@@ -396,7 +401,17 @@ export async function POST(req: NextRequest) {
           if (!sub.metadata?.org_id && session.client_reference_id) {
             sub.metadata = { ...(sub.metadata ?? {}), org_id: session.client_reference_id };
           }
-          await applySubscription(admin, sub, false);
+          const applied = await applySubscription(admin, sub, false);
+          // S702j: a landlord who just paid for a plan that includes renter
+          // texts gets them switched on. Texting was opt-in and off by
+          // default, so a paying customer got email only unless they found
+          // the setting. They can still turn it off in Settings.
+          if (applied?.matched && canUseRenterSms(applied.plan)) {
+            await admin
+              .from("organizations")
+              .update({ sms_enabled: true })
+              .eq("id", applied.orgId);
+          }
         }
         break;
       }

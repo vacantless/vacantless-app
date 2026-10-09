@@ -512,14 +512,15 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceCents: 0,
     priceEnv: null,
     maxActiveListings: 1,
-    blurb: "List one rental and try the tools — no card, no time limit.",
+    // S702j: the same words as the homepage pricing (app/page.tsx), which
+    // sells the leasing part first. One wording, so the plan a landlord
+    // chose on the homepage reads the same on the billing page.
+    blurb: "One live rental, with everything renters need to book.",
     features: [
-      "One active listing with a branded inquiry page",
-      "Every inquiry organized in one list",
-      "Rent-increase guideline calculator + N1 form",
-      "Automatic rent collection from your tenants' bank - unlimited units",
-      "Listing-copy generator + MLS data-sheet import",
-      "Email replies and reminders (no texting)",
+      "One live rental page",
+      "Instant email replies with a booking link",
+      "Self-booked viewings and email reminders",
+      "Every renter in one list",
     ],
   },
   growth: {
@@ -528,16 +529,13 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceCents: 9900,
     priceEnv: "STRIPE_PRICE_GROWTH",
     maxActiveListings: null,
-    blurb: "Everything in Free, plus screen renters, market unlimited listings, and manage tenants.",
+    blurb: "As many rentals as you have, and renters get texts too.",
     highlight: true,
     features: [
-      "Unlimited active listings",
-      "Renter pre-screening questions",
-      "Tenant + renter messaging by email and text",
-      "Automated lead nurture and post-viewing follow-up",
-      "Grouped viewing scheduling (back-to-back showings)",
-      "Tenancy records and payment ledger",
-      "Year-end tax / rent export",
+      "Unlimited live rentals",
+      "Booking and reminder texts to renters",
+      "Everything in Free",
+      "Help from us when you need it",
     ],
   },
   premium: {

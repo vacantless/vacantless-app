@@ -1,0 +1,21 @@
+name: Onboarding emails
+
+# S702j: the welcome email and the next-day nudge for new accounts. Each
+# account gets each email once; accounts made before 2026-10-09 never do.
+# Run by hand: Actions tab -> Run workflow.
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Onboarding emails
+        run: |
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/onboarding-emails" \
+            -w "\nHTTP %{http_code}\n"
