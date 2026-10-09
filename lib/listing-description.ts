@@ -351,9 +351,13 @@ export function buildDescriptionDraft(
   closeBits.push(toSentence(avail));
   if (facts.rent_cents != null && facts.rent_cents > 0)
     closeBits.push(
-      toSentence(`Rent is $${(Math.round(facts.rent_cents) / 100).toFixed(0)} per month`),
+      toSentence(
+        `Rent is $${Math.round(facts.rent_cents / 100).toLocaleString("en-CA")} per month`,
+      ),
     );
-  closeBits.push("Inquire to book a viewing.");
+  // S702: one closing line, the same on every site and on the renter page,
+  // where the booking form sits right under it.
+  closeBits.push("Book a viewing online.");
   const closing = closeBits.join(" ");
 
   const para1 = [opening, unitSentence].filter(Boolean).join(" ");

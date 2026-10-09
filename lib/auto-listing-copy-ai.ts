@@ -39,7 +39,10 @@ export function autoListingFactLines(
     Number.isFinite(facts.rent_cents) &&
     facts.rent_cents > 0
   ) {
-    add("Monthly rent", `$${Math.round(facts.rent_cents / 100)} per month`);
+    add(
+      "Monthly rent",
+      `$${Math.round(facts.rent_cents / 100).toLocaleString("en-CA")} per month`,
+    );
   }
   add("Square feet", facts.sqft);
   add("Floor", facts.floor);
@@ -73,6 +76,8 @@ export function buildAutoListingPrompt(
     "Use every fact listed below; do not leave any out.",
     "The location is a street name and city only: never add a house number, unit, or neighbourhood.",
     "No links. No em dashes. Plain text only. Two or three short paragraphs.",
+    "Write money with a thousands comma, for example $1,500.",
+    "End with exactly this sentence and no other contact line: Book a viewing online.",
     "If the facts are too thin, lightly polish the fallback draft without adding facts.",
     "",
     "Facts:",

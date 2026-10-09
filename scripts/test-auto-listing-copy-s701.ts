@@ -53,5 +53,14 @@ ok("prompt says use every fact", /Use every fact listed/.test(prompt));
 ok("prompt forbids house number and neighbourhood", /never add a house number, unit, or neighbourhood/.test(prompt));
 ok("prompt still forbids inventing", /Do not add or imply any feature/.test(prompt));
 
+// S702: money with a thousands comma, and one fixed closing line.
+{
+  const lines = autoListingFactLines({ rent_cents: 150000 } as never);
+  ok("rent fact has a comma", lines.includes("Monthly rent: $1,500 per month"));
+  const prompt = buildAutoListingPrompt({ rent_cents: 150000 } as never, null);
+  ok("prompt asks for the comma", prompt.includes("$1,500"));
+  ok("prompt fixes the closing line", prompt.includes("Book a viewing online."));
+}
+
 console.log(`\nauto-listing-copy-s701: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

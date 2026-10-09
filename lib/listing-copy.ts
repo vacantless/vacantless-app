@@ -417,3 +417,22 @@ export function buildAllListingCopy(input: ListingCopyInput): ListingCopy[] {
 export function stripEmDashes(s: string): string {
   return s.replace(/[–—]/g, "-");
 }
+
+// S702: the reply a landlord pastes when a renter messages "is this still
+// available?" on Facebook Marketplace or Kijiji instead of clicking the link.
+// The same wording Agile has used by hand since S698, so the renter lands on
+// the booking page. Plain text, no em dash, phone line only when one is set.
+export function buildRenterMessageReply({
+  publicUrl,
+  phone,
+}: {
+  publicUrl: string;
+  phone?: string | null;
+}): string {
+  const lines = [
+    `Hi, yes it is still available. You can pick a viewing time here: ${publicUrl}`,
+  ];
+  const p = phone?.trim();
+  if (p) lines.push(`If you would rather not fill out the form, you can also call ${p}.`);
+  return lines.join(" ");
+}

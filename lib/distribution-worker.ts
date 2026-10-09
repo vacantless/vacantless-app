@@ -142,7 +142,7 @@ export function buildAgentComposePrompt(input: {
     Number.isFinite(input.listing.rentCents) &&
     input.listing.rentCents > 0
   ) {
-    add("Monthly rent", `$${Math.round(input.listing.rentCents / 100)} per month`);
+    add("Monthly rent", `$${Math.round(input.listing.rentCents / 100).toLocaleString("en-CA")} per month`);
   }
   add("Existing description", input.listing.description);
 

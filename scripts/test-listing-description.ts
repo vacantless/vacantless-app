@@ -149,8 +149,8 @@ ok("draft includes utilities", /included/i.test(draft));
 ok("draft includes neighbourhood", /Close to transit/i.test(draft));
 ok("draft lifestyle is place-not-person", /Well-suited to quiet, low-maintenance living/i.test(draft));
 ok("draft has availability", /Available/i.test(draft));
-ok("draft has rent", /Rent is \$1350 per month/.test(draft));
-ok("draft has viewing CTA", /Inquire to book a viewing/.test(draft));
+ok("draft has rent", /Rent is \$1,350 per month/.test(draft));
+ok("draft has viewing CTA", /Book a viewing online/.test(draft));
 ok("draft has paragraphs", draft.includes("\n\n"));
 ok("draft has no links", !/https?:\/\//.test(draft));
 ok("draft has no em dash", !draft.includes("—"));
@@ -177,7 +177,7 @@ ok("usable auto description rejects short copy", usableAutoDescription("Too shor
     currentDescription: "Operator wrote this",
     facts,
     aiDescription:
-      "Bright unit with a practical layout and clear rental details. Inquire to book a viewing.",
+      "Bright unit with a practical layout and clear rental details. Book a viewing online.",
   });
   ok("auto copy never overwrites operator text", !decision.shouldWrite && decision.source === "existing");
 }
@@ -187,7 +187,7 @@ ok("usable auto description rejects short copy", usableAutoDescription("Too shor
     currentDescription: "",
     facts,
     aiDescription:
-      "Bright unit with a practical layout, useful storage, and clear rental details. Inquire to book a viewing.",
+      "Bright unit with a practical layout, useful storage, and clear rental details. Book a viewing online.",
   });
   ok("auto copy uses usable AI draft", decision.shouldWrite && decision.source === "ai");
 }
@@ -206,7 +206,7 @@ ok("deterministic auto description exists", !!deterministicAutoDescription(facts
 // Sparse input: still produces something useful, invents nothing.
 const sparse = buildDescriptionDraft({ beds: 1 }, {});
 ok("sparse draft is non-empty", sparse.length > 0);
-ok("sparse draft has CTA", /Inquire to book a viewing/.test(sparse));
+ok("sparse draft has CTA", /Book a viewing online/.test(sparse));
 ok("sparse draft invents no features", !/breakfast|granite|renovated/i.test(sparse));
 
 // Link stripping in an answer.

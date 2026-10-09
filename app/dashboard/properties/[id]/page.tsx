@@ -41,9 +41,11 @@ import {
   buildAllListingCopy,
   COPY_PORTAL_KEYS,
   copyPortalLabel,
+  buildRenterMessageReply,
   type CopyPortalKey,
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
+import { MessageReplyCard } from "./message-reply-card";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
 import { qrSvg } from "@/lib/qr-svg";
@@ -3873,6 +3875,15 @@ export default async function PropertyDetailPage({
         qrFilename={marketingQrFilename}
         feedStatus={marketingFeedStatus}
       />
+
+      {linkIsLive && (
+        <MessageReplyCard
+          reply={buildRenterMessageReply({
+            publicUrl,
+            phone: org?.public_contact_phone ?? null,
+          })}
+        />
+      )}
 
       {/* --- Listing copy for each channel --- */}
       <ListingCopyCard
