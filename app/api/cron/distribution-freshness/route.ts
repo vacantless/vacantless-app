@@ -243,6 +243,7 @@ type ListingHealthPostRow = {
   url: string | null;
   status: string;
   posted_on: string | null;
+  created_at?: string | null;
   last_health_alerted_at: string | null;
   properties:
     | { id: string; address: string | null; status: string | null }
@@ -310,7 +311,7 @@ async function loadListingHealthPosts(
   const { data, error } = await admin
     .from("listing_posts")
     .select(
-      "id, property_id, portal, label, url, status, posted_on, last_health_alerted_at, properties!inner(id, address, status, archived_at)",
+      "id, property_id, portal, label, url, status, posted_on, created_at, last_health_alerted_at, properties!inner(id, address, status, archived_at)",
     )
     .eq("organization_id", orgId)
     .eq("properties.status", "available")
@@ -335,6 +336,7 @@ async function loadListingHealthPosts(
       status: row.status,
       url: row.url,
       postedOn: row.posted_on,
+      createdAt: row.created_at ?? null,
       lastHealthAlertedAt: row.last_health_alerted_at,
     };
   });

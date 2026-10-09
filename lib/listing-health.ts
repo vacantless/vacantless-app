@@ -25,6 +25,11 @@ export type ListingHealthPost = {
   status: string;
   url: string | null;
   postedOn: string | null;
+  /** S702f: when the post row was made. Stands in for postedOn when that was
+   * left blank, so an ad with no posted date still ages. Before this, Bruce 303
+   * and Unit 36 on Facebook (no posted date) never showed as old while newer
+   * ads did. */
+  createdAt?: string | null;
   lastHealthAlertedAt?: string | null;
 };
 
@@ -109,7 +114,7 @@ function toChannelPost(post: ListingHealthPost): ChannelPost | null {
   return {
     status: post.status,
     url: post.url,
-    posted_on: post.postedOn,
+    posted_on: post.postedOn ?? (post.createdAt ? post.createdAt.slice(0, 10) : null),
     inquiryCount: 0,
   };
 }

@@ -228,6 +228,31 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
   );
 }
 
+// S702f: a live ad with no posted date ages from when its row was made.
+{
+  const noDate = { ...post({ portal: "facebook" }), postedOn: null };
+  const old = listingHealthChannels({
+    posts: [{ ...noDate, createdAt: "2026-07-10T15:00:00Z" }],
+    today: TODAY,
+    nowISO: NOW,
+  });
+  ok("no posted date: old row counts as old", old.length === 1 && old[0]?.reason === "stale");
+  const fresh = listingHealthChannels({
+    posts: [{ ...noDate, createdAt: "2026-07-19T15:00:00Z" }],
+    today: TODAY,
+    nowISO: NOW,
+  });
+  ok("no posted date: new row stays quiet", fresh.length === 0);
+  const neither = listingHealthChannels({ posts: [noDate], today: TODAY, nowISO: NOW });
+  ok("no dates at all: quiet, as before", neither.length === 0);
+  const both = listingHealthChannels({
+    posts: [{ ...post({ portal: "facebook", postedOn: "2026-07-19" }), createdAt: "2026-06-01T00:00:00Z" }],
+    today: TODAY,
+    nowISO: NOW,
+  });
+  ok("posted date wins over row date", both.length === 0);
+}
+
 // Event registration: editable operator template, opt-in controlled by cron.
 {
   const event = getNotificationEvent(LISTING_HEALTH_EVENT_KEY);
