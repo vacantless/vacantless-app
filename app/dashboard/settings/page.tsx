@@ -1,3 +1,5 @@
+import { adminEmails } from "@/lib/provisioning-server";
+import { isAdminEmail } from "@/lib/provisioning";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
@@ -368,6 +370,7 @@ export default async function SettingsPage({
     data: { user },
   } = await supabase.auth.getUser();
   const operatorEmail = user?.email ?? "";
+  const isPlatformAdmin = isAdminEmail(operatorEmail, adminEmails());
   const { data: mailAliasProvisionRows } = await supabase
     .from("org_mail_alias_provisions")
     .select(
@@ -2456,7 +2459,8 @@ export default async function SettingsPage({
               Only an owner/admin can change feature access.
             </div>
           )}
-          {canManageOwnerSettings && (
+          {/* S702: staff only. A landlord never sees raw switch names. */}
+          {canManageOwnerSettings && isPlatformAdmin && (
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <div className="flex items-center gap-2.5">
                 <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
@@ -2597,7 +2601,7 @@ export default async function SettingsPage({
           </div>
 
           {canManageOwnerSettings && (
-            <div id="close-account" className="rounded-2xl border border-red-200 bg-white p-5">
+            <div id="close-account" className="scroll-mt-6 rounded-2xl border border-red-200 bg-white p-5">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-red-700">
                 Close this account
               </h3>

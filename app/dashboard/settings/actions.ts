@@ -33,6 +33,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decideAccountClosure, OPEN_RENTAL_STATUSES } from "@/lib/account-closure";
 import { adminEmails } from "@/lib/provisioning-server";
+import { isAdminEmail } from "@/lib/provisioning";
 import { canUseRenterSms } from "@/lib/billing";
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import {
@@ -885,6 +886,17 @@ export async function updateOrganizationFeatureFlag(formData: FormData) {
   const org = await requireOwnerAdminSettingsOrg(
     "/dashboard/settings?tab=account&features=forbidden",
   );
+  // S702: per-account feature switches are a Vacantless staff tool, not a
+  // landlord setting. Only the platform admins (PROVISIONING_ADMIN_EMAILS) may
+  // change them.
+  {
+    const {
+      data: { user: who },
+    } = await createClient().auth.getUser();
+    if (!isAdminEmail(who?.email, adminEmails())) {
+      redirect("/dashboard/settings?tab=account&features=forbidden");
+    }
+  }
   const featureKey = String(formData.get("feature_key") ?? "").trim();
   const mode = String(formData.get("mode") ?? "").trim();
   if (!isOrgFeatureKey(featureKey) || !["default", "on", "off"].includes(mode)) {
@@ -1117,11 +1129,11 @@ export async function closeAccount(formData: FormData) {
     upcomingViewings: upcoming ?? 0,
   });
   if (!decision.ok) {
-    redirect(`/dashboard/settings?tab=account&close=${decision.reason}`);
+    redirect(`/dashboard/settings?tab=account&close=${decision.reason}#close-account`);
   }
 
   const admin = createAdminClient();
-  if (!admin) redirect("/dashboard/settings?tab=account&close=error");
+  if (!admin) redirect("/dashboard/settings?tab=account&close=error#close-account");
   const closedAt = new Date().toISOString();
 
   const { error: propErr } = await admin
@@ -1129,13 +1141,13 @@ export async function closeAccount(formData: FormData) {
     .update({ status: "off_market" })
     .eq("organization_id", org.id)
     .in("status", [...OPEN_RENTAL_STATUSES]);
-  if (propErr) redirect("/dashboard/settings?tab=account&close=error");
+  if (propErr) redirect("/dashboard/settings?tab=account&close=error#close-account");
 
   const { error: orgErr } = await admin
     .from("organizations")
     .update({ closed_at: closedAt, closed_by: user.id })
     .eq("id", org.id);
-  if (orgErr) redirect("/dashboard/settings?tab=account&close=error");
+  if (orgErr) redirect("/dashboard/settings?tab=account&close=error#close-account");
 
   // Tell us, so the 30-day deletion happens. Best-effort: a failed email must
   // not leave the landlord half-closed.
@@ -1163,7 +1175,7 @@ export async function closeAccount(formData: FormData) {
     .from("memberships")
     .delete()
     .eq("organization_id", org.id);
-  if (memErr) redirect("/dashboard/settings?tab=account&close=error");
+  if (memErr) redirect("/dashboard/settings?tab=account&close=error#close-account");
 
   await supabase.auth.signOut();
   redirect("/account-closed");

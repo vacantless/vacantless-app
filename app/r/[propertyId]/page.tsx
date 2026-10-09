@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { submitLead, rebookSavedLead, joinWaitlist } from "./actions";
 import { InquiryForm } from "./inquiry-form";
 import { PhotoGallery } from "./photo-gallery";
@@ -267,6 +268,22 @@ export default async function PublicListingPage({
   // draft was never published. (Migration 0223; before it, off-market 404'd and
   // every shared link to an archived unit died.)
   const isAvailable = l.status === "available";
+  // S702: a closed account's rentals say "no longer available" and offer no
+  // waiting list, because nobody is left to email the renter.
+  let orgClosed = false;
+  if (!isAvailable) {
+    const admin = createAdminClient();
+    if (admin) {
+      const { data: prop } = await admin
+        .from("properties")
+        .select("organizations(closed_at)")
+        .eq("id", params.propertyId)
+        .maybeSingle();
+      const orgRel = (prop as { organizations?: unknown } | null)?.organizations;
+      const orgRow = Array.isArray(orgRel) ? orgRel[0] : orgRel;
+      orgClosed = Boolean((orgRow as { closed_at?: string | null } | null)?.closed_at);
+    }
+  }
   // Guardrail: keep white-on-brand (header, button) and brand-on-white (price)
   // legible even when the tenant picked a pale color.
   const brand = accessibleBrand(l.brand_color || DEFAULT_BRAND_COLOR);
@@ -495,7 +512,16 @@ export default async function PublicListingPage({
           id="book"
           className="mt-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
         >
-          {!isAvailable ? (
+          {!isAvailable && orgClosed ? (
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-gray-900">
+                This rental is no longer available
+              </h2>
+              <p className="mt-2 text-sm text-gray-600">
+                {l.org_name} is no longer listing rentals here.
+              </p>
+            </div>
+          ) : !isAvailable ? (
             searchParams.waitlist === "joined" ? (
               <div className="text-center">
                 <span
