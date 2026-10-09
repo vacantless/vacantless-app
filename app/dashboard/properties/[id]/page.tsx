@@ -49,6 +49,8 @@ import { MessageReplyCard } from "./message-reply-card";
 import { RenewAdsCard } from "./renew-ads-card";
 import { PageWeeklyPostsCard } from "./page-weekly-posts-card";
 import { MarketingKitCard } from "./marketing-kit-card";
+import { VideoAdCard } from "./video-ad-card";
+import { publicAddressLabel } from "@/lib/address-privacy";
 import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
 import { qrSvg } from "@/lib/qr-svg";
 import { loadReservedListingPostIds } from "@/lib/listing-post-reservations";
@@ -3897,6 +3899,18 @@ export default async function PropertyDetailPage({
         qrFilename={marketingQrFilename}
         feedStatus={marketingFeedStatus}
       />
+
+      {/* S702: 15-second video ad from the rental's photos */}
+      {photoRows.length > 0 && (
+        <VideoAdCard
+          propertyId={p.id}
+          photoUrls={photoRows.map((ph) => ph.url)}
+          rentCents={p.rent_cents}
+          beds={p.beds}
+          baths={p.baths}
+          address={publicAddressLabel({ address: p.address, mode: p.address_display_mode })}
+        />
+      )}
 
       {linkIsLive && (
         <MessageReplyCard
