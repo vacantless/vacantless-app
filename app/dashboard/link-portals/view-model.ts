@@ -1,3 +1,4 @@
+import { isHiddenMarketplace } from "@/lib/posting-lanes";
 import { getFormatter, getTranslations } from "next-intl/server";
 import {
   channelByKey,
@@ -91,6 +92,8 @@ export async function buildLinkPortalsViewModel(
   const toVM = (row: ChannelTileStatusRow): LinkPortalTileVM | null => {
     const channel = channelByKey(row.channel);
     if (!channel) return null;
+    // S702v: Marketplace shows only for orgs that post it by hand today.
+    if (isHiddenMarketplace(row.channel, orgId)) return null;
 
     const copy = stage1StatusCopy(row.state, channel.connectKind);
     const label = row.accountLabel ?? channel.label;

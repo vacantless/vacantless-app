@@ -1,5 +1,6 @@
 "use server";
 
+import { usesDeskAllowance } from "@/lib/posting-lanes";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -5196,7 +5197,9 @@ export async function requestConciergePublish(formData: FormData) {
     );
   }
 
-  if (process.env.CONCIERGE_DESK_ENABLED === "true") {
+  // S702v: robot-posted sites (Kijiji, Rentals.ca, Zumper) never use the
+  // monthly done-for-you allowance; only a person-posted site does.
+  if (process.env.CONCIERGE_DESK_ENABLED === "true" && usesDeskAllowance(item.channel)) {
     const { data: capOrg, error: capOrgError } = await supabase
       .from("organizations")
       .select("concierge_leaseup_cap_override")

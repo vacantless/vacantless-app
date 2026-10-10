@@ -38,6 +38,7 @@ import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import { publishProperty, requestConciergePublish, startSitePost } from "../actions";
+import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import {
   authorizeAutopilotSubmit,
   authorizeChannelAutomation,
@@ -963,8 +964,7 @@ function ForYouHandoff({
       </ul>
       {conciergeDeskEnabled && !postingBlocker && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
-          “Have us post it” uses one of your monthly posts. We save the link to
-          your ad before it shows as Live.
+          We save the link to your ad before it shows as Live.
         </p>
       )}
     </section>
@@ -1142,7 +1142,7 @@ function ForYouRow({
                 type="submit"
                 className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
               >
-                Have us post it →
+                {isRobotPostedChannel(row.key) ? "Post it for me →" : "Have us post it →"}
               </button>
             </form>
           ) : (

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { showOnlyProvenChannelsEnabled } from "@/lib/channel-provenness";
 import { loadShownChannelKeys } from "./provenness-load";
+import { isHiddenMarketplace, withoutHiddenMarketplace } from "@/lib/posting-lanes";
 import { loadQuestionSheet } from "@/lib/question-sheet-load";
 import { questionSheetFieldFacts } from "@/lib/question-sheet";
 import { headers } from "next/headers";
@@ -1863,9 +1864,12 @@ export default async function PropertyDetailPage({
   // or unmeasurable it is null and every channel renders as before. Display
   // only: distributeChannelCards itself is untouched, so posting, connecting
   // and the proof grid all keep working for every channel.
-  const shownChannelKeys = showOnlyProvenChannelsEnabled()
-    ? await loadShownChannelKeys(distributeToday)
-    : null;
+  // S702v: Marketplace is listed only for orgs that post it by hand today.
+  const shownChannelKeys = withoutHiddenMarketplace(
+    showOnlyProvenChannelsEnabled() ? await loadShownChannelKeys(distributeToday) : null,
+    distributeChannelCards.map((card) => card.channel.key as string),
+    org?.id,
+  );
   // Slice 1 (S488): fold the where-posted grid's per-channel status into the
   // command center so a run row shows ONE merged status. computeChannelStatus
   // already derives needs_refresh (a live ad gone stale/expired) and problem (a
@@ -2122,8 +2126,10 @@ export default async function PropertyDetailPage({
     conciergeUsage,
   };
   const syndicationBlockerSummary = buildSyndicationBlockerSummary({
-    channelCards: distributeChannelCards,
-    runItems,
+    channelCards: distributeChannelCards.filter(
+      (card) => !isHiddenMarketplace(card.channel.key, org?.id),
+    ),
+    runItems: runItems.filter((item) => !isHiddenMarketplace(item.channel, org?.id)),
     accountStatuses: new Map(
       distributeChannelCards.map((card) => [
         card.channel.key,
