@@ -681,7 +681,7 @@ function ListingPacketCard({
         readiness.readyChannelCount === 1 ? "site" : "sites"
       }.`;
   const subline = ready
-    ? "Posting choices stay below: which sites, sign-in steps, and any site fees."
+    ? "Pick your sites below. We post the ad. You approve each post."
     : primaryMissing?.field === "property_type"
       ? primaryAction?.detail ??
         "Choose the property type to unlock posting to rental sites."
@@ -745,7 +745,7 @@ function ListingPacketCard({
           {missingRequired.length} missing details
         </span>
         <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-700">
-          Sign-in and fees come later
+          You approve each post
         </span>
       </div>
 

@@ -17,11 +17,11 @@
   },
   "stage1": {
     "title": "Sign in to your rental sites",
-    "sub": "Sign in to each site one time. Then you post everywhere from here.",
+    "sub": "Sign in to each site one time. After that we post your ads for you.",
     "groupReady": "Ready to sign in",
     "groupComing": "Not yet",
     "groupAgent": "Ask your agent",
-    "kindLogin": "You use your own account here. We write the ad and save the link. Vacantless never signs in as you.",
+    "kindLogin": "This is your own account. We post your ads on it after you approve each one. We never see your password.",
     "kindOauth": "One secure button",
     "kindNone": "Not connected through Vacantless",
     "status": {
@@ -41,10 +41,10 @@
       "deadSessionSub": "Your {name} sign-in ended: {reason}. Sign in again.",
       "capReached": "Needs you",
       "capReachedSub": "{capLine}",
-      "linkedSubLogin": "Your account is on file. We write the ad and save the link.",
-      "notLinkedSubLogin": "Tell us which account you use. Then we write the ad.",
+      "linkedSubLogin": "Your account is on file. We post your ads on it.",
+      "notLinkedSubLogin": "Tell us which account you use. Then we post your ads on it.",
       "selfPost": "Ready",
-      "selfPostSub": "Free. We write the ad. You post it from your own {name} account."
+      "selfPostSub": "Free. We post it for you."
     },
     "buttons": {
       "login": "Add your {name} account",

@@ -521,7 +521,7 @@ const live = (posted_on: string | null, url = "https://kijiji.ca/x", inquiryCoun
 ok("kijiji first-run line: 1 free ad then price", firstRunCostLine("kijiji") === "1 free ad per personal account, then $33.84 each.");
 ok("rentals_ca first-run line reads the cap", firstRunCostLine("rentals_ca") === "Free: up to 3 listings per account.");
 ok("zumper first-run line reads the cap", firstRunCostLine("zumper") === "Free: up to 5 listings per account.");
-ok("facebook marketplace is free, own account", /Free/.test(firstRunCostLine("facebook") ?? "") && /own Facebook/.test(firstRunCostLine("facebook") ?? ""));
+ok("facebook marketplace is free and we post it (S702u)", /Free/.test(firstRunCostLine("facebook") ?? "") && /We post it for you/.test(firstRunCostLine("facebook") ?? ""));
 ok("facebook_feed + instagram free", firstRunCostLine("facebook_feed") === "Free." && firstRunCostLine("instagram") === "Free.");
 ok("realtor_ca through an agent", firstRunCostLine("realtor_ca") === "Through your agent.");
 ok("rentfaster + viewit paid", firstRunCostLine("rentfaster") === "Paid site." && firstRunCostLine("viewit") === "Paid site.");

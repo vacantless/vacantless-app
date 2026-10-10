@@ -133,7 +133,7 @@ export function channelTileLine(
     case "not_available_yet":
       return `${label} is not available for connected posting yet.`;
     case "self_post":
-      return `You post on ${label} yourself; Vacantless writes the ad and keeps the link.`;
+      return `We post on ${label} for you and keep the link.`;
     case "mls_only":
       return `${label} requires an MLS or broker route.`;
     default:

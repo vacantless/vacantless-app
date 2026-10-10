@@ -17,11 +17,11 @@
   },
   "stage1": {
     "title": "Connectez-vous à vos sites de location",
-    "sub": "Connectez-vous à chaque site une fois. Ensuite vous publiez partout d'ici.",
+    "sub": "Connectez-vous à chaque site une fois. Ensuite nous publions vos annonces pour vous.",
     "groupReady": "Prêt à vous connecter",
     "groupComing": "Pas encore",
     "groupAgent": "Demandez à votre agent",
-    "kindLogin": "Vous utilisez votre propre compte ici. Nous rédigeons l'annonce et gardons le lien. Vacantless ne se connecte jamais à votre place.",
+    "kindLogin": "C'est votre propre compte. Nous y publions vos annonces après votre accord pour chacune. Nous ne voyons jamais votre mot de passe.",
     "kindOauth": "Un bouton sécurisé",
     "kindNone": "Non relié à Vacantless",
     "status": {
@@ -41,10 +41,10 @@
       "deadSessionSub": "Votre accès {name} a pris fin : {reason}. Reconnectez-vous.",
       "capReached": "À vous",
       "capReachedSub": "{capLine}",
-      "linkedSubLogin": "Votre compte est enregistré. Nous rédigeons l'annonce et gardons le lien.",
-      "notLinkedSubLogin": "Dites-nous quel compte vous utilisez. Ensuite nous rédigeons l'annonce.",
+      "linkedSubLogin": "Votre compte est enregistré. Nous y publions vos annonces.",
+      "notLinkedSubLogin": "Dites-nous quel compte vous utilisez. Ensuite nous y publions vos annonces.",
       "selfPost": "Prêt",
-      "selfPostSub": "Gratuit. Nous rédigeons l'annonce. Vous la publiez depuis votre compte {name}."
+      "selfPostSub": "Gratuit. Nous la publions pour vous."
     },
     "buttons": {
       "login": "Ajoutez votre compte {name}",

@@ -410,7 +410,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "A prepared post needs you to finish it",
     description:
-      "When the done-for-you posting worker has prepared an ad and needs a person to log in, pay, or review and submit it, your team gets a note with the unit, channel, and what is left to do. Vacantless never logs in, pays, or submits for you. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+      "When the done-for-you posting worker has prepared an ad and needs a person to log in, pay, or review and submit it, your team gets a note with the unit, channel, and what is left to do. Nothing is posted until you approve it. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
     tokens: [
       ...COMMON_TOKENS,
       "channel_label",

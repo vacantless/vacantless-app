@@ -288,7 +288,7 @@ function ChannelRow({
             href={connectHref}
             className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold underline-offset-2 hover:underline ${chip.cls}`}
           >
-            Connect →
+            Sign in once →
           </a>
         ) : (
           <span
@@ -963,7 +963,7 @@ function ForYouHandoff({
       </ul>
       {conciergeDeskEnabled && !postingBlocker && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
-          “Have us post it” uses one of your paid posts. We save the link to
+          “Have us post it” uses one of your monthly posts. We save the link to
           your ad before it shows as Live.
         </p>
       )}

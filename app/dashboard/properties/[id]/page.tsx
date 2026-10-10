@@ -708,7 +708,7 @@ function SyndicationFirstCard({
     : expiredOnly
       ? "Refresh or repost"
       : liveOutsideCount > 0
-        ? "Review syndication"
+        ? "See your sites"
         : "Post rental sites";
   const outsideLabel =
     liveOutsideCount > 0

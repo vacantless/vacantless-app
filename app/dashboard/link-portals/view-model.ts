@@ -199,7 +199,8 @@ export async function buildLinkPortalsViewModel(
       title: t(group.titleKey),
       rows: group.rows.map(toVM).filter((vm): vm is LinkPortalTileVM => vm !== null),
     }))
-    .filter((group) => group.rows.length > 0);
+    // S702u: no "Not yet" list. Show only sites we can post to today.
+    .filter((group) => group.id !== "coming" && group.rows.length > 0);
 
   return {
     groups,

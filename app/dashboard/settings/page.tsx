@@ -59,6 +59,7 @@ import {
   type ChannelAccountStatus,
 } from "@/lib/distribution-capabilities";
 import {
+  channelByKey,
   channelConnectionChecklistActionLabel,
   groupChannelConnectionChecklist,
   recommendedChannelConnectionChecklistAction,
@@ -1064,7 +1065,7 @@ export default async function SettingsPage({
           )}
           {searchParams.distribution === "spend" && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-              Paid-channel authorization needs a positive per-ad CAD ceiling.
+              To allow paid ads, set the most per ad to more than $0.
             </div>
           )}
           {searchParams.distribution === "error" && (
@@ -1073,6 +1074,125 @@ export default async function SettingsPage({
             </div>
           )}
 
+          {/* S702u: landlords see a plain page. The per-site control room
+              below is for our team only. */}
+          {!isPlatformAdmin && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <h3 className="text-base font-semibold text-gray-900">Your rental site accounts</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-600">
+                Sign in to each site once. After that we post your ads for you.
+                You approve each post. We never see your password.
+              </p>
+              <Link
+                href="/dashboard/link-portals"
+                className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
+              >
+                Go to your site accounts →
+              </Link>
+            </div>
+          )}
+          {!isPlatformAdmin &&
+            distributionChannels
+              .filter(({ cap }) => {
+                const ch = channelByKey(cap.channel);
+                return ch?.integrationStatus === "live" && ch.connectKind === "account_login";
+              })
+              .map(({ cap, meta, account, accountStatus }) => {
+                const allowed =
+                  account?.spend_authorized === true &&
+                  account.spend_revoked_at == null &&
+                  (account.spend_max_cents ?? 0) > 0;
+                // A landlord who names an account for the first time is waiting
+                // on a sign-in; we keep any status our team already set.
+                const statusToSave =
+                  accountStatus === "not_started" ? "needs_login" : accountStatus;
+                return (
+                  <form
+                    id={`channel-${cap.channel}`}
+                    key={`site-${cap.channel}`}
+                    action={updateDistributionChannelAccount}
+                    className="rounded-2xl border border-gray-200 bg-white p-5"
+                  >
+                    <input type="hidden" name="channel" value={cap.channel} />
+                    {/* Keep what is already saved; this form changes only the account and fees. */}
+                    <input type="hidden" name="account_status" value={statusToSave} />
+                    <input type="hidden" name="feed_url" value={account?.feed_url ?? ""} />
+                    <input type="hidden" name="manager_url" value={account?.manager_url ?? ""} />
+                    <input type="hidden" name="contact_name" value={account?.contact_name ?? ""} />
+                    <input type="hidden" name="contact_email" value={account?.contact_email ?? ""} />
+                    <input type="hidden" name="notes" value={account?.notes ?? ""} />
+                    <h3 className="text-base font-semibold text-gray-900">{meta.label}</h3>
+                    <label className="mt-3 block max-w-md">
+                      <span className="mb-1 block text-sm font-medium text-gray-700">
+                        Which {meta.label} account do you use?
+                      </span>
+                      <input
+                        name="external_account_label"
+                        type="text"
+                        placeholder="The email you sign in with"
+                        defaultValue={account?.external_account_label ?? ""}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                      <span className="mt-1 block text-xs text-gray-500">
+                        Not your password. We help you sign in once, then we post for you.
+                      </span>
+                    </label>
+                    {cap.requiresPayment && (
+                      <div className="mt-4 border-t border-gray-100 pt-4">
+                        <p className="max-w-2xl text-sm text-gray-600">
+                          {meta.label} charges for some ads. We stay inside the limit you set here. You still approve each post.
+                        </p>
+                        <label className="mt-3 flex items-start gap-3">
+                          <input
+                            name="spend_authorized"
+                            type="checkbox"
+                            value="1"
+                            defaultChecked={allowed}
+                            className="mt-1 h-4 w-4 rounded border-gray-300"
+                          />
+                          <span className="text-sm font-medium text-gray-800">Allow paid {meta.label} ads</span>
+                        </label>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-medium text-gray-600">Most per ad, in dollars</span>
+                            <input
+                              name="spend_max_cad"
+                              type="number"
+                              inputMode="decimal"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="33.84"
+                              defaultValue={cadInputValue(account?.spend_max_cents)}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-medium text-gray-600">Most per month, in dollars</span>
+                            <input
+                              name="spend_period_max_cad"
+                              type="number"
+                              inputMode="decimal"
+                              min="0.01"
+                              step="0.01"
+                              placeholder="No limit"
+                              defaultValue={cadInputValue(account?.spend_period_max_cents)}
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    <button
+                      className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
+                      type="submit"
+                    >
+                      Save
+                    </button>
+                  </form>
+                );
+              })}
+
+          {isPlatformAdmin && (<>
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-start gap-2.5">
@@ -1583,6 +1703,7 @@ export default async function SettingsPage({
               );
             })}
           </div>
+          </>)}
         </div>
       )}
 

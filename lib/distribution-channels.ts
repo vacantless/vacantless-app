@@ -155,7 +155,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "account_login",
     mode: "assisted_manual",
     blurb:
-      "Vacantless gives you the title, description, field sheet, and Kijiji reminders. You post on Kijiji, then paste the live ad link back here.",
+      "We post your ad on Kijiji from your account and save the link. You approve the post and any fee first.",
     copyKey: "kijiji",
     hasFillSheet: true,
     hasGuardrails: true,
@@ -784,7 +784,7 @@ export function firstRunCostLine(channelKey: unknown): string | null {
   if (!channel) return null;
   switch (channel.key) {
     case "facebook":
-      return "Free. You post it from your own Facebook account.";
+      return "Free. We post it for you.";
     case "kijiji":
       return `1 free ad per personal account, then ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)} each.`;
     case "rentals_ca":
@@ -901,7 +901,7 @@ export function channelTileStatus(
     return {
       ...base,
       state: "self_post",
-      headline: `You post on ${channel.label} from your own account. We write the ad.`,
+      headline: `We post on ${channel.label} for you.`,
     };
   }
 
@@ -1088,7 +1088,7 @@ export function channelConnectionStage(input: {
     const helper = input.requiresPayment
       ? "Not yet. This site charges a fee, so you approve it and pay the site."
       : input.requiresLogin
-        ? "Not yet. We write the ad, then you sign in and post it."
+        ? "We post it for you after you approve it."
         : "Not yet. This site comes later.";
     return {
       state: "planned_or_unavailable",

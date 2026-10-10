@@ -230,9 +230,10 @@ eq("feed URL can make Rentals.ca ready", stageFor("rentals_ca", { hasFeedRoute: 
 
 {
   const stage = stageFor("facebook");
-  ok("planned Marketplace says we write the ad", stage.helper.includes("We write the ad"));
-  ok("planned Marketplace keeps operator sign-in gate", stage.helper.includes("you sign in and post it"));
-  ok("planned Marketplace is not offered as ready", stage.helper.startsWith("Not yet"));
+  // S702u: a person on our team posts Marketplace after the landlord approves.
+  ok("planned Marketplace says we post it", stage.helper.includes("We post it for you"));
+  ok("planned Marketplace keeps the approval gate", stage.helper.includes("after you approve it"));
+  ok("planned Marketplace cannot connect from Settings", stage.canConnect === false);
   ok("planned Marketplace helper does not mention payment", !stage.helper.includes("charges a fee"));
 }
 
