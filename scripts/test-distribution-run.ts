@@ -290,9 +290,10 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
     propertyDetailSource.includes("SyndicationFirstCard") &&
       propertyDetailSource.includes("Your listing needs") &&
       propertyDetailSource.includes("Posting opens once your listing is ready.") &&
-      propertyDetailSource.includes("Your listing first. Sign-in and site fees wait inside Post,") &&
-      propertyDetailSource.includes("and a site counts as Live only after the link to your ad is saved") &&
-      propertyDetailSource.includes("a site counts as Live only after the link to your ad is saved"),
+      // S702t: we post the ad; the landlord approves each post.
+      propertyDetailSource.includes("We post your ad on each site. You approve each post.") &&
+      propertyDetailSource.includes("counts as Live once the link to your ad is saved") &&
+      !propertyDetailSource.includes("Sign-in and site fees wait inside Post"),
   );
   ok(
     "first screen sends the first listing blocker to its source field",

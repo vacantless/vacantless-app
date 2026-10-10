@@ -310,9 +310,9 @@ ok(
   publishEverywhereSource.includes('? { label: "Live", cls: "bg-green-50 text-green-700" }'),
 );
 ok(
-  "rail need-sign-in count excludes live sites",
-  publishEverywhereSource.includes("forYou.filter((r) => forYouNeedsOperatorStep(r)).length} need sign-in") &&
-    !publishEverywhereSource.includes("{reach.for_you} need sign-in"),
+  "rail we-post count excludes live sites",
+  publishEverywhereSource.includes("forYou.filter((r) => forYouNeedsOperatorStep(r)).length} we post") &&
+    !publishEverywhereSource.includes("{reach.for_you} we post"),
 );
 ok(
   "rail hides the cost line on a live row",

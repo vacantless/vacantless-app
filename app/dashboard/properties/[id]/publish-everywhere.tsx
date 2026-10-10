@@ -92,8 +92,8 @@ export type PublishEverywherePostingBlocker = {
 // north-star and the rest of the tab already use).
 const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
   instant_auto: { label: "Instant", cls: "bg-green-50 text-green-700" },
-  copilot_fill: { label: "Needs you", cls: "bg-indigo-50 text-indigo-700" },
-  paid_optin: { label: "Sign in + fee", cls: "bg-indigo-50 text-indigo-700" },
+  copilot_fill: { label: "We post it", cls: "bg-indigo-50 text-indigo-700" },
+  paid_optin: { label: "We post it. Site fee", cls: "bg-indigo-50 text-indigo-700" },
   needs_connection: { label: "Sign in first", cls: "bg-gray-100 text-gray-600" },
   brokerage_gated: { label: "Via brokerage", cls: "bg-gray-100 text-gray-600" },
   planned: { label: "Coming soon", cls: "bg-gray-100 text-gray-600" },
@@ -109,7 +109,7 @@ const BUCKET_META: Record<
     dot: "bg-green-500",
   },
   for_you: {
-    title: "Needs your sign-in",
+    title: "We post these",
     note: "",
     dot: "bg-indigo-500",
   },
@@ -256,7 +256,7 @@ function ChannelRow({
   const chip = isLive
     ? { label: "Live", cls: "bg-green-50 text-green-700" }
     : row.automationAction === "authorize"
-      ? { label: "Needs you", cls: "bg-amber-50 text-amber-700" }
+      ? { label: "Needs your OK", cls: "bg-amber-50 text-amber-700" }
       : MODE_CHIP[row.mode];
   // S691: "Connect once" was a dead chip; it now opens the Connect sites
   // screen for this property. Every row shows what the site costs so a
@@ -426,7 +426,6 @@ export function PublishEverywhere({
       (r) => r.mode === "needs_connection" || r.mode === "brokerage_gated",
     ),
   );
-  const comingSoonRows = resolved.filter((r) => r.mode === "planned");
   const runItemByChannel = new Map(runItems.map((item) => [item.channel, item]));
   // S691: one live rule for the whole page (lib/publish-everywhere.ts). A site
   // posted by hand has a live listing_posts row and no run item; it is live.
@@ -523,8 +522,8 @@ export function PublishEverywhere({
                 {onlineHeadline}
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-                Your Vacantless page is live. Finish any site that still needs
-                you.{" "}
+                Your Vacantless page is live. We post your ad on each site
+                you pick.{" "}
                 {totalInquiryCount}{" "}
                 {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
                 this rental so far.
@@ -569,51 +568,20 @@ export function PublishEverywhere({
                   <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h4 className="text-base font-semibold text-green-950">
-                        Finish {firstOutstandingForYou.label}
+                        Post on {firstOutstandingForYou.label}
                       </h4>
-                      {/* S700 (dress rehearsal F16): this button used to be an
-                          anchor to its own card, so it scrolled to itself. The
-                          real self-serve path is: copy the ad wording, post it
-                          on the site, save the link here. Say exactly that. */}
-                      <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm text-green-800">
-                        <li>
-                          <a href="#ad-wording" className="font-semibold underline">
-                            Copy the ad wording
-                          </a>{" "}
-                          for {firstOutstandingForYou.label}.
-                        </li>
-                        <li>
-                          Sign in to {firstOutstandingForYou.label} and paste it
-                          in. Add the photos and pay any fee the site asks for.
-                        </li>
-                        <li>
-                          <a
-                            href={`#save-link-${firstOutstandingForYou.key}`}
-                            className="font-semibold underline"
-                          >
-                            Save the link to your ad
-                          </a>{" "}
-                          here so we can check it stays up.
-                        </li>
-                      </ol>
+                      {/* S702t: we post it now (GitHub worker). No copy and
+                          paste steps; the site card below holds the one tap. */}
+                      <p className="mt-0.5 text-sm text-green-800">
+                        We post it for you. You approve the post once.
+                      </p>
                     </div>
-                    {channelByKey(firstOutstandingForYou.key)?.portalUrl ? (
-                      <a
-                        href={channelByKey(firstOutstandingForYou.key)?.portalUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-                      >
-                        Open {firstOutstandingForYou.label} ↗
-                      </a>
-                    ) : (
-                      <a
-                        href="#ad-wording"
-                        className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-                      >
-                        Copy the ad wording →
-                      </a>
-                    )}
+                    <a
+                      href={`#for-you-${firstOutstandingForYou.key}`}
+                      className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                    >
+                      Go to {firstOutstandingForYou.label} →
+                    </a>
                   </div>
                 ) : (
                   <div className="mt-1">
@@ -692,10 +660,10 @@ export function PublishEverywhere({
                   2
                 </span>
                 <b className="block text-[12.5px] text-emerald-50">
-                  Sign in if asked
+                  Approve each post
                 </b>
                 <small className="text-[11px] text-emerald-200">
-                  We write the ad. You sign in, post it, and pay any site fee.
+                  We post it for you. You pay a site only if it charges.
                 </small>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
@@ -722,7 +690,7 @@ export function PublishEverywhere({
                   Post everywhere
                 </span>
                 <small className="text-[12.5px] font-semibold opacity-80">
-                  Then follow the short sign-in or fee list
+                  Then approve each site's post
                 </small>
               </button>
             ) : postingBlocker ? (
@@ -809,10 +777,10 @@ export function PublishEverywhere({
                 {reach.instant} connected
               </span>
               <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                {forYou.filter((r) => forYouNeedsOperatorStep(r)).length} need sign-in
+                {forYou.filter((r) => forYouNeedsOperatorStep(r)).length} we post
               </span>
               <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                {setupRows.length + comingSoonRows.length} later
+                {setupRows.length} later
               </span>
             </div>
           </div>
@@ -875,26 +843,15 @@ export function PublishEverywhere({
           </div>
         )}
 
-        {comingSoonRows.length > 0 && (
-          <div className="mb-3.5">
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-700">
-              <span className="h-2 w-2 rounded-full bg-gray-300" />
-              Coming soon
-            </div>
-            {comingSoonRows.map((r) => (
-              <ChannelRow key={r.key} row={r} propertyId={propertyId} />
-            ))}
-          </div>
-        )}
-
+        {/* S702t: no "Coming soon" list. We show only sites we can post to
+            (DECISION-S696: an unbuilt site still advertises something we
+            cannot do). */}
         <div className="mt-2 border-t border-gray-100 pt-3 text-[11.5px] leading-relaxed text-gray-500">
           <b className="text-gray-700">Ready</b> means we post it when you press
           Post. It shows Live once the link to your ad comes back.
           <br />
-          <b className="text-gray-700">Needs you</b> means we write the ad. You
-          sign in to the site, paste it, pay any fee, and press post.
-          <br />
-          <b className="text-gray-700">Not yet</b> means this site comes later.
+          <b className="text-gray-700">We post it</b> means we post the ad for
+          you after you approve it. You pay a site only if it charges.
         </div>
       </aside>
 
@@ -979,7 +936,7 @@ function ForYouHandoff({
           ? "Posting to rental sites opens once your listing has the details every site needs."
           : allSetSummary
           ? "The link to each ad is saved here. Reopen a site only when you change the listing."
-          : "We write the ad. You sign in, post it, and pay a site only if it asks."}
+          : "We post it for you. You approve each post and pay a site only if it charges."}
       </p>
       {postingBlocker && (
         <a
@@ -1069,8 +1026,8 @@ function ForYouRow({
         : working
           ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
           : paid
-            ? { label: "Needs you + fee", cls: "bg-indigo-50 text-indigo-700" }
-            : { label: "Needs you", cls: "bg-indigo-50 text-indigo-700" };
+            ? { label: "Not posted. Site fee", cls: "bg-indigo-50 text-indigo-700" }
+            : { label: "Not posted yet", cls: "bg-indigo-50 text-indigo-700" };
 
   return (
     <li
@@ -1405,8 +1362,8 @@ function ConfirmModal({
               ))}
             </div>
             <p className="mt-2 text-[11.5px] leading-relaxed text-indigo-900/80">
-              We write the ad; you sign in and post it. We never see your
-              password.
+              Sign in to each site once. After that we post for you. We never
+              see your password.
             </p>
           </div>
         )}

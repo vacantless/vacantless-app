@@ -543,8 +543,8 @@ function buildSyndicationBlockerSummary({
       [...login.values()],
       "needs sign-in",
       "need sign-in",
-      (label) => `${label} needs sign-in before you can post it.`,
-      (list) => `${list} need sign-in before you can post them.`,
+      (label) => `Sign in to ${label} once so we can post your ad.`,
+      (list) => `Sign in to ${list} once so we can post your ad.`,
     ) ??
     summary(
       [...proof.values()],
@@ -780,8 +780,8 @@ function SyndicationFirstCard({
               are next, not while the customer is still filling in the listing. */}
           {!packetBlocked ? (
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
-              Sign-in and site fees wait inside Post, and a site counts as Live
-              only after the link to your ad is saved.
+              We post your ad on each site. You approve each post. A site
+              counts as Live once the link to your ad is saved.
             </p>
           ) : null}
         </div>
