@@ -1,5 +1,6 @@
 "use server";
 
+import { triggerPostNow } from "@/lib/post-now";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -412,6 +413,9 @@ export async function approveConciergeSubmit(formData: FormData) {
     if (alreadyPosted) redirect(`${DESK}?err=already_posted`);
     redirect(`${DESK}?err=stale`);
   }
+
+  // S702s: run the posting worker now rather than at the next hourly check.
+  await triggerPostNow();
 
   // Append-only audit of the human approval (actor = the operator). Status is
   // unchanged (needs_operator -> needs_operator); the metadata records the

@@ -13,6 +13,7 @@
 // or org id we then trust. createClient() is RLS-scoped to the operator's org, so
 // a read of another org's row returns null and the action stops.
 
+import { triggerPostNow } from "@/lib/post-now";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -457,6 +458,9 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
     if (propertyId) backTo(propertyId, "autopilot_stale");
     redirect("/dashboard/properties");
   }
+
+  // S702s: run the posting worker now rather than at the next hourly check.
+  await triggerPostNow();
 
   const priorAttempts = (approved.attempt_count as number | undefined) ?? 0;
   const attempt = buildAttemptRecord({
