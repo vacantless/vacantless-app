@@ -83,6 +83,9 @@ ok("kijiji working", s.sites[0].status.state === "working" && s.sites[1].status.
 s = summarizePortalInbox(sites, [ev("kijiji", "duplicate", 1)], NOW);
 ok("duplicate counts as working", s.sites[0].status.state === "working");
 
+s = summarizePortalInbox(sites, [ev("kijiji", "scam_held", 1)], NOW);
+ok("S705: a held scam still shows the route working", s.sites[0].status.state === "working");
+
 s = summarizePortalInbox(sites, [ev("kijiji", "lead_created", 50), ev("kijiji", "not_parsed", 2)], NOW);
 ok("a newer failure shows", s.sites[0].status.state === "unreadable");
 

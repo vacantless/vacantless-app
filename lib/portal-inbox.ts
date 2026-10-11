@@ -35,6 +35,7 @@ export const PORTAL_INBOX_OUTCOMES = [
   "auth_unverified",
   "cross_org_refused",
   "confirmation_code",
+  "scam_held",
 ] as const;
 export type PortalInboxOutcome = (typeof PORTAL_INBOX_OUTCOMES)[number];
 
@@ -147,7 +148,13 @@ export function summarizePortalInbox(
     const latest = sorted.find((e) => e.source === site.key);
     let status: PortalInboxSiteState = { state: "none" };
     if (latest) {
-      if (latest.outcome === "lead_created" || latest.outcome === "duplicate") {
+      // S705: a held scam still arrived through the landlord's own rule, so
+      // the route is working.
+      if (
+        latest.outcome === "lead_created" ||
+        latest.outcome === "duplicate" ||
+        latest.outcome === "scam_held"
+      ) {
         status = { state: "working", at: latest.received_at };
       } else if (latest.outcome === "auth_unverified") {
         status = { state: "unverified", at: latest.received_at };

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isLandlordPhishing, landlordPhishingTells } from "./portal-lead-scam";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DEFAULT_INGEST_DOMAIN,
@@ -698,6 +699,20 @@ export async function handleInboundLeadPost(
     return NextResponse.json({ ok: true, handled: "not_parsed", reason: parsed.reason });
   }
   const lead = parsed.lead;
+
+  // ---- S705: landlord phishing sent through a site's contact form ----------
+  // The site really sent it (auth passes), but it is a "verify your account,
+  // run our program" scam aimed at the landlord, not a renter. Hold it before
+  // it becomes a lead, alerts the team, or gets our instant reply. Recorded so
+  // the org's card still shows the forwarding route working.
+  if (isLandlordPhishing({ name: lead.name, phone: lead.phone, message: lead.message })) {
+    console.warn("inbound/lead: held a landlord-phishing message", {
+      portal: portalKey,
+      tells: landlordPhishingTells({ name: lead.name, phone: lead.phone, message: lead.message }),
+    });
+    await note("scam_held");
+    return NextResponse.json({ ok: true, handled: "scam_held" });
+  }
 
   // ---- Resolve the unit -----------------------------------------------------
   const target = await resolveTarget(admin, orgId, lead);

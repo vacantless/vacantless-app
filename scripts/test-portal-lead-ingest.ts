@@ -415,6 +415,36 @@ async function main() {
   ok("kijiji off still refuses, records nothing", res.handled === "portal_disabled" && res.portal === "kijiji" && events.length === 0, { res, events });
   }
 
+  // S705: landlord phishing through the site's own contact form is held.
+  {
+  const admin = new FakeAdmin();
+  const events: PortalEventRow[] = [];
+  const auth = [{ Name: "Authentication-Results", Value: "mx; dkim=pass header.d=rentals.ca; dmarc=pass header.from=rentals.ca" }];
+  const scam =
+    "Extra Check. To confirm your property and account, you need to run our Listing Check application on your computer. " +
+    "You have exactly 24 hours to install and launch the application; otherwise, your account will be blocked. " +
+    "Your personal password to open the program: Example2026";
+  const res = await post(
+    admin,
+    { ...payload({ messageId: "mid-scam", message: scam }), FromFull: { Email: "contact@rentals.ca" }, Headers: auth },
+    events,
+  );
+  ok("phishing through Rentals.ca is held", res.handled === "scam_held", res);
+  ok("held phishing writes no lead", admin.leads.length === 0, admin.leads);
+  ok("held phishing alerts nobody", admin.notifications === 0, admin.notifications);
+  ok(
+    "held phishing is recorded so the route still reads as working",
+    events.length === 1 && events[0]?.outcome === "scam_held" && events[0]?.source === "rentals_ca",
+    events,
+  );
+  const real = await post(
+    admin,
+    { ...payload({ messageId: "mid-real" }), FromFull: { Email: "contact@rentals.ca" }, Headers: auth },
+    events,
+  );
+  ok("a real renter right after is still filed", real.handled === "lead_created" && admin.leads.length === 1, real);
+  }
+
   // THE S697c BUG: the loop guard dropped every "noreply" site sender.
   {
   const admin = new FakeAdmin();
