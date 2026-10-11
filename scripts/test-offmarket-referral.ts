@@ -105,8 +105,8 @@ ok(
   page.includes("joinWaitlist"),
 );
 ok(
-  "public page keeps the gone-state behind !isAvailable",
-  page.includes("{!isAvailable ? ("),
+  "public page keeps the gone-state behind !isAvailable (S702b added a closed-org branch first)",
+  page.includes(") : !isAvailable ? (") || page.includes("{!isAvailable ? ("),
 );
 ok(
   "public page noindexes anything that is not available",

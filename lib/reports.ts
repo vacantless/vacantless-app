@@ -237,7 +237,11 @@ export function buildPropertyReport(
  * hidden. Publicly-visible rentals (Live / Paused / Leased) always qualify.
  */
 export function isReportableRental(row: PropertyRow): boolean {
-  if (isPubliclyVisible(row.status)) return true;
+  // S705: off_market became publicly visible in S672 (its /r page shows the
+  // "no longer available" state), which made every empty retired rental show
+  // up in reports. A retired rental is private for reporting: kept only when
+  // it gathered real activity, exactly like a draft.
+  if (row.status !== "off_market" && isPubliclyVisible(row.status)) return true;
   return row.leads > 0 || row.showings > 0;
 }
 

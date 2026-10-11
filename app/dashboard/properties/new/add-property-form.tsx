@@ -209,11 +209,15 @@ export function AddPropertyV2Form({
   replyToEmail,
   contactPhone,
   aiImageImportEnabled,
+  hiddenReadinessChannels = [],
 }: {
   availabilityWindowCount: number;
   replyToEmail: string | null;
   contactPhone: string | null;
   aiImageImportEnabled: boolean;
+  /** S705: readiness rows for sites this org cannot use (Marketplace and
+   *  Rentals.ca outside Agile), dropped from the panel. */
+  hiddenReadinessChannels?: readonly string[];
 }) {
   const [mode, setMode] = useState<"import" | "fresh">("import");
   const [draft, setDraft] = useState<AddPropertyV2Draft>(
@@ -1192,7 +1196,11 @@ export function AddPropertyV2Form({
         </div>
       </form>
 
-      <ReadinessMeter entries={readiness} />
+      <ReadinessMeter
+        entries={readiness.filter(
+          (entry) => !hiddenReadinessChannels.includes(entry.channel),
+        )}
+      />
     </div>
   );
 }

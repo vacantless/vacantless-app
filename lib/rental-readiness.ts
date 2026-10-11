@@ -57,6 +57,8 @@ const FEED_FIELD_LABEL: Record<string, string> = {
 };
 
 function closedPublicStatus(status: string): "leased" | "paused" | null {
+  // S705: off_market is publicly visible since S672 but is not "paused".
+  if (status === "off_market") return null;
   if (!isPubliclyVisible(status) || isPublicBookable(status)) return null;
   return status === "leased" ? "leased" : "paused";
 }
@@ -72,6 +74,18 @@ function linkSignal(status: string): ReadinessSignal {
       hint: "The public inquiry page is live — renters can view it, inquire, and book a viewing.",
     };
   }
+  if (status === "off_market") {
+    // S705: since S672 a retired rental's /r page still loads and points
+    // renters at the org's open units. It used to fall into the paused branch.
+    return {
+      key: "link",
+      label: "Link",
+      ok: false,
+      tone: "muted",
+      detail: "retired",
+      hint: "Retired. The public link still opens and points renters at your other vacancies.",
+    };
+  }
   if (isPubliclyVisible(status)) {
     // leased / paused: the /r page LOADS but shows "not available".
     const word = status === "leased" ? "Leased" : "Paused";
@@ -84,7 +98,7 @@ function linkSignal(status: string): ReadinessSignal {
       hint: `${word} — the public page still loads but tells renters the unit is not currently available, so it can't take inquiries.`,
     };
   }
-  // draft / off_market: the public link 404s.
+  // draft: the public link 404s.
   return {
     key: "link",
     label: "Link",

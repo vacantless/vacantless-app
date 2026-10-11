@@ -5,6 +5,7 @@ import { PageHeader, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { canUseListingAiImport } from "@/lib/billing";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { getCurrentOrg } from "@/lib/org";
+import { isHiddenForOrg, MARKETPLACE_CHANNEL_KEY, RENTALS_CA_CHANNEL_KEY } from "@/lib/posting-lanes";
 import { createClient } from "@/lib/supabase/server";
 import { AddPropertyV2Form } from "./add-property-form";
 
@@ -56,6 +57,11 @@ export default async function NewPropertyPage({
         replyToEmail={org.reply_to_email}
         contactPhone={org.public_contact_phone}
         aiImageImportEnabled={aiImageImportEnabled}
+        hiddenReadinessChannels={[
+          // The readiness panel names Marketplace "facebook_marketplace".
+          ...(isHiddenForOrg(MARKETPLACE_CHANNEL_KEY, org.id) ? ["facebook_marketplace"] : []),
+          ...(isHiddenForOrg(RENTALS_CA_CHANNEL_KEY, org.id) ? ["rentals_ca"] : []),
+        ]}
       />
     </div>
   );

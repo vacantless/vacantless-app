@@ -128,6 +128,18 @@ function rentalLaunchState({
     };
   }
 
+  // S705: a retired rental's page still loads (S672) and used to fall into
+  // the Paused branch below.
+  if (row.status === "off_market") {
+    return {
+      label: "Off market",
+      detail: "Link shows your open units",
+      action: "Review",
+      href: `/dashboard/properties/${row.id}`,
+      tone: "muted",
+    };
+  }
+
   if (isPubliclyVisible(row.status) && !isPublicBookable(row.status)) {
     return {
       label: "Paused",
@@ -590,7 +602,9 @@ export default async function PropertiesPage({
                     <span className="text-xs text-gray-400">
                       {p.status === "leased"
                         ? "Rented - page shows unavailable"
-                        : "Paused - not accepting inquiries"}
+                        : p.status === "off_market"
+                          ? "Off market - link shows your open units"
+                          : "Paused - not accepting inquiries"}
                     </span>
                     <Link
                       href={launch.href}

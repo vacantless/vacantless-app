@@ -95,7 +95,10 @@ export default async function NewTenancyPage({
   const properties = allProperties.filter(
     (p) =>
       !spokenFor.has(p.id) &&
-      (isPubliclyVisible(p.status) || p.id === defaultPropertyId),
+      // S705: off_market became publicly visible in S672; a retired unit
+      // still does not belong in the lease picker.
+      ((isPubliclyVisible(p.status) && p.status !== "off_market") ||
+        p.id === defaultPropertyId),
   );
 
   // The pre-selected unit (convert flow, or ?property= from the lifecycle rail)

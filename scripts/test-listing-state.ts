@@ -92,14 +92,14 @@ ok("visible: available", isPubliclyVisible("available"));
 ok("visible: paused", isPubliclyVisible("paused"));
 ok("visible: leased", isPubliclyVisible("leased"));
 ok("visible: draft NO (404)", !isPubliclyVisible("draft"));
-ok("visible: off_market NO (404)", !isPubliclyVisible("off_market"));
+ok("visible: off_market (S672: the page loads, shows the gone state)", isPubliclyVisible("off_market"));
 
 // --- visible-but-unavailable (loads /r, shows the gone state) --------------
 ok("visible-unavailable: paused yes", isVisibleButUnavailable("paused"));
 ok("visible-unavailable: leased yes", isVisibleButUnavailable("leased"));
 ok("visible-unavailable: available no (it's bookable)", !isVisibleButUnavailable("available"));
 ok("visible-unavailable: draft no (it 404s)", !isVisibleButUnavailable("draft"));
-ok("visible-unavailable: off_market no (it 404s)", !isVisibleButUnavailable("off_market"));
+ok("visible-unavailable: off_market yes (S672)", isVisibleButUnavailable("off_market"));
 
 // --- invariant: every status is either bookable, visible-unavailable, or private
 for (const s of PROPERTY_STATUSES) {
