@@ -1,0 +1,76 @@
+// S705: "Sign in once" helpers and the GitHub dispatch shape.
+// Run: npx tsx scripts/test-site-signin.ts
+import {
+  isSiteSigninChannel,
+  siteSigninEnabled,
+  siteSigninHref,
+  siteSigninIsOpen,
+  siteSigninLinksOn,
+  siteSigninPassword,
+  siteSigninSafeViewUrl,
+  siteSigninView,
+} from "../lib/site-signin";
+import { signinWindowRequest, triggerSigninWindow } from "../lib/site-signin-dispatch";
+import { readFileSync } from "node:fs";
+
+let passed = 0;
+let failed = 0;
+function ok(name: string, cond: boolean, extra?: unknown) {
+  if (cond) passed++;
+  else {
+    failed++;
+    console.error(`  x ${name}`);
+    if (extra !== undefined) console.error("    ->", JSON.stringify(extra));
+  }
+}
+
+async function main() {
+  ok("kijiji and zumper only", isSiteSigninChannel("kijiji") && isSiteSigninChannel("zumper") && !isSiteSigninChannel("rentals_ca") && !isSiteSigninChannel("facebook"));
+  ok("dark by default", !siteSigninEnabled({}, {}) && !siteSigninLinksOn({}));
+  ok("our team can always open it", siteSigninEnabled({ isPlatformAdmin: true }, {}));
+  ok("flag opens it for everyone", siteSigninEnabled({}, { SITE_SIGNIN_ENABLED: "true" }) && siteSigninLinksOn({ SITE_SIGNIN_ENABLED: "true" }));
+  ok("links stay off for a platform admin while dark", !siteSigninLinksOn({}));
+  ok("href", siteSigninHref("zumper") === "/dashboard/site-signin/zumper");
+  ok("open statuses", siteSigninIsOpen("starting") && siteSigninIsOpen("ready") && siteSigninIsOpen("saving") && !siteSigninIsOpen("done") && !siteSigninIsOpen(null));
+
+  const good = "https://quiet-river.trycloudflare.com/vnc.html#autoconnect=1&resize=scale&password=Ab3dEf9h";
+  ok("password read from the fragment", siteSigninPassword(good) === "Ab3dEf9h");
+  ok("no fragment, no password", siteSigninPassword("https://x.trycloudflare.com/vnc.html") === null);
+  ok("odd password refused", siteSigninPassword("https://x.trycloudflare.com/vnc.html#password=<script>") === null);
+  ok("our link is shown", siteSigninSafeViewUrl(good) === good);
+  ok("another host is never shown", siteSigninSafeViewUrl("https://evil.example.com/vnc.html#password=x") === null);
+  ok("http is never shown", siteSigninSafeViewUrl("http://a.trycloudflare.com/vnc.html") === null);
+  ok("another path is never shown", siteSigninSafeViewUrl("https://a.trycloudflare.com/login") === null);
+
+  for (const s of [null, "starting", "ready", "saving", "done", "expired", "cancelled", "failed"]) {
+    const v = siteSigninView("zumper", s);
+    ok(`copy for ${s} has no em dash`, !/—/.test(v.title + v.body), v);
+  }
+  ok("ready says the password stays with them", /stays with you/.test(siteSigninView("kijiji", "ready").body));
+  ok("a failed check says so", /not show you as signed in yet/.test(siteSigninView("kijiji", "ready", "not_signed_in_yet").body));
+  ok("done says each post is still approved", /approve each post/.test(siteSigninView("zumper", "done").body));
+
+  const req = signinWindowRequest("t0k", "win-1", "vacantless/vacantless-worker");
+  ok("dispatch url", req.url === "https://api.github.com/repos/vacantless/vacantless-worker/dispatches");
+  const body = JSON.parse(String(req.init.body));
+  ok("dispatch event and payload", body.event_type === "signin-window" && body.client_payload.window_id === "win-1", body);
+  ok("no token, no dispatch", (await triggerSigninWindow("w", (async () => new Response(null, { status: 204 })) as typeof fetch, undefined)) === false);
+  ok("204 = dispatched", (await triggerSigninWindow("w", (async () => new Response(null, { status: 204 })) as typeof fetch, "t")) === true);
+  ok("refusal = false", (await triggerSigninWindow("w", (async () => new Response(null, { status: 404 })) as typeof fetch, "t")) === false);
+  ok("a throw = false", (await triggerSigninWindow("w", (async () => { throw new Error("x"); }) as typeof fetch, "t")) === false);
+
+  // The page and actions keep their guards.
+  const actions = readFileSync("app/dashboard/site-signin/[channel]/actions.ts", "utf8");
+  ok("actions require manage_properties", actions.includes('requireCapability("manage_properties"'));
+  ok("actions check the flag", actions.includes("siteSigninEnabled("));
+  ok("updates are scoped to the org", actions.includes('.eq("organization_id", who.orgId)'));
+  const page = readFileSync("app/dashboard/site-signin/[channel]/page.tsx", "utf8");
+  ok("page 404s when dark for this user", page.includes("notFound()") && page.includes("siteSigninEnabled("));
+  ok("page states the consent before starting", page.includes("you let us post the ads you approve"));
+  const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
+  ok("site tiles point at the window when on", vm.includes("siteSigninLinksOn() && isSiteSigninChannel(row.channel)"));
+
+  console.log(`\nsite-signin: ${passed} passed, ${failed} failed`);
+  if (failed > 0) process.exit(1);
+}
+main();

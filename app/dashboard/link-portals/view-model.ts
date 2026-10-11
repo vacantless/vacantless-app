@@ -1,4 +1,5 @@
 import { isHiddenForOrg } from "@/lib/posting-lanes";
+import { isSiteSigninChannel, siteSigninHref, siteSigninLinksOn } from "@/lib/site-signin";
 import { getFormatter, getTranslations } from "next-intl/server";
 import {
   channelByKey,
@@ -102,7 +103,12 @@ export async function buildLinkPortalsViewModel(
     const capCost = row.costCap;
 
     const showConnect = canRenderStage1Connect(row, channel.connectKind);
-    const connectHref = stage1ConnectHref(row.channel, channel.connectKind);
+    // S705: with "Sign in once" on, Kijiji and Zumper sign in through our
+    // window instead of naming the account in Settings.
+    const connectHref =
+      siteSigninLinksOn() && isSiteSigninChannel(row.channel)
+        ? siteSigninHref(row.channel)
+        : stage1ConnectHref(row.channel, channel.connectKind);
     const buttonKey = stage1ConnectButtonKey(channel.connectKind);
     let button: LinkPortalTileButton | null = null;
     if (row.state === "dead_session" && showConnect && connectHref) {

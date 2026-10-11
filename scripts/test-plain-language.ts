@@ -58,6 +58,10 @@ const SURFACES: Surface[] = [
   // S705: the Facebook Page Connect / Disconnect card, moved out of the
   // removed Advanced tools view.
   { file: "app/dashboard/settings/facebook-page-card.tsx", mode: "ui" },
+  // S705: "Sign in once" for Kijiji and Zumper.
+  { file: "app/dashboard/site-signin/[channel]/page.tsx", mode: "ui" },
+  { file: "app/dashboard/site-signin/[channel]/window-panel.tsx", mode: "ui" },
+  { file: "lib/site-signin.ts", mode: "ui" },
   // S705: what is left of the Get online tab after the Advanced tools cut:
   // Publish Everywhere wrapper plus the live-ad-link list.
   { file: "app/dashboard/properties/[id]/distribute-tab.tsx", mode: "ui" },
