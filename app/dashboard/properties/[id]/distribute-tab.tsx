@@ -243,6 +243,8 @@ export type DistributeChannelCard = {
   partner: PartnerAccountView | null;
   facebookPage?: FacebookPageAccountView | null;
   instagramAccount?: InstagramAccountView | null;
+  /** S702w: a robot-posted site (Kijiji / Rentals.ca / Zumper) the org authorized us to post. */
+  robotReady?: boolean;
   posts: DistributePostRow[];
 };
 

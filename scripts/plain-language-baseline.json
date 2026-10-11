@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-08",
-  "checksum": "f121cef12098385eaada53235af030006177fff78321001561a78acb830b4b73",
+  "generated": "2026-10-11",
+  "checksum": "f0bcc422a7081be1e30f88fa1b94e9b8bc9a9db9a32bed37bddeddf0be10c81d",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -71,7 +71,7 @@
     "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 72,
     "app/dashboard/properties/[id]/page.tsx\u0000em_dash": 6,
     "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 20,
-    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 30,
+    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 29,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
     "app/dashboard/properties/new/add-property-form.tsx\u0000banned_word": 2,
     "app/dashboard/properties/new/add-property-form.tsx\u0000parentheses": 4,
@@ -86,7 +86,7 @@
     "app/dashboard/send-live/page.tsx\u0000banned_word": 2,
     "app/dashboard/settings/page.tsx\u0000all_caps": 2,
     "app/dashboard/settings/page.tsx\u0000ampersand_or_slash": 7,
-    "app/dashboard/settings/page.tsx\u0000banned_word": 66,
+    "app/dashboard/settings/page.tsx\u0000banned_word": 64,
     "app/dashboard/settings/page.tsx\u0000em_dash": 6,
     "app/dashboard/settings/page.tsx\u0000parentheses": 15,
     "app/dashboard/settings/page.tsx\u0000sentence_length": 17,
@@ -156,15 +156,15 @@
     "app/dashboard/properties/[id]/listing-copy-card.tsx": 21,
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 373,
-    "app/dashboard/properties/[id]/publish-everywhere.tsx": 138,
+    "app/dashboard/properties/[id]/page.tsx": 374,
+    "app/dashboard/properties/[id]/publish-everywhere.tsx": 132,
     "app/dashboard/properties/new/add-property-form.tsx": 98,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 81,
     "app/dashboard/properties/readiness-chips.tsx": 12,
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
-    "app/dashboard/settings/page.tsx": 284,
+    "app/dashboard/settings/page.tsx": 302,
     "app/dashboard/today-lane.tsx": 5,
     "lib/distribution-analytics.ts": 8,
     "lib/distribution-capabilities.ts": 21,
@@ -178,14 +178,14 @@
     "lib/distribution-run.ts": 62,
     "lib/distribution-stuck-sweep.ts": 8,
     "lib/distribution-verification.ts": 20,
-    "lib/listing-copy.ts": 55,
+    "lib/listing-copy.ts": 57,
     "lib/listing-description.ts": 76,
     "lib/listing-distribution.ts": 21,
     "lib/listing-health.ts": 12,
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
-    "messages/en.json": 192,
-    "messages/fr.json": 192
+    "messages/en.json": 193,
+    "messages/fr.json": 193
   },
   "entries": [
     {
@@ -1447,12 +1447,6 @@
       "file": "app/dashboard/settings/page.tsx",
       "text": "Org feed",
       "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Paid-channel authorization needs a positive per-ad CAD ceiling.",
-      "count": 2
     },
     {
       "rule": "banned_word",

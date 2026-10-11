@@ -1,6 +1,6 @@
 "use server";
 
-import { usesDeskAllowance } from "@/lib/posting-lanes";
+import { isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -2991,8 +2991,10 @@ export async function startSitePost(formData: FormData) {
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) redirect("/dashboard/properties?forbidden=1");
   const channel = normalizePublishChannel(formData.get("channel"));
-  // Only channels the co-pilot can actually fill (Kijiji / Facebook Marketplace).
-  if (!channel || !isCopilotChannel(channel)) {
+  // Only channels someone actually posts for the landlord: the co-pilot
+  // channels (Kijiji / Facebook Marketplace) and, S702w, the sites our posting
+  // robot handles (Rentals.ca / Zumper are feed sites in the catalog).
+  if (!channel || !(isCopilotChannel(channel) || isRobotPostedChannel(channel))) {
     redirect(`/dashboard/properties/${propertyId}?runerr=copilotchannel#distribute-header`);
   }
   const org = await getCurrentOrg();

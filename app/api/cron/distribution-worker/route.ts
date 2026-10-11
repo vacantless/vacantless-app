@@ -28,6 +28,7 @@ import { channelByKey } from "@/lib/distribution-channels";
 import {
   assertWorkerNeverTerminal,
   selectGate,
+  workerAccountConnected,
   workerJobEligible,
   type WorkerGate,
   type WorkerListingFacts,
@@ -463,7 +464,12 @@ export async function GET(req: NextRequest) {
     // Decide the gate. Never a terminal state.
     const gate = selectGate({
       requiresLogin: account.requires_login === true,
-      connected: account.account_status === "connected",
+      // S702w: an authorized robot site counts as connected (see helper).
+      connected: workerAccountConnected({
+        channel: job.channel,
+        accountStatus: account.account_status,
+        automationAuthorized: account.automation_authorized,
+      }),
       channelRequiresPayment: account.requires_payment === true,
       paymentCleared: false, // no payment-cleared signal exists yet; a paid channel always gates on payment
     });

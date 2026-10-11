@@ -2,7 +2,7 @@ import Link from "next/link";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { showOnlyProvenChannelsEnabled } from "@/lib/channel-provenness";
 import { loadShownChannelKeys } from "./provenness-load";
-import { isHiddenMarketplace, withoutHiddenMarketplace } from "@/lib/posting-lanes";
+import { isHiddenMarketplace, isRobotPostedChannel, withoutHiddenMarketplace } from "@/lib/posting-lanes";
 import { loadQuestionSheet } from "@/lib/question-sheet-load";
 import { questionSheetFieldFacts } from "@/lib/question-sheet";
 import { headers } from "next/headers";
@@ -414,6 +414,7 @@ function relistPublishInputForCard(
       // no partner accepted (none has, as of 2026-10-05). Only acceptance counts.
       card.partner?.status === "accepted",
     copilotSupported: copilotEnabled && isCopilotSupportedKey(channel.key),
+    robotReady: card.robotReady === true,
   };
 }
 
@@ -1853,6 +1854,11 @@ export default async function PropertyDetailPage({
                   false,
               }
             : null,
+        // S702w: our worker posts these on the landlord's own account once
+        // the org has authorized it, whatever account_status reads.
+        robotReady:
+          isRobotPostedChannel(channel.key) &&
+          channelAccountByKey.get(channel.key)?.automationAuthorized === true,
         posts,
       };
     });

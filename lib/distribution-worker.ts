@@ -12,6 +12,7 @@
 // exists so a regression that tried to emit a terminal state fails loudly.
 // ============================================================================
 
+import { isRobotPostedChannel } from "./posting-lanes";
 import type { PublishMode, PublishStatus } from "./distribution-publish";
 import type { RunStep } from "./distribution-run";
 
@@ -74,6 +75,22 @@ export function workerJobEligible(input: {
  *   3. needs_operator — prepared and ready for a human to review + final submit.
  * The worker NEVER returns a live/submitted state — final submit is a human gate.
  */
+/**
+ * S702w: is this org's site account "connected" for gate selection? A robot
+ * site's saved session lives with the posting worker, not in account_status
+ * (Agile's read needs_setup with live sessions), so an authorized robot site
+ * counts as connected. The worker itself falls back to needs_login when the
+ * saved session has expired.
+ */
+export function workerAccountConnected(input: {
+  channel: string;
+  accountStatus: string | null;
+  automationAuthorized: boolean | null;
+}): boolean {
+  if (input.accountStatus === "connected") return true;
+  return isRobotPostedChannel(input.channel) && input.automationAuthorized === true;
+}
+
 export function selectGate(input: {
   requiresLogin: boolean;
   connected: boolean;

@@ -60,5 +60,10 @@ ok("no monthly posts line", !pe.includes("monthly posts"));
 const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
 ok("sign-in page hides Marketplace", vm.includes("isHiddenMarketplace(row.channel, orgId)"));
 
+// S702w: Rentals.ca and Zumper reach the robot through the app.
+ok("Add this site accepts robot sites", actions.includes("isCopilotChannel(channel) || isRobotPostedChannel(channel)"));
+ok("page marks authorized robot sites ready", page.includes("isRobotPostedChannel(channel.key) &&") && page.includes("robotReady: card.robotReady === true"));
+ok("publish surface passes robotReady", pe.includes("robotReady: card.robotReady === true"));
+
 console.log(`\nposting-lanes: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

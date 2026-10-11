@@ -13,6 +13,7 @@
 // accepted; otherwise it honestly falls to "after setup". No overpromising.
 // ============================================================================
 
+import { isRobotPostedChannel } from "./posting-lanes";
 import type {
   ChannelIntegrationStatus,
   ChannelConnectKind,
@@ -69,6 +70,12 @@ export type PublishChannelInput = {
   // is catalog-"planned" (FB Marketplace). Channels WITHOUT a mechanism yet
   // (LinkedIn/WhatsApp/Snapchat) leave this false and stay honestly "coming soon".
   copilotSupported?: boolean;
+  // S702w: one of our robot-posted sites (lib/posting-lanes.ts: Kijiji,
+  // Rentals.ca, Zumper) AND the org has authorized us to post there
+  // (distribution_channel_accounts.automation_authorized). Our posting worker
+  // posts it on the landlord's own account, so it is "we post it", not a
+  // feed that waits on a partner. Ignored for any non-robot channel.
+  robotReady?: boolean;
 };
 
 /**
@@ -90,6 +97,13 @@ function computeMode(input: PublishChannelInput): PublishMode {
   // Broker / MLS route — never a self-serve post.
   if (input.integrationStatus === "mls_gated" || input.mode === "broker") {
     return "brokerage_gated";
+  }
+  // S702w: a robot-posted site the org has authorized. Our worker posts it on
+  // the landlord's own account, so it is "we post it" even though the catalog
+  // marks Rentals.ca and Zumper as feed sites with no accepted feed. An
+  // accepted partner feed still wins (it is hands-off).
+  if (input.robotReady === true && isRobotPostedChannel(input.key) && !input.feedAccepted) {
+    return input.hasFee ? "paid_optin" : "copilot_fill";
   }
   // A co-pilot-capable channel (Kijiji / FB Marketplace): the extension fill +
   // sidecar IS the posting mechanism, so it is a for-you handoff even with no API
@@ -158,6 +172,8 @@ export type PublishPreflightRow = {
   mode: PublishMode;
   feeLabel?: string | null;
   feeCents?: number | null;
+  /** S702w: an authorized robot site; we already hold the sign-in. */
+  alreadySignedIn?: boolean;
 };
 
 export type PublishPreflightFeeChannel = {
@@ -184,7 +200,9 @@ export function derivePublishPreflight(
   rows: readonly PublishPreflightRow[],
 ): PublishPreflightSummary {
   const signInNeeded = rows.filter(
-    (row) => row.mode === "copilot_fill" || row.mode === "paid_optin",
+    (row) =>
+      (row.mode === "copilot_fill" || row.mode === "paid_optin") &&
+      row.alreadySignedIn !== true,
   );
   const feeChannels = rows
     .filter((row) => row.mode === "paid_optin")

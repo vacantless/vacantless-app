@@ -175,6 +175,7 @@ function toPublishInput(
       // no partner accepted (none has, as of 2026-10-05). Only acceptance counts.
       card.partner?.status === "accepted",
     copilotSupported: copilotEnabled && isCopilotSupportedKey(ch.key),
+    robotReady: card.robotReady === true,
   };
 }
 
@@ -188,6 +189,8 @@ type ResolvedRow = {
   liveProofUrl?: string | null;
   /** URLs of this channel's non-live rows; a run item pointing at one is stale (S692). */
   retiredProofUrls?: readonly string[];
+  /** S702w: an authorized robot site; we already hold the sign-in. */
+  alreadySignedIn?: boolean;
 };
 
 type InstantDestination = {
@@ -409,6 +412,7 @@ export function PublishEverywhere({
       automationAction: automationActionForCard(card),
       liveProofUrl: liveProofUrlFromPosts(card.posts),
       retiredProofUrls: retiredProofUrlsFromPosts(card.posts),
+      alreadySignedIn: card.robotReady === true,
     };
   });
   const reach = summarizeReach(resolved.map((r) => r.bucket), true);

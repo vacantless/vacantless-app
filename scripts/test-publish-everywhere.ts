@@ -134,6 +134,25 @@ eq(
   true,
 );
 
+// --- S702w: robot sites the org authorized are "we post it", not "sign in once" ---
+eq("Rentals.ca robotReady -> copilot_fill", mode({ key: "rentals_ca", mode: "feed_or_assisted", integrationStatus: "live", robotReady: true }), "copilot_fill");
+eq("Zumper robotReady -> copilot_fill", mode({ key: "zumper", mode: "feed_or_assisted", integrationStatus: "live", robotReady: true }), "copilot_fill");
+eq("Rentals.ca not authorized -> needs_connection (unchanged)", mode({ key: "rentals_ca", mode: "feed_or_assisted", integrationStatus: "live", robotReady: false }), "needs_connection");
+eq("Rentals.ca accepted feed still wins -> instant_auto", mode({ key: "rentals_ca", mode: "feed_or_assisted", integrationStatus: "live", robotReady: true, feedAccepted: true }), "instant_auto");
+eq("Kijiji robotReady -> copilot_fill", mode({ key: "kijiji", mode: "assisted_manual", integrationStatus: "live", robotReady: true }), "copilot_fill");
+eq("robotReady ignored for a non-robot feed site (RentFaster)", mode({ key: "rentfaster", mode: "feed_or_assisted", integrationStatus: "live", robotReady: true }), "needs_connection");
+eq("robotReady ignored for broker (Realtor.ca)", mode({ key: "realtor_ca", mode: "broker", integrationStatus: "mls_gated", robotReady: true }), "brokerage_gated");
+eq("robot bucket is for_you", resolvePublishMode({ key: "zumper", connectKind: "account_login", mode: "feed_or_assisted", integrationStatus: "live", robotReady: true }).bucket, "for_you");
+
+eq(
+  "preflight skips sign-in for an authorized robot site",
+  derivePublishPreflight([
+    { key: "rentals_ca", label: "Rentals.ca", mode: "copilot_fill", alreadySignedIn: true },
+    { key: "kijiji", label: "Kijiji", mode: "copilot_fill" },
+  ]).signInNeeded.map((r) => r.key),
+  ["kijiji"],
+);
+
 // --- S691: one live rule (hand-posted sites with a listing_posts URL are live) ---
 eq("no run item, no post = not live", forYouLiveState({ runItem: null, liveProofUrl: null }), { isLive: false, liveUrl: null });
 eq("no run item, live post URL = live (S685 Manning by hand)", forYouLiveState({ runItem: null, liveProofUrl: "https://www.kijiji.ca/v-view-details.html?adId=1743093990" }), { isLive: true, liveUrl: "https://www.kijiji.ca/v-view-details.html?adId=1743093990" });

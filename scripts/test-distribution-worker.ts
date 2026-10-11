@@ -8,6 +8,7 @@ import {
   isWorkerGate,
   workerJobEligible,
   selectGate,
+  workerAccountConnected,
   assertWorkerNeverTerminal,
   buildAgentComposePrompt,
 } from "../lib/distribution-worker";
@@ -63,6 +64,26 @@ for (const s of ["needs_operator", "needs_login", "needs_payment", "submitting",
     `non-queued status ${s} is NOT eligible (no re-processing / no touching automatic)`,
     !workerJobEligible({ ...base, publishStatus: s as never }),
   );
+}
+
+// --- S702w: an authorized robot site counts as connected ------------------
+ok("connected account is connected", workerAccountConnected({ channel: "facebook_feed", accountStatus: "connected", automationAuthorized: false }));
+ok("Rentals.ca needs_setup + authorized -> connected", workerAccountConnected({ channel: "rentals_ca", accountStatus: "needs_setup", automationAuthorized: true }));
+ok("Zumper needs_setup + authorized -> connected", workerAccountConnected({ channel: "zumper", accountStatus: "needs_setup", automationAuthorized: true }));
+ok("Rentals.ca not authorized -> not connected", !workerAccountConnected({ channel: "rentals_ca", accountStatus: "needs_setup", automationAuthorized: false }));
+ok("non-robot site needs connected status", !workerAccountConnected({ channel: "facebook", accountStatus: "needs_setup", automationAuthorized: true }));
+ok(
+  "Agile Rentals.ca gates at needs_operator, not needs_login",
+  selectGate({
+    requiresLogin: true,
+    connected: workerAccountConnected({ channel: "rentals_ca", accountStatus: "needs_setup", automationAuthorized: true }),
+    channelRequiresPayment: false,
+    paymentCleared: false,
+  }) === "needs_operator",
+);
+{
+  const routeSrc0 = readFileSync("app/api/cron/distribution-worker/route.ts", "utf8");
+  ok("route gates on workerAccountConnected", routeSrc0.includes("connected: workerAccountConnected({"));
 }
 
 // --- gate precedence -------------------------------------------------------
