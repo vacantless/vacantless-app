@@ -4002,7 +4002,10 @@ export default async function PropertyDetailPage({
             c.status.value === "posted" || c.status.value === "needs_refresh",
         )}
       >
-        {facebookPageEnabled && (
+        {/* S705: only once the Page is connected. Connecting it is one row
+            in the site list ("Facebook Page: Connect"), not a second card. */}
+        {facebookPageEnabled &&
+          channelAccountByKey.get("facebook_feed")?.status === "connected" && (
           <PageWeeklyPostsCard
             propertyId={p.id}
             accountStatus={channelAccountByKey.get("facebook_feed")?.status ?? null}
@@ -4180,7 +4183,7 @@ export default async function PropertyDetailPage({
               More rental context
             </h3>
             <p className="mt-0.5 text-xs text-gray-500">
-              Vacancy cost, lifecycle status, and the older progress prompt.
+              How long it has been empty and what that costs you.
             </p>
           </div>
           <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">

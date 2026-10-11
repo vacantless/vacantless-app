@@ -359,7 +359,11 @@ export function DistributeTab({
       : null;
   const publishEverywhereSurface = (
     <div className="space-y-4">
-      <ListingPacketCard readiness={listingPacket} propertyId={propertyId} />
+      {/* S705: shown only when a site still needs a detail. A ready listing
+          needs no card saying so. */}
+      {listingPacket.readyChannelCount < listingPacket.channelCount && (
+        <ListingPacketCard readiness={listingPacket} propertyId={propertyId} />
+      )}
       <PublishEverywhere
         propertyId={propertyId}
         basics={basics}

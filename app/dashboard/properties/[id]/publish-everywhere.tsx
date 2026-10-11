@@ -48,7 +48,6 @@ import {
 import {
   derivePublishPreflight,
   resolvePublishMode,
-  summarizeReach,
   isCopilotSupportedKey,
   forYouLiveState,
   liveProofUrlFromPosts,
@@ -100,26 +99,6 @@ const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
   planned: { label: "Coming soon", cls: "bg-gray-100 text-gray-600" },
 };
 
-const BUCKET_META: Record<
-  PublishBucket,
-  { title: string; note: string; dot: string }
-> = {
-  instant: {
-    title: "Connected now",
-    note: "",
-    dot: "bg-green-500",
-  },
-  for_you: {
-    title: "We post these",
-    note: "",
-    dot: "bg-indigo-500",
-  },
-  after_setup: {
-    title: "Needs setup",
-    note: "",
-    dot: "bg-gray-400",
-  },
-};
 
 // A tiny per-channel glyph for the row. Purely decorative; unknown keys fall
 // back to a house. Keeps the surface readable without pulling in brand SVGs.
@@ -265,10 +244,18 @@ function ChannelRow({
   // S691: "Connect once" was a dead chip; it now opens the Connect sites
   // screen for this property. Every row shows what the site costs so a
   // first-time landlord can do the free ones first.
+  // S705: a Facebook Page or Instagram row connects in Settings (where the
+  // Connect / Disconnect controls live) and says "Connect", not "Sign in once".
+  const isMetaRow = row.key === "facebook_feed" || row.key === "instagram";
   const connectHref =
-    row.mode === "needs_connection" && propertyId && wizardEnabled
-      ? `/dashboard/link-portals?property=${encodeURIComponent(propertyId)}`
-      : null;
+    row.mode !== "needs_connection"
+      ? null
+      : isMetaRow
+        ? "/dashboard/settings?tab=distribution#facebook-page"
+        : propertyId && wizardEnabled
+          ? `/dashboard/link-portals?property=${encodeURIComponent(propertyId)}`
+          : null;
+  const connectLabel = isMetaRow ? "Connect →" : "Sign in once →";
   const costLine =
     isLive || row.key === "site" || row.key === "email" ? null : firstRunCostLine(row.key);
   return (
@@ -292,7 +279,7 @@ function ChannelRow({
             href={connectHref}
             className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold underline-offset-2 hover:underline ${chip.cls}`}
           >
-            Sign in once →
+            {connectLabel}
           </a>
         ) : (
           <span
@@ -385,10 +372,6 @@ export function PublishEverywhere({
   >(null);
 
   const addressLabel = basics.address || replyInputs.address || "this rental";
-  const rentLabel =
-    basics.rentCents != null
-      ? `$${Math.round(basics.rentCents / 100).toLocaleString("en-CA")}/mo`
-      : null;
   const publicLink = replyInputs.bookingUrl;
 
   // The record decides what is listed. An unproven channel is absent, not
@@ -415,7 +398,6 @@ export function PublishEverywhere({
       alreadySignedIn: card.robotReady === true,
     };
   });
-  const reach = summarizeReach(resolved.map((r) => r.bucket), true);
   const byBucket = (b: PublishBucket) => resolved.filter((r) => r.bucket === b);
   const instantRows = byBucket("instant");
   const instantDestinationsFromRows = instantRows.map(({ key, label }) => ({
@@ -460,9 +442,11 @@ export function PublishEverywhere({
   // Count only what the landlord can actually see. A hidden channel with a
   // saved ad must not appear in "Live on N sites", or the headline points at
   // something the page does not list.
-  const proofSavedCount = visibleCards.filter(
-    (card) => card.status.value === "posted",
-  ).length;
+  // S705: the headline uses the SAME live rule as each site row
+  // (forYouLiveState), so "Live on N sites" always matches the list below.
+  // It used to count only fresh "posted" cards and read 2 while the list
+  // showed 3 sites Live (an aging ad is still live).
+  const proofSavedCount = resolved.filter((row) => liveStateFor(row).isLive).length;
   const onlineHeadline =
     proofSavedCount > 0
       ? `Live on ${proofSavedCount} ${
@@ -491,130 +475,12 @@ export function PublishEverywhere({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
-      {/* Left: listing summary + the one-click hero. */}
+    <div className="space-y-5">
+      {/* S705: one column. The address card, the right-hand summary panel and
+          the per-site "next step" box are gone: the page header already names
+          the rental, and every site now appears once, in the list below. */}
       <div className="space-y-5">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold ${
-              linkIsLive
-                ? "bg-green-50 text-green-700"
-                : "bg-green-50 text-green-700"
-            }`}
-          >
-            {linkIsLive ? "✓ You're online" : "✓ Ready to post"}
-          </span>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight text-gray-950">
-            {addressLabel}
-          </h3>
-          <div className="mt-1 flex flex-wrap gap-3 text-sm font-medium text-gray-600">
-            {basics.beds != null && <span>🛏 {basics.beds} Bed</span>}
-            {basics.baths != null && <span>🛁 {basics.baths} Bath</span>}
-            {basics.sqft != null && (
-              <span>📐 {basics.sqft.toLocaleString("en-CA")} sqft</span>
-            )}
-            {rentLabel && <span>{rentLabel}</span>}
-          </div>
-        </div>
-
         {linkIsLive ? (
-          stepClarityLiveEnabled ? (
-            <section className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm">
-              <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
-                You&apos;re online
-              </span>
-              <h3 className="mt-3 text-2xl font-semibold text-green-950">
-                {onlineHeadline}
-              </h3>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-                Your Vacantless page is live. We post your ad on each site
-                you pick.{" "}
-                {totalInquiryCount}{" "}
-                {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to
-                this rental so far.
-              </p>
-
-              <div className="mt-4 rounded-2xl border border-green-200 bg-white px-4 py-3">
-                <p className="text-[11px] font-extrabold uppercase tracking-wide text-green-700">
-                  Your next step
-                </p>
-                {postingBlocker ? (
-                  <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h4 className="text-base font-semibold text-green-950">
-                        {postingBlocker.title}
-                      </h4>
-                      <p className="mt-0.5 text-sm text-green-800">
-                        {postingBlocker.detail}
-                      </p>
-                      {postingBlocker.items && postingBlocker.items.length > 1 ? (
-                        <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                          {postingBlocker.items.map((item) => (
-                            <li key={item.href + item.label}>
-                              <a
-                                href={item.href}
-                                className="inline-flex rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-50"
-                              >
-                                {item.label} →
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
-                    <a
-                      href={postingBlocker.href}
-                      className="inline-flex items-center gap-1 rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800"
-                    >
-                      {postingBlocker.action}
-                    </a>
-                  </div>
-                ) : firstOutstandingForYou ? (
-                  <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h4 className="text-base font-semibold text-green-950">
-                        Post on {firstOutstandingForYou.label}
-                      </h4>
-                      {/* S702t: we post it now (GitHub worker). No copy and
-                          paste steps; the site card below holds the one tap. */}
-                      <p className="mt-0.5 text-sm text-green-800">
-                        We post it for you. You approve the post once.
-                      </p>
-                    </div>
-                    <a
-                      href={`#for-you-${firstOutstandingForYou.key}`}
-                      className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-                    >
-                      Go to {firstOutstandingForYou.label} →
-                    </a>
-                  </div>
-                ) : (
-                  <div className="mt-1">
-                    <h4 className="text-base font-semibold text-green-950">
-                      You&apos;re all set
-                    </h4>
-                    <p className="mt-0.5 text-sm text-green-800">
-                      Post again only when the listing changes.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                {publicLink && <CopyLink url={publicLink} />}
-                {!postingBlocker && (
-                  <button
-                    type="button"
-                    onClick={openConfirm}
-                    className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
-                  >
-                    <Icons.bolt className="h-4 w-4" />
-                    Post the changes
-                  </button>
-                )}
-              </div>
-            </section>
-          ) : (
           <section className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm">
             <span className="rounded-full bg-green-600 px-2.5 py-0.5 text-xs font-semibold text-white">
               You&apos;re online
@@ -623,29 +489,59 @@ export function PublishEverywhere({
               {onlineHeadline}
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-              Your Vacantless page is live. Any site that needs you shows its
-              next step below.{" "}
+              Your Vacantless page is live too.{" "}
               {totalInquiryCount}{" "}
-              {totalInquiryCount === 1 ? "inquiry" : "inquiries"} tied to this
+              {totalInquiryCount === 1 ? "inquiry" : "inquiries"} for this
               rental so far.
             </p>
-            {publicLink && (
-              <div className="mt-4">
-                <CopyLink url={publicLink} />
+
+            {postingBlocker && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-white px-4 py-3">
+                <div>
+                  <h4 className="text-base font-semibold text-amber-950">
+                    {postingBlocker.title}
+                  </h4>
+                  <p className="mt-0.5 text-sm text-amber-900">
+                    {postingBlocker.detail}
+                  </p>
+                  {postingBlocker.items && postingBlocker.items.length > 1 ? (
+                    <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                      {postingBlocker.items.map((item) => (
+                        <li key={item.href + item.label}>
+                          <a
+                            href={item.href}
+                            className="inline-flex rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-50"
+                          >
+                            {item.label} →
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+                <a
+                  href={postingBlocker.href}
+                  className="inline-flex items-center gap-1 rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800"
+                >
+                  {postingBlocker.action}
+                </a>
               </div>
             )}
-            {!postingBlocker && (
-              <button
-                type="button"
-                onClick={openConfirm}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
-              >
-                <Icons.bolt className="h-4 w-4" />
-                Post the changes
-              </button>
-            )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {publicLink && <CopyLink url={publicLink} />}
+              {!postingBlocker && (
+                <button
+                  type="button"
+                  onClick={openConfirm}
+                  className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
+                >
+                  <Icons.bolt className="h-4 w-4" />
+                  Post your edits to every site
+                </button>
+              )}
+            </div>
           </section>
-          )
         ) : (
           <section className="relative overflow-hidden rounded-2xl border border-emerald-900 bg-gradient-to-b from-emerald-900 to-emerald-950 p-7 text-center text-white shadow-sm">
             <div className="mx-auto mb-5 grid max-w-2xl gap-2 text-left sm:grid-cols-3">
@@ -746,119 +642,33 @@ export function PublishEverywhere({
           </section>
         )}
 
-        {/* Slice 3: the real for-you handoff. Only with the flag on AND at least
-            one person-posted channel resolved; reuses requestConciergePublish
-            (S695: the sidecar is gone), so with the flag off nothing new renders. */}
-        {copilotEnabled && forYou.length > 0 && (
+        {/* S705: ONE list of sites. Sites we post for you first (each with its
+            one action), then every other site on one line each: connected
+            sites, sites that need a sign-in, and the brokerage route. */}
+        {(forYou.length > 0 || instantRows.length > 0 || setupRows.length > 0) && (
           <ForYouHandoff
             propertyId={propertyId}
             addressLabel={addressLabel}
-            rows={forYou}
+            rows={copilotEnabled ? forYou : []}
             runItems={runItems}
             linkIsLive={linkIsLive}
             conciergeDeskEnabled={conciergeDeskEnabled}
             wizardEnabled={wizardEnabled}
             allSetSummary={liveForYouAllSet}
             postingBlocker={postingBlocker}
-          />
-        )}
-      </div>
-
-      {/* Right: connected channels first, unavailable channels last. */}
-      <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center gap-4 border-b border-gray-100 pb-4">
-          <div className="text-3xl font-black leading-none tracking-tight text-green-700">
-            {reach.included}
-            <span className="mt-1 block text-[10px] font-extrabold uppercase tracking-wider text-gray-500">
-              Included now
-            </span>
-          </div>
-          <div>
-            <div className="mb-1.5 text-[13px] font-bold text-gray-800">
-              What happens
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-bold text-green-700">
-                {reach.instant} connected
-              </span>
-              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                {forYou.filter((r) => forYouNeedsOperatorStep(r)).length} we post
-              </span>
-              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                {setupRows.length} later
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Instant bucket leads with the two always-on destinations. */}
-        <div className="mb-3.5">
-          <BucketLabel bucket="instant" />
-          <ChannelRow
-            row={{
-              key: "site",
-              label: "Vacantless page",
-              mode: "instant_auto",
-              bucket: "instant",
-            }}
-          />
-          <ChannelRow
-            row={{
-              key: "email",
-              label: "Email alerts",
-              mode: "instant_auto",
-              bucket: "instant",
-            }}
-          />
-          {instantRows.map((r) => (
-            <ChannelRow key={r.key} row={r} propertyId={propertyId} live={liveStateFor(r)} />
-          ))}
-        </div>
-
-        {forYou.length > 0 && (
-          <div className="mb-3.5">
-            <BucketLabel bucket="for_you" />
-            {stepClarityLiveEnabled && linkIsLive && (
-              <p className="mb-1.5 text-[11px] leading-relaxed text-gray-500">
-                {firstOutstandingForYou
-                  ? "Same sites as “Post to these sites”; actions stay on the left."
-                  : "Your live sites are listed here; nothing more to do."}
-              </p>
-            )}
-            {forYou.map((r) => (
-              <ChannelRow key={r.key} row={r} propertyId={propertyId} live={liveStateFor(r)} />
-            ))}
-          </div>
-        )}
-
-        {setupRows.length > 0 && (
-          <div className="mb-3.5">
-            <BucketLabel bucket="after_setup" />
-            {setupRows.map((r) => (
+          >
+            {[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].map((r) => (
               <ChannelRow
                 key={r.key}
                 row={r}
                 propertyId={propertyId}
                 wizardEnabled={wizardEnabled}
-                // S700: Rentals.ca / Zumper now sit here until a feed is
-                // accepted; a hand-posted ad must still read Live.
                 live={liveStateFor(r)}
               />
             ))}
-          </div>
+          </ForYouHandoff>
         )}
-
-        {/* S702t: no "Coming soon" list. We show only sites we can post to
-            (DECISION-S696: an unbuilt site still advertises something we
-            cannot do). */}
-        <div className="mt-2 border-t border-gray-100 pt-3 text-[11.5px] leading-relaxed text-gray-500">
-          <b className="text-gray-700">Ready</b> means we post it when you press
-          Post. It shows Live once the link to your ad comes back.
-          <br />
-          <b className="text-gray-700">We post it</b> means we post the ad for
-          you after you approve it. You pay a site only if it charges.
-        </div>
-      </aside>
+      </div>
 
       {confirmOpen && (
           <ConfirmModal
@@ -877,20 +687,6 @@ export function PublishEverywhere({
   );
 }
 
-function BucketLabel({ bucket }: { bucket: PublishBucket }) {
-  const meta = BUCKET_META[bucket];
-  return (
-    <div className="mb-2 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-gray-700">
-      <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
-      {meta.title}
-      {meta.note && (
-        <span className="text-[10.5px] font-semibold normal-case tracking-normal text-gray-400">
-          {meta.note}
-        </span>
-      )}
-    </div>
-  );
-}
 
 // Slice 3 for-you handoff. Each co-pilot channel maps to its live distribution
 // run item (created by publishProperty). Ready -> the honest two-tier choice:
@@ -912,7 +708,9 @@ function ForYouHandoff({
   wizardEnabled = false,
   allSetSummary,
   postingBlocker,
+  children,
 }: {
+  children?: React.ReactNode;
   propertyId: string;
   addressLabel: string;
   rows: ResolvedRow[];
@@ -927,13 +725,8 @@ function ForYouHandoff({
   return (
     <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 shadow-sm">
       <div className="flex items-center gap-2">
-        <span className="text-lg">🤝</span>
         <h3 className="text-base font-semibold tracking-tight text-indigo-950">
-          {postingBlocker
-            ? "Finish your listing first"
-            : allSetSummary
-              ? "Your ads are live"
-              : "Post to these sites"}
+          Your rental sites
         </h3>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-900/80">
@@ -966,9 +759,14 @@ function ForYouHandoff({
           />
         ))}
       </ul>
+      {children ? (
+        <div className="mt-3 rounded-xl border border-indigo-100 bg-white px-3 py-1">
+          {children}
+        </div>
+      ) : null}
       {conciergeDeskEnabled && !postingBlocker && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
-          We save the link to your ad before it shows as Live.
+          A site shows Live once the link to your ad is saved.
         </p>
       )}
     </section>
