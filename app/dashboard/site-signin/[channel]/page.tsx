@@ -54,8 +54,9 @@ export default async function SiteSigninPage({
     latest && Date.now() - Date.parse(latest.created_at as string) < 60 * 60 * 1000 ? latest : null;
   const name = SITE_SIGNIN_LABEL[channel];
   const intro = siteSigninView(channel, null);
-  const canStart =
-    !recent || (!siteSigninIsOpen(recent.status as string) && recent.status !== "done");
+  // S705: a finished window can always be redone (sign in again, or a
+  // different account). Only an open window blocks a new one.
+  const canStart = !recent || !siteSigninIsOpen(recent.status as string);
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-6">
@@ -100,7 +101,7 @@ export default async function SiteSigninPage({
             type="submit"
             className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
           >
-            {recent ? "Try again" : `Sign in to ${name}`}
+            {recent?.status === "done" ? "Sign in again" : recent ? "Try again" : `Sign in to ${name}`}
           </button>
         </form>
       )}
