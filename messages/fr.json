@@ -36,7 +36,7 @@
       "connectedNeedsAuth": "À vous",
       "connectedNeedsAuthSub": "Connecté en tant que {label}. Permettez-nous de publier ici.",
       "checking": "Vérification",
-      "checkingSub": "Nous vérifions votre compte {name}. Cela prend moins d'une minute.",
+      "checkingSub": "Nous vérifions votre compte {name}. Cela prend quelques minutes.",
       "deadSession": "À vous",
       "deadSessionSub": "Votre accès {name} a pris fin : {reason}. Reconnectez-vous.",
       "capReached": "À vous",

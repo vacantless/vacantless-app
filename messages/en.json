@@ -36,7 +36,7 @@
       "connectedNeedsAuth": "Needs you",
       "connectedNeedsAuthSub": "Signed in as {label}. Allow us to post here.",
       "checking": "Checking",
-      "checkingSub": "We are checking your {name} account. It takes under a minute.",
+      "checkingSub": "We are checking your {name} account. It takes a few minutes.",
       "deadSession": "Needs you",
       "deadSessionSub": "Your {name} sign-in ended: {reason}. Sign in again.",
       "capReached": "Needs you",

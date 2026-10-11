@@ -13,8 +13,9 @@ import type { LinkPortalTileVM, LinkPortalsVM } from "./view-model";
 // to 90 s until every polled tile's lastCheckedAt moves. With the flag off it
 // never fetches or writes: the page is a plain render of the rows.
 
-const POLL_EVERY_MS = 5_000;
-const POLL_FOR_MS = 90_000;
+// S706: a check runs on GitHub and takes about 3 minutes.
+const POLL_EVERY_MS = 10_000;
+const POLL_FOR_MS = 300_000;
 
 export function ConnectTiles({ initial }: { initial: LinkPortalsVM }) {
   const [vm, setVm] = useState<LinkPortalsVM>(initial);

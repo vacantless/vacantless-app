@@ -10,6 +10,7 @@ import {
   sessionCheckThrottled,
   splitByConnectKind,
 } from "@/lib/distribution-session-status";
+import { triggerSessionCheck } from "@/lib/site-signin-dispatch";
 
 // Post Everywhere Slice 1 (SPEC-S688 section 3.3). The connect tile POSTs the
 // channels it found stale; account_login channels get check_requested_at set
@@ -82,7 +83,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // S706: run the check now (about 3 minutes on GitHub) rather than at the
+  // daily 10:41 UTC run. The worker's due filter still decides what it probes.
+  const dispatched = await triggerSessionCheck(org.id, requestResult.requested);
+
   return NextResponse.json({
+    dispatched,
     requested: requestResult.requested,
     missing: requestResult.missing,
     probed: probed.map((p) => ({

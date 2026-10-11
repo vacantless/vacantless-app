@@ -10,7 +10,7 @@ import {
   siteSigninSafeViewUrl,
   siteSigninView,
 } from "../lib/site-signin";
-import { signinWindowRequest, triggerSigninWindow } from "../lib/site-signin-dispatch";
+import { sessionCheckRequest, signinWindowRequest, triggerSessionCheck, triggerSigninWindow } from "../lib/site-signin-dispatch";
 import { readFileSync } from "node:fs";
 
 let passed = 0;
@@ -58,6 +58,14 @@ async function main() {
   ok("204 = dispatched", (await triggerSigninWindow("w", (async () => new Response(null, { status: 204 })) as typeof fetch, "t")) === true);
   ok("refusal = false", (await triggerSigninWindow("w", (async () => new Response(null, { status: 404 })) as typeof fetch, "t")) === false);
   ok("a throw = false", (await triggerSigninWindow("w", (async () => { throw new Error("x"); }) as typeof fetch, "t")) === false);
+
+  const sc = sessionCheckRequest("t0k", "org-1", ["zumper"], "vacantless/vacantless-worker");
+  const scBody = JSON.parse(String(sc.init.body));
+  ok("session check dispatch event", sc.url.endsWith("/vacantless/vacantless-worker/dispatches") && scBody.event_type === "session-check" && scBody.client_payload.org_id === "org-1" && scBody.client_payload.channels[0] === "zumper", scBody);
+  ok("session check: nothing requested, no dispatch", (await triggerSessionCheck("o", [], (async () => new Response(null, { status: 204 })) as typeof fetch, "t")) === false);
+  ok("session check: no token, no dispatch", (await triggerSessionCheck("o", ["zumper"], (async () => new Response(null, { status: 204 })) as typeof fetch, undefined)) === false);
+  ok("session check: 204 = dispatched", (await triggerSessionCheck("o", ["zumper"], (async () => new Response(null, { status: 204 })) as typeof fetch, "t")) === true);
+  ok("tile copy no longer promises under a minute", !/under a minute/.test(readFileSync("messages/en.json", "utf8")));
 
   // The page and actions keep their guards.
   const actions = readFileSync("app/dashboard/site-signin/[channel]/actions.ts", "utf8");

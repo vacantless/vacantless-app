@@ -4,10 +4,14 @@
 import { POST_NOW_REPO } from "./post-now";
 
 export const SIGNIN_WINDOW_EVENT = "signin-window";
+// S706: a "Checking" tile asks the worker to run session-check.yml now
+// instead of waiting for the daily 10:41 UTC run.
+export const SESSION_CHECK_EVENT = "session-check";
 
-export function signinWindowRequest(
+export function githubDispatchRequest(
   token: string,
-  windowId: string,
+  eventType: string,
+  clientPayload: Record<string, unknown>,
   repo: string = POST_NOW_REPO,
 ): { url: string; init: RequestInit } {
   return {
@@ -20,10 +24,33 @@ export function signinWindowRequest(
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ event_type: SIGNIN_WINDOW_EVENT, client_payload: { window_id: windowId } }),
+      body: JSON.stringify({ event_type: eventType, client_payload: clientPayload }),
       cache: "no-store",
     },
   };
+}
+
+export function signinWindowRequest(
+  token: string,
+  windowId: string,
+  repo: string = POST_NOW_REPO,
+): { url: string; init: RequestInit } {
+  return githubDispatchRequest(token, SIGNIN_WINDOW_EVENT, { window_id: windowId }, repo);
+}
+
+async function send(
+  req: { url: string; init: RequestInit },
+  fetchImpl: typeof fetch,
+): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetchImpl(req.url, { ...req.init, signal: controller.signal });
+    clearTimeout(timer);
+    return res.status === 204;
+  } catch {
+    return false;
+  }
 }
 
 export async function triggerSigninWindow(
@@ -32,14 +59,24 @@ export async function triggerSigninWindow(
   token: string | undefined = process.env.POST_NOW_GITHUB_TOKEN,
 ): Promise<boolean> {
   if (!token) return false;
-  try {
-    const { url, init } = signinWindowRequest(token, windowId);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-    const res = await fetchImpl(url, { ...init, signal: controller.signal });
-    clearTimeout(timer);
-    return res.status === 204;
-  } catch {
-    return false;
-  }
+  return send(signinWindowRequest(token, windowId), fetchImpl);
+}
+
+export function sessionCheckRequest(
+  token: string,
+  orgId: string,
+  channels: readonly string[],
+  repo: string = POST_NOW_REPO,
+): { url: string; init: RequestInit } {
+  return githubDispatchRequest(token, SESSION_CHECK_EVENT, { org_id: orgId, channels: [...channels] }, repo);
+}
+
+export async function triggerSessionCheck(
+  orgId: string,
+  channels: readonly string[],
+  fetchImpl: typeof fetch = fetch,
+  token: string | undefined = process.env.POST_NOW_GITHUB_TOKEN,
+): Promise<boolean> {
+  if (!token || channels.length === 0) return false;
+  return send(sessionCheckRequest(token, orgId, channels), fetchImpl);
 }
