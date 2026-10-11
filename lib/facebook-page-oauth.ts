@@ -233,7 +233,12 @@ export function facebookReturnPath(
 ): string {
   const params = new URLSearchParams({ fb: status });
   if (reason) params.set("reason", reason);
-  if (!propertyId) return `/dashboard/properties?${params.toString()}`;
+  // S705: a connect started from Settings (no rental) comes back to Settings,
+  // where the Connect / Disconnect controls now live.
+  if (!propertyId) {
+    params.set("tab", "distribution");
+    return `/dashboard/settings?${params.toString()}#facebook-page`;
+  }
   params.set("tab", "distribute");
   return `/dashboard/properties/${encodeURIComponent(propertyId)}?${params.toString()}#distribute-header`;
 }

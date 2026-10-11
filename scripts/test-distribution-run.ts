@@ -218,8 +218,9 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       !distributeSource.includes("function SimpleGetOnline"),
   );
   ok(
-    "Publish Everywhere is the one simple surface",
-    distributeSource.includes("simple={publishEverywhereSurface}") &&
+    "Publish Everywhere is the one surface (S705: no simple/advanced toggle)",
+    distributeSource.includes("{publishEverywhereSurface}") &&
+      !distributeSource.includes("GetOnlineView") &&
       distributeSource.includes("<PublishEverywhere"),
   );
 }
@@ -235,9 +236,9 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       distributeSource.includes("Save the link to your ad"),
   );
   ok(
-    "heavier channel tools sit behind per-channel disclosure",
-    distributeSource.includes("Posting tools") &&
-      distributeSource.includes("Full wording and answers"),
+    "S705: the per-channel posting tools are cut; each site keeps only its links",
+    !distributeSource.includes("Posting tools") &&
+      distributeSource.includes("<ChannelLinks"),
   );
 }
 {

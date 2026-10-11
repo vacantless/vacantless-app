@@ -43,6 +43,12 @@ import { RenterPagePreview } from "@/components/renter-page-preview";
 import { SettingsTabs, type SettingsTab } from "@/components/settings-tabs";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { PageHeader, IconTile } from "@/components/ui";
+import {
+  facebookOAuthConfigured,
+  fbPageChannelEnabled,
+  igChannelEnabledForOrg,
+} from "@/lib/facebook-page-oauth";
+import { FacebookPageCard, type FacebookPageCardView } from "./facebook-page-card";
 import { Icons } from "@/components/icons";
 import RotessaSettingsCard, {
   type RotessaAccountView,
@@ -117,7 +123,7 @@ function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   ) {
     return t;
   }
-  if (sp.distribution) return "distribution";
+  if (sp.distribution || sp.fb) return "distribution";
   if (sp.rotessa || sp.stripeconnect) return "banking";
   if (sp.features) return "account";
   if (sp.test || sp.sender || sp.renter || sp.sms || sp.confirm || sp.autoclose || sp.compliance) {
@@ -334,6 +340,7 @@ export default async function SettingsPage({
     close?: string; // Plan & admin → Close this account flash (S702)
     feed?: string; // Public Page & Brand → syndication contact flash
     distribution?: string; // Distribution → channel account/setup flash
+    fb?: string; // Distribution → Facebook Page connect/disconnect flash (S705)
   };
 }) {
   const org = await getCurrentOrg();
@@ -524,6 +531,35 @@ export default async function SettingsPage({
   const distributionAccountByChannel = new Map<string, DistributionAccountRow>();
   for (const row of (distributionAccountRows ?? []) as DistributionAccountRow[]) {
     distributionAccountByChannel.set(row.channel, row);
+  }
+  // S705: the Facebook Page card. Read capabilities on their own so the main
+  // account query above keeps its shape.
+  const facebookPageEnabled = facebookOAuthConfigured() && fbPageChannelEnabled();
+  let facebookPageView: FacebookPageCardView | null = null;
+  if (facebookPageEnabled) {
+    const { data: metaRows } = await supabase
+      .from("distribution_channel_accounts")
+      .select("channel, account_status, external_account_label, capabilities")
+      .eq("organization_id", org.id)
+      .in("channel", ["facebook_feed", "instagram"]);
+    type MetaRow = {
+      channel: string;
+      account_status: string | null;
+      external_account_label: string | null;
+      capabilities: Record<string, unknown> | null;
+    };
+    const rows = (metaRows ?? []) as MetaRow[];
+    const fbRow = rows.find((r) => r.channel === "facebook_feed") ?? null;
+    const igRow = rows.find((r) => r.channel === "instagram") ?? null;
+    facebookPageView = {
+      pageStatus: fbRow?.account_status ?? null,
+      pageName: fbRow?.external_account_label ?? null,
+      instagramEnabled: igChannelEnabledForOrg(org.id),
+      instagramStatus: igRow?.account_status ?? null,
+      instagramLabel: igRow?.external_account_label ?? null,
+      instagramHasBusinessAccount:
+        igRow?.capabilities?.linked_ig_business_account !== false,
+    };
   }
   const distributionChannels = allChannelCapabilities().map((cap) => {
     const account = distributionAccountByChannel.get(cap.channel) ?? null;
@@ -1072,6 +1108,10 @@ export default async function SettingsPage({
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               Something went wrong saving the channel setup. Please try again.
             </div>
+          )}
+
+          {facebookPageView && (
+            <FacebookPageCard view={facebookPageView} flash={searchParams.fb} />
           )}
 
           {/* S702u: landlords see a plain page. The per-site control room

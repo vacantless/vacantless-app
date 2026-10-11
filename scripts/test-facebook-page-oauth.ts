@@ -67,8 +67,9 @@ ok(
     "/dashboard/properties/prop1?fb=connected&tab=distribute#distribute-header",
 );
 ok(
-  "error return path carries reason",
-  facebookReturnPath(null, "error", "state") === "/dashboard/properties?fb=error&reason=state",
+  "a connect with no rental returns to Settings and carries the reason",
+  facebookReturnPath(null, "error", "state") ===
+    "/dashboard/settings?fb=error&reason=state&tab=distribution#facebook-page",
 );
 ok(
   "facebook scopes stay FB-only by default",

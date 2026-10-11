@@ -63,6 +63,7 @@ import {
   igChannelEnabledForOrg,
   FACEBOOK_FEED_CHANNEL,
   INSTAGRAM_CHANNEL,
+  facebookReturnPath,
 } from "@/lib/facebook-page-oauth";
 import {
   buildInstagramCaption,
@@ -924,7 +925,7 @@ export async function disconnectFacebookPage(formData: FormData) {
     if (propertyId) {
       redirect(`/dashboard/properties/${propertyId}?fb=error&reason=config#distribute-header`);
     }
-    redirect("/dashboard/properties?fb=error&reason=config");
+    redirect(facebookReturnPath(null, "error", "config"));
   }
 
   await deleteChannelSession({
@@ -992,7 +993,9 @@ export async function disconnectFacebookPage(formData: FormData) {
     revalidatePath(`/dashboard/properties/${propertyId}`);
     redirect(`/dashboard/properties/${propertyId}?fb=disconnected#distribute-header`);
   }
-  redirect("/dashboard/properties?fb=disconnected");
+  // S705: Disconnect lives in Settings now; come back there.
+  revalidatePath("/dashboard/settings");
+  redirect(facebookReturnPath(null, "disconnected"));
 }
 
 // ---------------------------------------------------------------------------

@@ -54,8 +54,13 @@ const SURFACES: Surface[] = [
   // The property-page files that survive DECISION-S694 (the seven of ROADMAP
   // section 1, minus the four self-guided ones listed in BEING_REMOVED).
   { file: "app/dashboard/properties/[id]/publish-everywhere.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/[id]/channel-publish-rail.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
+  // S705: the Facebook Page Connect / Disconnect card, moved out of the
+  // removed Advanced tools view.
+  { file: "app/dashboard/settings/facebook-page-card.tsx", mode: "ui" },
+  // S705: what is left of the Get online tab after the Advanced tools cut:
+  // Publish Everywhere wrapper plus the live-ad-link list.
+  { file: "app/dashboard/properties/[id]/distribute-tab.tsx", mode: "ui" },
   // The wizard.
   { file: "app/dashboard/link-portals/page.tsx", mode: "ui" },
   { file: "app/dashboard/link-portals/connect-tiles.tsx", mode: "ui" },
@@ -74,7 +79,6 @@ const SURFACES: Surface[] = [
   { file: "lib/distribution-channels.ts", mode: "ui" },
   // The wrapper of the Get online tab, the Post button, the lifecycle rail, and
   // the one line under every site chip (the file WP2 rewrites).
-  { file: "app/dashboard/properties/[id]/get-online-view.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/confirm-publish-button.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/lifecycle-rail.tsx", mode: "ui" },
   { file: "lib/distribution-channel-tile-statuses.ts", mode: "ui" },
@@ -204,10 +208,7 @@ const OUT_OF_SCOPE: Record<string, string> = {
  * run-item state machine feeds the worker, only its `buildRunSteps` checklist
  * copy belongs to the removed path.
  */
-const BEING_REMOVED: Record<string, string> = {
-  "app/dashboard/properties/[id]/distribute-tab.tsx":
-    "assisted-manual command centre; its tracked-post rows move to the after-live status",
-};
+const BEING_REMOVED: Record<string, string> = {};
 
 /**
  * The whole dashboard subtree is swept for landlord copy that is NOT yet gated,

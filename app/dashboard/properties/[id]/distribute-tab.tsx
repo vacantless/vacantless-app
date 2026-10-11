@@ -8,28 +8,20 @@
 // the listing goes and WHAT still needs a human step.
 //
 // Server component: it renders <form action={serverAction}> directly and leans
-// on two existing client islands for interactivity — CopyLink (tracked links)
-// and CopyTextButton (channel wording). Nothing here posts to a portal or logs
-// into anything: assisted-manual only, honest by design.
+// on one client island for interactivity, CopyLink (tracked links). S705: the
+// "Advanced tools" channel cards, partner setup and Facebook Page controls are
+// gone; Connect / Disconnect Facebook Page lives in Settings. What remains below
+// Publish Everywhere is the live-ad-link list.
 
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
-import { CopyTextButton } from "@/components/copy-text-button";
 import {
   addListingPost,
   updateListingPost,
   removeListingPost,
-  upsertPartnerAccount,
 } from "../actions";
-import { disconnectFacebookPage } from "../distribution-actions";
 import { startConciergePackCheckout } from "../../billing/actions";
-import {
-  PARTNER_STATUSES,
-  partnerStatusLabel,
-  partnerStatusTone,
-  partnerNextStep,
-  type PartnerStatus,
-} from "@/lib/distribution-partner";
+import type { PartnerStatus } from "@/lib/distribution-partner";
 import {
   channelModeLabel,
   channelStatusLabel,
@@ -62,8 +54,6 @@ import {
 } from "@/lib/distribution-run";
 import type { DistributionKeepLiveAction } from "@/lib/distribution-channel-contracts";
 import type { DistributionLifecycleAttention } from "@/lib/distribution-freshness";
-import { buildReplySnippets } from "@/lib/reply-snippets";
-import { GetOnlineView } from "./get-online-view";
 import type {
   ListingPacketChannelReadiness,
   ListingPacketMissingField,
@@ -259,8 +249,6 @@ const FIELD_CLASS =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm";
 const PRIMARY_BTN =
   "rounded-lg px-4 py-2 text-sm font-medium text-white";
-const SECONDARY_BTN =
-  "inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50";
 
 
 export type DistributeRunNotice = {
@@ -329,8 +317,17 @@ export function DistributeTab({
   const proofIssueCount = channelCards.filter(
     (card) => card.status.value === "problem",
   ).length;
+  // S705: the live-ad-link list shows the sites this landlord can see (the
+  // same list as the posting surface), plus any site that already holds a
+  // saved link, so no saved link is ever stranded out of sight.
+  const linkCards = channelCards.filter(
+    (card) =>
+      card.posts.length > 0 ||
+      shownChannelKeys === null ||
+      shownChannelKeys.includes(card.channel.key as string),
+  );
   const channelCardGroups = groupByDistributionChannelDisplayGroup(
-    channelCards,
+    linkCards,
     (card) => card.channel.category,
   );
   const firstListingPacketMissing = listingPacket.missingRequired[0] ?? null;
@@ -390,7 +387,10 @@ export function DistributeTab({
       />
     </div>
   );
-  const advancedTools = (
+  // S705: the "Advanced tools" view is gone (post-Meta deletion order). The
+  // Facebook Page Connect / Disconnect controls moved to Settings; what stays
+  // here is the one place to save, fix or remove a live ad link by hand.
+  const liveAdLinks = (
     <>
       {/* Proof links (Slice 1): keep source-of-truth live ad URLs easy to save;
           tuck heavier posting tools behind per-channel disclosure rows. */}
@@ -422,14 +422,13 @@ export function DistributeTab({
                 </h4>
                 <div className="space-y-3">
                   {items.map((card) => (
-                    <ChannelCard
+                    <ChannelLinks
                       key={card.channel.key}
                       card={card}
                       propertyId={propertyId}
                       linkIsLive={linkIsLive}
                       addFormKey={addFormKey}
                       today={today}
-                      replyInputs={replyInputs}
                     />
                   ))}
                 </div>
@@ -525,12 +524,8 @@ export function DistributeTab({
         )}
       </div>
 
-      <GetOnlineView
-        orgDefaultMode="simple"
-        linkIsLive={linkIsLive}
-        simple={publishEverywhereSurface}
-        advanced={advancedTools}
-      />
+      {publishEverywhereSurface}
+      {liveAdLinks}
     </div>
   );
 }
@@ -863,40 +858,23 @@ function packetReadyDetail(channel: ListingPacketChannelReadiness): string {
 // S695: the RentFaster posting kit (field sheet + gotchas, S262/S412) was
 // removed with the self-guided posting path (DECISION-S694).
 
-function ChannelCard({
+function ChannelLinks({
   card,
   propertyId,
   linkIsLive,
   addFormKey,
   today,
-  replyInputs,
 }: {
   card: DistributeChannelCard;
   propertyId: string;
   linkIsLive: boolean;
   addFormKey: string;
   today: string;
-  replyInputs: ReplyInputs;
 }) {
-  const { channel, status, copy, feed, partner } = card;
-  const facebookPage = card.facebookPage;
-  const instagramAccount = card.instagramAccount;
+  const { channel, status } = card;
   const tone = channelStatusTone(status.value);
   const brokerRail =
     channel.mode === "broker" || channel.integrationStatus === "mls_gated";
-  const combinedCopy = copy ? `${copy.title}\n\n${copy.body}` : null;
-  // Reply snippets for the assisted-manual + feed channels (a renter messages
-  // the operator; these route them to the branded booking page). Broker
-  // (Realtor.ca, no copyKey) doesn't take DMs, so no snippets there.
-  const replySnippets =
-    channel.copyKey !== null
-      ? buildReplySnippets({
-          channelKey: channel.key,
-          address: replyInputs.address,
-          bookingUrl: replyInputs.bookingUrl,
-          rentLabel: replyInputs.rentLabel,
-        })
-      : [];
   const refreshAge =
     status.value === "needs_refresh" && status.lastPostedOn
       ? daysBetween(status.lastPostedOn, today)
@@ -996,171 +974,6 @@ function ChannelCard({
         )}
       </div>
 
-      <details className="mt-3 border-t border-gray-100 pt-3">
-        <summary className="cursor-pointer text-xs font-semibold text-brand">
-          Posting tools
-        </summary>
-        <div className="mt-3 space-y-3">
-          <p className="text-xs text-gray-500">{channel.blurb}</p>
-
-          {channel.key === "facebook_feed" && facebookPage?.enabled && (
-            <div className="space-y-2 border-l-2 border-gray-200 pl-3 text-xs text-gray-600">
-              <p>
-                A Page post reaches people who follow your Page. For renters
-                on Marketplace, use the Marketplace site instead.
-              </p>
-              {facebookPage.accountStatus === "connected" && facebookPage.pageName ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-gray-800">
-                    Connected: {facebookPage.pageName}
-                  </span>
-                  <form action={disconnectFacebookPage}>
-                    <input type="hidden" name="property_id" value={propertyId} />
-                    <button
-                      type="submit"
-                      className="text-xs font-medium text-red-600 underline"
-                    >
-                      Disconnect
-                    </button>
-                  </form>
-                </div>
-              ) : (
-                <a
-                  href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
-                  className={SECONDARY_BTN}
-                >
-                  Connect Facebook Page
-                </a>
-              )}
-            </div>
-          )}
-
-          {channel.key === "instagram" && instagramAccount?.enabled && (
-            <div className="space-y-2 border-l-2 border-gray-200 pl-3 text-xs text-gray-600">
-              <p>
-                We post one photo with a caption to your Instagram. The
-                caption carries your inquiry link.
-              </p>
-              {instagramAccount.accountStatus === "connected" && instagramAccount.label ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-gray-800">
-                    Connected: {instagramAccount.label}
-                    {instagramAccount.pageName ? ` via ${instagramAccount.pageName}` : ""}
-                  </span>
-                  <form action={disconnectFacebookPage}>
-                    <input type="hidden" name="property_id" value={propertyId} />
-                    <button
-                      type="submit"
-                      className="text-xs font-medium text-red-600 underline"
-                    >
-                      Disconnect
-                    </button>
-                  </form>
-                </div>
-              ) : instagramAccount.hasLinkedBusinessAccount === false ? (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  The connected Facebook Page does not have a linked Instagram
-                  Business account.
-                </p>
-              ) : (
-                <a
-                  href={`/api/integrations/facebook/connect?propertyId=${encodeURIComponent(propertyId)}`}
-                  className={SECONDARY_BTN}
-                >
-                  Connect Facebook Page
-                </a>
-              )}
-            </div>
-          )}
-
-          {status.blockers.length > 0 && (
-            <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                Before posting
-              </p>
-              <ul className="space-y-1">
-                {status.blockers.map((b) => (
-                  <li
-                    key={b}
-                    className="flex items-start gap-1.5 text-xs text-gray-600"
-                  >
-                    <span aria-hidden className="mt-px text-amber-500">
-                      ○
-                    </span>
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {feed && (
-            <p className="text-xs text-gray-500">
-              <span className="font-medium text-gray-700">Partner sites:</span>{" "}
-              {feed.inFeed
-                ? "Sent on. Each partner site decides when to show it."
-                : feed.hint}
-            </p>
-          )}
-
-          {channel.feedEligible && (
-            <PartnerSection
-              channelKey={channel.key}
-              channelLabel={channel.label}
-              propertyId={propertyId}
-              partner={partner}
-            />
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              href={channel.portalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={SECONDARY_BTN}
-            >
-              Open {channel.label} →
-            </a>
-            {combinedCopy && (
-              <CopyTextButton
-                value={combinedCopy}
-                label="Copy this site's wording"
-              />
-            )}
-            <a
-              href="#listing-copy-title"
-              className="text-xs font-medium text-brand underline"
-            >
-              Full wording and answers →
-            </a>
-          </div>
-
-          {replySnippets.length > 0 && (
-            <details>
-              <summary className="cursor-pointer text-xs font-medium text-brand">
-                Reply snippets
-              </summary>
-              <div className="mt-2 space-y-2">
-                {replySnippets.map((s) => (
-                  <div
-                    key={s.key}
-                    className="rounded-lg border border-gray-200 bg-gray-50 p-2.5"
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                        {s.label}
-                      </span>
-                      <CopyTextButton value={s.text} label="Copy" />
-                    </div>
-                    <p className="text-xs text-gray-700">{s.text}</p>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-        </div>
-      </details>
     </div>
   );
 }
@@ -1410,173 +1223,6 @@ function PostFields({
 }
 
 // --- feed-partner onboarding (Slice 3) -------------------------------------
-
-function PartnerSection({
-  channelKey,
-  channelLabel,
-  propertyId,
-  partner,
-}: {
-  channelKey: string;
-  channelLabel: string;
-  propertyId: string;
-  partner: PartnerAccountView | null;
-}) {
-  const status: PartnerStatus = partner?.status ?? "not_started";
-  const tone = partnerStatusTone(status);
-  const nextStep = partnerNextStep({
-    status,
-    hasFeedUrl: !!partner?.feedUrl,
-  });
-
-  return (
-    <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-          Partner site
-        </span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CHIP[tone]}`}
-        >
-          {partnerStatusLabel(status)}
-        </span>
-      </div>
-      <p className="mb-2 text-xs text-gray-600">{nextStep}</p>
-      <details>
-        <summary className="cursor-pointer text-xs font-medium text-brand">
-          {partner ? "Update partner setup" : "Set up a partner site"}
-        </summary>
-        <form
-          action={upsertPartnerAccount}
-          className="mt-3 space-y-3 border-t border-gray-100 pt-3"
-        >
-          <input type="hidden" name="property_id" value={propertyId} />
-          <input type="hidden" name="channel" value={channelKey} />
-          <div className="flex flex-wrap gap-3">
-            <div className="w-40">
-              <label
-                htmlFor={`partner-${channelKey}-status`}
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Status
-              </label>
-              <select
-                id={`partner-${channelKey}-status`}
-                name="status"
-                defaultValue={status}
-                className={FIELD_CLASS}
-              >
-                {PARTNER_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {partnerStatusLabel(s)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="min-w-[12rem] flex-1">
-              <label
-                htmlFor={`partner-${channelKey}-contact`}
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Partner contact
-              </label>
-              <input
-                id={`partner-${channelKey}-contact`}
-                name="partner_contact"
-                defaultValue={partner?.partnerContact ?? ""}
-                placeholder="name@partner.com"
-                className={FIELD_CLASS}
-              />
-            </div>
-          </div>
-          <div>
-            <label
-              htmlFor={`partner-${channelKey}-feed-url`}
-              className="mb-1 block text-xs font-medium text-gray-600"
-            >
-              Link sent to {channelLabel}
-            </label>
-            <input
-              id={`partner-${channelKey}-feed-url`}
-              name="feed_url"
-              defaultValue={partner?.feedUrl ?? ""}
-              placeholder="https://app.vacantless.com/api/feed/..."
-              className={FIELD_CLASS}
-            />
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <div className="w-40">
-              <label
-                htmlFor={`partner-${channelKey}-submitted`}
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Submitted
-              </label>
-              <input
-                id={`partner-${channelKey}-submitted`}
-                name="submitted_on"
-                type="date"
-                defaultValue={partner?.submittedOn ?? ""}
-                className={FIELD_CLASS}
-              />
-            </div>
-            <div className="w-40">
-              <label
-                htmlFor={`partner-${channelKey}-accepted`}
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Accepted
-              </label>
-              <input
-                id={`partner-${channelKey}-accepted`}
-                name="accepted_on"
-                type="date"
-                defaultValue={partner?.acceptedOn ?? ""}
-                className={FIELD_CLASS}
-              />
-            </div>
-            <div className="w-40">
-              <label
-                htmlFor={`partner-${channelKey}-checked`}
-                className="mb-1 block text-xs font-medium text-gray-600"
-              >
-                Last checked
-              </label>
-              <input
-                id={`partner-${channelKey}-checked`}
-                name="last_checked_on"
-                type="date"
-                defaultValue={partner?.lastCheckedOn ?? ""}
-                className={FIELD_CLASS}
-              />
-            </div>
-          </div>
-          <div>
-            <label
-              htmlFor={`partner-${channelKey}-notes`}
-              className="mb-1 block text-xs font-medium text-gray-600"
-            >
-              Notes {partner?.status === "rejected" ? "on why it was turned down" : ""}
-            </label>
-            <input
-              id={`partner-${channelKey}-notes`}
-              name="notes"
-              defaultValue={partner?.notes ?? ""}
-              className={FIELD_CLASS}
-            />
-          </div>
-          <button
-            type="submit"
-            className={PRIMARY_BTN}
-            style={{ backgroundColor: "var(--brand-color)" }}
-          >
-            Save partner setup
-          </button>
-        </form>
-      </details>
-    </div>
-  );
-}
 
 function IconTile({ children }: { children: React.ReactNode }) {
   return (
