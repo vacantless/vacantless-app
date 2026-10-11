@@ -1015,6 +1015,10 @@ function ForYouRow({
     !isLive && (gate === "needs_operator" || gate === "needs_payment");
   // needs_login can't be approved — it needs a re-connect, so route to posting assist.
   const needsConnect = !isLive && gate === "needs_login";
+  // S703: the run item still says live but its ad is gone (expired or
+  // removed on the site, so the listing row no longer proves it). Re-staging
+  // the site resets the item, so offer the same "add" step as a fresh site.
+  const repostable = !isLive && item != null && item.publishStatus === "live";
   const working =
     !isLive &&
     (gate === "queued" || gate === "submitting" || gate === "submitted");
@@ -1078,7 +1082,7 @@ function ForYouRow({
         ) : (
           <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
         )
-      ) : item == null ? (
+      ) : item == null || repostable ? (
         linkIsLive ? (
           <form
             action={startSitePost}
@@ -1090,7 +1094,7 @@ function ForYouRow({
               type="submit"
               className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
             >
-              Add this site →
+              {repostable ? "Post it again →" : "Add this site →"}
             </button>
           </form>
         ) : (

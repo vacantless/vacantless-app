@@ -65,5 +65,8 @@ ok("Add this site accepts robot sites", actions.includes("isCopilotChannel(chann
 ok("page marks authorized robot sites ready", page.includes("isRobotPostedChannel(channel.key) &&") && page.includes("robotReady: card.robotReady === true"));
 ok("publish surface passes robotReady", pe.includes("robotReady: card.robotReady === true"));
 
+// S703: a site whose ad died can be posted again from the app.
+ok("dead live item offers Post it again", pe.includes('item.publishStatus === "live"') && pe.includes("item == null || repostable") && pe.includes('"Post it again →"'));
+
 console.log(`\nposting-lanes: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
