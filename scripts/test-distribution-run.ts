@@ -425,7 +425,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       ) &&
       publishEverywhereSource.includes("postingBlocked && !isLive") &&
       publishEverywhereSource.indexOf("postingBlocked && !isLive") <
-        publishEverywhereSource.indexOf("item == null ? (") &&
+        publishEverywhereSource.indexOf("item == null || repostable ? (") &&
       publishEverywhereSource.includes("conciergeDeskEnabled && !postingBlocker"),
   );
   // S695: the control room is gone; entry links land on the tab header.

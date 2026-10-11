@@ -1,4 +1,4 @@
-import { isHiddenMarketplace } from "@/lib/posting-lanes";
+import { isHiddenForOrg } from "@/lib/posting-lanes";
 import { getFormatter, getTranslations } from "next-intl/server";
 import {
   channelByKey,
@@ -93,7 +93,8 @@ export async function buildLinkPortalsViewModel(
     const channel = channelByKey(row.channel);
     if (!channel) return null;
     // S702v: Marketplace shows only for orgs that post it by hand today.
-    if (isHiddenMarketplace(row.channel, orgId)) return null;
+    // S704: Rentals.ca shows only for Agile (our robot cannot post it).
+    if (isHiddenForOrg(row.channel, orgId)) return null;
 
     const copy = stage1StatusCopy(row.state, channel.connectKind);
     const label = row.accountLabel ?? channel.label;

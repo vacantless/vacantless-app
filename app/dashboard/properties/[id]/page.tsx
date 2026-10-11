@@ -2,7 +2,7 @@ import Link from "next/link";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { showOnlyProvenChannelsEnabled } from "@/lib/channel-provenness";
 import { loadShownChannelKeys } from "./provenness-load";
-import { isHiddenMarketplace, isRobotPostedChannel, withoutHiddenMarketplace } from "@/lib/posting-lanes";
+import { isHiddenForOrg, isRobotPostedChannel, withoutHiddenChannels } from "@/lib/posting-lanes";
 import { loadQuestionSheet } from "@/lib/question-sheet-load";
 import { questionSheetFieldFacts } from "@/lib/question-sheet";
 import { headers } from "next/headers";
@@ -1871,7 +1871,8 @@ export default async function PropertyDetailPage({
   // only: distributeChannelCards itself is untouched, so posting, connecting
   // and the proof grid all keep working for every channel.
   // S702v: Marketplace is listed only for orgs that post it by hand today.
-  const shownChannelKeys = withoutHiddenMarketplace(
+  // S704: same for Rentals.ca, which our robot cannot post (Agile only).
+  const shownChannelKeys = withoutHiddenChannels(
     showOnlyProvenChannelsEnabled() ? await loadShownChannelKeys(distributeToday) : null,
     distributeChannelCards.map((card) => card.channel.key as string),
     org?.id,
@@ -2133,9 +2134,9 @@ export default async function PropertyDetailPage({
   };
   const syndicationBlockerSummary = buildSyndicationBlockerSummary({
     channelCards: distributeChannelCards.filter(
-      (card) => !isHiddenMarketplace(card.channel.key, org?.id),
+      (card) => !isHiddenForOrg(card.channel.key, org?.id),
     ),
-    runItems: runItems.filter((item) => !isHiddenMarketplace(item.channel, org?.id)),
+    runItems: runItems.filter((item) => !isHiddenForOrg(item.channel, org?.id)),
     accountStatuses: new Map(
       distributeChannelCards.map((card) => [
         card.channel.key,

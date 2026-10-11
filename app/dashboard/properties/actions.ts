@@ -1,6 +1,6 @@
 "use server";
 
-import { isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
+import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -2999,6 +2999,11 @@ export async function startSitePost(formData: FormData) {
   }
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+  // S704: a site this org is not shown (Marketplace, Rentals.ca outside Agile)
+  // cannot be added by a hand-built form post either.
+  if (isHiddenForOrg(channel, org.id)) {
+    redirect(`/dashboard/properties/${propertyId}?runerr=copilotchannel#distribute-header`);
+  }
 
   const supabase = createClient();
   // RLS-scoped: a foreign property id returns nothing.

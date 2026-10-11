@@ -2,10 +2,13 @@
 // S702v: robot sites never use the desk allowance; Marketplace only for hand-posting orgs.
 import { readFileSync } from "node:fs";
 import {
+  channelShownFor,
+  isHiddenForOrg,
   isHiddenMarketplace,
   isRobotPostedChannel,
   marketplaceShownFor,
   usesDeskAllowance,
+  withoutHiddenChannels,
   withoutHiddenMarketplace,
 } from "../lib/posting-lanes";
 
@@ -48,17 +51,41 @@ ok(
   JSON.stringify(withoutHiddenMarketplace(["facebook", "kijiji"], all, OTHER)) === JSON.stringify(["kijiji"]),
 );
 
+// S704: Rentals.ca is Agile-only (the GitHub robot cannot pass its Cloudflare).
+ok("Agile sees Rentals.ca", channelShownFor("rentals_ca", AGILE));
+ok("other org does not see Rentals.ca", isHiddenForOrg("rentals_ca", OTHER));
+ok("no org does not see Rentals.ca", isHiddenForOrg("rentals_ca", null));
+ok("other org does not see Marketplace", isHiddenForOrg("facebook", OTHER));
+ok("Kijiji shown for other org", channelShownFor("kijiji", OTHER));
+ok("Zumper shown for other org", channelShownFor("zumper", OTHER));
+ok("Zumper shown with no org", channelShownFor("zumper", null));
+const all2 = ["site", "facebook", "kijiji", "rentals_ca", "zumper"];
+ok("Agile keeps null via withoutHiddenChannels", withoutHiddenChannels(null, all2, AGILE) === null);
+ok(
+  "other org drops facebook and rentals_ca from all",
+  JSON.stringify(withoutHiddenChannels(null, all2, OTHER)) === JSON.stringify(["site", "kijiji", "zumper"]),
+);
+ok(
+  "other org drops rentals_ca from a proven list",
+  JSON.stringify(withoutHiddenChannels(["rentals_ca", "zumper"], all2, OTHER)) === JSON.stringify(["zumper"]),
+);
+ok(
+  "Agile keeps a proven list as is",
+  JSON.stringify(withoutHiddenChannels(["rentals_ca", "facebook"], all2, AGILE)) === JSON.stringify(["rentals_ca", "facebook"]),
+);
+
 // --- wiring ---
 const actions = readFileSync("app/dashboard/properties/actions.ts", "utf8");
 ok("desk claim gated on usesDeskAllowance", actions.includes('CONCIERGE_DESK_ENABLED === "true" && usesDeskAllowance(item.channel)'));
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
-ok("page narrows shown channels", page.includes("withoutHiddenMarketplace("));
-ok("header summary skips hidden Marketplace", page.includes("isHiddenMarketplace(card.channel.key, org?.id)"));
+ok("page narrows shown channels", page.includes("withoutHiddenChannels("));
+ok("header summary skips hidden sites", page.includes("isHiddenForOrg(card.channel.key, org?.id)") && page.includes("isHiddenForOrg(item.channel, org?.id)"));
 const pe = readFileSync("app/dashboard/properties/[id]/publish-everywhere.tsx", "utf8");
 ok("robot sites say Post it for me", pe.includes('isRobotPostedChannel(row.key) ? "Post it for me →"'));
 ok("no monthly posts line", !pe.includes("monthly posts"));
 const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
-ok("sign-in page hides Marketplace", vm.includes("isHiddenMarketplace(row.channel, orgId)"));
+ok("sign-in page hides org-only sites", vm.includes("isHiddenForOrg(row.channel, orgId)"));
+ok("Add this site refuses a hidden site", actions.includes("if (isHiddenForOrg(channel, org.id))"));
 
 // S702w: Rentals.ca and Zumper reach the robot through the app.
 ok("Add this site accepts robot sites", actions.includes("isCopilotChannel(channel) || isRobotPostedChannel(channel)"));
