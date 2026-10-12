@@ -1,6 +1,7 @@
 // Run with: npx tsx scripts/test-posting-lanes.ts
 // S702v: robot sites never use the desk allowance; Marketplace only for hand-posting orgs.
 import { readFileSync } from "node:fs";
+import { siteCheckoutUrl } from "../lib/distribution-publish";
 import {
   channelShownFor,
   isHiddenForOrg,
@@ -97,6 +98,15 @@ ok("dead live item offers Post it again", pe.includes('item.publishStatus === "l
 
 // S708: a rejected item can be posted again instead of pointing at billing.
 ok("rejected item offers Post it again", pe.includes('item.publishStatus === "rejected"'));
+
+// S708: a paid item the robot left at checkout shows a Pay link, not Approve.
+{
+  ok("checkout url shown at needs_payment", siteCheckoutUrl("needs_payment", "https://www.kijiji.ca/m-feature-cart.html?invoice=123") === "https://www.kijiji.ca/m-feature-cart.html?invoice=123");
+  ok("generic post-ad page is not a checkout", siteCheckoutUrl("needs_payment", "https://www.kijiji.ca/p-post-ad.html") === null);
+  ok("other states show no checkout", siteCheckoutUrl("needs_operator", "https://www.kijiji.ca/m-feature-cart.html?invoice=123") === null);
+  ok("non-https refused", siteCheckoutUrl("needs_payment", "javascript:alert(1)") === null);
+  ok("tile renders Pay link at checkout", pe.includes("payAtCheckout && item?.checkoutUrl") && pe.includes("Pay on {PAID_SITE_LABEL[row.key] ?? row.label}"));
+}
 
 console.log(`\nposting-lanes: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

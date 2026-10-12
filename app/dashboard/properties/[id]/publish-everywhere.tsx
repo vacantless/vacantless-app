@@ -75,6 +75,8 @@ export type PublishEverywhereRunItem = {
   mode: string;
   canConcierge: boolean;
   externalUrl: string | null;
+  /** S708: the paid site's checkout the robot stopped on (pay there with the CVV). */
+  checkoutUrl?: string | null;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -809,8 +811,13 @@ function ForYouRow({
     item != null && item.mode === "concierge" ? item.publishStatus : null;
   // needs_operator (free channel, prepared) + needs_payment (paid site, prepared
   // pending the fee) both collapse to one branded "Approve & publish" tap.
+  // S708: the robot built a paid ad and stopped at the site's checkout. The
+  // landlord pays there (a saved card still needs its CVV); no approval left.
+  const payAtCheckout = !isLive && gate === "needs_payment" && !!item?.checkoutUrl;
   const needsApproval =
-    !isLive && (gate === "needs_operator" || gate === "needs_payment");
+    !isLive &&
+    !payAtCheckout &&
+    (gate === "needs_operator" || gate === "needs_payment");
   // needs_login can't be approved — it needs a re-connect, so route to posting assist.
   const needsConnect = !isLive && gate === "needs_login";
   // S703: the run item still says live but its ad is gone (expired or
@@ -830,6 +837,8 @@ function ForYouRow({
     ? { label: "Live", cls: "bg-green-50 text-green-700" }
     : postingBlocked
       ? { label: "Waiting", cls: "bg-amber-50 text-amber-700" }
+    : payAtCheckout
+      ? { label: "Ready. Pay the site", cls: "bg-emerald-50 text-emerald-700" }
     : needsApproval
       ? { label: "Ready. Approve it", cls: "bg-emerald-50 text-emerald-700" }
       : needsConnect
@@ -905,6 +914,21 @@ function ForYouRow({
             Post first, then come back to this step.
           </p>
         )
+      ) : payAtCheckout && item?.checkoutUrl ? (
+        <div className="mt-2">
+          <p className="text-[12px] text-emerald-800">
+            Your ad is built and waiting at checkout. You pay only when you
+            press Pay. Pick your saved card, type its security code and press Pay.
+          </p>
+          <a
+            href={item.checkoutUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-700"
+          >
+            Pay on {PAID_SITE_LABEL[row.key] ?? row.label} ↗
+          </a>
+        </div>
       ) : needsApproval ? (
         <div className="mt-2">
           <p className="text-[12px] text-emerald-800">

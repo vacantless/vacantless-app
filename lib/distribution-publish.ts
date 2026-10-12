@@ -224,6 +224,28 @@ export const CONCIERGE_OPEN_STATUSES: readonly PublishStatus[] = [
 ];
 
 /** Can this run item be handed to the concierge desk? Pure. */
+/**
+ * S708: the paid site's checkout page the posting robot stopped on, if any.
+ * The robot builds the ad, picks the base paid plan and stops at checkout,
+ * because a saved card still needs its CVV. The cron's default action URL is
+ * the site's generic post-ad page, which is not a checkout and returns null.
+ */
+export function siteCheckoutUrl(
+  publishStatus: string | null | undefined,
+  operatorActionUrl: string | null | undefined,
+): string | null {
+  if (publishStatus !== "needs_payment" || !operatorActionUrl) return null;
+  let url: URL;
+  try {
+    url = new URL(operatorActionUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  if (/\/p-post-ad\.html$/i.test(url.pathname)) return null;
+  return url.toString();
+}
+
 export function canRequestConcierge(
   status: PublishStatus,
   mode: PublishMode,

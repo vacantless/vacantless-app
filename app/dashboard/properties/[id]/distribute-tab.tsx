@@ -44,6 +44,7 @@ import {
   formatAmount,
 } from "@/lib/billing";
 import {
+  siteCheckoutUrl,
   type PublishMode,
   type PublishStatus,
   type PublishTone,
@@ -385,6 +386,7 @@ export function DistributeTab({
           mode: it.mode,
           canConcierge: it.canConcierge,
           externalUrl: it.externalUrl,
+          checkoutUrl: siteCheckoutUrl(it.publishStatus, it.operatorActionUrl),
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
