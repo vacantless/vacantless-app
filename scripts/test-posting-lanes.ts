@@ -95,5 +95,8 @@ ok("publish surface passes robotReady", pe.includes("robotReady: card.robotReady
 // S703: a site whose ad died can be posted again from the app.
 ok("dead live item offers Post it again", pe.includes('item.publishStatus === "live"') && pe.includes("item == null || repostable") && pe.includes('"Post it again →"'));
 
+// S708: a rejected item can be posted again instead of pointing at billing.
+ok("rejected item offers Post it again", pe.includes('item.publishStatus === "rejected"'));
+
 console.log(`\nposting-lanes: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

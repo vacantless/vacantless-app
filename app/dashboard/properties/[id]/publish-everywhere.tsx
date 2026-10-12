@@ -816,7 +816,12 @@ function ForYouRow({
   // S703: the run item still says live but its ad is gone (expired or
   // removed on the site, so the listing row no longer proves it). Re-staging
   // the site resets the item, so offer the same "add" step as a fresh site.
-  const repostable = !isLive && item != null && item.publishStatus === "live";
+  // S708: a rejected item (e.g. an old desk item closed as superseded) is a
+  // dead end too; without this it fell through to a billing link.
+  const repostable =
+    !isLive &&
+    item != null &&
+    (item.publishStatus === "live" || item.publishStatus === "rejected");
   const working =
     !isLive &&
     (gate === "queued" || gate === "submitting" || gate === "submitted");
