@@ -1,6 +1,7 @@
 // Unit tests for the pure "Today" action lane.
 // Run: npx tsx scripts/test-dashboard-today.ts
 import { buildTodayLane, type TodayInput } from "../lib/dashboard-today";
+import { needsReplyToday } from "../lib/pipeline";
 
 let passed = 0;
 let failed = 0;
@@ -166,3 +167,14 @@ const ZERO: TodayInput = {
 
 console.log(`\ndashboard-today: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
+
+// S708: the Today count only includes `new` leads from the last 14 days.
+{
+  const now = Date.parse("2026-10-12T14:00:00Z");
+  ok("new lead 2 days old counts", needsReplyToday("new", "2026-10-10T10:00:00Z", now));
+  ok("new lead 13 days old counts", needsReplyToday("new", "2026-09-29T15:00:00Z", now));
+  ok("new lead 30 days old does not count", !needsReplyToday("new", "2026-09-12T10:00:00Z", now));
+  ok("contacted lead never counts", !needsReplyToday("contacted", "2026-10-11T10:00:00Z", now));
+  ok("missing date does not count", !needsReplyToday("new", null, now));
+  if (failed > 0) process.exit(1);
+}

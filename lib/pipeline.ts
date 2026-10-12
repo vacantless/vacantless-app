@@ -58,6 +58,25 @@ export function needsReply(status: string): boolean {
 }
 
 /**
+ * S708: the Today card counts only RECENT leads that still need a reply. A
+ * `new` lead from months ago is not someone waiting to hear back today (Agile
+ * showed "105 inquiries need a reply" when only 5 were from the last 14 days).
+ * Older `new` leads stay in the Renters list under Needs reply; no status changes.
+ */
+export const TODAY_REPLY_WINDOW_DAYS = 14;
+
+export function needsReplyToday(
+  status: string,
+  createdAt: string | null | undefined,
+  nowMs: number,
+): boolean {
+  if (!needsReply(status) || !createdAt) return false;
+  const t = new Date(createdAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return nowMs - t <= TODAY_REPLY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/**
  * Task segments (ESL Slice 6): the 8 granular pipeline stages grouped into a
  * few plain "what do I do next" buckets for the primary Renters filter. The raw
  * per-stage chips stay available behind an "All stages" toggle. Every stage is

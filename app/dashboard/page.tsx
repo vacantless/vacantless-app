@@ -5,6 +5,7 @@ import {
   PIPELINE_STAGES,
   statusLabel,
   needsReply,
+  needsReplyToday,
   type LeadStatus,
 } from "@/lib/pipeline";
 import {
@@ -356,7 +357,10 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         today,
   ).length;
   const todayItems = buildTodayLane({
-    inquiriesNeedingReply: allLeads.filter((l) => needsReply(l.status)).length,
+    // S708: only leads from the last 14 days; older `new` leads stay in Renters.
+    inquiriesNeedingReply: allLeads.filter((l) =>
+      needsReplyToday(l.status, l.created_at, Date.now()),
+    ).length,
     // S702: a renter whose viewing was cancelled goes back to "contacted" with a
     // follow-up due today; without this the lane said "all caught up".
     followUpsDue: allLeads.filter(
