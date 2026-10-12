@@ -44,7 +44,7 @@
       "linkedSubLogin": "Your account is on file. We post your ads on it.",
       "notLinkedSubLogin": "Tell us which account you use. Then we post your ads on it.",
       "selfPost": "Ready",
-      "selfPostSub": "Free. We post it for you."
+      "selfPostSub": "Free. Your team posts it from your own Facebook."
     },
     "buttons": {
       "login": "Add your {name} account",

@@ -298,7 +298,7 @@ export default function BrandColorField({
                 }}
                 className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
               >
-                Use as ombre
+                Use as a blend
               </button>
             )}
           </div>

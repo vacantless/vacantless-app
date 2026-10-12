@@ -61,7 +61,11 @@ ok("Kijiji shown for other org", channelShownFor("kijiji", OTHER));
 ok("Zumper shown for other org", channelShownFor("zumper", OTHER));
 ok("Zumper shown with no org", channelShownFor("zumper", null));
 const all2 = ["site", "facebook", "kijiji", "rentals_ca", "zumper"];
-ok("Agile keeps null via withoutHiddenChannels", withoutHiddenChannels(null, all2, AGILE) === null);
+// S710: Realtor.ca is hidden for every org, Agile included, so no org keeps the null "show all".
+ok("Agile gets every listed site via withoutHiddenChannels", JSON.stringify(withoutHiddenChannels(null, all2, AGILE)) === JSON.stringify(all2));
+ok("Agile does not see Realtor.ca", isHiddenForOrg("realtor_ca", AGILE));
+ok("other org does not see Realtor.ca", isHiddenForOrg("realtor_ca", OTHER));
+ok("Agile drops Realtor.ca from all", !(withoutHiddenChannels(null, [...all2, "realtor_ca"], AGILE) ?? []).includes("realtor_ca"));
 ok(
   "other org drops facebook and rentals_ca from all",
   JSON.stringify(withoutHiddenChannels(null, all2, OTHER)) === JSON.stringify(["site", "kijiji", "zumper"]),

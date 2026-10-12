@@ -289,10 +289,24 @@ export default async function AvailabilityPage({
           booked are removed automatically.
         </p>
 
-        {rules.length === 0 && (
+        {/* S710 audit: Agile opens one date at a time and has no weekly
+            windows, yet this box said "No times yet" above its booked dates. */}
+        {rules.length === 0 && overrides.length === 0 && (
           <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
             No times yet. Add your first below so renters can book a viewing
             online.
+          </div>
+        )}
+        {rules.length === 0 && overrides.length > 0 && (
+          <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            No weekly times. Renters book from your specific dates below. The
+            last one is{" "}
+            <strong>
+              {fmtSpecificDate(
+                overrides.reduce((max, o) => (o.day > max ? o.day : max), overrides[0].day),
+              )}
+            </strong>
+            . Add more dates before then so renters can keep booking.
           </div>
         )}
 

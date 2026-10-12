@@ -267,11 +267,19 @@ export default async function AutomationsPage({
   // or money yet) sees only the alerts about renters, viewings and ads; repair
   // dispatch, owner reminders and tenant notes appear once that data exists.
   const postLease = await orgShowsPostLease(supabase, org.id);
-  const events = activeNotificationEvents().filter(
-    (e) =>
-      postLease ||
-      (e.family === "leasing" && (e.lane === "showing" || e.lane === "listing")),
-  );
+  // Within a family, renter and viewing emails first, then ads, then owner
+  // reminders, so related emails sit together (S710 audit).
+  const laneRank = (lane: NotificationLane | undefined) =>
+    lane === "showing" ? 0 : lane === "listing" ? 1 : lane === "owner" ? 2 : 3;
+  const events = activeNotificationEvents()
+    .filter(
+      (e) =>
+        postLease ||
+        (e.family === "leasing" && (e.lane === "showing" || e.lane === "listing")),
+    )
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => laneRank(a.e.lane) - laneRank(b.e.lane) || a.i - b.i)
+    .map(({ e }) => e);
   const families = [...new Set(events.map((e) => e.family))].sort((a, b) =>
     a === b ? 0 : a === "leasing" ? -1 : 1,
   );

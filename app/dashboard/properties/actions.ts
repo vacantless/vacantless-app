@@ -1,5 +1,6 @@
 "use server";
 
+import { countViewingTimes } from "@/lib/viewing-times-count";
 import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -2324,9 +2325,8 @@ async function stageDistributionRunForProperty({
         .from("property_photos")
         .select("id", { count: "exact", head: true })
         .eq("property_id", propertyId),
-      supabase
-        .from("availability_rules")
-        .select("id", { count: "exact", head: true }),
+      // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
+      countViewingTimes(supabase, orgId).then((count) => ({ count })),
       supabase
         .from("listing_posts")
         .select("id, portal, status, url, posted_on, created_at")

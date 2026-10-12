@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { countViewingTimes } from "@/lib/viewing-times-count";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { showOnlyProvenChannelsEnabled } from "@/lib/channel-provenness";
@@ -512,7 +513,15 @@ function buildSyndicationBlockerSummary({
   for (const item of runItems) {
     const label = labelFor(item.channel, item.channelLabel);
     if (item.publishStatus === "needs_payment") payment.set(item.channel, label);
-    if (item.publishStatus === "needs_login") login.set(item.channel, label);
+    // S710 audit: a run item left at needs_login from before the site was
+    // signed in again kept saying "Sign in to Kijiji" on Agile's Bruce 303
+    // while the account read connected. The account is the truth for sign-in.
+    if (
+      item.publishStatus === "needs_login" &&
+      accountStatuses.get(item.channel) !== "connected"
+    ) {
+      login.set(item.channel, label);
+    }
     if (item.liveWithoutUrl) proof.set(item.channel, label);
     if (item.staleRefresh) refresh.set(item.channel, label);
   }
@@ -901,9 +910,11 @@ export default async function PropertyDetailPage({
 
   // Org-wide weekly viewing windows — one signal in the share-readiness check
   // below ("can a renter actually self-book a viewing once they land?").
-  const { count: availabilityCount } = await supabase
-    .from("availability_rules")
-    .select("id", { count: "exact", head: true });
+  // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
+  const availabilityOrg = await getCurrentOrg();
+  const availabilityCount = availabilityOrg
+    ? await countViewingTimes(supabase, availabilityOrg.id, availabilityOrg.booking_timezone || undefined)
+    : 0;
 
   // The unit's tenancy (active preferred, else most recent) — lets the
   // lifecycle rail's Lease/Tenanted steps deep-link into THIS unit's tenancy

@@ -44,7 +44,7 @@
       "linkedSubLogin": "Votre compte est enregistré. Nous y publions vos annonces.",
       "notLinkedSubLogin": "Dites-nous quel compte vous utilisez. Ensuite nous y publions vos annonces.",
       "selfPost": "Prêt",
-      "selfPostSub": "Gratuit. Nous la publions pour vous."
+      "selfPostSub": "Gratuit. Votre équipe la publie depuis votre propre Facebook."
     },
     "buttons": {
       "login": "Ajoutez votre compte {name}",

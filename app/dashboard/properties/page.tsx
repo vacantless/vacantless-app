@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { countViewingTimes } from "@/lib/viewing-times-count";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { propertyStatusLabel } from "@/lib/pipeline";
@@ -264,10 +265,8 @@ export default async function PropertiesPage({
     // share-readiness check uses. One count for the selected org, so
     // the "Viewings" readiness chip reflects whether ANY rental can be
     // self-booked once a renter lands.
-    supabase
-      .from("availability_rules")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", org.id),
+    // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
+    countViewingTimes(supabase, org.id, org.booking_timezone || undefined).then((count) => ({ count })),
   ]);
 
   const allRows = (properties ?? []) as PropertyRow[];

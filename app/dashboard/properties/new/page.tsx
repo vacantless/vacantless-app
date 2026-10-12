@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { countViewingTimes } from "@/lib/viewing-times-count";
 import { notFound } from "next/navigation";
 import { Icons } from "@/components/icons";
 import { PageHeader, SECONDARY_ACTION_CLASS } from "@/components/ui";
@@ -24,10 +25,8 @@ export default async function NewPropertyPage({
   if (!org) return null;
 
   const supabase = createClient();
-  const { count: availabilityCount } = await supabase
-    .from("availability_rules")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", org.id);
+  // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
+  const availabilityCount = await countViewingTimes(supabase, org.id, org.booking_timezone || undefined);
 
   const aiImageImportEnabled =
     !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org.plan);

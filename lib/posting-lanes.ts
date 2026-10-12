@@ -34,10 +34,20 @@ export const RENTALS_CA_CHANNEL_KEY = "rentals_ca";
 
 export const RENTALS_CA_ORG_IDS: readonly string[] = [AGILE_ORG_ID];
 
+// S710 (Noam took the audit's recommendation): Realtor.ca is an MLS listing
+// that only a Royal LePage agent can place, as a full-service listing under a
+// signed representation agreement. It is not a site we post to, so it leaves
+// the site list for every org. It comes back later as a separate brokerage
+// request, not a posting tile.
+export const REALTOR_CA_CHANNEL_KEY = "realtor_ca";
+
+export const REALTOR_CA_ORG_IDS: readonly string[] = [];
+
 /** Sites shown only to the orgs listed against them. Every other site shows for everyone. */
 const ORG_ONLY_CHANNELS: Readonly<Record<string, readonly string[]>> = {
   [MARKETPLACE_CHANNEL_KEY]: MARKETPLACE_ORG_IDS,
   [RENTALS_CA_CHANNEL_KEY]: RENTALS_CA_ORG_IDS,
+  [REALTOR_CA_CHANNEL_KEY]: REALTOR_CA_ORG_IDS,
 };
 
 export function channelShownFor(channel: unknown, orgId: string | null | undefined): boolean {

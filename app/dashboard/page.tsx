@@ -179,6 +179,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     { count: onboardingTenancyCount },
     { data: onboardingRow },
     { count: availabilityOverrideCount },
+    { count: activeRentalCount },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -259,6 +260,13 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .from("availability_overrides")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", org.id),
+    // S710 audit: the Rentals tile counted archived rentals too (Agile: 12
+    // shown, 7 on the Rentals page).
+    supabase
+      .from("properties")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .is("archived_at", null),
   ]);
 
   // Open + urgent work-order counts for the Overview tile.
@@ -281,6 +289,12 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // matching the upcomingShowings projection above.
   const allLeads = (leads ?? []) as unknown as LeadRow[];
   const openLeads = allLeads.filter((l) => OPEN_STATUSES.includes(l.status));
+  // S710 audit: "Open inquiries 258" counted every renter since May. The tile
+  // now counts open renters who asked in the last 30 days.
+  const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const activeRecentLeads = openLeads.filter(
+    (l) => new Date(l.created_at).getTime() >= monthAgo,
+  );
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const newThisWeek = allLeads.filter(
     (l) => new Date(l.created_at).getTime() >= weekAgo,
@@ -381,7 +395,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     propertyCount: propertyCount ?? 0,
     listingOnlineCount: listingOnlineCount ?? 0,
     wizardEnabled: process.env.DISTRIBUTION_WIZARD_ENABLED === "1",
-    availabilityWindowCount: availabilityCount ?? 0,
+    // S710: dated hours count too, as in the setup checklist below.
+    availabilityWindowCount: (availabilityCount ?? 0) + (availabilityOverrideCount ?? 0),
     replyToConfigured: org ? isReplyToConfigured(org) : false,
     leadCount: allLeads.length,
     // "Go live" is satisfied by an active paid subscription OR an active pilot.
@@ -451,8 +466,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
-          label="Open inquiries"
-          value={openLeads.length}
+          label="Active renters, last 30 days"
+          value={activeRecentLeads.length}
           icon={<Icons.chat className="h-4 w-4" />}
         />
         <StatCard
@@ -462,7 +477,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         />
         <StatCard
           label="Rentals"
-          value={propertyCount ?? 0}
+          value={activeRentalCount ?? 0}
           icon={<Icons.building className="h-4 w-4" />}
         />
       </div>
