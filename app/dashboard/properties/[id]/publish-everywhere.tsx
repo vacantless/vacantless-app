@@ -77,6 +77,8 @@ export type PublishEverywhereRunItem = {
   externalUrl: string | null;
   /** S708: the paid site's checkout the robot stopped on (pay there with the CVV). */
   checkoutUrl?: string | null;
+  /** S709: the pay instruction for checkoutUrl (Kijiji: My Ads > Activate Ad). */
+  checkoutHint?: string | null;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -917,8 +919,8 @@ function ForYouRow({
       ) : payAtCheckout && item?.checkoutUrl ? (
         <div className="mt-2">
           <p className="text-[12px] text-emerald-800">
-            Your ad is built and waiting at checkout. You pay only when you
-            press Pay. Pick your saved card, type its security code and press Pay.
+            {item.checkoutHint ??
+              "Your ad is built and waiting at checkout. You pay only when you press Pay. Pick your saved card, type its security code and press Pay."}
           </p>
           <a
             href={item.checkoutUrl}

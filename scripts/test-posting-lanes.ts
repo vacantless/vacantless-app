@@ -1,7 +1,7 @@
 // Run with: npx tsx scripts/test-posting-lanes.ts
 // S702v: robot sites never use the desk allowance; Marketplace only for hand-posting orgs.
 import { readFileSync } from "node:fs";
-import { siteCheckoutUrl } from "../lib/distribution-publish";
+import { KIJIJI_MY_ADS_URL, siteCheckoutHint, siteCheckoutUrl } from "../lib/distribution-publish";
 import {
   channelShownFor,
   isHiddenForOrg,
@@ -105,6 +105,18 @@ ok("rejected item offers Post it again", pe.includes('item.publishStatus === "re
   ok("generic post-ad page is not a checkout", siteCheckoutUrl("needs_payment", "https://www.kijiji.ca/p-post-ad.html") === null);
   ok("other states show no checkout", siteCheckoutUrl("needs_operator", "https://www.kijiji.ca/m-feature-cart.html?invoice=123") === null);
   ok("non-https refused", siteCheckoutUrl("needs_payment", "javascript:alert(1)") === null);
+  // S709 (KI1263, rule 218): the exact value the robot wrote on run item 404542f9.
+  const robotWrote = "https://www.kijiji.ca/p-post-ad.html?addToCart=true&categoryId=37";
+  ok("robot's Kijiji checkout value -> My Ads", siteCheckoutUrl("needs_payment", robotWrote) === KIJIJI_MY_ADS_URL);
+  ok("My Ads is the account's ad list", KIJIJI_MY_ADS_URL === "https://www.kijiji.ca/m-my-ads/active/1");
+  ok("robot's value at any other state -> no link", siteCheckoutUrl("live", robotWrote) === null && siteCheckoutUrl("needs_operator", robotWrote) === null);
+  ok("addToCart on another site's post page -> no link", siteCheckoutUrl("needs_payment", "https://evil.example/p-post-ad.html?addToCart=true") === null);
+  ok("lookalike host refused", siteCheckoutUrl("needs_payment", "https://kijiji.ca.evil.example/p-post-ad.html?addToCart=true") === null);
+  ok("prepared Kijiji item (no addToCart) still needs approval", siteCheckoutUrl("needs_payment", "https://www.kijiji.ca/p-post-ad.html?categoryId=37") === null);
+  ok("Kijiji hint names Activate Ad", /Pending ad/.test(siteCheckoutHint(KIJIJI_MY_ADS_URL)) && /Activate Ad/.test(siteCheckoutHint(KIJIJI_MY_ADS_URL)));
+  ok("other checkout keeps the generic hint", /waiting at checkout/.test(siteCheckoutHint("https://www.kijiji.ca/m-feature-cart.html?invoice=1")));
+  const dt = readFileSync("app/dashboard/properties/[id]/distribute-tab.tsx", "utf8");
+  ok("tile gets the hint from the server", dt.includes("siteCheckoutHint(checkoutUrl)") && pe.includes("item.checkoutHint"));
   ok("tile renders Pay link at checkout", pe.includes("payAtCheckout && item?.checkoutUrl") && pe.includes("Pay on {PAID_SITE_LABEL[row.key] ?? row.label}"));
 }
 

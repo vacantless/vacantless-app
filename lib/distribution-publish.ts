@@ -242,8 +242,31 @@ export function siteCheckoutUrl(
     return null;
   }
   if (url.protocol !== "https:") return null;
-  if (/\/p-post-ad\.html$/i.test(url.pathname)) return null;
+  if (/\/p-post-ad\.html$/i.test(url.pathname)) {
+    // S709 (KI1263): Kijiji's checkout is a step of the post page, so the
+    // robot saves p-post-ad.html?addToCart=true. Reopening that starts a new
+    // ad; the built ad waits in My Ads as Pending with "Activate Ad". A plain
+    // post page (no addToCart) is a prepared item that still needs approval.
+    if (
+      /(^|\.)kijiji\.ca$/i.test(url.hostname) &&
+      url.searchParams.get("addToCart") === "true"
+    ) {
+      return KIJIJI_MY_ADS_URL;
+    }
+    return null;
+  }
   return url.toString();
+}
+
+/** S709: where a built, unpaid Kijiji ad waits (Pending, "Activate Ad"). */
+export const KIJIJI_MY_ADS_URL = "https://www.kijiji.ca/m-my-ads/active/1";
+
+/** S709: the one-line pay instruction for a checkout link. Pure. */
+export function siteCheckoutHint(checkoutUrl: string): string {
+  if (checkoutUrl === KIJIJI_MY_ADS_URL) {
+    return "Your ad is built and waiting for payment. In My Ads, open the Pending ad and press Activate Ad. Pick your saved card, type its security code and press Pay. You pay only when you press Pay.";
+  }
+  return "Your ad is built and waiting at checkout. You pay only when you press Pay. Pick your saved card, type its security code and press Pay.";
 }
 
 export function canRequestConcierge(

@@ -45,6 +45,7 @@ import {
 } from "@/lib/billing";
 import {
   siteCheckoutUrl,
+  siteCheckoutHint,
   type PublishMode,
   type PublishStatus,
   type PublishTone,
@@ -386,7 +387,10 @@ export function DistributeTab({
           mode: it.mode,
           canConcierge: it.canConcierge,
           externalUrl: it.externalUrl,
-          checkoutUrl: siteCheckoutUrl(it.publishStatus, it.operatorActionUrl),
+          ...(() => {
+            const checkoutUrl = siteCheckoutUrl(it.publishStatus, it.operatorActionUrl);
+            return { checkoutUrl, checkoutHint: checkoutUrl ? siteCheckoutHint(checkoutUrl) : null };
+          })(),
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
