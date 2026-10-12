@@ -217,5 +217,8 @@ ok("route uses drip opt-in helper", routeSource.includes("isDripEnqueueEnabled(l
 ok("route skips listing health summary when not opted in", routeSource.includes("listingHealthEnabled") && routeSource.includes(": null"));
 ok("route content gate reads the gated summary", routeSource.includes("snapshotHasContent(buckets, health, listingHealth)"));
 
+// S708: leads already marked lost (held scams) do not count as new.
+ok("new bucket excludes lost leads", routeSource.includes("SNAPSHOT_NEW_EXCLUDED_STATUSES.join") && readFileSync("lib/leasing-snapshot.ts", "utf8").includes('SNAPSHOT_NEW_EXCLUDED_STATUSES = ["lost"]'));
+
 console.log(`\nleasing-snapshot: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

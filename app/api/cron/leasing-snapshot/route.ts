@@ -28,6 +28,7 @@ import {
   snapshotHasContent,
   snapshotDateLabel,
   SNAPSHOT_NUDGE_STATUSES,
+  SNAPSHOT_NEW_EXCLUDED_STATUSES,
   type SnapshotLead,
   type SnapshotShowing,
   type SnapshotBuckets,
@@ -296,6 +297,11 @@ export async function GET(req: NextRequest) {
         .select("id, name, phone, move_in, source, created_at, properties(address)")
         .eq("organization_id", org.id)
         .gt("created_at", win.cutoff24hIso)
+        .not(
+          "status",
+          "in",
+          `(${SNAPSHOT_NEW_EXCLUDED_STATUSES.join(",")})`,
+        )
         .order("created_at", { ascending: true });
       const newLeads: SnapshotLead[] = (newRows ?? []).map((r: any) => ({
         name: r.name,

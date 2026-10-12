@@ -51,6 +51,11 @@ export const SNAPSHOT_SECTION_CAP = 50;
 // progressed or closed), matching the Zap's NOT_CLOSED guard.
 export const SNAPSHOT_NUDGE_STATUSES = ["new", "replied", "contacted"] as const;
 
+// S708: a lead already closed as lost (a held scam, a test, a renter who said
+// no) is not news. Agile's 2026-10-12 snapshot read "2 new" when both were
+// Rentals.ca phishing leads marked lost the day before.
+export const SNAPSHOT_NEW_EXCLUDED_STATUSES = ["lost"] as const;
+
 // --- Timezone-anchored window ------------------------------------------------
 
 type TzParts = { y: number; mo: number; d: number; h: number; mi: number; s: number };
