@@ -57,6 +57,14 @@ export type LinkPortalTileVM = {
     business: string;
     save: string;
   } | null;
+  /** S709: "Forget this sign-in" on a robot site with a saved sign-in. */
+  forget: {
+    button: string;
+    confirm: string;
+    yes: string;
+    cancel: string;
+    error: string;
+  } | null;
 };
 
 export type LinkPortalsGroupVM = {
@@ -182,6 +190,17 @@ export async function buildLinkPortalsViewModel(
           }
         : null;
 
+    const forget =
+      hasAccount && isSiteSigninChannel(row.channel) && row.lastCheckCode !== "no_session"
+        ? {
+            button: t("forget.button"),
+            confirm: t("forget.confirm", { name: channel.label }),
+            yes: t("forget.yes"),
+            cancel: t("forget.cancel"),
+            error: t("forget.error"),
+          }
+        : null;
+
     return {
       channel: row.channel,
       label: channel.label,
@@ -200,6 +219,7 @@ export async function buildLinkPortalsViewModel(
       needsCheck: row.needsCheck,
       lastCheckedAt: row.lastCheckedAt,
       kijijiTier,
+      forget,
     };
   };
 

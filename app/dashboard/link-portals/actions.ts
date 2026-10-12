@@ -4,6 +4,8 @@ import { getLocale } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isSiteSigninChannel } from "@/lib/site-signin";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { KIJIJI_TIERS, type KijijiTier } from "@/lib/distribution-channels";
@@ -60,6 +62,39 @@ export async function setKijijiTier(
 
   revalidatePath("/dashboard/link-portals");
   return { ok: true, tier: tier as KijijiTier };
+}
+
+// S709: "Forget this sign-in". Deletes the org's saved site sign-in for one
+// robot-posted site and marks the account as needing a new sign-in, so the
+// robot cannot post there until someone signs in again. The session table is
+// service-role only (it holds the encrypted cookies), so the delete runs on
+// the admin client, scoped to the caller's own org.
+export async function forgetSiteSignin(
+  channel: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!isSiteSigninChannel(channel)) return { ok: false, error: "bad_channel" };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "not_configured" };
+  const { error: delErr } = await admin
+    .from("distribution_channel_sessions")
+    .delete()
+    .eq("organization_id", org.id)
+    .eq("channel", channel);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  const { error: updErr } = await admin
+    .from("distribution_channel_accounts")
+    .update({ account_status: "needs_login", updated_at: new Date().toISOString() })
+    .eq("organization_id", org.id)
+    .eq("channel", channel);
+  if (updErr) return { ok: false, error: updErr.message };
+
+  revalidatePath("/dashboard/link-portals");
+  return { ok: true };
 }
 
 // S697c. Mint the org's inquiry address from the "Get your inquiries here" card.

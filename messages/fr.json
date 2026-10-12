@@ -90,6 +90,13 @@
       "personal": "Personnel : 1 annonce gratuite",
       "business": "Entreprise : chaque annonce est payante",
       "save": "Enregistrer"
+    },
+    "forget": {
+      "button": "Oublier cette connexion",
+      "confirm": "Nous supprimons la connexion {name} enregistrée. Nous publierons de nouveau sur {name} après une nouvelle connexion.",
+      "yes": "Oui, l'oublier",
+      "cancel": "La garder",
+      "error": "Un problème est survenu. Réessayez."
     }
   },
   "stage2": {

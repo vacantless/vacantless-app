@@ -90,6 +90,13 @@
       "personal": "Personal: 1 free ad",
       "business": "Business: every ad is paid",
       "save": "Save"
+    },
+    "forget": {
+      "button": "Forget this sign-in",
+      "confirm": "We delete the saved {name} sign-in. We post on {name} again once someone signs in.",
+      "yes": "Yes, forget it",
+      "cancel": "Keep it",
+      "error": "Something went wrong. Try again."
     }
   },
   "stage2": {

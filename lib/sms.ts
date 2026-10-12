@@ -243,6 +243,23 @@ export function waitlistVacancySms(p: {
 }
 
 /**
+ * S709: new viewing times opened for a rental the renter asked about (they
+ * told us no time worked). Same rule as the email: only sent when their own
+ * building has an open time.
+ */
+export function viewingTimesOpenedSms(p: {
+  org_name: string | null;
+  property_address: string | null;
+  booking_url: string;
+}): string {
+  const org = (p.org_name || "Our leasing team").trim();
+  const what = p.property_address ? p.property_address.trim() : "the rental you asked about";
+  return noEmDash(
+    `${org}: new viewing times just opened for ${what}. Book one here: ${p.booking_url.trim()} ${OPT_OUT_LINE}`,
+  );
+}
+
+/**
  * S702: the one text a renter gets after they called or left a voicemail and
  * the landlord forwarded it. It carries the booking link, and an answer to
  * their question when the rental's facts answer it.

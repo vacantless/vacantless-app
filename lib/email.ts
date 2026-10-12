@@ -1144,7 +1144,7 @@ export type PriceDropPayload = {
   old_rent_cents: number | null;
 };
 
-function listingUrl(propertyId: string): string {
+export function listingUrl(propertyId: string): string {
   return `${APP_BASE_URL}/r/${encodeURIComponent(propertyId)}`;
 }
 
@@ -1438,7 +1438,7 @@ function viewingTimesOpenedHtml(p: ViewingTimesOpenedPayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
-      <p style="margin:0 0 16px;">Good news — new viewing times just opened${addressLine}. Grab one that works for you:</p>
+      <p style="margin:0 0 16px;">Good news: new viewing times just opened${addressLine}. Grab one that works for you:</p>
       ${propBlock}
       <p style="margin:0 0 24px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
@@ -1467,7 +1467,7 @@ export async function sendViewingTimesOpenedEmail(
   if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
 
   const subject = p.property_address
-    ? `New viewing times just opened — ${p.property_address}`
+    ? `New viewing times just opened: ${p.property_address}`
     : "New viewing times just opened";
 
   const body = {

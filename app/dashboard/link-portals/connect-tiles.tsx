@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, ButtonLink, Card, StatusBanner } from "@/components/ui";
-import { readLinkPortalTiles, setKijijiTier } from "./actions";
+import { forgetSiteSignin, readLinkPortalTiles, setKijijiTier } from "./actions";
 import type { LinkPortalTileVM, LinkPortalsVM } from "./view-model";
 
 // Stage 1 connect tiles (Post Everywhere Slice 1, SPEC-S688 3.4).
@@ -176,8 +176,78 @@ function ConnectTile({
             {row.igNote}
           </p>
         )}
+        {row.forget && (
+          <ForgetSignin channel={row.channel} copy={row.forget} onDone={onChanged} />
+        )}
       </div>
     </Card>
+  );
+}
+
+// S709: two-step, in-page confirm (no browser dialog).
+function ForgetSignin({
+  channel,
+  copy,
+  onDone,
+}: {
+  channel: string;
+  copy: NonNullable<LinkPortalTileVM["forget"]>;
+  onDone: () => Promise<void>;
+}) {
+  const [asking, setAsking] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  if (!asking) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setFailed(false);
+          setAsking(true);
+        }}
+        className="text-base font-semibold text-[var(--vl-text-secondary)] underline underline-offset-4 hover:text-[var(--vl-text-primary)]"
+      >
+        {copy.button}
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-3 rounded-lg border border-[var(--vl-border)] p-3">
+      <p className="text-base leading-relaxed text-[var(--vl-text-primary)]">{copy.confirm}</p>
+      {failed && <p className="text-base text-[var(--vl-text-primary)]">{copy.error}</p>}
+      <div className="flex flex-wrap gap-3">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={pending}
+          onClick={() => {
+            if (pending) return;
+            setPending(true);
+            void (async () => {
+              try {
+                const result = await forgetSiteSignin(channel);
+                if (!result.ok) {
+                  setFailed(true);
+                  return;
+                }
+                setAsking(false);
+                await onDone();
+              } catch {
+                setFailed(true);
+              } finally {
+                setPending(false);
+              }
+            })();
+          }}
+        >
+          {copy.yes}
+        </Button>
+        <Button type="button" variant="ghost" disabled={pending} onClick={() => setAsking(false)}>
+          {copy.cancel}
+        </Button>
+      </div>
+    </div>
   );
 }
 

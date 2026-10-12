@@ -18,6 +18,7 @@ import {
   NURTURABLE_STATUSES,
 } from "@/lib/nurture";
 import { sendViewingTimesOpenedEmail } from "@/lib/email";
+import { textViewingTimesOpened } from "@/lib/availability-reopen-sms";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -130,10 +131,10 @@ export async function GET(req: NextRequest) {
   let leadQuery = admin
     .from("leads")
     .select(
-      "id, created_at, organization_id, property_id, name, email, status, " +
+      "id, created_at, organization_id, property_id, name, email, phone, status, " +
         "no_suitable_time, reopen_notified_at, " +
         "properties(status, address, rent_cents, building_key), " +
-        "organizations(id, name, brand_color, logo_url, mail_alias, reply_to_email, " +
+        "organizations(id, name, brand_color, logo_url, mail_alias, reply_to_email, sms_enabled, plan, " +
         "availability_reopened_at, availability_tripwire_lookahead_days, " +
         "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days)",
     )
@@ -404,7 +405,22 @@ export async function GET(req: NextRequest) {
             rent_cents: property.rent_cents ?? null,
           });
 
-          if (!result.sent) {
+          // S709: also text the renter (opt-out, plan and quiet hours respected).
+          const texted = await textViewingTimesOpened(admin, {
+            org: {
+              id: orgId,
+              name: org.name ?? null,
+              sms_enabled: org.sms_enabled ?? null,
+              plan: org.plan ?? null,
+              booking_timezone: org.booking_timezone ?? null,
+            },
+            leadId: row.id,
+            propertyId: row.property_id,
+            phone: row.phone ?? null,
+            address: property.address ?? null,
+          });
+
+          if (!result.sent && !texted) {
             errorCount++;
             summary.errors++;
             summary.details.push({ lead: row.id, error: result.reason });
@@ -427,13 +443,15 @@ export async function GET(req: NextRequest) {
             continue;
           }
 
-          const { error: messageErr } = await admin.from("messages").insert({
-            organization_id: row.organization_id,
-            lead_id: row.id,
-            channel: "email",
-            direction: "outbound",
-            body: "Notified — new viewing times opened",
-          });
+          const { error: messageErr } = result.sent
+            ? await admin.from("messages").insert({
+                organization_id: row.organization_id,
+                lead_id: row.id,
+                channel: "email",
+                direction: "outbound",
+                body: "Notified - new viewing times opened",
+              })
+            : { error: null };
           if (messageErr) {
             errorCount++;
             summary.errors++;
@@ -445,6 +463,8 @@ export async function GET(req: NextRequest) {
           summary.details.push({
             lead: row.id,
             sent: true,
+            emailed: result.sent,
+            texted,
             subject: result.subject,
             stamped_reopen_notified_at: sentAt,
           });
