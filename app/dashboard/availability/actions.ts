@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { timeStrToMinutes } from "@/lib/booking";
+import { parseBuildingWeekdays, timeStrToMinutes } from "@/lib/booking";
 
 const COMMON_TZ = new Set([
   "America/Toronto",
@@ -333,4 +333,45 @@ export async function removeAvailabilityOverride(formData: FormData) {
   await supabase.from("availability_overrides").delete().eq("id", id);
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
+}
+
+// S708: viewing days per building. A building with saved weekdays shows only on
+// those days (enforced in get_public_availability + book_public_showing); no
+// weekdays saved = the building uses every weekly window, as before.
+export async function saveBuildingViewingDays(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+  const buildingKey = String(formData.get("building_key") ?? "").trim();
+  if (!buildingKey) redirect("/dashboard/availability?error=building_invalid");
+  const weekdays = parseBuildingWeekdays(formData.getAll("weekday"));
+
+  const supabase = createClient();
+  // The building must be one of this org's own (RLS also scopes properties).
+  const { data: owned } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("organization_id", org.id)
+    .eq("building_key", buildingKey)
+    .limit(1);
+  if (!owned || owned.length === 0) redirect("/dashboard/availability?error=building_invalid");
+
+  const { error: delErr } = await supabase
+    .from("availability_building_days")
+    .delete()
+    .eq("organization_id", org.id)
+    .eq("building_key", buildingKey);
+  if (delErr) redirect("/dashboard/availability?error=building_save");
+  if (weekdays.length > 0) {
+    const { error: insErr } = await supabase.from("availability_building_days").insert(
+      weekdays.map((weekday) => ({
+        organization_id: org.id,
+        building_key: buildingKey,
+        weekday,
+      })),
+    );
+    if (insErr) redirect("/dashboard/availability?error=building_save");
+  }
+  revalidatePath("/dashboard/availability");
+  redirect("/dashboard/availability?saved=building_days");
 }

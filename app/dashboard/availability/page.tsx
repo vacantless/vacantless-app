@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { WEEKDAY_LABELS, minutesToLabel, previewSlotStarts } from "@/lib/booking";
+import { WEEKDAY_LABELS, buildingLabel, minutesToLabel, previewSlotStarts } from "@/lib/booking";
 import {
   updateBookingSettings,
   updateClusteringSettings,
@@ -11,6 +11,7 @@ import {
   removeDayOff,
   addAvailabilityOverride,
   removeAvailabilityOverride,
+  saveBuildingViewingDays,
 } from "./actions";
 import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -66,12 +67,15 @@ const SAVED_MESSAGES: Record<string, string> = {
   window: "Viewing window added.",
   dayoff: "Day off added.",
   override: "Specific-date hours added.",
+  building_days: "Viewing days for the building saved.",
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
   window_invalid: "The end time has to be after the start time.",
   dayoff_invalid: "Pick a valid date, today or later.",
   override_invalid: "Pick a valid date and custom hours where the end is after the start.",
+  building_invalid: "That building was not found. Reload the page and try again.",
+  building_save: "The viewing days did not save. Try again.",
 };
 
 export default async function AvailabilityPage({
@@ -95,6 +99,8 @@ export default async function AvailabilityPage({
     { data: rulesData },
     { data: daysOffData },
     { data: overridesData },
+    { data: buildingPropsData },
+    { data: buildingDaysData },
   ] =
     await Promise.all([
       supabase
@@ -121,7 +127,36 @@ export default async function AvailabilityPage({
         .eq("organization_id", org.id)
         .order("day")
         .order("start_minute"),
+      // S708: viewing days per building.
+      supabase
+        .from("properties")
+        .select("building_key, address, status")
+        .eq("organization_id", org.id)
+        .is("archived_at", null)
+        .not("building_key", "is", null),
+      supabase
+        .from("availability_building_days")
+        .select("building_key, weekday")
+        .eq("organization_id", org.id),
     ]);
+
+  // S708: one row per building that has an available unit, labelled by street.
+  const buildingDays = new Map<string, number[]>();
+  for (const r of (buildingDaysData ?? []) as { building_key: string; weekday: number }[]) {
+    const list = buildingDays.get(r.building_key) ?? [];
+    list.push(r.weekday);
+    buildingDays.set(r.building_key, list);
+  }
+  const buildingsMap = new Map<string, { key: string; label: string; available: number }>();
+  for (const p of (buildingPropsData ?? []) as { building_key: string | null; address: string | null; status: string | null }[]) {
+    if (!p.building_key) continue;
+    const cur = buildingsMap.get(p.building_key) ?? { key: p.building_key, label: buildingLabel(p.address), available: 0 };
+    if (p.status === "available") cur.available += 1;
+    buildingsMap.set(p.building_key, cur);
+  }
+  const buildings = [...buildingsMap.values()]
+    .filter((b) => b.available > 0 || buildingDays.has(b.key))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const cfg = (orgRow as OrgBooking) ?? {
     booking_timezone: "America/Toronto",
@@ -672,6 +707,60 @@ export default async function AvailabilityPage({
           </button>
         </form>
       </div>
+
+      {/* S708: viewing days per building */}
+      {buildings.length > 1 && (
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Viewing days by building
+          </h3>
+          <p className="mb-4 mt-1 text-sm text-gray-500">
+            Pick the days each building shows. Renters for that building can
+            only book on those days, inside the hours you open. Leave every day
+            unticked to show the building on every day you open.
+          </p>
+          <div className="divide-y divide-gray-100">
+            {buildings.map((b) => {
+              const picked = new Set(buildingDays.get(b.key) ?? []);
+              return (
+                <form
+                  key={b.key}
+                  action={saveBuildingViewingDays}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3"
+                >
+                  <input type="hidden" name="building_key" value={b.key} />
+                  <span className="w-40 text-sm font-medium text-gray-800">
+                    {b.label}
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAY_LABELS.map((label, wd) => (
+                      <label
+                        key={wd}
+                        className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700"
+                      >
+                        <input
+                          type="checkbox"
+                          name="weekday"
+                          value={wd}
+                          defaultChecked={picked.has(wd)}
+                          className="h-3.5 w-3.5"
+                        />
+                        {label.slice(0, 3)}
+                      </label>
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {picked.size === 0 ? "Every viewing day" : "Only the ticked days"}
+                  </span>
+                  <button className="ml-auto rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white">
+                    Save
+                  </button>
+                </form>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Specific dates: day-off blackouts + custom hours */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

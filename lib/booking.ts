@@ -622,3 +622,22 @@ export function utcToLocalInputValue(iso: string, timeZone: string): string {
   const hour = map.hour === "24" ? "00" : map.hour;
   return `${map.year}-${map.month}-${map.day}T${hour}:${map.minute}`;
 }
+
+/**
+ * S708: weekday checkboxes for "viewing days by building" -> sorted unique
+ * weekdays 0..6 (0 = Sunday). Anything else is dropped. Pure.
+ */
+export function parseBuildingWeekdays(values: unknown[]): number[] {
+  const out = new Set<number>();
+  for (const v of values) {
+    const n = Number(typeof v === "string" ? v.trim() : v);
+    if (Number.isInteger(n) && n >= 0 && n <= 6) out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+/** S708: a building's display name from one of its unit addresses ("1195 Bruce Ave"). Pure. */
+export function buildingLabel(address: string | null | undefined): string {
+  const first = (address ?? "").split(",")[0]?.trim() ?? "";
+  return first.replace(/\s+(unit|apt|suite|#)\s*\S+$/i, "").trim() || (address ?? "").trim();
+}
