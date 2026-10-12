@@ -363,7 +363,10 @@ export function DistributeTab({
     <div className="space-y-4">
       {/* S705: shown only when a site still needs a detail. A ready listing
           needs no card saying so. */}
-      {listingPacket.readyChannelCount < listingPacket.channelCount && (
+      {/* S710 audit: when the posting box below already lists every missing
+          detail with its own button, this card said the same thing again. */}
+      {listingPacket.readyChannelCount < listingPacket.channelCount &&
+        !publishEverywherePostingBlocker && (
         <ListingPacketCard readiness={listingPacket} propertyId={propertyId} />
       )}
       <PublishEverywhere
