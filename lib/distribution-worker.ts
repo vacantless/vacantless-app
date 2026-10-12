@@ -91,6 +91,26 @@ export function workerAccountConnected(input: {
   return isRobotPostedChannel(input.channel) && input.automationAuthorized === true;
 }
 
+/**
+ * S708: the landlord's STANDING spend authorization for a paid site, read at
+ * prepare time. It does not mean the fee is paid (Kijiji re-asks the CVV on
+ * every purchase, so the human always pays at the fee wall). It means the
+ * robot is allowed to build the paid ad and stop at the fee wall. Without it
+ * the prepare step parked every paid item at needs_payment, which the robot
+ * never claims (it claims approved needs_operator items only), so no paid
+ * post could ever reach the robot. Mirrors the worker's spendAuthorizationIssue.
+ */
+export function standingSpendAuthorized(account: {
+  spend_authorized?: boolean | null;
+  spend_revoked_at?: string | null;
+  spend_max_cents?: number | null;
+} | null): boolean {
+  if (!account) return false;
+  if (account.spend_authorized !== true) return false;
+  if (account.spend_revoked_at != null) return false;
+  return typeof account.spend_max_cents === "number" && account.spend_max_cents > 0;
+}
+
 export function selectGate(input: {
   requiresLogin: boolean;
   connected: boolean;

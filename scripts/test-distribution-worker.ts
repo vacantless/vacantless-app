@@ -8,6 +8,7 @@ import {
   isWorkerGate,
   workerJobEligible,
   selectGate,
+  standingSpendAuthorized,
   workerAccountConnected,
   assertWorkerNeverTerminal,
   buildAgentComposePrompt,
@@ -238,6 +239,14 @@ ok("prompt omits unsupplied facts (no unit type line)", !/Unit type:/i.test(prom
   ok("ai adapter is dark on missing key", aiSrc.includes('skipped: "no_key"'));
   ok("ai adapter never throws (has catch)", aiSrc.includes("catch"));
 }
+
+// S708: a standing spend limit sends a paid item to the robot (needs_operator);
+// without one it parks at needs_payment as before.
+ok("spend limit set -> paid item goes to the robot", selectGate({ requiresLogin: true, connected: true, channelRequiresPayment: true, paymentCleared: standingSpendAuthorized({ spend_authorized: true, spend_revoked_at: null, spend_max_cents: 3384 }) }) === "needs_operator");
+ok("no spend limit -> needs_payment", selectGate({ requiresLogin: true, connected: true, channelRequiresPayment: true, paymentCleared: standingSpendAuthorized({ spend_authorized: false, spend_revoked_at: null, spend_max_cents: 3384 }) }) === "needs_payment");
+ok("revoked spend -> not authorized", standingSpendAuthorized({ spend_authorized: true, spend_revoked_at: "2026-10-11T00:00:00Z", spend_max_cents: 3384 }) === false);
+ok("zero ceiling -> not authorized", standingSpendAuthorized({ spend_authorized: true, spend_revoked_at: null, spend_max_cents: 0 }) === false);
+ok("missing account -> not authorized", standingSpendAuthorized(null) === false);
 
 console.log(`\ndistribution-worker: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

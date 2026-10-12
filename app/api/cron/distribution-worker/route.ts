@@ -28,6 +28,7 @@ import { channelByKey } from "@/lib/distribution-channels";
 import {
   assertWorkerNeverTerminal,
   selectGate,
+  standingSpendAuthorized,
   workerAccountConnected,
   workerJobEligible,
   type WorkerGate,
@@ -117,6 +118,9 @@ type ChannelAccountRow = {
   requires_login: boolean | null;
   requires_payment: boolean | null;
   account_status: string | null;
+  spend_authorized?: boolean | null;
+  spend_revoked_at?: string | null;
+  spend_max_cents?: number | null;
 };
 
 async function operatorFallbackForOrg(
@@ -373,7 +377,9 @@ export async function GET(req: NextRequest) {
     for (const c of candidates) {
       const { data: acct } = await admin
         .from("distribution_channel_accounts")
-        .select("automation_authorized, requires_login, requires_payment, account_status")
+        .select(
+          "automation_authorized, requires_login, requires_payment, account_status, spend_authorized, spend_revoked_at, spend_max_cents",
+        )
         .eq("organization_id", c.organization_id)
         .eq("channel", c.channel)
         .maybeSingle();
@@ -471,7 +477,9 @@ export async function GET(req: NextRequest) {
         automationAuthorized: account.automation_authorized,
       }),
       channelRequiresPayment: account.requires_payment === true,
-      paymentCleared: false, // no payment-cleared signal exists yet; a paid channel always gates on payment
+      // S708: a standing spend limit lets the robot build the paid ad; it
+      // still stops at the site's fee wall (needs_payment) for the human.
+      paymentCleared: standingSpendAuthorized(account),
     });
     assertWorkerNeverTerminal(gate);
     summary.gate = gate;
