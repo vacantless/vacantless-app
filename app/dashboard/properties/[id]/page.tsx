@@ -951,7 +951,10 @@ export default async function PropertyDetailPage({
   const draftMissing: string[] = [];
   if (!(typeof p.rent_cents === "number" && p.rent_cents > 0)) draftMissing.push("the rent");
   if (p.beds == null || p.baths == null) draftMissing.push("the bed and bath count");
-  if (photoRows.length === 0) draftMissing.push("at least one photo");
+  // S710 audit: Set Live only needs address, rent, beds and baths
+  // (publishProperty). A photo is recommended, never required, so it is not
+  // listed as "still needed" here.
+  const draftNeedsPhoto = photoRows.length === 0;
   const publicPageIsBookable = isPublicBookable(normalizedStatus);
   const publicPageIsVisible = isPubliclyVisible(normalizedStatus);
   const publicPageShowsUnavailable =
@@ -2702,6 +2705,9 @@ export default async function PropertyDetailPage({
               <>When you&apos;re ready, press </>
             )}
             <strong>Set Live</strong> at the top of this page.
+            {draftMissing.length === 0 && draftNeedsPhoto && (
+              <> Add a photo first if you can. Renters ask about rentals with photos far more often.</>
+            )}
           </p>
         )}
 
@@ -3139,8 +3145,8 @@ export default async function PropertyDetailPage({
             <option value="approximate">Approximate (street + city only)</option>
           </select>
           <p className="mt-1 text-xs text-gray-500">
-            Rental portals (Kijiji, Rentals.ca, Zumper) still receive the full
-            address, which they require to post.
+            Rental sites like Kijiji and Zumper still get the full address.
+            They need it to post your ad.
           </p>
         </div>
         </section>

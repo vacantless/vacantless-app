@@ -36,9 +36,9 @@ export default async function NewPropertyPage({
     <div>
       <PageHeader
         icon={<Icons.building />}
-        eyebrow="Portfolio"
+        eyebrow="Rentals"
         title="Add rental"
-        subtitle="Import a listing first or start fresh, then save a private Draft."
+        subtitle="Fill in the basics. Renters can't see it until you make it public."
         action={
           <Link href="/dashboard/properties" className={SECONDARY_ACTION_CLASS}>
             Back to rentals

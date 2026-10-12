@@ -61,7 +61,7 @@ const STEP_DEFS: StepDef[] = [
     key: "property",
     label: "Add your first rental",
     description:
-      "Create the rental record first. You can start with just the address and fill in the rest later.",
+      "Start with the address, rent, beds and baths. You can add photos and the rest later.",
     href: "/dashboard/properties#add-rental",
     cta: "Add rental",
   },
@@ -77,7 +77,7 @@ const STEP_DEFS: StepDef[] = [
     key: "get_online",
     label: "Put it on the rental sites",
     description:
-      "Start with Facebook Marketplace (free) and Kijiji (one free ad per personal account). Paid sites come after. Done when one ad is live, or when the unit already has a tenant.",
+      "Press Set Live on your rental first. Then we post it to Kijiji or Zumper for you. You approve each ad. Done when one ad is live.",
     href: "/dashboard/properties",
     cta: "Post my rental",
   },

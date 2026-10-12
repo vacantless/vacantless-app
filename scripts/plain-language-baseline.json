@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-11",
-  "checksum": "c296f9ad064d4fc462f246250c5cb42960f79ba1c54b92795147deaf2c51faf0",
+  "generated": "2026-10-12",
+  "checksum": "f2fa39a486c8a27a37c77bb3e7abd47c01939a89d579d23b72b62c1bfded2661",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -71,14 +71,13 @@
     "app/dashboard/properties/[id]/lifecycle-rail.tsx\u0000banned_word": 1,
     "app/dashboard/properties/[id]/page.tsx\u0000all_caps": 2,
     "app/dashboard/properties/[id]/page.tsx\u0000ampersand_or_slash": 7,
-    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 72,
+    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 70,
     "app/dashboard/properties/[id]/page.tsx\u0000em_dash": 6,
-    "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 20,
-    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 29,
+    "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 19,
+    "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 28,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
-    "app/dashboard/properties/new/add-property-form.tsx\u0000banned_word": 2,
+    "app/dashboard/properties/new/add-property-form.tsx\u0000banned_word": 1,
     "app/dashboard/properties/new/add-property-form.tsx\u0000parentheses": 4,
-    "app/dashboard/properties/new/page.tsx\u0000banned_word": 1,
     "app/dashboard/properties/readiness-chips.tsx\u0000banned_word": 3,
     "app/dashboard/properties/standard-policy/page.tsx\u0000all_caps": 1,
     "app/dashboard/properties/standard-policy/page.tsx\u0000ampersand_or_slash": 2,
@@ -90,9 +89,9 @@
     "app/dashboard/settings/page.tsx\u0000all_caps": 2,
     "app/dashboard/settings/page.tsx\u0000ampersand_or_slash": 7,
     "app/dashboard/settings/page.tsx\u0000banned_word": 64,
-    "app/dashboard/settings/page.tsx\u0000em_dash": 6,
+    "app/dashboard/settings/page.tsx\u0000em_dash": 5,
     "app/dashboard/settings/page.tsx\u0000parentheses": 15,
-    "app/dashboard/settings/page.tsx\u0000sentence_length": 17,
+    "app/dashboard/settings/page.tsx\u0000sentence_length": 15,
     "app/dashboard/today-lane.tsx\u0000banned_word": 1,
     "app/dashboard/today-lane.tsx\u0000negative_promise": 2,
     "lib/distribution-analytics.ts\u0000ampersand_or_slash": 1,
@@ -159,7 +158,7 @@
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
     "app/dashboard/properties/[id]/page.tsx": 375,
-    "app/dashboard/properties/[id]/publish-everywhere.tsx": 133,
+    "app/dashboard/properties/[id]/publish-everywhere.tsx": 106,
     "app/dashboard/properties/new/add-property-form.tsx": 98,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 85,
@@ -167,8 +166,8 @@
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
-    "app/dashboard/settings/page.tsx": 302,
-    "app/dashboard/site-signin/[channel]/page.tsx": 12,
+    "app/dashboard/settings/page.tsx": 301,
+    "app/dashboard/site-signin/[channel]/page.tsx": 13,
     "app/dashboard/site-signin/[channel]/window-panel.tsx": 5,
     "app/dashboard/today-lane.tsx": 5,
     "lib/distribution-analytics.ts": 8,
@@ -179,7 +178,7 @@
     "lib/distribution-freshness.ts": 20,
     "lib/distribution-launch-coverage.ts": 8,
     "lib/distribution-partner.ts": 13,
-    "lib/distribution-publish.ts": 73,
+    "lib/distribution-publish.ts": 75,
     "lib/distribution-run.ts": 62,
     "lib/distribution-stuck-sweep.ts": 8,
     "lib/distribution-verification.ts": 20,
@@ -190,8 +189,8 @@
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
     "lib/site-signin.ts": 19,
-    "messages/en.json": 193,
-    "messages/fr.json": 193
+    "messages/en.json": 198,
+    "messages/fr.json": 198
   },
   "entries": [
     {
@@ -599,12 +598,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Rental portals (Kijiji, Rentals.ca, Zumper) still receive the full address, which they require to post.",
-      "count": 2
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Rides along to the portals (e.g. Kijiji posts it as this type).",
       "count": 2
     },
@@ -833,12 +826,6 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Rental portals (Kijiji, Rentals.ca, Zumper) still receive the full address, which they require to post.",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Rides along to the portals (e.g. Kijiji posts it as this type).",
       "count": 1
     },
@@ -959,12 +946,6 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Rental portals (Kijiji, Rentals.ca, Zumper) still receive the full address, which they require to post.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Sends the operator smart-lock battery reminder when that reminder is turned on for this company.",
       "count": 1
     },
@@ -1049,12 +1030,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/new/add-property-form.tsx",
-      "text": "Channel readiness",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/new/add-property-form.tsx",
       "text": "Start fresh",
       "count": 1
     },
@@ -1080,12 +1055,6 @@
       "rule": "parentheses",
       "file": "app/dashboard/properties/new/add-property-form.tsx",
       "text": "Size (sq ft)",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/new/page.tsx",
-      "text": "Import a listing first or start fresh, then save a private Draft.",
       "count": 1
     },
     {
@@ -1641,12 +1610,6 @@
       "count": 1
     },
     {
-      "rule": "em_dash",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Where Vacantless sends account updates and the landlord email campaign for this account. Private — never shown on listings. Leave blank to skip this account in the campaign.",
-      "count": 1
-    },
-    {
       "rule": "parentheses",
       "file": "app/dashboard/settings/page.tsx",
       "text": ") behind white text (your header, buttons, and links) to keep it readable. Your exact color is saved.",
@@ -1799,12 +1762,6 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "Set where renter replies should go. A per-company Vacantless address can be prepared here, but it is only used after the matching ImprovMX forward exists and the sender flag is enabled.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/settings/page.tsx",
       "text": "Shown on your public listing pages and at the top of every email to renters. Use a PNG, JPG, WebP, GIF, or SVG up to 2 MB.",
       "count": 1
     },
@@ -1812,12 +1769,6 @@
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Tenant notes still draft for approval, landlord reminders still respect Automations settings, and the global master switch remains the final kill-switch.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "The landlord email must be a single valid email address, or left blank to skip this account in the campaign.",
       "count": 1
     },
     {

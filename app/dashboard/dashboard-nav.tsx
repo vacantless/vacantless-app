@@ -43,11 +43,12 @@ const PRIMARY: NavItem[] = [
   { href: "/dashboard", label: "Today" },
   { href: "/dashboard/properties", label: "Rentals" },
   {
-    href: "/dashboard/leasing",
+    // S710 audit: "Renters" opens the renter list itself, not a hub of tiles.
+    href: "/dashboard/leads",
     label: "Renters",
     // Renter inquiries + the leasing FUNNEL report (inquiries/viewings/
     // channels/lease-timing). Showings/viewing-times light Viewings, not this.
-    match: ["/dashboard/leads", "/dashboard/reports"],
+    match: ["/dashboard/leasing", "/dashboard/reports"],
   },
   {
     href: "/dashboard/showings",
@@ -179,7 +180,8 @@ export function DashboardNav({
     ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
     ...(showAgentBook ? [AGENT_BOOK] : []),
     ...(referralsEnabled ? [REFERRALS] : []),
-    ...(capturesEnabled ? [CAPTURES] : []),
+    // S710 audit: Captures files appliance plates and receipts, a post-lease job.
+    ...(capturesEnabled && postLeaseEnabled ? [CAPTURES] : []),
   ];
   const accountActive = account.some((u) => isActive(pathname, u));
   const initial = (orgName.trim()[0] ?? "V").toUpperCase();

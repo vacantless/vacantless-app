@@ -100,8 +100,8 @@ export default async function MySettingsPage({
       ) : (
         <EmptyState
           icon={<Icons.users className="h-5 w-5" />}
-          title="You're not on this organization's showing roster yet."
-          description="Ask an admin to add you so you can set your coverage."
+          title="Nothing to set here yet"
+          description="This page is for people who show your rentals. Add yourself or a helper under Viewings, then Showing agents. Then each person sets the times they can cover here."
         />
       )}
     </div>

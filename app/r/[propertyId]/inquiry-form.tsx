@@ -1,5 +1,6 @@
 "use client";
 
+import { timezoneLabel } from "@/lib/timezone-label";
 import {
   useEffect,
   useMemo,
@@ -344,7 +345,7 @@ export function InquiryForm({
             </legend>
             {timezone && (
               <p className="mb-1 mt-0.5 text-xs text-gray-400">
-                Times shown in {timezone.replace(/_/g, " ")}.
+                All times are {timezoneLabel(timezone)}.
               </p>
             )}
             {hasClustered && (

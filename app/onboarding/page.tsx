@@ -27,7 +27,7 @@ export default async function OnboardingPage({
       eyebrow="Step 1 of 2"
       title="Set up your business profile"
       subtitle="Name your business and pick the brand color renters see on your pages and emails. You can change any of this later."
-      footer="Next: add your first rental and share its inquiry page."
+      footer="Next: add your first rental."
     >
       {/* gradient step indicator */}
       <div className="mb-6 flex items-center gap-2" aria-hidden>

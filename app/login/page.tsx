@@ -44,7 +44,7 @@ export default function LoginPage() {
         <>
           No account?{" "}
           <Link href="/signup" className="font-semibold text-brand">
-            Start a 30-day pilot
+            Start free
           </Link>
         </>
       }

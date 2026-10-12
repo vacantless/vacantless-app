@@ -9,6 +9,7 @@ import {
   type PortalInboxEvent,
   type PortalInboxSiteState,
 } from "@/lib/portal-inbox";
+import { channelShownFor } from "@/lib/posting-lanes";
 import { provisionInquiryAddress } from "./actions";
 
 // S697c. The self-serve half of portal lead ingest: the org's own address, the
@@ -23,7 +24,8 @@ const TONE: Record<PortalInboxSiteState["state"], "success" | "attention" | "neu
 };
 
 export async function PortalInboxCard({ orgId }: { orgId: string }) {
-  const sites = portalInboxSites();
+  // S710 audit: drop sites this org is not shown anywhere else (Rentals.ca is Agile only).
+  const sites = portalInboxSites().filter((s) => channelShownFor(s.key, orgId));
   if (sites.length === 0) return null;
 
   const supabase = createClient();

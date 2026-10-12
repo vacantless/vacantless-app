@@ -127,10 +127,10 @@ function ReadinessMeter({ entries: allEntries }: { entries: ChannelReadiness[] }
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">
-            Channel readiness
+            Where it can be posted
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
-            Missing items do not block saving a Draft.
+            You can save now. Add the missing items later.
           </p>
         </div>
         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
@@ -219,7 +219,7 @@ export function AddPropertyV2Form({
    *  Rentals.ca outside Agile), dropped from the panel. */
   hiddenReadinessChannels?: readonly string[];
 }) {
-  const [mode, setMode] = useState<"import" | "fresh">("import");
+  const [mode, setMode] = useState<"import" | "fresh">("fresh");
   const [draft, setDraft] = useState<AddPropertyV2Draft>(
     EMPTY_ADD_PROPERTY_V2_DRAFT,
   );
@@ -485,17 +485,6 @@ export function AddPropertyV2Form({
           <div className="mb-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setMode("import")}
-              className={
-                mode === "import"
-                  ? "rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white"
-                  : SECONDARY_ACTION_CLASS
-              }
-            >
-              Import
-            </button>
-            <button
-              type="button"
               onClick={() => setMode("fresh")}
               className={
                 mode === "fresh"
@@ -504,6 +493,17 @@ export function AddPropertyV2Form({
               }
             >
               Start fresh
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("import")}
+              className={
+                mode === "import"
+                  ? "rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white"
+                  : SECONDARY_ACTION_CLASS
+              }
+            >
+              Copy from an existing ad
             </button>
           </div>
 
@@ -1191,7 +1191,7 @@ export function AddPropertyV2Form({
             Save draft
           </SubmitButton>
           <span className="text-xs text-gray-500">
-            Lands on the rental detail page after save.
+            Saves as a private draft. Renters can&apos;t see it yet.
           </span>
         </div>
       </form>

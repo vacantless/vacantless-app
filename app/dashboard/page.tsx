@@ -687,8 +687,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         <EmptyState
           icon={<Icons.chat />}
           title="No inquiries yet"
-          description="Share a rental's public listing link to start collecting inquiries. They'll land here automatically."
-          cta={{ href: "/dashboard/properties", label: "Open a rental" }}
+          description="Put your rental's link in your ads. Every renter who asks shows up here."
+          cta={{ href: "/dashboard/properties", label: "Go to your rentals" }}
         />
       ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">

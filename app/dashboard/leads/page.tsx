@@ -130,8 +130,18 @@ export default async function LeadsPage({
       <PageHeader
         icon={<Icons.chat />}
         eyebrow="Renters"
-        title="Inquiries"
-        subtitle="Every renter who has reached out about one of your rentals."
+        title="Renters"
+        subtitle="Every renter who has asked about one of your rentals."
+        action={
+          <div className="flex gap-4 text-sm">
+            <Link href="/dashboard/leasing/screening" className="font-medium text-brand hover:underline">
+              Questions for renters
+            </Link>
+            <Link href="/dashboard/reports" className="font-medium text-brand hover:underline">
+              Reports
+            </Link>
+          </div>
+        }
       />
 
       <ScreenshotLeadCard
@@ -254,8 +264,8 @@ export default async function LeadsPage({
           <EmptyState
             icon={<Icons.chat />}
             title="No inquiries yet"
-            description="Share a rental's public listing link to start collecting inquiries. Every submission lands here automatically."
-            cta={{ href: "/dashboard/properties", label: "Open a rental" }}
+            description="Put your rental's link in your ads. Every renter who asks shows up here."
+            cta={{ href: "/dashboard/properties", label: "Go to your rentals" }}
           />
         ) : (
           <EmptyState

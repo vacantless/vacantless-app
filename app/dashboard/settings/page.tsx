@@ -1,4 +1,5 @@
 import { adminEmails } from "@/lib/provisioning-server";
+import { channelShownFor } from "@/lib/posting-lanes";
 import { isAdminEmail } from "@/lib/provisioning";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -960,8 +961,8 @@ export default async function SettingsPage({
             )}
             {searchParams.feed === "landlord_email" && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                The landlord email must be a single valid email address, or left
-                blank to skip this account in the campaign.
+                The account email must be one valid email address, or left
+                blank.
               </div>
             )}
             {searchParams.feed === "error" && (
@@ -1024,9 +1025,8 @@ export default async function SettingsPage({
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
                 <span className="mt-1 block text-xs text-gray-400">
-                  Where Vacantless sends account updates and the landlord email
-                  campaign for this account. Private — never shown on listings.
-                  Leave blank to skip this account in the campaign.
+                  Where we send news about your Vacantless account. Private, never
+                  shown on your listings. Leave blank if you do not want these emails.
                 </span>
               </label>
               <div className="sm:col-span-2">
@@ -1048,11 +1048,11 @@ export default async function SettingsPage({
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-gray-900">
                     Renter pre-screening{" "}
-                    <span className="font-normal text-brand">→ Leasing</span>
+                    <span className="font-normal text-brand">→ Renters</span>
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Qualifying questions and auto-flagging now live in Leasing,
-                    where you work your inquiries. Open to manage.
+                    Questions you ask renters before a viewing now live under
+                    Renters. Open to manage.
                   </p>
                 </div>
               </div>
@@ -1135,6 +1135,8 @@ export default async function SettingsPage({
             distributionChannels
               .filter(({ cap }) => {
                 const ch = channelByKey(cap.channel);
+                // S710 audit: Rentals.ca (and Marketplace) show only to the orgs we can post them for.
+                if (!channelShownFor(cap.channel, org.id)) return false;
                 return ch?.integrationStatus === "live" && ch.connectKind === "account_login";
               })
               .map(({ cap, meta, account, accountStatus }) => {
@@ -1759,9 +1761,8 @@ export default async function SettingsPage({
               </h3>
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Set where renter replies should go. A per-company Vacantless
-              address can be prepared here, but it is only used after the matching
-              ImprovMX forward exists and the sender flag is enabled.
+              Choose where renter replies go. You can also ask us for your own
+              @vacantless.com address. We tell you when it is ready.
             </p>
 
             {senderFlash === "saved" && (
@@ -2209,8 +2210,8 @@ export default async function SettingsPage({
                     Automatically release still-unconfirmed viewings
                   </span>
                   <span className="block text-xs text-gray-400">
-                    Applies only in agent-confirm mode. Existing orgs stay off
-                    until you turn this on.
+                    Only works when someone confirms viewings by hand. Off until
+                    you turn it on.
                   </span>
                 </span>
               </label>
@@ -2738,11 +2739,7 @@ export default async function SettingsPage({
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-gray-500">Plan</dt>
-                <dd className="font-medium text-gray-900">{org.plan}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Listing link prefix</dt>
-                <dd className="font-medium text-gray-900">/r/&hellip;</dd>
+                <dd className="font-medium capitalize text-gray-900">{org.plan}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Account ID</dt>
@@ -2755,7 +2752,7 @@ export default async function SettingsPage({
                 : "Renter replies to automated emails route to the shared Vacantless inbox."}{" "}
               Change this under{" "}
               <Link href="/dashboard/settings?tab=comms" className="font-medium underline">
-                Communications → Email sender
+                Message setup → Email sender
               </Link>
               .
             </p>
