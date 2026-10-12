@@ -775,7 +775,7 @@ export default async function SettingsPage({
                 </span>
                 <span className="mb-2 block text-xs text-gray-400">
                   Used for the header bar, listing accents, and the email accent
-                  stripe. Pick a solid or a two-color ombre.
+                  stripe. Pick one color or a blend of two.
                 </span>
                 <BrandColorField
                   defaultPrimary={color}
@@ -1992,6 +1992,98 @@ export default async function SettingsPage({
             </div>
           </div>
 
+          {/* --- Text messages --- */}
+          <form
+            action={updateTextMessages}
+            className="rounded-2xl border border-gray-200 bg-white p-5"
+          >
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.chat className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Text messages
+              </h3>
+            </div>
+
+            {smsFlash === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                {smsTransportReady
+                  ? "Text message setting saved."
+                  : "Saved. Texts start once your account's SMS is connected — nothing is sending yet."}
+              </div>
+            )}
+            {smsFlash === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving this setting. Please try again.
+              </div>
+            )}
+            {smsFlash === "upgrade" && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                Texting renters is a Growth feature.{" "}
+                <Link href="/dashboard/billing" className="font-medium underline">
+                  Upgrade to turn it on
+                </Link>
+                .
+              </div>
+            )}
+            {!canRenterSms && smsFlash !== "upgrade" && (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500">
+                Texting renters comes with Growth. On your current plan we send
+                confirmations and reminders by email.
+              </div>
+            )}
+
+            {/* S528 honesty: when the transport isn't connected, lead with
+                "not sending yet" and keep every verb conditional, so an
+                operator can never read this toggle as live texting. */}
+            {canRenterSms && !smsTransportReady && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                <span className="font-medium">Not sending yet.</span> Your
+                account&apos;s SMS isn&apos;t connected, so no texts go out
+                regardless of this setting. Your choice here is saved and takes
+                effect when SMS is connected. Renters get email confirmations
+                and reminders either way.
+              </div>
+            )}
+
+            <label className="mt-4 flex items-start gap-3">
+              <input
+                name="sms_enabled"
+                type="checkbox"
+                defaultChecked={org.sms_enabled}
+                disabled={!canRenterSms}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 disabled:opacity-50"
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-gray-700">
+                  Also text renters their booking confirmation and viewing
+                  reminders
+                </span>
+                <span className="block text-xs text-gray-400">
+                  {smsTransportReady ? (
+                    <>
+                      When a renter leaves a phone number, we text their booking
+                      confirmation. We text a reminder a few hours before the
+                      viewing. The day-before reminder still goes by email.
+                    </>
+                  ) : (
+                    <>
+                      Once your account&apos;s SMS is connected, we&apos;ll text
+                      renters who leave a phone number. We text their booking
+                      confirmation and a reminder a few hours before the viewing.
+                      The day-before reminder still goes by email.
+                    </>
+                  )}{" "}
+                  Every text includes &quot;Reply STOP to opt out,&quot; and a
+                  renter who replies STOP is never texted again.
+                </span>
+              </span>
+            </label>
+
+            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
+              Save text messages
+            </button>
+          </form>
+
           {/* --- Renter messages --- */}
           <form
             action={updateRenterMessages}
@@ -2324,7 +2416,7 @@ export default async function SettingsPage({
             </div>
           )}
 
-          {canManageOwnerSettings && (
+          {canManageOwnerSettings && postLeaseEnabled && (
             <form
               action={updateComplianceCalendarSettings}
               className="rounded-2xl border border-gray-200 bg-white p-5"
@@ -2381,6 +2473,7 @@ export default async function SettingsPage({
 
           {/* S499b: tenant message templates moved to their point-of-use under
               Tenancies; org-level communications defaults stay here. */}
+          {postLeaseEnabled && (
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <p className="text-sm text-gray-600">
               Tenant message templates now live with your tenancies.{" "}
@@ -2393,6 +2486,7 @@ export default async function SettingsPage({
               .
             </p>
           </div>
+          )}
 
           {/* S501: notification automations/templates moved to their own
               operator surface; org-level communications defaults stay here. */}
@@ -2409,97 +2503,6 @@ export default async function SettingsPage({
             </p>
           </div>
 
-          {/* --- Text messages --- */}
-          <form
-            action={updateTextMessages}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm"><Icons.chat className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Text messages
-              </h3>
-            </div>
-
-            {smsFlash === "saved" && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                {smsTransportReady
-                  ? "Text message setting saved."
-                  : "Saved. Texts start once your account's SMS is connected — nothing is sending yet."}
-              </div>
-            )}
-            {smsFlash === "error" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Something went wrong saving this setting. Please try again.
-              </div>
-            )}
-            {smsFlash === "upgrade" && (
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                Texting renters is a Growth feature.{" "}
-                <Link href="/dashboard/billing" className="font-medium underline">
-                  Upgrade to turn it on
-                </Link>
-                .
-              </div>
-            )}
-            {!canRenterSms && smsFlash !== "upgrade" && (
-              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500">
-                Texting renters is included on Growth and Premium. On your current plan we send
-                confirmations and reminders by email.
-              </div>
-            )}
-
-            {/* S528 honesty: when the transport isn't connected, lead with
-                "not sending yet" and keep every verb conditional, so an
-                operator can never read this toggle as live texting. */}
-            {canRenterSms && !smsTransportReady && (
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-                <span className="font-medium">Not sending yet.</span> Your
-                account&apos;s SMS isn&apos;t connected, so no texts go out
-                regardless of this setting. Your choice here is saved and takes
-                effect when SMS is connected. Renters get email confirmations
-                and reminders either way.
-              </div>
-            )}
-
-            <label className="mt-4 flex items-start gap-3">
-              <input
-                name="sms_enabled"
-                type="checkbox"
-                defaultChecked={org.sms_enabled}
-                disabled={!canRenterSms}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 disabled:opacity-50"
-              />
-              <span className="text-sm">
-                <span className="block font-medium text-gray-700">
-                  Also text renters their booking confirmation and viewing
-                  reminders
-                </span>
-                <span className="block text-xs text-gray-400">
-                  {smsTransportReady ? (
-                    <>
-                      When a renter leaves a phone number, we text their booking
-                      confirmation. We text a reminder a few hours before the
-                      viewing. The day-before reminder still goes by email.
-                    </>
-                  ) : (
-                    <>
-                      Once your account&apos;s SMS is connected, we&apos;ll text
-                      renters who leave a phone number. We text their booking
-                      confirmation and a reminder a few hours before the viewing.
-                      The day-before reminder still goes by email.
-                    </>
-                  )}{" "}
-                  Every text includes &quot;Reply STOP to opt out,&quot; and a
-                  renter who replies STOP is never texted again.
-                </span>
-              </span>
-            </label>
-
-            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-              Save text messages
-            </button>
-          </form>
         </div>
       )}
 

@@ -190,13 +190,13 @@ export default function BrandColorField({
             key={m}
             type="button"
             onClick={() => setMode(m)}
-            className={`rounded-md px-3 py-1 font-medium capitalize transition ${
+            className={`rounded-md px-3 py-1 font-medium transition ${
               mode === m
                 ? "bg-white text-gray-900 shadow-sm"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            {m}
+            {m === "solid" ? "One color" : "Two-color blend"}
           </button>
         ))}
       </div>
@@ -224,11 +224,6 @@ export default function BrandColorField({
             </>
           )}
         </span>
-        <code className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">
-          {mode === "ombre" && secondaryOut
-            ? `${primary} → ${secondary}`
-            : primary}
-        </code>
         <button
           type="button"
           onClick={reset}
@@ -241,7 +236,7 @@ export default function BrandColorField({
       {/* Presets */}
       <div>
         <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-gray-400">
-          {mode === "ombre" ? "Ombre presets" : "Presets"}
+          Or pick a ready-made one
         </p>
         <div className="flex flex-wrap gap-2">
           {mode === "solid"

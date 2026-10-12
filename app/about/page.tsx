@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
 import { VacantlessMark } from "../../components/vacantless-mark";
 
 export const metadata = {
@@ -8,7 +9,7 @@ export const metadata = {
 };
 
 const CONTACT_HREF = "mailto:hello@vacantless.com";
-const SIGNUP_LABEL = "Start with one rental free";
+const SIGNUP_LABEL = "Start free";
 
 export default function AboutPage() {
   return (
@@ -45,20 +46,27 @@ function SiteHeader() {
             How it works
           </Link>
           <Link href="/#pricing" className="hover:text-[#15211d]">
-            Pricing
+            Plans
           </Link>
           <Link href="/about" className="text-[#15211d]">
             About
           </Link>
         </nav>
+        <div className="flex flex-shrink-0 items-center gap-2.5">
+        <Link
+          href="/login"
+          className="hidden min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#d5ddd9] bg-white px-[18px] text-[0.92rem] font-bold text-[#17362f] transition hover:bg-[#f4f7f5] sm:inline-flex"
+        >
+          Log in
+        </Link>
         <Link
           href="/signup"
           aria-label={SIGNUP_LABEL}
           className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-[18px] text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c]"
         >
-          <span aria-hidden className="sm:hidden">Start free</span>
-          <span aria-hidden className="hidden sm:inline">{SIGNUP_LABEL}</span>
+          {SIGNUP_LABEL}
         </Link>
+        </div>
       </div>
     </header>
   );
@@ -167,13 +175,8 @@ function Body() {
   );
 }
 
-// S702: counted from the database 2026-10-09 (since 2026-06-26), same as the
-// home page. Update from the database, never from memory.
-const STATS: { value: string; label: string }[] = [
-  { value: "258", label: "renter enquiries, all in one list." },
-  { value: "107", label: "viewings booked." },
-  { value: "8 in 10", label: "viewings booked by the renter, with no phone tag." },
-];
+// Same figures as the home page: lib/proof-stats.ts.
+const STATS = LEASING_PROOF_STATS;
 
 const PRINCIPLES: string[] = [
   "One rental, one clear path, from empty page to signed tenancy.",
@@ -205,7 +208,7 @@ function ClosingCta() {
             href={CONTACT_HREF}
             className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-white/40 px-[18px] text-[0.92rem] font-bold text-white transition hover:bg-white/10"
           >
-            Get help launching
+            Talk to our team
           </Link>
         </div>
       </div>

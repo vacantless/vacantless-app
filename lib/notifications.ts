@@ -299,9 +299,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.listing_health",
     family: "leasing",
     audience: "operator",
-    label: "Listing health refresh alert",
+    label: "Ads that need a refresh",
     description:
-      "When tracked ads are stale, expired, or removed, your team gets one digest with the affected units and channels so someone can renew or repost them. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+      "When an ad is old, expired or removed, you get one email listing those ads, so someone can renew or post them again. Off until you turn it on.",
     tokens: [
       ...COMMON_TOKENS,
       "affected_ads_count",
@@ -326,9 +326,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar",
     family: "leasing",
     audience: "operator",
-    label: "Keep live refresh decision",
+    label: "Ad about to expire",
     description:
-      "When tracked ads are close to expiry, your listing team gets one per-property note with safe links to record skip or paid-refresh consent. Vacantless does not repost or charge from this email.",
+      "When an ad is close to expiring, you get one email per rental. Tap to keep it or let it end. Nothing is posted or charged from this email.",
     tokens: [
       ...COMMON_TOKENS,
       "relist_radar_subject",
@@ -344,9 +344,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar_last_chance",
     family: "leasing",
     audience: "operator",
-    label: "Keep live last chance",
+    label: "Ad expires tomorrow",
     description:
-      "When a free relist was skipped and expiry is tomorrow, your listing team gets one last chance to record keep-live or let-expire intent. No portal action runs from the link.",
+      "The day before a free ad ends, you get a last chance to keep it or let it end. Nothing is posted from this email.",
     tokens: [
       ...COMMON_TOKENS,
       "relist_radar_subject",
@@ -362,9 +362,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar_paid_lapse",
     family: "leasing",
     audience: "operator",
-    label: "Keep live paid listing lapse",
+    label: "Paid ad ended",
     description:
-      "When a paid listing reaches expiry with no recorded consent, your listing team gets a post-expiry nudge and the cycle is stamped no-response. No money is spent.",
+      "When a paid ad ends and nobody chose to keep it, you get a note. Nothing is spent.",
     tokens: [
       ...COMMON_TOKENS,
       "relist_radar_subject",
@@ -380,9 +380,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.relist_radar_autopilot_recap",
     family: "leasing",
     audience: "operator",
-    label: "Keep live monthly recap",
+    label: "Monthly ad refresh summary",
     description:
-      "When hands-off Kijiji refresh is enabled, your listing team gets a monthly recap of the free refreshes Vacantless queued. Paid channels stay separate.",
+      "If we refresh your free Kijiji ads for you, you get a monthly list of what we refreshed.",
     tokens: [
       ...COMMON_TOKENS,
       "relist_radar_subject",
@@ -410,7 +410,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "A prepared post needs you to finish it",
     description:
-      "When the done-for-you posting worker has prepared an ad and needs a person to log in, pay, or review and submit it, your team gets a note with the unit, channel, and what is left to do. Nothing is posted until you approve it. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+      "When we have built an ad and need you to sign in, pay or approve it, you get a note with the rental, the site and what is left. Nothing is posted until you approve it. Off until you turn it on.",
     tokens: [
       ...COMMON_TOKENS,
       "channel_label",
@@ -437,7 +437,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "A leased unit's ad needs take-down",
     description:
-      "When a unit is leased and an outside ad should be removed by a person, your listing team gets the channel, reason, and Distribute link. Vacantless never deletes paid or manually posted ads unless the channel is explicitly authorized and proven removed.",
+      "When a rental is leased and an ad on another site needs taking down by hand, you get the site and a link. We never delete an ad you posted yourself.",
     tokens: [
       ...COMMON_TOKENS,
       "channel_label",

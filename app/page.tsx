@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -314,17 +315,14 @@ function CheckMark() {
 
 /* ------------------------------------------------------------ Leasing proof */
 
-/* Numbers from the founder's own rentals (Agile Real Estate Group), counted
-   from the database on 2026-10-09: 258 renter enquiries and 107 viewings since
-   2026-06-26, 89 of the 107 booked by the renter on the listing page. Update
-   them from the database, never from memory. */
+/* Numbers from the founder's own rentals live in lib/proof-stats.ts. */
 function LeasingProof() {
   return (
     <section id="leasing" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="It already runs on our own rentals.">
           Vacantless started as the system for the rentals its founder runs.
-          Here is what it has handled there since June.
+          Here is what it has handled there since May.
         </SectionHead>
         <div className="grid gap-4 sm:grid-cols-3">
           {LEASING_STATS.map((s) => (
@@ -350,11 +348,7 @@ function LeasingProof() {
   );
 }
 
-const LEASING_STATS: { value: string; label: string }[] = [
-  { value: "258", label: "renter enquiries, all in one list." },
-  { value: "107", label: "viewings booked." },
-  { value: "8 in 10", label: "viewings booked by the renter, with no phone tag." },
-];
+const LEASING_STATS = LEASING_PROOF_STATS;
 
 /* ------------------------------------------------------------- How it works */
 

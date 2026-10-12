@@ -2,7 +2,7 @@
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
   "generated": "2026-10-12",
-  "checksum": "f2fa39a486c8a27a37c77bb3e7abd47c01939a89d579d23b72b62c1bfded2661",
+  "checksum": "1d46a15d1ca9a1aaec2ffe785ba34c2d72428a68755894018b0fb909b42f3fad",
   "surfaces": [
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
@@ -59,11 +59,10 @@
   "totals": {
     "app/dashboard/(wizard)/getting-started/page.tsx\u0000banned_word": 3,
     "app/dashboard/(wizard)/getting-started/page.tsx\u0000sentence_length": 1,
-    "app/dashboard/automations/page.tsx\u0000ampersand_or_slash": 4,
-    "app/dashboard/automations/page.tsx\u0000banned_word": 8,
-    "app/dashboard/automations/page.tsx\u0000em_dash": 3,
-    "app/dashboard/automations/page.tsx\u0000parentheses": 6,
-    "app/dashboard/automations/page.tsx\u0000sentence_length": 1,
+    "app/dashboard/automations/page.tsx\u0000ampersand_or_slash": 2,
+    "app/dashboard/automations/page.tsx\u0000banned_word": 3,
+    "app/dashboard/automations/page.tsx\u0000em_dash": 2,
+    "app/dashboard/automations/page.tsx\u0000parentheses": 4,
     "app/dashboard/dashboard-nav.tsx\u0000ampersand_or_slash": 2,
     "app/dashboard/dashboard-nav.tsx\u0000banned_word": 1,
     "app/dashboard/facebook-connect/page.tsx\u0000banned_word": 4,
@@ -71,7 +70,7 @@
     "app/dashboard/properties/[id]/lifecycle-rail.tsx\u0000banned_word": 1,
     "app/dashboard/properties/[id]/page.tsx\u0000all_caps": 2,
     "app/dashboard/properties/[id]/page.tsx\u0000ampersand_or_slash": 7,
-    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 70,
+    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 68,
     "app/dashboard/properties/[id]/page.tsx\u0000em_dash": 6,
     "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 19,
     "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 28,
@@ -144,7 +143,7 @@
     "app/dashboard/add-details/page.tsx": 2,
     "app/dashboard/add-details/question-sheet-form.tsx": 2,
     "app/dashboard/after-live/page.tsx": 1,
-    "app/dashboard/automations/page.tsx": 64,
+    "app/dashboard/automations/page.tsx": 65,
     "app/dashboard/dashboard-nav.tsx": 28,
     "app/dashboard/facebook-connect/page.tsx": 8,
     "app/dashboard/getting-started-card.tsx": 6,
@@ -230,33 +229,9 @@
       "count": 1
     },
     {
-      "rule": "ampersand_or_slash",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "Owner / landlord",
-      "count": 2
-    },
-    {
       "rule": "banned_word",
       "file": "app/dashboard/automations/page.tsx",
       "text": "Choose which reminders and updates send automatically, who receives them, and what they say.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "Goes to your team. If you leave recipients empty, it uses your {value} lane (set at the top), then falls back to {value} .",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "Handles getting units advertised: listing health, syndication, and done-for-you posting.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "Handles the inquiry-to-lease funnel: new leads, viewings, showings, availability, and the daily leasing summary.",
       "count": 1
     },
     {
@@ -272,18 +247,6 @@
       "count": 1
     },
     {
-      "rule": "banned_word",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "placeholders — they're filled in automatically when the email is sent.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "Set who handles each kind of alert once here. Any event below with its own recipients still overrides its lane. Leave a lane empty to fall back to your team members.",
-      "count": 1
-    },
-    {
       "rule": "em_dash",
       "file": "app/dashboard/automations/page.tsx",
       "text": "(from your team and reply-to — add addresses above to change this)",
@@ -293,12 +256,6 @@
       "rule": "em_dash",
       "file": "app/dashboard/automations/page.tsx",
       "text": "Not sent yet — sends once a year when it's due",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "placeholders — they're filled in automatically when the email is sent.",
       "count": 1
     },
     {
@@ -316,31 +273,13 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/automations/page.tsx",
-      "text": "Goes to your team. If you leave recipients empty, it uses your {value} lane (set at the top), then falls back to {value} .",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/automations/page.tsx",
       "text": "One address per line (or comma-separated).",
       "count": 1
     },
     {
       "rule": "parentheses",
       "file": "app/dashboard/automations/page.tsx",
-      "text": "One address per line (or comma-separated). Empty falls back to your team members.",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/automations/page.tsx",
       "text": "The accent color isn't a valid hex value (like #dc2626). Please fix it and save again.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "Goes to your team. If you leave recipients empty, it uses your {value} lane (set at the top), then falls back to {value} .",
       "count": 1
     },
     {
@@ -588,12 +527,6 @@
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Relist it as Live before sharing a public link, QR code, or bundled channel copy.",
       "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Rental created. Finish the unit details below, then publish.",
-      "count": 2
     },
     {
       "rule": "banned_word",
@@ -1535,12 +1468,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Tenant notes still draft for approval, landlord reminders still respect Automations settings, and the global master switch remains the final kill-switch.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Texting renters is included on Growth and Premium. On your current plan we send confirmations and reminders by email.",
       "count": 1
     },
     {

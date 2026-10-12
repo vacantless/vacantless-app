@@ -68,7 +68,7 @@ export function OnboardingForm({
           Brand color
         </label>
         <p className="mb-2 text-sm text-gray-500">
-          Used on your renter pages and emails. Pick a solid or an ombre.
+          Optional. Used on your renter pages and emails. Pick one color or a blend of two.
         </p>
         <BrandColorField
           defaultPrimary={DEFAULT_BRAND_COLOR}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { showOnlyProvenChannelsEnabled } from "@/lib/channel-provenness";
 import { loadShownChannelKeys } from "./provenness-load";
@@ -1014,6 +1015,7 @@ export default async function PropertyDetailPage({
   // never embeds a dead or unavailable URL; closed statuses get a safe fallback
   // line that does not invite bookings.
   const org = await getCurrentOrg();
+  const showPostLease = org ? await orgShowsPostLease(supabase, org.id) : true;
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
@@ -2613,7 +2615,7 @@ export default async function PropertyDetailPage({
 
       {searchParams.created && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          Rental created. Finish the unit details below, then publish.
+          Rental saved.
         </p>
       )}
 
@@ -2896,28 +2898,34 @@ export default async function PropertyDetailPage({
         }
       />
 
-      <SyndicationFirstCard
-        propertyId={p.id}
-        linkIsLive={publicPageIsBookable}
-        setupOutstanding={setupOutstandingCount}
-        hasPhotos={hasListingPhotos}
-        liveOutsideCount={liveListingPostCount}
-        postHistoryCount={postRows.length}
-        totalInquiryCount={leadRows.length}
-        blockerSummary={syndicationBlockerSummary}
-        listingPacketMissingCount={listingPacketReadiness.missingRequired.length}
-        listingPacketReadyChannelCount={listingPacketReadiness.readyChannelCount}
-        listingPacketChannelCount={listingPacketReadiness.channelCount}
-        firstListingPacketMissingField={
-          listingPacketReadiness.missingRequired[0]?.field ?? null
-        }
-        firstListingPacketMissingLabel={
-          listingPacketReadiness.missingRequired[0]?.label ?? null
-        }
-        listingPacketMissingLabels={listingPacketReadiness.missingRequired.map(
-          (m) => m.label,
-        )}
-      />
+      {/* S710 audit: a draft, paused or leased rental showed four status
+          messages that disagreed. Rental sites only matter once the rental
+          is live, so this card shows only then; the draft banner above is
+          the one status line before that. */}
+      {publicPageIsBookable && (
+        <SyndicationFirstCard
+          propertyId={p.id}
+          linkIsLive={publicPageIsBookable}
+          setupOutstanding={setupOutstandingCount}
+          hasPhotos={hasListingPhotos}
+          liveOutsideCount={liveListingPostCount}
+          postHistoryCount={postRows.length}
+          totalInquiryCount={leadRows.length}
+          blockerSummary={syndicationBlockerSummary}
+          listingPacketMissingCount={listingPacketReadiness.missingRequired.length}
+          listingPacketReadyChannelCount={listingPacketReadiness.readyChannelCount}
+          listingPacketChannelCount={listingPacketReadiness.channelCount}
+          firstListingPacketMissingField={
+            listingPacketReadiness.missingRequired[0]?.field ?? null
+          }
+          firstListingPacketMissingLabel={
+            listingPacketReadiness.missingRequired[0]?.label ?? null
+          }
+          listingPacketMissingLabels={listingPacketReadiness.missingRequired.map(
+            (m) => m.label,
+          )}
+        />
+      )}
 
       <PhotoUploadModal
         propertyId={p.id}
@@ -3767,7 +3775,7 @@ export default async function PropertyDetailPage({
 
       <TabPanel
         tabId="market"
-        label="Listing assets"
+        label="Photos and link"
         done={marketStep?.state === "done"}
       >
 
@@ -4054,6 +4062,8 @@ export default async function PropertyDetailPage({
         />
       </TabPanel>
 
+      {/* S710 audit: detectors, equipment and documents are a post-lease job. */}
+      {showPostLease && (
       <TabPanel tabId="assets" label="Safety & appliances">
 
       <CollapsibleSection
@@ -4129,6 +4139,7 @@ export default async function PropertyDetailPage({
       )}
 
       </TabPanel>
+      )}
 
       <TabPanel
         tabId="inquiries"

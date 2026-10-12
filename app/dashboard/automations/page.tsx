@@ -23,6 +23,7 @@ import {
   type ReminderLogSummary,
 } from "@/lib/compliance-calendar";
 import { AccentColorField } from "@/components/accent-color-field";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { saveNotificationSetting, saveNotificationLane } from "./actions";
 
 // The operator lanes (S554), in display order. Each label names WHO handles that
@@ -30,24 +31,24 @@ import { saveNotificationSetting, saveNotificationLane } from "./actions";
 const LANES: { lane: NotificationLane; label: string; hint: string }[] = [
   {
     lane: "showing",
-    label: "Showing operator",
-    hint: "Handles the inquiry-to-lease funnel: new leads, viewings, showings, availability, and the daily leasing summary.",
+    label: "Renters and viewings",
+    hint: "New renters, booked and cancelled viewings, viewing times, and the daily summary.",
   },
   {
     lane: "listing",
-    label: "Listing operator",
-    hint: "Handles getting units advertised: listing health, syndication, and done-for-you posting.",
+    label: "Ads and posting",
+    hint: "Your ads on rental sites. Ads about to expire, and ads to take down.",
   },
   {
     lane: "owner",
-    label: "Owner / landlord",
-    hint: "Handles landlord reminders: rent increases, detector and equipment end-of-life, inspections, and other compliance.",
+    label: "Owner reminders",
+    hint: "Rent increases, detectors and equipment to replace, inspections, and other yearly jobs.",
   },
 ];
 const LANE_LABEL: Record<NotificationLane, string> = {
-  showing: "Showing operator",
-  listing: "Listing operator",
-  owner: "Owner / landlord",
+  showing: "Renters and viewings",
+  listing: "Ads and posting",
+  owner: "Owner reminders",
 };
 
 // Global fallback when an event has no code default accent and the org has no
@@ -95,7 +96,7 @@ function audienceHint(event: NotificationEvent): string {
         const memberHint = INQUIRY_OPERATOR_EVENTS.has(event.key)
           ? "members who manage inquiries"
           : "members who manage this account";
-        return `Goes to your team. If you leave recipients empty, it uses your ${LANE_LABEL[event.lane]} lane (set at the top), then falls back to ${memberHint}.`;
+        return `Goes to your team. Empty list? It uses the "${LANE_LABEL[event.lane]}" box at the top. Else ${memberHint}.`;
       }
       return INQUIRY_OPERATOR_EVENTS.has(event.key)
         ? "Goes to your team. If you leave recipients empty, it goes to members who manage inquiries."
@@ -262,8 +263,19 @@ export default async function AutomationsPage({
   }
 
   // Group active events by family for display.
-  const events = activeNotificationEvents();
-  const families = [...new Set(events.map((e) => e.family))];
+  // S710 audit: leasing comes first. A leasing-only org (no tenancies, repairs
+  // or money yet) sees only the alerts about renters, viewings and ads; repair
+  // dispatch, owner reminders and tenant notes appear once that data exists.
+  const postLease = await orgShowsPostLease(supabase, org.id);
+  const events = activeNotificationEvents().filter(
+    (e) =>
+      postLease ||
+      (e.family === "leasing" && (e.lane === "showing" || e.lane === "listing")),
+  );
+  const families = [...new Set(events.map((e) => e.family))].sort((a, b) =>
+    a === b ? 0 : a === "leasing" ? -1 : 1,
+  );
+  const lanes = postLease ? LANES : LANES.filter((l) => l.lane !== "owner");
 
   const savedKey = searchParams.saved;
   const savedLane = searchParams.saved_lane;
@@ -290,10 +302,8 @@ export default async function AutomationsPage({
         )}
 
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          Each update below can be turned off, re-worded, and sent to extra
-          people. Leave the subject or message blank to use the built-in wording.
-          Use <code className="rounded bg-white px-1 py-0.5 text-gray-800">{"{{token}}"}</code>{" "}
-          placeholders — they&apos;re filled in automatically when the email is sent.
+          Turn each email off, change its words, or add people. Leave the
+          wording blank to use ours.
         </div>
 
         <p className="text-sm text-gray-500">
@@ -313,17 +323,16 @@ export default async function AutomationsPage({
         <section className="space-y-4">
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-              Who handles each alert
+              Who gets each kind of email
             </h2>
             <p className="mt-1 text-sm text-gray-600">
-              Set who handles each kind of alert once here. Any event below with
-              its own recipients still overrides its lane. Leave a lane empty to
-              fall back to your team members.
+              Say once who gets each kind of email. An email below with its own
+              list still uses that list. Leave a box empty to send to your team.
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {LANES.map(({ lane, label, hint }) => {
+          <div className={`grid gap-4 ${lanes.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+            {lanes.map(({ lane, label, hint }) => {
               const current = (laneByKey.get(lane) ?? []).join("\n");
               const laneFieldId = `lane-${lane}-recipients`;
               const highlight = savedLane === lane;
@@ -353,8 +362,7 @@ export default async function AutomationsPage({
                     className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:ring-brand"
                   />
                   <p className="mt-1.5 text-xs text-gray-500">
-                    One address per line (or comma-separated). Empty falls back to
-                    your team members.
+                    One email address per line. Empty sends to your team.
                   </p>
                   <div className="mt-3 flex justify-end">
                     <button
@@ -426,7 +434,7 @@ export default async function AutomationsPage({
                         </h3>
                         {event.lane && (
                           <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                            Lane: {LANE_LABEL[event.lane]}
+                            Goes to: {LANE_LABEL[event.lane]}
                           </span>
                         )}
                         <p className="mt-1 text-sm text-gray-600">{event.description}</p>

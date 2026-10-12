@@ -83,7 +83,7 @@ export default async function BillingPage({
 
   const errorCopy: Record<string, string> = {
     not_configured:
-      "Card subscriptions aren't available yet. Your pilot access is unaffected - you can start a pilot with full access below.",
+      "Card payments are not switched on yet. Free covers one rental until they are.",
     plan:
       "That plan isn't recognized. Please choose Growth and try again.",
     checkout: "Couldn't start checkout. Please try again.",
@@ -99,7 +99,10 @@ export default async function BillingPage({
 
   // Whether to show the standalone pilot offer (only for a fresh trial org that
   // hasn't started a pilot or subscribed).
-  const showPilotOffer = !view.isPaid && !view.isPilot;
+  // S710 (Noam): the 30-day pilot is no longer offered. The plans are Free
+  // and Growth. Orgs already in a pilot keep their status panel below.
+  const freshOrg = !view.isPaid && !view.isPilot;
+  const showPilotOffer: boolean = false;
 
   return (
     <div>
@@ -203,7 +206,7 @@ export default async function BillingPage({
           on pricing; honor it instead of dropping it. Free-first framing keeps
           the guided pilot as the on-ramp. Only shown for a fresh org still
           deciding (showPilotOffer). */}
-      {planIntent && showPilotOffer && (
+      {planIntent && freshOrg && (
         <div className="mt-4 rounded-lg border border-brand/30 bg-brand/[0.04] px-4 py-3 text-sm text-gray-700">
           <p>
             <strong className="text-gray-900">
@@ -212,22 +215,18 @@ export default async function BillingPage({
             </strong>{" "}
             {configured ? (
               <>
-                Start with the guided 30-day pilot below to set up your first
-                rental at no cost, or{" "}
                 <a
                   href={`#plan-${planIntent}`}
                   className="font-medium text-brand underline"
                 >
-                  subscribe to {TIERS[planIntent].name} now
+                  Subscribe to {TIERS[planIntent].name}
                 </a>{" "}
-                to go live right away.
+                below to post all your rentals.
               </>
             ) : (
               <>
-                Card subscriptions aren&apos;t switched on yet, so start with the
-                guided 30-day pilot below - you get full access to every{" "}
-                {TIERS[planIntent].name} feature, and can subscribe to{" "}
-                {TIERS[planIntent].name} once billing is live.
+                Card payments are not switched on yet. Free covers one rental
+                until they are.
               </>
             )}
           </p>
@@ -236,10 +235,8 @@ export default async function BillingPage({
 
       {!configured && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Card subscriptions aren&apos;t switched on for your account yet - you
-          can still start a pilot with full access below. When subscriptions are
-          ready, the plan buttons here go live automatically, with nothing else
-          for you to do.
+          Card payments are not switched on for your account yet. Free covers
+          one rental until they are. The plan buttons turn on by themselves.
         </div>
       )}
 

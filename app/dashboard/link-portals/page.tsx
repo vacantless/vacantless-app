@@ -82,13 +82,17 @@ export default async function LinkPortalsPage({
 
       <PortalInboxCard orgId={org.id} />
 
-      <BackNext
-        backHref="/dashboard"
-        nextHref={withPropertyParam("/dashboard/add-details", ownedPropertyId)}
-        backLabel={tCommon("back")}
-        nextLabel={tCommon("next")}
-        ariaLabel={tCommon("stepNavigation")}
-      />
+      {/* S710 audit: opened from the menu (no rental in hand) this is a
+          settings page, not a wizard step; Back and Next Step led nowhere. */}
+      {ownedPropertyId && (
+        <BackNext
+          backHref="/dashboard"
+          nextHref={withPropertyParam("/dashboard/add-details", ownedPropertyId)}
+          backLabel={tCommon("back")}
+          nextLabel={tCommon("next")}
+          ariaLabel={tCommon("stepNavigation")}
+        />
+      )}
     </StageShell>
   );
 }

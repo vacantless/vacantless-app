@@ -137,7 +137,7 @@ const STEP_DEFS: StepDef[] = [
     key: "golive",
     label: "Go live",
     description:
-      "Start a 30-day pilot or subscribe to a plan when you're ready to run real listings on Vacantless.",
+      "Free covers one rental. Move to Growth when you have more.",
     href: "/dashboard/billing",
     cta: "View billing",
   },
