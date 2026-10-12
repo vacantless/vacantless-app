@@ -34,6 +34,11 @@ export type LeasingHealthInput = {
     createdAtMs: number | null;
     openInquiries: number;
     bookedInstants: string[];
+    /**
+     * S709: open viewing days on this listing's own building days, when its
+     * building has any. Undefined = the building shows every viewing day.
+     */
+    buildingOpenDays?: number;
   }>;
   cfg?: Partial<LeasingHealthConfig>;
 };
@@ -315,6 +320,22 @@ export function assessLeasingHealth(input: LeasingHealthInput): LeasingHealth {
         message: "Live and un-bookable.",
         recommendation: "Add viewing windows now.",
       });
+    }
+  }
+
+  // S709: the org has open days, but none on this listing's building days.
+  if (futureOpenDays > 0) {
+    for (const listing of availableListings) {
+      if (listing.buildingOpenDays === 0) {
+        addAlert(alerts, {
+          code: "offline",
+          severity: 4,
+          scope: "listing",
+          propertyId: listing.propertyId,
+          message: "Live and un-bookable on its building's viewing days.",
+          recommendation: "Add a window on one of its building's days.",
+        });
+      }
     }
   }
 

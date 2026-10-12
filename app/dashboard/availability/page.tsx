@@ -270,6 +270,12 @@ export default async function AvailabilityPage({
         one viewing schedule instead of setting times per unit. To keep visits to
         the same building together on a given day, turn on &ldquo;Group viewings
         by building&rdquo; below.
+        {buildings.length > 1 && (
+          <>
+            {" "}To show a building only on certain days, tick its days in
+            &ldquo;Viewing days by building&rdquo; further down.
+          </>
+        )}
       </p>
 
       {/* Booking settings */}

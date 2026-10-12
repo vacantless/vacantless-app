@@ -15,6 +15,8 @@ import type {
   AvailabilityOverride,
   AvailabilityRule,
 } from "@/lib/booking";
+import { limitAvailabilityToWeekdays, unionBuildingWeekdays } from "@/lib/booking";
+import { loadBuildingDayScope } from "@/lib/building-days-server";
 import {
   describeTripwire,
   formatOpenDayList,
@@ -275,8 +277,14 @@ export async function GET(req: NextRequest) {
         })),
       };
 
-      const open = countOpenBookableSlots(availability, now, lookaheadDays);
-      const openDayKeys = openBookableDays(availability, now, lookaheadDays);
+      // S709: only days a listed building actually shows on count as open.
+      const buildingScope = await loadBuildingDayScope(admin, org.id);
+      const bookable = limitAvailabilityToWeekdays(
+        availability,
+        unionBuildingWeekdays(buildingScope.availableBuildingKeys, buildingScope.rows),
+      );
+      const open = countOpenBookableSlots(bookable, now, lookaheadDays);
+      const openDayKeys = openBookableDays(bookable, now, lookaheadDays);
       const openDays = openDayKeys.length;
       const severity = classifyTripwire({ open, openDays, thinSlots });
       const todayLocal = localDateString(nowMs, tz);

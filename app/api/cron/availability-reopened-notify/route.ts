@@ -5,10 +5,13 @@ import type {
   AvailabilityOverride,
   AvailabilityRule,
 } from "@/lib/booking";
+import { limitAvailabilityToWeekdays, unionBuildingWeekdays } from "@/lib/booking";
+import { loadBuildingDayScope } from "@/lib/building-days-server";
 import { countOpenBookableSlots } from "@/lib/availability-tripwire";
 import {
   isReopenLeadEligible,
   reopenLeadsToNotify,
+  reopenLeadsWithOpenBuilding,
 } from "@/lib/availability-reopen";
 import {
   NURTURE_MAX_AGE_MS,
@@ -129,7 +132,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, created_at, organization_id, property_id, name, email, status, " +
         "no_suitable_time, reopen_notified_at, " +
-        "properties(status, address, rent_cents), " +
+        "properties(status, address, rent_cents, building_key), " +
         "organizations(id, name, brand_color, logo_url, mail_alias, reply_to_email, " +
         "availability_reopened_at, availability_tripwire_lookahead_days, " +
         "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days)",
@@ -302,8 +305,27 @@ export async function GET(req: NextRequest) {
         })),
       };
 
-      open = countOpenBookableSlots(availability, now, lookaheadDays);
-      const toNotify = reopenLeadsToNotify(open, eligible);
+      // S709: viewing days per building. The org count covers only days a
+      // listed building shows on, and a lead is told only when its own
+      // building has an open time on its building days. A lead held back
+      // here is not stamped, so a later run can still tell it.
+      const buildingScope = await loadBuildingDayScope(admin, orgId);
+      open = countOpenBookableSlots(
+        limitAvailabilityToWeekdays(
+          availability,
+          unionBuildingWeekdays(buildingScope.availableBuildingKeys, buildingScope.rows),
+        ),
+        now,
+        lookaheadDays,
+      );
+      const withOpenBuilding = reopenLeadsWithOpenBuilding(
+        eligible,
+        (row) => firstRelation(row.properties)?.building_key ?? null,
+        buildingScope.rows,
+        (days) =>
+          countOpenBookableSlots(limitAvailabilityToWeekdays(availability, days), now, lookaheadDays),
+      );
+      const toNotify = reopenLeadsToNotify(open, withOpenBuilding);
       toNotifyCount = toNotify.length;
       skippedCount += eligible.length - toNotify.length;
 

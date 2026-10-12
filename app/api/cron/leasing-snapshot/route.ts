@@ -13,6 +13,7 @@ import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import {
   assessLeasingHealth,
+  openBookableDays,
   type LeasingHealth,
 } from "@/lib/leasing-health";
 import type {
@@ -20,6 +21,12 @@ import type {
   AvailabilityOverride,
   AvailabilityRule,
 } from "@/lib/booking";
+import {
+  buildingOpenWeekdays,
+  limitAvailabilityToWeekdays,
+  unionBuildingWeekdays,
+} from "@/lib/booking";
+import { loadBuildingDayScope } from "@/lib/building-days-server";
 import {
   snapshotWindow,
   shouldSendSnapshot,
@@ -108,6 +115,7 @@ type ListingRow = {
   address: string | null;
   status: string | null;
   created_at: string | null;
+  building_key: string | null;
 };
 type FutureShowingRow = {
   property_id: string | null;
@@ -390,7 +398,7 @@ export async function GET(req: NextRequest) {
           .eq("organization_id", org.id),
         admin
           .from("properties")
-          .select("id, address, status, created_at")
+          .select("id, address, status, created_at, building_key")
           .eq("organization_id", org.id)
           .eq("status", "available")
           .is("archived_at", null),
@@ -445,19 +453,38 @@ export async function GET(req: NextRequest) {
           end_minute: r.end_minute,
         })),
       };
+      // S709: viewing days per building. The org line counts only days a
+      // listed building shows on; a listing whose own building days have no
+      // open time gets its own "un-bookable" line.
+      const buildingScope = await loadBuildingDayScope(admin, org.id);
+      const bookable = limitAvailabilityToWeekdays(
+        availability,
+        unionBuildingWeekdays(buildingScope.availableBuildingKeys, buildingScope.rows),
+      );
       const health: LeasingHealth = assessLeasingHealth({
         now,
         windowDays: LEASING_HEALTH_WINDOW_DAYS,
-        availability,
+        availability: bookable,
         lastWindowChangeMs: maxCreatedAtMs(rules, daysOff, overrides),
-        listings: ((listingRows ?? []) as ListingRow[]).map((p) => ({
-          propertyId: p.id,
-          address: p.address ?? "",
-          status: p.status ?? "",
-          createdAtMs: parseTimeMs(p.created_at),
-          openInquiries: openInquiriesByProperty.get(p.id) ?? 0,
-          bookedInstants: bookedByProperty.get(p.id) ?? [],
-        })),
+        listings: ((listingRows ?? []) as ListingRow[]).map((p) => {
+          const ownDays = buildingOpenWeekdays(p.building_key, buildingScope.rows);
+          return {
+            propertyId: p.id,
+            address: p.address ?? "",
+            status: p.status ?? "",
+            createdAtMs: parseTimeMs(p.created_at),
+            openInquiries: openInquiriesByProperty.get(p.id) ?? 0,
+            bookedInstants: bookedByProperty.get(p.id) ?? [],
+            buildingOpenDays:
+              ownDays === null
+                ? undefined
+                : openBookableDays(
+                    limitAvailabilityToWeekdays(availability, ownDays),
+                    now,
+                    LEASING_HEALTH_WINDOW_DAYS,
+                  ).length,
+          };
+        }),
       });
       const { data: listingHealthSettingRow } = await admin
         .from("notification_settings")

@@ -15,6 +15,8 @@ import type {
   AvailabilityOverride,
   AvailabilityRule,
 } from "@/lib/booking";
+import { limitAvailabilityToWeekdays, unionBuildingWeekdays } from "@/lib/booking";
+import { loadBuildingDayScope } from "@/lib/building-days-server";
 import {
   isViewingWeekEmpty,
   openViewingDaysNext7,
@@ -159,8 +161,14 @@ export async function GET(req: NextRequest) {
         overrides: (overrideRows ?? []) as AvailabilityOverride[],
       };
 
-      const openDays = openViewingDaysNext7(availability, now);
-      const empty = isViewingWeekEmpty(availability, now);
+      // S709: only days a listed building actually shows on count as open.
+      const buildingScope = await loadBuildingDayScope(admin, org.id);
+      const bookable = limitAvailabilityToWeekdays(
+        availability,
+        unionBuildingWeekdays(buildingScope.availableBuildingKeys, buildingScope.rows),
+      );
+      const openDays = openViewingDaysNext7(bookable, now);
+      const empty = isViewingWeekEmpty(bookable, now);
 
       if (!empty) {
         if (!dry) {

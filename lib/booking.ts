@@ -641,3 +641,67 @@ export function buildingLabel(address: string | null | undefined): string {
   const first = (address ?? "").split(",")[0]?.trim() ?? "";
   return first.replace(/\s+(unit|apt|suite|#)\s*\S+$/i, "").trim() || (address ?? "").trim();
 }
+
+/** S709: one availability_building_days row. */
+export type BuildingDayRow = { building_key: string; weekday: number };
+
+/**
+ * S709: the weekdays a building shows on, or null when it has no rows (or no
+ * building key), which means every viewing day. Mirrors the 0237 SQL. Pure.
+ */
+export function buildingOpenWeekdays(
+  buildingKey: string | null | undefined,
+  rows: BuildingDayRow[],
+): number[] | null {
+  if (!buildingKey) return null;
+  const days = rows.filter((r) => r.building_key === buildingKey).map((r) => r.weekday);
+  return days.length > 0 ? parseBuildingWeekdays(days) : null;
+}
+
+/**
+ * S709: the weekdays at least one of these buildings shows on (an org-level
+ * view). null = no limit: no buildings given, or any one of them has no
+ * building days. Pure.
+ */
+export function unionBuildingWeekdays(
+  buildingKeys: Array<string | null | undefined>,
+  rows: BuildingDayRow[],
+): number[] | null {
+  if (buildingKeys.length === 0) return null;
+  const out = new Set<number>();
+  for (const key of buildingKeys) {
+    const days = buildingOpenWeekdays(key, rows);
+    if (days === null) return null;
+    for (const d of days) out.add(d);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+/** S709: weekday (0 = Sunday) of a YYYY-MM-DD calendar day, as Postgres extract(dow). */
+function weekdayOfDayKey(day: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(day);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
+}
+
+/**
+ * S709: the one place a consumer limits an Availability to building days.
+ * Keeps only weekly windows on those weekdays and specific-date hours whose
+ * date falls on one (same rule as get_public_availability). null = unchanged.
+ * Pure; returns a new object.
+ */
+export function limitAvailabilityToWeekdays(
+  availability: Availability,
+  weekdays: number[] | null,
+): Availability {
+  if (weekdays === null) return availability;
+  const allowed = new Set(weekdays);
+  return {
+    ...availability,
+    rules: availability.rules.filter((r) => allowed.has(r.weekday)),
+    overrides: (availability.overrides ?? []).filter((o) => {
+      const wd = weekdayOfDayKey(String(o.day));
+      return wd !== null && allowed.has(wd);
+    }),
+  };
+}
