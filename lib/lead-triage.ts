@@ -9,10 +9,10 @@
 // Pure (status + follow-up + flag in, classification out) so it's unit-testable
 // and the queue order can't drift from the chips/counts on the same page.
 
-import type { LeadStatus } from "./pipeline";
+import { needsReplyToday, type LeadStatus } from "./pipeline";
 import type { FollowUpStatus } from "./lead-detail";
 
-export type TriageBucket = "needs_you" | "in_progress" | "closed";
+export type TriageBucket = "needs_you" | "in_progress" | "gone_quiet" | "closed";
 
 export type LeadTriage = {
   bucket: TriageBucket;
@@ -26,12 +26,17 @@ export type TriageInput = {
   status: LeadStatus;
   followUp: FollowUpStatus;
   qualifiedOut: boolean;
+  /** S710: when set with nowMs, a "new" lead older than the Today reply
+   *  window goes to Gone quiet instead of Needs you now. */
+  createdAt?: string | null;
+  nowMs?: number;
 };
 
 // Bucket bases keep the three groups contiguous when sorting the flat list.
 const BASE: Record<TriageBucket, number> = {
   needs_you: 0,
   in_progress: 100,
+  gone_quiet: 150,
   closed: 200,
 };
 
@@ -60,6 +65,17 @@ export function triageLead(input: TriageInput): LeadTriage {
   // Needs-you-now, most urgent first: a brand-new inquiry owed a first reply,
   // then a follow-up you promised that's overdue, then one due today.
   if (status === "new") {
+    // S710 audit: Agile's list said 107 needed you while Today said 5. A
+    // renter who wrote more than TODAY_REPLY_WINDOW_DAYS ago and never got a
+    // reply is not waiting on you today; group them apart, same window as
+    // the Today card (lib/pipeline needsReplyToday).
+    if (
+      input.createdAt != null &&
+      input.nowMs != null &&
+      !needsReplyToday(status, input.createdAt, input.nowMs)
+    ) {
+      return { bucket: "gone_quiet", rank: BASE.gone_quiet, reason: null };
+    }
     return { bucket: "needs_you", rank: BASE.needs_you + 0, reason: "Needs a reply" };
   }
   if (followUp === "overdue") {
@@ -80,6 +96,7 @@ export function triageLead(input: TriageInput): LeadTriage {
 export const TRIAGE_BUCKET_LABEL: Record<TriageBucket, string> = {
   needs_you: "Needs you now",
   in_progress: "Working",
+  gone_quiet: "Gone quiet: asked over two weeks ago, never answered",
   closed: "Closed",
 };
 
@@ -87,5 +104,6 @@ export const TRIAGE_BUCKET_LABEL: Record<TriageBucket, string> = {
 export const TRIAGE_BUCKET_ORDER: TriageBucket[] = [
   "needs_you",
   "in_progress",
+  "gone_quiet",
   "closed",
 ];

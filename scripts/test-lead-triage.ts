@@ -105,9 +105,23 @@ const base: TriageInput = {
   ok("applied ranks above replied", applied < replied);
 }
 
+// S710: an old unanswered "new" lead goes to Gone quiet; a recent one still needs you.
+{
+  const now = Date.parse("2026-10-12T20:00:00Z");
+  const recent = triageLead({ ...base, status: "new", createdAt: "2026-10-05T12:00:00Z", nowMs: now });
+  const old = triageLead({ ...base, status: "new", createdAt: "2026-08-01T12:00:00Z", nowMs: now });
+  const noDate = triageLead({ ...base, status: "new" });
+  ok("recent new -> needs_you", recent.bucket === "needs_you");
+  ok("old new -> gone_quiet", old.bucket === "gone_quiet");
+  ok("new without a date keeps needs_you", noDate.bucket === "needs_you");
+  ok("gone quiet ranks after working", old.rank > triageLead({ ...base, status: "contacted" }).rank);
+  ok("old contacted lead stays working", triageLead({ ...base, status: "contacted", createdAt: "2026-08-01T12:00:00Z", nowMs: now }).bucket === "in_progress");
+}
+
 // Metadata sanity.
 {
-  ok("bucket order has 3", TRIAGE_BUCKET_ORDER.length === 3);
+  ok("bucket order has 4", TRIAGE_BUCKET_ORDER.length === 4);
+  ok("gone quiet sits before closed", TRIAGE_BUCKET_ORDER.indexOf("gone_quiet") === TRIAGE_BUCKET_ORDER.indexOf("closed") - 1);
   ok(
     "every bucket has a label",
     TRIAGE_BUCKET_ORDER.every((b) => TRIAGE_BUCKET_LABEL[b].length > 0),

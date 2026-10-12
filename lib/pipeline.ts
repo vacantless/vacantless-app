@@ -83,7 +83,7 @@ export function needsReplyToday(
  * covered by exactly one segment, so segment counts sum to the stage counts.
  */
 export const PIPELINE_SEGMENTS = [
-  { key: "needs_reply", label: "Needs reply", stages: ["new"] },
+  { key: "needs_reply", label: "No reply yet", stages: ["new"] },
   { key: "in_conversation", label: "In conversation", stages: ["replied", "contacted"] },
   { key: "viewing", label: "Viewing", stages: ["booked", "showed"] },
   { key: "deciding", label: "Deciding", stages: ["applied"] },

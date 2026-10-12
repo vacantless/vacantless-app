@@ -51,7 +51,9 @@ export function OutcomeSelect({
       role="group"
       aria-label="Viewing outcome"
     >
-      {SHOWING_OUTCOMES.map((o) => {
+      {/* S710 audit: "Auto-closed" is set by the system when no outcome was
+          recorded; it is not a choice. Show it only when it is the state. */}
+      {SHOWING_OUTCOMES.filter((o) => o !== "auto_closed" || outcome === "auto_closed").map((o) => {
         const active = o === outcome;
         const tone = TONE[o] ?? TONE.scheduled;
         return (

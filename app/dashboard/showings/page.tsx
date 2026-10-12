@@ -481,7 +481,11 @@ export default async function ShowingsPage({
         nowLocalValue={nowLocalValue}
         slotOptionsByShowingId={slotOptionsByShowingId}
         note={
-          canAssign && awaitingConfirmation > 0 ? (
+          // S710 audit: the unconfirmed box above already lists these; the
+          // note only repeats it when that box is showing them.
+          canAssign &&
+          awaitingConfirmation > 0 &&
+          !(showingConfirmMode === "agent" && atRiskShowings.length > 0) ? (
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               {awaitingConfirmation} assigned{" "}
               {awaitingConfirmation === 1 ? "viewing is" : "viewings are"} awaiting

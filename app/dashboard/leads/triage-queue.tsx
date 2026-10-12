@@ -47,12 +47,15 @@ export function TriageQueue({
   today: string;
   timeZone: string;
 }) {
+  const nowMs = Date.now();
   const triaged = rows.map((l) => ({
     l,
     t: triageLead({
       status: l.status,
       followUp: followUpStatus(l.next_action_at, today),
       qualifiedOut: l.qualified_out,
+      createdAt: l.created_at,
+      nowMs,
     }),
   }));
 
