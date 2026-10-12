@@ -65,6 +65,23 @@ export function OnboardingForm({
 
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
+          Phone for renters
+        </label>
+        <input
+          name="public_contact_phone"
+          type="tel"
+          autoComplete="tel"
+          placeholder="519-555-0123"
+          className={AUTH_INPUT_CLASS}
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          Rental sites need a phone number before they post your ad. You can
+          add it later in Settings.
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
           Brand color
         </label>
         <p className="mb-2 text-sm text-gray-500">

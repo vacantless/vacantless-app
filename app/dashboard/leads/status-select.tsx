@@ -21,7 +21,11 @@ export function StatusSelect({
   return (
     <form ref={formRef} action={updateLeadStatus}>
       <input type="hidden" name="id" value={leadId} />
+      {/* S710 audit: defaultValue is read once, so a stage changed elsewhere
+          (Quick move) kept showing the old stage until a reload. Keying on the
+          status remounts the select with the saved value. */}
       <select
+        key={status}
         name="status"
         defaultValue={status}
         onChange={() => formRef.current?.requestSubmit()}

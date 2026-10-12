@@ -13,6 +13,7 @@ import {
 } from "@/lib/org-seeds-server";
 import { acceptReferral } from "@/lib/referrals-server";
 import { isPaidPlan } from "@/lib/billing";
+import { validatePublicContactPhone } from "@/lib/public-contact";
 
 // Org-seeding helpers (clause library + tenant-message templates) now live in
 // lib/org-seeds-server.ts so the provisioning primitive can reuse them with the
@@ -58,6 +59,16 @@ export async function createOrganization(formData: FormData) {
     );
   }
 
+  // S710 audit: every rental site needs a phone number, and a new landlord
+  // only found that out when posting was blocked. Ask for it here (optional).
+  const phone = validatePublicContactPhone(String(formData.get("public_contact_phone") ?? ""));
+  if (!phone.ok) {
+    redirect(
+      "/onboarding?error=" +
+        encodeURIComponent("That phone number does not look right. Check it, or leave it blank for now."),
+    );
+  }
+
   const supabase = createClient();
   const slug = `${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`;
 
@@ -82,6 +93,7 @@ export async function createOrganization(formData: FormData) {
       brand_color: brandColor,
       brand_color_secondary: brandColorSecondary,
       plan: "free",
+      ...(phone.ok && phone.value ? { public_contact_phone: phone.value } : {}),
     })
     .eq("id", orgId);
 
