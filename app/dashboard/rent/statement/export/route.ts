@@ -15,6 +15,7 @@ import {
 } from "@/lib/statements";
 import type { WorkOrderCostRow } from "@/lib/work-orders";
 import { expenseToCostRow, type ExpenseRow } from "@/lib/expenses";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,8 @@ type WoQueryRow = {
 };
 
 export async function GET(req: NextRequest) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 

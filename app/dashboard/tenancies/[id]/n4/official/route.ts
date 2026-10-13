@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { currentUserCan } from "@/lib/membership";
 import { fillOfficialN4 } from "@/lib/n4-official-pdf";
 import { snapshotToN4Fill, n4SnapshotReady, type N4Snapshot } from "@/lib/n4-snapshot";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,6 +20,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   if (!(await currentUserCan("manage_tenancies"))) {
     return new NextResponse("Forbidden", { status: 403 });
   }

@@ -8,6 +8,7 @@ import {
   type LeaseRenderModel,
   type CapturedSignature,
 } from "@/lib/lease-render";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string; leaseId: string } },
 ) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 

@@ -4,6 +4,7 @@ import { planEntitlements } from "@/lib/billing";
 import { investmentPackageToCsv } from "@/lib/investment-package";
 import { rangeForPreset, parseRangeBound, type DateRange } from "@/lib/statements";
 import { loadInvestmentPackage } from "../load";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ function slug(label: string): string {
 }
 
 export async function GET(request: Request) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.json({ error: "no_org" }, { status: 401 });
   if (!planEntitlements(org.plan).accounting) {

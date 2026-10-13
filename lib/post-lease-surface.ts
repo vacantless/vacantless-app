@@ -71,3 +71,19 @@ export async function requirePostLeaseSurface(): Promise<void> {
   const show = await orgShowsPostLease(createClient(), org.id);
   if (!show) redirect("/dashboard");
 }
+
+/**
+ * S712i: the same wall for post-lease route handlers (CSV/PDF exports, lease
+ * and form downloads). Layouts don't wrap route.ts, so each one asks this.
+ * True when the org is walled and the handler should answer 404.
+ */
+export async function postLeaseRouteWalled(): Promise<boolean> {
+  if (!leasingOnlyNavEnabled()) return false;
+  const [{ createClient }, { getCurrentOrg }] = await Promise.all([
+    import("@/lib/supabase/server"),
+    import("@/lib/org"),
+  ]);
+  const org = await getCurrentOrg();
+  if (!org) return false;
+  return !(await orgShowsPostLease(createClient(), org.id));
+}

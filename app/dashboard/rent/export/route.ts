@@ -8,6 +8,7 @@ import {
   fetchTransactionReport,
   transactionsToCsv,
 } from "@/lib/rotessa";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export const dynamic = "force-dynamic";
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req: NextRequest) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 

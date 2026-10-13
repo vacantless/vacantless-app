@@ -134,6 +134,9 @@ import {
   HEATING_TYPE_LABELS,
   PARKING_TYPE_OPTIONS,
   PARKING_TYPE_LABELS,
+  AMENITY_KEYS,
+  AMENITY_LABELS,
+  normalizeAmenities,
 } from "@/lib/property-features";
 import {
   resolveEffectiveFeatures,
@@ -352,6 +355,7 @@ type Property = {
   security_deposit_cents: number | null;
   income_requirement: string | null;
   video_url: string | null;
+  amenities: string[] | null;
   // Standard-policy per-unit overrides (0048); null = inherit org profile.
   lease_term: string | null;
   smoking: string | null;
@@ -887,7 +891,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -3536,6 +3540,22 @@ export default async function PropertyDetailPage({
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
             </div>
+          </div>
+          {/* S712i: amenities were only settable when the rental was added. */}
+          <input type="hidden" name="amenities_on_form" value="1" />
+          <p className="mb-2 mt-4 text-xs font-medium text-gray-600">Amenities</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {AMENITY_KEYS.map((key) => (
+              <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  name="amenities"
+                  value={key}
+                  defaultChecked={normalizeAmenities(p.amenities).includes(key)}
+                />
+                {AMENITY_LABELS[key]}
+              </label>
+            ))}
           </div>
         </fieldset>
 

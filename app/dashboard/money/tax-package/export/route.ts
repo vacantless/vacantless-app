@@ -13,6 +13,7 @@ import {
   buildT776Statement,
   t776ToCsv,
 } from "@/lib/t776";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,8 @@ function parseYear(raw: string | null): number {
 }
 
 export async function GET(req: NextRequest) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 

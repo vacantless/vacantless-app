@@ -8,6 +8,7 @@ import {
   stripeInvoicesToCsv,
   type RawStripeInvoice,
 } from "@/lib/stripe-connect";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ function isoToUnixStart(iso: string | null): number | null {
 }
 
 export async function GET(req: NextRequest) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 

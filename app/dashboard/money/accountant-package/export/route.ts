@@ -35,6 +35,7 @@ import {
   type LedgerWorkOrderRow,
 } from "@/lib/accountant-package";
 import { buildZip, type ZipEntry } from "@/lib/zip";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,8 @@ function parseYear(raw: string | null): number | null {
 }
 
 export async function GET(req: NextRequest) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 

@@ -1,3 +1,5 @@
+import { CHANNEL_COST_CENTS } from "../lib/distribution-channels";
+const CHANNEL_COST_CENTS_KIJIJI = CHANNEL_COST_CENTS.kijiji;
 // Monthly spend cap for paid posting sites.
 // Run: npx tsx scripts/test-spend-cap.ts
 import { readFileSync } from "node:fs";
@@ -97,6 +99,15 @@ ok(
 ok("sums the real charge ledger", lib.includes('.from("distribution_channel_spend")'));
 ok("falls back to posted run items", lib.includes('.from("distribution_run_items")'));
 ok("settings explains the month", settings.includes("Resets on the 1st of each month, Toronto time."));
+
+// S712i: the separate posting worker's claim RPC enforces the same limits.
+{
+  const sql = require("node:fs").readFileSync("supabase/migrations/0243_worker_claim_enforces_spend_limits.sql", "utf8") as string;
+  ok("worker claim checks the monthly limit", sql.includes("'spend_period_cap'") && sql.includes("distribution_period_spend_cents(p_organization_id, p_channel, p_item_id)"));
+  ok("worker claim checks the per-ad limit", sql.includes("'spend_per_ad_cap'"));
+  ok("SQL month is Toronto calendar month", sql.includes("date_trunc('month', now() at time zone 'America/Toronto')"));
+  ok("SQL list price matches the app", sql.includes("'kijiji' then 3384") && CHANNEL_COST_CENTS_KIJIJI === 3384);
+}
 
 console.log(`\ntest-spend-cap: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

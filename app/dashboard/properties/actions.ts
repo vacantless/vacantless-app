@@ -1123,6 +1123,14 @@ export async function updateProperty(formData: FormData) {
       ),
       income_requirement: textOrNull(formData.get("income_requirement")),
       video_url: videoUrl,
+      // S712i: amenities are editable after creation. Only written when the
+      // form carried the list, so another form posting here never clears it.
+      ...(formData.get("amenities_on_form") === "1"
+        ? (() => {
+            const a = normalizeAmenities(formData.getAll("amenities"));
+            return { amenities: a.length > 0 ? a : null };
+          })()
+        : {}),
       // Standard-policy per-unit overrides (0048); null = inherit org profile.
       lease_term: normalizeLeaseTerm(formData.get("lease_term")),
       smoking: normalizeSmoking(formData.get("smoking")),

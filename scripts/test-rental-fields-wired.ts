@@ -139,5 +139,21 @@ ok("7 reply panel: heading reference", reply.includes("Answers for reply drafts"
 ok("7 entitlements: description", ent.includes("Adds the reply draft helper to renter inquiry replies."));
 ok("7 real AI left alone", read("lib/ai-enquiry-server.ts").length > 0);
 
+// S712i: amenities editable after creation
+{
+  const pg = read("app/dashboard/properties/[id]/page.tsx");
+  const ac = read("app/dashboard/properties/actions.ts");
+  ok("edit form lists amenities", pg.includes('name="amenities"') && pg.includes('name="amenities_on_form"'));
+  ok("update saves amenities only when the form carried them", ac.includes('formData.get("amenities_on_form") === "1"'));
+}
+// S712i: post-lease route handlers honour the leasing-only wall
+{
+  const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
+  const walk = (d: string): string[] => readdirSync(d).flatMap((n) => { const f = `${d}/${n}`; return statSync(f).isDirectory() ? walk(f) : [f]; });
+  const routes = ["money", "rent", "tenancies"].flatMap((d) => walk(`app/dashboard/${d}`)).filter((f) => f.endsWith("/route.ts"));
+  ok("found post-lease routes", routes.length >= 13);
+  for (const r of routes) ok(`wall on ${r}`, read(r).includes("postLeaseRouteWalled()"));
+}
+
 console.log(`\nrental-fields-wired: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

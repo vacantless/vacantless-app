@@ -10,6 +10,7 @@ import {
   hasConfirmedRentLedger,
   leaseTermShiftEnabled,
 } from "@/lib/rent-adjustments-server";
+import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  // S712i: leasing-only wall.
+  if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 
