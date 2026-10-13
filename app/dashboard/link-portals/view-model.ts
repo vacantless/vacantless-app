@@ -1,4 +1,4 @@
-import { isHiddenForOrg } from "@/lib/posting-lanes";
+import { isHiddenForOrg, RENTALS_CA_CHANNEL_KEY } from "@/lib/posting-lanes";
 import { isSiteSigninChannel, siteSigninHref, siteSigninLinksOn } from "@/lib/site-signin";
 import { getFormatter, getTranslations } from "next-intl/server";
 import {
@@ -165,7 +165,11 @@ export async function buildLinkPortalsViewModel(
       : hasAccount
         ? row.capLine
         : null;
-    const costLine = hasAccount && capCost.cost
+    // S711 audit: "Free for 5 listings. You use 2 of 5. Free." said Free
+    // twice. A cap line already says the site is free, so drop the bare
+    // "Free." cost after it.
+    const costIsBareFree = capCost.cost?.key === "free" && !capCost.spendSuffix;
+    const costLine = hasAccount && capCost.cost && !(costIsBareFree && capLine)
       ? t(`cost.${capCost.cost.key}`, {
           price: formatChannelMoney(capCost.cost.priceCents ?? 0, moneyLocale),
         }) + (capCost.spendSuffix ? ` ${t("cost.spendSuffix")}` : "")
@@ -200,6 +204,33 @@ export async function buildLinkPortalsViewModel(
             error: t("forget.error"),
           }
         : null;
+
+    // S711 audit: Rentals.ca shows only for Agile, whose ads are posted for
+    // it from our side (the robot cannot reach Rentals.ca). The tile asked
+    // Agile to "Add your Rentals.ca account" next to ads already live, which
+    // read as a to-do. Say it plainly instead: posted for you, nothing to do.
+    if (row.channel === RENTALS_CA_CHANNEL_KEY) {
+      return {
+        channel: row.channel,
+        label: channel.label,
+        connectKind: channel.connectKind,
+        state: row.state,
+        tone: "success",
+        title: t("status.linked"),
+        sub: t("status.postedForYouSub", { name: channel.label }),
+        kindLine: t("kindPostedForYou"),
+        accountLine: null,
+        checkedLine: null,
+        capLine: t("cap.rentalsUnknown"),
+        costLine: null,
+        button: null,
+        igNote: null,
+        needsCheck: false,
+        lastCheckedAt: null,
+        kijijiTier: null,
+        forget: null,
+      };
+    }
 
     return {
       channel: row.channel,

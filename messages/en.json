@@ -24,6 +24,7 @@
     "kindLogin": "This is your own account. We post your ads on it after you approve each one. We never see your password.",
     "kindOauth": "One secure button",
     "kindNone": "Not connected through Vacantless",
+    "kindPostedForYou": "Posted on your own account from our side.",
     "status": {
       "linked": "Ready",
       "linkedSub": "We post it when you press Post.",
@@ -44,7 +45,8 @@
       "linkedSubLogin": "Your account is on file. We post your ads on it.",
       "notLinkedSubLogin": "Tell us which account you use. Then we post your ads on it.",
       "selfPost": "Ready",
-      "selfPostSub": "Free. Your team posts it from your own Facebook."
+      "selfPostSub": "Free. Your team posts it from your own Facebook.",
+      "postedForYouSub": "We post your {name} ads for you, and keep them running."
     },
     "buttons": {
       "login": "Add your {name} account",
