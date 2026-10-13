@@ -169,13 +169,13 @@ export async function buildLinkPortalsViewModel(
     // twice. A cap line already says the site is free, so drop the bare
     // "Free." cost after it.
     const costIsBareFree = capCost.cost?.key === "free" && !capCost.spendSuffix;
-    const costLine = hasAccount && capCost.cost && !(costIsBareFree && capLine)
-      ? t(`cost.${capCost.cost.key}`, {
-          price: formatChannelMoney(capCost.cost.priceCents ?? 0, moneyLocale),
-        }) + (capCost.spendSuffix ? ` ${t("cost.spendSuffix")}` : "")
-      : hasAccount
-        ? row.costLine
-        : null;
+    const costLine = !hasAccount || (costIsBareFree && capLine)
+      ? null
+      : capCost.cost
+        ? t(`cost.${capCost.cost.key}`, {
+            price: formatChannelMoney(capCost.cost.priceCents ?? 0, moneyLocale),
+          }) + (capCost.spendSuffix ? ` ${t("cost.spendSuffix")}` : "")
+        : row.costLine;
 
     const sub = t(copy.subKey, {
       label,
