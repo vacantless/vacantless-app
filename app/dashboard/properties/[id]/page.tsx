@@ -251,6 +251,7 @@ import {
 } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
 import { marketplaceKitAgents } from "@/lib/marketplace-kit";
+import { formatAvailability } from "@/lib/property-features";
 import type { MarketplaceKitData } from "./marketplace-row";
 import type { AddressDisplayMode } from "@/lib/address-privacy";
 import { shareLinkStatus } from "@/lib/documents";
@@ -1478,7 +1479,7 @@ export default async function PropertyDetailPage({
     if (p.baths != null) facts.push({ label: "Bathrooms", value: String(p.baths) });
     if (p.sqft) facts.push({ label: "Square feet", value: String(p.sqft) });
     if (p.address) facts.push({ label: "Address", value: p.address });
-    if (p.available_date) facts.push({ label: "Available", value: p.available_date });
+    facts.push({ label: "Available", value: formatAvailability(p.available_date).replace(/^Available /, "") });
     const mkt = String(searchParams.mkt ?? "");
     marketplaceKit = {
       adText: fbCopy.body,

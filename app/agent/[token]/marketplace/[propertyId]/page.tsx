@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { buildListingCopy, buildRenterMessageReply } from "@/lib/listing-copy";
+import { formatAvailability } from "@/lib/property-features";
 import { listingPostErrorMessage } from "@/lib/listing-distribution";
 import { loadAgentMarketplaceContext } from "@/lib/marketplace-kit-server";
 import { agentMarketplaceKitPath } from "@/lib/marketplace-kit";
@@ -44,6 +45,7 @@ export default async function AgentMarketplaceKitPage({
       baths: ctx.property.baths,
       description: ctx.property.description,
       publicUrl,
+      features: { available_date: ctx.property.available_date, sqft: ctx.property.sqft },
     },
     "facebook",
   );
@@ -54,7 +56,7 @@ export default async function AgentMarketplaceKitPage({
   if (p.baths != null) facts.push({ label: "Bathrooms", value: String(p.baths) });
   if (p.sqft) facts.push({ label: "Square feet", value: String(p.sqft) });
   if (p.address) facts.push({ label: "Address", value: p.address });
-  if (p.available_date) facts.push({ label: "Available", value: p.available_date });
+  facts.push({ label: "Available", value: formatAvailability(p.available_date).replace(/^Available /, "") });
 
   const brand = accessibleBrand(ctx.org.brand_color || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(ctx.org.brand_color, ctx.org.brand_color_secondary);
