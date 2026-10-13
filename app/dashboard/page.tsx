@@ -701,7 +701,16 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       <SectionHeading action={{ href: "/dashboard/leads", label: "View all" }}>
         Recent inquiries
       </SectionHeading>
-      {inPlayLeads.length === 0 ? (
+      {inPlayLeads.length === 0 && allLeads.length > 0 ? (
+        // S712 (Codex review): every renter is Lost, so "No inquiries yet"
+        // would be false.
+        <EmptyState
+          icon={<Icons.chat />}
+          title="No open inquiries"
+          description="Every renter so far is marked Lost. You can still see them in View all."
+          cta={{ href: "/dashboard/leads", label: "See all renters" }}
+        />
+      ) : inPlayLeads.length === 0 ? (
         <EmptyState
           icon={<Icons.chat />}
           title="No inquiries yet"

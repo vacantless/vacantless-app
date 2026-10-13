@@ -259,6 +259,8 @@ for (const s of ["dead_session", "cap_reached", "connected_needs_authorization"]
 {
   const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
   eq("view model gates the override on the state", vm.includes("row.channel === RENTALS_CA_CHANNEL_KEY && rentalsCaPostedForYou(row.state)"), true);
+  eq("posted-for-you tile still asks for a stale check", vm.includes("needsCheck: row.needsCheck,\n        lastCheckedAt: row.lastCheckedAt,\n        kijijiTier: null,"), true);
+  eq("no tile hard-codes needsCheck false", vm.includes("needsCheck: false"), false);
 }
 
 console.log(`\nstage1-link-portals: ${passed} passed, ${failed} failed`);

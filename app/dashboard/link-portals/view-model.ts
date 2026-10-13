@@ -232,8 +232,10 @@ export async function buildLinkPortalsViewModel(
         costLine: null,
         button: null,
         igNote: null,
-        needsCheck: false,
-        lastCheckedAt: null,
+        // S712 (Codex review): an unchecked sign-in still asks for a check, so
+        // a sign-in that really ended turns into its own "Sign in again".
+        needsCheck: row.needsCheck,
+        lastCheckedAt: row.lastCheckedAt,
         kijijiTier: null,
         forget: null,
       };
