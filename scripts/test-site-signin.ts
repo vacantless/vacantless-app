@@ -77,6 +77,11 @@ async function main() {
   ok("page states the consent before starting", page.includes("you let us post the ads you approve"));
   const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
   ok("site tiles point at the window when on", vm.includes("siteSigninLinksOn() && isSiteSigninChannel(row.channel)"));
+  // S711: with sign-in once on, Settings keeps only the paid-ad limits and
+  // never blanks a saved account name.
+  const settings = readFileSync("app/dashboard/settings/page.tsx", "utf8");
+  ok("settings drops free sites when sign-in once is on", settings.includes("if (siteSigninLinksOn() && !cap.requiresPayment) return false;"));
+  ok("settings keeps the saved account name as a hidden field", settings.includes('name="external_account_label"\n                        value={account?.external_account_label ?? ""}'));
 
   console.log(`\nsite-signin: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

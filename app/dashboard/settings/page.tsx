@@ -1,6 +1,7 @@
 import { adminEmails } from "@/lib/provisioning-server";
 import { channelShownFor } from "@/lib/posting-lanes";
 import { isAdminEmail } from "@/lib/provisioning";
+import { siteSigninLinksOn } from "@/lib/site-signin";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
@@ -1137,6 +1138,10 @@ export default async function SettingsPage({
                 const ch = channelByKey(cap.channel);
                 // S710 audit: Rentals.ca (and Marketplace) show only to the orgs we can post them for.
                 if (!channelShownFor(cap.channel, org.id)) return false;
+                // S711 audit: with "Sign in once" on, the sign-in page owns the
+                // account. Only a site that charges keeps a card here, for its
+                // paid-ad limits.
+                if (siteSigninLinksOn() && !cap.requiresPayment) return false;
                 return ch?.integrationStatus === "live" && ch.connectKind === "account_login";
               })
               .map(({ cap, meta, account, accountStatus }) => {
@@ -1164,6 +1169,14 @@ export default async function SettingsPage({
                     <input type="hidden" name="contact_email" value={account?.contact_email ?? ""} />
                     <input type="hidden" name="notes" value={account?.notes ?? ""} />
                     <h3 className="text-base font-semibold text-gray-900">{meta.label}</h3>
+                    {siteSigninLinksOn() ? (
+                      // S711: the account comes from the sign-in page; keep what is saved.
+                      <input
+                        type="hidden"
+                        name="external_account_label"
+                        value={account?.external_account_label ?? ""}
+                      />
+                    ) : (
                     <label className="mt-3 block max-w-md">
                       <span className="mb-1 block text-sm font-medium text-gray-700">
                         Which {meta.label} account do you use?
@@ -1179,6 +1192,7 @@ export default async function SettingsPage({
                         Not your password. We help you sign in once, then we post for you.
                       </span>
                     </label>
+                    )}
                     {cap.requiresPayment && (
                       <div className="mt-4 border-t border-gray-100 pt-4">
                         <p className="max-w-2xl text-sm text-gray-600">
