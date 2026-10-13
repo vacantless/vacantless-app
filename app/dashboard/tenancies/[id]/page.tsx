@@ -2317,9 +2317,8 @@ export default async function TenancyDetailPage({
       </div>
 
       {/* Chexy — tenant-initiated credit-card pay (a hand-off, NOT a pull
-          rail). Opens Chexy in a new tab with our referral code; no money or
-          bank data touches Vacantless. TODO: swap ?ref=vacantless for the real
-          Chexy partner code once they provide it. */}
+          rail). Opens Chexy's public site in a new tab; no money or bank data
+          touches Vacantless. We have no referral or partner code with Chexy. */}
       <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
@@ -2334,7 +2333,7 @@ export default async function TenancyDetailPage({
           charges nothing for this.
         </p>
         <a
-          href="https://chexy.co/?ref=vacantless"
+          href="https://chexy.co/"
           target="_blank"
           rel="noopener noreferrer"
           className="mt-3 inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50"

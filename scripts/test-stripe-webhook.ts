@@ -2,11 +2,7 @@
 import { readFileSync } from "node:fs";
 import { createContext, Script } from "node:vm";
 import ts from "typescript";
-import {
-  planForPriceId,
-  shouldApplyStatus,
-  subscriptionPeriodEndSeconds,
-} from "../lib/billing";
+import * as billing from "../lib/billing";
 import {
   isRentReconcileEvent,
   rentStatusFromEvent,
@@ -226,7 +222,7 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
         return { createAdminClient: () => admin };
       }
       if (id === "@/lib/billing") {
-        return { planForPriceId, shouldApplyStatus, subscriptionPeriodEndSeconds };
+        return billing;
       }
       if (id === "@/lib/stripe-connect") {
         return {
@@ -377,7 +373,89 @@ async function run() {
   }
 }
 
-run().then(() => {
+async function runS712() {
+  // S712: an incomplete first payment must NOT grant Growth.
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_inc", plan: "free", subscription_status: null, stripe_subscription_id: null, sms_enabled: false },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.created",
+        data: { object: activeSubscription("sub_inc", "org_inc", "price_growth", "incomplete") },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_inc");
+    ok(
+      "S712: incomplete new subscription leaves a free org on free with texts off",
+      org?.plan === "free" && org?.subscription_status === "incomplete" && org?.sms_enabled === false,
+    );
+  }
+  // S712: subscription.updated active -> Growth AND texts on (not only checkout).
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_up", plan: "free", subscription_status: "incomplete", stripe_subscription_id: "sub_up", sms_enabled: false },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.updated",
+        data: { object: activeSubscription("sub_up", "org_up", "price_growth", "active") },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_up");
+    ok("S712: subscription.updated active grants Growth", org?.plan === "growth");
+    ok("S712: moving onto Growth switches texts on", org?.sms_enabled === true);
+  }
+  // S712: a renewal on Growth never re-enables texts the owner turned off.
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_ren", plan: "growth", subscription_status: "active", stripe_subscription_id: "sub_ren", sms_enabled: false },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.updated",
+        data: { object: activeSubscription("sub_ren", "org_ren", "price_growth", "active") },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_ren");
+    ok("S712: Growth renewal keeps texts off when the owner turned them off", org?.sms_enabled === false && org?.plan === "growth");
+  }
+  // S712: unpaid drops a paying org to free.
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_unpaid", plan: "growth", subscription_status: "past_due", stripe_subscription_id: "sub_unpaid" },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.updated",
+        data: { object: activeSubscription("sub_unpaid", "org_unpaid", "price_growth", "unpaid") },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_unpaid");
+    ok("S712: unpaid subscription moves a Growth org to free", org?.plan === "free" && org?.subscription_status === "unpaid");
+  }
+  // S712: past_due keeps Growth (grace window).
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_pd", plan: "growth", subscription_status: "active", stripe_subscription_id: "sub_pd" },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.updated",
+        data: { object: activeSubscription("sub_pd", "org_pd", "price_growth", "past_due") },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_pd");
+    ok("S712: past_due keeps Growth", org?.plan === "growth" && org?.subscription_status === "past_due");
+  }
+}
+
+run().then(runS712).then(() => {
   console.log(`\nstripe-webhook: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 });

@@ -57,7 +57,12 @@ export type ChecklistInput = {
   availabilityWindowCount: number;
   replyToConfigured: boolean;
   leadCount: number;
-  subscriptionActive: boolean;
+  /**
+   * Rentals live on Vacantless (status available, not archived). S712: the
+   * "Go live" step completes on the first live rental, on ANY plan. Free
+   * covers one rental, so a paid plan is not needed to be live.
+   */
+  liveRentalCount: number;
   /**
    * Id of a property to deep-link the "Test your renter intake page" step to.
    * When set, that step points straight at the property's public `/r/[id]`
@@ -155,7 +160,7 @@ export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
     input.availabilityWindowCount > 0,
     input.replyToConfigured,
     input.leadCount > 0,
-    input.subscriptionActive,
+    input.liveRentalCount > 0,
   ];
 
   let currentAssigned = false;

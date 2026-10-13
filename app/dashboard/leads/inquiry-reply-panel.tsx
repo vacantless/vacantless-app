@@ -77,7 +77,7 @@ export function InquiryReplyPanel({
             onClick={onAiDraft}
             className="rounded-lg border border-brand/30 bg-white px-3 py-2 text-sm font-medium text-brand hover:bg-brand/5"
           >
-            {drafted ? "AI draft added" : "AI draft"}
+            {drafted ? "Draft added" : "Draft a reply"}
           </button>
         ) : null}
         {mailto ? (
@@ -170,7 +170,7 @@ export function InquiryReplyPanel({
               </button>
               <p className="text-xs text-gray-500">
                 Saved as a reusable answer for this rental. You can edit or
-                delete it in &quot;Answers the AI can use&quot; above.
+                delete it in &quot;Answers for reply drafts&quot; above.
               </p>
             </div>
           </form>

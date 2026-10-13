@@ -14,6 +14,7 @@
 // a read of another org's row returns null and the action stops.
 
 import { triggerPostNow } from "@/lib/post-now";
+import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -422,6 +423,52 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
     ) {
       if (propertyId) backTo(propertyId, "autopilot_spend_auth", pendingItem.channel ?? undefined);
       redirect("/dashboard/properties");
+    }
+  }
+
+  // Spend cap: approving a paid post must not break the per-ad or monthly
+  // limit set in Settings. Checked for any site that charges, not only rows
+  // already parked at needs_payment.
+  if (pendingItem?.channel) {
+    const { data: capAccount } = await supabase
+      .from("distribution_channel_accounts")
+      .select("requires_payment, spend_max_cents, spend_period_max_cents")
+      .eq("organization_id", org.id)
+      .eq("channel", pendingItem.channel)
+      .maybeSingle();
+    const cap = capAccount as
+      | {
+          requires_payment: boolean | null;
+          spend_max_cents: number | null;
+          spend_period_max_cents: number | null;
+        }
+      | null;
+    if (cap?.requires_payment === true || pendingItem.publish_status === "needs_payment") {
+      const capCheck = await checkPeriodSpend(supabase, {
+        organizationId: org.id,
+        channel: pendingItem.channel,
+        periodMaxCents: cap?.spend_period_max_cents ?? null,
+        perAdMaxCents: cap?.spend_max_cents ?? null,
+        excludeItemId: pendingItem.id,
+      });
+      if (!capCheck.ok) {
+        await supabase
+          .from("distribution_run_items")
+          .update({
+            error_code: capCheck.reason,
+            error_message: spendCapBlockMessage({
+              reason: capCheck.reason,
+              channel: pendingItem.channel,
+              periodMaxCents: cap?.spend_period_max_cents ?? null,
+              perAdMaxCents: cap?.spend_max_cents ?? null,
+            }),
+            updated_at: now,
+          })
+          .eq("id", pendingItem.id)
+          .eq("organization_id", org.id);
+        if (propertyId) backTo(propertyId, "autopilot_spend_cap", pendingItem.channel);
+        redirect("/dashboard/properties");
+      }
     }
   }
 

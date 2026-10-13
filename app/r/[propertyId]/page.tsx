@@ -14,7 +14,9 @@ import { Icons } from "@/components/icons";
 import {
   buildSpecLine,
   buildAmenityChips,
+  buildGoodToKnow,
   formatAvailability,
+  safeHttpUrl,
   utilitiesSummary,
 } from "@/lib/property-features";
 import { virtualTourFor } from "@/lib/virtual-tour";
@@ -98,6 +100,19 @@ type Listing = {
     choices: string[];
   }[];
   photos: string[];
+};
+
+// S712: renter-facing columns get_public_listing does not return.
+const LISTING_EXTRAS_COLUMNS =
+  "heating_type, security_deposit_cents, income_requirement, parking_type, parking_count, amenities, video_url";
+type ListingExtras = {
+  heating_type: string | null;
+  security_deposit_cents: number | null;
+  income_requirement: string | null;
+  parking_type: string | null;
+  parking_count: number | null;
+  amenities: string[] | null;
+  video_url: string | null;
 };
 
 type OpenSibling = {
@@ -299,8 +314,31 @@ export default async function PublicListingPage({
   const days = avForSlots ? generateSlots(avForSlots) : [];
   const hasClustered = days.some((d) => d.slots.some((s) => s.clustered));
 
-  const specs = buildSpecLine(l);
-  const amenities = buildAmenityChips(l);
+  // S712: fields the RPC does not return (heating, deposit, income requirement,
+  // structured parking, amenities, video). Read only for a live listing, by id,
+  // selecting just these renter-facing columns. Service role, so keep it narrow.
+  let extras: ListingExtras | null = null;
+  if (isAvailable) {
+    const admin = createAdminClient();
+    if (admin) {
+      const { data: extraRow } = await admin
+        .from("properties")
+        .select(LISTING_EXTRAS_COLUMNS)
+        .eq("id", params.propertyId)
+        .eq("status", "available")
+        .maybeSingle();
+      extras = (extraRow as ListingExtras | null) ?? null;
+    }
+  }
+  const goodToKnow = buildGoodToKnow({ ...(extras ?? {}), parking: l.parking });
+  // Parking moves to "Good to know" when we have it, so it is not said twice.
+  const hasParkingFact = goodToKnow.some((fact) => fact.label === "Parking");
+  const specs = buildSpecLine(
+    hasParkingFact ? { ...l, parking: null, parking_type: null, parking_count: null } : l,
+  );
+  const amenities = buildAmenityChips({ ...l, amenities: extras?.amenities ?? null });
+  const videoHref = safeHttpUrl(extras?.video_url);
+  const showVideoLink = !!videoHref && videoHref !== safeHttpUrl(l.virtual_tour_url);
   const utilities = utilitiesSummary(l);
   const availability = formatAvailability(l.available_date);
   // Photos come pre-ordered from the RPC (cover first, then sort order).
@@ -449,6 +487,32 @@ export default async function PublicListingPage({
           {l.pets_notes && l.pets_notes.trim() && (
             <p className="mt-2 text-sm text-gray-600">
               Pets: {l.pets_notes.trim()}
+            </p>
+          )}
+          {goodToKnow.length > 0 && (
+            <div className="mt-4">
+              <h2 className="text-sm font-semibold text-gray-700">Good to know</h2>
+              <dl className="mt-1 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                {goodToKnow.map((fact) => (
+                  <div key={fact.label} className="flex gap-1.5">
+                    <dt className="text-gray-500">{fact.label}:</dt>
+                    <dd className="font-medium text-gray-700">{fact.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+          {showVideoLink && videoHref && (
+            <p className="mt-3 text-sm">
+              <a
+                href={videoHref}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="font-medium underline"
+                style={{ color: brand }}
+              >
+                Watch the video
+              </a>
             </p>
           )}
           {/* Bring the booking action above the fold on mobile (Codex design

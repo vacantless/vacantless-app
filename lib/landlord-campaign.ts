@@ -49,6 +49,23 @@ export const REVEAL_KEYS = [
 ] as const;
 
 export type RevealKey = (typeof REVEAL_KEYS)[number];
+
+// S710: reveals that point at post-lease screens (rent confirm, /dashboard/rent,
+// /dashboard/money). An org behind the leasing-only wall (lib/post-lease-surface)
+// never gets them; listing_marketing and upgrade_ask are leasing-relevant.
+export const POST_LEASE_REVEAL_KEYS: ReadonlySet<RevealKey> = new Set<RevealKey>([
+  "rent_increase_confirm",
+  "rent_collection",
+  "tax_export",
+]);
+
+/** True when this reveal may go to the org, given the leasing-only wall. Pure. */
+export function revealAllowedForOrg(
+  key: RevealKey,
+  postLeaseWalled: boolean,
+): boolean {
+  return !(postLeaseWalled && POST_LEASE_REVEAL_KEYS.has(key));
+}
 export const CAMPAIGN_STEPS = REVEAL_KEYS.length;
 
 /**
@@ -98,6 +115,12 @@ export type LandlordRevealInput = {
   hasRentCollection: boolean;
   hasTaxExport: boolean;
   hasListingMarketing: boolean;
+  /**
+   * S710: the org sits behind the leasing-only wall (LEASING_ONLY_NAV=1 and no
+   * post-lease data). Post-lease reveals are skipped like owned ones. Omitted
+   * or false keeps today's behaviour.
+   */
+  postLeaseWalled?: boolean;
 };
 
 function isRevealOwned(key: RevealKey, input: LandlordRevealInput): boolean {
@@ -173,7 +196,11 @@ export function nextRevealDue(
   // Start at the watermark, then advance past any reveal the org already owns.
   let idx =
     Number.isInteger(input.stepSent) && input.stepSent > 0 ? input.stepSent : 0;
-  while (idx < REVEAL_KEYS.length && isRevealOwned(REVEAL_KEYS[idx], input)) {
+  while (
+    idx < REVEAL_KEYS.length &&
+    (isRevealOwned(REVEAL_KEYS[idx], input) ||
+      !revealAllowedForOrg(REVEAL_KEYS[idx], input.postLeaseWalled === true))
+  ) {
     idx++;
   }
   if (idx >= REVEAL_KEYS.length) return null; // nothing left

@@ -931,6 +931,30 @@ export async function createPropertyV2(formData: FormData) {
   redirect(`/dashboard/properties/${newId}?created=1#rental-details`);
 }
 
+/**
+ * S712i: the Free plan's one-live-rental cap, shared by every path that can
+ * make a rental Live (publish, the edit form's Status, relist, unarchive).
+ * True when making `propertyId` Live would go over the plan's cap. Counts the
+ * org's OTHER non-archived live rentals; paid plans have no cap.
+ */
+async function liveRentalCapFull(
+  supabase: ReturnType<typeof createClient>,
+  org: { id: string; plan?: string | null } | null,
+  propertyId: string,
+): Promise<boolean> {
+  const cap = listingCapForPlan(org?.plan);
+  if (cap == null) return false;
+  let q = supabase
+    .from("properties")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "available")
+    .is("archived_at", null)
+    .neq("id", propertyId);
+  if (org?.id) q = q.eq("organization_id", org.id);
+  const { count } = await q;
+  return (count ?? 0) >= cap;
+}
+
 export async function updateProperty(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const id = String(formData.get("id") ?? "");
@@ -986,6 +1010,18 @@ export async function updateProperty(formData: FormData) {
     }
   }
 
+  // S712i: the edit form's Status dropdown is a second way to go Live, so it
+  // must respect the Free plan's live-rental cap too. Over the cap, every
+  // other field still saves and the status stays as it was.
+  let capBlocked = false;
+  if (!relistBlocked && priorStatus !== "available" && effectiveStatus === "available") {
+    const orgForCap = await getCurrentOrg();
+    if (await liveRentalCapFull(supabase, orgForCap, id)) {
+      effectiveStatus = (priorStatus as string | null) ?? "draft";
+      capBlocked = true;
+    }
+  }
+
   // Structured pet policy (0045), now inheritable (0050): cats/dogs are tri-state
   // (true / false / null = inherit the building/org standard policy). The stored
   // pet_friendly master is written best-effort here, but is NO LONGER the
@@ -1012,6 +1048,10 @@ export async function updateProperty(formData: FormData) {
   const tourRaw = String(formData.get("virtual_tour_url") ?? "").trim();
   const virtualTourUrl = tourRaw ? normalizeVirtualTourUrl(tourRaw) : null;
   const tourRejected = tourRaw !== "" && virtualTourUrl === null;
+  // The video link uses the same host allow-list as the add form.
+  const videoRaw = String(formData.get("video_url") ?? "").trim();
+  const videoUrl = videoRaw ? normalizeVirtualTourUrl(videoRaw) : null;
+  const videoRejected = videoRaw !== "" && videoUrl === null;
 
   // S712: a blank size is estimated from similar rentals (marked as estimated);
   // a size the landlord types replaces the estimate.
@@ -1073,7 +1113,16 @@ export async function updateProperty(formData: FormData) {
       hydro_included: parseTriStateBool(formData, "hydro_included"),
       water_included: parseTriStateBool(formData, "water_included"),
       has_smart_lock: parseCheckbox(formData, "has_smart_lock"),
-      photos_ready: parseCheckbox(formData, "photos_ready"),
+      // S712: fields the add form collects, now editable. Same parsing as
+      // createPropertyV2; a blank input saves null.
+      heating_type: normalizeHeatingType(formData.get("heating_type")),
+      parking_type: normalizeParkingType(formData.get("parking_type")),
+      parking_count: parseNonNegativeInt(String(formData.get("parking_count") ?? "")),
+      security_deposit_cents: parseRentCents(
+        String(formData.get("security_deposit") ?? ""),
+      ),
+      income_requirement: textOrNull(formData.get("income_requirement")),
+      video_url: videoUrl,
       // Standard-policy per-unit overrides (0048); null = inherit org profile.
       lease_term: normalizeLeaseTerm(formData.get("lease_term")),
       smoking: normalizeSmoking(formData.get("smoking")),
@@ -1084,7 +1133,7 @@ export async function updateProperty(formData: FormData) {
 
   let orgAfterSave: Org | null = null;
   if (
-    (!relistBlocked && priorStatus !== "available" && effectiveStatus === "available") ||
+    (!relistBlocked && !capBlocked && priorStatus !== "available" && effectiveStatus === "available") ||
     (priorStatus !== "leased" && effectiveStatus === "leased")
   ) {
     orgAfterSave = await getCurrentOrg();
@@ -1113,9 +1162,9 @@ export async function updateProperty(formData: FormData) {
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
   redirect(
-    `/dashboard/properties/${id}?${relistBlocked ? "relist=confirm" : "saved=1"}${
+    `/dashboard/properties/${id}?${relistBlocked ? "relist=confirm" : capBlocked ? "saved=1&publish=plan" : "saved=1"}${
       tourRejected ? "&tourerr=host" : ""
-    }`,
+    }${videoRejected ? "&videoerr=host" : ""}`,
   );
 }
 
@@ -1258,17 +1307,8 @@ export async function publishProperty(formData: FormData) {
   // explain the choice. Paid/pilot plans return a null cap (unlimited) so this
   // never fires for them — e.g. Agile (premium) with several live units.
   const org = await getCurrentOrg();
-  const cap = listingCapForPlan(org?.plan);
-  if (!alreadyLive && cap != null) {
-    const { count: liveCount } = await supabase
-      .from("properties")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "available")
-      .is("archived_at", null)
-      .neq("id", id);
-    if ((liveCount ?? 0) >= cap) {
-      redirect(`/dashboard/properties/${id}?publish=plan`);
-    }
+  if (!alreadyLive && (await liveRentalCapFull(supabase, org, id))) {
+    redirect(`/dashboard/properties/${id}?publish=plan`);
   }
 
   if (!alreadyLive) {
@@ -1306,13 +1346,17 @@ export async function relistLeasedProperty(formData: FormData) {
   if (!id) return;
 
   const supabase = createClient();
+  const org = await getCurrentOrg();
+  // S712i: relisting makes the rental Live, so the Free cap applies here too.
+  if (await liveRentalCapFull(supabase, org, id)) {
+    redirect(`/dashboard/properties/${id}?publish=plan`);
+  }
   await supabase
     .from("properties")
     .update({ status: "available" })
     .eq("id", id)
     .eq("status", "leased");
 
-  const org = await getCurrentOrg();
   if (org) await maybePrepareAvailableListing(supabase, org, id);
 
   revalidatePath(`/dashboard/properties/${id}`);
@@ -1638,14 +1682,22 @@ export async function unarchiveProperty(formData: FormData) {
   } | null;
   if (!p) redirect("/dashboard/properties");
 
+  // S712i: a rental archived while Live would come back Live. Over the Free
+  // cap it comes back Paused instead, and the list says why.
+  const restore = unarchivePropertyStatusUpdate(p!);
+  let restoredPaused = false;
+  if (restore.status === "available" && (await liveRentalCapFull(supabase, org, id))) {
+    restore.status = "paused";
+    restoredPaused = true;
+  }
   await supabase
     .from("properties")
-    .update(unarchivePropertyStatusUpdate(p))
+    .update(restore)
     .eq("id", id)
     .eq("organization_id", org.id);
 
   revalidatePropertyList();
-  redirect("/dashboard/properties?restored=1");
+  redirect(`/dashboard/properties?restored=${restoredPaused ? "paused" : "1"}`);
 }
 
 /**

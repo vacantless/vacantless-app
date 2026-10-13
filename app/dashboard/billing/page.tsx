@@ -1,4 +1,5 @@
 import { getCurrentOrg } from "@/lib/org";
+import { createClient } from "@/lib/supabase/server";
 import {
   TIERS,
   TIER_KEYS,
@@ -6,6 +7,7 @@ import {
   formatPlanPrice,
   formatAmount,
   buildBillingView,
+  overListingCapNotice,
 } from "@/lib/billing";
 import { isBillingConfigured, isDepositConfigured } from "@/lib/stripe";
 import {
@@ -49,6 +51,16 @@ export default async function BillingPage({
     pilot_deposit_paid_at: org.pilot_deposit_paid_at,
     timezone: org.booking_timezone,
   });
+
+  // S712: after a downgrade, rentals beyond the Free cap stay live. Say so
+  // plainly here instead of taking ads down.
+  const { count: liveRentalCount } = await createClient()
+    .from("properties")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .eq("status", "available")
+    .is("archived_at", null);
+  const overCapNotice = overListingCapNotice(org.plan, liveRentalCount ?? 0);
 
   const configured = isBillingConfigured();
   const depositConfigured = isDepositConfigured();
@@ -113,6 +125,14 @@ export default async function BillingPage({
         subtitle="Your plan. Billed monthly - change or cancel anytime, no contract."
       />
 
+      {overCapNotice && (
+        <div
+          role="status"
+          className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          {overCapNotice}
+        </div>
+      )}
       {checkout === "success" && (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           Thanks! Your subscription is being activated. It can take a few seconds

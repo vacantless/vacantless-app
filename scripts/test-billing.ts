@@ -819,7 +819,14 @@ ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREM
   const hook = readFileSync("app/api/stripe/webhook/route.ts", "utf8");
   const i = hook.indexOf('case "checkout.session.completed"');
   const block = hook.slice(i, hook.indexOf("break;", hook.indexOf("applySubscription(admin, sub, false)", i)));
-  ok("checkout turns renter texts on", block.includes("canUseRenterSms(applied.plan)") && block.includes("sms_enabled: true"));
+  // S712: the switch moved into applySubscription so EVERY subscription event
+  // that moves an org onto a texting plan turns texts on, not only checkout.
+  ok(
+    "checkout turns renter texts on",
+    block.includes("applySubscription(admin, sub, false)") &&
+      hook.includes("shouldEnableSmsOnPlanChange(existing.plan, nextPlan)") &&
+      hook.includes("update.sms_enabled = true"),
+  );
   const billingPage = readFileSync("app/dashboard/billing/page.tsx", "utf8");
   ok("premium hidden unless current", billingPage.includes('key !== "premium" || org?.plan === "premium"'));
 }

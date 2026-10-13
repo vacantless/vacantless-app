@@ -30,7 +30,6 @@ export async function updateMyCoverage(formData: FormData) {
   if (!agentId) redirect(`${BASE}?me=not_linked`);
 
   const check = validateCoverage({
-    service_area: formData.get("service_area") as string | null,
     product_types: formData.getAll("product_types") as string[],
     weekly_capacity: formData.get("weekly_capacity") as string | null,
   });
@@ -39,7 +38,7 @@ export async function updateMyCoverage(formData: FormData) {
   await supabase
     .from("showing_agents")
     .update({
-      service_area: check.value.service_area,
+      // S710: service_area left the form; never write it (would wipe it).
       product_types: check.value.product_types,
       weekly_capacity: check.value.weekly_capacity,
     })

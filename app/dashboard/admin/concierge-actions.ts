@@ -1,6 +1,7 @@
 "use server";
 
 import { triggerPostNow } from "@/lib/post-now";
+import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -386,6 +387,51 @@ export async function approveConciergeSubmit(formData: FormData) {
   // gate. A stale form (already approved, or the item moved on) matches 0 rows ->
   // stale. publish_status is deliberately UNCHANGED: the item stays needs_operator
   // until the worker actually completes the submit, so the desk still shows it.
+  // Spend cap first: a paid post must stay inside the org's per-ad and
+  // monthly limits from Settings.
+  const { data: capItem } = await admin
+    .from("distribution_run_items")
+    .select("id, organization_id, channel")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (capItem?.organization_id && capItem.channel) {
+    const capOrg = capItem.organization_id as string;
+    const capChannel = capItem.channel as string;
+    const { data: capAccount } = await admin
+      .from("distribution_channel_accounts")
+      .select("requires_payment, spend_max_cents, spend_period_max_cents")
+      .eq("organization_id", capOrg)
+      .eq("channel", capChannel)
+      .maybeSingle();
+    if (capAccount?.requires_payment === true) {
+      const periodMaxCents = (capAccount.spend_period_max_cents as number | null) ?? null;
+      const perAdMaxCents = (capAccount.spend_max_cents as number | null) ?? null;
+      const capCheck = await checkPeriodSpend(admin, {
+        organizationId: capOrg,
+        channel: capChannel,
+        periodMaxCents,
+        perAdMaxCents,
+        excludeItemId: itemId,
+      });
+      if (!capCheck.ok) {
+        await admin
+          .from("distribution_run_items")
+          .update({
+            error_code: capCheck.reason,
+            error_message: spendCapBlockMessage({
+              reason: capCheck.reason,
+              channel: capChannel,
+              periodMaxCents,
+              perAdMaxCents,
+            }),
+            updated_at: now,
+          })
+          .eq("id", itemId);
+        redirect(`${DESK}?err=spend_cap`);
+      }
+    }
+  }
+
   const { data: approved } = await admin
     .from("distribution_run_items")
     .update({

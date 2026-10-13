@@ -369,7 +369,12 @@ export default async function PropertiesPage({
             tone: "green",
             text: "Listing archived. You can restore it from the Archived view.",
           }
-        : searchParams.restored
+        : searchParams.restored === "paused"
+          ? {
+              tone: "amber",
+              text: "Listing restored as Paused. Free includes one live rental.",
+            }
+          : searchParams.restored
           ? {
               tone: "green",
               text: "Listing restored to Active as Off market.",

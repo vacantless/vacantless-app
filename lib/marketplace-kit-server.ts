@@ -125,6 +125,8 @@ export type AgentMarketplaceContext = {
     sqft: number | null;
     description: string | null;
     available_date: string | null;
+    heating_type: string | null;
+    security_deposit_cents: number | null;
   };
   photos: { id: string; url: string; sort_order: number; is_cover: boolean }[];
   liveUrl: string | null;
@@ -154,7 +156,7 @@ export async function loadAgentMarketplaceContext(
 
   const { data: prop } = await admin
     .from("properties")
-    .select("id, address, rent_cents, beds, baths, sqft, description, available_date")
+    .select("id, address, rent_cents, beds, baths, sqft, description, available_date, heating_type, security_deposit_cents")
     .eq("id", propertyId)
     .eq("organization_id", agent.organization_id)
     .maybeSingle();

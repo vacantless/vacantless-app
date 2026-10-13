@@ -39,7 +39,8 @@ export function MarketingKitCard({
   postChecklist: string[];
   qrFilename: string;
   // Aggregator-feed status for this rental (Slice A2), from the same feedSignal
-  // the rentals list uses. inFeed = currently syndicating; hint explains the
+  // the rentals list uses. inFeed = ready AND a partner takes the feed
+  // (networkFeedLive); hint explains the
   // state (e.g. set it Live, or add a photo) when not.
   feedStatus: { inFeed: boolean; hint: string } | null;
 }) {
@@ -238,13 +239,13 @@ export function MarketingKitCard({
                 />
                 <span className="text-xs font-medium text-gray-700">
                   {feedStatus.inFeed
-                    ? "Sent to our partner sites"
-                    : "Not sent to partner sites yet"}
+                    ? "Shared with partner sites"
+                    : "Not shared with partner sites"}
                 </span>
               </div>
               <p className="mt-1 pl-4 text-[11px] text-gray-500">
                 {feedStatus.inFeed
-                  ? "We sent this rental to our partner sites. Each one decides when to show it."
+                  ? "Partner sites can pick it up. Each one decides when to show it."
                   : feedStatus.hint}
               </p>
             </div>

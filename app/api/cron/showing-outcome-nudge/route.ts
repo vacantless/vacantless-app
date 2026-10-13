@@ -4,7 +4,7 @@ import { sendOrgNotification } from "@/lib/notifications-server";
 import type { NotificationEmailAction } from "@/lib/email";
 import {
   getNotificationEvent,
-  isDripEnqueueEnabled,
+  isOutcomeNudgeEnabled,
   isEventEnabled,
   renderNotification,
   resolveNotificationRecipients,
@@ -47,9 +47,9 @@ import {
 // the instant it's answered. outcome_nudge_count is bumped + outcome_nudge_sent_at
 // stamped after each send.
 //
-// SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns the "Post-showing outcome reminder" event on in Automations & Templates
-// (that toggle is the "off"; the cadence cap is the "once vs follow-up").
+// ON BY DEFAULT (S712, isOutcomeNudgeEnabled): an org with no settings row gets
+// the nudge. Turning the "Post-showing outcome reminder" event off in Automations
+// & Templates stops it (the cadence cap is the "once vs follow-up").
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
 //   ?org=<id>   limit the sweep to one org
@@ -175,8 +175,7 @@ export async function GET(req: NextRequest) {
     try {
       const tz: string = org.booking_timezone || "America/Toronto";
 
-      // Opt-in gate (ship dark): only sweep orgs that have turned the event on.
-      // Absent row => isDripEnqueueEnabled false => skip.
+      // On-by-default gate (S712): absent row => enabled; explicit off => skip.
       const { data: settingRow } = await admin
         .from("notification_settings")
         .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
@@ -184,9 +183,9 @@ export async function GET(req: NextRequest) {
         .eq("event_key", EVENT_KEY)
         .maybeSingle();
       const setting = (settingRow as NotificationSettingRow | null) ?? null;
-      const nudgeEnabled = isDripEnqueueEnabled(setting);
+      const nudgeEnabled = isOutcomeNudgeEnabled(setting);
       const autocloseEnabled = org.showing_autoclose_enabled === true;
-      // Skip only when neither pass is opted in. The nudge pass ships dark behind
+      // Skip only when neither pass is on. The nudge pass is on by default behind
       // the notification event; the S546 auto-close pass ships dark behind
       // organizations.showing_autoclose_enabled. They are independent opt-ins.
       if (!nudgeEnabled && !autocloseEnabled) {

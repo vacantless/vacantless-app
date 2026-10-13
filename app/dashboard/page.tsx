@@ -16,7 +16,7 @@ import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { computeOnboardingState } from "@/lib/onboarding-wizard";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
-import { isSubscriptionActive, pilotStatus } from "@/lib/billing";
+import { overListingCapNotice } from "@/lib/billing";
 import {
   SectionHeading,
   EmptyState,
@@ -180,6 +180,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     { data: onboardingRow },
     { count: availabilityOverrideCount },
     { count: activeRentalCount },
+    { count: liveRentalCount },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -266,6 +267,15 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .from("properties")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", org.id)
+      .is("archived_at", null),
+    // S712: rentals live on Vacantless (available, not archived). Completes the
+    // "Go live" checklist step on any plan, and drives the over-the-Free-cap
+    // notice after a downgrade (we never auto-take ads down).
+    supabase
+      .from("properties")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .eq("status", "available")
       .is("archived_at", null),
   ]);
 
@@ -402,10 +412,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     availabilityWindowCount: (availabilityCount ?? 0) + (availabilityOverrideCount ?? 0),
     replyToConfigured: org ? isReplyToConfigured(org) : false,
     leadCount: allLeads.length,
-    // "Go live" is satisfied by an active paid subscription OR an active pilot.
-    subscriptionActive:
-      isSubscriptionActive(org?.subscription_status) ||
-      pilotStatus(org?.pilot_started_at).active,
+    // S712: "Go live" completes on the first live rental, on any plan.
+    liveRentalCount: liveRentalCount ?? 0,
     firstPropertyId:
       (availablePropertyRows as { id: string }[] | null)?.[0]?.id ?? null,
   });
@@ -444,6 +452,9 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       })
     : null;
 
+  // S712: a Free org over its one-rental cap (e.g. after a downgrade).
+  const overCapNotice = overListingCapNotice(org?.plan, liveRentalCount ?? 0);
+
   return (
     <div>
       {showFullChecklistOnTop && (
@@ -459,6 +470,18 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
 
       {onboardingWizardState && (
         <GettingStartedCard state={onboardingWizardState} />
+      )}
+
+      {overCapNotice && (
+        <div
+          role="status"
+          className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          {overCapNotice}{" "}
+          <Link href="/dashboard/billing" className="font-medium underline">
+            See plans
+          </Link>
+        </div>
       )}
 
       <TodayLane items={todayItems} firstRun={showFullChecklistOnTop} />

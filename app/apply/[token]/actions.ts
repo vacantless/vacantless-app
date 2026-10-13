@@ -3,17 +3,24 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ALLOWED_FORM_FIELDS, validateSubmission } from "@/lib/rental-application";
+import { SCREENING_LIVE } from "@/lib/screening-live";
 
 // Public applicant submit (S454, Slice 1). Anon-callable through the SECURITY
 // DEFINER submit_rental_application RPC (migration 0125). We build form_data from
 // the NON-SENSITIVE allowlist only — a belt to the RPC's SQL-level sensitive-key
 // strip (Model B: SIN/DOB/DL/income-docs are never captured here). Consent is
 // mandatory (the credit pull can't be authorized without it).
+// S712: while SCREENING_LIVE is false there is no credit pull, so the form shows
+// no credit consent and this action never reads the `consent` field. The
+// applicant instead ticks `certify` (answers are true; references may be
+// checked), and that acknowledgement is what reaches the RPC's p_consent.
 export async function submitRentalApplication(formData: FormData) {
   const token = String(formData.get("token") ?? "").trim();
   if (!token) return;
 
-  const consent = formData.get("consent") != null;
+  const consent = SCREENING_LIVE
+    ? formData.get("consent") != null
+    : formData.get("certify") != null;
   const name = String(formData.get("applicant_name") ?? "").trim();
   const email = String(formData.get("applicant_email") ?? "").trim();
   const phone = String(formData.get("applicant_phone") ?? "").trim();

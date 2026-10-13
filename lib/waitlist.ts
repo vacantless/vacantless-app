@@ -127,6 +127,11 @@ export type VacancyProperty = {
   status: string | null;
   beds: number | null;
   rent_cents: number | null;
+  /**
+   * properties.available_date ('YYYY-MM-DD'). Null or omitted = available now.
+   * Callers that omit it treat every vacancy as available now.
+   */
+  available_date?: string | null;
 };
 
 export type WaitlistMatchEntry = {
@@ -135,7 +140,25 @@ export type WaitlistMatchEntry = {
   beds_min: number | null;
   max_rent_cents: number | null;
   last_notified_property_id: string | null;
+  /** waitlist_entries.move_in_by ('YYYY-MM-DD'): the latest move-in that works. */
+  move_in_by?: string | null;
 };
+
+/**
+ * S710: does the vacancy open in time for this waiter? A waiter who must move
+ * in BEFORE the unit opens is not a match. Unknown on either side never
+ * excludes (null available date = available now). Pure; compares the
+ * 'YYYY-MM-DD' prefix as text, which orders correctly.
+ */
+export function opensByMoveIn(
+  moveInBy: string | null | undefined,
+  availableDate: string | null | undefined,
+): boolean {
+  const by = parseDateOrNull((moveInBy ?? "").slice(0, 10));
+  const opens = parseDateOrNull((availableDate ?? "").slice(0, 10));
+  if (by == null || opens == null) return true;
+  return by >= opens;
+}
 
 /**
  * Does a now-available property match a waiting entry? True only when:
@@ -143,6 +166,7 @@ export type WaitlistMatchEntry = {
  *   - the property is actually 'available',
  *   - the entry is org-wide (property_id null) OR tied to THIS property,
  *   - it hasn't already been notified about THIS property (idempotency),
+ *   - the unit opens on or before the waiter's move_in_by (S710),
  *   - and any set preference is satisfied. A preference is only ENFORCED when it
  *     is known on BOTH sides — an unknown property bed count / rent never
  *     silently excludes a waiter (better to over-notify than to drop a match).
@@ -178,6 +202,8 @@ export function matchesVacancy(
   ) {
     return false;
   }
+
+  if (!opensByMoveIn(entry.move_in_by, property.available_date)) return false;
 
   return true;
 }

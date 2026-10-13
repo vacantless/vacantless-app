@@ -756,3 +756,66 @@ export function hasAnyFeature(f: UnitFeatures): boolean {
     !!(f.floor && f.floor.trim())
   );
 }
+
+// --- Renter "Good to know" facts (S712) -------------------------------------
+
+/** Human heating label, or null when unset or unknown. */
+export function heatingTypeLabel(value: unknown): string | null {
+  return isHeatingType(value) ? HEATING_TYPE_LABELS[value] : null;
+}
+
+/**
+ * Money in dollars for renters: 125000 -> "$1,250", 125050 -> "$1,250.50".
+ * Null for a missing, negative or non-finite amount.
+ */
+export function formatDollarsFromCents(cents: number | null | undefined): string | null {
+  if (cents == null || !Number.isFinite(cents) || cents < 0) return null;
+  const whole = Math.round(cents) % 100 === 0;
+  return `$${(Math.round(cents) / 100).toLocaleString("en-CA", {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/**
+ * Only an absolute http(s) link is safe to put in an href. Anything else
+ * (javascript:, data:, relative paths, junk) returns null.
+ */
+export function safeHttpUrl(raw: string | null | undefined): string | null {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  if (!v) return null;
+  try {
+    const url = new URL(v);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (!url.hostname) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+export type GoodToKnowFact = { label: string; value: string };
+
+/**
+ * The short "Good to know" list on the public page: heating, deposit, income
+ * requirement and parking. Only the facts that are set, in a stable order.
+ */
+export function buildGoodToKnow(f: {
+  heating_type?: string | null;
+  security_deposit_cents?: number | null;
+  income_requirement?: string | null;
+  parking_type?: string | null;
+  parking_count?: number | null;
+  parking?: string | null;
+}): GoodToKnowFact[] {
+  const out: GoodToKnowFact[] = [];
+  const heating = heatingTypeLabel(f.heating_type);
+  if (heating) out.push({ label: "Heating", value: heating });
+  const deposit = formatDollarsFromCents(f.security_deposit_cents);
+  if (deposit) out.push({ label: "Deposit", value: deposit });
+  const income = typeof f.income_requirement === "string" ? f.income_requirement.trim() : "";
+  if (income) out.push({ label: "Income requirement", value: income });
+  const parking = formatParking(f.parking_type, f.parking_count, f.parking);
+  if (parking) out.push({ label: "Parking", value: parking });
+  return out;
+}

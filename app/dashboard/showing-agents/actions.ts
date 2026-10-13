@@ -31,8 +31,6 @@ export async function createShowingAgent(formData: FormData) {
     name: s(formData, "name"),
     email: s(formData, "email") || null,
     phone: s(formData, "phone") || null,
-    tier: s(formData, "tier") || null,
-    service_area: s(formData, "service_area") || null,
     product_types: productTypes(formData),
     weekly_capacity: s(formData, "weekly_capacity") || null,
   });
@@ -44,8 +42,7 @@ export async function createShowingAgent(formData: FormData) {
     name: check.value.name,
     email: check.value.email,
     phone: check.value.phone,
-    tier: check.value.tier,
-    service_area: check.value.service_area,
+    // S710: tier and service_area left the form; never write them here.
     product_types: check.value.product_types,
     weekly_capacity: check.value.weekly_capacity,
     note: s(formData, "note") || null,
@@ -64,8 +61,6 @@ export async function updateShowingAgent(formData: FormData) {
     name: s(formData, "name"),
     email: s(formData, "email") || null,
     phone: s(formData, "phone") || null,
-    tier: s(formData, "tier") || null,
-    service_area: s(formData, "service_area") || null,
     product_types: productTypes(formData),
     weekly_capacity: s(formData, "weekly_capacity") || null,
   });
@@ -79,8 +74,8 @@ export async function updateShowingAgent(formData: FormData) {
       name: check.value.name,
       email: check.value.email,
       phone: check.value.phone,
-      tier: check.value.tier,
-      service_area: check.value.service_area,
+      // S710: no tier/service_area; the form no longer has them, so writing
+      // them would wipe stored values.
       product_types: check.value.product_types,
       weekly_capacity: check.value.weekly_capacity,
       note: s(formData, "note") || null,

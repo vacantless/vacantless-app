@@ -13,7 +13,7 @@ const FLASH: Record<string, { message: string; error?: boolean }> = {
   saved: { message: "Answer saved." },
   deleted: { message: "Answer deleted." },
   promoted: { message: "Answer promoted to all listings." },
-  disabled: { message: "AI reply drafts are off for this company.", error: true },
+  disabled: { message: "Reply drafts are off for this company.", error: true },
   forbidden: { message: "You do not have permission to manage these answers.", error: true },
   invalid: { message: "Add both a question and an answer.", error: true },
   missing: { message: "That answer could not be found.", error: true },
@@ -155,7 +155,7 @@ export function PropertyQaPanel({
       className="mt-4 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
     >
       <summary className="cursor-pointer select-none text-sm font-semibold text-gray-900">
-        Answers the AI can use
+        Answers for reply drafts
         <span className="ml-2 text-xs font-medium text-gray-500">
           {entries.length === 0 ? "None saved" : `${entries.length} saved`}
         </span>
@@ -174,8 +174,8 @@ export function PropertyQaPanel({
         )}
 
         <p className="text-sm leading-relaxed text-gray-600">
-          Saved answers are used only when the AI draft helper is enabled. This
-          rental&apos;s answers are checked before common answers for all listings.
+          Saved answers are used only when the reply draft helper is on. This
+          rental&apos;s answers are checked first. Then common answers.
         </p>
 
         <form

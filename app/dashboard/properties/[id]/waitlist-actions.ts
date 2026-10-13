@@ -153,7 +153,7 @@ export async function notifyWaitlist(formData: FormData) {
   // Load the vacancy + its org branding for the alert.
   const { data: prop } = await supabase
     .from("properties")
-    .select("id, status, beds, rent_cents, address")
+    .select("id, status, beds, rent_cents, address, available_date")
     .eq("id", propertyId)
     .maybeSingle();
   if (!prop) redirect("/dashboard/properties");
@@ -170,7 +170,7 @@ export async function notifyWaitlist(formData: FormData) {
   const { data: rows } = await supabase
     .from("waitlist_entries")
     .select(
-      "id, property_id, status, beds_min, max_rent_cents, last_notified_property_id, name, email, phone_e164",
+      "id, property_id, status, beds_min, max_rent_cents, move_in_by, last_notified_property_id, name, email, phone_e164",
     )
     .eq("organization_id", org.id)
     .eq("status", "active")
@@ -188,6 +188,7 @@ export async function notifyWaitlist(formData: FormData) {
     status: prop.status as string,
     beds: (prop.beds as number | null) ?? null,
     rent_cents: (prop.rent_cents as number | null) ?? null,
+    available_date: (prop.available_date as string | null) ?? null,
   };
 
   // Text renters too when the org has SMS on AND the plan carries the renter-SMS

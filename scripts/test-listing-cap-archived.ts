@@ -82,8 +82,8 @@ function sourceHas(path: string, name: string, pattern: RegExp) {
 
 sourceHas(
   "app/dashboard/properties/actions.ts",
-  "publishProperty cap count excludes archived rows",
-  /\.select\("id", \{ count: "exact", head: true \}\)\s*\.eq\("status", "available"\)\s*\.is\("archived_at", null\)\s*\.neq\("id", id\)/,
+  "shared live-cap count (publish, edit, relist, unarchive) excludes archived rows",
+  /\.select\("id", \{ count: "exact", head: true \}\)\s*\.eq\("status", "available"\)\s*\.is\("archived_at", null\)\s*\.neq\("id", propertyId\)/,
 );
 sourceHas(
   "app/dashboard/properties/actions.ts",

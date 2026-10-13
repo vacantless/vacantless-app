@@ -1237,6 +1237,9 @@ export default async function SettingsPage({
                               defaultValue={cadInputValue(account?.spend_period_max_cents)}
                               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                             />
+                            <span className="mt-1 block text-xs text-gray-500">
+                              Resets on the 1st of each month, Toronto time.
+                            </span>
                           </label>
                         </div>
                       </div>
@@ -1589,6 +1592,11 @@ export default async function SettingsPage({
                         ))}
                       </select>
                     </label>
+
+                    {/* S712: the fields below are reference only. Posting never reads them. */}
+                    <p className="text-xs text-gray-500 sm:col-span-2">
+                      For your records. We don&apos;t use these to post.
+                    </p>
 
                     {showFeedField && (
                       <label className="block">

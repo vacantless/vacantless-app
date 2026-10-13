@@ -592,6 +592,18 @@ export function listingCapForPlan(plan: string | null | undefined): number | nul
   return TIERS.free.maxActiveListings; // free / trial / unknown
 }
 
+// S712: after a downgrade to Free, rentals beyond the cap stay live (we never
+// auto-take ads down). Instead the dashboard and billing page show this plain
+// notice. Null when the plan has no cap or the org is within it.
+export function overListingCapNotice(
+  plan: string | null | undefined,
+  liveRentalCount: number,
+): string | null {
+  const cap = listingCapForPlan(plan);
+  if (cap == null || liveRentalCount <= cap) return null;
+  return `You have ${liveRentalCount} live rentals. Free covers one. Upgrade or take some down.`;
+}
+
 // --- Pilot tier (GTM Layer 1) ----------------------------------------------
 // A self-serve 30-day, founder-led pilot at $0/month with a refundable $200
 // setup deposit (paid in-app via the one-time Stripe deposit Checkout, S199;
@@ -775,6 +787,55 @@ export function shouldApplyStatus(
   if (!existingStatus) return true;
   // Existing status is settled (non-incomplete) → skip the stale downgrade.
   return (INCOMPLETE_STATUSES as readonly string[]).includes(existingStatus);
+}
+
+// --- Status-aware plan grant (S712) ----------------------------------------
+// A subscription only GRANTS its paid tier while Stripe says it is being paid
+// for: active, trialing, or past_due (the dunning grace window). An
+// `incomplete` first payment, an expired/unpaid one, or a canceled/paused sub
+// grants nothing. Before S712 the webhook wrote plan=growth on ANY event with a
+// recognised price, so a card that failed at checkout still unlocked Growth.
+export const PLAN_GRANTING_STATUSES = ["active", "trialing", "past_due"] as const;
+
+export function subscriptionGrantsPlan(status: string | null | undefined): boolean {
+  return !!status && (PLAN_GRANTING_STATUSES as readonly string[]).includes(status);
+}
+
+// The plan the webhook should WRITE for a (non-deleted) subscription event, or
+// null to leave the stored plan untouched.
+//   - statusApplies=false (a stale, out-of-order `incomplete`; see
+//     shouldApplyStatus) -> null: the event is ignored for billing state.
+//   - a granting status -> the recognised tier (null for an unknown price, so an
+//     unknown price never wipes a plan).
+//   - a non-granting status -> "free" when the org currently holds a paid plan
+//     that this subscription was paying for (same sub, or no sub on record);
+//     otherwise null, so a pilot/free/trial org is left as it is.
+export function planForSubscriptionEvent(input: {
+  tier: PaidPlanKey | null;
+  status: string | null | undefined;
+  statusApplies: boolean;
+  existingPlan: string | null | undefined;
+  sameSubscription: boolean;
+  existingSubscriptionId: string | null | undefined;
+}): PaidPlanKey | "free" | null {
+  if (!input.statusApplies) return null;
+  if (subscriptionGrantsPlan(input.status)) return input.tier;
+  const paidBySub = input.sameSubscription || !input.existingSubscriptionId;
+  if (isAnyPaidPlan(input.existingPlan) && paidBySub) return "free";
+  return null;
+}
+
+// Should a plan change switch renter texts ON? (S702j/S712) A landlord who moves
+// onto a plan that includes renter texts gets them on by default, on every path
+// (checkout, subscription events, pilot). There is no stored "explicitly off"
+// flag, so we only flip on the TRANSITION from a plan without texts to one with
+// them. A later event on the same plan never re-enables texts the owner turned
+// off in Settings.
+export function shouldEnableSmsOnPlanChange(
+  previousPlan: string | null | undefined,
+  nextPlan: string | null | undefined,
+): boolean {
+  return canUseRenterSms(nextPlan) && !canUseRenterSms(previousPlan);
 }
 
 // Human label for a raw Stripe status.

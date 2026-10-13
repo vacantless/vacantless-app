@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { submitRentalApplication } from "./actions";
+import { SCREENING_LIVE } from "@/lib/screening-live";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,9 @@ type AppShell = {
 };
 
 const ERROR_COPY: Record<string, string> = {
-  consent_required: "Please tick the authorization box so we can process your application.",
+  consent_required: SCREENING_LIVE
+    ? "Please tick the authorization box so we can process your application."
+    : "Please tick the box to confirm your answers are true.",
   name_required: "Please enter your full legal name.",
   contact_required: "Please give an email or phone number so we can reach you.",
   already_submitted: "This application has already been submitted. Thank you!",
@@ -91,8 +94,10 @@ export default async function ApplyPage({
 
             <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
               This is the first step of your application. We will <strong>never</strong> ask for your SIN,
-              date of birth, or banking details here. If a credit or background check is needed, you will
-              receive a separate secure link from our screening partner.
+              date of birth, or banking details here.
+              {SCREENING_LIVE
+                ? " If a credit or background check is needed, you will receive a separate secure link from our screening partner."
+                : null}
             </p>
 
             <Section title="Your details">
@@ -168,14 +173,24 @@ export default async function ApplyPage({
             </Section>
 
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-              <label className="flex items-start gap-3 text-sm text-gray-700">
-                <input type="checkbox" name="consent" value="1" required className="mt-1 h-4 w-4" />
-                <span>
-                  I certify the information above is true and complete, and I authorize {orgName} and its
-                  screening partner to verify it and to obtain a consumer credit report and background/tenancy
-                  history as part of processing this application (PIPEDA consent).
-                </span>
-              </label>
+              {SCREENING_LIVE ? (
+                <label className="flex items-start gap-3 text-sm text-gray-700">
+                  <input type="checkbox" name="consent" value="1" required className="mt-1 h-4 w-4" />
+                  <span>
+                    I certify the information above is true and complete, and I authorize {orgName} and its
+                    screening partner to verify it and to obtain a consumer credit report and background/tenancy
+                    history as part of processing this application (PIPEDA consent).
+                  </span>
+                </label>
+              ) : (
+                <label className="flex items-start gap-3 text-sm text-gray-700">
+                  <input type="checkbox" name="certify" value="1" required className="mt-1 h-4 w-4" />
+                  <span>
+                    I confirm my answers are true and complete. {orgName} may contact my references and
+                    landlords to check them. My details are used only for this application.
+                  </span>
+                </label>
+              )}
             </div>
 
             <button

@@ -71,6 +71,7 @@ import {
 } from "@/lib/portal-requirements";
 import { MIN_DESCRIPTION_CHARS } from "@/lib/listing-feed";
 import { feedSignal } from "@/lib/rental-readiness";
+import { networkFeedLive } from "@/lib/network-feed-live";
 import {
   sortPhotos,
   uploadErrorMessage,
@@ -129,6 +130,10 @@ import {
   STRUCTURE_TYPE_OPTIONS,
   structureTypeLabel,
   smartLockLabel,
+  HEATING_TYPE_OPTIONS,
+  HEATING_TYPE_LABELS,
+  PARKING_TYPE_OPTIONS,
+  PARKING_TYPE_LABELS,
 } from "@/lib/property-features";
 import {
   resolveEffectiveFeatures,
@@ -340,6 +345,13 @@ type Property = {
   water_included: boolean | null;
   has_smart_lock: boolean;
   photos_ready: boolean;
+  // Saved by the add form; editable in "Rent terms and parking" (S712).
+  heating_type: string | null;
+  parking_type: string | null;
+  parking_count: number | null;
+  security_deposit_cents: number | null;
+  income_requirement: string | null;
+  video_url: string | null;
   // Standard-policy per-unit overrides (0048); null = inherit org profile.
   lease_term: string | null;
   smoking: string | null;
@@ -849,6 +861,7 @@ export default async function PropertyDetailPage({
     run?: string;
     runerr?: string;
     tourerr?: string;
+    videoerr?: string;
     docs?: string;
     // Relist-over-active-tenancy confirmation (S447 Codex P2).
     relist?: string;
@@ -874,7 +887,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1406,6 +1419,10 @@ export default async function PropertyDetailPage({
         smoking: p.smoking,
         ac_type: p.ac_type,
         on_site_management: p.on_site_management,
+        heating_type: p.heating_type,
+        security_deposit_cents: p.security_deposit_cents,
+        parking_type: p.parking_type,
+        parking_count: p.parking_count,
       },
       policyProfile,
     );
@@ -1578,9 +1595,16 @@ export default async function PropertyDetailPage({
         property_id: e.property_id,
         beds_min: e.beds_min,
         max_rent_cents: e.max_rent_cents,
+        move_in_by: e.move_in_by,
         last_notified_property_id: e.last_notified_property_id,
       },
-      { id: p.id, status: p.status, beds: p.beds, rent_cents: p.rent_cents },
+      {
+        id: p.id,
+        status: p.status,
+        beds: p.beds,
+        rent_cents: p.rent_cents,
+        available_date: p.available_date,
+      },
     ),
   ).length;
 
@@ -1613,8 +1637,16 @@ export default async function PropertyDetailPage({
     availabilityWindowCount: 0,
   });
   const marketingFeedSignal = marketingEnabled ? feedSignalResult : null;
+  // S712: ready is not sent. Only claim the feed when a partner can take it
+  // (the same NETWORK_FEED_TOKEN gate the publish lane and feed route use).
+  const marketingFeedLive = networkFeedLive();
   const marketingFeedStatus = marketingFeedSignal
-    ? { inFeed: marketingFeedSignal.ok, hint: marketingFeedSignal.hint }
+    ? {
+        inFeed: marketingFeedLive && marketingFeedSignal.ok,
+        hint: marketingFeedLive
+          ? marketingFeedSignal.hint
+          : "No partner site takes our listings yet. Post it yourself for now.",
+      }
     : null;
   // Feed status for the Distribute channel cards is shown regardless of the
   // marketing-kit entitlement, so a free-plan operator still learns WHY a Live
@@ -2238,6 +2270,13 @@ export default async function PropertyDetailPage({
                     title: "Spend authorization needed.",
                     body:
                       "Set a standing limit for site fees in Settings. Then approve this prepared post again.",
+                  }
+              : searchParams.dist === "autopilot_spend_cap"
+                ? {
+                    tone: "warning",
+                    title: "Over your fee limit.",
+                    body:
+                      "This post would go over a fee limit you set. The post shows the limit. Raise it in Settings, then approve again.",
                   }
               : searchParams.dist === "already_posted"
                 ? {
@@ -3309,7 +3348,7 @@ export default async function PropertyDetailPage({
         </section>
 
         <details
-          open={Boolean(searchParams.tourerr)}
+          open={Boolean(searchParams.tourerr || searchParams.videoerr)}
           className="rounded-2xl border border-gray-200 bg-white shadow-sm"
         >
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
@@ -3362,6 +3401,143 @@ export default async function PropertyDetailPage({
             </p>
           )}
         </div>
+
+        {/* --- Video link (S712: saved by the add form, now editable) --- */}
+        <div>
+          <label
+            htmlFor="property-video-url"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-500"
+          >
+            Video link{" "}
+            <span className="font-normal normal-case tracking-normal text-gray-400">
+              (optional)
+            </span>
+          </label>
+          <input
+            id="property-video-url"
+            name="video_url"
+            type="url"
+            inputMode="url"
+            defaultValue={p.video_url ?? ""}
+            placeholder="https://youtube.com/..."
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          {searchParams.videoerr === "host" ? (
+            <p className="mt-1 text-xs text-amber-700">
+              We could not save that video link. Use a YouTube, Vimeo, iGUIDE or Matterport link.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-gray-400">
+              Renters see this link on your listing page.
+            </p>
+          )}
+        </div>
+
+        {/* --- Rent terms and parking (S712) --- */}
+        <fieldset className="border-t border-gray-100 pt-4">
+          <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Rent terms and parking
+          </legend>
+          <div className="flex flex-wrap gap-4">
+            <div className="w-40">
+              <label
+                htmlFor="property-security-deposit"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Security deposit in dollars
+              </label>
+              <input
+                id="property-security-deposit"
+                name="security_deposit"
+                type="number"
+                min="0"
+                step="any"
+                inputMode="decimal"
+                defaultValue={
+                  p.security_deposit_cents != null
+                    ? String(p.security_deposit_cents / 100)
+                    : ""
+                }
+                placeholder="1250"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-64">
+              <label
+                htmlFor="property-income-requirement"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Income requirement
+              </label>
+              <input
+                id="property-income-requirement"
+                name="income_requirement"
+                defaultValue={p.income_requirement ?? ""}
+                placeholder="3x monthly rent"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-44">
+              <label
+                htmlFor="property-heating-type"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Heating
+              </label>
+              <select
+                id="property-heating-type"
+                name="heating_type"
+                defaultValue={p.heating_type ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Not specified</option>
+                {HEATING_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {HEATING_TYPE_LABELS[opt]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-48">
+              <label
+                htmlFor="property-parking-type"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Parking type
+              </label>
+              <select
+                id="property-parking-type"
+                name="parking_type"
+                defaultValue={p.parking_type ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Not specified</option>
+                {PARKING_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {PARKING_TYPE_LABELS[opt]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-32">
+              <label
+                htmlFor="property-parking-count"
+                className="mb-1 block text-xs font-medium text-gray-600"
+              >
+                Parking count
+              </label>
+              <input
+                id="property-parking-count"
+                name="parking_count"
+                type="number"
+                min="0"
+                step="1"
+                defaultValue={p.parking_count ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        </fieldset>
 
         {/* --- Unit details --- */}
         <fieldset className="border-t border-gray-100 pt-4">
@@ -3788,16 +3964,7 @@ export default async function PropertyDetailPage({
           <p className="mb-3 text-xs text-gray-400">
             Not shown to renters.
           </p>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              name="photos_ready"
-              defaultChecked={p.photos_ready}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            Listing photos ready
-          </label>
-          <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-gray-700">
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
               name="has_smart_lock"

@@ -15,7 +15,9 @@ function ok(name: string, cond: boolean) {
 
 const w = decideOnboardingEmail({ stage: "signed_up", daysSinceSignup: 0, stepSent: 0 });
 ok("welcome first", w?.step === 1);
-ok("welcome points at adding a rental", w?.actionPath === "/dashboard/properties/new");
+ok("welcome points at the inline add form when the new page is off", w?.actionPath === "/dashboard/properties#add-rental");
+const wV2 = decideOnboardingEmail({ stage: "signed_up", daysSinceSignup: 0, stepSent: 0, addPropertyV2Enabled: true });
+ok("welcome points at the new add page when it is on", wV2?.actionPath === "/dashboard/properties/new");
 ok("welcome lists 3 steps", (w?.body ?? "").includes("3. Paste your rental link"));
 ok("no nudge on day 0", decideOnboardingEmail({ stage: "signed_up", daysSinceSignup: 0, stepSent: 1 }) === null);
 const n = decideOnboardingEmail({ stage: "live", daysSinceSignup: 1, stepSent: 1 });
@@ -43,6 +45,7 @@ ok("route skips old accounts", route.includes("ONBOARDING_EMAILS_START"));
 ok("route skips quiet test orgs", route.includes("isQuietNotificationOrg"));
 ok("route skips closed accounts", route.includes('.is("closed_at", null)'));
 ok("route stamps the step after sending", route.includes("onboarding_email_step: email.step"));
+ok("route passes the add-page flag", route.includes("addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)"));
 
 console.log(`\nonboarding-emails: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

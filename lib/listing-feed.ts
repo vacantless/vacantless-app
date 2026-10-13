@@ -26,6 +26,7 @@ import {
   formatParking,
   isAvailableNow,
   isDogSize,
+  isHeatingType,
   isParkingType,
   type UnitFeatures,
 } from "./property-features";
@@ -361,6 +362,14 @@ export function buildListingItemXml(
       parts.push(`    ${tag("parking_count", String(Math.round(listing.parking_count)))}`);
     }
   }
+
+  // S712: heating + deposit. Same conventions as the fields above: a machine
+  // value like <parking_type>, and money shaped exactly like <rent>.
+  if (isHeatingType(listing.heating_type)) {
+    parts.push(`    ${tag("heating_type", listing.heating_type)}`);
+  }
+  const deposit = rentDollars(listing.security_deposit_cents);
+  if (deposit) parts.push(`    <security_deposit currency="CAD">${deposit}</security_deposit>`);
 
   const util = listEl("utilities_included", "utility", utilities);
   if (util) parts.push(util);

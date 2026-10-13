@@ -230,6 +230,8 @@ export default async function ConciergeDeskPage({
   const deskError =
     searchParams?.err === "already_posted"
       ? "An ad from a previous submit is already live for this listing. Confirm it or take it down before submitting again."
+      : searchParams?.err === "spend_cap"
+        ? "This post would go over the org's spend limit for this site. The item shows the limit."
       : searchParams?.err === "stale"
         ? "That desk item changed before this action completed. Refresh and use the current controls."
         : null;

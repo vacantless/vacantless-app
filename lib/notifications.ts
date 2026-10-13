@@ -271,9 +271,8 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
   // showing funnel — once a showing's time has passed with no outcome recorded,
   // the operator gets ONE "how did the viewing go?" email with a one-tap
   // {{outcome_url}} (Attended / No-show / Cancelled), so recording an outcome
-  // stops being a pull nobody does. SHIP DARK: opt-in per org (the cron requires
-  // an explicit enabled override via isDripEnqueueEnabled), so nothing fires
-  // until the operator turns it on. The one-tap page records via POST (never a
+  // stops being a pull nobody does. ON BY DEFAULT (S712, isOutcomeNudgeEnabled):
+  // an absent settings row means enabled; an explicit off row stops it. The one-tap page records via POST (never a
   // GET side-effect) so email link-scanners can't auto-record. Wired by the cron
   // in a later slice; registered here so Settings can surface + route it per org.
   {
@@ -282,11 +281,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Post-showing outcome reminder",
     description:
-      "After a viewing's time passes with no outcome recorded, your team gets a one-tap reminder to mark it Attended, No-show, or Cancelled — so your renter list stays accurate and attended viewings move the renter forward automatically. Defaults to members who manage inquiries; edit the recipients below. Off until you turn it on.",
+      "After a viewing's time passes with no outcome recorded, your team gets a one-tap reminder to mark it Attended, No-show, or Cancelled. Your renter list stays accurate. Defaults to members who manage inquiries; edit the recipients below. On by default.",
     tokens: [...COMMON_TOKENS, "lead_name", "showing_time", "outcome_url"],
     defaultSubject: "How did the viewing go? - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nUse the buttons below to record how it went — or open {{outcome_url}}.\n\nMarking it Attended moves this renter forward automatically and keeps your renter list accurate.",
+      "The viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) has passed and no outcome is recorded yet.\n\nUse the buttons below to record how it went, or open {{outcome_url}}.\n\nMarking it Attended moves this renter forward automatically and keeps your renter list accurate.",
     active: true,
   },
   // Proactive listing-health digest (S548). Audience operator; sent by the
@@ -1336,6 +1335,17 @@ export function notificationSendMode(event: NotificationEvent): NotificationSend
  */
 export function isDripEnqueueEnabled(setting: NotificationSettingRow | null): boolean {
   return setting?.enabled === true;
+}
+
+/**
+ * Is the post-showing outcome question on for this org? ON BY DEFAULT (S712):
+ * the homepage promises "a quick question after each viewing", so an absent
+ * notification_settings row means enabled. An explicit enabled=false row still
+ * turns it off. Scoped to this one event: every other drip stays opt-in via
+ * isDripEnqueueEnabled.
+ */
+export function isOutcomeNudgeEnabled(setting: NotificationSettingRow | null): boolean {
+  return isEventEnabled(setting);
 }
 
 // --- Recipients --------------------------------------------------------------

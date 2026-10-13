@@ -16,6 +16,7 @@ import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 import { rentConfirmUrl } from "@/lib/rent-confirm-public";
 import { isQuietNotificationOrg } from "@/lib/quiet-orgs";
+import { leasingOnlyNavEnabled } from "@/lib/post-lease-surface";
 import {
   buildAnniversaryRentConfirmPlan,
   buildRentConfirmUnits,
@@ -366,6 +367,7 @@ async function previewDryCampaignJourney(args: {
   hasRentCollection: boolean;
   hasTaxExport: boolean;
   hasListingMarketing: boolean;
+  postLeaseWalled: boolean;
   campaignActivatedAtMs: number;
 }): Promise<DryJourneyResult> {
   const campaignStartMs = args.org.created_at
@@ -381,6 +383,7 @@ async function previewDryCampaignJourney(args: {
     hasRentCollection: args.hasRentCollection,
     hasTaxExport: args.hasTaxExport,
     hasListingMarketing: args.hasListingMarketing,
+    postLeaseWalled: args.postLeaseWalled,
   };
   let stepSent = args.org.landlord_campaign_step_sent ?? 0;
   let lastSentAtMs = args.org.landlord_campaign_last_sent_at
@@ -760,6 +763,14 @@ async function runLandlordCampaign(
     }
   }
 
+  // S710 leasing-only wall, same rule as the nav (lib/post-lease-surface):
+  // walled = flag on AND no post-lease rows. Any tenancy row lifts the wall,
+  // and nextRevealDue already needs a tenancy, so the tenancy set we loaded
+  // decides it exactly for every org that can get a reveal. No extra reads.
+  const wallOn = leasingOnlyNavEnabled(deps.env);
+  const isPostLeaseWalled = (orgId: string): boolean =>
+    wallOn && !orgsWithTenancy.has(orgId);
+
   for (const org of orgs) {
     // S700g: Noam's test/demo orgs stay silent (lib/quiet-orgs.ts).
     if (isQuietNotificationOrg(org.id)) continue;
@@ -795,6 +806,7 @@ async function runLandlordCampaign(
         hasRentCollection: orgHasActiveRentRail(org.id),
         hasTaxExport: hasEntitlement(org.plan, "tax_export"),
         hasListingMarketing: hasEntitlement(org.plan, "listing_marketing"),
+        postLeaseWalled: isPostLeaseWalled(org.id),
       });
 
       if (!due && !dry) {
@@ -828,6 +840,7 @@ async function runLandlordCampaign(
           hasRentCollection: orgHasActiveRentRail(org.id),
           hasTaxExport: hasEntitlement(org.plan, "tax_export"),
           hasListingMarketing: hasEntitlement(org.plan, "listing_marketing"),
+          postLeaseWalled: isPostLeaseWalled(org.id),
           campaignActivatedAtMs,
         });
 

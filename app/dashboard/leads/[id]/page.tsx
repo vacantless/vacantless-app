@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import { incomeRequirementMagnitude } from "@/lib/screening";
 import {
@@ -38,6 +39,7 @@ import { InquiryReplyPanel } from "../inquiry-reply-panel";
 import { buildAiReplyDraft } from "@/lib/ai-reply";
 import { loadPropertyKnowledge } from "@/lib/property-qa";
 import { PropertyQaPanel } from "../property-qa-panel";
+import { SCREENING_LIVE } from "@/lib/screening-live";
 import {
   isFeatureEnabledForOrg,
   loadOrganizationFeatureFlags,
@@ -194,6 +196,8 @@ export default async function LeadDetailPage({
   const timeZone = org?.booking_timezone ?? "America/Toronto";
   const orgName = org?.name ?? "Vacantless";
   const canApplications = canUseRentalApplications(org?.plan);
+  // S710: a leasing-only org never sees tenancy links (same wall as the nav).
+  const showPostLease = org ? await orgShowsPostLease(supabase, org.id) : true;
   const aiReplyFeatureFlags = org
     ? await loadOrganizationFeatureFlags(supabase, org.id, ["ai_reply"])
     : [];
@@ -460,7 +464,7 @@ export default async function LeadDetailPage({
             View tenancy →
           </Link>
         </div>
-      ) : l.status === "leased" ? (
+      ) : !showPostLease ? null : l.status === "leased" ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3">
           <p className="text-sm text-gray-700">
             Lease signed? Create the tenancy record to manage rent and tenant
@@ -1050,9 +1054,11 @@ function ApplicationCard({
                 </form>
               )}
             </div>
-            <p className="mt-3 text-xs text-gray-400">
-              Credit &amp; background screening runs on the applicant&apos;s secure link (coming next).
-            </p>
+            {SCREENING_LIVE ? (
+              <p className="mt-3 text-xs text-gray-400">
+                Credit &amp; background screening runs on the applicant&apos;s secure link.
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="mt-3 space-y-2">
@@ -1061,9 +1067,10 @@ function ApplicationCard({
               {application.requested_at
                 ? ` ${new Date(application.requested_at).toLocaleString("en-US", { timeZone })}`
                 : ""}
-              {" · "}
-              {application.pay_mode === "landlord" ? "landlord-paid" : "applicant-paid"}. Waiting for the
-              applicant to complete it.
+              {SCREENING_LIVE
+                ? ` · ${application.pay_mode === "landlord" ? "landlord-paid" : "applicant-paid"}`
+                : ""}
+              . Waiting for the applicant to complete it.
             </p>
             <label className="block">
               <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-400">
@@ -1086,19 +1093,21 @@ function ApplicationCard({
             details are collected on this step.
           </p>
           <div className="flex flex-wrap items-end gap-3">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-400">
-                Who pays for screening
-              </span>
-              <select
-                name="pay_mode"
-                defaultValue="applicant"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              >
-                <option value="applicant">Applicant pays</option>
-                <option value="landlord">I&apos;ll pay</option>
-              </select>
-            </label>
+            {SCREENING_LIVE ? (
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-400">
+                  Who pays for screening
+                </span>
+                <select
+                  name="pay_mode"
+                  defaultValue="applicant"
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="applicant">Applicant pays</option>
+                  <option value="landlord">I&apos;ll pay</option>
+                </select>
+              </label>
+            ) : null}
             <button
               type="submit"
               className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
@@ -1110,7 +1119,9 @@ function ApplicationCard({
         </form>
       ) : (
         <p className="mt-3 text-sm text-gray-500">
-          Rental applications with built-in credit &amp; background screening are part of{" "}
+          {SCREENING_LIVE
+            ? "Rental applications with built-in credit & background screening are part of "
+            : "Rental applications are part of "}
           <span className="font-medium text-gray-700">Growth</span>.{" "}
           <Link href="/dashboard/billing" className="font-medium text-brand hover:underline">
             Upgrade to request one

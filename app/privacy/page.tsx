@@ -71,6 +71,8 @@ export default function PrivacyPage() {
           under contracts that limit their use of it. These include our hosting
           and database provider, our email delivery providers, and the payment
           processors you choose to use (Stripe and, where applicable, Rotessa).
+          Renter questions may be answered with help from an AI provider
+          (Anthropic). Texts are sent through an SMS provider (Quo or Twilio).
           Some of these providers operate in the United States, so information may
           be processed outside Canada.
         </P>

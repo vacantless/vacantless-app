@@ -17,11 +17,22 @@ export type OnboardingEmail = {
   actionPath: string;
 };
 
+// S710: /dashboard/properties/new is a 404 unless ADD_PROPERTY_V2_ENABLED is
+// on. Same gate as the in-app links (lib/onboarding-wizard.ts, the Rentals
+// page): the flag picks the new page, otherwise the inline add form.
+export const ADD_RENTAL_V2_PATH = "/dashboard/properties/new";
+export const ADD_RENTAL_FALLBACK_PATH = "/dashboard/properties#add-rental";
+
+/** The add-a-rental link for this deploy. Pure. */
+export function addRentalPath(addPropertyV2Enabled: boolean): string {
+  return addPropertyV2Enabled ? ADD_RENTAL_V2_PATH : ADD_RENTAL_FALLBACK_PATH;
+}
+
 /** Where to send a landlord for their next step. */
 const NEXT_ACTION: Record<Stage, { label: string; path: string; line: string } | null> = {
   signed_up: {
     label: "Add your rental",
-    path: "/dashboard/properties/new",
+    path: ADD_RENTAL_FALLBACK_PATH,
     line: "Add your rental. The address, the rent and a few photos are enough.",
   },
   rental_added: {
@@ -47,8 +58,14 @@ export function decideOnboardingEmail(args: {
   stage: Stage;
   daysSinceSignup: number;
   stepSent: number;
+  /** ADD_PROPERTY_V2_ENABLED, read by the caller. Off = the inline add form. */
+  addPropertyV2Enabled?: boolean;
 }): OnboardingEmail | null {
-  const next = NEXT_ACTION[args.stage];
+  const base = NEXT_ACTION[args.stage];
+  const next =
+    base && args.stage === "signed_up"
+      ? { ...base, path: addRentalPath(args.addPropertyV2Enabled === true) }
+      : base;
 
   if (args.stepSent < 1) {
     const steps = [

@@ -43,8 +43,8 @@ export type OrgFeatureSetting = {
 const SPECIAL_ORG_FEATURE_SETTINGS: Record<SpecialOrgFeatureKey, OrgFeatureSetting> = {
   ai_reply: {
     key: "ai_reply",
-    label: "AI reply drafts",
-    description: "Adds the AI draft helper to renter inquiry replies.",
+    label: "Reply drafts",
+    description: "Adds the reply draft helper to renter inquiry replies.",
   },
   landlord_campaign: {
     key: "landlord_campaign",

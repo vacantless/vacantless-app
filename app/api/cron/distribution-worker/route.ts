@@ -35,6 +35,7 @@ import {
   type WorkerListingFacts,
 } from "@/lib/distribution-worker";
 import { composePostWithAgent } from "@/lib/distribution-worker-ai";
+import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import {
   daysParked,
   propertyWantsPosting,
@@ -121,6 +122,7 @@ type ChannelAccountRow = {
   spend_authorized?: boolean | null;
   spend_revoked_at?: string | null;
   spend_max_cents?: number | null;
+  spend_period_max_cents?: number | null;
 };
 
 async function operatorFallbackForOrg(
@@ -378,7 +380,7 @@ export async function GET(req: NextRequest) {
       const { data: acct } = await admin
         .from("distribution_channel_accounts")
         .select(
-          "automation_authorized, requires_login, requires_payment, account_status, spend_authorized, spend_revoked_at, spend_max_cents",
+          "automation_authorized, requires_login, requires_payment, account_status, spend_authorized, spend_revoked_at, spend_max_cents, spend_period_max_cents",
         )
         .eq("organization_id", c.organization_id)
         .eq("channel", c.channel)
@@ -467,6 +469,30 @@ export async function GET(req: NextRequest) {
       steps,
     });
 
+    // Spend cap: a paid post that would break the per-ad or monthly limit is
+    // not cleared. It parks at needs_payment with a plain reason instead.
+    let spendCapBlock: { code: string; message: string } | null = null;
+    if (account.requires_payment === true && standingSpendAuthorized(account)) {
+      const capCheck = await checkPeriodSpend(admin, {
+        organizationId: job.organization_id,
+        channel: job.channel,
+        periodMaxCents: account.spend_period_max_cents ?? null,
+        perAdMaxCents: account.spend_max_cents ?? null,
+        excludeItemId: job.id,
+      });
+      if (!capCheck.ok) {
+        spendCapBlock = {
+          code: capCheck.reason,
+          message: spendCapBlockMessage({
+            reason: capCheck.reason,
+            channel: job.channel,
+            periodMaxCents: account.spend_period_max_cents ?? null,
+            perAdMaxCents: account.spend_max_cents ?? null,
+          }),
+        };
+      }
+    }
+
     // Decide the gate. Never a terminal state.
     const gate = selectGate({
       requiresLogin: account.requires_login === true,
@@ -479,7 +505,7 @@ export async function GET(req: NextRequest) {
       channelRequiresPayment: account.requires_payment === true,
       // S708: a standing spend limit lets the robot build the paid ad; it
       // still stops at the site's fee wall (needs_payment) for the human.
-      paymentCleared: standingSpendAuthorized(account),
+      paymentCleared: standingSpendAuthorized(account) && spendCapBlock == null,
     });
     assertWorkerNeverTerminal(gate);
     summary.gate = gate;
@@ -496,6 +522,8 @@ export async function GET(req: NextRequest) {
       actorUserId: null,
       statusBefore: "queued",
       statusAfter: gate,
+      errorCode: spendCapBlock?.code ?? null,
+      errorMessage: spendCapBlock?.message ?? null,
       metadata: {
         source: "distribution_worker",
         composed: compose.composed != null,
@@ -515,6 +543,8 @@ export async function GET(req: NextRequest) {
         actor_user_id: attempt.actor_user_id,
         status_before: attempt.status_before,
         status_after: attempt.status_after,
+        error_code: attempt.error_code,
+        error_message: attempt.error_message,
         proof_id: attempt.proof_id,
         metadata: attempt.metadata,
       })
@@ -553,6 +583,9 @@ export async function GET(req: NextRequest) {
         last_attempt_id: attemptRow.id,
         attempt_count: attempt.attempt_no,
         audit_message: `Prepared by the posting worker. Next: ${GATE_STEP[gate]}.`,
+        ...(spendCapBlock
+          ? { error_code: spendCapBlock.code, error_message: spendCapBlock.message }
+          : {}),
         updated_at: gateISO,
       })
       .eq("id", job.id)

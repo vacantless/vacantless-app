@@ -45,7 +45,12 @@ export default async function AgentMarketplaceKitPage({
       baths: ctx.property.baths,
       description: ctx.property.description,
       publicUrl,
-      features: { available_date: ctx.property.available_date, sqft: ctx.property.sqft },
+      features: {
+        available_date: ctx.property.available_date,
+        sqft: ctx.property.sqft,
+        heating_type: ctx.property.heating_type,
+        security_deposit_cents: ctx.property.security_deposit_cents,
+      },
     },
     "facebook",
   );

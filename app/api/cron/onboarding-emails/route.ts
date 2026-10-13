@@ -5,6 +5,7 @@ import { adminEmails } from "@/lib/provisioning-server";
 import { isQuietNotificationOrg } from "@/lib/quiet-orgs";
 import { daysSince, stageOf, type AccountCounts } from "@/lib/new-account-watch";
 import { decideOnboardingEmail } from "@/lib/onboarding-emails";
+import { envFlagEnabled } from "@/lib/auto-listing-copy";
 
 // S702j: the welcome email and the next-day nudge for new accounts. Runs every
 // 30 minutes from .github/workflows/onboarding-emails.yml. Accounts made
@@ -80,6 +81,7 @@ export async function GET(req: NextRequest) {
       stage: stageOf(counts),
       daysSinceSignup: daysSince(o.created_at, now),
       stepSent: o.onboarding_email_step ?? 0,
+      addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
     });
     if (!email) continue;
 

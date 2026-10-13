@@ -25,7 +25,7 @@ const EMPTY: ChecklistInput = {
   availabilityWindowCount: 0,
   replyToConfigured: false,
   leadCount: 0,
-  subscriptionActive: false,
+  liveRentalCount: 0,
 };
 
 const ALL: ChecklistInput = {
@@ -35,7 +35,7 @@ const ALL: ChecklistInput = {
   availabilityWindowCount: 5,
   replyToConfigured: true,
   leadCount: 12,
-  subscriptionActive: true,
+  liveRentalCount: 1,
 };
 
 // --- Structure -------------------------------------------------------------
@@ -106,7 +106,7 @@ const ALL: ChecklistInput = {
 {
   const c = buildLaunchChecklist({
     ...EMPTY,
-    subscriptionActive: true, // last step done, earlier ones not
+    liveRentalCount: 1, // last step done, earlier ones not
   });
   ok("golive counts complete out of order", c.steps[5].status === "complete");
   ok("first gap still current", c.steps[0].status === "current");

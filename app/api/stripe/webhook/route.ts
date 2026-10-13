@@ -3,10 +3,11 @@ import type Stripe from "stripe";
 import { getStripe, priceMap } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  canUseRenterSms,
   planForPriceId,
+  planForSubscriptionEvent,
   subscriptionPeriodEndSeconds,
   shouldApplyStatus,
+  shouldEnableSmsOnPlanChange,
 } from "@/lib/billing";
 import {
   isRentReconcileEvent,
@@ -79,13 +80,20 @@ async function applySubscription(
   // event can't clobber a subscription that has already advanced past it.
   const { data: existingRows } = await admin
     .from("organizations")
-    .select("subscription_status, stripe_subscription_id")
+    .select("plan, subscription_status, stripe_subscription_id")
     .eq("id", orgId)
     .limit(1);
   const existing = (existingRows?.[0] ?? {}) as {
+    plan?: string | null;
     subscription_status?: string | null;
     stripe_subscription_id?: string | null;
   };
+  const sameSubscription = existing.stripe_subscription_id === sub.id;
+  const statusApplies = shouldApplyStatus(
+    sub.status,
+    existing.subscription_status,
+    sameSubscription,
+  );
 
   const priceId = sub.items?.data?.[0]?.price?.id ?? null;
   const tier = planForPriceId(priceId, priceMap());
@@ -104,23 +112,33 @@ async function applySubscription(
     update.current_period_end = new Date(periodEndSec * 1000).toISOString();
   }
   if (customerId) update.stripe_customer_id = customerId;
-  // Only set the tier when we recognize the price — an unknown price must not
-  // wipe an existing plan.
-  if (tier) update.plan = tier;
+  // S712: the plan follows the subscription STATUS, not just the price. Only
+  // active / trialing / past_due grant the tier; an incomplete first payment
+  // grants nothing, and unpaid / expired / canceled drop a paying org to free.
+  // An unknown price never wipes a plan (planForSubscriptionEvent returns null).
+  const nextPlan = planForSubscriptionEvent({
+    tier,
+    status: sub.status,
+    statusApplies,
+    existingPlan: existing.plan,
+    sameSubscription,
+    existingSubscriptionId: existing.stripe_subscription_id,
+  });
+  if (nextPlan) update.plan = nextPlan;
+  // S702j/S712: moving onto a plan with renter texts switches texts on, on
+  // every subscription path (not only checkout). Only on the transition, so a
+  // renewal never re-enables texts the owner turned off in Settings.
+  if (nextPlan && shouldEnableSmsOnPlanChange(existing.plan, nextPlan)) {
+    update.sms_enabled = true;
+  }
   // Apply the status unless it's a stale `incomplete` for a sub that already
   // advanced (see shouldApplyStatus).
-  if (
-    shouldApplyStatus(
-      sub.status,
-      existing.subscription_status,
-      existing.stripe_subscription_id === sub.id,
-    )
-  ) {
+  if (statusApplies) {
     update.subscription_status = sub.status;
   }
 
   await admin.from("organizations").update(update).eq("id", orgId);
-  return { matched: true as const, orgId, plan: tier ?? "(unchanged)" };
+  return { matched: true as const, orgId, plan: nextPlan ?? "(unchanged)" };
 }
 
 // Record a paid pilot deposit on its org (one-time payment Checkout).
@@ -401,17 +419,10 @@ export async function POST(req: NextRequest) {
           if (!sub.metadata?.org_id && session.client_reference_id) {
             sub.metadata = { ...(sub.metadata ?? {}), org_id: session.client_reference_id };
           }
-          const applied = await applySubscription(admin, sub, false);
-          // S702j: a landlord who just paid for a plan that includes renter
-          // texts gets them switched on. Texting was opt-in and off by
-          // default, so a paying customer got email only unless they found
-          // the setting. They can still turn it off in Settings.
-          if (applied?.matched && canUseRenterSms(applied.plan)) {
-            await admin
-              .from("organizations")
-              .update({ sms_enabled: true })
-              .eq("id", applied.orgId);
-          }
+          // S702j/S712: applySubscription switches renter texts on when the
+          // org moves onto a plan that includes them (every subscription
+          // event, not only this one). They can still turn it off in Settings.
+          await applySubscription(admin, sub, false);
         }
         break;
       }

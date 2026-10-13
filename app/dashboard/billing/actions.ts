@@ -13,6 +13,7 @@ import {
   canUseListingMarketing,
   CONCIERGE_PACK_PRICE_CENTS,
   CONCIERGE_PACK_QUANTITY,
+  shouldEnableSmsOnPlanChange,
 } from "@/lib/billing";
 
 // Start a 30-day, founder-led pilot ($0/month, refundable $200 setup deposit
@@ -32,7 +33,13 @@ export async function startPilot() {
   const supabase = createClient();
   const { error } = await supabase
     .from("organizations")
-    .update({ plan: "pilot", pilot_started_at: new Date().toISOString() })
+    .update({
+      plan: "pilot",
+      pilot_started_at: new Date().toISOString(),
+      // S712: the pilot includes renter texts, so switch them on, as the
+      // Stripe webhook does for Growth. Only on the move onto a texting plan.
+      ...(shouldEnableSmsOnPlanChange(org.plan, "pilot") ? { sms_enabled: true } : {}),
+    })
     .eq("id", org.id);
 
   if (error) redirect("/dashboard/billing?error=pilot");

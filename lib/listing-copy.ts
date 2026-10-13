@@ -14,6 +14,8 @@ import {
   buildAmenityChips,
   utilitiesSummary,
   formatAvailability,
+  formatDollarsFromCents,
+  heatingTypeLabel,
 } from "./property-features";
 
 // Portals the builder can target. "generic" is the portal-agnostic master copy.
@@ -382,6 +384,10 @@ export function buildListingCopy(
   const utils = utilitiesSummary(features);
   if (utils) lines.push(`${utils} in rent.`);
 
+  // S712: heating and deposit are facts a renter asks about. Shown when set.
+  const factLine = listingFactsLine(features);
+  if (factLine) lines.push(factLine);
+
   // (The description already led the copy above when present.)
 
   // Call to action + inquiry link. The CTA is portal-specific (Facebook gets a
@@ -406,6 +412,19 @@ export function buildListingCopy(
 
   const body = stripEmDashes(lines.join("\n\n").trim());
   return { portal, title: stripEmDashes(title), body };
+}
+
+/**
+ * "Heating: Forced air. Deposit: $1,250." from the unit's own fields, or null
+ * when neither is set. Money is in dollars.
+ */
+export function listingFactsLine(features: UnitFeatures): string | null {
+  const parts: string[] = [];
+  const heating = heatingTypeLabel(features.heating_type);
+  if (heating) parts.push(`Heating: ${heating}.`);
+  const deposit = formatDollarsFromCents(features.security_deposit_cents);
+  if (deposit) parts.push(`Deposit: ${deposit}.`);
+  return parts.length ? parts.join(" ") : null;
 }
 
 /** Build copy for every portal at once (operator "copy for each channel" view). */

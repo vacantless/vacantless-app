@@ -294,7 +294,7 @@ export default async function AgentCalendarPage({
             <p className="text-lg font-semibold">{orgName}</p>
           )}
           <p className="mt-1 text-sm text-white/85">
-            Viewings for {agentDisplayLabel({ name: agent.name, tier: agent.tier })}
+            Viewings for {agentDisplayLabel({ name: agent.name })}
           </p>
         </div>
       </header>
