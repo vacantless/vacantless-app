@@ -35,6 +35,7 @@ import type { NotifyMember } from "@/lib/incident-reports";
 import {
   orgWeekWindow,
   pickAutoAssignAgent,
+  productTypeForUnitType,
   normalizeProductTypes,
   type SuggestCandidate,
 } from "@/lib/showing-agents";
@@ -431,7 +432,7 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
     const { data: showingRow } = await admin
       .from("showings")
       .select(
-        "id, organization_id, scheduled_at, outcome, assigned_agent_id, lead:leads(id, name, email), property:properties(id, address)",
+        "id, organization_id, scheduled_at, outcome, assigned_agent_id, lead:leads(id, name, email), property:properties(id, address, unit_type)",
       )
       .eq("id", showingId)
       .maybeSingle();
@@ -442,7 +443,7 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
       outcome: string | null;
       assigned_agent_id: string | null;
       lead: { id: string; name: string | null; email: string | null } | null;
-      property: { id: string; address: string } | null;
+      property: { id: string; address: string; unit_type: string | null } | null;
     };
     if (showing.assigned_agent_id) return;
     if (showing.outcome != null && showing.outcome !== "scheduled") return;
@@ -527,9 +528,10 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
       assignedThisWeek: assignedThisWeek.get(a.id) ?? 0,
       archived: false,
     }));
-    // No property product-type column yet, so productType is left unset (every
-    // agent is a generalist) — wiring lights up when properties gain a type.
-    const pick = pickAutoAssignAgent(candidates);
+    // S712: route by the rental's unit type against each agent's "Handles".
+    const pick = pickAutoAssignAgent(candidates, {
+      productType: productTypeForUnitType(showing.property?.unit_type),
+    });
     if (!pick) return; // everyone at capacity -> leave unassigned for manual routing
     const agent = active.find((a) => a.id === pick.agentId);
     if (!agent) return;

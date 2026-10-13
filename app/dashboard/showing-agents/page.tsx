@@ -9,7 +9,7 @@ import {
   SECONDARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { PRODUCT_TYPES } from "@/lib/showing-agents";
+import { RENTAL_SHAPE_LABEL, RENTAL_SHAPE_TYPES, rentalShapeLabels } from "@/lib/showing-agents";
 import {
   createShowingAgent,
   updateShowingAgent,
@@ -147,23 +147,15 @@ export default async function ShowingAgentsPage({
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-900">
                       {a.name}
-                      {a.tier ? (
-                        <span className="ml-2 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600">
-                          {a.tier}
-                        </span>
-                      ) : null}
                     </p>
                     <p className="mt-0.5 text-xs text-gray-500">
                       {[
                         a.email,
                         a.phone,
-                        a.service_area,
                         a.weekly_capacity != null
                           ? `${a.weekly_capacity}/week`
                           : null,
-                        a.product_types && a.product_types.length > 0
-                          ? a.product_types.join(", ")
-                          : null,
+                        rentalShapeLabels(a.product_types),
                       ]
                         .filter(Boolean)
                         .join(" · ") || "No contact details yet"}
@@ -263,24 +255,6 @@ function AgentFields({
           <input name="phone" defaultValue={agent?.phone ?? ""} className={FIELD} />
         </div>
         <div>
-          <label className={LABEL}>Tier</label>
-          <input
-            name="tier"
-            defaultValue={agent?.tier ?? ""}
-            className={FIELD}
-            placeholder="e.g. lead, associate, helper"
-          />
-        </div>
-        <div>
-          <label className={LABEL}>Service area</label>
-          <input
-            name="service_area"
-            defaultValue={agent?.service_area ?? ""}
-            className={FIELD}
-            placeholder="e.g. York Mills"
-          />
-        </div>
-        <div>
           <label className={LABEL}>Weekly capacity</label>
           <input
             name="weekly_capacity"
@@ -289,14 +263,18 @@ function AgentFields({
             step={1}
             defaultValue={agent?.weekly_capacity ?? ""}
             className={FIELD}
-            placeholder="Max viewings/week (optional)"
+            placeholder="Max viewings a week (optional)"
           />
+          <p className="mt-1 text-xs text-gray-500">Once full, automatic assignment skips them.</p>
         </div>
       </div>
       <div>
         <label className={LABEL}>Handles</label>
+        <p className="mb-1.5 text-xs text-gray-500">
+          Automatic assignment sends them only these kinds of rentals. Leave all unticked for every rental.
+        </p>
         <div className="flex flex-wrap gap-3">
-          {PRODUCT_TYPES.map((p) => (
+          {RENTAL_SHAPE_TYPES.map((p) => (
             <label key={p} className="inline-flex items-center gap-1.5 text-sm text-gray-700">
               <input
                 type="checkbox"
@@ -305,7 +283,7 @@ function AgentFields({
                 defaultChecked={selected.has(p)}
                 className="rounded border-gray-300 text-brand focus:ring-brand"
               />
-              {p}
+              {RENTAL_SHAPE_LABEL[p]}
             </label>
           ))}
         </div>

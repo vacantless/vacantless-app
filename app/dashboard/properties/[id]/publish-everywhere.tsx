@@ -799,7 +799,7 @@ function ForYouRow({
   linkIsLive,
   conciergeDeskEnabled,
   wizardEnabled = false,
-  postingBlocked,
+  postingBlocked: postingBlockedProp,
   marketplaceKit = null,
 }: {
   marketplaceKit?: MarketplaceKitData | null;
@@ -813,6 +813,9 @@ function ForYouRow({
   postingBlocked?: boolean;
 }) {
   const [approveOpen, setApproveOpen] = useState(false);
+  // S712: Marketplace needs no sign-in, fee or square footage, so the "finish
+  // your listing first" hold does not apply; its kit warns when photos are missing.
+  const postingBlocked = postingBlockedProp && !marketplaceKit;
   const paid = row.mode === "paid_optin";
   const { isLive, liveUrl } = forYouLiveState({
     runItem: item,

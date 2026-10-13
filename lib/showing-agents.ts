@@ -27,6 +27,40 @@ export function isProductType(value: unknown): value is ProductType {
   );
 }
 
+// S712: the kinds of rental an agent can be limited to. Every Vacantless
+// listing is a rental, so "rental" and "sale" no longer show as choices; an
+// agent who still has "rental" stored is treated as taking every rental.
+export const RENTAL_SHAPE_TYPES = ["apartment", "condo", "house"] as const;
+export type RentalShapeType = (typeof RENTAL_SHAPE_TYPES)[number];
+export const RENTAL_SHAPE_LABEL: Record<RentalShapeType, string> = {
+  apartment: "Apartments",
+  condo: "Condos",
+  house: "Houses and townhouses",
+};
+
+/** The agent-routing type for a rental's unit type (properties.unit_type). */
+export function productTypeForUnitType(unitType: string | null | undefined): RentalShapeType | null {
+  switch ((unitType ?? "").trim().toLowerCase()) {
+    case "apartment":
+    case "basement-apartment":
+    case "duplex-triplex":
+      return "apartment";
+    case "condo":
+      return "condo";
+    case "house":
+    case "townhouse":
+      return "house";
+    default:
+      return null;
+  }
+}
+
+/** "Apartments, Condos" for the roster line; null when the agent takes every rental. */
+export function rentalShapeLabels(values: readonly (string | null | undefined)[] | null | undefined): string | null {
+  const shapes = RENTAL_SHAPE_TYPES.filter((t) => (values ?? []).includes(t));
+  return shapes.length > 0 ? shapes.map((t) => RENTAL_SHAPE_LABEL[t]).join(", ") : null;
+}
+
 // Keep only recognized product types, de-duplicated, order-preserved. Anything
 // unknown is dropped so a hand-posted form can't wedge junk into the array.
 export function normalizeProductTypes(
@@ -398,7 +432,11 @@ export function suggestShowingAgent(
     // reason, which is separately gated on the winner truly covering the type, so
     // a generalist winner never falsely claims coverage.)
     const fit = active.filter(
-      (c) => c.productTypes.length === 0 || c.productTypes.includes(productType),
+      (c) =>
+        c.productTypes.length === 0 ||
+        c.productTypes.includes(productType) ||
+        // S712: a stored "rental" covers every kind of rental.
+        (productType !== "sale" && c.productTypes.includes("rental")),
     );
     if (fit.length > 0 && fit.length < active.length) {
       pool = fit;
@@ -466,6 +504,20 @@ export function pickAutoAssignAgent(
   candidates: readonly SuggestCandidate[],
   opts?: { productType?: ProductType | null },
 ): AgentSuggestion | null {
+  // S712: the unattended path honours "Handles" strictly. When the rental's
+  // kind is known and no active agent takes it, leave the viewing unassigned
+  // for a person to route (the manual suggestion stays soft).
+  const productType = opts?.productType ?? null;
+  if (productType) {
+    const anyFit = candidates.some(
+      (c) =>
+        !c.archived &&
+        (c.productTypes.length === 0 ||
+          c.productTypes.includes(productType) ||
+          (productType !== "sale" && c.productTypes.includes("rental"))),
+    );
+    if (!anyFit) return null;
+  }
   const suggestion = suggestShowingAgent(candidates, opts);
   if (!suggestion || suggestion.atCapacity) return null;
   return suggestion;

@@ -8,7 +8,7 @@ import {
   PRIMARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { PRODUCT_TYPES } from "@/lib/showing-agents";
+import { RENTAL_SHAPE_LABEL, RENTAL_SHAPE_TYPES } from "@/lib/showing-agents";
 import type { AssignedView } from "@/lib/dashboard-assigned";
 import { updateMyCoverage, updateMyDashboardDefaults } from "./actions";
 
@@ -154,29 +154,16 @@ function DashboardDefaultsCard({ defaultView }: { defaultView: AssignedView }) {
 function MyCoverageCard({ me }: { me: MyAgent }) {
   const selected = new Set(me.product_types ?? []);
   const displayName = (me.name ?? "").trim() || "Unnamed agent";
-  const tier = (me.tier ?? "").trim() || "-";
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <SectionHeading>My coverage</SectionHeading>
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-gray-700">
         <span className="font-medium text-gray-900">{displayName}</span>
-        <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600">
-          Tier: {tier} - set by your admin
-        </span>
       </div>
 
       <form action={updateMyCoverage} className="space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Service area</label>
-            <input
-              name="service_area"
-              defaultValue={me.service_area ?? ""}
-              className={FIELD}
-              placeholder="e.g. York Mills"
-            />
-          </div>
           <div>
             <label className={LABEL}>Weekly capacity</label>
             <input
@@ -196,8 +183,11 @@ function MyCoverageCard({ me }: { me: MyAgent }) {
 
         <div>
           <label className={LABEL}>Handles</label>
+          <p className="mb-1.5 text-xs text-gray-500">
+            Automatic assignment sends you only these kinds of rentals. Leave all unticked for every rental.
+          </p>
           <div className="flex flex-wrap gap-3">
-            {PRODUCT_TYPES.map((p) => (
+            {RENTAL_SHAPE_TYPES.map((p) => (
               <label
                 key={p}
                 className="inline-flex items-center gap-1.5 text-sm text-gray-700"
@@ -209,7 +199,7 @@ function MyCoverageCard({ me }: { me: MyAgent }) {
                   defaultChecked={selected.has(p)}
                   className="rounded border-gray-300 text-brand focus:ring-brand"
                 />
-                {p}
+                {RENTAL_SHAPE_LABEL[p]}
               </label>
             ))}
           </div>

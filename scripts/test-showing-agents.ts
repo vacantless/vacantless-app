@@ -25,6 +25,8 @@ import {
   planBulkAssignments,
   type SuggestCandidate,
   type BulkAssignAgent,
+  productTypeForUnitType,
+  rentalShapeLabels,
 } from "../lib/showing-agents";
 
 let passed = 0;
@@ -553,6 +555,36 @@ const wk2a = Date.parse("2026-07-20T18:00:00-04:00");
 }
 
 // --- summary ----------------------------------------------------------------
+// --- S712: Handles routes by the rental's unit type -------------------------
+{
+  ok("unit type apartment", productTypeForUnitType("apartment") === "apartment");
+  ok("basement apartment counts as apartment", productTypeForUnitType("basement-apartment") === "apartment");
+  ok("duplex counts as apartment", productTypeForUnitType("duplex-triplex") === "apartment");
+  ok("condo", productTypeForUnitType("condo") === "condo");
+  ok("townhouse counts as house", productTypeForUnitType("townhouse") === "house");
+  ok("unknown unit type routes to anyone", productTypeForUnitType(null) === null && productTypeForUnitType("") === null);
+  ok("roster label", rentalShapeLabels(["condo", "apartment", "rental"]) === "Apartments, Condos");
+  ok("roster label empty = every rental", rentalShapeLabels(["rental"]) === null && rentalShapeLabels([]) === null);
+  const condoOnly = mk({ id: "c", name: "CondoOnly", productTypes: ["condo"], assignedThisWeek: 0 });
+  const legacy = mk({ id: "r", name: "LegacyRental", productTypes: ["rental"], assignedThisWeek: 3 });
+  ok(
+    "auto-assign: a condo-only agent never gets an apartment",
+    pickAutoAssignAgent([condoOnly], { productType: "apartment" }) === null,
+  );
+  ok(
+    "auto-assign: a legacy 'rental' agent takes an apartment",
+    pickAutoAssignAgent([condoOnly, legacy], { productType: "apartment" })?.agentId === "r",
+  );
+  ok(
+    "auto-assign: unknown kind routes to anyone",
+    pickAutoAssignAgent([condoOnly], { productType: null })?.agentId === "c",
+  );
+  ok(
+    "auto-assign: condo goes to the condo agent",
+    pickAutoAssignAgent([condoOnly, legacy], { productType: "condo" })?.agentId === "c",
+  );
+}
+
 if (failed === 0) console.log(`✓ showing-agents: ${passed} passed`);
 else {
   console.error(`✗ showing-agents: ${failed} failed, ${passed} passed`);
