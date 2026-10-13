@@ -2,6 +2,7 @@
 // Run: npx tsx scripts/test-site-signin.ts
 import {
   isSiteSigninChannel,
+  settingsAccountStatusToSave,
   siteSigninEnabled,
   siteSigninHref,
   siteSigninIsOpen,
@@ -82,6 +83,14 @@ async function main() {
   const settings = readFileSync("app/dashboard/settings/page.tsx", "utf8");
   ok("settings drops free sites when sign-in once is on", settings.includes("if (siteSigninLinksOn() && !cap.requiresPayment) return false;"));
   ok("settings keeps the saved account name as a hidden field", settings.includes('name="external_account_label"\n                        value={account?.external_account_label ?? ""}'));
+
+  // S712 (Codex review): a Save of the paid-ad limits never flips the status
+  // when sign-in once is on.
+  ok("sign-in once on keeps not_started", settingsAccountStatusToSave("not_started", true) === "not_started");
+  ok("sign-in once on keeps connected", settingsAccountStatusToSave("connected", true) === "connected");
+  ok("flag off: first naming waits on a sign-in", settingsAccountStatusToSave("not_started", false) === "needs_login");
+  ok("flag off keeps other statuses", settingsAccountStatusToSave("connected", false) === "connected");
+  ok("settings uses the helper", settings.includes("settingsAccountStatusToSave("));
 
   console.log(`\nsite-signin: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

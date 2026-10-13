@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // Pure tests for the S583 Stage 1 "Link your portals" grouping and copy keys.
 // Run: npx tsx scripts/test-stage1-link-portals.ts
 import type { ChannelTileStatusRow } from "../lib/distribution-channel-tile-statuses";
@@ -7,6 +8,7 @@ import {
   stage1ConnectButtonKey,
   stage1ConnectHref,
   stage1ReasonKey,
+  rentalsCaPostedForYou,
   stage1StatusCopy,
   STAGE1_GROUPS,
 } from "../lib/stage1-link-portals";
@@ -246,6 +248,18 @@ eq("self_post sits in the ready group", groupStage1ChannelRows([row("facebook", 
 eq("account_login linked sub does not promise automatic sending", stage1StatusCopy("linked", "account_login").subKey, "status.linkedSubLogin");
 eq("account_login not_linked sub does not promise posting for you", stage1StatusCopy("not_linked", "account_login").subKey, "status.notLinkedSubLogin");
 eq("oauth linked keeps the automatic sub", stage1StatusCopy("linked", "oauth").subKey, "status.linkedSub");
+
+// --- S712: Rentals.ca "posted for you" never masks a real blocker -------------
+for (const s of ["linked", "not_linked", "checking"] as const) {
+  eq(`rentals.ca ${s} reads posted for you`, rentalsCaPostedForYou(s), true);
+}
+for (const s of ["dead_session", "cap_reached", "connected_needs_authorization"] as const) {
+  eq(`rentals.ca ${s} keeps its own label`, rentalsCaPostedForYou(s), false);
+}
+{
+  const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
+  eq("view model gates the override on the state", vm.includes("row.channel === RENTALS_CA_CHANNEL_KEY && rentalsCaPostedForYou(row.state)"), true);
+}
 
 console.log(`\nstage1-link-portals: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -1,7 +1,7 @@
 import { adminEmails } from "@/lib/provisioning-server";
 import { channelShownFor } from "@/lib/posting-lanes";
 import { isAdminEmail } from "@/lib/provisioning";
-import { siteSigninLinksOn } from "@/lib/site-signin";
+import { settingsAccountStatusToSave, siteSigninLinksOn } from "@/lib/site-signin";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
@@ -1150,9 +1150,12 @@ export default async function SettingsPage({
                   account.spend_revoked_at == null &&
                   (account.spend_max_cents ?? 0) > 0;
                 // A landlord who names an account for the first time is waiting
-                // on a sign-in; we keep any status our team already set.
-                const statusToSave =
-                  accountStatus === "not_started" ? "needs_login" : accountStatus;
+                // on a sign-in; we keep any status our team already set. With
+                // "Sign in once" on, a Save of the paid-ad limits keeps it as is.
+                const statusToSave = settingsAccountStatusToSave(
+                  accountStatus,
+                  siteSigninLinksOn(),
+                );
                 return (
                   <form
                     id={`channel-${cap.channel}`}

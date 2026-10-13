@@ -37,6 +37,21 @@ export function siteSigninLinksOn(env: Record<string, string | undefined> = proc
   return env.SITE_SIGNIN_ENABLED === "true";
 }
 
+/**
+ * S712 (Codex review): the status a Settings site-account Save writes back.
+ * With "Sign in once" on, the sign-in page owns the account, so a Save of the
+ * paid-ad limits keeps the status as it is; flipping not_started to
+ * needs_login would turn an unconnected tile into "Sign in again".
+ * Flag off = the old rule (naming an account for the first time waits on a sign-in).
+ */
+export function settingsAccountStatusToSave(
+  accountStatus: string,
+  signinLinksOn: boolean,
+): string {
+  if (signinLinksOn) return accountStatus;
+  return accountStatus === "not_started" ? "needs_login" : accountStatus;
+}
+
 export function siteSigninHref(channel: SiteSigninChannel): string {
   return `/dashboard/site-signin/${channel}`;
 }

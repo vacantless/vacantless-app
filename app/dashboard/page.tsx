@@ -296,7 +296,10 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     (l) => new Date(l.created_at).getTime() >= monthAgo,
   );
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const newThisWeek = allLeads.filter(
+  // S712 (Codex review): Lost renters (test checks, scam holds, duplicate
+  // copies) stay out of Recent inquiries, its empty state and New this week.
+  const inPlayLeads = allLeads.filter((l) => l.status !== "lost");
+  const newThisWeek = inPlayLeads.filter(
     (l) => new Date(l.created_at).getTime() >= weekAgo,
   );
 
@@ -698,7 +701,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       <SectionHeading action={{ href: "/dashboard/leads", label: "View all" }}>
         Recent inquiries
       </SectionHeading>
-      {allLeads.length === 0 ? (
+      {inPlayLeads.length === 0 ? (
         <EmptyState
           icon={<Icons.chat />}
           title="No inquiries yet"
@@ -709,7 +712,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {/* S711 audit: Lost renters (test checks, scam holds, duplicate
               copies) cluttered Today's list. Show only renters still in play. */}
-          {allLeads.filter((l) => l.status !== "lost").slice(0, 8).map((l) => (
+          {inPlayLeads.slice(0, 8).map((l) => (
             <li key={l.id}>
               <Link
                 href={`/dashboard/leads/${l.id}`}

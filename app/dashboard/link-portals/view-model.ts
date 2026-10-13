@@ -9,6 +9,7 @@ import {
 } from "@/lib/distribution-channels";
 import type { ChannelTileStatusRow } from "@/lib/distribution-channel-tile-statuses";
 import {
+  rentalsCaPostedForYou,
   canRenderStage1Connect,
   groupStage1ChannelRows,
   stage1AuthorizeHref,
@@ -215,7 +216,7 @@ export async function buildLinkPortalsViewModel(
     // it from our side (the robot cannot reach Rentals.ca). The tile asked
     // Agile to "Add your Rentals.ca account" next to ads already live, which
     // read as a to-do. Say it plainly instead: posted for you, nothing to do.
-    if (row.channel === RENTALS_CA_CHANNEL_KEY) {
+    if (row.channel === RENTALS_CA_CHANNEL_KEY && rentalsCaPostedForYou(row.state)) {
       return {
         channel: row.channel,
         label: channel.label,
