@@ -44,6 +44,7 @@
       "capReachedSub": "{capLine}",
       "linkedSubLogin": "Votre compte est enregistré. Nous y publions vos annonces.",
       "notLinkedSubLogin": "Dites-nous quel compte vous utilisez. Ensuite nous y publions vos annonces.",
+      "notLinkedSubSignin": "Connectez-vous une fois. Ensuite nous y publions vos annonces.",
       "selfPost": "Prêt",
       "selfPostSub": "Gratuit. Votre équipe la publie depuis votre propre Facebook.",
       "postedForYouSub": "Nous publions vos annonces {name} pour vous et les gardons en ligne.",

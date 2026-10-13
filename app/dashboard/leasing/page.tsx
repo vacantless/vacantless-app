@@ -183,7 +183,8 @@ export default async function LeasingHubPage() {
     <div>
       <PageHeader
         eyebrow="Daily work"
-        title="Renters"
+        // S711 audit: the renter list (nav "Renters") had the same title.
+        title="Leasing overview"
         subtitle={
           needsYou > 0
             ? `${needsYou} item${needsYou === 1 ? "" : "s"} need${

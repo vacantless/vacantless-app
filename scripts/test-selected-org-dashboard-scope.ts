@@ -66,8 +66,10 @@ const selectedOrgChecks: FileScopeCheck[] = [
   },
   {
     file: "app/dashboard/properties/page.tsx",
-    tables: ["properties", "leads", "property_photos", "availability_rules"],
+    // S710 moved the viewing-times count into lib/viewing-times-count.
+    tables: ["properties", "leads", "property_photos"],
   },
+
   { file: "app/dashboard/leads/page.tsx", tables: ["leads"] },
   {
     file: "app/dashboard/leasing/page.tsx",
@@ -206,6 +208,11 @@ for (const check of selectedOrgChecks) {
 }
 
 assertEveryChainContains("app/dashboard/availability/page.tsx", "organizations", `.eq("id", org.id)`);
+// S710: the rentals page counts viewing times through lib/viewing-times-count,
+// which scopes by the orgId it is handed; the page must hand it the selected org.
+assertEveryChainContains("lib/viewing-times-count.ts", "availability_rules", `.eq("organization_id", orgId)`);
+assertEveryChainContains("lib/viewing-times-count.ts", "availability_overrides", `.eq("organization_id", orgId)`);
+ok("properties page counts viewing times for the selected org", read("app/dashboard/properties/page.tsx").includes("countViewingTimes(supabase, org.id"));
 
 const nav = read("app/dashboard/dashboard-nav.tsx");
 const agent = read("app/agent/page.tsx");

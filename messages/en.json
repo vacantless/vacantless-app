@@ -44,6 +44,7 @@
       "capReachedSub": "{capLine}",
       "linkedSubLogin": "Your account is on file. We post your ads on it.",
       "notLinkedSubLogin": "Tell us which account you use. Then we post your ads on it.",
+      "notLinkedSubSignin": "Sign in once. Then we post your ads on it.",
       "selfPost": "Ready",
       "selfPostSub": "Free. Your team posts it from your own Facebook.",
       "postedForYouSub": "We post your {name} ads for you, and keep them running.",

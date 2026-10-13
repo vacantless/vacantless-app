@@ -126,10 +126,11 @@ export async function buildLinkPortalsViewModel(
         label: t("buttons.reconnect", { name: channel.label }),
       };
     } else if (showConnect && connectHref && buttonKey) {
+      const signinWindow = siteSigninLinksOn() && isSiteSigninChannel(row.channel);
       button = {
         kind: "connect",
         href: connectHref,
-        label: t(buttonKey, { name: channel.label }),
+        label: t(signinWindow ? "buttons.connect" : buttonKey, { name: channel.label }),
       };
     } else if (row.state === "connected_needs_authorization") {
       button = {
@@ -177,7 +178,12 @@ export async function buildLinkPortalsViewModel(
           }) + (capCost.spendSuffix ? ` ${t("cost.spendSuffix")}` : "")
         : row.costLine;
 
-    const sub = t(copy.subKey, {
+    // S711 audit: with "Sign in once" on, the button opens our sign-in
+    // window, so the line and the button say sign in, not "tell us which
+    // account".
+    const signsInOnce =
+      siteSigninLinksOn() && isSiteSigninChannel(row.channel) && row.state === "not_linked";
+    const sub = t(signsInOnce ? "status.notLinkedSubSignin" : copy.subKey, {
       label,
       name: channel.label,
       reason,

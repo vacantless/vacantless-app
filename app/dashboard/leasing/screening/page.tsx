@@ -108,7 +108,7 @@ export default async function ScreeningSettingsPage({
 
       <p className="mt-4 text-sm text-gray-500">
         <Link href="/dashboard/leads" className="font-medium text-brand underline">
-          ← Back to Inquiries
+          ← Back to Renters
         </Link>
       </p>
 
