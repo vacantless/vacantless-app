@@ -2011,6 +2011,7 @@ export default async function PropertyDetailPage({
     listing_post_id: string | null;
     operator_action_url: string | null;
     error_message: string | null;
+    error_code: string | null;
     audit_message: string | null;
     transport: string | null;
     verification_status: string | null;
@@ -2025,7 +2026,7 @@ export default async function PropertyDetailPage({
     const { data: ri } = await supabase
       .from("distribution_run_items")
       .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at",
+        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, error_code, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at",
       )
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
@@ -2173,6 +2174,7 @@ export default async function PropertyDetailPage({
       operatorActionUrl: r.operator_action_url,
       auditMessage: r.audit_message,
       errorMessage: r.error_message,
+      errorCode: r.error_code,
       externalUrl: r.external_url,
       trackedUrl:
         linkIsLive && r.listing_post_id

@@ -84,6 +84,8 @@ export type PublishEverywhereRunItem = {
   checkoutUrl?: string | null;
   /** S709: the pay instruction for checkoutUrl (Kijiji: My Ads > Activate Ad). */
   checkoutHint?: string | null;
+  /** S713d: a step only the landlord can do on the site (Zumper renter account). */
+  siteSetup?: { message: string; href: string; action: string } | null;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -874,6 +876,8 @@ function ForYouRow({
     !isLive &&
     !payAtCheckout &&
     (gate === "needs_operator" || gate === "needs_payment");
+  // S713d: the robot found a step only the landlord can do on the site itself.
+  const siteSetup = needsApproval ? (item?.siteSetup ?? null) : null;
   // needs_login can't be approved — it needs a re-connect, so route to posting assist.
   const needsConnect = !isLive && gate === "needs_login";
   // S703: the run item still says live but its ad is gone (expired or
@@ -898,6 +902,8 @@ function ForYouRow({
       ? { label: "Waiting", cls: "bg-amber-50 text-amber-700" }
     : payAtCheckout
       ? { label: "Ready. Pay the site", cls: "bg-emerald-50 text-emerald-700" }
+    : siteSetup
+      ? { label: "Needs you", cls: "bg-amber-50 text-amber-700" }
     : needsApproval
       ? { label: "Ready. Approve it", cls: "bg-emerald-50 text-emerald-700" }
       : needsConnect
@@ -996,10 +1002,24 @@ function ForYouRow({
         </div>
       ) : needsApproval ? (
         <div className="mt-2">
+          {siteSetup ? (
+            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-[12px] leading-relaxed text-amber-950">{siteSetup.message}</p>
+              <a
+                href={siteSetup.href}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-semibold text-amber-900 hover:underline"
+              >
+                {siteSetup.action} ↗
+              </a>
+            </div>
+          ) : (
           <p className="text-[12px] text-emerald-800">
             Your ad is ready. Approve it to post
             {paid ? " and cover the fee" : ""}.
           </p>
+          )}
           <button
             type="button"
             onClick={() => setApproveOpen(true)}

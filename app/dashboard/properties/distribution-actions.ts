@@ -491,6 +491,10 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
         .update({
           operator_submit_approved_at: now,
           operator_submit_approved_by: uid,
+          // S713d: a fresh approval clears the robot's last named blocker (for
+          // example a Zumper renter account the landlord has since upgraded).
+          error_code: null,
+          error_message: null,
           updated_at: now,
         })
         .eq("id", itemId)

@@ -46,6 +46,7 @@ import {
 import {
   siteCheckoutUrl,
   siteCheckoutHint,
+  siteSetupNotice,
   type PublishMode,
   type PublishStatus,
   type PublishTone,
@@ -87,6 +88,8 @@ export type RunItemView = {
   operatorActionUrl: string | null;
   auditMessage: string | null;
   errorMessage: string | null;
+  /** S713d: the worker's named blocker (e.g. zumper_landlord_setup). */
+  errorCode?: string | null;
   externalUrl: string | null;
   trackedUrl: string | null;
   notes: string | null;
@@ -401,6 +404,7 @@ export function DistributeTab({
             const checkoutUrl = siteCheckoutUrl(it.publishStatus, it.operatorActionUrl);
             return { checkoutUrl, checkoutHint: checkoutUrl ? siteCheckoutHint(checkoutUrl) : null };
           })(),
+          siteSetup: siteSetupNotice(it.publishStatus, it.errorCode),
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}

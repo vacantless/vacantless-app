@@ -223,6 +223,30 @@ export const CONCIERGE_OPEN_STATUSES: readonly PublishStatus[] = [
   "needs_payment",
 ];
 
+/**
+ * S713d: a step only the landlord can do on the site itself, which the posting
+ * robot found and named (the worker writes error_code). Zumper: a brand-new
+ * account is a renter account; Zumper only posts from its landlord side and asks
+ * for a role, a phone number and ID first. Pure.
+ */
+export const ZUMPER_LANDLORD_SETUP_CODE = "zumper_landlord_setup";
+export type SiteSetupNotice = { message: string; href: string; action: string };
+export function siteSetupNotice(
+  publishStatus: string | null | undefined,
+  errorCode: string | null | undefined,
+): SiteSetupNotice | null {
+  if (publishStatus !== "needs_operator") return null;
+  if (errorCode === ZUMPER_LANDLORD_SETUP_CODE) {
+    return {
+      message:
+        "Zumper still has your account as a renter. Open Zumper, pick Landlord and finish their setup. They ask for a phone number and ID. Then approve again.",
+      href: "https://www.zumper.com/manage/upgrade",
+      action: "Open Zumper",
+    };
+  }
+  return null;
+}
+
 /** Can this run item be handed to the concierge desk? Pure. */
 /**
  * S708: the paid site's checkout page the posting robot stopped on, if any.
