@@ -30,7 +30,7 @@ export function TodayLane({
   return (
     <section className="mb-8">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-        Today
+        Needs you now
       </h2>
 
       {items.length === 0 ? (

@@ -43,7 +43,7 @@ export function RenterPagePreview({
   if (properties.length === 0) {
     return (
       <span className="text-xs text-gray-400">
-        Add a property to preview your public renter page.
+        Add a rental to preview your public renter page.
       </span>
     );
   }

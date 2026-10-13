@@ -192,14 +192,14 @@ export function deriveNextAction(input: NextActionInput): NextAction | null {
               "detail is",
               "details are",
             )} already filled from your building defaults. Confirm them and add the few things below.`
-          : "Add the property's rental details below. Set your building defaults once and future units inherit them automatically.";
+          : "Add the rental details below. Set your building defaults once and future units inherit them automatically.";
       return {
         step,
-        title: "Finish setting up this property",
+        title: "Finish setting up this rental",
         blurb,
         derived: facts,
         gaps,
-        cta: { label: "Add property details", href: setupHref },
+        cta: { label: "Add rental details", href: setupHref },
       };
     }
 

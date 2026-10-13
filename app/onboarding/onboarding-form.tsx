@@ -49,10 +49,14 @@ export function OnboardingForm({
       {/* Paid-plan intent from the pricing CTA -> billing after onboarding. */}
       {planIntent && <input type="hidden" name="plan" value={planIntent} />}
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label
+          htmlFor="business-name"
+          className="mb-1 block text-sm font-medium text-gray-700"
+        >
           Business name
         </label>
         <input
+          id="business-name"
           name="name"
           required
           autoComplete="organization"
@@ -64,10 +68,14 @@ export function OnboardingForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">
+        <label
+          htmlFor="public-contact-phone"
+          className="mb-1 block text-sm font-medium text-gray-700"
+        >
           Phone for renters
         </label>
         <input
+          id="public-contact-phone"
           name="public_contact_phone"
           type="tel"
           autoComplete="tel"

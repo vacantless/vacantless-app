@@ -91,7 +91,7 @@ ok("new-inquiry unit next action routes to viewings", rows[0]?.nextAction === "G
 ok("needs-operator unit stage = Inquiries", rows[1]?.stage === "Inquiries");
 ok("needs-operator unit next action = syndication", rows[1]?.nextAction === "Open syndication");
 ok("setup-gap unit stage = Unit details", rows[2]?.stage === "Unit details");
-ok("setup-gap unit next action = Add property details", rows[2]?.nextAction === "Add property details");
+ok("setup-gap unit next action = Add rental details", rows[2]?.nextAction === "Add rental details");
 ok("tenanted unit stage = Tenanted", rows[4]?.stage === "Tenanted");
 ok("tenanted unit has no next action", rows[4]?.nextAction === "");
 

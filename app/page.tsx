@@ -113,10 +113,20 @@ function SiteHeader() {
           </Link>
         </nav>
         <div className="flex flex-shrink-0 items-center gap-2.5">
+          <Link
+            href="/login"
+            className="inline-flex min-h-[44px] items-center justify-center text-[0.86rem] font-bold text-[#203029] transition hover:text-[#15211d] sm:hidden"
+          >
+            Log in
+          </Link>
           <SecondaryButton href="/login" className="hidden sm:inline-flex">
             Log in
           </SecondaryButton>
-          <PrimaryButton href="/signup" ariaLabel="Start free with one rental">
+          <PrimaryButton
+            href="/signup"
+            ariaLabel="Start free with one rental"
+            className="!px-2.5 !text-[0.86rem] sm:!px-[18px] sm:!text-[0.92rem]"
+          >
             Start free
           </PrimaryButton>
         </div>
@@ -159,7 +169,8 @@ function Hero() {
         <div className="max-w-[590px]">
           <Eyebrow>For landlords and property managers</Eyebrow>
           <h1 className="mb-[16px] max-w-[19ch] text-[clamp(2.2rem,4.6vw,3.4rem)] font-extrabold leading-[1.04] tracking-tight">
-            Every renter answered. Every viewing booked.
+            <span className="block">Every renter answered.</span>
+            <span className="block">Every viewing booked.</span>
           </h1>
           <p className="mb-[18px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
             Put one link in your rental ads. Vacantless does the back and forth.

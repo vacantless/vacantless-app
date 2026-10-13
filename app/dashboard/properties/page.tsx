@@ -408,7 +408,7 @@ export default async function PropertiesPage({
 
       {searchParams.added && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          Property added as a draft. Open it to add photos and details. Post it
+          Rental added as a draft. Open it to add photos and details. Post it
           to share your inquiry link.
         </p>
       )}
@@ -422,7 +422,7 @@ export default async function PropertiesPage({
       )}
       {searchParams.import === "failed" && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-          Something went wrong creating the property. Please try again.
+          Something went wrong creating the rental. Please try again.
         </p>
       )}
       {searchParams.import === "badimage" && (
@@ -664,11 +664,11 @@ export default async function PropertiesPage({
         <div className="mb-8">
           <EmptyState
             icon={<Icons.building />}
-            title="No properties yet"
-            description="Add your first property to create your inquiry link. Renters can then write to you. It takes a couple of minutes."
+            title="No rentals yet"
+            description="Add your first rental to create your inquiry link. Renters can then write to you. It takes a couple of minutes."
             cta={{
               href: addPropertyV2Enabled ? "/dashboard/properties/new" : "#add-rental",
-              label: "Add your first property",
+              label: "Add your first rental",
             }}
           />
         </div>
@@ -699,7 +699,7 @@ export default async function PropertiesPage({
           }
         >
           <span>
-            <span className="font-semibold text-gray-900">Add a property</span>
+            <span className="font-semibold text-gray-900">Add a rental</span>
             <span className="ml-2 text-xs text-gray-500">
               Enter it yourself, or import from MLS or realtor.ca
             </span>
@@ -711,7 +711,7 @@ export default async function PropertiesPage({
         <div
           className={allRows.length > 0 ? "border-t border-gray-100 p-5" : ""}
         >
-      {allRows.length === 0 ? <SectionHeading>Add a property</SectionHeading> : null}
+      {allRows.length === 0 ? <SectionHeading>Add a rental</SectionHeading> : null}
 
       {/* Fresh-org audit #3: lead with the simple, persona-neutral path. A small
           landlord with no MLS sheet enters an address and goes; the realtor
@@ -806,7 +806,7 @@ export default async function PropertiesPage({
           className={PRIMARY_ACTION_CLASS}
           style={{ background: "var(--brand-gradient, var(--brand-color))" }}
         >
-          Add property
+          Add rental
         </button>
       </form>
 
