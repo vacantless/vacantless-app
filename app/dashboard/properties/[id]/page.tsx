@@ -250,6 +250,8 @@ import {
   scanExpensePrefillFromQuery,
 } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
+import { marketplaceKitAgents } from "@/lib/marketplace-kit";
+import type { MarketplaceKitData } from "./marketplace-row";
 import type { AddressDisplayMode } from "@/lib/address-privacy";
 import { shareLinkStatus } from "@/lib/documents";
 
@@ -830,6 +832,7 @@ export default async function PropertyDetailPage({
     blasted?: string;
     post?: string;
     pn?: string; // post-submit nonce that remounts the add-post form (form reset)
+    mkt?: string; // S712: result of "Email them these steps" (Marketplace kit)
     posterr?: string;
     photos?: string;
     waitlist?: string;
@@ -1457,6 +1460,36 @@ export default async function PropertyDetailPage({
       ),
   );
   const shownCopyTabs = copyTabs.filter((t) => !plannedOnlyCopyKeys.has(t.key));
+
+  // --- S712: Facebook Marketplace kit (every org; its own team posts it) ----
+  let marketplaceKit: MarketplaceKitData | null = null;
+  const fbCopy = copyTabs.find((t) => t.key === "facebook");
+  if (linkIsLive && fbCopy && org) {
+    const { data: agentRows } = await supabase
+      .from("showing_agents")
+      .select("id, name, email, archived")
+      .eq("organization_id", org.id);
+    const facts: { label: string; value: string }[] = [];
+    if (p.rent_cents) facts.push({ label: "Price per month", value: `$${Math.round(p.rent_cents / 100).toLocaleString("en-US")}` });
+    if (p.beds != null) facts.push({ label: "Bedrooms", value: String(p.beds) });
+    if (p.baths != null) facts.push({ label: "Bathrooms", value: String(p.baths) });
+    if (p.sqft) facts.push({ label: "Square feet", value: String(p.sqft) });
+    if (p.address) facts.push({ label: "Address", value: p.address });
+    if (p.available_date) facts.push({ label: "Available", value: p.available_date });
+    const mkt = String(searchParams.mkt ?? "");
+    marketplaceKit = {
+      adText: fbCopy.body,
+      facts,
+      photosHref: `/dashboard/properties/${p.id}/marketplace-photos`,
+      photoCount: photoRows.length,
+      renterReply: buildRenterMessageReply({ publicUrl, phone: org.public_contact_phone ?? null }),
+      agents: marketplaceKitAgents(
+        (agentRows ?? []) as { id: string; name: string | null; email: string | null; archived: boolean | null }[],
+      ),
+      sendNotice:
+        mkt === "sent" || mkt === "notsent" || mkt === "noagent" || mkt === "pick" ? mkt : null,
+    };
+  }
   // The channel copy is only as good as the description it's built from. Flag a
   // thin/empty one so the card can nudge the operator into the Description Helper
   // instead of shipping a field-summary ad.
@@ -4070,6 +4103,7 @@ export default async function PropertyDetailPage({
           stepClarityLiveEnabled={stepClarityLiveEnabled}
           wizardEnabled={distributionWizardEnabled()}
           shownChannelKeys={shownChannelKeys}
+          marketplaceKit={marketplaceKit}
         />
       </TabPanel>
 

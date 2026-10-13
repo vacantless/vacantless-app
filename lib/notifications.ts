@@ -506,6 +506,24 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\nLead agent (keep CC'd): {{assigned_by}}\n\nOpen your viewings page for the renter's contact, access instructions, and a one-tap Confirm: {{agent_url}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
     active: true,
   },
+  // Marketplace posting kit sent to a showing agent (S712). Facebook Marketplace
+  // has no API, so the org's own team posts it from a personal profile. The
+  // landlord picks one of their showing agents and we email that agent a
+  // no-login link to the kit: the ad text, the photos, the booking link, and a
+  // box to paste the ad link back. Defaults to the agent (audienceEmail).
+  {
+    key: "leasing.marketplace_kit",
+    family: "leasing",
+    audience: "operator",
+    label: "Marketplace ad sent to an agent",
+    description:
+      "When you send a rental's Facebook Marketplace ad to one of your showing agents, they get an email with a link to the ad text, the photos and a box to save the link to the ad once it is up.",
+    tokens: [...COMMON_TOKENS, "agent_name", "sent_by", "kit_url"],
+    defaultSubject: "Please post {{property_address}} on Facebook Marketplace",
+    defaultBody:
+      "Hi {{agent_name}}, {{sent_by}} asked you to post this rental on Facebook Marketplace from your own Facebook.\n\nRental: {{property_address}}\n\nOpen this page for everything you need: the ad text to copy, the photos to download, and the button that opens Marketplace. When the ad is up, paste its link on the same page so it shows as live:\n{{kit_url}}\n\nWhen renters message you on Facebook, send them the booking link from the ad so they can pick a viewing time.",
+    active: true,
+  },
   // Assigned viewing RESCHEDULED (S442, operator reschedule). Audience operator;
   // fired when the lead agent moves an already-assigned viewing to a new time. The
   // covering agent is account-less, so this email keeps their hand-off current —
@@ -1142,6 +1160,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.showing_outcome_nudge": "showing",
   "leasing.showing_cancelled": "showing",
   "leasing.showing_assigned": "showing",
+  "leasing.marketplace_kit": "listing",
   "leasing.showing_rescheduled": "showing",
   "leasing.reschedule_accepted": "showing",
   "leasing.showing_unconfirmed_nudge": "showing",

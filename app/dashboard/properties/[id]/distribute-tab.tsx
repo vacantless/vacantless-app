@@ -67,6 +67,7 @@ import {
   type PortalRequirementFieldKey,
 } from "@/lib/portal-requirements";
 import { PublishEverywhere } from "./publish-everywhere";
+import type { MarketplaceKitData } from "./marketplace-row";
 
 
 // S695: the run-item view types moved here from launch-run-panel.tsx when the
@@ -290,6 +291,7 @@ export function DistributeTab({
   stepClarityLiveEnabled,
   wizardEnabled,
   shownChannelKeys = null,
+  marketplaceKit = null,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -312,6 +314,8 @@ export function DistributeTab({
   /** SHOW_ONLY_PROVEN_CHANNELS. Display only, and passed straight through to
    *  PublishEverywhere. Null leaves every channel listed, as today. */
   shownChannelKeys?: readonly string[] | null;
+  /** S712: Facebook Marketplace kit, passed straight through to PublishEverywhere. */
+  marketplaceKit?: MarketplaceKitData | null;
 }) {
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
@@ -397,6 +401,7 @@ export function DistributeTab({
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
+        marketplaceKit={marketplaceKit}
       />
     </div>
   );

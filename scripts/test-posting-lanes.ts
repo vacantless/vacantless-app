@@ -35,28 +35,25 @@ ok("realtor.ca uses the desk allowance", usesDeskAllowance("realtor_ca"));
 ok("junk input is not robot posted", !isRobotPostedChannel(null));
 
 ok("Agile sees Marketplace", marketplaceShownFor(AGILE));
-ok("other org does not", !marketplaceShownFor(OTHER));
+ok("S712: other org sees Marketplace too", marketplaceShownFor(OTHER));
 ok("no org does not", !marketplaceShownFor(null));
-ok("Marketplace hidden for other org", isHiddenMarketplace("facebook", OTHER));
+ok("S712: Marketplace shown for other org", !isHiddenMarketplace("facebook", OTHER));
 ok("Marketplace shown for Agile", !isHiddenMarketplace("facebook", AGILE));
 ok("Kijiji never hidden", !isHiddenMarketplace("kijiji", OTHER));
 
 const all = ["site", "facebook", "kijiji", "zumper"];
 ok("Agile keeps null (show all)", withoutHiddenMarketplace(null, all, AGILE) === null);
+ok("S712: other org keeps null (show all)", withoutHiddenMarketplace(null, all, OTHER) === null);
 ok(
-  "other org drops facebook from all",
-  JSON.stringify(withoutHiddenMarketplace(null, all, OTHER)) === JSON.stringify(["site", "kijiji", "zumper"]),
-);
-ok(
-  "other org drops facebook from a proven list",
-  JSON.stringify(withoutHiddenMarketplace(["facebook", "kijiji"], all, OTHER)) === JSON.stringify(["kijiji"]),
+  "S712: other org keeps facebook in a proven list",
+  JSON.stringify(withoutHiddenMarketplace(["facebook", "kijiji"], all, OTHER)) === JSON.stringify(["facebook", "kijiji"]),
 );
 
 // S704: Rentals.ca is Agile-only (the GitHub robot cannot pass its Cloudflare).
 ok("Agile sees Rentals.ca", channelShownFor("rentals_ca", AGILE));
 ok("other org does not see Rentals.ca", isHiddenForOrg("rentals_ca", OTHER));
 ok("no org does not see Rentals.ca", isHiddenForOrg("rentals_ca", null));
-ok("other org does not see Marketplace", isHiddenForOrg("facebook", OTHER));
+ok("S712: other org sees Marketplace", !isHiddenForOrg("facebook", OTHER));
 ok("Kijiji shown for other org", channelShownFor("kijiji", OTHER));
 ok("Zumper shown for other org", channelShownFor("zumper", OTHER));
 ok("Zumper shown with no org", channelShownFor("zumper", null));
@@ -67,8 +64,8 @@ ok("Agile does not see Realtor.ca", isHiddenForOrg("realtor_ca", AGILE));
 ok("other org does not see Realtor.ca", isHiddenForOrg("realtor_ca", OTHER));
 ok("Agile drops Realtor.ca from all", !(withoutHiddenChannels(null, [...all2, "realtor_ca"], AGILE) ?? []).includes("realtor_ca"));
 ok(
-  "other org drops facebook and rentals_ca from all",
-  JSON.stringify(withoutHiddenChannels(null, all2, OTHER)) === JSON.stringify(["site", "kijiji", "zumper"]),
+  "other org drops only rentals_ca from all (S712: Marketplace stays)",
+  JSON.stringify(withoutHiddenChannels(null, all2, OTHER)) === JSON.stringify(["site", "facebook", "kijiji", "zumper"]),
 );
 ok(
   "other org drops rentals_ca from a proven list",

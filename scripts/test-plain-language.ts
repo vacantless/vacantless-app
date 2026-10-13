@@ -54,6 +54,9 @@ const SURFACES: Surface[] = [
   // The property-page files that survive DECISION-S694 (the seven of ROADMAP
   // section 1, minus the four self-guided ones listed in BEING_REMOVED).
   { file: "app/dashboard/properties/[id]/publish-everywhere.tsx", mode: "ui" },
+  { file: "app/dashboard/properties/[id]/marketplace-row.tsx", mode: "ui" },
+  { file: "components/marketplace-kit-steps.tsx", mode: "ui" },
+  { file: "app/agent/[token]/marketplace/[propertyId]/page.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
   // S705: the Facebook Page Connect / Disconnect card, moved out of the
   // removed Advanced tools view.

@@ -34,6 +34,7 @@
 // renders exactly as Slice 1.
 // ============================================================================
 
+import { MarketplaceRow, type MarketplaceKitData } from "./marketplace-row";
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
@@ -336,6 +337,7 @@ export function PublishEverywhere({
   postingBlocker = null,
   wizardEnabled = false,
   shownChannelKeys = null,
+  marketplaceKit = null,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -364,6 +366,8 @@ export function PublishEverywhere({
    * cannot yet stand behind; it removes nobody's account and no posting path.
    */
   shownChannelKeys?: readonly string[] | null;
+  /** S712: the Facebook Marketplace kit (every org posts it from its own team). */
+  marketplaceKit?: MarketplaceKitData | null;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDestinations, setConfirmDestinations] = useState<
@@ -660,6 +664,7 @@ export function PublishEverywhere({
             wizardEnabled={wizardEnabled}
             allSetSummary={liveForYouAllSet}
             postingBlocker={postingBlocker}
+            marketplaceKit={marketplaceKit}
           >
             {[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].map((r) => (
               <ChannelRow
@@ -712,9 +717,11 @@ function ForYouHandoff({
   wizardEnabled = false,
   allSetSummary,
   postingBlocker,
+  marketplaceKit = null,
   children,
 }: {
   children?: React.ReactNode;
+  marketplaceKit?: MarketplaceKitData | null;
   propertyId: string;
   addressLabel: string;
   rows: ResolvedRow[];
@@ -760,6 +767,7 @@ function ForYouHandoff({
             conciergeDeskEnabled={conciergeDeskEnabled}
             wizardEnabled={wizardEnabled}
             postingBlocked={Boolean(postingBlocker)}
+            marketplaceKit={row.key === "facebook" ? marketplaceKit : null}
           />
         ))}
       </ul>
@@ -792,7 +800,9 @@ function ForYouRow({
   conciergeDeskEnabled,
   wizardEnabled = false,
   postingBlocked,
+  marketplaceKit = null,
 }: {
+  marketplaceKit?: MarketplaceKitData | null;
   row: ResolvedRow;
   item: PublishEverywhereRunItem | null;
   propertyId: string;
@@ -896,6 +906,10 @@ function ForYouRow({
         ) : (
           <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
         )
+      ) : marketplaceKit && linkIsLive ? (
+        // S712: Marketplace is posted by the org's own team from the kit, never
+        // by the desk or the robot (Facebook has no API for it).
+        <MarketplaceRow propertyId={propertyId} kit={marketplaceKit} />
       ) : item == null || repostable ? (
         linkIsLive ? (
           <form

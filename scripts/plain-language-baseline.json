@@ -1,9 +1,10 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-12",
-  "checksum": "1d46a15d1ca9a1aaec2ffe785ba34c2d72428a68755894018b0fb909b42f3fad",
+  "generated": "2026-10-13",
+  "checksum": "4ea0b7b6e069f189a0c20fd4fa1103f00c7b583b5bcd43d16647e2f0ba5ba9fe",
   "surfaces": [
+    "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/dashboard/(wizard)/getting-started/page.tsx",
     "app/dashboard/add-details/page.tsx",
     "app/dashboard/add-details/question-sheet-form.tsx",
@@ -20,6 +21,7 @@
     "app/dashboard/properties/[id]/lifecycle-rail.tsx",
     "app/dashboard/properties/[id]/listing-copy-card.tsx",
     "app/dashboard/properties/[id]/marketing-kit-card.tsx",
+    "app/dashboard/properties/[id]/marketplace-row.tsx",
     "app/dashboard/properties/[id]/next-action-card.tsx",
     "app/dashboard/properties/[id]/page.tsx",
     "app/dashboard/properties/[id]/publish-everywhere.tsx",
@@ -34,6 +36,7 @@
     "app/dashboard/site-signin/[channel]/page.tsx",
     "app/dashboard/site-signin/[channel]/window-panel.tsx",
     "app/dashboard/today-lane.tsx",
+    "components/marketplace-kit-steps.tsx",
     "lib/distribution-analytics.ts",
     "lib/distribution-capabilities.ts",
     "lib/distribution-channel-contracts.ts",
@@ -139,6 +142,7 @@
     "lib/listing-state.ts\u0000banned_word": 3
   },
   "strings": {
+    "app/agent/[token]/marketplace/[propertyId]/page.tsx": 14,
     "app/dashboard/(wizard)/getting-started/page.tsx": 22,
     "app/dashboard/add-details/page.tsx": 2,
     "app/dashboard/add-details/question-sheet-form.tsx": 2,
@@ -155,8 +159,9 @@
     "app/dashboard/properties/[id]/lifecycle-rail.tsx": 4,
     "app/dashboard/properties/[id]/listing-copy-card.tsx": 21,
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
+    "app/dashboard/properties/[id]/marketplace-row.tsx": 13,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 375,
+    "app/dashboard/properties/[id]/page.tsx": 382,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 106,
     "app/dashboard/properties/new/add-property-form.tsx": 98,
     "app/dashboard/properties/new/page.tsx": 5,
@@ -165,10 +170,11 @@
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
-    "app/dashboard/settings/page.tsx": 301,
+    "app/dashboard/settings/page.tsx": 302,
     "app/dashboard/site-signin/[channel]/page.tsx": 13,
     "app/dashboard/site-signin/[channel]/window-panel.tsx": 5,
     "app/dashboard/today-lane.tsx": 5,
+    "components/marketplace-kit-steps.tsx": 20,
     "lib/distribution-analytics.ts": 8,
     "lib/distribution-capabilities.ts": 21,
     "lib/distribution-channel-contracts.ts": 68,
@@ -188,8 +194,8 @@
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
     "lib/site-signin.ts": 19,
-    "messages/en.json": 198,
-    "messages/fr.json": 198
+    "messages/en.json": 203,
+    "messages/fr.json": 203
   },
   "entries": [
     {
@@ -1468,6 +1474,12 @@
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Tenant notes still draft for approval, landlord reminders still respect Automations settings, and the global master switch remains the final kill-switch.",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/settings/page.tsx",
+      "text": "Texting renters comes with Growth. On your current plan we send confirmations and reminders by email.",
       "count": 1
     },
     {

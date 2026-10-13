@@ -784,7 +784,7 @@ export function firstRunCostLine(channelKey: unknown): string | null {
   if (!channel) return null;
   switch (channel.key) {
     case "facebook":
-      return "Free. We post it for you.";
+      return "Free. Your team posts it from your own Facebook.";
     case "kijiji":
       return `1 free ad per personal account, then ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)} each.`;
     case "rentals_ca":
