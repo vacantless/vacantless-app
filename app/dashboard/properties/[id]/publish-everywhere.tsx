@@ -595,7 +595,7 @@ export function PublishEverywhere({
                   Post everywhere
                 </span>
                 <small className="text-[12.5px] font-semibold opacity-80">
-                  Then approve each site's post
+                  Then approve each site&apos;s post
                 </small>
               </button>
             ) : postingBlocker ? (

@@ -2759,7 +2759,17 @@ export default async function SettingsPage({
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-gray-500">Plan</dt>
-                <dd className="font-medium capitalize text-gray-900">{org.plan}</dd>
+                <dd className="font-medium capitalize text-gray-900">
+                  {org.plan}
+                  {/* S712 new-landlord run: the plan read "Free" here with no way
+                      to change it; the plan page lives under More > Your plan. */}
+                  <Link
+                    href="/dashboard/billing"
+                    className="ml-2 text-xs font-medium normal-case text-blue-700 underline"
+                  >
+                    Open billing
+                  </Link>
+                </dd>
               </div>
               <div>
                 <dt className="text-gray-500">Account ID</dt>
