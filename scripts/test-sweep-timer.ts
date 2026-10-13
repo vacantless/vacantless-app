@@ -56,5 +56,7 @@ ok("secret generated in the vault", /vault\.create_secret\(/.test(sql) && /gen_r
 ok("check is service-role only", /revoke all on function public\.sweep_trigger_secret_matches\(text\) from public, anon, authenticated/.test(sql) && /to service_role/.test(sql));
 ok("job is re-runnable", /cron\.unschedule\('vacantless-sweeps'\)/.test(sql));
 
+ok("GitHub schedule is off (one timer only)", !/^\s*schedule:/m.test(yml) && /workflow_dispatch/.test(yml));
+
 console.log(`sweep timer: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

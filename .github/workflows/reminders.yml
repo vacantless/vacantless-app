@@ -1,5 +1,9 @@
 name: Vacantless background sweeps
 
+# S713e: NO LONGER SCHEDULED. The database timer (pg_cron, migration 0245) is the
+# only 15-minute driver; see lib/cron-sweeps.ts. This file stays as the manual
+# "Run workflow" button and as the list scripts/test-sweep-timer.ts checks.
+
 # Free external pinger for the Vacantless cron sweeps. Vercel Hobby caps native
 # cron at once/day, which can't drive the ~2h reminder, so this GitHub Actions
 # schedule hits the idempotent sweep endpoints every 15 minutes. Each route only
@@ -78,8 +82,10 @@ name: Vacantless background sweeps
 # (*/15 * * * * in vercel.json) and delete this workflow.
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  # S713e (2026-10-13): the schedule is OFF. The database now runs these sweeps
+  # every 15 minutes (pg_cron job vacantless-sweeps -> /api/cron/sweep-all,
+  # migration 0245). Two timers could run the same sweep at the same moment and
+  # send a reminder twice, so GitHub keeps only the manual button below.
   workflow_dispatch: {} # lets you trigger the sweeps manually from the Actions tab
 
 jobs:
