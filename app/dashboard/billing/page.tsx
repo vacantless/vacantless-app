@@ -10,6 +10,7 @@ import {
   overListingCapNotice,
   POSTING_ADDON,
   postingAddonOffer,
+  postingAddonPending,
 } from "@/lib/billing";
 import {
   isBillingConfigured,
@@ -92,6 +93,10 @@ export default async function BillingPage({
     subscriptionStatus: org.subscription_status,
   });
   const growthPriceSet = Boolean(priceIdForPlan("growth"));
+  const addonPending = postingAddonPending(addonOffer, {
+    addon: searchParams.addon ?? null,
+    checkout: searchParams.checkout ?? null,
+  });
   const addonNotice: Record<string, string> = {
     added: "Posting is switching on. Refresh in a few seconds.",
     removed: "Posting is switching off. You get a credit for the unused days.",
@@ -587,7 +592,16 @@ export default async function BillingPage({
             stay free with every account.
           </p>
           <div className="mt-5">
-            {addonOffer === "on_bought" ? (
+            {addonPending ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                  {addonPending === "switching_on" ? "Posting is switching on" : "Posting is switching off"}
+                </span>
+                <a href="/dashboard/billing#posting-addon" className="text-sm font-medium text-brand">
+                  Refresh
+                </a>
+              </div>
+            ) : addonOffer === "on_bought" ? (
               <div className="flex flex-wrap items-center gap-3">
                 <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
                   Posting is on

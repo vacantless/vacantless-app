@@ -1,6 +1,7 @@
 // S705: "Sign in once" helpers and the GitHub dispatch shape.
 // Run: npx tsx scripts/test-site-signin.ts
 import {
+  SITE_SIGNIN_ACCOUNT_FIRST,
   isSiteSigninChannel,
   settingsAccountStatusToSave,
   siteSigninEnabled,
@@ -91,6 +92,19 @@ async function main() {
   ok("flag off: first naming waits on a sign-in", settingsAccountStatusToSave("not_started", false) === "needs_login");
   ok("flag off keeps other statuses", settingsAccountStatusToSave("connected", false) === "connected");
   ok("settings uses the helper", settings.includes("settingsAccountStatusToSave("));
+
+  // S714: tell the landlord to make the site account first (Zumper checks ID).
+  ok("zumper hint names the landlord account and the ID check", /landlord account/.test(SITE_SIGNIN_ACCOUNT_FIRST.zumper.text) && /ID/.test(SITE_SIGNIN_ACCOUNT_FIRST.zumper.text));
+  ok("hint links go to the real sites", SITE_SIGNIN_ACCOUNT_FIRST.zumper.href.startsWith("https://www.zumper.com/") && SITE_SIGNIN_ACCOUNT_FIRST.kijiji.href.startsWith("https://www.kijiji.ca/"));
+  {
+    const page = readFileSync("app/dashboard/site-signin/[channel]/page.tsx", "utf8");
+    ok("sign-in page shows the account-first hint", page.includes("SITE_SIGNIN_ACCOUNT_FIRST[channel].text"));
+    ok("sign-in page passes the window's expiry to the panel", page.includes("expiresAt: (recent.expires_at"));
+    const panel = readFileSync("app/dashboard/site-signin/[channel]/window-panel.tsx", "utf8");
+    ok("panel shows when the window closes", panel.includes("The window stays open until"));
+    const fb = readFileSync("app/dashboard/facebook-connect/page.tsx", "utf8");
+    ok("page picker has no token/channel/autopilot jargon", !/Page token|feed channel|autopilot|Distribute tab/.test(fb));
+  }
 
   console.log(`\nsite-signin: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

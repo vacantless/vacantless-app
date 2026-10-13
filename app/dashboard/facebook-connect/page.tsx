@@ -50,11 +50,11 @@ export default async function FacebookConnectPage() {
       <div className="mb-6">
         <p className="text-sm font-semibold text-brand">Facebook Page</p>
         <h1 className="mt-1 text-2xl font-semibold text-gray-950">
-          Choose the Page Vacantless can post to
+          Pick the Page for your rentals
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          This stores a Page token for the Facebook feed channel. It does not
-          authorize autopilot; that stays separate on the Distribute tab.
+          We post your rentals to this Page when you post them. You can
+          disconnect it any time in Settings.
         </p>
       </div>
 
@@ -70,12 +70,11 @@ export default async function FacebookConnectPage() {
               <p className="truncate text-sm font-medium text-gray-900">
                 {page.name}
               </p>
-              <p className="truncate text-xs text-gray-500">Page ID {page.id}</p>
               {instagramEnabled && (
                 <p className="truncate text-xs text-gray-500">
                   {page.instagram_business_account
                     ? `Instagram ${instagramAccountLabel(page.instagram_business_account)} linked`
-                    : "No linked Instagram Business account"}
+                    : "No Instagram account linked to this Page"}
                 </p>
               )}
             </div>

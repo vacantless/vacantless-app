@@ -52,6 +52,27 @@ export function settingsAccountStatusToSave(
   return accountStatus === "not_started" ? "needs_login" : accountStatus;
 }
 
+/**
+ * S714: sign-in only works with an account that can post. Zumper turns a
+ * renter account into a landlord account only after an ID check (S713), so a
+ * landlord without one must make it on Zumper before the window is any use.
+ */
+export const SITE_SIGNIN_ACCOUNT_FIRST: Record<
+  SiteSigninChannel,
+  { text: string; href: string; linkLabel: string }
+> = {
+  kijiji: {
+    text: "You need a Kijiji account. If you do not have one, make it on Kijiji first. Then come back here.",
+    href: "https://www.kijiji.ca/",
+    linkLabel: "Open Kijiji",
+  },
+  zumper: {
+    text: "You need a Zumper landlord account. Zumper checks your ID before you can post. If you do not have one, make it on Zumper first. Then come back here.",
+    href: "https://www.zumper.com/manage",
+    linkLabel: "Open Zumper",
+  },
+};
+
 export function siteSigninHref(channel: SiteSigninChannel): string {
   return `/dashboard/site-signin/${channel}`;
 }

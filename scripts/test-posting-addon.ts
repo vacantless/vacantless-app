@@ -13,6 +13,7 @@ import {
   planPriceIdOfItems,
   postingAddonForSubscriptionEvent,
   postingAddonOffer,
+  postingAddonPending,
 } from "../lib/billing";
 import { isRobotPostedChannel } from "../lib/posting-lanes";
 import { countWords, splitSentences } from "../lib/i18n/plain-words";
@@ -224,6 +225,19 @@ ok("no buy button when price unset (admin-only note)", billingPage.includes('add
 const home = read("app/page.tsx");
 ok("homepage names the add-on under Growth", home.includes('addon: "Add Posting for CA$49 a month. We post to Kijiji and Zumper for you."'));
 ok("homepage renders the add-on line", home.includes("{p.addon}"));
+
+// S714: no second buy button while a purchase is still landing.
+ok("pending: just added, flag not flipped yet", postingAddonPending("add", { addon: "added" }) === "switching_on");
+ok("pending: Growth+Posting checkout back, plan not flipped yet", postingAddonPending("needs_growth", { checkout: "success" }) === "switching_on");
+ok("pending: just removed, still on", postingAddonPending("on_bought", { addon: "removed" }) === "switching_off");
+ok("not pending once the add lands", postingAddonPending("on_bought", { addon: "added" }) === null);
+ok("not pending once the removal lands", postingAddonPending("add", { addon: "removed" }) === null);
+ok("not pending with no URL signal", postingAddonPending("add", {}) === null);
+ok("a cancelled checkout is not pending", postingAddonPending("needs_growth", { checkout: "cancel" }) === null);
+{
+  const page = read("app/dashboard/billing/page.tsx");
+  ok("billing page checks pending before any buy button", page.indexOf("addonPending ?") > 0 && page.indexOf("addonPending ?") < page.indexOf("Add Posting for"));
+}
 
 console.log(`\nposting-addon: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

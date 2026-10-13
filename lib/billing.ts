@@ -712,6 +712,21 @@ export function postingAddonOffer(input: {
   return "needs_growth";
 }
 
+// S714: right after a Posting purchase (or removal) the page reloads before
+// Stripe's webhook has flipped the flag, so the old button would still show
+// and invite a second click. While the URL says a change was just made and
+// the offer has not caught up, show "switching" instead of a button.
+export type PostingAddonPending = "switching_on" | "switching_off" | null;
+export function postingAddonPending(
+  offer: PostingAddonOffer,
+  params: { addon?: string | null; checkout?: string | null },
+): PostingAddonPending {
+  if (params.addon === "added" && offer === "add") return "switching_on";
+  if (params.checkout === "success" && offer === "needs_growth") return "switching_on";
+  if (params.addon === "removed" && offer === "on_bought") return "switching_off";
+  return null;
+}
+
 // The published-listing allowance for a stored plan (the Free funnel cap; null =
 // unlimited). The publish path (publishProperty) enforces this by counting the
 // org's other non-archived live listings before it makes a rental public. Unknown/missing

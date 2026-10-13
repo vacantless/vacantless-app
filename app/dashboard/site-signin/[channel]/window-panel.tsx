@@ -70,6 +70,12 @@ export function WindowPanel({
           >
             Open the sign-in window
           </a>
+          {win.expiresAt && (
+            <p className="text-xs text-gray-500">
+              The window stays open until{" "}
+              {new Date(win.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.
+            </p>
+          )}
           {password && (
             <p className="text-xs text-gray-500">
               If the window asks for a password, it is <span className="font-mono font-semibold text-gray-800">{password}</span>. It works only for this window.

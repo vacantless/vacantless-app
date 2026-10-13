@@ -10,6 +10,7 @@ import {
   siteSigninEnabled,
   siteSigninIsOpen,
   siteSigninView,
+  SITE_SIGNIN_ACCOUNT_FIRST,
   SITE_SIGNIN_LABEL,
 } from "@/lib/site-signin";
 import { startSiteSignin } from "./actions";
@@ -44,7 +45,7 @@ export default async function SiteSigninPage({
 
   const { data: latest } = await supabase
     .from("site_signin_windows")
-    .select("id, status, view_url, detail, created_at")
+    .select("id, status, view_url, detail, created_at, expires_at")
     .eq("organization_id", org.id)
     .eq("channel", channel)
     .order("created_at", { ascending: false })
@@ -97,6 +98,7 @@ export default async function SiteSigninPage({
             status: recent.status as string,
             viewUrl: (recent.view_url as string | null) ?? null,
             detail: (recent.detail as string | null) ?? null,
+            expiresAt: (recent.expires_at as string | null) ?? null,
           }}
         />
       )}
@@ -104,6 +106,19 @@ export default async function SiteSigninPage({
       {canStart && (
         <form action={startSiteSignin} className="rounded-2xl border border-gray-200 bg-white p-5">
           <input type="hidden" name="channel" value={channel} />
+          {recent?.status !== "done" && (
+            <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {SITE_SIGNIN_ACCOUNT_FIRST[channel].text}{" "}
+              <a
+                href={SITE_SIGNIN_ACCOUNT_FIRST[channel].href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline"
+              >
+                {SITE_SIGNIN_ACCOUNT_FIRST[channel].linkLabel}
+              </a>
+            </p>
+          )}
           <ul className="space-y-1.5 text-sm text-gray-700">
             <li>1. We open {name} in a secure window. It stays open for 10 minutes.</li>
             <li>2. You sign in yourself. If {name} asks you to prove you are a person, you do that too.</li>

@@ -87,6 +87,8 @@ export type SiteSigninWindowRead = {
   status: string;
   viewUrl: string | null;
   detail: string | null;
+  /** S714: set by the worker when the window turns ready (ready + 10 minutes). */
+  expiresAt?: string | null;
 } | null;
 
 /** Poll target for the window panel. RLS scopes the read to the org. */
@@ -94,7 +96,7 @@ export async function readSiteSigninWindow(id: string): Promise<SiteSigninWindow
   const supabase = createClient();
   const { data } = await supabase
     .from(TABLE)
-    .select("id, status, view_url, detail")
+    .select("id, status, view_url, detail, expires_at")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -103,6 +105,7 @@ export async function readSiteSigninWindow(id: string): Promise<SiteSigninWindow
     status: data.status as string,
     viewUrl: (data.view_url as string | null) ?? null,
     detail: (data.detail as string | null) ?? null,
+    expiresAt: (data.expires_at as string | null) ?? null,
   };
 }
 
