@@ -128,7 +128,7 @@ sourceHas(
 sourceHas(
   "app/api/cron/leasing-snapshot/route.ts",
   "leasing snapshot active listings exclude archived rows",
-  /\.select\("id, address, status, created_at"\)\s*\.eq\("organization_id", org\.id\)\s*\.eq\("status", "available"\)\s*\.is\("archived_at", null\)/,
+  /\.select\("id, address, status, created_at(?:, building_key)?"\)\s*\.eq\("organization_id", org\.id\)\s*\.eq\("status", "available"\)\s*\.is\("archived_at", null\)/,
 );
 sourceHas(
   "app/api/cron/distribution-freshness/route.ts",

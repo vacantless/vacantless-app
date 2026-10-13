@@ -46,7 +46,9 @@
       "notLinkedSubLogin": "Tell us which account you use. Then we post your ads on it.",
       "selfPost": "Ready",
       "selfPostSub": "Free. Your team posts it from your own Facebook.",
-      "postedForYouSub": "We post your {name} ads for you, and keep them running."
+      "postedForYouSub": "We post your {name} ads for you, and keep them running.",
+      "optional": "Optional",
+      "optionalSub": "Connect it to post your ads here too."
     },
     "buttons": {
       "login": "Add your {name} account",

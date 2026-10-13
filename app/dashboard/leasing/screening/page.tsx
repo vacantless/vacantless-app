@@ -101,7 +101,7 @@ export default async function ScreeningSettingsPage({
     <div>
       <BrandBanner
         eyebrow="Leasing"
-        title="Pre-screening settings"
+        title="Questions for renters"
         subtitle="Set up the qualifying questions on your inquiry form and choose which answers get a “possible mismatch” heads-up. This shapes every inquiry across all your rentals."
         icon={<Icons.users className="h-6 w-6" />}
       />

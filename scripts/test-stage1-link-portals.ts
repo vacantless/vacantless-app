@@ -104,6 +104,11 @@ eq(
   "status.notLinkedSub",
 );
 eq("not_linked tone", stage1StatusCopy("not_linked").tone, "attention");
+// S711: an unconnected Facebook Page / Instagram is optional, not a to-do.
+eq("oauth not_linked reads Optional", stage1StatusCopy("not_linked", "oauth").titleKey, "status.optional");
+eq("oauth not_linked is neutral", stage1StatusCopy("not_linked", "oauth").tone, "neutral");
+eq("account_login not_linked still Needs you", stage1StatusCopy("not_linked", "account_login").titleKey, "status.notLinked");
+eq("oauth dead session still Needs you", stage1StatusCopy("dead_session", "oauth").titleKey, "status.deadSession");
 eq(
   "not_available_yet title key",
   stage1StatusCopy("not_available_yet").titleKey,

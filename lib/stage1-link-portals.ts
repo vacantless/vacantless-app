@@ -27,7 +27,8 @@ export type Stage1StatusCopy = {
     | "status.notLinked"
     | "status.notAvailable"
     | "status.selfPost"
-    | "status.mlsOnly";
+    | "status.mlsOnly"
+    | "status.optional";
   subKey:
     | "status.linkedSub"
     | "status.linkedSubLogin"
@@ -39,7 +40,8 @@ export type Stage1StatusCopy = {
     | "status.notLinkedSubLogin"
     | "status.notAvailableSub"
     | "status.selfPostSub"
-    | "status.mlsOnlySub";
+    | "status.mlsOnlySub"
+    | "status.optionalSub";
   tone: Stage1StatusTone;
 };
 
@@ -159,6 +161,13 @@ export function stage1StatusCopy(
   connectKind?: ChannelConnectKind,
 ): Stage1StatusCopy {
   const copy = STAGE1_STATUS_COPY[state];
+  // S711 audit: a Facebook Page or Instagram that is not connected is an
+  // extra site, not a blocker. "Needs you" on it read as a to-do for every
+  // landlord who has no Page. "Needs you" stays for real blockers (a sign-in
+  // that ended, a cap reached, a post waiting for the go).
+  if (connectKind === "oauth" && state === "not_linked") {
+    return { titleKey: "status.optional", subKey: "status.optionalSub", tone: "neutral" };
+  }
   if (connectKind === "account_login") {
     if (state === "linked") return { ...copy, subKey: "status.linkedSubLogin" };
     if (state === "not_linked") return { ...copy, subKey: "status.notLinkedSubLogin" };

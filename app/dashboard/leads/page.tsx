@@ -238,7 +238,7 @@ export default async function LeadsPage({
             href="/dashboard/leasing/screening"
             className="ml-1 text-xs font-medium text-brand hover:underline"
           >
-            Manage pre-screening →
+            Questions for renters →
           </Link>
         </div>
       )}

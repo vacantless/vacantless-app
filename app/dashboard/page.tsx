@@ -707,7 +707,9 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         />
       ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {allLeads.slice(0, 8).map((l) => (
+          {/* S711 audit: Lost renters (test checks, scam holds, duplicate
+              copies) cluttered Today's list. Show only renters still in play. */}
+          {allLeads.filter((l) => l.status !== "lost").slice(0, 8).map((l) => (
             <li key={l.id}>
               <Link
                 href={`/dashboard/leads/${l.id}`}

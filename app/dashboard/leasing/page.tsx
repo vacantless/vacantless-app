@@ -154,7 +154,7 @@ export default async function LeasingHubPage() {
       // S275 IA Step 3: pre-screening relocated here from Settings — it's a
       // pipeline rule, so it lives where you work inquiries.
       href: "/dashboard/leasing/screening",
-      title: "Pre-screening",
+      title: "Questions for renters",
       desc: "Add qualifying questions to your inquiry form and auto-flag renters who likely don't fit. You always decide.",
       icon: "users",
     },

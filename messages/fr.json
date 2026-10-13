@@ -46,7 +46,9 @@
       "notLinkedSubLogin": "Dites-nous quel compte vous utilisez. Ensuite nous y publions vos annonces.",
       "selfPost": "Prêt",
       "selfPostSub": "Gratuit. Votre équipe la publie depuis votre propre Facebook.",
-      "postedForYouSub": "Nous publions vos annonces {name} pour vous et les gardons en ligne."
+      "postedForYouSub": "Nous publions vos annonces {name} pour vous et les gardons en ligne.",
+      "optional": "Facultatif",
+      "optionalSub": "Connectez-le pour publier vos annonces ici aussi."
     },
     "buttons": {
       "login": "Ajoutez votre compte {name}",
