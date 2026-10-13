@@ -73,3 +73,24 @@ export function selectChannelPublishAutofireItems(input: {
 
   return selected;
 }
+
+/**
+ * S713: the instant (API) sites this org has connected and allowed us to post
+ * to. Used to open a run for a rental that went Live before any run existed,
+ * so "Post everywhere" reaches a connected Facebook Page / Instagram.
+ */
+export function instantAutofireChannelsForAccounts(
+  accountRows: ChannelPublishAutofireAccountRow[],
+  instagramEnabled: boolean,
+  channels: readonly DistributionChannel[] = DISTRIBUTION_CHANNELS,
+): string[] {
+  const out: string[] = [];
+  for (const channel of channels) {
+    if (channel.mode !== "api_automatic") continue;
+    if (channel.key === "instagram" && !instagramEnabled) continue;
+    const account = accountRows.find((a) => a.channel === channel.key);
+    if (account?.accountStatus !== "connected" || account.automationAuthorized !== true) continue;
+    out.push(channel.key);
+  }
+  return out;
+}

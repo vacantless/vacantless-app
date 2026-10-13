@@ -598,7 +598,7 @@ export const POSTING_ADDON = {
   priceEnv: "STRIPE_PRICE_POSTING_ADDON",
   blurb: "We post your rentals to Kijiji and Zumper for you.",
   features: [
-    "We post to Kijiji, Rentals.ca and Zumper",
+    "We post to Kijiji and Zumper",
     "You approve every ad first",
     "Kijiji ad fees extra, at cost, inside your limits",
   ],

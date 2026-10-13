@@ -78,6 +78,7 @@ import {
 } from "@/lib/distribution-publish";
 import {
   selectChannelPublishAutofireItems,
+  instantAutofireChannelsForAccounts,
   type ChannelPublishAutofireAccountRow,
   type ChannelPublishAutofireRunItem,
 } from "@/lib/channel-publish-autofire";
@@ -1193,19 +1194,69 @@ async function publishAuthorizedInstantChannelsAfterPageLive({
     .eq("status", "active")
     .limit(1)
     .maybeSingle();
-  const runId = (run?.id as string | undefined) ?? null;
+  let runId = (run?.id as string | undefined) ?? null;
+
+  const { data: accountRows } = await supabase
+    .from("distribution_channel_accounts")
+    .select("channel, account_status, automation_authorized")
+    .eq("organization_id", orgId);
+
+  // S713 (found in the live proof on a non-Agile org): a rental that went Live
+  // before any posting run existed had no run, so "Post everywhere" posted
+  // nothing to a connected Facebook Page / Instagram and said nothing. Open a
+  // run and queue an item for each connected, allowed instant site first.
+  const instantKeys = instantAutofireChannelsForAccounts(
+    ((accountRows ?? []) as Array<{
+      channel: string | null;
+      account_status: string | null;
+      automation_authorized: boolean | null;
+    }>).map((a) => ({
+      channel: a.channel,
+      accountStatus: a.account_status,
+      automationAuthorized: a.automation_authorized,
+    })),
+    igChannelEnabledForOrg(orgId),
+  );
+  if (instantKeys.length > 0) {
+    if (!runId) {
+      const { data: created } = await supabase
+        .from("distribution_runs")
+        .insert({ organization_id: orgId, property_id: propertyId, status: "active" })
+        .select("id")
+        .single();
+      runId = (created?.id as string | undefined) ?? null;
+    }
+    if (runId) {
+      const { data: existingItems } = await supabase
+        .from("distribution_run_items")
+        .select("channel")
+        .eq("run_id", runId);
+      const have = new Set(
+        ((existingItems ?? []) as Array<{ channel: string | null }>).map((r) => r.channel),
+      );
+      const nowISO = new Date().toISOString();
+      const missing = instantKeys.filter((k) => !have.has(k));
+      if (missing.length > 0) {
+        await supabase.from("distribution_run_items").insert(
+          missing.map((channel) => ({
+            organization_id: orgId,
+            run_id: runId,
+            channel,
+            status: "pending",
+            publish_status: "queued",
+            mode: "automatic",
+            updated_at: nowISO,
+          })),
+        );
+      }
+    }
+  }
   if (!runId) return;
 
-  const [{ data: itemRows }, { data: accountRows }] = await Promise.all([
-    supabase
-      .from("distribution_run_items")
-      .select("id, channel, mode, publish_status")
-      .eq("run_id", runId),
-    supabase
-      .from("distribution_channel_accounts")
-      .select("channel, account_status, automation_authorized")
-      .eq("organization_id", orgId),
-  ]);
+  const { data: itemRows } = await supabase
+    .from("distribution_run_items")
+    .select("id, channel, mode, publish_status")
+    .eq("run_id", runId);
   const selected = selectChannelPublishAutofireItems({
     runItems: ((itemRows ?? []) as Array<{
       id: string;
