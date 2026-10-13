@@ -171,6 +171,14 @@ function ConnectTile({
             {row.button.label}
           </ButtonLink>
         )}
+        {row.addonNote && (
+          <p className="text-[length:var(--vl-type-guided-body)] leading-relaxed text-[var(--vl-text-primary)]">
+            {row.addonNote.text}{" "}
+            <a href={row.addonNote.href} className="font-semibold text-brand underline">
+              {row.addonNote.linkLabel}
+            </a>
+          </p>
+        )}
         {row.igNote && (
           <p className="text-base leading-relaxed text-[var(--vl-text-muted)]">
             {row.igNote}

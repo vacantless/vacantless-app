@@ -159,9 +159,10 @@ function Eyebrow({ children }: { children: ReactNode }) {
 
 /* S702: the site sells the leasing funnel only (Noam's go-to-market call,
    2026-10-05; price CA$99 a month flat, 2026-10-09). Everything on this page
-   was walked on prod by a brand-new org on 2026-10-08. Rent collection,
-   expenses and posting to rental sites for you come later as upgrades and are
-   not sold here. */
+   was walked on prod by a brand-new org on 2026-10-08. Rent collection and
+   expenses come later as upgrades and are not sold here. S713 (2026-10-13):
+   posting to Kijiji, Rentals.ca and Zumper for you is the CA$49 Posting
+   add-on on top of Growth, named once under the Growth card. */
 function Hero() {
   return (
     <section className="relative isolate border-b border-[#d9e1dc] bg-gradient-to-b from-white to-[#edf5f0]/90">
@@ -503,6 +504,11 @@ function Pricing() {
                   </li>
                 ))}
               </ul>
+              {p.addon ? (
+                <p className="mb-5 rounded-md bg-[#f4f7f5] px-3 py-2 text-[0.84rem] leading-snug text-[#273832]">
+                  {p.addon}
+                </p>
+              ) : null}
               {p.featured ? (
                 <PrimaryButton href={p.href}>{p.cta}</PrimaryButton>
               ) : (
@@ -536,6 +542,8 @@ const PLANS: {
   priceNote?: string;
   body: string;
   includes: string[];
+  /** S713: an optional paid add-on line under the plan's list. */
+  addon?: string;
   cta: string;
   href: string;
   featured?: boolean;
@@ -565,6 +573,7 @@ const PLANS: {
       "Everything in Free",
       "Help from us when you need it",
     ],
+    addon: "Add Posting for CA$49 a month. We post to Kijiji and Zumper for you.",
     cta: "Choose Growth",
     href: "/signup?plan=growth",
     featured: true,

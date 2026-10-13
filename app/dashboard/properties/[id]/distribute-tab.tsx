@@ -292,6 +292,7 @@ export function DistributeTab({
   wizardEnabled,
   shownChannelKeys = null,
   marketplaceKit = null,
+  robotPostingAllowed = false,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -316,6 +317,8 @@ export function DistributeTab({
   shownChannelKeys?: readonly string[] | null;
   /** S712: Facebook Marketplace kit, passed straight through to PublishEverywhere. */
   marketplaceKit?: MarketplaceKitData | null;
+  /** S713: the Posting add-on gate (canUseRobotPosting), passed through. */
+  robotPostingAllowed?: boolean;
 }) {
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
@@ -402,6 +405,7 @@ export function DistributeTab({
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
         marketplaceKit={marketplaceKit}
+        robotPostingAllowed={robotPostingAllowed}
       />
     </div>
   );

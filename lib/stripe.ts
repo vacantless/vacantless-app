@@ -13,6 +13,9 @@
 //   STRIPE_PRICE_GROWTH    — the Stripe price id for the Growth tier ($99/mo CAD)
 //   STRIPE_PRICE_PREMIUM   — the Stripe price id for the Premium tier ($249/mo CAD)
 //   STRIPE_PRICE_MANAGED   — the Stripe price id for the Managed tier ($399/mo CAD)
+//   STRIPE_PRICE_POSTING_ADDON — (optional) the Stripe price id for the Posting
+//                            add-on (CA$49/mo CAD, monthly recurring). Unset =
+//                            no Posting buy button anywhere (no fake feature).
 //   STRIPE_PRICE_CONCIERGE_PACK — (optional) a one-time Price for the $49
 //                            concierge 3-pack. If unset, pack Checkout falls
 //                            back to an inline price built in the server action.
@@ -24,7 +27,7 @@
 //                            amount/currency in the Stripe dashboard instead.
 
 import Stripe from "stripe";
-import { TIERS, PAID_PLAN_KEYS, type PaidPlanKey } from "@/lib/billing";
+import { TIERS, PAID_PLAN_KEYS, POSTING_ADDON, type PaidPlanKey } from "@/lib/billing";
 
 let _stripe: Stripe | null | undefined;
 
@@ -73,4 +76,11 @@ export function depositPriceId(): string | null {
 // inline fallback, so it needs no dedicated Price env var.
 export function isDepositConfigured(): boolean {
   return !!getStripe();
+}
+
+// The Posting add-on price id (CA$49/mo recurring), or null when unset. Kept
+// OUT of priceMap() on purpose: it is not a plan, so the webhook must never
+// read it as one. Null = the billing page shows no Posting buy button.
+export function postingAddonPriceId(): string | null {
+  return process.env[POSTING_ADDON.priceEnv] || null;
 }

@@ -15,6 +15,7 @@ import {
   siteSigninIsOpen,
 } from "@/lib/site-signin";
 import { triggerSigninWindow } from "@/lib/site-signin-dispatch";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
 const TABLE = "site_signin_windows";
@@ -44,6 +45,10 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
   const who = await allowed();
   if (!who) redirect("/dashboard/link-portals");
   if (isHiddenForOrg(channel, who.orgId)) redirect("/dashboard/link-portals");
+  // S713: signing in is for robot posting, which is the paid Posting add-on.
+  // No window (and no worker run) without it.
+  const access = await readRobotPostingAccess(createClient(), who.orgId);
+  if (!access.allowed) redirect(`${siteSigninHref(channel)}?err=addon`);
 
   const admin = createAdminClient();
   if (!admin) redirect(`${siteSigninHref(channel)}?err=config`);

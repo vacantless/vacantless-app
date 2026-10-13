@@ -582,6 +582,136 @@ export function isTierPurchasable(tier: TierInfo): boolean {
   return tier.priceCents > 0 && tier.priceEnv != null;
 }
 
+// --- Posting add-on (Noam, 2026-10-13) -------------------------------------
+// CA$49 a month on top of a paid plan (Growth or better). It covers our robot
+// posting to Kijiji, Rentals.ca and Zumper (lib/posting-lanes
+// ROBOT_POSTED_CHANNELS). Kijiji's own ad fees pass through at cost, inside the
+// landlord's per-ad and monthly limits (lib/spend-cap.ts). The Facebook
+// Marketplace kit and the Facebook Page / Instagram connections stay in every
+// plan. Sold as a second Stripe subscription item (price env
+// STRIPE_PRICE_POSTING_ADDON). The webhook mirrors it onto
+// organizations.posting_addon_active (migration 0244).
+export const POSTING_ADDON = {
+  key: "posting" as const,
+  name: "Posting",
+  priceCents: 4900,
+  priceEnv: "STRIPE_PRICE_POSTING_ADDON",
+  blurb: "We post your rentals to Kijiji and Zumper for you.",
+  features: [
+    "We post to Kijiji, Rentals.ca and Zumper",
+    "You approve every ad first",
+    "Kijiji ad fees extra, at cost, inside your limits",
+  ],
+};
+
+export type RobotPostingOrg = {
+  plan: string | null | undefined;
+  posting_addon_active?: boolean | null;
+};
+
+// THE robot-posting gate. A live paid plan (Growth, Premium or Managed) AND the
+// Posting add-on. Every server path that queues, approves or claims a robot post
+// for Kijiji / Rentals.ca / Zumper funnels through here (or its SQL twin in the
+// worker claim RPC, migration 0244). Free, trial, pilot and a lapsed paid org
+// (the webhook drops it to free) never pass, even with the flag left on.
+export function canUseRobotPosting(org: RobotPostingOrg | null | undefined): boolean {
+  if (!org) return false;
+  return isPaidPlan(org.plan) && org.posting_addon_active === true;
+}
+
+// The landlord line shown on a robot site instead of its post / sign-in button.
+export const POSTING_ADDON_NOTE = "Part of the Posting add-on. $49 a month.";
+export const POSTING_ADDON_HREF = "/dashboard/billing#posting-addon";
+
+// Find the subscription item that carries a given price, or null.
+export type SubscriptionItemShape = {
+  id?: string | null;
+  price?: { id?: string | null } | null;
+};
+export function itemForPrice(
+  items: readonly SubscriptionItemShape[] | null | undefined,
+  priceId: string | null | undefined,
+): SubscriptionItemShape | null {
+  if (!priceId || !items) return null;
+  return items.find((it) => it?.price?.id === priceId) ?? null;
+}
+
+// The plan price among a subscription's items. Before the add-on a sub had one
+// item, so items[0] was the plan. With the add-on the order is not promised,
+// so pick the first item whose price maps to a plan. One item = same answer.
+export function planPriceIdOfItems(
+  items: readonly SubscriptionItemShape[] | null | undefined,
+  map: Record<string, PaidPlanKey>,
+): string | null {
+  if (!items || items.length === 0) return null;
+  const hit = items.find((it) => {
+    const id = it?.price?.id;
+    return !!id && Object.prototype.hasOwnProperty.call(map, id);
+  });
+  return hit?.price?.id ?? items[0]?.price?.id ?? null;
+}
+
+// What the webhook should write for the Posting add-on, or null to leave the
+// org's add-on columns as they are.
+//   - add-on price not configured -> null (we cannot recognise the item).
+//   - stale event (statusApplies false) -> null.
+//   - sub deleted, or no granting add-on item -> off, BUT only when we were
+//     tracking a bought add-on item (existingItemId set). A grandfathered org
+//     (flag on, no item id; Agile in migration 0244) is never switched off by
+//     its plain Growth subscription's events. The plan gate still applies.
+//   - the add-on item is on a sub whose status grants a plan -> on + its id.
+export function postingAddonForSubscriptionEvent(input: {
+  addonPriceId: string | null | undefined;
+  items: readonly SubscriptionItemShape[] | null | undefined;
+  status: string | null | undefined;
+  statusApplies: boolean;
+  ended: boolean;
+  existingItemId: string | null | undefined;
+}): { active: boolean; itemId: string | null } | null {
+  if (!input.addonPriceId) return null;
+  if (!input.ended && !input.statusApplies) return null;
+  const item = input.ended ? null : itemForPrice(input.items, input.addonPriceId);
+  if (item?.id && subscriptionGrantsPlan(input.status)) {
+    return { active: true, itemId: item.id };
+  }
+  if (input.existingItemId) return { active: false, itemId: null };
+  return null;
+}
+
+// What the billing page's Posting card should offer.
+//   unavailable  add-on price not set: no buy button (admins see "Coming soon")
+//   on_bought    on, paid as a subscription item (can be removed)
+//   on_included  on with no item (grandfathered): nothing to buy or remove
+//   add          paid plan with a live subscription: add it to that sub
+//   needs_growth anyone else: Growth + Posting together at checkout
+export type PostingAddonOffer =
+  | "unavailable"
+  | "on_bought"
+  | "on_included"
+  | "add"
+  | "needs_growth";
+export function postingAddonOffer(input: {
+  priceConfigured: boolean;
+  plan: string | null | undefined;
+  addonActive: boolean | null | undefined;
+  addonItemId: string | null | undefined;
+  hasSubscription: boolean;
+  subscriptionStatus: string | null | undefined;
+}): PostingAddonOffer {
+  const on = canUseRobotPosting({ plan: input.plan, posting_addon_active: input.addonActive });
+  if (on && input.addonItemId) return "on_bought";
+  if (on) return "on_included";
+  if (!input.priceConfigured) return "unavailable";
+  if (
+    isPaidPlan(input.plan) &&
+    input.hasSubscription &&
+    subscriptionGrantsPlan(input.subscriptionStatus)
+  ) {
+    return "add";
+  }
+  return "needs_growth";
+}
+
 // The published-listing allowance for a stored plan (the Free funnel cap; null =
 // unlimited). The publish path (publishProperty) enforces this by counting the
 // org's other non-archived live listings before it makes a rental public. Unknown/missing

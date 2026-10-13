@@ -14,6 +14,8 @@
 // a read of another org's row returns null and the action stops.
 
 import { triggerPostNow } from "@/lib/post-now";
+import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -401,6 +403,15 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
   const pendingItem = pending as
     | { id: string; publish_status: string | null; channel: string | null }
     | null;
+  // S713: approving a robot post (Kijiji, Rentals.ca, Zumper) needs the
+  // Posting add-on. Checked before anything is approved or the robot is woken.
+  if (pendingItem?.channel && isRobotPostedChannel(pendingItem.channel)) {
+    const access = await readRobotPostingAccess(supabase, org.id);
+    if (!access.allowed) {
+      if (propertyId) backTo(propertyId, "posting_addon", pendingItem.channel);
+      redirect("/dashboard/billing#posting-addon");
+    }
+  }
   if (pendingItem?.publish_status === "needs_payment") {
     const { data: spendAccount } = await supabase
       .from("distribution_channel_accounts")

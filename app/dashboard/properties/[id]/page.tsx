@@ -88,7 +88,9 @@ import {
   canUseMarketRent,
   conciergeMonthlyCap,
   conciergeUsedLeaseUps,
+  POSTING_ADDON_NOTE,
 } from "@/lib/billing";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { WaitlistCard, type WaitlistEntryView } from "./waitlist-card";
 import { matchesVacancy } from "@/lib/waitlist";
 import { CopyLink } from "./copy-link";
@@ -1051,6 +1053,9 @@ export default async function PropertyDetailPage({
   // line that does not invite bookings.
   const org = await getCurrentOrg();
   const showPostLease = org ? await orgShowsPostLease(supabase, org.id) : true;
+  // S713: Kijiji, Rentals.ca and Zumper are the paid Posting add-on. Without
+  // it their rows show the add-on note instead of a post or sign-in button.
+  const robotPostingAccess = await readRobotPostingAccess(supabase, org?.id);
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
@@ -2234,7 +2239,14 @@ export default async function PropertyDetailPage({
     ),
   });
   const distributeRunNotice: DistributeRunNotice | null =
-    (searchParams.dist === "channel_auto_on"
+    // S713: a robot site was asked for without the Posting add-on.
+    (searchParams.run === "postingaddon" || searchParams.dist === "posting_addon"
+      ? {
+          tone: "warning",
+          title: POSTING_ADDON_NOTE,
+          body: "We post to Kijiji and Zumper for you. Add it on the Billing page.",
+        }
+      : searchParams.dist === "channel_auto_on"
       ? {
           tone: "success",
           title: "Auto-posting authorized.",
@@ -4302,6 +4314,7 @@ export default async function PropertyDetailPage({
           wizardEnabled={distributionWizardEnabled()}
           shownChannelKeys={shownChannelKeys}
           marketplaceKit={marketplaceKit}
+          robotPostingAllowed={robotPostingAccess.allowed}
         />
       </TabPanel>
 

@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
-import { getStripe, priceMap } from "@/lib/stripe";
+import { getStripe, postingAddonPriceId, priceMap } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   planForPriceId,
   planForSubscriptionEvent,
+  planPriceIdOfItems,
+  postingAddonForSubscriptionEvent,
   subscriptionPeriodEndSeconds,
   shouldApplyStatus,
   shouldEnableSmsOnPlanChange,
@@ -37,6 +39,56 @@ export const runtime = "nodejs"; // Stripe signature verification needs Node cry
 
 function customerIdOf(sub: Stripe.Subscription): string | null {
   return typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null;
+}
+
+// S713: the Posting add-on columns (migration 0244), read on their own. If the
+// read fails (0244 not applied yet) we skip the add-on write and leave the
+// plan logic untouched, so a missing column can never break Growth billing.
+async function readAddonItemId(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  orgId: string,
+): Promise<{ ok: boolean; itemId: string | null }> {
+  const { data, error } = await admin
+    .from("organizations")
+    .select("posting_addon_subscription_item_id")
+    .eq("id", orgId)
+    .maybeSingle();
+  if (error) return { ok: false, itemId: null };
+  return {
+    ok: true,
+    itemId:
+      ((data as { posting_addon_subscription_item_id?: string | null } | null)
+        ?.posting_addon_subscription_item_id as string | null | undefined) ?? null,
+  };
+}
+
+async function applyPostingAddon(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  orgId: string,
+  sub: Stripe.Subscription,
+  opts: { ended: boolean; statusApplies: boolean },
+): Promise<{ active: boolean; itemId: string | null } | null> {
+  const addonPriceId = postingAddonPriceId();
+  if (!addonPriceId) return null;
+  const existing = await readAddonItemId(admin, orgId);
+  if (!existing.ok) return null;
+  const next = postingAddonForSubscriptionEvent({
+    addonPriceId,
+    items: (sub.items?.data ?? []).map((it) => ({ id: it.id, price: { id: it.price?.id ?? null } })),
+    status: sub.status,
+    statusApplies: opts.statusApplies,
+    ended: opts.ended,
+    existingItemId: existing.itemId,
+  });
+  if (!next) return null;
+  await admin
+    .from("organizations")
+    .update({
+      posting_addon_active: next.active,
+      posting_addon_subscription_item_id: next.itemId,
+    })
+    .eq("id", orgId);
+  return next;
 }
 
 // Apply a subscription's state to its org. `ended` is the cancellation path
@@ -73,6 +125,7 @@ async function applySubscription(
         current_period_end: null,
       })
       .eq("id", orgId);
+    await applyPostingAddon(admin, orgId, sub, { ended: true, statusApplies: true });
     return { matched: true as const, orgId, plan: "free" };
   }
 
@@ -95,8 +148,14 @@ async function applySubscription(
     sameSubscription,
   );
 
-  const priceId = sub.items?.data?.[0]?.price?.id ?? null;
-  const tier = planForPriceId(priceId, priceMap());
+  // S713: with the Posting add-on a sub has two items, in no promised order,
+  // so take the item whose price is a plan (one item = the same as before).
+  const plans = priceMap();
+  const priceId = planPriceIdOfItems(
+    (sub.items?.data ?? []).map((it) => ({ id: it.id, price: { id: it.price?.id ?? null } })),
+    plans,
+  );
+  const tier = planForPriceId(priceId, plans);
   // stripe v17 types lag the dahlia runtime, where current_period_end moved onto
   // the subscription item; cast so we can read it without fighting stale types.
   const periodEndSec = subscriptionPeriodEndSeconds(
@@ -138,7 +197,15 @@ async function applySubscription(
   }
 
   await admin.from("organizations").update(update).eq("id", orgId);
-  return { matched: true as const, orgId, plan: nextPlan ?? "(unchanged)" };
+  // S713: mirror the Posting add-on item onto the org (on iff the item is on a
+  // sub whose status grants a plan). Separate write; never touches the plan.
+  const addon = await applyPostingAddon(admin, orgId, sub, { ended: false, statusApplies });
+  return {
+    matched: true as const,
+    orgId,
+    plan: nextPlan ?? "(unchanged)",
+    postingAddon: addon ? addon.active : "(unchanged)",
+  };
 }
 
 // Record a paid pilot deposit on its org (one-time payment Checkout).

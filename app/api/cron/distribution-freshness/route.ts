@@ -1,3 +1,5 @@
+import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
@@ -1380,9 +1382,28 @@ async function executeRelistRadarFreeRefreshes({
     loadRelistRadarProperties(admin, events.map((event) => event.property_id)),
     loadRelistRadarChannelAccounts(admin, events),
   ]);
+  // S713: a robot refresh is part of the Posting add-on. One read per org.
+  const robotAccessByOrg = new Map<string, boolean>();
 
   for (const event of events) {
     try {
+      if (isRobotPostedChannel(event.channel)) {
+        let allowed = robotAccessByOrg.get(event.organization_id);
+        if (allowed === undefined) {
+          allowed = (await readRobotPostingAccess(admin, event.organization_id)).allowed;
+          robotAccessByOrg.set(event.organization_id, allowed);
+        }
+        if (!allowed) {
+          summary.skipped++;
+          pushDetail(summary, {
+            relist_radar_execute: "skipped",
+            event: event.id,
+            item: event.run_item_id,
+            reason: "posting_addon_required",
+          });
+          continue;
+        }
+      }
       const metadata = radarMetadata(event.metadata);
       const property = properties.get(event.property_id) ?? null;
       const account =

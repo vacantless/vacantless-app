@@ -102,6 +102,10 @@
       "yes": "Yes, forget it",
       "cancel": "Keep it",
       "error": "Something went wrong. Try again."
+    },
+    "addon": {
+      "note": "Part of the Posting add-on. $49 a month.",
+      "link": "See Billing"
     }
   },
   "stage2": {

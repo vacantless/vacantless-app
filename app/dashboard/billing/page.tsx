@@ -8,13 +8,25 @@ import {
   formatAmount,
   buildBillingView,
   overListingCapNotice,
+  POSTING_ADDON,
+  postingAddonOffer,
 } from "@/lib/billing";
-import { isBillingConfigured, isDepositConfigured } from "@/lib/stripe";
+import {
+  isBillingConfigured,
+  isDepositConfigured,
+  postingAddonPriceId,
+  priceIdForPlan,
+} from "@/lib/stripe";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { adminEmails } from "@/lib/provisioning-server";
+import { isAdminEmail } from "@/lib/provisioning";
 import {
   startCheckout,
   openBillingPortal,
   startPilot,
   startDepositCheckout,
+  addPostingAddon,
+  removePostingAddon,
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -30,6 +42,7 @@ export default async function BillingPage({
     pilot?: string;
     deposit?: string;
     plan?: string;
+    addon?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -61,6 +74,30 @@ export default async function BillingPage({
     .eq("status", "available")
     .is("archived_at", null);
   const overCapNotice = overListingCapNotice(org.plan, liveRentalCount ?? 0);
+
+  // S713: the Posting add-on card. No price id = no buy button (no fake
+  // feature); our own team sees a "Coming soon" note instead.
+  const supabaseForAddon = createClient();
+  const [addonAccess, { data: { user: viewer } }] = await Promise.all([
+    readRobotPostingAccess(supabaseForAddon, org.id),
+    supabaseForAddon.auth.getUser(),
+  ]);
+  const viewerIsAdmin = isAdminEmail(viewer?.email ?? null, adminEmails());
+  const addonOffer = postingAddonOffer({
+    priceConfigured: Boolean(postingAddonPriceId()) && isBillingConfigured(),
+    plan: org.plan,
+    addonActive: addonAccess.addonActive,
+    addonItemId: addonAccess.addonItemId,
+    hasSubscription: Boolean(org.stripe_subscription_id),
+    subscriptionStatus: org.subscription_status,
+  });
+  const growthPriceSet = Boolean(priceIdForPlan("growth"));
+  const addonNotice: Record<string, string> = {
+    added: "Posting is switching on. Refresh in a few seconds.",
+    removed: "Posting is switching off. You get a credit for the unused days.",
+    already: "Posting is already on.",
+    none: "There is no Posting add-on to remove.",
+  };
 
   const configured = isBillingConfigured();
   const depositConfigured = isDepositConfigured();
@@ -107,6 +144,10 @@ export default async function BillingPage({
     deposit: "Couldn't start the deposit payment. Please try again.",
     deposit_not_pilot:
       "The setup deposit is part of the pilot. Start your pilot first.",
+    addon_not_configured: "The Posting add-on is not on sale yet.",
+    addon_needs_growth:
+      "Posting needs Growth. Choose Growth with Posting below.",
+    addon: "We could not change Posting. Please try again.",
   };
 
   // Whether to show the standalone pilot offer (only for a fresh trial org that
@@ -165,6 +206,11 @@ export default async function BillingPage({
       {deposit === "already" && (
         <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
           Your setup deposit is already paid. Nothing more to do.
+        </div>
+      )}
+      {searchParams.addon && addonNotice[searchParams.addon] && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {addonNotice[searchParams.addon]}
         </div>
       )}
       {error && (
@@ -497,6 +543,95 @@ export default async function BillingPage({
           );
         })}
       </div>
+
+      {/* S713: the Posting add-on (CA$49 a month on top of Growth). */}
+      {addonOffer === "unavailable" ? (
+        viewerIsAdmin ? (
+          <div
+            id="posting-addon"
+            className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-600"
+          >
+            <p className="font-semibold text-gray-800">
+              {POSTING_ADDON.name} add-on: coming soon
+            </p>
+            <p className="mt-1">
+              Only our team sees this. Set {POSTING_ADDON.priceEnv} in Vercel
+              to put it on sale.
+            </p>
+          </div>
+        ) : null
+      ) : (
+        <div
+          id="posting-addon"
+          className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-lg font-bold text-gray-900">
+              {POSTING_ADDON.name} add-on
+            </h3>
+            <p className="text-xl font-bold text-gray-900">
+              {formatPlanPrice(POSTING_ADDON.priceCents)}
+            </p>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">{POSTING_ADDON.blurb}</p>
+          <ul className="mt-4 space-y-2 text-sm text-gray-700">
+            {POSTING_ADDON.features.map((f) => (
+              <li key={f} className="flex items-start gap-2">
+                <span className="mt-0.5 text-brand">✓</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-gray-500">
+            The Facebook Marketplace kit and your Facebook Page and Instagram
+            stay free with every account.
+          </p>
+          <div className="mt-5">
+            {addonOffer === "on_bought" ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                  Posting is on
+                </span>
+                <form action={removePostingAddon}>
+                  <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Remove Posting
+                  </button>
+                </form>
+              </div>
+            ) : addonOffer === "on_included" ? (
+              <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                Posting is on. It is included for your account.
+              </span>
+            ) : addonOffer === "add" ? (
+              <form action={addPostingAddon}>
+                <button className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white sm:w-auto sm:px-8">
+                  Add Posting for {formatAmount(POSTING_ADDON.priceCents)} a month
+                </button>
+                <p className="mt-2 text-xs text-gray-400">
+                  It goes on your next bill, charged only for the days left
+                  this month.
+                </p>
+              </form>
+            ) : (
+              <form action={startCheckout}>
+                <input type="hidden" name="plan" value="growth" />
+                <input type="hidden" name="with_posting" value="1" />
+                <p className="mb-3 text-sm text-gray-700">
+                  Posting needs Growth. Get both in one checkout.
+                </p>
+                <button
+                  disabled={!growthPriceSet}
+                  className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-8"
+                >
+                  Get Growth with Posting (
+                  {formatAmount(TIERS.growth.priceCents + POSTING_ADDON.priceCents)} a
+                  month)
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
         <p>

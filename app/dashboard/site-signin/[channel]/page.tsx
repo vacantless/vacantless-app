@@ -13,6 +13,8 @@ import {
   SITE_SIGNIN_LABEL,
 } from "@/lib/site-signin";
 import { startSiteSignin } from "./actions";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { POSTING_ADDON_HREF, POSTING_ADDON_NOTE } from "@/lib/billing";
 import { WindowPanel } from "./window-panel";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +58,10 @@ export default async function SiteSigninPage({
   const intro = siteSigninView(channel, null);
   // S705: a finished window can always be redone (sign in again, or a
   // different account). Only an open window blocks a new one.
-  const canStart = !recent || !siteSigninIsOpen(recent.status as string);
+  // S713: no Posting add-on = no sign-in form, just the add-on note.
+  const access = await readRobotPostingAccess(supabase, org.id);
+  const canStart =
+    access.allowed && (!recent || !siteSigninIsOpen(recent.status as string));
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-6">
@@ -74,7 +79,17 @@ export default async function SiteSigninPage({
         </p>
       )}
 
-      {recent && (
+      {!access.allowed && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-700">
+          <p className="font-semibold text-gray-900">{POSTING_ADDON_NOTE}</p>
+          <p className="mt-1">We sign in and post to {name} for you with it.</p>
+          <Link href={POSTING_ADDON_HREF} className="mt-3 inline-block font-semibold text-brand">
+            See Billing &rarr;
+          </Link>
+        </div>
+      )}
+
+      {access.allowed && recent && (
         <WindowPanel
           channel={channel}
           initial={{

@@ -1,4 +1,7 @@
-import { isHiddenForOrg, RENTALS_CA_CHANNEL_KEY } from "@/lib/posting-lanes";
+import { isHiddenForOrg, isRobotPostedChannel, RENTALS_CA_CHANNEL_KEY } from "@/lib/posting-lanes";
+import { POSTING_ADDON_HREF } from "@/lib/billing";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { createClient } from "@/lib/supabase/server";
 import { isSiteSigninChannel, siteSigninHref, siteSigninLinksOn } from "@/lib/site-signin";
 import { getFormatter, getTranslations } from "next-intl/server";
 import {
@@ -58,6 +61,11 @@ export type LinkPortalTileVM = {
     business: string;
     save: string;
   } | null;
+  /**
+   * S713: a robot site (Kijiji, Rentals.ca, Zumper) for an org without the
+   * Posting add-on. Shown instead of the sign-in button.
+   */
+  addonNote: { text: string; linkLabel: string; href: string } | null;
   /** S709: "Forget this sign-in" on a robot site with a saved sign-in. */
   forget: {
     button: string;
@@ -90,10 +98,11 @@ export async function buildLinkPortalsViewModel(
   orgId: string,
   locale: string,
 ): Promise<LinkPortalsVM> {
-  const [rows, t, format] = await Promise.all([
+  const [rows, t, format, robotAccess] = await Promise.all([
     listChannelTileStatuses(orgId),
     getTranslations("stage1"),
     getFormatter(),
+    readRobotPostingAccess(createClient(), orgId),
   ]);
   const now = new Date();
   const probeEnabled = linkPortalsProbeEnabled();
@@ -107,6 +116,10 @@ export async function buildLinkPortalsViewModel(
     if (isHiddenForOrg(row.channel, orgId)) return null;
 
     const copy = stage1StatusCopy(row.state, channel.connectKind);
+    const addonNote =
+      !robotAccess.allowed && isRobotPostedChannel(row.channel)
+        ? { text: t("addon.note"), linkLabel: t("addon.link"), href: POSTING_ADDON_HREF }
+        : null;
     const label = row.accountLabel ?? channel.label;
     const reason = t(`reason.${stage1ReasonKey(row)}`);
     const capCost = row.costCap;
@@ -120,7 +133,10 @@ export async function buildLinkPortalsViewModel(
         : stage1ConnectHref(row.channel, channel.connectKind);
     const buttonKey = stage1ConnectButtonKey(channel.connectKind);
     let button: LinkPortalTileButton | null = null;
-    if (row.state === "dead_session" && showConnect && connectHref) {
+    if (addonNote) {
+      // S713: no sign-in button without the Posting add-on.
+      button = null;
+    } else if (row.state === "dead_session" && showConnect && connectHref) {
       button = {
         kind: "reconnect",
         href: connectHref,
@@ -238,6 +254,7 @@ export async function buildLinkPortalsViewModel(
         lastCheckedAt: row.lastCheckedAt,
         kijijiTier: null,
         forget: null,
+        addonNote,
       };
     }
 
@@ -260,6 +277,7 @@ export async function buildLinkPortalsViewModel(
       lastCheckedAt: row.lastCheckedAt,
       kijijiTier,
       forget,
+      addonNote,
     };
   };
 

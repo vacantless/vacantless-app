@@ -1,6 +1,8 @@
 "use server";
 
 import { triggerPostNow } from "@/lib/post-now";
+import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -394,6 +396,15 @@ export async function approveConciergeSubmit(formData: FormData) {
     .select("id, organization_id, channel")
     .eq("id", itemId)
     .maybeSingle();
+  // S713: the desk cannot approve a robot post for an org without the
+  // Posting add-on (the worker claim RPC would refuse it anyway).
+  if (
+    capItem?.channel &&
+    isRobotPostedChannel(capItem.channel as string) &&
+    !(await readRobotPostingAccess(admin, capItem.organization_id as string)).allowed
+  ) {
+    redirect(`${DESK}?err=posting_addon`);
+  }
   if (capItem?.organization_id && capItem.channel) {
     const capOrg = capItem.organization_id as string;
     const capChannel = capItem.channel as string;

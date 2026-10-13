@@ -77,6 +77,11 @@ class FakeQuery {
     return Promise.resolve({ data: rows, error: null });
   }
 
+  maybeSingle() {
+    const row = this.matchRows()[0];
+    return Promise.resolve({ data: row ? this.project(row) : null, error: null });
+  }
+
   limit(n: number) {
     return Promise.resolve({
       data: this.matchRows()
@@ -216,6 +221,7 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
         return {
           getStripe: () => stripe,
           priceMap: () => ({ price_growth: "growth", price_premium: "premium" }),
+          postingAddonPriceId: () => process.env.STRIPE_PRICE_POSTING_ADDON || null,
         };
       }
       if (id === "@/lib/supabase/admin") {
@@ -455,7 +461,126 @@ async function runS712() {
   }
 }
 
-run().then(runS712).then(() => {
+// S713: the Posting add-on rides on the Growth subscription as a 2nd item.
+function subWithItems(
+  id: string,
+  orgId: string,
+  items: Array<{ id: string; price: string }>,
+  status = "active",
+) {
+  return {
+    id,
+    status,
+    customer: "cus_123",
+    metadata: { org_id: orgId },
+    items: {
+      data: items.map((it) => ({ id: it.id, price: { id: it.price }, current_period_end: 1784137920 })),
+    },
+  };
+}
+
+async function runS713() {
+  process.env.STRIPE_PRICE_POSTING_ADDON = "price_addon";
+  // Checkout with Growth + Posting, add-on item listed FIRST.
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_both", plan: "free", subscription_status: null, stripe_subscription_id: null, posting_addon_active: false, posting_addon_subscription_item_id: null },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.created",
+        data: {
+          object: subWithItems("sub_both", "org_both", [
+            { id: "si_addon", price: "price_addon" },
+            { id: "si_growth", price: "price_growth" },
+          ]),
+        },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_both");
+    ok("S713: Growth is found even when the add-on item is first", org?.plan === "growth");
+    ok(
+      "S713: active sub with the add-on item turns Posting on and stores the item",
+      org?.posting_addon_active === true && org?.posting_addon_subscription_item_id === "si_addon",
+    );
+  }
+  // Item removed -> off.
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_rm", plan: "growth", subscription_status: "active", stripe_subscription_id: "sub_rm", posting_addon_active: true, posting_addon_subscription_item_id: "si_addon" },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.updated",
+        data: { object: subWithItems("sub_rm", "org_rm", [{ id: "si_growth", price: "price_growth" }]) },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_rm");
+    ok(
+      "S713: removing the add-on item turns Posting off, Growth stays",
+      org?.posting_addon_active === false && org?.posting_addon_subscription_item_id === null && org?.plan === "growth",
+    );
+  }
+  // Grandfathered (Agile): flag on, no item. A plain Growth renewal leaves it on.
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_gf", plan: "growth", subscription_status: "active", stripe_subscription_id: "sub_gf", posting_addon_active: true, posting_addon_subscription_item_id: null },
+    ]);
+    await postEvent(
+      {
+        type: "invoice.paid",
+        data: { object: { id: "in_gf", subscription: "sub_gf" } },
+      },
+      admin,
+      { sub_gf: subWithItems("sub_gf", "org_gf", [{ id: "si_growth", price: "price_growth" }]) },
+    );
+    const org = db.organizations.get("org_gf");
+    ok("S713: grandfathered Posting survives a Growth renewal", org?.posting_addon_active === true && org?.plan === "growth");
+  }
+  // Deleted sub with a bought add-on -> off.
+  {
+    const { admin, db } = createFakeAdmin([
+      { id: "org_del", plan: "growth", subscription_status: "active", stripe_subscription_id: "sub_del", posting_addon_active: true, posting_addon_subscription_item_id: "si_addon" },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.deleted",
+        data: {
+          object: subWithItems("sub_del", "org_del", [
+            { id: "si_growth", price: "price_growth" },
+            { id: "si_addon", price: "price_addon" },
+          ], "canceled"),
+        },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_del");
+    ok("S713: deleted subscription turns a bought add-on off", org?.posting_addon_active === false && org?.plan === "free");
+  }
+  // Price env unset -> the add-on columns are never touched.
+  {
+    delete process.env.STRIPE_PRICE_POSTING_ADDON;
+    const { admin, db } = createFakeAdmin([
+      { id: "org_noenv", plan: "growth", subscription_status: "active", stripe_subscription_id: "sub_noenv", posting_addon_active: true, posting_addon_subscription_item_id: "si_addon" },
+    ]);
+    await postEvent(
+      {
+        type: "customer.subscription.updated",
+        data: { object: subWithItems("sub_noenv", "org_noenv", [{ id: "si_growth", price: "price_growth" }]) },
+      },
+      admin,
+    );
+    const org = db.organizations.get("org_noenv");
+    ok(
+      "S713: no add-on price set leaves the add-on columns alone",
+      org?.posting_addon_active === true && !db.updates.some((u) => "posting_addon_active" in u.values),
+    );
+  }
+}
+
+run().then(runS712).then(runS713).then(() => {
   console.log(`\nstripe-webhook: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 });

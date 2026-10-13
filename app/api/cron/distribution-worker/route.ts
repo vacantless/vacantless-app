@@ -35,6 +35,8 @@ import {
   type WorkerListingFacts,
 } from "@/lib/distribution-worker";
 import { composePostWithAgent } from "@/lib/distribution-worker-ai";
+import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import {
   daysParked,
@@ -376,7 +378,22 @@ export async function GET(req: NextRequest) {
     // Find the first candidate whose channel is authorized for automation.
     let job: CandidateRow | null = null;
     let account: ChannelAccountRow | null = null;
+    // S713: a robot-posted site (Kijiji, Rentals.ca, Zumper) is only eligible
+    // for an org with the Posting add-on. One read per org per run.
+    const robotAccessByOrg = new Map<string, boolean>();
+    let skippedForAddon = 0;
     for (const c of candidates) {
+      if (isRobotPostedChannel(c.channel)) {
+        let allowed = robotAccessByOrg.get(c.organization_id);
+        if (allowed === undefined) {
+          allowed = (await readRobotPostingAccess(admin, c.organization_id)).allowed;
+          robotAccessByOrg.set(c.organization_id, allowed);
+        }
+        if (!allowed) {
+          skippedForAddon += 1;
+          continue;
+        }
+      }
       const { data: acct } = await admin
         .from("distribution_channel_accounts")
         .select(
@@ -401,7 +418,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (!job || !account) {
-      return NextResponse.json({ ...summary, skippedReason: "no_authorized_job" }, { status: 200 });
+      return NextResponse.json(
+        {
+          ...summary,
+          skippedReason: "no_authorized_job",
+          ...(skippedForAddon > 0 ? { skippedForPostingAddon: skippedForAddon } : {}),
+        },
+        { status: 200 },
+      );
     }
 
     // Resolve the property via the run. distribution_run_items has no property_id

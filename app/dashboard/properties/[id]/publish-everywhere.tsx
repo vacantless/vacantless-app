@@ -57,7 +57,11 @@ import {
   type PublishBucket,
   type PublishChannelInput,
 } from "@/lib/publish-everywhere";
-import { conciergeUsageLabel } from "@/lib/billing";
+import {
+  conciergeUsageLabel,
+  POSTING_ADDON_HREF,
+  POSTING_ADDON_NOTE,
+} from "@/lib/billing";
 import { channelByKey, firstRunCostLine, firstRunIsFree } from "@/lib/distribution-channels";
 import type {
   DistributeChannelCard,
@@ -227,22 +231,43 @@ function ChannelAutomationAction({
   return null;
 }
 
+// S713: what a robot site (Kijiji, Rentals.ca, Zumper) shows instead of its
+// post or sign-in button when the org has no Posting add-on.
+function PostingAddonNote({ className = "" }: { className?: string }) {
+  return (
+    <p className={`text-[12px] text-gray-600 ${className}`}>
+      {POSTING_ADDON_NOTE}{" "}
+      <a href={POSTING_ADDON_HREF} className="font-semibold text-indigo-700 hover:underline">
+        See Billing →
+      </a>
+    </p>
+  );
+}
+
+const ADDON_CHIP = { label: "Posting add-on", cls: "bg-gray-100 text-gray-600" };
+
 function ChannelRow({
   row,
   propertyId,
   wizardEnabled = false,
   live = null,
+  addonLocked = false,
 }: {
   row: ResolvedRow;
   propertyId?: string;
   wizardEnabled?: boolean;
+  /** S713: a robot site and the org has no Posting add-on. */
+  addonLocked?: boolean;
   /** S692: the one live rule (forYouLiveState) for this row, so the rail never
    *  says "Sign in + post" about a site whose ad link is already saved. */
   live?: { isLive: boolean; liveUrl: string | null } | null;
 }) {
   const isLive = live?.isLive === true;
+  const locked = addonLocked && !isLive;
   const chip = isLive
     ? { label: "Live", cls: "bg-green-50 text-green-700" }
+    : locked
+      ? ADDON_CHIP
     : row.automationAction === "authorize"
       ? { label: "Needs your OK", cls: "bg-amber-50 text-amber-700" }
       : MODE_CHIP[row.mode];
@@ -253,7 +278,7 @@ function ChannelRow({
   // Connect / Disconnect controls live) and says "Connect", not "Sign in once".
   const isMetaRow = row.key === "facebook_feed" || row.key === "instagram";
   const connectHref =
-    row.mode !== "needs_connection"
+    row.mode !== "needs_connection" || locked
       ? null
       : isMetaRow
         ? "/dashboard/settings?tab=distribution#facebook-page"
@@ -297,6 +322,7 @@ function ChannelRow({
       {costLine ? (
         <p className="ml-10 text-[11px] leading-snug text-gray-500">{costLine}</p>
       ) : null}
+      {locked ? <PostingAddonNote className="ml-10 mt-0.5" /> : null}
       {propertyId && row.automationAction ? (
         <div className="ml-10">
           <ChannelAutomationAction propertyId={propertyId} row={row} />
@@ -338,6 +364,7 @@ export function PublishEverywhere({
   wizardEnabled = false,
   shownChannelKeys = null,
   marketplaceKit = null,
+  robotPostingAllowed = false,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -368,6 +395,8 @@ export function PublishEverywhere({
   shownChannelKeys?: readonly string[] | null;
   /** S712: the Facebook Marketplace kit (every org posts it from its own team). */
   marketplaceKit?: MarketplaceKitData | null;
+  /** S713: canUseRobotPosting. False = Kijiji, Rentals.ca and Zumper show the add-on note. */
+  robotPostingAllowed?: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDestinations, setConfirmDestinations] = useState<
@@ -665,6 +694,7 @@ export function PublishEverywhere({
             allSetSummary={liveForYouAllSet}
             postingBlocker={postingBlocker}
             marketplaceKit={marketplaceKit}
+            robotPostingAllowed={robotPostingAllowed}
           >
             {[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].map((r) => (
               <ChannelRow
@@ -673,6 +703,7 @@ export function PublishEverywhere({
                 propertyId={propertyId}
                 wizardEnabled={wizardEnabled}
                 live={liveStateFor(r)}
+                addonLocked={!robotPostingAllowed && isRobotPostedChannel(r.key)}
               />
             ))}
           </ForYouHandoff>
@@ -686,7 +717,11 @@ export function PublishEverywhere({
             instantDestinations={confirmDestinations}
             instantDestinationsLoading={confirmDestinationsLoading}
             instantDestinationsError={confirmDestinationsError}
-            forYouRows={forYou}
+            forYouRows={
+              robotPostingAllowed
+                ? forYou
+                : forYou.filter((r) => !isRobotPostedChannel(r.key))
+            }
             conciergeDeskEnabled={conciergeDeskEnabled}
           conciergeUsage={conciergeUsage}
           onClose={() => setConfirmOpen(false)}
@@ -718,10 +753,12 @@ function ForYouHandoff({
   allSetSummary,
   postingBlocker,
   marketplaceKit = null,
+  robotPostingAllowed = false,
   children,
 }: {
   children?: React.ReactNode;
   marketplaceKit?: MarketplaceKitData | null;
+  robotPostingAllowed?: boolean;
   propertyId: string;
   addressLabel: string;
   rows: ResolvedRow[];
@@ -768,6 +805,7 @@ function ForYouHandoff({
             wizardEnabled={wizardEnabled}
             postingBlocked={Boolean(postingBlocker)}
             marketplaceKit={row.key === "facebook" ? marketplaceKit : null}
+            addonLocked={!robotPostingAllowed && isRobotPostedChannel(row.key)}
           />
         ))}
       </ul>
@@ -801,8 +839,11 @@ function ForYouRow({
   wizardEnabled = false,
   postingBlocked: postingBlockedProp,
   marketplaceKit = null,
+  addonLocked = false,
 }: {
   marketplaceKit?: MarketplaceKitData | null;
+  /** S713: a robot site and the org has no Posting add-on. */
+  addonLocked?: boolean;
   row: ResolvedRow;
   item: PublishEverywhereRunItem | null;
   propertyId: string;
@@ -847,9 +888,12 @@ function ForYouRow({
   const working =
     !isLive &&
     (gate === "queued" || gate === "submitting" || gate === "submitted");
+  const locked = addonLocked && !isLive;
 
   const stateChip = isLive
     ? { label: "Live", cls: "bg-green-50 text-green-700" }
+    : locked
+      ? ADDON_CHIP
     : postingBlocked
       ? { label: "Waiting", cls: "bg-amber-50 text-amber-700" }
     : payAtCheckout
@@ -891,7 +935,9 @@ function ForYouRow({
         </p>
       )}
 
-      {postingBlocked && !isLive ? (
+      {locked ? (
+        <PostingAddonNote className="mt-2" />
+      ) : postingBlocked && !isLive ? (
         <p className="mt-2 text-[12px] leading-relaxed text-indigo-900/70">
           Finish your listing first. Sign-in and any site fee come after the
           details are complete.
@@ -1010,7 +1056,7 @@ function ForYouRow({
         </div>
       )}
 
-      {approveOpen && item != null && (
+      {approveOpen && item != null && !locked && (
         <ApprovalModal
           propertyId={propertyId}
           itemId={item.id}

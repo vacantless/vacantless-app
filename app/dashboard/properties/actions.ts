@@ -2,6 +2,7 @@
 
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -3100,6 +3101,14 @@ export async function startSitePost(formData: FormData) {
   }
 
   const supabase = createClient();
+  // S713: Kijiji, Rentals.ca and Zumper are posted by our robot, which is the
+  // paid Posting add-on. Marketplace (the kit) stays open to every org.
+  if (isRobotPostedChannel(channel)) {
+    const access = await readRobotPostingAccess(supabase, org.id);
+    if (!access.allowed) {
+      redirect(`/dashboard/properties/${propertyId}?run=postingaddon#distribute-header`);
+    }
+  }
   // RLS-scoped: a foreign property id returns nothing.
   const { data: propRow } = await supabase
     .from("properties")
@@ -5327,6 +5336,15 @@ export async function requestConciergePublish(formData: FormData) {
     redirect(`/dashboard/properties/${propertyId}?forbidden=1#distribute-header`);
   }
   const runOrgPlan = (runOrg as { plan: string | null }).plan;
+  // S713: a robot-posted site needs the Posting add-on on the RUN'S org.
+  if (isRobotPostedChannel(item.channel)) {
+    const access = await readRobotPostingAccess(supabase, runOrgId);
+    if (!access.allowed) {
+      redirect(
+        `/dashboard/properties/${propertyId}?run=postingaddon#distribute-header`,
+      );
+    }
+  }
   if (!hasEntitlement(runOrgPlan, "listing_marketing")) {
     redirect(
       `/dashboard/properties/${propertyId}?run=conciergeupgrade#distribute-header`,

@@ -4,7 +4,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { getStripe, priceIdForPlan, depositPriceId } from "@/lib/stripe";
+import {
+  getStripe,
+  priceIdForPlan,
+  depositPriceId,
+  postingAddonPriceId,
+} from "@/lib/stripe";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import {
   isPaidPlan,
   isPilotPlan,
@@ -14,6 +20,8 @@ import {
   CONCIERGE_PACK_PRICE_CENTS,
   CONCIERGE_PACK_QUANTITY,
   shouldEnableSmsOnPlanChange,
+  itemForPrice,
+  subscriptionGrantsPlan,
 } from "@/lib/billing";
 
 // Start a 30-day, founder-led pilot ($0/month, refundable $200 setup deposit
@@ -121,10 +129,19 @@ export async function startCheckout(formData: FormData) {
   const customerId = await ensureCustomer(org, user?.email ?? null);
   if (!customerId) redirect("/dashboard/billing?error=not_configured");
 
+  // S713: "Growth with Posting" from the Posting card sends with_posting=1.
+  // Same checkout, one more line item. Only when the add-on price exists; the
+  // webhook turns Posting on once Stripe says the subscription is paid for.
+  const addonPriceId = postingAddonPriceId();
+  const withPosting = String(formData.get("with_posting") ?? "") === "1";
+  if (withPosting && !addonPriceId) redirect("/dashboard/billing?error=addon_not_configured");
+  const lineItems: { price: string; quantity: number }[] = [{ price: priceId!, quantity: 1 }];
+  if (withPosting && addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 });
+
   const session = await stripe!.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
-    line_items: [{ price: priceId!, quantity: 1 }],
+    line_items: lineItems,
     client_reference_id: org.id,
     subscription_data: { metadata: { org_id: org.id } },
     // Lets you apply a founding-customer / promo coupon at checkout without a
@@ -300,4 +317,92 @@ export async function openBillingPortal() {
   });
 
   redirect(session.url);
+}
+
+// S713: add the Posting add-on (CA$49/mo) to an org's EXISTING paid
+// subscription as a second item, prorated to the current period.
+//
+// We do NOT switch the flag on here. Stripe's customer.subscription.updated
+// webhook (seconds later) sets posting_addon_active from the real subscription,
+// through the same rule as every other event. That is the safe choice: the flag
+// is an entitlement, so only Stripe's own record may grant it, and a
+// signed-in owner cannot write it anyway (0244 guard trigger). The page says
+// "switching on" until the webhook lands.
+export async function addPostingAddon() {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
+
+  const stripe = getStripe();
+  const addonPriceId = postingAddonPriceId();
+  if (!stripe || !addonPriceId) redirect("/dashboard/billing?error=addon_not_configured");
+  // Needs a paid plan with a live subscription. Anyone else buys Growth with
+  // Posting together at checkout (startCheckout with_posting=1).
+  if (
+    !isPaidPlan(org.plan) ||
+    !org.stripe_subscription_id ||
+    !subscriptionGrantsPlan(org.subscription_status)
+  ) {
+    redirect("/dashboard/billing?error=addon_needs_growth#posting-addon");
+  }
+
+  const access = await readRobotPostingAccess(createClient(), org.id);
+  if (access.allowed) redirect("/dashboard/billing?addon=already#posting-addon");
+
+  try {
+    const sub = await stripe!.subscriptions.retrieve(org.stripe_subscription_id!);
+    if (!subscriptionGrantsPlan(sub.status)) {
+      redirect("/dashboard/billing?error=addon_needs_growth#posting-addon");
+    }
+    // Idempotent: a double click (or a webhook still in flight) must not add
+    // a second CA$49 item.
+    const already = itemForPrice(
+      (sub.items?.data ?? []).map((it) => ({ id: it.id, price: { id: it.price?.id ?? null } })),
+      addonPriceId,
+    );
+    if (!already) {
+      await stripe!.subscriptionItems.create({
+        subscription: sub.id,
+        price: addonPriceId!,
+        quantity: 1,
+        proration_behavior: "create_prorations",
+      });
+    }
+  } catch (err) {
+    // redirect() throws a control-flow error; let it through.
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    console.error("addPostingAddon: Stripe call failed", {
+      organizationId: org.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    redirect("/dashboard/billing?error=addon#posting-addon");
+  }
+  redirect("/dashboard/billing?addon=added#posting-addon");
+}
+
+// S713: remove the Posting add-on. Deletes the subscription item (prorated
+// credit); the webhook then switches the flag off. A grandfathered org has no
+// item, so there is nothing to remove.
+export async function removePostingAddon() {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
+
+  const stripe = getStripe();
+  if (!stripe) redirect("/dashboard/billing?error=addon_not_configured");
+  const access = await readRobotPostingAccess(createClient(), org.id);
+  if (!access.addonItemId) redirect("/dashboard/billing?addon=none#posting-addon");
+
+  try {
+    await stripe!.subscriptionItems.del(access.addonItemId!, {
+      proration_behavior: "create_prorations",
+    });
+  } catch (err) {
+    console.error("removePostingAddon: Stripe call failed", {
+      organizationId: org.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    redirect("/dashboard/billing?error=addon#posting-addon");
+  }
+  redirect("/dashboard/billing?addon=removed#posting-addon");
 }

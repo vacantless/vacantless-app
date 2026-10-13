@@ -102,6 +102,10 @@
       "yes": "Oui, l'oublier",
       "cancel": "La garder",
       "error": "Un problème est survenu. Réessayez."
+    },
+    "addon": {
+      "note": "Inclus dans l'option Publication. 49 $ par mois.",
+      "link": "Voir la facturation"
     }
   },
   "stage2": {
