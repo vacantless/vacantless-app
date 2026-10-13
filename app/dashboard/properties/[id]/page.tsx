@@ -317,6 +317,7 @@ type Property = {
   available_date: string | null;
   virtual_tour_url: string | null;
   sqft: number | null;
+  sqft_estimated: boolean | null;
   floor: string | null;
   // Kijiji autopilot field map (S550): unit_type is nullable (falls back to
   // apartment downstream); for_rent_by is NOT NULL default 'owner'.
@@ -373,6 +374,8 @@ type PhotoRow = {
   url: string;
   sort_order: number;
   is_cover: boolean;
+  building_photo?: boolean | null;
+  copied_from?: string | null;
 };
 
 function currentUtcMonthWindow(now: Date): { startIso: string; endIso: string } {
@@ -870,7 +873,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -907,7 +910,7 @@ export default async function PropertyDetailPage({
 
   const { data: photos } = await supabase
     .from("property_photos")
-    .select("id, url, sort_order, is_cover")
+    .select("id, url, sort_order, is_cover, building_photo, copied_from")
     .eq("property_id", p.id);
   const photoRows = sortPhotos((photos ?? []) as PhotoRow[]);
 
@@ -3469,6 +3472,13 @@ export default async function PropertyDetailPage({
                 placeholder="850"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
+              {p.sqft_estimated ? (
+                <p className="mt-1 text-xs text-amber-700">
+                  Estimated from similar rentals. Change it if you know the real size.
+                </p>
+              ) : !p.sqft ? (
+                <p className="mt-1 text-xs text-gray-500">Leave it blank and we estimate it.</p>
+              ) : null}
             </div>
             <div className="w-32">
               <label

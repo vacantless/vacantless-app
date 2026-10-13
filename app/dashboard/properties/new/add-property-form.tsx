@@ -828,6 +828,7 @@ export function AddPropertyV2Form({
                   value={draft.sqft}
                   onChange={(e) => update("sqft", e.target.value)}
                   className={inputClass()}
+                  placeholder="We estimate it if blank"
                 />
               </Field>
               <Field label="Floor" htmlFor="floor">

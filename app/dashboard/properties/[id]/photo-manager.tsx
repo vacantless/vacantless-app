@@ -26,6 +26,7 @@ import {
   deletePhoto,
   importPropertyPhotosFromUrls,
   movePhoto,
+  setBuildingPhoto,
   setCoverPhoto,
   type PhotoUploadActionReason,
   type PhotoUploadTarget,
@@ -366,6 +367,38 @@ export function PhotoUploadWorkspace({
     }
   }
 
+  // S712: share a photo (outside, lobby, laundry) with every unit in the same
+  // building that has no photos yet; unmark to stop new units getting it.
+  async function handleToggleBuildingPhoto(photoId: string, on: boolean) {
+    if (photoAction) return;
+    setError(null);
+    setSuccess(null);
+    setPhotoAction(`building:${photoId}`);
+    const before = photos;
+    setPhotos((current) =>
+      current.map((photo) => (photo.id === photoId ? { ...photo, building_photo: on } : photo)),
+    );
+    try {
+      const fd = formDataForPhoto(photoId);
+      fd.set("on", on ? "1" : "0");
+      const result = await setBuildingPhoto(fd);
+      if (!result.ok) throw new Error("not saved");
+      router.refresh();
+      setSuccess(
+        on
+          ? result.filled > 0
+            ? `Shared with ${result.filled} other unit${result.filled === 1 ? "" : "s"} in this building that had no photos.`
+            : "Saved. New units in this building will start with this photo."
+          : "No longer shared with the building.",
+      );
+    } catch {
+      setPhotos(before);
+      setError("That could not be saved. Please try again.");
+    } finally {
+      setPhotoAction(null);
+    }
+  }
+
   async function handleDeletePhoto(photoId: string) {
     if (photoAction) return;
     setError(null);
@@ -455,6 +488,11 @@ export function PhotoUploadWorkspace({
                     Cover
                   </span>
                 )}
+                {photo.building_photo || photo.copied_from ? (
+                  <span className="absolute right-1.5 top-1.5 rounded-full bg-gray-900/70 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    {photo.copied_from ? "From the building" : "Building photo"}
+                  </span>
+                ) : null}
               </div>
               <div className="flex items-center justify-between gap-1 px-2 py-1.5">
                 <div className="flex items-center gap-1">
@@ -486,6 +524,17 @@ export function PhotoUploadWorkspace({
                       className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       Set cover
+                    </button>
+                  )}
+                  {!photo.copied_from && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBuildingPhoto(photo.id, !photo.building_photo)}
+                      disabled={photoAction !== null}
+                      title="Outside, lobby or laundry photos can be shared with every unit in this building that has no photos."
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      {photo.building_photo ? "Unshare" : "Share with building"}
                     </button>
                   )}
                   <button

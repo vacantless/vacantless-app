@@ -178,6 +178,8 @@ import { plateFieldsToQuery, normalizePendingDocId, type AssetDraft } from "@/li
 import { validateExpenseInput } from "@/lib/expenses";
 import { parseMoneyToCents } from "@/lib/tenancy";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
+import { sqftToSave } from "@/lib/sqft-estimate-server";
+import { copyBuildingPhotosTo, spreadBuildingPhotos } from "@/lib/building-photos-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import {
   listChannelTileStatuses as listChannelTileStatusesFromAccounts,
@@ -451,6 +453,12 @@ export async function addProperty(formData: FormData) {
   // If the insert failed to return an id, keep the list fallback so we never build
   // a /properties/null URL.
   if (newId) {
+    // S712: a unit with no photos of its own starts with its building's photos.
+    try {
+      await copyBuildingPhotosTo(supabase, { orgId: org.id, propertyId: newId, address });
+    } catch {
+      // best-effort
+    }
     redirect(`/dashboard/properties/${newId}?created=1#rental-details`);
   }
   redirect(`/dashboard/properties?added=${Date.now().toString(36)}`);
@@ -834,6 +842,13 @@ export async function createPropertyV2(formData: FormData) {
     (await geocodeResolve(address));
 
   const supabase = createClient();
+  // S712: a blank size is estimated from similar rentals (marked as estimated).
+  const sizeToSave = await sqftToSave(supabase, {
+    orgId: org.id,
+    address,
+    beds: parseIntOrNull(String(formData.get("beds") ?? "")),
+    typedSqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
+  });
   const { data: inserted } = await supabase
     .from("properties")
     .insert({
@@ -849,7 +864,7 @@ export async function createPropertyV2(formData: FormData) {
         String(formData.get("address_display_mode") ?? ""),
       ),
       available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),
-      sqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
+      ...sizeToSave,
       floor: textOrNull(formData.get("floor")),
       furnished: parseCheckbox(formData, "furnished"),
       lease_term: normalizeLeaseTerm(formData.get("lease_term")),
@@ -906,6 +921,12 @@ export async function createPropertyV2(formData: FormData) {
     );
   }
 
+  // S712: a unit with no photos of its own starts with its building's photos.
+  try {
+    await copyBuildingPhotosTo(supabase, { orgId: org.id, propertyId: newId, address });
+  } catch {
+    // best-effort; the landlord can still add photos
+  }
   revalidatePath(`/dashboard/properties/${newId}`);
   redirect(`/dashboard/properties/${newId}?created=1#rental-details`);
 }
@@ -930,7 +951,7 @@ export async function updateProperty(formData: FormData) {
   // scopes this to the caller's org.
   const { data: prior } = await supabase
     .from("properties")
-    .select("rent_cents, price_drop_pending_cents, status")
+    .select("rent_cents, price_drop_pending_cents, status, organization_id")
     .eq("id", id)
     .maybeSingle();
   const oldRent = (prior as { rent_cents: number | null } | null)?.rent_cents ?? null;
@@ -992,6 +1013,19 @@ export async function updateProperty(formData: FormData) {
   const virtualTourUrl = tourRaw ? normalizeVirtualTourUrl(tourRaw) : null;
   const tourRejected = tourRaw !== "" && virtualTourUrl === null;
 
+  // S712: a blank size is estimated from similar rentals (marked as estimated);
+  // a size the landlord types replaces the estimate.
+  const priorOrgId = (prior as { organization_id?: string } | null)?.organization_id ?? null;
+  const sizeToSave = priorOrgId
+    ? await sqftToSave(supabase, {
+        orgId: priorOrgId,
+        address,
+        beds: parseIntOrNull(String(formData.get("beds") ?? "")),
+        typedSqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
+        excludePropertyId: id,
+      })
+    : { sqft: parseIntOrNull(String(formData.get("sqft") ?? "")), sqft_estimated: false };
+
   // RLS scopes the update to the caller's org; .eq("id") targets one row.
   await supabase
     .from("properties")
@@ -1017,7 +1051,7 @@ export async function updateProperty(formData: FormData) {
       // Unit-level fields
       available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),
       virtual_tour_url: virtualTourUrl,
-      sqft: parseIntOrNull(String(formData.get("sqft") ?? "")),
+      ...sizeToSave,
       floor: String(formData.get("floor") ?? "").trim() || null,
       // Kijiji autopilot field map (S550): unit_type is nullable (unset -> the
       // worker falls back to apartment); for_rent_by is NOT NULL, so the
@@ -3134,7 +3168,13 @@ export async function upsertPartnerAccount(formData: FormData) {
 
 type PhotoRow = PhotoLike & { storage_path: string };
 
-export type PropertyPhotoView = PhotoLike & { url: string };
+export type PropertyPhotoView = PhotoLike & {
+  url: string;
+  /** S712: marked as a building photo (shared with units that have none). */
+  building_photo?: boolean | null;
+  /** S712: a copy of another unit's building photo. */
+  copied_from?: string | null;
+};
 
 export type PhotoUploadActionReason =
   | "none"
@@ -4141,6 +4181,45 @@ export async function setCoverPhoto(formData: FormData) {
   revalidatePath(`/dashboard/properties/${propertyId}`);
 }
 
+// S712: mark (or unmark) a photo as a building photo. Marking copies it into
+// every unit of the same building that has no photos of its own; units that
+// already have photos are left alone. Unmarking leaves existing copies in place
+// (each unit can delete its copy) and stops new units from getting it.
+export async function setBuildingPhoto(formData: FormData): Promise<{ ok: boolean; filled: number }> {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const id = String(formData.get("photo_id") ?? "");
+  const on = String(formData.get("on") ?? "") === "1";
+  if (!propertyId || !id) return { ok: false, filled: 0 };
+  const org = await getCurrentOrg();
+  if (!org) return { ok: false, filled: 0 };
+  const supabase = createClient();
+  const { data: prop } = await supabase
+    .from("properties")
+    .select("id, address")
+    .eq("id", propertyId)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!prop) return { ok: false, filled: 0 };
+  const { error: markErr } = await supabase
+    .from("property_photos")
+    .update({ building_photo: on })
+    .eq("id", id)
+    .eq("property_id", propertyId)
+    .eq("organization_id", org.id);
+  if (markErr) return { ok: false, filled: 0 };
+  let filled = 0;
+  if (on) {
+    filled = await spreadBuildingPhotos(supabase, {
+      orgId: org.id,
+      address: (prop as { address: string | null }).address,
+      excludePropertyId: propertyId,
+    });
+  }
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  return { ok: true, filled };
+}
+
 export async function movePhoto(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
@@ -4185,6 +4264,17 @@ export async function deletePhoto(formData: FormData) {
   const rows = (data ?? []) as PhotoRow[];
 
   const target = rows.find((r) => r.id === id);
+  // S712: building photos share one stored file across units. Keep the file
+  // while any other unit still shows it.
+  let fileStillUsed = false;
+  if (target) {
+    const { count: sharing } = await supabase
+      .from("property_photos")
+      .select("id", { count: "exact", head: true })
+      .eq("storage_path", target.storage_path)
+      .neq("id", id);
+    fileStillUsed = (sharing ?? 0) > 0;
+  }
   if (!target) {
     revalidatePath(`/dashboard/properties/${propertyId}`);
     return;
@@ -4207,7 +4297,7 @@ export async function deletePhoto(formData: FormData) {
   // the object. Log any error or an empty result instead of swallowing it so a
   // future regression is visible (the reconcile script is the last-resort
   // backstop). Failure here is non-fatal: the row is already gone.
-  if (target) {
+  if (target && !fileStillUsed) {
     const { data: removed, error: rmErr } = await supabase.storage
       .from(PHOTO_BUCKET)
       .remove([target.storage_path]);
