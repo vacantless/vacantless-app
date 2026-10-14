@@ -37,6 +37,8 @@ export const SWEEP_PATHS = [
   "/api/cron/landlord-campaign",
   // S715: the welcome email sat 84 minutes on GitHub's scheduler.
   "/api/cron/onboarding-emails",
+  // S717: team addresses back off Brevo's blocklist after a stray unsubscribe.
+  "/api/cron/team-unsubscribe-guard",
 ] as const;
 
 export type SweepResult = { path: string; status: number | null; ms: number; error?: string };
