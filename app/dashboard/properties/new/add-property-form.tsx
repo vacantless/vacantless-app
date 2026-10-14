@@ -933,7 +933,7 @@ export function AddPropertyV2Form({
                   ))}
                 </select>
               </Field>
-              <div className="flex items-end gap-4">
+              <div className="flex flex-wrap items-end gap-x-4 gap-y-2 sm:col-span-3">
                 {(
                   [
                     ["furnished", "Furnished"],

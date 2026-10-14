@@ -8,6 +8,7 @@ import {
   planPriceIdOfItems,
   postingAddonForSubscriptionEvent,
   subscriptionPeriodEndSeconds,
+  subscriptionCancelAtSeconds,
   shouldApplyStatus,
   shouldEnableSmsOnPlanChange,
 } from "@/lib/billing";
@@ -123,6 +124,7 @@ async function applySubscription(
         subscription_status: "canceled",
         stripe_subscription_id: null,
         current_period_end: null,
+        subscription_cancel_at: null,
       })
       .eq("id", orgId);
     await applyPostingAddon(admin, orgId, sub, { ended: true, statusApplies: true });
@@ -171,6 +173,13 @@ async function applySubscription(
     update.current_period_end = new Date(periodEndSec * 1000).toISOString();
   }
   if (customerId) update.stripe_customer_id = customerId;
+  // S714d: mirror a scheduled cancel (or its undo) so Billing can say
+  // "Cancels on <date>". Always written: null clears a resumed subscription.
+  const cancelAtSec = subscriptionCancelAtSeconds(
+    sub as unknown as Parameters<typeof subscriptionCancelAtSeconds>[0],
+    periodEndSec,
+  );
+  update.subscription_cancel_at = cancelAtSec != null ? new Date(cancelAtSec * 1000).toISOString() : null;
   // S712: the plan follows the subscription STATUS, not just the price. Only
   // active / trialing / past_due grant the tier; an incomplete first payment
   // grants nothing, and unpaid / expired / canceled drop a paying org to free.

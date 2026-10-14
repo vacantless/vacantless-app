@@ -922,6 +922,19 @@ export function subscriptionPeriodEndSeconds(
   return null;
 }
 
+// S714d: when a subscription is set to end (Stripe billing portal "Cancel"),
+// it stays active to the period end and carries cancel_at_period_end (older
+// API) or cancel_at (newer API). Return that end as epoch seconds, or null
+// when it is not cancelling (also null after the owner resumes it).
+export function subscriptionCancelAtSeconds(
+  sub: { cancel_at?: number | null; cancel_at_period_end?: boolean | null },
+  periodEndSec: number | null,
+): number | null {
+  if (typeof sub.cancel_at === "number" && sub.cancel_at > 0) return sub.cancel_at;
+  if (sub.cancel_at_period_end === true) return periodEndSec;
+  return null;
+}
+
 // Guard against a stale, out-of-order `incomplete` event clobbering a
 // subscription that has already advanced past it. `incomplete` is only ever a
 // transient *initial* state — once a subscription is active / trialing /
@@ -1030,6 +1043,8 @@ export type BillingView = {
   needsAttention: boolean; // past_due / unpaid / incomplete
   periodEnd: Date | null;
   periodEndLabel: string | null; // formatted in the org timezone
+  /** S714d: "November 14, 2026" when the plan is set to end; null otherwise. */
+  cancelsOnLabel: string | null;
   // Pilot deposit
   depositStatus: DepositStatus; // none | paid | refunded
   depositPaid: boolean; // status === "paid"
@@ -1045,6 +1060,8 @@ export type BillingInput = {
   subscription_status: string | null | undefined;
   stripe_subscription_id: string | null | undefined;
   current_period_end: string | Date | null | undefined;
+  /** S714d: when a scheduled cancel ends the plan (null = not cancelling). */
+  subscription_cancel_at?: string | Date | null | undefined;
   pilot_started_at?: string | Date | null | undefined;
   pilot_deposit_status?: string | null | undefined;
   pilot_deposit_amount_cents?: number | null | undefined;
@@ -1129,6 +1146,9 @@ export function buildBillingView(input: BillingInput): BillingView {
     needsAttention: needsBillingAttention(status),
     periodEnd: validPeriodEnd,
     periodEndLabel: formatPeriodEnd(input.current_period_end, input.timezone),
+    cancelsOnLabel: isAnyPaidPlan(planKey)
+      ? formatPeriodEnd(input.subscription_cancel_at ?? null, input.timezone)
+      : null,
     depositStatus,
     depositPaid: depositStatus === "paid",
     depositRefunded: depositStatus === "refunded",

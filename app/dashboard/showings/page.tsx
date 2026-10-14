@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { countViewingTimes } from "@/lib/viewing-times-count";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { EmptyState, PageHeader, SectionHeading } from "@/components/ui";
@@ -126,6 +127,8 @@ export default async function ShowingsPage({
   const org = await getCurrentOrg();
   if (!org) return null;
   const timeZone = org.booking_timezone ?? "America/Toronto";
+  // S714d: the empty Upcoming box only asks for viewing hours when there are none.
+  const hasViewingTimes = (await countViewingTimes(supabase, org.id, timeZone)) > 0;
   // Role-gate the write affordances so a showing_helper (server-blocked from both
   // actions) doesn't see forbidden-click controls (Codex P3).
   const role = await getCurrentRole();
@@ -466,8 +469,16 @@ export default async function ShowingsPage({
           <EmptyState
             icon={<Icons.calendar className="h-5 w-5" />}
             title="No upcoming viewings yet"
-            description="Set your weekly availability so renters can book their own viewings online. Confirmed viewings appear here."
-            cta={{ href: "/dashboard/availability", label: "Set availability" }}
+            description={
+              hasViewingTimes
+                ? "Your viewing hours are set. When a renter books, the viewing shows up here."
+                : "Set your weekly availability so renters can book their own viewings online. Confirmed viewings appear here."
+            }
+            cta={
+              hasViewingTimes
+                ? { href: "/dashboard/availability", label: "See viewing hours" }
+                : { href: "/dashboard/availability", label: "Set availability" }
+            }
           />
         }
         timeZone={timeZone}

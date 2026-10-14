@@ -558,6 +558,7 @@ const PLANS: {
       "Instant email replies with a booking link",
       "Self-booked viewings and email reminders",
       "Every renter in one list",
+      "Posts to your Facebook Page, free",
     ],
     cta: "Start free",
     href: "/signup",

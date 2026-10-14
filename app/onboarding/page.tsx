@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createOrganization } from "./actions";
 import { OnboardingForm } from "./onboarding-form";
 import { AuthShell } from "@/components/auth-shell";
+import { onboardingNextStep } from "@/lib/signup-copy";
 
 export default async function OnboardingPage({
   searchParams,
@@ -27,7 +28,7 @@ export default async function OnboardingPage({
       eyebrow="Step 1 of 2"
       title="Set up your business profile"
       subtitle="Name your business and pick the brand color renters see on your pages and emails. You can change any of this later."
-      footer="Next: add your first rental."
+      footer={onboardingNextStep(searchParams.plan)}
     >
       {/* gradient step indicator */}
       <div className="mb-6 flex items-center gap-2" aria-hidden>

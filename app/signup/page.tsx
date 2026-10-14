@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,12 @@ import {
   AUTH_BUTTON_CLASS,
   AUTH_INPUT_CLASS,
 } from "@/components/auth-shell";
+import {
+  EXISTING_ACCOUNT_MESSAGE,
+  signupEyebrow,
+  signupHitExistingAccount,
+  signupSubtitle,
+} from "@/lib/signup-copy";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -22,6 +28,26 @@ export default function SignupPage() {
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [loading, setLoading] = useState(false);
+  // S714d: the plan picked on the homepage, and who (if anyone) is already
+  // signed in in this browser.
+  const [plan, setPlan] = useState<string | null>(null);
+  const [signedInAs, setSignedInAs] = useState<string | null>(null);
+  const [existingAccount, setExistingAccount] = useState(false);
+
+  useEffect(() => {
+    setPlan(new URLSearchParams(window.location.search).get("plan"));
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => setSignedInAs(data.user?.email ?? null))
+      .catch(() => setSignedInAs(null));
+  }, []);
+
+  async function handleSignOut() {
+    await createClient().auth.signOut();
+    setSignedInAs(null);
+    setEmail("");
+    setPassword("");
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +55,19 @@ export default function SignupPage() {
     setError(null);
     const supabase = createClient();
     const { data, error } = await supabase.auth.signUp({ email, password });
+    setExistingAccount(false);
+    if (
+      signupHitExistingAccount({
+        errorMessage: error?.message ?? null,
+        identitiesCount: data?.user?.identities?.length ?? null,
+        hasUser: !!data?.user,
+      })
+    ) {
+      setExistingAccount(true);
+      setError(EXISTING_ACCOUNT_MESSAGE);
+      setLoading(false);
+      return;
+    }
     if (error) {
       setError(error.message);
       setLoading(false);
@@ -128,11 +167,36 @@ export default function SignupPage() {
     );
   }
 
+  // S714d: already signed in here. Say who, instead of a blank form that
+  // Chrome fills with the other login.
+  if (signedInAs) {
+    return (
+      <AuthShell
+        eyebrow={signupEyebrow(plan)}
+        title="You're already signed in"
+        subtitle={`This browser is signed in as ${signedInAs}.`}
+      >
+        <div className="space-y-3">
+          <Link href="/dashboard" className={AUTH_BUTTON_CLASS + " block text-center"}>
+            Go to my dashboard
+          </Link>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Sign out and create a new login
+          </button>
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
     <AuthShell
-      eyebrow="Start free"
+      eyebrow={signupEyebrow(plan)}
       title="Create your login"
-      subtitle="First, set up your sign-in details. Next you'll name your business. No credit card to start."
+      subtitle={signupSubtitle(plan)}
       footer={
         <>
           Already have an account?{" "}
@@ -178,7 +242,19 @@ export default function SignupPage() {
             className={AUTH_INPUT_CLASS}
           />
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="text-sm text-red-600">
+            {error}
+            {existingAccount && (
+              <>
+                {" "}
+                <Link href="/login" className="font-semibold underline">
+                  Log in
+                </Link>
+              </>
+            )}
+          </p>
+        )}
         <button type="submit" disabled={loading} className={AUTH_BUTTON_CLASS}>
           {loading ? "Creating…" : "Create login"}
         </button>

@@ -105,12 +105,12 @@ export function ConfirmPublishButton({
             >
               {showingInstantCommitment
                 ? "Approve connected account posts"
-                : "Post this rental"}
+                : "Put your rental page online"}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
               {showingInstantCommitment
                 ? "These accounts get a public post as soon as you approve."
-                : "This puts your Vacantless page online. No site posts yet."}
+                : "Renters can see your page and book a viewing. Posting to rental sites comes next, and you approve each one."}
             </p>
 
             <div className="mt-4 rounded-lg border border-gray-200">
@@ -156,7 +156,7 @@ export function ConfirmPublishButton({
                 disabled={loadingDestinations || Boolean(destinationError)}
                 className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {hasFreshDestinations ? "Approve and post" : "Post it"}
+                {hasFreshDestinations ? "Approve and post" : "Put it online"}
               </button>
               <button
                 type="button"

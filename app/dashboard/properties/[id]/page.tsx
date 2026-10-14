@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { showRelistButton } from "@/lib/relist-visibility";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
@@ -2618,11 +2619,14 @@ export default async function PropertyDetailPage({
     normalizedStatus === "leased"
       ? relistConfirmHref(p.id)
       : relistDistributeHref(p.id, relistAnchor);
-  const showRelistOneTap =
-    relistOneTapEnabled &&
-    (normalizedStatus === "leased" ||
-      (publicPageIsBookable &&
-        listingPacketReadiness.missingRequired.length === 0));
+  // S714d: not on a rental that went live in the last week (lib/relist-visibility).
+  const showRelistOneTap = showRelistButton({
+    enabled: relistOneTapEnabled,
+    leased: normalizedStatus === "leased",
+    bookable: publicPageIsBookable,
+    missingRequired: listingPacketReadiness.missingRequired.length,
+    availableSince: p.available_since,
+  });
   const nextAction = deriveNextAction({
     propertyId: p.id,
     currentStep: lifecycle.currentStep,

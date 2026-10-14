@@ -413,8 +413,9 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
   ok(
     "packet blockers win before relist and outside-site actions",
     propertyDetailSource.includes(": packetBlocked || needsListingWork") &&
+      // S714d: the relist gate moved to lib/relist-visibility (missingRequired > 0 hides it).
       propertyDetailSource.includes(
-        "listingPacketReadiness.missingRequired.length === 0",
+        "missingRequired: listingPacketReadiness.missingRequired.length",
       ),
   );
   ok(

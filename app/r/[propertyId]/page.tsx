@@ -241,6 +241,7 @@ export default async function PublicListingPage({
   params: { propertyId: string };
   searchParams: {
     submitted?: string;
+    texted?: string;
     error?: string;
     p?: string;
     waitlist?: string;
@@ -819,8 +820,8 @@ export default async function PublicListingPage({
               <p className="mt-2 text-sm text-gray-600">
                 {booked
                   ? bookingRequiresConfirmation
-                    ? `We've emailed you the details. Someone from ${l.org_name} will reach out to confirm before your viewing.`
-                    : `We've emailed you the details. ${l.org_name} will see you then.`
+                    ? `${searchParams.texted === "1" ? "We've emailed and texted you the details." : "We've emailed you the details."} Someone from ${l.org_name} will reach out to confirm before your viewing.`
+                    : `${searchParams.texted === "1" ? "We've emailed and texted you the details." : "We've emailed you the details."} ${l.org_name} will see you then.`
                   : `The team at ${l.org_name} will be in touch shortly to set up a viewing.`}
               </p>
             </div>

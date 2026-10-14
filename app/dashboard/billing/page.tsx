@@ -55,6 +55,7 @@ export default async function BillingPage({
     subscription_status: org.subscription_status,
     stripe_subscription_id: org.stripe_subscription_id,
     current_period_end: org.current_period_end,
+    subscription_cancel_at: org.subscription_cancel_at,
     // Without this, a Pilot org's pilot window can't be derived, so the page
     // wrongly falls through to the "free trial" copy (live QA finding S192).
     pilot_started_at: org.pilot_started_at,
@@ -236,7 +237,12 @@ export default async function BillingPage({
               {currentPlanTitle(view.planLabel, addonOffer)}
             </p>
             <p className="mt-1 text-sm text-gray-500">
-              {view.isPaid ? (
+              {view.isPaid && view.cancelsOnLabel ? (
+                <>
+                  Cancelled. You keep your plan until {view.cancelsOnLabel}, then
+                  it moves to Free. Changed your mind? Use Manage billing.
+                </>
+              ) : view.isPaid ? (
                 <>
                   {view.statusLabel}
                   {view.periodEndLabel

@@ -86,9 +86,11 @@ async function attemptBooking(
   leadId: string,
   propertyId: string,
   slot: string,
-): Promise<{ booked: boolean; slotTaken: boolean }> {
+): Promise<{ booked: boolean; slotTaken: boolean; texted: boolean }> {
   let booked = false;
   let slotTaken = false;
+  // S714d: the renter's booked screen says "emailed and texted" when a text went.
+  let texted = false;
   try {
     const { data: avData } = await supabase.rpc("get_public_availability", {
       p_property_id: propertyId,
@@ -196,6 +198,7 @@ async function attemptBooking(
             }),
           });
           if (sms.sent) {
+            texted = true;
             await supabase.rpc("record_booking_sms", {
               p_lead_id: leadId,
               p_to: b.renter_phone,
@@ -215,7 +218,7 @@ async function attemptBooking(
   } catch {
     // swallow — the lead is saved; the caller falls back appropriately.
   }
-  return { booked, slotTaken };
+  return { booked, slotTaken, texted };
 }
 
 // Notify the org's leasing team that a new lead came in — the first
@@ -794,11 +797,13 @@ export async function submitLead(formData: FormData) {
   // "that time was just taken" state on the page instead of the generic
   // inquiry-received message (audit B1). The lead is still saved either way.
   let slotTaken = false;
+  let texted = false;
 
   // --- Booking path -------------------------------------------------------
   if (initialEffects.attemptBooking) {
     const r = await attemptBooking(supabase, payload.lead_id, propertyId, slot);
     slotTaken = r.slotTaken;
+    texted = r.texted;
     outcome = r.booked ? "booked" : "booking_failed";
   }
 
@@ -866,7 +871,7 @@ export async function submitLead(formData: FormData) {
     outcome === "booked" ? "booked" : slotTaken ? "slottaken" : "1";
   redirect(
     withTracking(
-      `/r/${propertyId}?submitted=${submittedState}`,
+      `/r/${propertyId}?submitted=${submittedState}${outcome === "booked" && texted ? "&texted=1" : ""}`,
       listingPostId,
       sourceHint,
       utmSource,
@@ -907,13 +912,13 @@ export async function rebookSavedLead(formData: FormData) {
   }
 
   const supabase = createClient();
-  const { booked } = await attemptBooking(supabase, leadId, propertyId, slot);
+  const { booked, texted } = await attemptBooking(supabase, leadId, propertyId, slot);
 
   if (booked) {
     cookies().delete(cookieName);
     redirect(
       withTracking(
-        `/r/${propertyId}?submitted=booked`,
+        `/r/${propertyId}?submitted=booked${texted ? "&texted=1" : ""}`,
         listingPostId,
         sourceHint,
         utmSource,

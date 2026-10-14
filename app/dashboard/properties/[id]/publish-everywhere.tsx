@@ -528,7 +528,7 @@ export function PublishEverywhere({
               {onlineHeadline}
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-green-800">
-              Your Vacantless page is live too.{" "}
+              {proofSavedCount > 0 ? "Your Vacantless page is live too. " : ""}
               {totalInquiryCount}{" "}
               {totalInquiryCount === 1 ? "inquiry" : "inquiries"} for this
               rental so far.
