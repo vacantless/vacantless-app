@@ -2247,7 +2247,7 @@ export default async function PropertyDetailPage({
       ? {
           tone: "warning",
           title: POSTING_ADDON_NOTE,
-          body: "We post to Kijiji and Zumper for you. Add it on the Billing page.",
+          body: "We post to Kijiji, Rentals.ca and Zumper for you. Add it on the Billing page.",
         }
       : searchParams.dist === "channel_auto_on"
       ? {

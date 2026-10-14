@@ -571,7 +571,7 @@ const PLANS: {
       "Everything in Free",
       "Help from us when you need it",
     ],
-    addon: "Add Posting for CA$49 a month. We post to Kijiji and Zumper for you.",
+    addon: "Add Posting for CA$49 a month. We post to Kijiji, Rentals.ca and Zumper for you.",
     cta: "Choose Growth",
     href: "/signup?plan=growth",
     featured: true,

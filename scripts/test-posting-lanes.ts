@@ -49,10 +49,10 @@ ok(
   JSON.stringify(withoutHiddenMarketplace(["facebook", "kijiji"], all, OTHER)) === JSON.stringify(["facebook", "kijiji"]),
 );
 
-// S704: Rentals.ca is Agile-only (the GitHub robot cannot pass its Cloudflare).
+// S717: Rentals.ca posts from the home runner, so every org sees it.
 ok("Agile sees Rentals.ca", channelShownFor("rentals_ca", AGILE));
-ok("other org does not see Rentals.ca", isHiddenForOrg("rentals_ca", OTHER));
-ok("no org does not see Rentals.ca", isHiddenForOrg("rentals_ca", null));
+ok("S717: other org sees Rentals.ca", channelShownFor("rentals_ca", OTHER));
+ok("S717: no org sees Rentals.ca", channelShownFor("rentals_ca", null));
 ok("S712: other org sees Marketplace", !isHiddenForOrg("facebook", OTHER));
 ok("Kijiji shown for other org", channelShownFor("kijiji", OTHER));
 ok("Zumper shown for other org", channelShownFor("zumper", OTHER));
@@ -64,13 +64,14 @@ ok("Agile does not see Realtor.ca", isHiddenForOrg("realtor_ca", AGILE));
 ok("other org does not see Realtor.ca", isHiddenForOrg("realtor_ca", OTHER));
 ok("Agile drops Realtor.ca from all", !(withoutHiddenChannels(null, [...all2, "realtor_ca"], AGILE) ?? []).includes("realtor_ca"));
 ok(
-  "other org drops only rentals_ca from all (S712: Marketplace stays)",
-  JSON.stringify(withoutHiddenChannels(null, all2, OTHER)) === JSON.stringify(["site", "facebook", "kijiji", "zumper"]),
+  "S717: other org keeps every listed site, Rentals.ca included",
+  JSON.stringify(withoutHiddenChannels(null, all2, OTHER)) === JSON.stringify(all2),
 );
 ok(
-  "other org drops rentals_ca from a proven list",
-  JSON.stringify(withoutHiddenChannels(["rentals_ca", "zumper"], all2, OTHER)) === JSON.stringify(["zumper"]),
+  "S717: other org keeps rentals_ca in a proven list",
+  JSON.stringify(withoutHiddenChannels(["rentals_ca", "zumper"], all2, OTHER)) === JSON.stringify(["rentals_ca", "zumper"]),
 );
+ok("S717: other org still drops Realtor.ca", !(withoutHiddenChannels(null, [...all2, "realtor_ca"], OTHER) ?? []).includes("realtor_ca"));
 ok(
   "Agile keeps a proven list as is",
   JSON.stringify(withoutHiddenChannels(["rentals_ca", "facebook"], all2, AGILE)) === JSON.stringify(["rentals_ca", "facebook"]),

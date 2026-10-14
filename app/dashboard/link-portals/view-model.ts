@@ -125,7 +125,7 @@ export async function buildLinkPortalsViewModel(
     const capCost = row.costCap;
 
     const showConnect = canRenderStage1Connect(row, channel.connectKind);
-    // S705: with "Sign in once" on, Kijiji and Zumper sign in through our
+    // S705: with "Sign in once" on, Kijiji, Zumper and (S717) Rentals.ca sign in through our
     // window instead of naming the account in Settings.
     const connectHref =
       siteSigninLinksOn() && isSiteSigninChannel(row.channel)

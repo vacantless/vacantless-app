@@ -77,7 +77,7 @@ const STEP_DEFS: StepDef[] = [
     key: "get_online",
     label: "Put it on the rental sites",
     description:
-      "Press Set Live on your rental first. Then post it to your Facebook Page for free. With Posting, we post it to Kijiji and Zumper for you. Done when one ad is live.",
+      "Press Set Live on your rental first. Then post it to your Facebook Page for free. With Posting, we post it to Kijiji, Rentals.ca and Zumper for you. Done when one ad is live.",
     href: "/dashboard/properties",
     cta: "Post my rental",
   },

@@ -30,12 +30,12 @@ const AGILE_ORG_ID = "921f7c08-98af-428f-a238-36f4a781b0de"; // Agile Real Estat
 export const MARKETPLACE_ORG_IDS: readonly string[] = [AGILE_ORG_ID];
 
 // S704 (2026-10-11, Noam): Rentals.ca blocks our GitHub robot (Cloudflare, in
-// every setup we probed), so we cannot post it for a new landlord. Agile's
-// Rentals.ca ads run from Noam's Mac, so only Agile sees the site. No other
-// org should be shown "We post it" for a site we cannot post.
+// every setup we probed), so it was Agile only. S717 (2026-10-14): Rentals.ca
+// now runs on the home runner (a computer with a home connection, which its
+// Cloudflare lets through): posting (worker post-home.yml) and "Sign in once"
+// (signin-window-home.yml, proven by Agile's sign-in that day). So every org
+// sees Rentals.ca, like Kijiji and Zumper.
 export const RENTALS_CA_CHANNEL_KEY = "rentals_ca";
-
-export const RENTALS_CA_ORG_IDS: readonly string[] = [AGILE_ORG_ID];
 
 // S710 (Noam took the audit's recommendation): Realtor.ca is an MLS listing
 // that only a Royal LePage agent can place, as a full-service listing under a
@@ -48,7 +48,6 @@ export const REALTOR_CA_ORG_IDS: readonly string[] = [];
 
 /** Sites shown only to the orgs listed against them. Every other site shows for everyone. */
 const ORG_ONLY_CHANNELS: Readonly<Record<string, readonly string[]>> = {
-  [RENTALS_CA_CHANNEL_KEY]: RENTALS_CA_ORG_IDS,
   [REALTOR_CA_CHANNEL_KEY]: REALTOR_CA_ORG_IDS,
 };
 

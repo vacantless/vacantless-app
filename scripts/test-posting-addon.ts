@@ -224,7 +224,7 @@ ok("no buy button when price unset (admin-only note)", billingPage.includes('add
 
 // --- 8. Homepage -------------------------------------------------------------
 const home = read("app/page.tsx");
-ok("homepage names the add-on under Growth", home.includes('addon: "Add Posting for CA$49 a month. We post to Kijiji and Zumper for you."'));
+ok("homepage names the add-on under Growth", home.includes('addon: "Add Posting for CA$49 a month. We post to Kijiji, Rentals.ca and Zumper for you."'));
 ok("homepage renders the add-on line", home.includes("{p.addon}"));
 
 // S714: no second buy button while a purchase is still landing.
