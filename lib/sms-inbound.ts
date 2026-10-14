@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { classifyInbound, normalizePhoneE164 } from "./sms";
+import { classifyInbound, normalizePhoneE164, orgCanUseSharedSmsNumber } from "./sms";
 
 type SmsInboundClient = Pick<SupabaseClient, "from">;
 
@@ -11,8 +11,17 @@ type LeadMatch = {
 
 type TenantMatch = {
   id: string;
+  organization_id?: string | null;
   sms_opt_out?: boolean | null;
 };
+
+// S717: the shared number only ever texts for orgs on SHARED_SMS_NUMBER_ORG_IDS,
+// so a reply, STOP, START or call to it belongs to those orgs only. Before this,
+// a renter known to two landlords had their reply and their STOP filed into
+// both (2026-10-07: Agile and Davis Muscovitch Rentals).
+function onSharedNumber<T extends { organization_id?: string | null }>(rows: T[]): T[] {
+  return rows.filter((r) => orgCanUseSharedSmsNumber(r.organization_id ?? null));
+}
 
 export type ApplyInboundSmsResult = {
   action: "stop" | "start" | "reply" | "ignored";
@@ -23,6 +32,8 @@ export type ApplyInboundSmsResult = {
   updatedTenants: number;
   messagesInserted: number;
   reason?: "invalid_sender" | "empty_body";
+  /** S717: the renters (lead id + org) a plain reply was filed to, for the landlord alert. */
+  repliedLeads?: { leadId: string; orgId: string }[];
 };
 
 export type ApplyInboundSmsInput = {
@@ -72,7 +83,7 @@ export async function applyInboundSms(
     .from("leads")
     .select("id, organization_id, sms_opt_out")
     .eq("phone_e164", senderE164);
-  const leads = ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id);
+  const leads = onSharedNumber(((leadRows ?? []) as LeadMatch[]).filter((l) => l.id));
 
   const base = {
     senderE164,
@@ -100,6 +111,7 @@ export async function applyInboundSms(
       ...base,
       action: "reply",
       messagesInserted: rows.length,
+      repliedLeads: rows.map((r) => ({ leadId: r.lead_id, orgId: r.organization_id as string })),
     };
   }
 
@@ -137,9 +149,9 @@ export async function applyInboundSms(
   // in sync with STOP/START so later tenant SMS paths skip correctly.
   const { data: tenantRows } = await admin
     .from("tenants")
-    .select("id, sms_opt_out")
+    .select("id, organization_id, sms_opt_out")
     .eq("phone_e164", senderE164);
-  const tenants = ((tenantRows ?? []) as TenantMatch[]).filter((t) => t.id);
+  const tenants = onSharedNumber(((tenantRows ?? []) as TenantMatch[]).filter((t) => t.id));
   const tenantIds = tenants
     .filter((t) => Boolean(t.sms_opt_out) !== optOut)
     .map((t) => t.id);
@@ -171,14 +183,16 @@ export async function applyInboundSms(
 export async function logInboundCall(
   admin: SmsInboundClient,
   input: { from: string | null | undefined; answered: boolean; voicemail: boolean },
-): Promise<{ matchedLeads: number; messagesInserted: number }> {
+): Promise<{ matchedLeads: number; messagesInserted: number; calledLeads?: { leadId: string; orgId: string }[] }> {
   const senderE164 = normalizePhoneE164(input.from);
   if (!senderE164 || input.answered) return { matchedLeads: 0, messagesInserted: 0 };
   const { data: leadRows } = await admin
     .from("leads")
     .select("id, organization_id")
     .eq("phone_e164", senderE164);
-  const leads = ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id && l.organization_id);
+  const leads = onSharedNumber(
+    ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id && l.organization_id),
+  );
   const body = input.voicemail
     ? "Renter called the texting number and left a voicemail. Call them back."
     : "Renter called the texting number. Nobody answered. Call them back.";
@@ -190,5 +204,9 @@ export async function logInboundCall(
     body,
   }));
   if (rows.length > 0) await admin.from("messages").insert(rows);
-  return { matchedLeads: leads.length, messagesInserted: rows.length };
+  return {
+    matchedLeads: leads.length,
+    messagesInserted: rows.length,
+    calledLeads: rows.map((r) => ({ leadId: r.lead_id, orgId: r.organization_id as string })),
+  };
 }

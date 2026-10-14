@@ -146,7 +146,7 @@ export async function dispatchTenantMessage(args: {
     } else {
       const renderedBody = renderForRecipient(body, ctx);
       const smsBody = buildTenantSmsBody(renderedBody, org.name);
-      const result = await sendSms({ to: d.destination, body: smsBody });
+      const result = await sendSms({ organizationId: org.id, to: d.destination, body: smsBody });
       if (result.sent) sent++;
       else failed++;
       deliveries.push({

@@ -738,7 +738,8 @@ const freeTierCopy = `${TIERS.free.blurb} ${TIERS.free.features.join(" ")}`.toLo
 const growthTierCopy = `${TIERS.growth.blurb} ${TIERS.growth.features.join(" ")}`.toLowerCase();
 // S702j: Free and Growth read like the homepage pricing (leasing first).
 ok("Free tier card offers one live rental", freeTierCopy.includes("one live rental"));
-ok("Growth tier card offers renter texts", growthTierCopy.includes("texts to renters"));
+// S717: texting is Agile only until each landlord has its own number; Growth must not sell it.
+ok("Growth tier card does not sell renter texts", !/\btexts?\b/i.test(growthTierCopy));
 ok("Growth tier card no longer lists rent collection", !growthTierCopy.includes("rent collection"));
 ok("Growth blurb no longer says collect rent", !TIERS.growth.blurb.toLowerCase().includes("collect rent"));
 

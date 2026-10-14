@@ -490,6 +490,7 @@ export async function GET(req: NextRequest) {
     // --- Coordinated SMS reminder -----------------------------------------
     if (kind && plan.sms && normalizedPhone) {
       const result = await sendSms({
+        organizationId: row.organization_id ?? null,
         to: normalizedPhone,
         body: showingReminderSms(
           {

@@ -258,7 +258,7 @@ export default async function BillingPage({
               ) : view.pilotExpired ? (
                 "Your 30-day pilot has ended. Choose a plan below to keep going."
               ) : (
-                "Free covers one live rental. Choose Growth below for more rentals and texts to renters."
+                "Free covers one live rental. Choose Growth below for more rentals."
               )}
             </p>
           </div>

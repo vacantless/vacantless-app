@@ -188,7 +188,14 @@ async function attemptBooking(
         }
         const smsAllowed = b.sms_enabled === true && canUseRenterSms(orgPlan) && smsLive();
         if (smsAllowed && b.renter_phone && !b.sms_opt_out) {
+          // S717: the shared-number gate needs the org; the booking RPC does
+          // not return it, so read it off the property.
+          const smsAdmin = createAdminClient();
+          const { data: propOrg } = smsAdmin
+            ? await smsAdmin.from("properties").select("organization_id").eq("id", propertyId).maybeSingle()
+            : { data: null };
           const sms = await sendSms({
+            organizationId: (propOrg?.organization_id as string | null | undefined) ?? null,
             to: b.renter_phone,
             body: bookingConfirmationSms({
               org_name: b.org_name,

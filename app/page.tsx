@@ -444,7 +444,6 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
       "A reply by email within seconds, with a link to book",
       "Viewing times they pick themselves, whenever suits them",
       "An email confirmation and a reminder email the day before",
-      "On Growth, a text when they book and on the day",
       "A cancel link, so you hear about it instead of a no show",
     ],
   },
@@ -467,8 +466,7 @@ function Pricing() {
     <section id="pricing" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="Two plans. Simple.">
-          Try it free on one rental. Move up when you have more than one, or
-          when you want renters texted.
+          Try it free on one rental. Move up when you have more than one.
         </SectionHead>
         <div className="grid gap-4 md:grid-cols-2">
           {PLANS.map((p) => (
@@ -567,10 +565,9 @@ const PLANS: {
     name: "Growth",
     price: "CA$99",
     priceNote: "a month",
-    body: "As many rentals as you have, and renters get texts too.",
+    body: "As many rentals as you have.",
     includes: [
       "Unlimited live rentals",
-      "Booking and reminder texts to renters",
       "Everything in Free",
       "Help from us when you need it",
     ],

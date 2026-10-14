@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTwilioSignature } from "@/lib/sms";
 import { applyInboundSms } from "@/lib/sms-inbound";
+import { notifyOperatorsOfTextReply } from "@/lib/sms-reply-notify-server";
 
 // Twilio inbound-SMS webhook. Honors opt-out: a renter who texts STOP (or
 // UNSUBSCRIBE/CANCEL/etc.) is suppressed from all future Vacantless SMS by
@@ -68,7 +69,15 @@ export async function POST(req: NextRequest) {
 
   // Shared core: STOP/START flips lead + tenant opt-out state; ordinary renter
   // replies are logged to every matched lead timeline. No app-generated reply.
-  await applyInboundSms(admin, { from: params.From ?? "", body: params.Body ?? "" });
+  const summary = await applyInboundSms(admin, { from: params.From ?? "", body: params.Body ?? "" });
+  // S717: a renter's text reply is emailed to the landlord.
+  for (const l of summary.repliedLeads ?? []) {
+    await notifyOperatorsOfTextReply(admin, {
+      orgId: l.orgId,
+      leadId: l.leadId,
+      replyText: (params.Body ?? "").trim().slice(0, 1000),
+    });
+  }
 
   // Rely on Twilio's built-in opt-out confirmation; send no second message.
   return twiml();

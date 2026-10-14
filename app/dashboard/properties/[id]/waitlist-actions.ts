@@ -224,6 +224,7 @@ export async function notifyWaitlist(formData: FormData) {
     }
     if (smsOn && entry.phone_e164) {
       const smsRes = await sendSms({
+        organizationId: org.id,
         to: entry.phone_e164,
         body: waitlistVacancySms({
           org_name: orgRow?.name ?? null,

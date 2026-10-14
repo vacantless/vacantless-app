@@ -105,7 +105,8 @@ async function main() {
   ok("text logged", a.inserted.some((i) => i.table === "messages" && i.rows[0].channel === "sms"));
 
   // --- logInboundCall ---
-  const b = fakeAdmin({ leads: [{ id: "l1", organization_id: "o1", phone_e164: "+15195551234" }] });
+  // S717: only orgs on the shared texting number own a call to it.
+  const b = fakeAdmin({ leads: [{ id: "l1", organization_id: "921f7c08-98af-428f-a238-36f4a781b0de", phone_e164: "+15195551234" }, { id: "l2", organization_id: "o-other", phone_e164: "+15195551234" }] });
   const r1 = await logInboundCall(b as any, { from: "+15195551234", answered: false, voicemail: true });
   ok("missed call logged on lead", r1.messagesInserted === 1 && b.inserted[0].rows[0].channel === "call");
   ok("voicemail wording", String(b.inserted[0].rows[0].body).includes("voicemail"));

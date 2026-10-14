@@ -164,7 +164,7 @@ async function main() {
       leads: [
         {
           id: "lead-1",
-          organization_id: "org-1",
+          organization_id: "921f7c08-98af-428f-a238-36f4a781b0de",
           phone_e164: "+15195551234",
           sms_opt_out: false,
         },
@@ -172,22 +172,23 @@ async function main() {
           id: "lead-2",
           organization_id: "org-2",
           phone_e164: "+15195551234",
-          sms_opt_out: true,
+          sms_opt_out: false,
         },
       ],
-      tenants: [{ id: "tenant-1", phone_e164: "+15195551234", sms_opt_out: false }],
+      tenants: [{ id: "tenant-1", organization_id: "921f7c08-98af-428f-a238-36f4a781b0de", phone_e164: "+15195551234", sms_opt_out: false }],
     });
     const result = await applyInboundSms(admin, {
       from: "(519) 555-1234",
       body: "STOP please",
     });
     eq("STOP action", result.action, "stop");
-    eq("STOP matches both leads", result.matchedLeads, 2);
-    eq("STOP updates only changing lead", result.updatedLeads, 1);
+    // S717: only orgs on the shared texting number own a STOP sent to it.
+    eq("STOP matches only the texting org's lead", result.matchedLeads, 1);
+    eq("STOP updates only that lead", result.updatedLeads, 1);
     eq("STOP updates tenant", result.updatedTenants, 1);
     eq("STOP logs one affected lead message", result.messagesInserted, 1);
     eq("STOP flips lead opt-out", state.leads[0].sms_opt_out, true);
-    eq("STOP leaves already opted-out lead", state.leads[1].sms_opt_out, true);
+    eq("STOP never opts the renter out of another landlord", state.leads[1].sms_opt_out, false);
     eq("STOP timeline body", state.messages[0].body, "Renter texted STOP \u2014 opted out of SMS");
   }
 
@@ -196,7 +197,7 @@ async function main() {
       leads: [
         {
           id: "lead-1",
-          organization_id: "org-1",
+          organization_id: "921f7c08-98af-428f-a238-36f4a781b0de",
           phone_e164: "+15195551234",
           sms_opt_out: false,
         },
@@ -207,14 +208,15 @@ async function main() {
           sms_opt_out: false,
         },
       ],
-      tenants: [{ id: "tenant-1", phone_e164: "+15195551234", sms_opt_out: false }],
+      tenants: [{ id: "tenant-1", organization_id: "921f7c08-98af-428f-a238-36f4a781b0de", phone_e164: "+15195551234", sms_opt_out: false }],
     });
     const result = await applyInboundSms(admin, {
       from: "+15195551234",
       body: "  Is parking included?  ",
     });
     eq("normal reply action", result.action, "reply");
-    eq("normal reply logs each matched lead", result.messagesInserted, 2);
+    eq("normal reply is filed only to the texting org", result.messagesInserted, 1);
+    deepEq("normal reply names the lead to alert", result.repliedLeads, [{ leadId: "lead-1", orgId: "921f7c08-98af-428f-a238-36f4a781b0de" }]);
     eq("normal reply does not update leads", result.updatedLeads, 0);
     eq("normal reply does not update tenants", result.updatedTenants, 0);
     deepEq(
@@ -228,15 +230,8 @@ async function main() {
       })),
       [
         {
-          organization_id: "org-1",
+          organization_id: "921f7c08-98af-428f-a238-36f4a781b0de",
           lead_id: "lead-1",
-          channel: "sms",
-          direction: "inbound",
-          body: "Is parking included?",
-        },
-        {
-          organization_id: "org-2",
-          lead_id: "lead-2",
           channel: "sms",
           direction: "inbound",
           body: "Is parking included?",

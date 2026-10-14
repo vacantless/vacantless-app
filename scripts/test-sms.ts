@@ -1,5 +1,6 @@
 // Run with: npx tsx scripts/test-sms.ts
 import {
+  orgCanUseSharedSmsNumber,
   buildQuoPayload,
   isSmsConfigured,
   normalizePhoneE164,
@@ -125,7 +126,7 @@ try {
   }) as typeof fetch;
   deepEq(
     "sendSms returns dark no-op when SMS_LIVE is unset",
-    await sendSms({ to: "+15195551234", body: "Hello" }),
+    await sendSms({ organizationId: "921f7c08-98af-428f-a238-36f4a781b0de", to: "+15195551234", body: "Hello" }),
     { sent: false, reason: "sms_not_live" },
   );
   ok("sendSms dark no-op makes no network call", !fetchCalled);
@@ -169,6 +170,10 @@ eq("9 digits ambiguous -> null", normalizePhoneE164("519555123"), null);
 eq("letters only -> null", normalizePhoneE164("call me"), null);
 
 // --- samePhone --------------------------------------------------------------
+// S717: texting is Agile only until each landlord has their own number.
+ok("shared number: Agile may text", orgCanUseSharedSmsNumber("921f7c08-98af-428f-a238-36f4a781b0de"));
+ok("shared number: another org may not", !orgCanUseSharedSmsNumber("b6fdceb7-e7f6-4f54-bbab-107ae5d3254a"));
+ok("shared number: no org may not", !orgCanUseSharedSmsNumber(null));
 ok("samePhone formats match", samePhone("(519) 555-1234", "+15195551234"));
 ok("samePhone differs", !samePhone("5195551234", "4165551234"));
 ok("samePhone null safe", !samePhone(null, "5195551234"));

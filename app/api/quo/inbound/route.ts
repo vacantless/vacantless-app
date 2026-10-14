@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { parseOpenPhoneCall, parseOpenPhoneInbound, verifyOpenPhoneSignature } from "@/lib/sms";
 import { applyInboundSms, logInboundCall } from "@/lib/sms-inbound";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyOperatorsOfTextReply } from "@/lib/sms-reply-notify-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,6 +35,16 @@ export async function POST(req: NextRequest) {
     const callAdmin = createAdminClient();
     if (!callAdmin) return NextResponse.json({ ok: true, handled: "unconfigured_admin" });
     const summary = await logInboundCall(callAdmin, call);
+    // S717: the landlord hears about the call, not just the renter's record.
+    for (const l of summary.calledLeads ?? []) {
+      await notifyOperatorsOfTextReply(callAdmin, {
+        orgId: l.orgId,
+        leadId: l.leadId,
+        replyText: call.voicemail
+          ? "(They called the texting number and left a voicemail. Call them back.)"
+          : "(They called the texting number and nobody answered. Call them back.)",
+      });
+    }
     return NextResponse.json({ ok: true, handled: "call_logged", summary });
   }
 
@@ -47,6 +58,14 @@ export async function POST(req: NextRequest) {
     from: inbound.from,
     body: inbound.body,
   });
+  // S717: a renter's text reply is emailed to the landlord.
+  for (const l of summary.repliedLeads ?? []) {
+    await notifyOperatorsOfTextReply(admin, {
+      orgId: l.orgId,
+      leadId: l.leadId,
+      replyText: (inbound.body ?? "").trim().slice(0, 1000),
+    });
+  }
 
   return NextResponse.json({ ok: true, handled: "message_received", summary });
 }

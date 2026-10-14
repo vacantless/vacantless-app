@@ -794,6 +794,23 @@ export async function requestMailAlias(formData: FormData) {
     redirect("/dashboard/settings?tab=comms&sender=error");
   }
 
+  // S717: the alias is set up by hand in ImprovMX, and nobody was told a
+  // request had come in. Email the Vacantless admins.
+  for (const to of adminEmails()) {
+    await sendNotificationEmail({
+      to_email: to,
+      subject: `Alias request: ${alias}@vacantless.com for ${org.name ?? org.id}`,
+      body:
+        `${org.name ?? "An organization"} asked for ${alias}@vacantless.com.\n` +
+        `Forward it to: ${org.reply_to_email}\nOrg id: ${org.id}\n\n` +
+        "Add the alias in ImprovMX, then mark the request verified.",
+      org_name: "Vacantless",
+      brand_color: null,
+      logo_url: null,
+      reply_to_email: null,
+    }).catch(() => null);
+  }
+
   redirect("/dashboard/settings?tab=comms&sender=alias_requested");
 }
 

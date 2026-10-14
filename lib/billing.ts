@@ -529,11 +529,10 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceCents: 9900,
     priceEnv: "STRIPE_PRICE_GROWTH",
     maxActiveListings: null,
-    blurb: "As many rentals as you have, and renters get texts too.",
+    blurb: "As many rentals as you have.",
     highlight: true,
     features: [
       "Unlimited live rentals",
-      "Booking and reminder texts to renters",
       "Everything in Free",
       "Help from us when you need it",
     ],
@@ -599,6 +598,7 @@ export const POSTING_ADDON = {
   blurb: "We post your rentals to Kijiji and Zumper for you.",
   features: [
     "We post to Kijiji and Zumper",
+    "Set up with you, on your own Kijiji and Zumper accounts",
     "You approve every ad first",
     "Kijiji ad fees extra, at cost, inside your limits",
   ],

@@ -55,7 +55,7 @@ export async function textViewingTimesOpened(
       property_address: args.address,
       booking_url: listingUrl(args.propertyId),
     });
-    const result = await send({ to, body });
+    const result = await send({ organizationId: args.org.id, to, body });
     if (result.sent) {
       await admin.from("messages").insert({
         organization_id: args.org.id,

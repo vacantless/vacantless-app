@@ -472,6 +472,23 @@ export function parseOpenPhoneInbound(payload: unknown): OpenPhoneInboundMessage
 // ---------------------------------------------------------------------------
 
 export type SendSmsInput = { to: string | null | undefined; body: string };
+/** S717: every send names the org it is for, so the shared-number gate holds. */
+export type SendOrgSmsInput = SendSmsInput & { organizationId: string | null | undefined };
+
+// S717: every renter text goes out from ONE QUO number registered to
+// Vacantless as a sole proprietor. That registration covers Agile (the
+// founder's own leasing) and nobody else, and replies to it cannot be routed
+// per landlord. Until each landlord has their own number (Twilio, after
+// incorporation), texting is Agile only. One list, read by the send gate,
+// the inbound router and the Settings card.
+export const SHARED_SMS_NUMBER_ORG_IDS: readonly string[] = [
+  "921f7c08-98af-428f-a238-36f4a781b0de", // Agile Real Estate Group
+];
+
+/** Whether this org may text renters or tenants at all. Pure. */
+export function orgCanUseSharedSmsNumber(orgId: string | null | undefined): boolean {
+  return !!orgId && SHARED_SMS_NUMBER_ORG_IDS.includes(orgId);
+}
 export type SmsProvider = "twilio" | "quo" | "none";
 
 type ActiveSmsProvider = Exclude<SmsProvider, "none">;
@@ -627,8 +644,9 @@ export function isSmsConfigured(): boolean {
  * { sent:false, reason } when unconfigured, the number is unusable, or the
  * provider rejects it.
  */
-export async function sendSms({ to, body }: SendSmsInput): Promise<SmsResult> {
+export async function sendSms({ to, body, organizationId }: SendOrgSmsInput): Promise<SmsResult> {
   if (!smsLive()) return { sent: false, reason: "sms_not_live" };
+  if (!orgCanUseSharedSmsNumber(organizationId)) return { sent: false, reason: "org_not_on_sms" };
   const provider = selectSmsProvider();
   return provider === "none"
     ? { sent: false, reason: "no_credentials" }

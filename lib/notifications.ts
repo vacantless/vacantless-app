@@ -250,6 +250,22 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "New inquiry from {{lead_name}} for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{no_suitable_time_note}}\n\n{{screening}}\n\nReply when you can and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
   },
+  // S717: a renter texted back (or called) the texting number. Before this the
+  // reply only landed on the renter's record and nobody was told.
+  {
+    key: "leasing.renter_text_reply",
+    family: "leasing",
+    audience: "operator",
+    label: "Renter texted back",
+    description:
+      "When a renter replies to one of our texts, or calls the texting number, your leasing team gets the message by email so nobody is left waiting.",
+    tokens: [...COMMON_TOKENS, "lead_name", "lead_phone", "reply_text", "dashboard_url"],
+    defaultSubject: "{{lead_name}} texted back about {{property_address}}",
+    defaultBody:
+      "{{lead_name}} ({{lead_phone}}) wrote:\n\n{{reply_text}}\n\nReply to them by phone or text from your own phone. Their record: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Real-time viewing-booked alert (S490). Audience operator; complements
   // leasing.new_lead with the missing booked-time signal when a renter self-books
   // from /r. Defaults to the same manage-leads member fallback, so the covering
@@ -1160,6 +1176,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
 const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   // showing — the inquiry-to-lease funnel
   "leasing.new_lead": "showing",
+  "leasing.renter_text_reply": "showing",
   "leasing.viewing_booked": "showing",
   "leasing.showing_outcome_nudge": "showing",
   "leasing.showing_cancelled": "showing",

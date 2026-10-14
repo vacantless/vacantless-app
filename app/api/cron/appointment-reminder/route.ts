@@ -298,6 +298,7 @@ export async function GET(req: NextRequest) {
               summary.details.push({ org: org.id, appt: row.id, channel: "sms", kind: smsKind, dry: true, to: tenantPhone });
             } else {
               const result = await sendSms({
+                organizationId: org.id,
                 to: tenantPhone,
                 body: repairReminderSms(
                   { org_name: org.name ?? null, property_address: address, when_label: windowLabel },

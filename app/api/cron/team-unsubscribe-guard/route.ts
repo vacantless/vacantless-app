@@ -70,13 +70,15 @@ export async function GET(req: NextRequest) {
     admin.from("memberships").select("user_id"),
   ]);
 
+  // One page of up to 1000 users per call instead of one call per member.
   const memberEmails: string[] = [];
-  const userIds = Array.from(
-    new Set(((members.data ?? []) as { user_id: string }[]).map((m) => m.user_id)),
-  );
-  for (const id of userIds) {
-    const { data: u } = await admin.auth.admin.getUserById(id);
-    if (u?.user?.email) memberEmails.push(u.user.email);
+  const userIds = new Set(((members.data ?? []) as { user_id: string }[]).map((m) => m.user_id));
+  for (let page = 1; page <= 50; page++) {
+    const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (listErr) break;
+    const users = list?.users ?? [];
+    for (const u of users) if (userIds.has(u.id) && u.email) memberEmails.push(u.email);
+    if (users.length < 1000) break;
   }
 
   const team = buildTeamAddressSet([

@@ -257,7 +257,7 @@ export async function textBackCaller(
       booking_url: args.bookingUrl,
       answer: args.answer,
     });
-    const result = await send({ to, body });
+    const result = await send({ organizationId: args.orgId, to, body });
     if (result.sent) {
       await admin.from("messages").insert({
         organization_id: args.orgId,

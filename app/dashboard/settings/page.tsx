@@ -7,7 +7,7 @@ import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { getRoleForOrg } from "@/lib/membership";
 import { canUseRenterSms } from "@/lib/billing";
-import { isSmsConfigured } from "@/lib/sms";
+import { isSmsConfigured, orgCanUseSharedSmsNumber } from "@/lib/sms";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import {
@@ -696,6 +696,8 @@ export default async function SettingsPage({
   // out is a TRANSPORT fact (SMS_LIVE + provider creds). Read it so the UI
   // never implies texting while the account's SMS is not connected.
   const smsTransportReady = isSmsConfigured();
+  // S717: texting is Agile only until each landlord has their own number.
+  const orgTexts = orgCanUseSharedSmsNumber(org.id);
 
   return (
     <div>
@@ -1888,6 +1890,13 @@ export default async function SettingsPage({
                 Text messages
               </h3>
             </div>
+            {!orgTexts ? (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                Texting renters is not available on your account yet. Renters
+                get every booking confirmation and reminder by email.
+              </div>
+            ) : (
+            <>
 
             {smsFlash === "saved" && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
@@ -1965,6 +1974,8 @@ export default async function SettingsPage({
               </span>
             </label>
 
+            </>
+            )}
           </div>
 
           {/* --- Renter messages --- */}
@@ -2400,7 +2411,7 @@ export default async function SettingsPage({
                       type="text"
                       inputMode="text"
                       pattern="[a-z0-9][a-z0-9-]{1,30}"
-                      placeholder="agile"
+                      placeholder="yourcompany"
                       defaultValue={mailAliasProvision?.requested_alias ?? org.mail_alias ?? ""}
                       className="min-w-0 flex-1 rounded-l-lg border border-gray-300 px-3 py-2 text-sm"
                     />
