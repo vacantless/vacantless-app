@@ -1966,7 +1966,7 @@ export default async function PropertyDetailPage({
   // only: distributeChannelCards itself is untouched, so posting, connecting
   // and the proof grid all keep working for every channel.
   // S702v: Marketplace is listed only for orgs that post it by hand today.
-  // S704: same for Rentals.ca, which our robot cannot post (Agile only).
+  // S704: Rentals.ca was hidden here too; S717 shows it to every org (home runner).
   const shownChannelKeys = withoutHiddenChannels(
     showOnlyProvenChannelsEnabled() ? await loadShownChannelKeys(distributeToday) : null,
     distributeChannelCards.map((card) => card.channel.key as string),

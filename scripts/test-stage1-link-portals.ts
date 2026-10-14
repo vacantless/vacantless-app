@@ -8,7 +8,6 @@ import {
   stage1ConnectButtonKey,
   stage1ConnectHref,
   stage1ReasonKey,
-  rentalsCaPostedForYou,
   stage1StatusCopy,
   STAGE1_GROUPS,
 } from "../lib/stage1-link-portals";
@@ -249,17 +248,11 @@ eq("account_login linked sub does not promise automatic sending", stage1StatusCo
 eq("account_login not_linked sub does not promise posting for you", stage1StatusCopy("not_linked", "account_login").subKey, "status.notLinkedSubLogin");
 eq("oauth linked keeps the automatic sub", stage1StatusCopy("linked", "oauth").subKey, "status.linkedSub");
 
-// --- S712: Rentals.ca "posted for you" never masks a real blocker -------------
-for (const s of ["linked", "not_linked", "checking"] as const) {
-  eq(`rentals.ca ${s} reads posted for you`, rentalsCaPostedForYou(s), true);
-}
-for (const s of ["dead_session", "cap_reached", "connected_needs_authorization"] as const) {
-  eq(`rentals.ca ${s} keeps its own label`, rentalsCaPostedForYou(s), false);
-}
+// --- S717: Rentals.ca has no "posted for you" override any more ---------------
 {
   const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
-  eq("view model gates the override on the state", vm.includes("row.channel === RENTALS_CA_CHANNEL_KEY && rentalsCaPostedForYou(row.state)"), true);
-  eq("posted-for-you tile still asks for a stale check", vm.includes("needsCheck: row.needsCheck,\n        lastCheckedAt: row.lastCheckedAt,\n        kijijiTier: null,"), true);
+  eq("S717: no Rentals.ca posted-for-you override", vm.includes("postedForYouSub"), false);
+  eq("S717: Rentals.ca not-signed-in uses Sign in once", vm.includes('isSiteSigninChannel(row.channel) && row.state === "not_linked"'), true);
   eq("no tile hard-codes needsCheck false", vm.includes("needsCheck: false"), false);
 }
 

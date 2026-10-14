@@ -1,4 +1,4 @@
-import { isHiddenForOrg, isRobotPostedChannel, RENTALS_CA_CHANNEL_KEY } from "@/lib/posting-lanes";
+import { isHiddenForOrg, isRobotPostedChannel } from "@/lib/posting-lanes";
 import { POSTING_ADDON_HREF } from "@/lib/billing";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +12,6 @@ import {
 } from "@/lib/distribution-channels";
 import type { ChannelTileStatusRow } from "@/lib/distribution-channel-tile-statuses";
 import {
-  rentalsCaPostedForYou,
   canRenderStage1Connect,
   groupStage1ChannelRows,
   stage1AuthorizeHref,
@@ -228,35 +227,9 @@ export async function buildLinkPortalsViewModel(
           }
         : null;
 
-    // S711 audit: Rentals.ca shows only for Agile, whose ads are posted for
-    // it from our side (the robot cannot reach Rentals.ca). The tile asked
-    // Agile to "Add your Rentals.ca account" next to ads already live, which
-    // read as a to-do. Say it plainly instead: posted for you, nothing to do.
-    if (row.channel === RENTALS_CA_CHANNEL_KEY && rentalsCaPostedForYou(row.state)) {
-      return {
-        channel: row.channel,
-        label: channel.label,
-        connectKind: channel.connectKind,
-        state: row.state,
-        tone: "success",
-        title: t("status.linked"),
-        sub: t("status.postedForYouSub", { name: channel.label }),
-        kindLine: t("kindPostedForYou"),
-        accountLine: null,
-        checkedLine: null,
-        capLine: t("cap.rentalsUnknown"),
-        costLine: null,
-        button: null,
-        igNote: null,
-        // S712 (Codex review): an unchecked sign-in still asks for a check, so
-        // a sign-in that really ended turns into its own "Sign in again".
-        needsCheck: row.needsCheck,
-        lastCheckedAt: row.lastCheckedAt,
-        kijijiTier: null,
-        forget: null,
-        addonNote,
-      };
-    }
+    // S717: the S711 "Ready, posted for you" override for Rentals.ca is gone.
+    // Rentals.ca is a normal Sign in once site for every landlord now (home
+    // runner), so a landlord who has not signed in must see the sign-in button.
 
     return {
       channel: row.channel,

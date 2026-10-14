@@ -175,17 +175,6 @@ export function stage1StatusCopy(
   return copy;
 }
 
-/**
- * S712 (Codex review): Rentals.ca (Agile only) reads "Ready, posted for you"
- * only while nothing is wrong: linked, not linked, or not checked yet (the
- * robot cannot reach Rentals.ca, so these are the everyday states). A real
- * blocker (sign-in ended, free limit reached, waiting for the go) keeps its
- * own label.
- */
-export function rentalsCaPostedForYou(state: ChannelTileState): boolean {
-  return state === "linked" || state === "not_linked" || state === "checking";
-}
-
 export function groupStage1ChannelRows(
   rows: readonly ChannelTileStatusRow[],
 ): Stage1GroupedRows[] {

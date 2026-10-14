@@ -24,7 +24,7 @@ const TONE: Record<PortalInboxSiteState["state"], "success" | "attention" | "neu
 };
 
 export async function PortalInboxCard({ orgId }: { orgId: string }) {
-  // S710 audit: drop sites this org is not shown anywhere else (Rentals.ca is Agile only).
+  // S710 audit: drop sites this org is not shown anywhere else (S717: only Realtor.ca now).
   const sites = portalInboxSites().filter((s) => channelShownFor(s.key, orgId));
   if (sites.length === 0) return null;
 
