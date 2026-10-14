@@ -120,7 +120,7 @@ async function main() {
   ok("QUO route logs calls", route.includes("logInboundCall") && route.includes("parseOpenPhoneCall"));
   const ingest = readFileSync("lib/ai-enquiry-ingest.ts", "utf8");
   ok("ingest texts phone-only callers", ingest.includes("textBackCaller(admin"));
-  ok("Agile still excluded first", ingest.indexOf("ORGS_THAT_ANSWER_THEMSELVES.includes") < ingest.indexOf("textBackCaller(admin"));
+  ok("Agile still excluded first", ingest.indexOf('orgHasSwitch(admin, "answers_own_enquiries"') < ingest.indexOf("textBackCaller(admin"));
 
   console.log(`\nai-calls: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

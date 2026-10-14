@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 import { adminEmails } from "@/lib/provisioning-server";
 import { channelShownFor } from "@/lib/posting-lanes";
 import { isAdminEmail } from "@/lib/provisioning";
@@ -7,7 +8,8 @@ import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { getRoleForOrg } from "@/lib/membership";
 import { canUseRenterSms } from "@/lib/billing";
-import { isSmsConfigured, orgCanUseSharedSmsNumber } from "@/lib/sms";
+import { isSmsConfigured } from "@/lib/sms";
+import { orgHasSwitch } from "@/lib/platform-switches";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import {
@@ -697,7 +699,7 @@ export default async function SettingsPage({
   // never implies texting while the account's SMS is not connected.
   const smsTransportReady = isSmsConfigured();
   // S717: texting is Agile only until each landlord has their own number.
-  const orgTexts = orgCanUseSharedSmsNumber(org.id);
+  const orgTexts = await orgHasSwitch(createAdminClient(), "shared_sms_number", org.id);
 
   return (
     <div>

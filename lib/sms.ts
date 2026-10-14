@@ -25,6 +25,7 @@
 // they are exempt from quiet-hours throttling; the quiet-hours helper below is
 // kept pure + tested for any future promotional path.
 
+import { builtInSwitchOn, orgHasSwitch } from "./platform-switches";
 import { createHmac, timingSafeEqual } from "crypto";
 
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01/Accounts";
@@ -479,15 +480,23 @@ export type SendOrgSmsInput = SendSmsInput & { organizationId: string | null | u
 // Vacantless as a sole proprietor. That registration covers Agile (the
 // founder's own leasing) and nobody else, and replies to it cannot be routed
 // per landlord. Until each landlord has their own number (Twilio, after
-// incorporation), texting is Agile only. One list, read by the send gate,
-// the inbound router and the Settings card.
-export const SHARED_SMS_NUMBER_ORG_IDS: readonly string[] = [
-  "921f7c08-98af-428f-a238-36f4a781b0de", // Agile Real Estate Group
-];
+// incorporation), texting is on only for accounts with the staff-only
+// shared_sms_number switch (lib/platform-switches.ts; Agile is built in).
 
-/** Whether this org may text renters or tenants at all. Pure. */
+/** Built-in accounts only (no database). Pure. The send gate also reads staff switches. */
 export function orgCanUseSharedSmsNumber(orgId: string | null | undefined): boolean {
-  return !!orgId && SHARED_SMS_NUMBER_ORG_IDS.includes(orgId);
+  return builtInSwitchOn("shared_sms_number", orgId);
+}
+
+async function orgMayTextNow(orgId: string | null | undefined): Promise<boolean> {
+  if (!orgId) return false;
+  if (orgCanUseSharedSmsNumber(orgId)) return true;
+  try {
+    const { createAdminClient } = await import("./supabase/admin");
+    return await orgHasSwitch(createAdminClient(), "shared_sms_number", orgId);
+  } catch {
+    return false;
+  }
 }
 export type SmsProvider = "twilio" | "quo" | "none";
 
@@ -646,7 +655,7 @@ export function isSmsConfigured(): boolean {
  */
 export async function sendSms({ to, body, organizationId }: SendOrgSmsInput): Promise<SmsResult> {
   if (!smsLive()) return { sent: false, reason: "sms_not_live" };
-  if (!orgCanUseSharedSmsNumber(organizationId)) return { sent: false, reason: "org_not_on_sms" };
+  if (!(await orgMayTextNow(organizationId))) return { sent: false, reason: "org_not_on_sms" };
   const provider = selectSmsProvider();
   return provider === "none"
     ? { sent: false, reason: "no_credentials" }

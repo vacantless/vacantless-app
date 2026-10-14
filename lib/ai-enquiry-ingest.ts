@@ -1,6 +1,7 @@
 // ai-enquiry-ingest.ts (S702). Files a forwarded enquiry the hand-built site
 // readers could not read, using the AI reader, and sends every emailed-in
 // renter the same instant reply a website renter gets.
+import { orgHasSwitch } from "./platform-switches";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendAutoReply, type AutoReplyPayload } from "./email";
 import { callBackSms, isWithinQuietHours, normalizePhoneE164, sendSms, smsLive } from "./sms";
@@ -13,14 +14,10 @@ import { answerRenterQuestion, openRentalsForOrg, readEnquiryWithAi } from "./ai
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
 
-/**
- * Accounts whose own staff answer emailed-in renters, so we file the renter
- * but send no instant reply. Agile: Aaliyah answers every renter herself
- * (Noam, 2026-10-08).
- */
-export const ORGS_THAT_ANSWER_THEMSELVES: readonly string[] = [
-  "921f7c08-98af-428f-a238-36f4a781b0de", // Agile Real Estate Group
-];
+// Accounts whose own staff answer emailed-in renters (we file the renter but
+// send no instant reply) are the staff-only answers_own_enquiries switch
+// (S717, lib/platform-switches.ts; Agile is built in: Aaliyah answers every
+// renter herself, Noam 2026-10-08).
 
 /** Leads an unknown sender may create per account per day before we stop. */
 export const UNKNOWN_SENDER_DAILY_CAP = 30;
@@ -170,7 +167,7 @@ export async function autoReplyIngestedLead(
   },
 ): Promise<boolean> {
   try {
-    if (ORGS_THAT_ANSWER_THEMSELVES.includes(args.orgId)) return false;
+    if (await orgHasSwitch(admin, "answers_own_enquiries", args.orgId)) return false;
     if (!args.payload || args.payload.lead_reused) return false;
     if (!args.payload.renter_email && !args.phone) return false;
     let bookingUrl: string | null = null;

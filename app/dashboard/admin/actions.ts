@@ -15,6 +15,7 @@ import {
   adminEmails,
 } from "@/lib/provisioning-server";
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
+import { isPlatformSwitchKey } from "@/lib/platform-switches";
 
 // Operator-initiated landlord onboarding (the scale version of WORKFLOW 112).
 // Double-gated: the page 404s for non-admins, AND this action rechecks the
@@ -166,4 +167,39 @@ export async function setOrgFeatureFlagAsAdmin(
 
   revalidatePath("/dashboard/admin");
   redirect("/dashboard/admin?features=saved");
+}
+
+// S717: staff-only per-account switches (migration 0247, lib/platform-switches).
+export async function setPlatformSwitchAsAdmin(formData: FormData): Promise<void> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!isAdminEmail(user?.email, adminEmails())) {
+    redirect("/dashboard/admin?switches=forbidden");
+  }
+  const orgId = String(formData.get("organization_id") ?? "").trim();
+  const key = String(formData.get("switch_key") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "").trim();
+  if (!orgId || !isPlatformSwitchKey(key) || !["on", "off"].includes(mode)) {
+    redirect("/dashboard/admin?switches=invalid");
+  }
+  const admin = createAdminClient();
+  if (!admin) redirect("/dashboard/admin?switches=not_configured");
+  const write =
+    mode === "off"
+      ? await admin.from("platform_org_switches").delete().eq("organization_id", orgId).eq("switch_key", key)
+      : await admin.from("platform_org_switches").upsert(
+          {
+            organization_id: orgId,
+            switch_key: key,
+            enabled: true,
+            updated_at: new Date().toISOString(),
+            updated_by: user?.email ?? null,
+          },
+          { onConflict: "organization_id,switch_key" },
+        );
+  if (write.error) redirect("/dashboard/admin?switches=error");
+  revalidatePath("/dashboard/admin");
+  redirect("/dashboard/admin?switches=saved");
 }

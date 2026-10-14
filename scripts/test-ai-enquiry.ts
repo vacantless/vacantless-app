@@ -11,7 +11,7 @@ import {
   worthAnswering,
 } from "../lib/ai-enquiry";
 import { firstJsonObject } from "../lib/ai-call";
-import { ORGS_THAT_ANSWER_THEMSELVES } from "../lib/ai-enquiry-ingest";
+import { builtInSwitchOn } from "../lib/platform-switches";
 
 let pass = 0;
 let fail = 0;
@@ -71,7 +71,7 @@ ok("unset pet policy is not stated", !facts.includes("Cats allowed"));
 ok("facts include parking", facts.includes("Parking: 1 spot"));
 
 // Wiring
-ok("Agile answers renters itself", ORGS_THAT_ANSWER_THEMSELVES.includes("921f7c08-98af-428f-a238-36f4a781b0de"));
+ok("Agile answers renters itself", builtInSwitchOn("answers_own_enquiries", "921f7c08-98af-428f-a238-36f4a781b0de"));
 const ingest = readFileSync("lib/portal-lead-ingest-server.ts", "utf8");
 ok("unknown sender goes to the AI first", ingest.indexOf("tryAiEnquiry(true)") < ingest.indexOf('handled: "sender_not_allowed"'));
 ok("unparsed goes to the AI first", ingest.indexOf("tryAiEnquiry(false)") < ingest.indexOf('handled: "not_parsed"'));

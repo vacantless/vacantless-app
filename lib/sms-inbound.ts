@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { classifyInbound, normalizePhoneE164, orgCanUseSharedSmsNumber } from "./sms";
+import { classifyInbound, normalizePhoneE164 } from "./sms";
+import { orgsWithSwitch } from "./platform-switches";
 
 type SmsInboundClient = Pick<SupabaseClient, "from">;
 
@@ -19,8 +20,12 @@ type TenantMatch = {
 // so a reply, STOP, START or call to it belongs to those orgs only. Before this,
 // a renter known to two landlords had their reply and their STOP filed into
 // both (2026-10-07: Agile and Davis Muscovitch Rentals).
-function onSharedNumber<T extends { organization_id?: string | null }>(rows: T[]): T[] {
-  return rows.filter((r) => orgCanUseSharedSmsNumber(r.organization_id ?? null));
+async function onSharedNumber<T extends { organization_id?: string | null }>(
+  admin: SmsInboundClient,
+  rows: T[],
+): Promise<T[]> {
+  const on = await orgsWithSwitch(admin, "shared_sms_number", rows.map((r) => r.organization_id));
+  return rows.filter((r) => !!r.organization_id && on.has(r.organization_id));
 }
 
 export type ApplyInboundSmsResult = {
@@ -83,7 +88,7 @@ export async function applyInboundSms(
     .from("leads")
     .select("id, organization_id, sms_opt_out")
     .eq("phone_e164", senderE164);
-  const leads = onSharedNumber(((leadRows ?? []) as LeadMatch[]).filter((l) => l.id));
+  const leads = await onSharedNumber(admin, ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id));
 
   const base = {
     senderE164,
@@ -151,7 +156,7 @@ export async function applyInboundSms(
     .from("tenants")
     .select("id, organization_id, sms_opt_out")
     .eq("phone_e164", senderE164);
-  const tenants = onSharedNumber(((tenantRows ?? []) as TenantMatch[]).filter((t) => t.id));
+  const tenants = await onSharedNumber(admin, ((tenantRows ?? []) as TenantMatch[]).filter((t) => t.id));
   const tenantIds = tenants
     .filter((t) => Boolean(t.sms_opt_out) !== optOut)
     .map((t) => t.id);
@@ -190,7 +195,8 @@ export async function logInboundCall(
     .from("leads")
     .select("id, organization_id")
     .eq("phone_e164", senderE164);
-  const leads = onSharedNumber(
+  const leads = await onSharedNumber(
+    admin,
     ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id && l.organization_id),
   );
   const body = input.voicemail
