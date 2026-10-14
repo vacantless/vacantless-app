@@ -2,8 +2,16 @@
 // .github/workflows/signin-window.yml), the same dispatch post-now.ts uses.
 // Never throws. Returns false when the token is missing or GitHub refuses.
 import { POST_NOW_REPO } from "./post-now";
+import { signinOpensAtHome, type SiteSigninChannel } from "./site-signin";
 
 export const SIGNIN_WINDOW_EVENT = "signin-window";
+// S717: Rentals.ca's window opens on the home runner (signin-window-home.yml).
+export const SIGNIN_WINDOW_HOME_EVENT = "signin-window-home";
+
+/** Which worker workflow opens this site's window. Pure. */
+export function signinWindowEvent(channel: SiteSigninChannel): string {
+  return signinOpensAtHome(channel) ? SIGNIN_WINDOW_HOME_EVENT : SIGNIN_WINDOW_EVENT;
+}
 // S706: a "Checking" tile asks the worker to run session-check.yml now
 // instead of waiting for the daily 10:41 UTC run.
 export const SESSION_CHECK_EVENT = "session-check";
@@ -34,8 +42,9 @@ export function signinWindowRequest(
   token: string,
   windowId: string,
   repo: string = POST_NOW_REPO,
+  channel: SiteSigninChannel = "kijiji",
 ): { url: string; init: RequestInit } {
-  return githubDispatchRequest(token, SIGNIN_WINDOW_EVENT, { window_id: windowId }, repo);
+  return githubDispatchRequest(token, signinWindowEvent(channel), { window_id: windowId }, repo);
 }
 
 async function send(
@@ -55,11 +64,12 @@ async function send(
 
 export async function triggerSigninWindow(
   windowId: string,
+  channel: SiteSigninChannel,
   fetchImpl: typeof fetch = fetch,
   token: string | undefined = process.env.POST_NOW_GITHUB_TOKEN,
 ): Promise<boolean> {
   if (!token) return false;
-  return send(signinWindowRequest(token, windowId), fetchImpl);
+  return send(signinWindowRequest(token, windowId, POST_NOW_REPO, channel), fetchImpl);
 }
 
 export function sessionCheckRequest(

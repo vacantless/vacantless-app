@@ -72,7 +72,7 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
     .single();
   if (error || !created) redirect(`${siteSigninHref(channel)}?err=save`);
 
-  const dispatched = await triggerSigninWindow(created.id as string);
+  const dispatched = await triggerSigninWindow(created.id as string, channel);
   if (!dispatched) {
     await admin
       .from(TABLE)

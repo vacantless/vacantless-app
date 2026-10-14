@@ -12,7 +12,7 @@ import {
   siteSigninSafeViewUrl,
   siteSigninView,
 } from "../lib/site-signin";
-import { sessionCheckRequest, signinWindowRequest, triggerSessionCheck, triggerSigninWindow } from "../lib/site-signin-dispatch";
+import { sessionCheckRequest, signinWindowEvent, signinWindowRequest, triggerSessionCheck, triggerSigninWindow } from "../lib/site-signin-dispatch";
 import { readFileSync } from "node:fs";
 
 let passed = 0;
@@ -27,7 +27,14 @@ function ok(name: string, cond: boolean, extra?: unknown) {
 }
 
 async function main() {
-  ok("kijiji and zumper only", isSiteSigninChannel("kijiji") && isSiteSigninChannel("zumper") && !isSiteSigninChannel("rentals_ca") && !isSiteSigninChannel("facebook"));
+  // S717: Rentals.ca signs in too, on the home runner.
+  ok("kijiji, zumper and rentals.ca", isSiteSigninChannel("kijiji") && isSiteSigninChannel("zumper") && isSiteSigninChannel("rentals_ca") && !isSiteSigninChannel("facebook"));
+  ok("rentals.ca window opens at home", signinWindowEvent("rentals_ca") === "signin-window-home");
+  ok("kijiji and zumper windows open on GitHub", signinWindowEvent("kijiji") === "signin-window" && signinWindowEvent("zumper") === "signin-window");
+  ok(
+    "rentals.ca dispatch names the home event",
+    JSON.parse(String(signinWindowRequest("t", "w", "vacantless/vacantless-worker", "rentals_ca").init.body)).event_type === "signin-window-home",
+  );
   ok("dark by default", !siteSigninEnabled({}, {}) && !siteSigninLinksOn({}));
   ok("our team can always open it", siteSigninEnabled({ isPlatformAdmin: true }, {}));
   ok("flag opens it for everyone", siteSigninEnabled({}, { SITE_SIGNIN_ENABLED: "true" }) && siteSigninLinksOn({ SITE_SIGNIN_ENABLED: "true" }));
@@ -56,10 +63,10 @@ async function main() {
   ok("dispatch url", req.url === "https://api.github.com/repos/vacantless/vacantless-worker/dispatches");
   const body = JSON.parse(String(req.init.body));
   ok("dispatch event and payload", body.event_type === "signin-window" && body.client_payload.window_id === "win-1", body);
-  ok("no token, no dispatch", (await triggerSigninWindow("w", (async () => new Response(null, { status: 204 })) as typeof fetch, undefined)) === false);
-  ok("204 = dispatched", (await triggerSigninWindow("w", (async () => new Response(null, { status: 204 })) as typeof fetch, "t")) === true);
-  ok("refusal = false", (await triggerSigninWindow("w", (async () => new Response(null, { status: 404 })) as typeof fetch, "t")) === false);
-  ok("a throw = false", (await triggerSigninWindow("w", (async () => { throw new Error("x"); }) as typeof fetch, "t")) === false);
+  ok("no token, no dispatch", (await triggerSigninWindow("w", "kijiji", (async () => new Response(null, { status: 204 })) as typeof fetch, undefined)) === false);
+  ok("204 = dispatched", (await triggerSigninWindow("w", "kijiji", (async () => new Response(null, { status: 204 })) as typeof fetch, "t")) === true);
+  ok("refusal = false", (await triggerSigninWindow("w", "kijiji", (async () => new Response(null, { status: 404 })) as typeof fetch, "t")) === false);
+  ok("a throw = false", (await triggerSigninWindow("w", "kijiji", (async () => { throw new Error("x"); }) as typeof fetch, "t")) === false);
 
   const sc = sessionCheckRequest("t0k", "org-1", ["zumper"], "vacantless/vacantless-worker");
   const scBody = JSON.parse(String(sc.init.body));

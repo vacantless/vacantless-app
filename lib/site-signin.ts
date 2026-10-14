@@ -4,17 +4,25 @@
 // A landlord asks for a sign-in window; our worker on GitHub opens a real
 // browser, shares its screen through a private link, and saves the session
 // once the landlord has signed in by hand (vacantless-worker
-// src/signin-window.ts). Kijiji and Zumper only: Rentals.ca's Cloudflare
-// blocks the robot from GitHub (S703), so a session made there is no use.
+// src/signin-window.ts). Kijiji and Zumper open on GitHub. S717: Rentals.ca's
+// Cloudflare blocks GitHub (S703), so its window opens on the home runner
+// (a computer with a home connection) instead; see SIGNIN_AT_HOME.
 // ============================================================================
 
-export const SITE_SIGNIN_CHANNELS = ["kijiji", "zumper"] as const;
+export const SITE_SIGNIN_CHANNELS = ["kijiji", "zumper", "rentals_ca"] as const;
 export type SiteSigninChannel = (typeof SITE_SIGNIN_CHANNELS)[number];
 
 export const SITE_SIGNIN_LABEL: Record<SiteSigninChannel, string> = {
   kijiji: "Kijiji",
   zumper: "Zumper",
+  rentals_ca: "Rentals.ca",
 };
+
+/** S717: sites whose window opens on the home runner (worker signin-window-home.yml). */
+export const SIGNIN_AT_HOME: readonly SiteSigninChannel[] = ["rentals_ca"];
+export function signinOpensAtHome(channel: SiteSigninChannel): boolean {
+  return SIGNIN_AT_HOME.includes(channel);
+}
 
 export function isSiteSigninChannel(v: unknown): v is SiteSigninChannel {
   return typeof v === "string" && (SITE_SIGNIN_CHANNELS as readonly string[]).includes(v);
@@ -70,6 +78,11 @@ export const SITE_SIGNIN_ACCOUNT_FIRST: Record<
     text: "You need a Zumper landlord account. Zumper checks your ID before you can post. If you do not have one, make it on Zumper first. Then come back here.",
     href: "https://www.zumper.com/manage",
     linkLabel: "Open Zumper",
+  },
+  rentals_ca: {
+    text: "You need a Rentals.ca account. If you do not have one, make it on Rentals.ca first. Then come back here. If Rentals.ca sends you a code, type it in the window.",
+    href: "https://rentals.ca/",
+    linkLabel: "Open Rentals.ca",
   },
 };
 
