@@ -19,13 +19,8 @@ import {
   updateBrandIdentity,
   updatePublicContact,
   updateDistributionChannelAccount,
-  updateEmailSender,
+  saveMessageSetup,
   requestMailAlias,
-  updateRenterMessages,
-  updateTextMessages,
-  updateShowingConfirmationSettings,
-  updateShowingAutocloseSettings,
-  updateComplianceCalendarSettings,
   updateOrganizationFeatureFlag,
   sendTestEmailAction,
   uploadOrgLogo,
@@ -44,6 +39,7 @@ import BrandColorField from "@/components/brand-color-field";
 import { RenterPagePreview } from "@/components/renter-page-preview";
 import { SettingsTabs, type SettingsTab } from "@/components/settings-tabs";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
+import { messageSetupFlash } from "@/lib/message-setup-save";
 import { PageHeader, IconTile } from "@/components/ui";
 import {
   facebookOAuthConfigured,
@@ -337,6 +333,7 @@ export default async function SettingsPage({
     sms?: string; // Communications → Text messages flash
     confirm?: string; // Communications → Showing confirmation flash
     autoclose?: string; // Communications → Showing auto-close flash
+    setup?: string; // S717: Message setup one-Save result
     compliance?: string; // Communications → Compliance calendar flash
     features?: string; // Plan & admin → Feature access flash
     close?: string; // Plan & admin → Close this account flash (S702)
@@ -671,6 +668,7 @@ export default async function SettingsPage({
         ? "Something went wrong uploading your logo. Please try again."
         : null;
   const senderFlash = searchParams.sender;
+  const setupFlash = messageSetupFlash(searchParams.setup);
   const renterFlash = searchParams.renter;
   const smsFlash = searchParams.sms;
   const confirmFlash = searchParams.confirm;
@@ -1777,6 +1775,20 @@ export default async function SettingsPage({
       {/* ================= Tab 2 — Communications ================= */}
       {tab === "comms" && (
         <div className="mt-6 space-y-6">
+          <form id="message-setup" action={saveMessageSetup} className="space-y-6">
+          {setupFlash && (
+            <div
+              className={
+                setupFlash.tone === "green"
+                  ? "rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+                  : setupFlash.tone === "amber"
+                    ? "rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                    : "rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+              }
+            >
+              {setupFlash.text}
+            </div>
+          )}
           {/* --- Email sender --- */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center gap-2.5">
@@ -1845,7 +1857,8 @@ export default async function SettingsPage({
               </div>
             )}
 
-            <form action={updateEmailSender} className="mt-4 space-y-4">
+            <div className="mt-4 space-y-4">
+              <input type="hidden" name="has_reply_to" value="1" />
               <label className="block max-w-md">
                 <span className="mb-1 block text-sm font-medium text-gray-700">
                   Reply-to email
@@ -1863,12 +1876,476 @@ export default async function SettingsPage({
                   Leave blank to use the shared Vacantless inbox.
                 </span>
               </label>
-              <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-                Save reply-to
-              </button>
-            </form>
+            </div>
+
+          </div>
+
+          {/* --- Text messages --- */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.chat className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Text messages
+              </h3>
+            </div>
+
+            {smsFlash === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                {smsTransportReady
+                  ? "Text message setting saved."
+                  : "Saved. Texts start once your account's SMS is connected — nothing is sending yet."}
+              </div>
+            )}
+            {smsFlash === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving this setting. Please try again.
+              </div>
+            )}
+            {smsFlash === "upgrade" && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                Texting renters is a Growth feature.{" "}
+                <Link href="/dashboard/billing" className="font-medium underline">
+                  Upgrade to turn it on
+                </Link>
+                .
+              </div>
+            )}
+            {!canRenterSms && smsFlash !== "upgrade" && (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500">
+                Texting renters comes with Growth. On your current plan we send
+                confirmations and reminders by email.
+              </div>
+            )}
+
+            {/* S528 honesty: when the transport isn't connected, lead with
+                "not sending yet" and keep every verb conditional, so an
+                operator can never read this toggle as live texting. */}
+            {canRenterSms && !smsTransportReady && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                <span className="font-medium">Not sending yet.</span> Your
+                account&apos;s SMS isn&apos;t connected, so no texts go out
+                regardless of this setting. Your choice here is saved and takes
+                effect when SMS is connected. Renters get email confirmations
+                and reminders either way.
+              </div>
+            )}
+
+            {canRenterSms && <input type="hidden" name="has_sms" value="1" />}
+            <label className="mt-4 flex items-start gap-3">
+              <input
+                name="sms_enabled"
+                type="checkbox"
+                defaultChecked={org.sms_enabled}
+                disabled={!canRenterSms}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 disabled:opacity-50"
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-gray-700">
+                  Also text renters their booking confirmation and viewing
+                  reminders
+                </span>
+                <span className="block text-xs text-gray-400">
+                  {smsTransportReady ? (
+                    <>
+                      When a renter leaves a phone number, we text their booking
+                      confirmation. We text a reminder a few hours before the
+                      viewing. The day-before reminder still goes by email.
+                    </>
+                  ) : (
+                    <>
+                      Once your account&apos;s SMS is connected, we&apos;ll text
+                      renters who leave a phone number. We text their booking
+                      confirmation and a reminder a few hours before the viewing.
+                      The day-before reminder still goes by email.
+                    </>
+                  )}{" "}
+                  Every text includes &quot;Reply STOP to opt out,&quot; and a
+                  renter who replies STOP is never texted again.
+                </span>
+              </span>
+            </label>
+
+          </div>
+
+          {/* --- Renter messages --- */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <input type="hidden" name="has_renter" value="1" />
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.chat className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Renter messages
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Automated, branded emails that go to renters as they move through
+              inquiry, viewing, and follow-up.
+            </p>
+
+            {renterFlash === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Renter message settings saved.
+              </div>
+            )}
+            {renterFlash === "invalid" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                The send delay must be a whole number of hours (0–336).
+              </div>
+            )}
+            {renterFlash === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving these settings. Please try again.
+              </div>
+            )}
+
+            <div className="mt-5">
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Post-viewing feedback
+              </h4>
+              <label className="flex items-start gap-3">
+                <input
+                  name="feedback_enabled"
+                  type="checkbox"
+                  defaultChecked={org.feedback_enabled}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Email a feedback request after each attended viewing
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Renters get a one-tap 1–5 star rating link once you mark their
+                    viewing as Attended. Results show on the viewing and in Reports.
+                  </span>
+                </span>
+              </label>
+
+              <label className="mt-4 block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Send delay (hours after the viewing)
+                </span>
+                <input
+                  name="feedback_delay_hours"
+                  type="number"
+                  min={0}
+                  max={336}
+                  step={1}
+                  defaultValue={org.feedback_delay_hours}
+                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  How long to wait after the viewing time before sending. Default
+                  is 2 hours.
+                </span>
+              </label>
+            </div>
 
             <div className="mt-6 border-t border-gray-100 pt-5">
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Automatic follow-up
+              </h4>
+              <label className="flex items-start gap-3">
+                <input
+                  name="nurture_enabled"
+                  type="checkbox"
+                  defaultChecked={org.nurture_enabled}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Automatically follow up with renters who haven&apos;t booked
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Sends a gentle, branded sequence of up to 3 reminders (around 2,
+                    5, and 10 days after the inquiry) inviting them to book a
+                    viewing. It stops automatically the moment a renter books, is
+                    marked lost, or moves further along.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                When they arrive for a viewing
+              </h4>
+              <label className="block max-w-md">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Arrival phone
+                </span>
+                <input
+                  name="showing_arrival_phone"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="226-778-0014"
+                  defaultValue={org.showing_arrival_phone ?? ""}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  The number renters can text or call when they arrive for a
+                  viewing. We put it in their booking confirmation and reminder.
+                  You can add an extension (for example 226-778-0014 ext 5). Leave
+                  blank to use your listing contact phone.
+                </span>
+              </label>
+            </div>
+
+          </div>
+
+          {/* --- Viewing confirmation --- */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <input type="hidden" name="has_confirm" value="1" />
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Viewing confirmation
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Choose whether booked viewings proceed automatically or stay
+              visible to your team until someone confirms them.
+            </p>
+
+            {confirmFlash === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Viewing confirmation settings saved.
+              </div>
+            )}
+            {confirmFlash === "invalid" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Pick a confirmation mode and an auto-release window from 1 to 24
+                hours.
+              </div>
+            )}
+            {confirmFlash === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving these settings. Please try again.
+              </div>
+            )}
+
+            <fieldset className="mt-5 space-y-3">
+              <legend className="text-sm font-medium text-gray-700">
+                Confirmation mode
+              </legend>
+              <label className="flex items-start gap-3">
+                <input
+                  name="showing_confirm_mode"
+                  type="radio"
+                  value="auto"
+                  defaultChecked={showingConfirmMode === "auto"}
+                  className="mt-0.5 h-4 w-4 border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Auto-confirm booked viewings
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Renters still get the one-tap confirm links in reminders.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  name="showing_confirm_mode"
+                  type="radio"
+                  value="agent"
+                  defaultChecked={showingConfirmMode === "agent"}
+                  className="mt-0.5 h-4 w-4 border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Agent confirms before the viewing
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Unconfirmed viewings appear in an at-risk board on Viewings.
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+
+            <div className="mt-6 border-t border-gray-100 pt-5">
+              <label className="flex items-start gap-3">
+                <input
+                  name="auto_release_unconfirmed_enabled"
+                  type="checkbox"
+                  defaultChecked={
+                    showingConfirmMode === "agent" &&
+                    org.auto_release_unconfirmed_enabled
+                  }
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Automatically release still-unconfirmed viewings
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Only works when someone confirms viewings by hand. Off until
+                    you turn it on.
+                  </span>
+                </span>
+              </label>
+              <label className="mt-4 block max-w-[12rem]">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Release window
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    name="auto_release_unconfirmed_hours"
+                    type="number"
+                    min={1}
+                    max={24}
+                    step={1}
+                    defaultValue={autoReleaseHours}
+                    className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <span className="text-sm text-gray-500">hours before</span>
+                </div>
+              </label>
+            </div>
+
+          </div>
+
+          {/* S546: showing-outcome auto-close default */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <input type="hidden" name="has_autoclose" value="1" />
+            <div className="flex items-center gap-2.5">
+              <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                Auto-close viewings with no outcome
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              After the reminder-to-record series is spent and a viewing has still
+              had no outcome recorded, close it automatically as{" "}
+              <span className="font-medium text-gray-700">
+                &ldquo;no outcome recorded&rdquo;
+              </span>
+              . This is not counted as attended or no-show and never affects your
+              attendance rate. A recorded outcome later always wins.
+            </p>
+
+            {autocloseFlash === "saved" && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Auto-close settings saved.
+              </div>
+            )}
+            {autocloseFlash === "invalid" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Pick a grace window from 24 to 336 hours.
+              </div>
+            )}
+            {autocloseFlash === "error" && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                Something went wrong saving these settings. Please try again.
+              </div>
+            )}
+
+            <div className="mt-5">
+              <label className="flex items-start gap-3">
+                <input
+                  name="showing_autoclose_enabled"
+                  type="checkbox"
+                  defaultChecked={org.showing_autoclose_enabled === true}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Automatically close viewings with no recorded outcome
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Off by default. Only closes viewings whose reminders are spent;
+                    never touches ones older than 14 days.
+                  </span>
+                </span>
+              </label>
+              <label className="mt-4 block max-w-[14rem]">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Grace window
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    name="showing_autoclose_after_hours"
+                    type="number"
+                    min={24}
+                    max={336}
+                    step={1}
+                    defaultValue={autocloseHours}
+                    className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <span className="text-sm text-gray-500">hours after the viewing</span>
+                </div>
+              </label>
+            </div>
+
+          </div>
+
+          {complianceFlash === "forbidden" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Only an owner/admin can change compliance calendar reminders.
+            </div>
+          )}
+
+          {canManageOwnerSettings && postLeaseEnabled && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <input type="hidden" name="has_compliance" value="1" />
+              <div className="flex items-center gap-2.5">
+                <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                  Compliance calendar reminders
+                </h3>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Turn on the organization-level calendar for Vacant Home Tax
+                deadlines, seasonal water shutoff and turn-on, winter walkways
+                and ice, furnace service and filters, smoke and CO alarms, and
+                rent-increase timing reminders.
+              </p>
+
+              {complianceFlash === "saved" && (
+                <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                  Compliance calendar setting saved.
+                </div>
+              )}
+              {complianceFlash === "error" && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                  Something went wrong saving this setting. Please try again.
+                </div>
+              )}
+
+              <label className="mt-4 flex items-start gap-3">
+                <input
+                  name="compliance_calendar_enabled"
+                  type="checkbox"
+                  defaultChecked={org.compliance_calendar_enabled === true}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium text-gray-700">
+                    Enable compliance calendar reminders for this organization
+                  </span>
+                  <span className="block text-xs text-gray-400">
+                    Tenant notes still draft for approval, landlord reminders
+                    still respect Automations settings, and the global master
+                    switch remains the final kill-switch.
+                  </span>
+                </span>
+              </label>
+
+            </div>
+          )}
+
+          <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+            <p className="text-sm text-gray-600">One button saves every setting above.</p>
+            <button
+              type="submit"
+              className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm"
+            >
+              Save message setup
+            </button>
+          </div>
+          </form>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="mt-6 border-t border-gray-100 pt-5 first:mt-0 first:border-t-0 first:pt-0">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Vacantless reply address
               </h4>
@@ -2016,485 +2493,6 @@ export default async function SettingsPage({
               </p>
             </div>
           </div>
-
-          {/* --- Text messages --- */}
-          <form
-            action={updateTextMessages}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm"><Icons.chat className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Text messages
-              </h3>
-            </div>
-
-            {smsFlash === "saved" && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                {smsTransportReady
-                  ? "Text message setting saved."
-                  : "Saved. Texts start once your account's SMS is connected — nothing is sending yet."}
-              </div>
-            )}
-            {smsFlash === "error" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Something went wrong saving this setting. Please try again.
-              </div>
-            )}
-            {smsFlash === "upgrade" && (
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                Texting renters is a Growth feature.{" "}
-                <Link href="/dashboard/billing" className="font-medium underline">
-                  Upgrade to turn it on
-                </Link>
-                .
-              </div>
-            )}
-            {!canRenterSms && smsFlash !== "upgrade" && (
-              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500">
-                Texting renters comes with Growth. On your current plan we send
-                confirmations and reminders by email.
-              </div>
-            )}
-
-            {/* S528 honesty: when the transport isn't connected, lead with
-                "not sending yet" and keep every verb conditional, so an
-                operator can never read this toggle as live texting. */}
-            {canRenterSms && !smsTransportReady && (
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-                <span className="font-medium">Not sending yet.</span> Your
-                account&apos;s SMS isn&apos;t connected, so no texts go out
-                regardless of this setting. Your choice here is saved and takes
-                effect when SMS is connected. Renters get email confirmations
-                and reminders either way.
-              </div>
-            )}
-
-            <label className="mt-4 flex items-start gap-3">
-              <input
-                name="sms_enabled"
-                type="checkbox"
-                defaultChecked={org.sms_enabled}
-                disabled={!canRenterSms}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 disabled:opacity-50"
-              />
-              <span className="text-sm">
-                <span className="block font-medium text-gray-700">
-                  Also text renters their booking confirmation and viewing
-                  reminders
-                </span>
-                <span className="block text-xs text-gray-400">
-                  {smsTransportReady ? (
-                    <>
-                      When a renter leaves a phone number, we text their booking
-                      confirmation. We text a reminder a few hours before the
-                      viewing. The day-before reminder still goes by email.
-                    </>
-                  ) : (
-                    <>
-                      Once your account&apos;s SMS is connected, we&apos;ll text
-                      renters who leave a phone number. We text their booking
-                      confirmation and a reminder a few hours before the viewing.
-                      The day-before reminder still goes by email.
-                    </>
-                  )}{" "}
-                  Every text includes &quot;Reply STOP to opt out,&quot; and a
-                  renter who replies STOP is never texted again.
-                </span>
-              </span>
-            </label>
-
-            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-              Save text messages
-            </button>
-          </form>
-
-          {/* --- Renter messages --- */}
-          <form
-            action={updateRenterMessages}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm"><Icons.chat className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Renter messages
-              </h3>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
-              Automated, branded emails that go to renters as they move through
-              inquiry, viewing, and follow-up.
-            </p>
-
-            {renterFlash === "saved" && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Renter message settings saved.
-              </div>
-            )}
-            {renterFlash === "invalid" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                The send delay must be a whole number of hours (0–336).
-              </div>
-            )}
-            {renterFlash === "error" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Something went wrong saving these settings. Please try again.
-              </div>
-            )}
-
-            <div className="mt-5">
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Post-viewing feedback
-              </h4>
-              <label className="flex items-start gap-3">
-                <input
-                  name="feedback_enabled"
-                  type="checkbox"
-                  defaultChecked={org.feedback_enabled}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                />
-                <span className="text-sm">
-                  <span className="block font-medium text-gray-700">
-                    Email a feedback request after each attended viewing
-                  </span>
-                  <span className="block text-xs text-gray-400">
-                    Renters get a one-tap 1–5 star rating link once you mark their
-                    viewing as Attended. Results show on the viewing and in Reports.
-                  </span>
-                </span>
-              </label>
-
-              <label className="mt-4 block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Send delay (hours after the viewing)
-                </span>
-                <input
-                  name="feedback_delay_hours"
-                  type="number"
-                  min={0}
-                  max={336}
-                  step={1}
-                  defaultValue={org.feedback_delay_hours}
-                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <span className="mt-1 block text-xs text-gray-400">
-                  How long to wait after the viewing time before sending. Default
-                  is 2 hours.
-                </span>
-              </label>
-            </div>
-
-            <div className="mt-6 border-t border-gray-100 pt-5">
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Automatic follow-up
-              </h4>
-              <label className="flex items-start gap-3">
-                <input
-                  name="nurture_enabled"
-                  type="checkbox"
-                  defaultChecked={org.nurture_enabled}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                />
-                <span className="text-sm">
-                  <span className="block font-medium text-gray-700">
-                    Automatically follow up with renters who haven&apos;t booked
-                  </span>
-                  <span className="block text-xs text-gray-400">
-                    Sends a gentle, branded sequence of up to 3 reminders (around 2,
-                    5, and 10 days after the inquiry) inviting them to book a
-                    viewing. It stops automatically the moment a renter books, is
-                    marked lost, or moves further along.
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            <div className="mt-6 border-t border-gray-100 pt-5">
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                When they arrive for a viewing
-              </h4>
-              <label className="block max-w-md">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Arrival phone
-                </span>
-                <input
-                  name="showing_arrival_phone"
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="226-778-0014"
-                  defaultValue={org.showing_arrival_phone ?? ""}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-                <span className="mt-1 block text-xs text-gray-400">
-                  The number renters can text or call when they arrive for a
-                  viewing. We put it in their booking confirmation and reminder.
-                  You can add an extension (for example 226-778-0014 ext 5). Leave
-                  blank to use your listing contact phone.
-                </span>
-              </label>
-            </div>
-
-            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-              Save renter messages
-            </button>
-          </form>
-
-          {/* --- Viewing confirmation --- */}
-          <form
-            action={updateShowingConfirmationSettings}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Viewing confirmation
-              </h3>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
-              Choose whether booked viewings proceed automatically or stay
-              visible to your team until someone confirms them.
-            </p>
-
-            {confirmFlash === "saved" && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Viewing confirmation settings saved.
-              </div>
-            )}
-            {confirmFlash === "invalid" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Pick a confirmation mode and an auto-release window from 1 to 24
-                hours.
-              </div>
-            )}
-            {confirmFlash === "error" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Something went wrong saving these settings. Please try again.
-              </div>
-            )}
-
-            <fieldset className="mt-5 space-y-3">
-              <legend className="text-sm font-medium text-gray-700">
-                Confirmation mode
-              </legend>
-              <label className="flex items-start gap-3">
-                <input
-                  name="showing_confirm_mode"
-                  type="radio"
-                  value="auto"
-                  defaultChecked={showingConfirmMode === "auto"}
-                  className="mt-0.5 h-4 w-4 border-gray-300"
-                />
-                <span className="text-sm">
-                  <span className="block font-medium text-gray-700">
-                    Auto-confirm booked viewings
-                  </span>
-                  <span className="block text-xs text-gray-400">
-                    Renters still get the one-tap confirm links in reminders.
-                  </span>
-                </span>
-              </label>
-              <label className="flex items-start gap-3">
-                <input
-                  name="showing_confirm_mode"
-                  type="radio"
-                  value="agent"
-                  defaultChecked={showingConfirmMode === "agent"}
-                  className="mt-0.5 h-4 w-4 border-gray-300"
-                />
-                <span className="text-sm">
-                  <span className="block font-medium text-gray-700">
-                    Agent confirms before the viewing
-                  </span>
-                  <span className="block text-xs text-gray-400">
-                    Unconfirmed viewings appear in an at-risk board on Viewings.
-                  </span>
-                </span>
-              </label>
-            </fieldset>
-
-            <div className="mt-6 border-t border-gray-100 pt-5">
-              <label className="flex items-start gap-3">
-                <input
-                  name="auto_release_unconfirmed_enabled"
-                  type="checkbox"
-                  defaultChecked={
-                    showingConfirmMode === "agent" &&
-                    org.auto_release_unconfirmed_enabled
-                  }
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                />
-                <span className="text-sm">
-                  <span className="block font-medium text-gray-700">
-                    Automatically release still-unconfirmed viewings
-                  </span>
-                  <span className="block text-xs text-gray-400">
-                    Only works when someone confirms viewings by hand. Off until
-                    you turn it on.
-                  </span>
-                </span>
-              </label>
-              <label className="mt-4 block max-w-[12rem]">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Release window
-                </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    name="auto_release_unconfirmed_hours"
-                    type="number"
-                    min={1}
-                    max={24}
-                    step={1}
-                    defaultValue={autoReleaseHours}
-                    className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                  <span className="text-sm text-gray-500">hours before</span>
-                </div>
-              </label>
-            </div>
-
-            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-              Save viewing confirmation
-            </button>
-          </form>
-
-          {/* S546: showing-outcome auto-close default */}
-          <form
-            action={updateShowingAutocloseSettings}
-            className="rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="flex items-center gap-2.5">
-              <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                Auto-close viewings with no outcome
-              </h3>
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
-              After the reminder-to-record series is spent and a viewing has still
-              had no outcome recorded, close it automatically as{" "}
-              <span className="font-medium text-gray-700">
-                &ldquo;no outcome recorded&rdquo;
-              </span>
-              . This is not counted as attended or no-show and never affects your
-              attendance rate. A recorded outcome later always wins.
-            </p>
-
-            {autocloseFlash === "saved" && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                Auto-close settings saved.
-              </div>
-            )}
-            {autocloseFlash === "invalid" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Pick a grace window from 24 to 336 hours.
-              </div>
-            )}
-            {autocloseFlash === "error" && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                Something went wrong saving these settings. Please try again.
-              </div>
-            )}
-
-            <div className="mt-5">
-              <label className="flex items-start gap-3">
-                <input
-                  name="showing_autoclose_enabled"
-                  type="checkbox"
-                  defaultChecked={org.showing_autoclose_enabled === true}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                />
-                <span className="text-sm">
-                  <span className="block font-medium text-gray-700">
-                    Automatically close viewings with no recorded outcome
-                  </span>
-                  <span className="block text-xs text-gray-400">
-                    Off by default. Only closes viewings whose reminders are spent;
-                    never touches ones older than 14 days.
-                  </span>
-                </span>
-              </label>
-              <label className="mt-4 block max-w-[14rem]">
-                <span className="mb-1 block text-sm font-medium text-gray-700">
-                  Grace window
-                </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    name="showing_autoclose_after_hours"
-                    type="number"
-                    min={24}
-                    max={336}
-                    step={1}
-                    defaultValue={autocloseHours}
-                    className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  />
-                  <span className="text-sm text-gray-500">hours after the viewing</span>
-                </div>
-              </label>
-            </div>
-
-            <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-              Save auto-close settings
-            </button>
-          </form>
-
-          {complianceFlash === "forbidden" && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-              Only an owner/admin can change compliance calendar reminders.
-            </div>
-          )}
-
-          {canManageOwnerSettings && postLeaseEnabled && (
-            <form
-              action={updateComplianceCalendarSettings}
-              className="rounded-2xl border border-gray-200 bg-white p-5"
-            >
-              <div className="flex items-center gap-2.5">
-                <IconTile size="sm"><Icons.check className="h-4 w-4" /></IconTile>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-                  Compliance calendar reminders
-                </h3>
-              </div>
-              <p className="mt-1 text-sm text-gray-500">
-                Turn on the organization-level calendar for Vacant Home Tax
-                deadlines, seasonal water shutoff and turn-on, winter walkways
-                and ice, furnace service and filters, smoke and CO alarms, and
-                rent-increase timing reminders.
-              </p>
-
-              {complianceFlash === "saved" && (
-                <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
-                  Compliance calendar setting saved.
-                </div>
-              )}
-              {complianceFlash === "error" && (
-                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                  Something went wrong saving this setting. Please try again.
-                </div>
-              )}
-
-              <label className="mt-4 flex items-start gap-3">
-                <input
-                  name="compliance_calendar_enabled"
-                  type="checkbox"
-                  defaultChecked={org.compliance_calendar_enabled === true}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                />
-                <span className="text-sm">
-                  <span className="block font-medium text-gray-700">
-                    Enable compliance calendar reminders for this organization
-                  </span>
-                  <span className="block text-xs text-gray-400">
-                    Tenant notes still draft for approval, landlord reminders
-                    still respect Automations settings, and the global master
-                    switch remains the final kill-switch.
-                  </span>
-                </span>
-              </label>
-
-              <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
-                Save compliance calendar
-              </button>
-            </form>
-          )}
-
 
           {/* S499b: tenant message templates moved to their point-of-use under
               Tenancies; org-level communications defaults stay here. */}

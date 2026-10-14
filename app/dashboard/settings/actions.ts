@@ -35,6 +35,7 @@ import { decideAccountClosure, OPEN_RENTAL_STATUSES } from "@/lib/account-closur
 import { adminEmails } from "@/lib/provisioning-server";
 import { isAdminEmail } from "@/lib/provisioning";
 import { canUseRenterSms } from "@/lib/billing";
+import { parseMessageSetup } from "@/lib/message-setup-save";
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import {
   validateLogoUpload,
@@ -649,6 +650,62 @@ export async function updateEmailSender(formData: FormData) {
   }
 
   redirect("/dashboard/settings?tab=comms&sender=saved");
+}
+
+// S717: Settings > Message setup has ONE Save. Every card posts here; nothing
+// is written unless every card validates (lib/message-setup-save.ts).
+export async function saveMessageSetup(formData: FormData) {
+  const org = await requireSettingsOrg();
+  const base = "/dashboard/settings?tab=comms&setup=";
+
+  const parsed = parseMessageSetup(formData, { canRenterSms: canUseRenterSms(org.plan) });
+  if (!parsed.ok) redirect(base + parsed.code);
+
+  if (parsed.compliance.present) {
+    const role = await getRoleForOrg(org.id);
+    if (role !== "owner_admin") redirect(base + "compliance_forbidden");
+    parsed.patch.compliance_calendar_enabled = parsed.compliance.enabled;
+  }
+
+  let pauseAlias: string | null = null;
+  if (parsed.replyTo.present) {
+    const nextReplyTo = parsed.replyTo.value;
+    parsed.patch.reply_to_email = nextReplyTo;
+    const replyToChanged = (org.reply_to_email ?? null) !== nextReplyTo;
+    if (replyToChanged && org.mail_alias) {
+      pauseAlias = org.mail_alias;
+      parsed.patch.mail_alias = null;
+    }
+  }
+
+  if (Object.keys(parsed.patch).length > 0) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("organizations")
+      .update(parsed.patch)
+      .eq("id", org.id);
+    if (error) redirect(base + "error");
+  }
+
+  if (pauseAlias && parsed.replyTo.present) {
+    const admin = createAdminClient();
+    if (admin) {
+      await admin
+        .from("org_mail_alias_provisions")
+        .update(
+          mailAliasProvisionForwardingReset({
+            requestedAlias: pauseAlias,
+            nextReplyToEmail: parsed.replyTo.value,
+          }),
+        )
+        .eq("organization_id", org.id)
+        .eq("requested_alias", pauseAlias)
+        .in("status", ["active", "provider_verified", "needs_forward_update"]);
+    }
+    redirect(base + "alias_paused");
+  }
+
+  redirect(base + "saved");
 }
 
 export async function requestMailAlias(formData: FormData) {
