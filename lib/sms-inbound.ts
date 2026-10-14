@@ -16,14 +16,19 @@ type TenantMatch = {
   sms_opt_out?: boolean | null;
 };
 
-// S717: the shared number only ever texts for orgs on SHARED_SMS_NUMBER_ORG_IDS,
+// S717: the shared number only ever texts for orgs with the shared_sms_number switch,
 // so a reply, STOP, START or call to it belongs to those orgs only. Before this,
 // a renter known to two landlords had their reply and their STOP filed into
 // both (2026-10-07: Agile and Davis Muscovitch Rentals).
-async function onSharedNumber<T extends { organization_id?: string | null }>(
+//
+// S717: a text that came in to a landlord's OWN number (org_sms_numbers) is
+// that landlord's only, whoever else knows the renter.
+async function onThisNumber<T extends { organization_id?: string | null }>(
   admin: SmsInboundClient,
   rows: T[],
+  ownerOrgId: string | null | undefined,
 ): Promise<T[]> {
+  if (ownerOrgId) return rows.filter((r) => r.organization_id === ownerOrgId);
   const on = await orgsWithSwitch(admin, "shared_sms_number", rows.map((r) => r.organization_id));
   return rows.filter((r) => !!r.organization_id && on.has(r.organization_id));
 }
@@ -44,6 +49,8 @@ export type ApplyInboundSmsResult = {
 export type ApplyInboundSmsInput = {
   from: string | null | undefined;
   body: string | null | undefined;
+  /** S717: the account whose own number the text came in to; omit for the shared number. */
+  ownerOrgId?: string | null;
 };
 
 const MAX_INBOUND_REPLY_BODY = 4000;
@@ -88,7 +95,11 @@ export async function applyInboundSms(
     .from("leads")
     .select("id, organization_id, sms_opt_out")
     .eq("phone_e164", senderE164);
-  const leads = await onSharedNumber(admin, ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id));
+  const leads = await onThisNumber(
+    admin,
+    ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id),
+    input.ownerOrgId,
+  );
 
   const base = {
     senderE164,
@@ -156,7 +167,11 @@ export async function applyInboundSms(
     .from("tenants")
     .select("id, organization_id, sms_opt_out")
     .eq("phone_e164", senderE164);
-  const tenants = await onSharedNumber(admin, ((tenantRows ?? []) as TenantMatch[]).filter((t) => t.id));
+  const tenants = await onThisNumber(
+    admin,
+    ((tenantRows ?? []) as TenantMatch[]).filter((t) => t.id),
+    input.ownerOrgId,
+  );
   const tenantIds = tenants
     .filter((t) => Boolean(t.sms_opt_out) !== optOut)
     .map((t) => t.id);
@@ -187,7 +202,12 @@ export async function applyInboundSms(
  */
 export async function logInboundCall(
   admin: SmsInboundClient,
-  input: { from: string | null | undefined; answered: boolean; voicemail: boolean },
+  input: {
+    from: string | null | undefined;
+    answered: boolean;
+    voicemail: boolean;
+    ownerOrgId?: string | null;
+  },
 ): Promise<{ matchedLeads: number; messagesInserted: number; calledLeads?: { leadId: string; orgId: string }[] }> {
   const senderE164 = normalizePhoneE164(input.from);
   if (!senderE164 || input.answered) return { matchedLeads: 0, messagesInserted: 0 };
@@ -195,9 +215,10 @@ export async function logInboundCall(
     .from("leads")
     .select("id, organization_id")
     .eq("phone_e164", senderE164);
-  const leads = await onSharedNumber(
+  const leads = await onThisNumber(
     admin,
     ((leadRows ?? []) as LeadMatch[]).filter((l) => l.id && l.organization_id),
+    input.ownerOrgId,
   );
   const body = input.voicemail
     ? "Renter called the texting number and left a voicemail. Call them back."

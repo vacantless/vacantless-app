@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTwilioSignature } from "@/lib/sms";
 import { applyInboundSms } from "@/lib/sms-inbound";
+import { orgForTextingNumber } from "@/lib/org-sms-numbers";
 import { notifyOperatorsOfTextReply } from "@/lib/sms-reply-notify-server";
 
 // Twilio inbound-SMS webhook. Honors opt-out: a renter who texts STOP (or
@@ -69,7 +70,13 @@ export async function POST(req: NextRequest) {
 
   // Shared core: STOP/START flips lead + tenant opt-out state; ordinary renter
   // replies are logged to every matched lead timeline. No app-generated reply.
-  const summary = await applyInboundSms(admin, { from: params.From ?? "", body: params.Body ?? "" });
+  // S717: a text to a landlord's own number is filed to that landlord only.
+  const ownerOrgId = await orgForTextingNumber(admin, params.To ?? "");
+  const summary = await applyInboundSms(admin, {
+    from: params.From ?? "",
+    body: params.Body ?? "",
+    ownerOrgId,
+  });
   // S717: a renter's text reply is emailed to the landlord.
   for (const l of summary.repliedLeads ?? []) {
     await notifyOperatorsOfTextReply(admin, {

@@ -16,6 +16,7 @@ import {
 } from "@/lib/provisioning-server";
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import { isPlatformSwitchKey } from "@/lib/platform-switches";
+import { cleanOwnNumber } from "@/lib/org-sms-numbers";
 
 // Operator-initiated landlord onboarding (the scale version of WORKFLOW 112).
 // Double-gated: the page 404s for non-admins, AND this action rechecks the
@@ -202,4 +203,46 @@ export async function setPlatformSwitchAsAdmin(formData: FormData): Promise<void
   if (write.error) redirect("/dashboard/admin?switches=error");
   revalidatePath("/dashboard/admin");
   redirect("/dashboard/admin?switches=saved");
+}
+
+// S717: staff set a landlord's own texting number (0248). Remove deletes the
+// row; save upserts it, on or off.
+export async function setOrgSmsNumberAsAdmin(formData: FormData): Promise<void> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!isAdminEmail(user?.email, adminEmails())) {
+    redirect("/dashboard/admin?numbers=forbidden");
+  }
+  const orgId = String(formData.get("organization_id") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "").trim();
+  if (!orgId || !["save", "remove"].includes(mode)) {
+    redirect("/dashboard/admin?numbers=invalid");
+  }
+  const admin = createAdminClient();
+  if (!admin) redirect("/dashboard/admin?numbers=error");
+  if (mode === "remove") {
+    const del = await admin.from("org_sms_numbers").delete().eq("organization_id", orgId);
+    if (del.error) redirect("/dashboard/admin?numbers=error");
+  } else {
+    const phone = cleanOwnNumber(String(formData.get("phone") ?? ""));
+    if (!phone) redirect("/dashboard/admin?numbers=bad_number");
+    const write = await admin.from("org_sms_numbers").upsert(
+      {
+        organization_id: orgId,
+        phone_e164: phone,
+        provider: "twilio",
+        enabled: formData.get("enabled") === "on",
+        updated_at: new Date().toISOString(),
+        updated_by: user?.email ?? null,
+      },
+      { onConflict: "organization_id" },
+    );
+    if (write.error) {
+      redirect(write.error.code === "23505" ? "/dashboard/admin?numbers=taken" : "/dashboard/admin?numbers=error");
+    }
+  }
+  revalidatePath("/dashboard/admin");
+  redirect("/dashboard/admin?numbers=saved");
 }

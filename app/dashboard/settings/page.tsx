@@ -8,8 +8,9 @@ import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { getRoleForOrg } from "@/lib/membership";
 import { canUseRenterSms } from "@/lib/billing";
-import { isSmsConfigured } from "@/lib/sms";
+import { isOwnNumberSmsConfigured, isSmsConfigured } from "@/lib/sms";
 import { orgHasSwitch } from "@/lib/platform-switches";
+import { orgOwnSmsNumber } from "@/lib/org-sms-numbers";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import {
@@ -697,9 +698,13 @@ export default async function SettingsPage({
   // S528 honesty: the toggle is a PLAN feature, but whether texts actually go
   // out is a TRANSPORT fact (SMS_LIVE + provider creds). Read it so the UI
   // never implies texting while the account's SMS is not connected.
-  const smsTransportReady = isSmsConfigured();
-  // S717: texting is Agile only until each landlord has their own number.
-  const orgTexts = await orgHasSwitch(createAdminClient(), "shared_sms_number", org.id);
+  // S717: an account texts when it has its own number (staff turn it on) or
+  // staff put it on the shared number (Agile today).
+  const smsAdmin = createAdminClient();
+  const ownSmsNumber = await orgOwnSmsNumber(smsAdmin, org.id);
+  const orgTexts =
+    !!ownSmsNumber || (await orgHasSwitch(smsAdmin, "shared_sms_number", org.id));
+  const smsTransportReady = ownSmsNumber ? isOwnNumberSmsConfigured() : isSmsConfigured();
 
   return (
     <div>

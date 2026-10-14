@@ -8,6 +8,7 @@ import { HandoffLandlordForm } from "./handoff-form";
 import { GuidelineForm } from "./guideline-form";
 import { setOrgFeatureFlagAsAdmin } from "./actions";
 import { PlatformSwitchesSection } from "./platform-switches-section";
+import { OrgSmsNumbersSection } from "./org-sms-numbers-section";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import {
   SETTINGS_ORG_FEATURES,
@@ -26,6 +27,7 @@ export const fetchCache = "force-no-store";
 type AdminSearchParams = {
   features?: string;
   switches?: string;
+  numbers?: string;
 };
 
 type AdminOrgRow = {
@@ -142,6 +144,8 @@ export default async function AdminConsolePage({
       <OnboardLandlordForm />
 
       <PlatformSwitchesSection flash={searchParams.switches} />
+
+      <OrgSmsNumbersSection flash={searchParams.numbers} />
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-slate-700">Client feature access</h2>

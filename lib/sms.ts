@@ -26,6 +26,7 @@
 // kept pure + tested for any future promotional path.
 
 import { builtInSwitchOn, orgHasSwitch } from "./platform-switches";
+import { orgOwnSmsNumber, routeSms } from "./org-sms-numbers";
 import { createHmac, timingSafeEqual } from "crypto";
 
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01/Accounts";
@@ -479,23 +480,32 @@ export type SendOrgSmsInput = SendSmsInput & { organizationId: string | null | u
 // S717: every renter text goes out from ONE QUO number registered to
 // Vacantless as a sole proprietor. That registration covers Agile (the
 // founder's own leasing) and nobody else, and replies to it cannot be routed
-// per landlord. Until each landlord has their own number (Twilio, after
-// incorporation), texting is on only for accounts with the staff-only
-// shared_sms_number switch (lib/platform-switches.ts; Agile is built in).
+// per landlord. An account with its own number (lib/org-sms-numbers.ts)
+// texts from it instead; otherwise texting is on only for accounts with the
+// staff-only shared_sms_number switch (lib/platform-switches.ts; Agile is
+// built in).
 
 /** Built-in accounts only (no database). Pure. The send gate also reads staff switches. */
 export function orgCanUseSharedSmsNumber(orgId: string | null | undefined): boolean {
   return builtInSwitchOn("shared_sms_number", orgId);
 }
 
-async function orgMayTextNow(orgId: string | null | undefined): Promise<boolean> {
-  if (!orgId) return false;
-  if (orgCanUseSharedSmsNumber(orgId)) return true;
+// S717: an account with its own number (lib/org-sms-numbers.ts, 0248) texts
+// from it through Twilio; otherwise the shared-number switch decides.
+async function orgSmsStanding(
+  orgId: string | null | undefined,
+): Promise<{ ownNumber: string | null; onSharedNumber: boolean }> {
+  if (!orgId) return { ownNumber: null, onSharedNumber: false };
   try {
     const { createAdminClient } = await import("./supabase/admin");
-    return await orgHasSwitch(createAdminClient(), "shared_sms_number", orgId);
+    const admin = createAdminClient();
+    const ownNumber = await orgOwnSmsNumber(admin, orgId);
+    if (ownNumber) return { ownNumber, onSharedNumber: false };
+    const onSharedNumber =
+      orgCanUseSharedSmsNumber(orgId) || (await orgHasSwitch(admin, "shared_sms_number", orgId));
+    return { ownNumber: null, onSharedNumber };
   } catch {
-    return false;
+    return { ownNumber: null, onSharedNumber: orgCanUseSharedSmsNumber(orgId) };
   }
 }
 export type SmsProvider = "twilio" | "quo" | "none";
@@ -505,6 +515,8 @@ type SmsBackend = {
   ready: (env: NodeJS.ProcessEnv) => boolean;
   send: (input: SendSmsInput) => Promise<SmsResult>;
 };
+/** S717: a send from a landlord's own Twilio number names that number. */
+type TwilioSendInput = SendSmsInput & { from?: string | null };
 
 function twilioReady(env: NodeJS.ProcessEnv): boolean {
   return Boolean(
@@ -523,11 +535,12 @@ function quoReady(env: NodeJS.ProcessEnv): boolean {
  * helper). Never throws; returns { sent:false, reason } when unconfigured, the
  * number is unusable, or Twilio rejects it.
  */
-async function sendViaTwilio({ to, body }: SendSmsInput): Promise<SmsResult> {
+async function sendViaTwilio({ to, body, from: ownFrom }: TwilioSendInput): Promise<SmsResult> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
-  const from = process.env.TWILIO_FROM;
+  // An own number always sends as itself, never through the shared service.
+  const messagingServiceSid = ownFrom ? undefined : process.env.TWILIO_MESSAGING_SERVICE_SID;
+  const from = ownFrom || process.env.TWILIO_FROM;
 
   if (!sid || !token || (!messagingServiceSid && !from)) {
     return { sent: false, reason: "no_credentials" };
@@ -648,6 +661,11 @@ export function isSmsConfigured(): boolean {
   return smsLive() && selectSmsProvider() !== "none";
 }
 
+/** S717: own-number texts need only the live switch and the Twilio account keys. */
+export function isOwnNumberSmsConfigured(env = process.env): boolean {
+  return smsLive(env) && Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN);
+}
+
 /**
  * Send one SMS through the selected provider. Never throws; returns
  * { sent:false, reason } when unconfigured, the number is unusable, or the
@@ -655,7 +673,9 @@ export function isSmsConfigured(): boolean {
  */
 export async function sendSms({ to, body, organizationId }: SendOrgSmsInput): Promise<SmsResult> {
   if (!smsLive()) return { sent: false, reason: "sms_not_live" };
-  if (!(await orgMayTextNow(organizationId))) return { sent: false, reason: "org_not_on_sms" };
+  const route = routeSms({ ...(await orgSmsStanding(organizationId)), to });
+  if (route.kind === "none") return { sent: false, reason: route.reason };
+  if (route.kind === "own") return sendViaTwilio({ to, body, from: route.from });
   const provider = selectSmsProvider();
   return provider === "none"
     ? { sent: false, reason: "no_credentials" }
