@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { nextParamFor } from "@/lib/safe-next";
 
 // Refreshes the Supabase auth session on every request and guards
 // authenticated routes.
@@ -44,6 +45,12 @@ export async function updateSession(request: NextRequest) {
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    // S716: keep the page they asked for, so an emailed link still lands
+    // there after they log in (lib/safe-next.ts). The browser keeps any
+    // #anchor across the redirect on its own.
+    url.search = "";
+    const next = nextParamFor(path, request.nextUrl.search);
+    if (next) url.searchParams.set("next", next);
     return NextResponse.redirect(url);
   }
 

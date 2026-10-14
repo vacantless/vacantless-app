@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/safe-next";
 import {
   AuthShell,
   AUTH_BUTTON_CLASS,
@@ -31,7 +32,12 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push("/dashboard");
+    // S716: go back to the page an emailed link pointed at (?next=), with its
+    // #anchor (e.g. #renew-ads), or the dashboard home.
+    const params = new URLSearchParams(window.location.search);
+    const next = safeNextPath(params.get("next"));
+    const hash = next.includes("#") ? "" : window.location.hash;
+    router.push(`${next}${hash}`);
     router.refresh();
   }
 
