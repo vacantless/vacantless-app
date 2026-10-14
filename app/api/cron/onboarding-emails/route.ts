@@ -1,3 +1,4 @@
+import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
@@ -96,7 +97,7 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
     let to: string | null = null;
     if (owner?.user_id) {
-      const { data: u } = await admin.auth.admin.getUserById(owner.user_id as string);
+      const { data: u } = await getUserByIdCached(admin, owner.user_id as string);
       to = u?.user?.email ?? null;
     }
     if (!to) {

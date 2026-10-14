@@ -28,6 +28,7 @@
 // for the inbound webhook, which would tell the provider to retry a lead we
 // already have.
 
+import { getUserByIdCached } from "./auth-email-cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendOrgNotification } from "./notifications-server";
 import {
@@ -86,7 +87,7 @@ export async function notifyOperatorsOfNewLeadById(
       .eq("organization_id", opts.orgId);
     const members: NotifyMember[] = [];
     for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
-      const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+      const { data: u } = await getUserByIdCached(admin, m.user_id);
       members.push({ role: m.role, email: u?.user?.email ?? null });
     }
     const operatorFallback = resolveLeadNotifyEmailsPreferMemberFallback(members, [

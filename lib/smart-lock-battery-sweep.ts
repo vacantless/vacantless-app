@@ -1,3 +1,4 @@
+import { getUserByIdCached } from "./auth-email-cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendOrgNotification } from "./notifications-server";
 import {
@@ -121,7 +122,7 @@ async function operatorFallbackForOrg(
     .eq("organization_id", org.id);
   const members: NotifyMember[] = [];
   for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
-    const { data: u } = await client.auth.admin.getUserById(m.user_id);
+    const { data: u } = await getUserByIdCached(client, m.user_id);
     members.push({ role: m.role, email: u?.user?.email ?? null });
   }
   return resolveLeadNotifyEmails(members, [

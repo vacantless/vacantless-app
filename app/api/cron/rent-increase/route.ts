@@ -1,3 +1,4 @@
+import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOrgNotification } from "@/lib/notifications-server";
@@ -263,7 +264,7 @@ export async function GET(req: NextRequest) {
         .eq("organization_id", org.id);
       const members: NotifyMember[] = [];
       for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
-        const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+        const { data: u } = await getUserByIdCached(admin, m.user_id);
         members.push({ role: m.role, email: u?.user?.email ?? null });
       }
       const operatorFallback = resolveLeadNotifyEmails(members, [

@@ -16,6 +16,7 @@
 // live / submitted. Proof-before-Live stays with completeConciergeItem.
 // ============================================================================
 
+import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
@@ -137,7 +138,7 @@ async function operatorFallbackForOrg(
     .eq("organization_id", org.id);
   const members: NotifyMember[] = [];
   for (const m of (memberRows ?? []) as { user_id: string; role: string }[]) {
-    const { data: u } = await admin.auth.admin.getUserById(m.user_id);
+    const { data: u } = await getUserByIdCached(admin, m.user_id);
     members.push({ role: m.role, email: u?.user?.email ?? null });
   }
   return resolveLeadNotifyEmails(members, [

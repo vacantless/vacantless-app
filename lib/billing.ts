@@ -583,8 +583,9 @@ export function isTierPurchasable(tier: TierInfo): boolean {
 
 // --- Posting add-on (Noam, 2026-10-13) -------------------------------------
 // CA$49 a month on top of a paid plan (Growth or better). It covers our robot
-// posting to Kijiji, Rentals.ca and Zumper (lib/posting-lanes
-// ROBOT_POSTED_CHANNELS). Kijiji's own ad fees pass through at cost, inside the
+// posting to Kijiji and Zumper (lib/posting-lanes ROBOT_POSTED_CHANNELS;
+// Rentals.ca is Agile only, RENTALS_CA_ORG_IDS, because Cloudflare blocks the
+// robot). Kijiji's own ad fees pass through at cost, inside the
 // landlord's per-ad and monthly limits (lib/spend-cap.ts). The Facebook
 // Marketplace kit and the Facebook Page / Instagram connections stay in every
 // plan. Sold as a second Stripe subscription item (price env
