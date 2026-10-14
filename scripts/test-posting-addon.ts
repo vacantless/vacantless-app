@@ -14,6 +14,7 @@ import {
   postingAddonForSubscriptionEvent,
   postingAddonOffer,
   postingAddonPending,
+  currentPlanTitle,
 } from "../lib/billing";
 import { isRobotPostedChannel } from "../lib/posting-lanes";
 import { countWords, splitSentences } from "../lib/i18n/plain-words";
@@ -238,6 +239,12 @@ ok("a cancelled checkout is not pending", postingAddonPending("needs_growth", { 
   const page = read("app/dashboard/billing/page.tsx");
   ok("billing page checks pending before any buy button", page.indexOf("addonPending ?") > 0 && page.indexOf("addonPending ?") < page.indexOf("Add Posting for"));
 }
+
+// S714b: the add-on shows in the Current plan card.
+ok("bought add-on is named with the plan", currentPlanTitle("Growth", "on_bought") === "Growth + Posting");
+ok("grandfathered add-on reads included", currentPlanTitle("Growth", "on_included") === "Growth + Posting (included)");
+ok("no add-on, plan only", currentPlanTitle("Growth", "add") === "Growth" && currentPlanTitle("Free", "needs_growth") === "Free");
+ok("billing page uses the title helper", read("app/dashboard/billing/page.tsx").includes("currentPlanTitle(view.planLabel, addonOffer)"));
 
 console.log(`\nposting-addon: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

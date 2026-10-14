@@ -11,6 +11,7 @@ import {
   POSTING_ADDON,
   postingAddonOffer,
   postingAddonPending,
+  currentPlanTitle,
 } from "@/lib/billing";
 import {
   isBillingConfigured,
@@ -232,7 +233,7 @@ export default async function BillingPage({
               Current plan
             </h3>
             <p className="mt-1 text-2xl font-bold text-gray-900">
-              {view.planLabel}
+              {currentPlanTitle(view.planLabel, addonOffer)}
             </p>
             <p className="mt-1 text-sm text-gray-500">
               {view.isPaid ? (

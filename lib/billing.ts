@@ -712,6 +712,15 @@ export function postingAddonOffer(input: {
   return "needs_growth";
 }
 
+// S714b: the "Current plan" card named only the plan ("Growth"), so a landlord
+// who bought Growth with Posting could not see the add-on they pay for at the
+// top of Billing. Name it there too.
+export function currentPlanTitle(planLabel: string, offer: PostingAddonOffer): string {
+  if (offer === "on_bought") return `${planLabel} + Posting`;
+  if (offer === "on_included") return `${planLabel} + Posting (included)`;
+  return planLabel;
+}
+
 // S714: right after a Posting purchase (or removal) the page reloads before
 // Stripe's webhook has flipped the flag, so the old button would still show
 // and invite a second click. While the URL says a change was just made and
