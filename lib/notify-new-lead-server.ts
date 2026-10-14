@@ -136,7 +136,7 @@ export async function notifyOperatorsOfNewLeadById(
         dashboard_url: dashboardUrl,
       },
       operatorFallback,
-      action: { label: "View lead", url: dashboardUrl },
+      action: { label: "Open the inquiry", url: dashboardUrl },
     });
   } catch {
     // Swallow — the lead is saved; the operator alert is best-effort and must

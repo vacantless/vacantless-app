@@ -35,6 +35,8 @@ export const SWEEP_PATHS = [
   "/api/cron/distribution-freshness",
   "/api/cron/distribution-worker",
   "/api/cron/landlord-campaign",
+  // S715: the welcome email sat 84 minutes on GitHub's scheduler.
+  "/api/cron/onboarding-emails",
 ] as const;
 
 export type SweepResult = { path: string; status: number | null; ms: number; error?: string };

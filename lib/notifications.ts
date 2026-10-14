@@ -304,15 +304,18 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     tokens: [
       ...COMMON_TOKENS,
       "affected_ads_count",
+      "affected_ads_label",
       "affected_units_count",
       "listing_health_summary",
       "listing_health_details",
       "dashboard_url",
     ],
+    // S715: plain words, the ad's age, and how to fix it. The old copy said
+    // "1 listing ad(s)", "stale" and "Distribute" and never said what to do.
     defaultSubject:
-      "{{affected_ads_count}} listing ad(s) need a refresh",
+      "{{affected_ads_label}} a refresh",
     defaultBody:
-      "{{listing_health_summary}}\n\n{{listing_health_details}}\n\nVacantless has not posted, edited, removed, or submitted anything on an external portal. Review the affected channels in Distribute and refresh them manually when ready.\n\nOpen Distribute: {{dashboard_url}}",
+      "{{listing_health_summary}}\n\n{{listing_health_details}}\n\nOld ads sink lower on the site. Renew each one on the site, then tap \"I already renewed it\" on the rental's page so we stop reminding you.\n\nOpen the rental: {{dashboard_url}}",
     defaultAccent: "#d97706",
     active: true,
   },
@@ -417,10 +420,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "next_step",
       "dashboard_url",
     ],
+    // S715: plain rewrite (was "Vacantless has PREPARED ... Open Distribute").
     defaultSubject:
-      "A {{channel_label}} post for {{property_address}} is ready for you",
+      "Your {{channel_label}} ad for {{property_address}} is ready to post",
     defaultBody:
-      "Vacantless has PREPARED a {{channel_label}} post for {{property_address}} and stopped so a person can finish it.\n\nWhat is left: {{next_step}}\n\nVacantless has not logged in, paid, submitted, or posted anything on an external portal. Open the post, do the remaining step, submit it yourself, and paste the live URL so it is marked Live.\n\nOpen Distribute: {{dashboard_url}}",
+      "We filled in your {{channel_label}} ad for {{property_address}} and stopped before posting it.\n\nWhat is left: {{next_step}}\n\nNothing has been posted, paid for or sent for you. When the ad is up, paste its link on the rental's page so it shows as live.\n\nOpen the rental: {{dashboard_url}}",
     defaultAccent: "#2563eb",
     active: true,
   },
@@ -445,9 +449,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "dashboard_url",
     ],
     defaultSubject:
-      "Take down {{channel_label}} for leased unit — {{property_address}}",
+      "Take down the {{channel_label}} ad: {{property_address}} is leased",
     defaultBody:
-      "{{property_address}} is now leased, and the {{channel_label}} ad needs a human take-down.\n\nReason: {{reason}}\nAd URL: {{external_url}}\n\nOpen Distribute: {{dashboard_url}}",
+      "{{property_address}} is leased, and its {{channel_label}} ad needs taking down by hand.\n\nWhy: {{reason}}\nThe ad: {{external_url}}\n\nOpen the rental: {{dashboard_url}}",
     defaultAccent: "#d97706",
     active: true,
   },
@@ -641,11 +645,12 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "snapshot_date",
       "new_count",
       "showings_today_count",
+      "viewings_today_label",
       "snapshot",
       "dashboard_url",
     ],
     defaultSubject:
-      "Leasing snapshot, {{snapshot_date}}: {{new_count}} new, {{showings_today_count}} viewings today",
+      "Leasing snapshot, {{snapshot_date}}: {{new_count}} new, {{viewings_today_label}} today",
     defaultBody: "{{snapshot}}\n\nOpen your inquiries: {{dashboard_url}}",
     active: true,
   },
@@ -1291,6 +1296,46 @@ export function firstWord(name: string | null | undefined): string {
 export type RenderedNotification = { subject: string; body: string };
 
 /**
+ * S715: tidy the values a reader sees in every alert, whatever the caller
+ * passed. A phone "2263506690" reads "226-350-6690", a move-in "2026-10-14"
+ * reads "Wed, Oct 14, 2026", and the count words agree with the count
+ * ("1 viewing", "1 ad needs"). Pure.
+ */
+export function polishTokenVars(vars: NotificationTokenVars): NotificationTokenVars {
+  const out: NotificationTokenVars = { ...vars };
+  const phone = (out.lead_phone ?? "").trim();
+  if (phone) {
+    let digits = phone.replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+    if (digits.length === 10 && !/[a-z]/i.test(phone)) {
+      out.lead_phone = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+  }
+  const moveIn = (out.move_in ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(moveIn)) {
+    const ms = Date.parse(`${moveIn}T12:00:00Z`);
+    if (!Number.isNaN(ms)) {
+      out.move_in = new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(new Date(ms));
+    }
+  }
+  if (out.viewings_today_label === undefined && out.showings_today_count !== undefined) {
+    const n = Number(out.showings_today_count);
+    out.viewings_today_label = `${out.showings_today_count} ${n === 1 ? "viewing" : "viewings"}`;
+  }
+  if (out.affected_ads_label === undefined && out.affected_ads_count !== undefined) {
+    const n = Number(out.affected_ads_count);
+    out.affected_ads_label = `${out.affected_ads_count} ${n === 1 ? "ad needs" : "ads need"}`;
+  }
+  return out;
+}
+
+/**
  * Render an event's subject + body for one send: pick the operator override or
  * the code default, then substitute {{tokens}}. Pure string work.
  */
@@ -1307,9 +1352,10 @@ export function renderNotification(
     setting?.body_template && setting.body_template.trim() !== ""
       ? setting.body_template
       : event.defaultBody;
+  const v = polishTokenVars(vars);
   return {
-    subject: applyMessageTokens(subjectTpl, vars),
-    body: applyMessageTokens(bodyTpl, vars),
+    subject: applyMessageTokens(subjectTpl, v),
+    body: applyMessageTokens(bodyTpl, v),
   };
 }
 

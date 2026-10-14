@@ -183,13 +183,13 @@ const named = buildSnapshotBlock(empty, TZ, null, {
   unitCount: 2,
   firstDistributeUrl: "https://x/p1",
   items: [
-    { propertyId: "p1", address: "1195 Bruce Ave, Unit 303, Windsor, ON N9A 4Y5", channelLabel: "Facebook Marketplace", reason: "stale", distributeUrl: "https://x/p1" },
+    { propertyId: "p1", address: "1195 Bruce Ave, Unit 303, Windsor, ON N9A 4Y5", channelLabel: "Facebook Marketplace", reason: "stale", distributeUrl: "https://x/p1", days: 19 },
     { propertyId: "p1", address: "1195 Bruce Ave, Unit 303, Windsor, ON N9A 4Y5", channelLabel: "Zumper", reason: "stale", distributeUrl: "https://x/p1" },
     { propertyId: "p2", address: "833 Pillette Rd, Unit 3, Windsor, ON N8Y 3B4", channelLabel: "Kijiji", reason: "expired_or_removed", distributeUrl: "https://x/p2" },
   ],
 });
-ok("block: ads grouped by unit with sites", named.includes("• 1195 Bruce Ave, Unit 303: Facebook Marketplace (old), Zumper (old)\nhttps://x/p1"));
-ok("block: expired ad named", named.includes("• 833 Pillette Rd, Unit 3: Kijiji (expired)\nhttps://x/p2"));
+ok("block: ads grouped by unit with sites", named.includes("• 1195 Bruce Ave, Unit 303: Facebook Marketplace, posted 19 days ago, Zumper, old\nhttps://x/p1"));
+ok("block: expired ad named", named.includes("• 833 Pillette Rd, Unit 3: Kijiji, no longer up\nhttps://x/p2"));
 ok("block: ads header counts ads", named.includes("ADS TO REFRESH (3)"));
 ok("block: ads count in summary", named.startsWith("0 new inquiries · 0 viewings this week · 0 waiting for a viewing · 3 ads to refresh"));
 

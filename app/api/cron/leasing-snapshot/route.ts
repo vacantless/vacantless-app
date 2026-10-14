@@ -227,7 +227,7 @@ async function loadListingHealthSummary({
     today: nowISO.slice(0, 10),
     nowISO,
   });
-  return listingHealthSnapshotSummary(channels, APP_URL);
+  return listingHealthSnapshotSummary(channels, APP_URL, nowISO);
 }
 
 export async function GET(req: NextRequest) {

@@ -306,7 +306,7 @@ async function notifyOperatorsOfNewLead(
       },
       operatorFallback,
       action: {
-        label: "View lead",
+        label: "Open the inquiry",
         url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
       },
     });

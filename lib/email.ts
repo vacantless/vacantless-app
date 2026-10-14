@@ -18,6 +18,55 @@ import { isValidMailAlias } from "@/lib/email-ingest";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
+/** S715: no em dashes in any email (Noam's standing copy rule). Pure. */
+export function scrubEmDashes(s: string): string {
+  return s.replace(/\s*(?:\u2014|&mdash;|&#8212;)\s*/g, " - ");
+}
+
+/**
+ * S715: every Brevo send goes through here, so the copy rules hold for every
+ * email, including templates an operator edited in Settings.
+ */
+function brevoFetch(init: RequestInit): Promise<Response> {
+  let body = init.body;
+  if (typeof body === "string") {
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      for (const k of ["subject", "htmlContent", "textContent"]) {
+        if (typeof parsed[k] === "string") parsed[k] = scrubEmDashes(parsed[k] as string);
+      }
+      body = JSON.stringify(parsed);
+    } catch {
+      // Not JSON: send as is.
+    }
+  }
+  return fetch(BREVO_ENDPOINT, { ...init, body });
+}
+
+/** S715: Vacantless's own emails said "Sent by Vacantless via Vacantless." Pure. */
+export function sentByLine(orgEscaped: string): string {
+  return orgEscaped === "Vacantless" ? "Sent by Vacantless." : `Sent by ${orgEscaped} via Vacantless.`;
+}
+
+/**
+ * S715: an alert with a button also printed the same link as a body line
+ * ("Open the inquiry: <url>"), then the button, then the copy-and-paste box:
+ * three copies. Drop body lines that only carry the button's link. Pure.
+ */
+export function stripActionUrlLines(body: string, url: string | null | undefined): string {
+  const u = (url ?? "").trim();
+  if (!u) return body;
+  return body
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      return !(t === u || t.endsWith(" " + u) || t.endsWith(":" + u));
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // All vacantless.com mail goes out under the one domain-authed sender; the
 // per-org identity rides in the display name + reply-to so each customer's
 // renters see the customer's brand.
@@ -334,7 +383,7 @@ export async function sendBookingConfirmation(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -439,7 +488,7 @@ export async function sendRentalApplicationInvite(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -566,7 +615,7 @@ export async function sendRescheduleProposal(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -651,7 +700,7 @@ export async function sendRescheduleAcceptedConfirmation(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -759,7 +808,7 @@ export async function sendShowingRescheduled(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -902,7 +951,7 @@ export async function sendShowingReminder(p: ReminderPayload): Promise<SendResul
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -999,7 +1048,7 @@ export async function sendShowingAutoReleased(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1104,7 +1153,7 @@ export async function sendFeedbackRequest(p: FeedbackPayload): Promise<SendResul
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1240,7 +1289,7 @@ export async function sendPriceDropAlert(p: PriceDropPayload): Promise<SendResul
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1362,7 +1411,7 @@ export async function sendWaitlistVacancyAlert(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1485,7 +1534,7 @@ export async function sendViewingTimesOpenedEmail(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1617,7 +1666,7 @@ export async function sendNurtureEmail(p: NurturePayload): Promise<SendResult> {
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1692,7 +1741,7 @@ export async function sendTestEmail(p: TestEmailPayload): Promise<SendResult> {
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1798,7 +1847,7 @@ export async function sendTenantMessageEmail(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -1906,7 +1955,7 @@ export async function sendLeaseSignatureRequest(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -2020,7 +2069,7 @@ export async function sendIncidentReportNotification(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -2120,7 +2169,7 @@ export async function sendSenderConfirmation(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -2182,7 +2231,7 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -2297,7 +2346,7 @@ export async function sendTradeDispatchInvite(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -2402,7 +2451,7 @@ export function renderLandlordRentConfirmEmail(
       <p style="margin:20px 0 0;color:#52525b;font-size:13px;">This keeps your rent increase guideline math and N1 notice draft accurate.</p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      Sent by ${org} via Vacantless.
+      ${sentByLine(org)}
     </div>
   </div>
 </body></html>`;
@@ -2503,7 +2552,7 @@ export function renderLandlordAnniversaryRentConfirmEmail(
       <p style="margin:20px 0 0;color:#52525b;font-size:13px;">This keeps your rent increase calendar and N1 notice draft accurate.</p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      Sent by ${org} via Vacantless.
+      ${sentByLine(org)}
     </div>
   </div>
 </body></html>`;
@@ -2543,7 +2592,7 @@ export async function sendLandlordRentConfirmEmail(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,
@@ -2661,11 +2710,11 @@ export function notificationHtml(p: NotificationEmailPayload): string {
     <div style="height:6px;background:${escapeHtml(accent)};"></div>
     <div style="padding:28px 28px 24px;">
       ${logo}
-      ${bodyToParagraphs(p.body)}
+      ${bodyToParagraphs(p.actions?.length ? p.body : stripActionUrlLines(p.body, p.action_url))}
       ${action}
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      Sent by ${org} via Vacantless.
+      ${sentByLine(org)}
     </div>
   </div>
 </body></html>`;
@@ -2694,7 +2743,7 @@ export async function sendNotificationEmail(
   };
 
   try {
-    const res = await fetch(BREVO_ENDPOINT, {
+    const res = await brevoFetch({
       method: "POST",
       headers: {
         "api-key": apiKey,

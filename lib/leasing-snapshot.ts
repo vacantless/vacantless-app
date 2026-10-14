@@ -16,7 +16,7 @@
 // "today" / "this week" / "start of shift" match the operator's day, not UTC.
 
 import type { LeasingHealth, LeasingHealthStatus } from "./leasing-health";
-import type { ListingHealthSnapshotSummary } from "./listing-health";
+import { adStateLabel, type ListingHealthSnapshotSummary } from "./listing-health";
 
 // --- Row shapes the route passes in (already fetched + flattened) ------------
 export type SnapshotLead = {
@@ -426,8 +426,8 @@ function adsSection(listingHealth: ListingHealthSnapshotSummary): string {
       url: item.distributeUrl,
       sites: [],
     };
-    const why = item.reason === "stale" ? "old" : "expired";
-    entry.sites.push(`${item.channelLabel} (${why})`);
+    // S715: say how old, not just "(old)".
+    entry.sites.push(`${item.channelLabel}, ${adStateLabel(item.reason, item.days ?? null)}`);
     byUnit.set(item.propertyId, entry);
   }
   const blocks = [...byUnit.values()].map(

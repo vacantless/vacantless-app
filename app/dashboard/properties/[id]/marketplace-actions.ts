@@ -70,7 +70,7 @@ export async function sendMarketplaceKit(formData: FormData) {
       sent_by: org.name ?? user?.email ?? "Your landlord",
       kit_url: kitUrl,
     },
-    action: { label: "Open the Marketplace ad", url: kitUrl },
+    action: { label: "Open the posting page", url: kitUrl },
   });
 
   revalidatePath(`/dashboard/properties/${propertyId}`);

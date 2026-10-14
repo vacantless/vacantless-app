@@ -267,3 +267,10 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/landlord-campaign" \
             -w "\nHTTP %{http_code}\n"
+      - name: Trigger onboarding-emails sweep
+        if: ${{ !cancelled() }}
+        run: |
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/onboarding-emails" \
+            -w "\nHTTP %{http_code}\n"

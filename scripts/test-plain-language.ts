@@ -68,6 +68,8 @@ const SURFACES: Surface[] = [
   // S705: what is left of the Get online tab after the Advanced tools cut:
   // Publish Everywhere wrapper plus the live-ad-link list.
   { file: "app/dashboard/properties/[id]/distribute-tab.tsx", mode: "ui" },
+  // S715: the dashboard's own "not found" page.
+  { file: "app/dashboard/not-found.tsx", mode: "ui" },
   // The wizard.
   { file: "app/dashboard/link-portals/page.tsx", mode: "ui" },
   { file: "app/dashboard/link-portals/connect-tiles.tsx", mode: "ui" },

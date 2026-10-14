@@ -118,6 +118,8 @@ export function buildWatchRows(
     const plan = paid ? "Growth" : (a.plan ?? "free") !== "free" ? "Growth, not paying" : "Free";
     let line = `${name} (${plan}, signed up ${dayWord(days)}): `;
     if (closed) line += "closed the account.";
+    // S715: "First booking. It has a booking." said the same thing twice.
+    else if (stage === "first_booking") line += "First booking. Nothing to do.";
     else line += `${STAGE_LABELS[stage]}. It ${NEXT_STEP[stage]}.`;
     if (stalled) line = `NEEDS A NUDGE. ${line}`;
     rows.push({ id: a.id, name, days, stage, stalled, paid, closed, line });

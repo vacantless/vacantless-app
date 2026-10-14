@@ -61,6 +61,8 @@ export type ListingHealthSnapshotItem = {
   channelLabel: string;
   reason: ListingHealthReason;
   distributeUrl: string;
+  /** S715: days since the ad was posted, when known. */
+  days?: number | null;
 };
 
 export type ListingHealthSnapshotSummary = {
@@ -212,18 +214,32 @@ function plural(count: number, one: string, many: string): string {
 }
 
 function distributeUrl(appUrl: string, propertyId: string): string {
+  // S715: land on the Renew box (renew-ads-card.tsx), not the top of the tab.
   return `${appUrl.replace(/\/+$/, "")}/dashboard/properties/${encodeURIComponent(
     propertyId,
-  )}?tab=distribute#distribute`;
+  )}?tab=distribute#renew-ads`;
 }
 
-function reasonLabel(reason: ListingHealthReason): string {
-  return reason === "stale" ? "stale" : "expired or removed";
+/** S715: days since a YYYY-MM-DD posted date, or null. Pure. */
+export function adAgeDays(lastPostedOn: string | null | undefined, nowISO: string): number | null {
+  if (!lastPostedOn) return null;
+  const then = Date.parse(`${lastPostedOn.slice(0, 10)}T00:00:00Z`);
+  const now = Date.parse(`${nowISO.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(then) || Number.isNaN(now)) return null;
+  return Math.max(0, Math.round((now - then) / 86_400_000));
+}
+
+/** S715: "posted 14 days ago" for an old ad, "no longer up" for a gone one. Pure. */
+export function adStateLabel(reason: ListingHealthReason, days: number | null): string {
+  if (reason !== "stale") return "no longer up";
+  if (days == null) return "old";
+  return `posted ${days} ${days === 1 ? "day" : "days"} ago`;
 }
 
 export function buildListingHealthDigest(
   channels: ListingHealthChannel[],
   appUrl: string,
+  nowISO: string = new Date().toISOString(),
 ): ListingHealthDigest {
   const uniqueUnits = new Set(channels.map((channel) => channel.propertyId));
   const adCount = channels.length;
@@ -238,7 +254,7 @@ export function buildListingHealthDigest(
     .map((channel) => {
       const url = distributeUrl(appUrl, channel.propertyId);
       return [
-        `- ${channel.address}: ${channel.channelLabel} (${reasonLabel(channel.reason)})`,
+        `- ${channel.address}: ${channel.channelLabel}, ${adStateLabel(channel.reason, adAgeDays(channel.lastPostedOn, nowISO))}`,
         `  ${url}`,
       ].join("\n");
     })
@@ -249,9 +265,10 @@ export function buildListingHealthDigest(
 export function listingHealthSnapshotSummary(
   channels: ListingHealthChannel[],
   appUrl: string,
+  nowISO: string = new Date().toISOString(),
 ): ListingHealthSnapshotSummary | null {
   if (channels.length === 0) return null;
-  const digest = buildListingHealthDigest(channels, appUrl);
+  const digest = buildListingHealthDigest(channels, appUrl, nowISO);
   return {
     adCount: digest.adCount,
     unitCount: digest.unitCount,
@@ -262,6 +279,7 @@ export function listingHealthSnapshotSummary(
       channelLabel: channel.channelLabel,
       reason: channel.reason,
       distributeUrl: distributeUrl(appUrl, channel.propertyId),
+      days: adAgeDays(channel.lastPostedOn, nowISO),
     })),
   };
 }
@@ -275,6 +293,6 @@ export function buildListingHealthSnapshotLine(
     `${plural(summary.adCount, "ad needs", "ads need")} a refresh across ` +
     `${summary.unitCount} ${plural(summary.unitCount, "unit", "units")}.`;
   return summary.firstDistributeUrl
-    ? `${line} Review in Distribute: ${summary.firstDistributeUrl}`
+    ? `${line} Renew them here: ${summary.firstDistributeUrl}`
     : line;
 }

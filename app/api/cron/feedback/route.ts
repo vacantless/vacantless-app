@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isDaytime } from "@/lib/send-hours";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendFeedbackRequest } from "@/lib/email";
 import { feedbackDue, FEEDBACK_MAX_AGE_HOURS, HOUR_MS } from "@/lib/feedback";
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, scheduled_at, organization_id, lead_id, " +
         "leads(name, email), properties(address), " +
-        "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, feedback_enabled, feedback_delay_hours)",
+        "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, feedback_enabled, feedback_delay_hours, booking_timezone)",
     )
     .eq("outcome", "attended")
     .is("feedback_request_sent_at", null)
@@ -101,6 +102,14 @@ export async function GET(req: NextRequest) {
 
     if (!due) {
       summary.skipped++;
+      continue;
+    }
+
+    // S715: a renter got "How was your viewing?" at 11:46 PM. Hold it until
+    // daytime where the account is; the next daytime run sends it.
+    if (!isDaytime(now, org?.booking_timezone ?? null)) {
+      summary.skipped++;
+      summary.details.push({ showing: row.id, skipped: "held_until_daytime" });
       continue;
     }
 

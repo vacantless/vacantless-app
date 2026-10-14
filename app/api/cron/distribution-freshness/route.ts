@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { sendOrgNotification } from "@/lib/notifications-server";
+import { isDaytime } from "@/lib/send-hours";
 import {
   getNotificationEvent,
   isDripEnqueueEnabled,
@@ -235,6 +236,7 @@ type ListingHealthOrgRow = {
   logo_url: string | null;
   reply_to_email: string | null;
   public_contact_email: string | null;
+  booking_timezone?: string | null;
 };
 
 type ListingHealthPostRow = {
@@ -388,7 +390,7 @@ async function sendListingHealthAlerts({
 
   const { data: orgRows, error: orgErr } = await admin
     .from("organizations")
-    .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email")
+    .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, booking_timezone")
     .in("id", Array.from(settingsByOrg.keys()));
   if (orgErr) {
     summary.errors++;
@@ -398,6 +400,13 @@ async function sendListingHealthAlerts({
 
   const today = nowISO.slice(0, 10);
   for (const org of (orgRows ?? []) as ListingHealthOrgRow[]) {
+    // S715: not urgent, so it waits for daytime where the account is (it
+    // went out at 12:15 AM). Nothing is stamped, so the next daytime run sends.
+    if (!isDaytime(new Date(nowISO), org.booking_timezone)) {
+      summary.skipped++;
+      pushDetail(summary, { org: org.id, listing_health: "held_until_daytime" });
+      continue;
+    }
     try {
       const { posts, missingColumn } = await loadListingHealthPosts(admin, org.id);
       if (missingColumn) {
@@ -417,7 +426,7 @@ async function sendListingHealthAlerts({
         continue;
       }
 
-      const digest = buildListingHealthDigest(channels, APP_URL);
+      const digest = buildListingHealthDigest(channels, APP_URL, nowISO);
       const fallback = await operatorFallbackForOrg(admin, org);
       const result = await sendOrgNotification({
         client: admin,
@@ -440,7 +449,7 @@ async function sendListingHealthAlerts({
         },
         operatorFallback: fallback,
         action: {
-          label: "Review listing health",
+          label: "Open the rental",
           url: digest.firstDistributeUrl ?? `${APP_URL}/dashboard/leasing`,
         },
       });
