@@ -1,31 +1,27 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
+import { canonicalRedirect } from "@/lib/canonical-host";
+
 // S700 (dress rehearsal F1): the app answered on two hosts with two separate
 // logins, so one browser could be signed in to two different orgs at once.
-// Page visits to the old Vercel host now move to the real address. Only the
-// exact old host is moved (preview deployments keep their own URLs), only
-// GET/HEAD (form posts and server actions are never redirected), and never
-// /api (the GitHub cron workflows and webhooks call the old host directly).
-const LEGACY_APP_HOST = "vacantless-app.vercel.app";
+// Page visits to the old Vercel host move to the real address.
+// S714: account pages on www.vacantless.com / vacantless.com move too, so a
+// landlord who signs up from the homepage is still signed in when Stripe,
+// Facebook or an email link brings them back to app.vacantless.com.
+// Only GET/HEAD, never /api (lib/canonical-host.ts).
 const CANONICAL_APP_HOST =
   process.env.CANONICAL_APP_HOST?.trim() || "app.vacantless.com";
 
 export async function middleware(request: NextRequest) {
-  const host = (request.headers.get("host") ?? "").toLowerCase();
-  const { pathname } = request.nextUrl;
-  if (
-    host === LEGACY_APP_HOST &&
-    CANONICAL_APP_HOST !== LEGACY_APP_HOST &&
-    (request.method === "GET" || request.method === "HEAD") &&
-    !pathname.startsWith("/api/")
-  ) {
-    const target = new URL(
-      `${pathname}${request.nextUrl.search}`,
-      `https://${CANONICAL_APP_HOST}`,
-    );
-    return NextResponse.redirect(target, 308);
-  }
+  const target = canonicalRedirect({
+    host: request.headers.get("host") ?? "",
+    method: request.method,
+    pathname: request.nextUrl.pathname,
+    search: request.nextUrl.search,
+    canonicalHost: CANONICAL_APP_HOST,
+  });
+  if (target) return NextResponse.redirect(target, 308);
   return await updateSession(request);
 }
 
