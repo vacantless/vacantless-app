@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   }
   const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) return NextResponse.json({ ok: false, reason: "no_api_key" });
+  if (!apiKey) return NextResponse.json({ ok: false, reason: "no_api_key" }, { status: 500 });
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: false, reason: "service_role_not_configured" });
   const dry = req.nextUrl.searchParams.get("dry") === "1";
@@ -51,9 +51,16 @@ export async function GET(req: NextRequest) {
   try {
     blocked = await readBlocked(apiKey);
   } catch (e) {
-    return NextResponse.json({ ok: false, reason: `blocked_read:${(e as Error).message}` });
+    console.error("[team-unsubscribe-guard] blocked list read failed", (e as Error).message);
+    return NextResponse.json(
+      { ok: false, reason: `blocked_read:${(e as Error).message}` },
+      { status: 500 },
+    );
   }
-  if (blocked.length === 0) return NextResponse.json({ ok: true, blocked: 0, unblocked: [] });
+  if (blocked.length === 0) {
+    console.log("[team-unsubscribe-guard] blocked=0");
+    return NextResponse.json({ ok: true, blocked: 0, unblocked: [] });
+  }
 
   const [orgs, settings, lanes, agents, members] = await Promise.all([
     admin.from("organizations").select("reply_to_email, public_contact_email"),
@@ -97,6 +104,9 @@ export async function GET(req: NextRequest) {
     if (unblocked.length > 0) console.warn("[team-unsubscribe-guard] unblocked", unblocked);
   }
 
+  console.log(
+    `[team-unsubscribe-guard] blocked=${blocked.length} team=${team.size} toUnblock=${toUnblock.length} unblocked=${unblocked.length} failed=${failed.length} dry=${dry}`,
+  );
   return NextResponse.json({
     ok: failed.length === 0,
     dry,
@@ -105,5 +115,5 @@ export async function GET(req: NextRequest) {
     wouldUnblock: dry ? toUnblock : undefined,
     unblocked,
     failed,
-  });
+  }, { status: failed.length === 0 ? 200 : 500 });
 }
