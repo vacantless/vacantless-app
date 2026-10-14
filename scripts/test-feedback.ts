@@ -1,5 +1,6 @@
 // Unit tests for the pure feedback-due logic. Run: npx tsx scripts/test-feedback.ts
-import { feedbackDue, HOUR_MS, FEEDBACK_MAX_AGE_HOURS } from "../lib/feedback";
+import { feedbackDue, HOUR_MS, FEEDBACK_MAX_AGE_HOURS, feedbackAlertVars } from "../lib/feedback";
+import { getNotificationEvent, renderNotification } from "../lib/notifications";
 
 let passed = 0;
 let failed = 0;
@@ -104,6 +105,41 @@ ok(
   "large delay not yet elapsed → not due",
   !feedbackDue({ ...base, delayHours: 48, scheduledAtMs: NOW - 5 * HOUR_MS }),
 );
+
+// --- S718: the feedback alert email -------------------------------------
+{
+  const low = feedbackAlertVars({ rating: 2, comments: "  too small " });
+  ok("alert: 2 stars is flagged", low.rating_flag === "Low rating: ");
+  ok("alert: stars drawn", low.rating_stars === "\u2605\u2605\u2606\u2606\u2606");
+  ok("alert: comment trimmed and quoted", low.comments === '"too small"');
+  const one = feedbackAlertVars({ rating: 1, comments: null });
+  ok("alert: 1 star flagged", one.rating_flag === "Low rating: ");
+  ok("alert: blank comment reads (no comment)", one.comments === "(no comment)");
+  const three = feedbackAlertVars({ rating: 3, comments: "" });
+  ok("alert: 3 stars not flagged", three.rating_flag === "");
+  ok("alert: out of range clamps", feedbackAlertVars({ rating: 9, comments: "" }).rating === "5");
+
+  const ev = getNotificationEvent("leasing.viewing_feedback");
+  ok("event: registered and active", !!ev && ev.active);
+  ok("event: showing lane", ev?.lane === "showing");
+  if (ev) {
+    const vars = {
+      org_name: "S712 Test Rentals",
+      property_address: "12 Test St",
+      lead_name: "Renter Five",
+      showing_time: "Wed, Oct 14, 5:00 PM",
+      dashboard_url: "https://app.vacantless.com/dashboard/leads/x",
+    };
+    const rLow = renderNotification(ev, null, { ...vars, ...low });
+    ok("render: low subject", rLow.subject === "Low rating: Viewing feedback from Renter Five: 2 of 5");
+    ok("render: body has comment", rLow.body.includes('Comment: "too small"'));
+    ok("render: body has link", rLow.body.includes("dashboard/leads/x"));
+    const rOk = renderNotification(ev, null, { ...vars, ...feedbackAlertVars({ rating: 4, comments: "I need a bigger unit" }) });
+    ok("render: normal subject has no flag", rOk.subject === "Viewing feedback from Renter Five: 4 of 5");
+    ok("render: no em dash", !/\u2014/.test(rOk.subject + rOk.body + ev.description));
+    ok("render: no leftover tokens", !/{{/.test(rOk.subject + rOk.body));
+  }
+}
 
 console.log(`\nfeedback: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

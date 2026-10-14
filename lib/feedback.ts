@@ -56,3 +56,27 @@ export function feedbackDue(input: FeedbackDueInput): boolean {
 
   return true;
 }
+
+// --- S718: the landlord alert when a renter leaves feedback ------------------
+
+/** A 1 or 2 star rating is flagged in the alert subject. */
+export const LOW_RATING_MAX = 2;
+
+/**
+ * The rating-specific words for the leasing.viewing_feedback email. Pure.
+ * rating_flag is "Low rating: " for 1 or 2 stars (it prefixes the subject),
+ * otherwise empty. A blank comment reads "(no comment)".
+ */
+export function feedbackAlertVars(input: {
+  rating: number;
+  comments: string | null | undefined;
+}): { rating: string; rating_stars: string; rating_flag: string; comments: string } {
+  const r = Math.min(5, Math.max(1, Math.round(input.rating)));
+  const comment = (input.comments ?? "").trim();
+  return {
+    rating: String(r),
+    rating_stars: "\u2605".repeat(r) + "\u2606".repeat(5 - r),
+    rating_flag: r <= LOW_RATING_MAX ? "Low rating: " : "",
+    comments: comment ? `"${comment}"` : "(no comment)",
+  };
+}

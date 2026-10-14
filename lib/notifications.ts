@@ -495,6 +495,24 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // Renter viewing feedback (S718, Noam approved 2026-10-14). Audience operator.
+  // Fires once when a renter submits the post-viewing feedback form
+  // (/f/[showingId]); before this the rating only showed on Reports and the
+  // lead timeline, so nobody saw it. Same recipients as Viewing booked. The
+  // subject starts "Low rating:" for 1 or 2 stars (rating_flag token).
+  {
+    key: "leasing.viewing_feedback",
+    family: "leasing",
+    audience: "operator",
+    label: "Renter left viewing feedback",
+    description:
+      "When a renter rates their viewing, your leasing team gets the stars and comment by email. A 1 or 2 star rating is marked Low rating in the subject. Defaults to members who manage inquiries; edit the recipients below.",
+    tokens: [...COMMON_TOKENS, "lead_name", "rating", "rating_stars", "rating_flag", "comments", "showing_time", "dashboard_url"],
+    defaultSubject: "{{rating_flag}}Viewing feedback from {{lead_name}}: {{rating}} of 5",
+    defaultBody:
+      "{{lead_name}} rated their viewing at {{property_address}} ({{showing_time}}).\n\nRating: {{rating_stars}} ({{rating}} of 5)\nComment: {{comments}}\n\nOpen the inquiry: {{dashboard_url}}",
+    active: true,
+  },
   // Showing assigned to an agent (S436, multi-operator routing Slice 1 — see
   // DOGFOOD-MULTI-OPERATOR-ROUTING-2026-07-07.md). Audience operator; fired when
   // the lead agent routes a viewing to one of the org's showing agents. The
@@ -1180,6 +1198,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.viewing_booked": "showing",
   "leasing.showing_outcome_nudge": "showing",
   "leasing.showing_cancelled": "showing",
+  "leasing.viewing_feedback": "showing",
   "leasing.showing_assigned": "showing",
   "leasing.marketplace_kit": "listing",
   "leasing.showing_rescheduled": "showing",
