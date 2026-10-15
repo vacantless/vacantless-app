@@ -405,6 +405,7 @@ export function DistributeTab({
             return { checkoutUrl, checkoutHint: checkoutUrl ? siteCheckoutHint(checkoutUrl) : null };
           })(),
           siteSetup: siteSetupNotice(it.publishStatus, it.errorCode),
+          approved: it.autopilotApproved === true,
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}

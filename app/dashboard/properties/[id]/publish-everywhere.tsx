@@ -86,6 +86,8 @@ export type PublishEverywhereRunItem = {
   checkoutHint?: string | null;
   /** S713d: a step only the landlord can do on the site (Zumper renter account). */
   siteSetup?: { message: string; href: string; action: string } | null;
+  /** S719 (KI1303): the landlord has clicked Approve for this item. */
+  approved?: boolean;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -892,6 +894,11 @@ function ForYouRow({
   const working =
     !isLive &&
     (gate === "queued" || gate === "submitting" || gate === "submitted");
+  // S719 (KI1303): right after "Post it for me" a robot item is queued while we
+  // fill in the ad. Nothing is posted until the landlord approves it, so this
+  // is "getting it ready", not "posting".
+  const preparing =
+    working && gate === "queued" && item?.approved !== true && isRobotPostedChannel(row.key);
   const locked = addonLocked && !isLive;
 
   const stateChip = isLive
@@ -908,6 +915,8 @@ function ForYouRow({
       ? { label: "Ready. Approve it", cls: "bg-emerald-50 text-emerald-700" }
       : needsConnect
         ? { label: "Sign-in needed", cls: "bg-amber-50 text-amber-700" }
+        : preparing
+          ? { label: "Getting it ready", cls: "bg-amber-50 text-amber-700" }
         : working
           ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
           : paid
@@ -1048,6 +1057,11 @@ function ForYouRow({
             and post it on the site.
           </span>
         </div>
+      ) : preparing ? (
+        <p className="mt-2 text-[12px] text-amber-800">
+          We&apos;re filling in the ad. You approve it here before anything is
+          posted. Reload this page in a few minutes.
+        </p>
       ) : working ? (
         <p className="mt-2 text-[12px] text-amber-800">
           We&apos;re posting this now and will bring back the live link here.
