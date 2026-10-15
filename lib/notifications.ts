@@ -278,10 +278,10 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     label: "Viewing booked",
     description:
       "When a renter books a viewing from your public listing, your leasing team is notified in real time with the time and contact so whoever's covering can plan. Defaults to members who manage inquiries; edit the recipients below.",
-    tokens: [...COMMON_TOKENS, "lead_name", "lead_phone", "showing_time", "dashboard_url"],
+    tokens: [...COMMON_TOKENS, "lead_name", "lead_phone", "showing_time", "dashboard_url", "calendar_url"],
     defaultSubject: "Viewing booked: {{lead_name}}, {{showing_time}}",
     defaultBody:
-      "{{lead_name}} booked a viewing at {{property_address}}.\n\nWhen: {{showing_time}}\nPhone: {{lead_phone}}\n\nOpen the inquiry: {{dashboard_url}}",
+      "{{lead_name}} booked a viewing at {{property_address}}.\n\nWhen: {{showing_time}}\nPhone: {{lead_phone}}\n\nAdd to your calendar: {{calendar_url}}\n\nOpen the inquiry: {{dashboard_url}}",
     active: true,
   },
   // Post-showing outcome nudge (S391). Audience operator; the push half of the
@@ -538,10 +538,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "showing_time",
       "assigned_by",
       "agent_url",
+      "calendar_url",
     ],
     defaultSubject: "Viewing assigned to you - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\nLead agent (keep CC'd): {{assigned_by}}\n\nOpen your viewings page for the renter's contact, access instructions, and a one-tap Confirm: {{agent_url}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
+      "Hi {{agent_name}}, {{assigned_by}} has assigned you a viewing.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nTime: {{showing_time}}\nLead agent (keep CC'd): {{assigned_by}}\n\nAdd to your calendar: {{calendar_url}}\n\nOpen your viewings page for the renter's contact, access instructions, and a one-tap Confirm: {{agent_url}}\n\nPlease coordinate the viewing directly and keep the lead agent CC'd on your correspondence so they stay in the loop.",
     active: true,
   },
   // Marketplace posting kit sent to a showing agent (S712). Facebook Marketplace
@@ -587,10 +588,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "old_showing_time",
       "rescheduled_by",
       "agent_url",
+      "calendar_url",
     ],
     defaultSubject: "Viewing time changed - {{lead_name}} at {{property_address}}",
     defaultBody:
-      "Hi {{agent_name}}, {{rescheduled_by}} moved a viewing you're covering to a new time.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nNew time: {{showing_time}}\nPrevious time: {{old_showing_time}}\nLead agent (keep CC'd): {{rescheduled_by}}\n\nThis viewing now needs to be re-confirmed with the renter. Open your viewings page for the renter's contact and a one-tap Confirm: {{agent_url}}\n\nPlease keep the lead agent CC'd on your correspondence so they stay in the loop.",
+      "Hi {{agent_name}}, {{rescheduled_by}} moved a viewing you're covering to a new time.\n\nRenter: {{lead_name}}\nProperty: {{property_address}}\nNew time: {{showing_time}}\nPrevious time: {{old_showing_time}}\nLead agent (keep CC'd): {{rescheduled_by}}\n\nAdd the new time to your calendar (delete the old one): {{calendar_url}}\n\nThis viewing now needs to be re-confirmed with the renter. Open your viewings page for the renter's contact and a one-tap Confirm: {{agent_url}}\n\nPlease keep the lead agent CC'd on your correspondence so they stay in the loop.",
     defaultAccent: "#d97706",
     active: true,
   },

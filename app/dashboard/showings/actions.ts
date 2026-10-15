@@ -27,6 +27,7 @@ import {
 } from "@/lib/email";
 import { normalizeProposedSlots } from "@/lib/reschedule-proposals";
 import { sendOrgNotification } from "@/lib/notifications-server";
+import { viewingCalendarUrl } from "@/lib/viewing-calendar-server";
 import { resolveArrivalPhone } from "@/lib/showing-contact";
 import { releaseUnconfirmedShowing } from "@/lib/showing-release";
 
@@ -357,6 +358,7 @@ export async function assignShowing(formData: FormData) {
         showing_time: showingTime,
         assigned_by: user?.email ?? "The lead agent",
         agent_url: `${APP_URL}/agent/${agent.agent_token}`,
+        calendar_url: viewingCalendarUrl(id),
       },
     });
   }
@@ -554,6 +556,7 @@ export async function assignAllUnassigned() {
           showing_time: showingTime,
           assigned_by: user?.email ?? "The lead agent",
           agent_url: `${APP_URL}/agent/${agent.agent_token}`,
+          calendar_url: viewingCalendarUrl(job.showingId),
         },
       });
     }),
@@ -927,6 +930,7 @@ export async function rescheduleShowing(formData: FormData) {
       cancel_url: showing.cancel_token
         ? `${APP_URL}/showing/cancel/${showing.cancel_token}`
         : null,
+      calendar_url: viewingCalendarUrl(id),
     });
   }
 
@@ -970,6 +974,7 @@ export async function rescheduleShowing(formData: FormData) {
           old_showing_time: oldLabel,
           rescheduled_by: user?.email ?? "The lead agent",
           agent_url: `${APP_URL}/agent/${agent.agent_token}`,
+          calendar_url: viewingCalendarUrl(id),
         },
       });
     }

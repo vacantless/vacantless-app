@@ -442,6 +442,7 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       lead_phone: "519-555-0100",
       showing_time: "Tue, Jul 14, 5:30 PM EDT",
       dashboard_url: "https://x/dashboard/leads/abc",
+      calendar_url: "https://x/showing/calendar/abc.def",
     });
     ok("viewing_booked: renders lead name", rendered.subject.includes("Gurpreet Singh"));
     ok("viewing_booked: renders showing time", rendered.subject.includes("5:30 PM"));

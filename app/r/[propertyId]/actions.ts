@@ -20,6 +20,7 @@ import {
 } from "@/lib/booking";
 import { parseIncomeToCents, parseCount } from "@/lib/screening";
 import { sendOrgNotification } from "@/lib/notifications-server";
+import { viewingCalendarUrl } from "@/lib/viewing-calendar-server";
 import {
   formatLeadScreeningBlock,
   resolveLeadNotifyEmailsPreferMemberFallback,
@@ -178,6 +179,7 @@ async function attemptBooking(
             : null,
           leasing_phone: leasingPhone,
           booking_requires_confirmation: bookingRequiresConfirmation,
+          calendar_url: viewingCalendarUrl(b.showing_id ?? null),
         });
         if (result.sent) {
           await supabase.rpc("record_booking_email", {
@@ -413,6 +415,7 @@ async function notifyOperatorsOfViewingBooked(showingId: string): Promise<void> 
         lead_phone: showing.lead?.phone?.trim() || "(no phone)",
         showing_time: showingTime,
         dashboard_url: dashboardUrl,
+        calendar_url: viewingCalendarUrl(showingId),
       },
       operatorFallback,
       action: { label: "Open the inquiry", url: dashboardUrl },
@@ -623,6 +626,7 @@ async function autoAssignBookedShowing(showingId: string): Promise<void> {
         showing_time: showingTime,
         assigned_by: "Auto-assign",
         agent_url: `${APP_URL}/agent/${agent.agent_token}`,
+        calendar_url: viewingCalendarUrl(showingId),
       },
     });
   } catch {

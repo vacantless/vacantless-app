@@ -253,7 +253,25 @@ export type BookingPayload = {
   // S490: copy-only gate. The slot is still reserved, but the renter is told an
   // agent will confirm before the viewing. Default false preserves old copy.
   booking_requires_confirmation?: boolean | null;
+  // S721: the viewing's "Add to calendar" page (lib/viewing-calendar-server.ts).
+  // Optional: absent => no calendar line.
+  calendar_url?: string | null;
 };
+
+// S721: one "Add to calendar" line for the renter's viewing emails. When the
+// time moved, say plainly that an earlier calendar entry does not update itself.
+export function calendarLineHtml(
+  url: string | null | undefined,
+  brand: string,
+  moved = false,
+): string {
+  const u = url?.trim();
+  if (!u) return "";
+  const link = `<a href="${escapeHtml(u)}" style="color:${escapeHtml(brand)};font-weight:600;">Add to your calendar</a>`;
+  return moved
+    ? `<p style="margin:0 0 16px;">${link}. If you added the old time to your calendar, delete that one.</p>`
+    : `<p style="margin:0 0 16px;">${link} (Google, Apple or Outlook).</p>`;
+}
 
 // Shared renter-facing viewing logistics (S448): a tap-to-navigate map link
 // (always, when there's an address), a call/text-if-late number (when the org
@@ -326,6 +344,7 @@ function bookingHtml(p: BookingPayload): string {
         <p style="margin:0;color:#3f3f46;">${visitNote}</p>
       </div>
       ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
+      ${calendarLineHtml(p.calendar_url, brand)}
       ${
         p.cancel_url
           ? `<p style="margin:0 0 16px;">Need to change your plans? <a href="${escapeHtml(
@@ -667,6 +686,7 @@ function rescheduleAcceptedConfirmationHtml(
       ${oldTime ? `<div style="margin:0 0 12px;">${timeChangeBlock("Original Showing", oldTime, "original")}</div>` : ""}
       <div style="margin:0 0 18px;">${timeChangeBlock("New Suggested Time", newTime, "suggested")}</div>
       ${logistics}
+      ${calendarLineHtml(p.calendar_url, brand, true)}
       ${p.cancel_url ? `<p style="margin:18px 0 0;font-size:13px;color:#52525b;">Need to cancel instead? <a href="${escapeHtml(p.cancel_url)}" style="color:${escapeHtml(brand)};">Use your cancellation link</a>.</p>` : ""}
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
     </div>
@@ -760,6 +780,7 @@ function rescheduleHtml(p: ReschedulePayload): string {
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
       ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
+      ${calendarLineHtml(p.calendar_url, brand, true)}
       ${
         p.cancel_url
           ? `<p style="margin:0 0 16px;">Can't make the new time? <a href="${escapeHtml(

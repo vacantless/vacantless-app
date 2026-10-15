@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendRescheduleAcceptedConfirmation } from "@/lib/email";
 import { formatSlotLong } from "@/lib/booking";
 import { sendOrgNotification } from "@/lib/notifications-server";
+import { viewingCalendarUrl } from "@/lib/viewing-calendar-server";
 import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 
@@ -153,6 +154,7 @@ async function sendRenterAcceptedConfirmation(
         : null,
       leasing_phone: leasingPhone,
       booking_requires_confirmation: bookingRequiresConfirmation,
+      calendar_url: viewingCalendarUrl(r.showing_id ?? null),
     });
     if (result.sent) {
       await supabase.rpc("record_booking_email", {
