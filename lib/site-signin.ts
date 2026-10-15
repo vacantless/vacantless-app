@@ -150,9 +150,11 @@ export function siteSigninView(
         tone: "action",
         title: `Sign in to ${name}`,
         body:
-          detail === "not_signed_in_yet"
-            ? `We checked and ${name} does not show you as signed in yet. Finish signing in, then press the button again.`
-            : `Open the window and sign in to your ${name} account. You type your password into ${name} itself, so it stays with you.`,
+          detail === "enter_code"
+            ? `${name} just emailed you a code. Type it into the box in the window. Then press Submit there. We do the rest.`
+            : detail === "not_signed_in_yet"
+              ? `We checked and ${name} does not show you as signed in yet. Finish signing in, then press the button again.`
+              : `Open the window and sign in to your ${name} account. You type your password into ${name} itself, so it stays with you.`,
       };
     case "saving":
       return { tone: "wait", title: "Signed in. Saving", body: "One moment." };

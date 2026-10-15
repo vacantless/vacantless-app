@@ -39,7 +39,7 @@ export function WindowPanel({
       const next = await readSiteSigninWindow(win.id);
       if (next) {
         setWin(next);
-        if (next.detail === "not_signed_in_yet") setAsked(false);
+        if (next.detail === "not_signed_in_yet" || next.detail === "enter_code") setAsked(false);
       }
     }, 3000);
     return () => clearInterval(timer);

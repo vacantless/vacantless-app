@@ -113,6 +113,17 @@ async function main() {
     ok("page picker has no token/channel/autopilot jargon", !/Page token|feed channel|autopilot|Distribute tab/.test(fb));
   }
 
+  // S718: Rentals.ca's code step reads as its own instruction.
+  {
+    const v = siteSigninView("rentals_ca", "ready", "enter_code");
+    ok("enter_code: tells them the code was emailed", /emailed you a code/.test(v.body), v.body);
+    ok("enter_code: says where to type it", /box in the window/.test(v.body), v.body);
+    ok("enter_code: no em dash", !v.body.includes("\u2014"));
+    ok("enter_code: still an action", v.tone === "action");
+    const plain = siteSigninView("rentals_ca", "ready", null);
+    ok("no detail: normal sign-in copy", /sign in to your Rentals\.ca account/.test(plain.body), plain.body);
+  }
+
   console.log(`\nsite-signin: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

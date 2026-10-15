@@ -840,6 +840,9 @@ export function sessionCheckReason(code: string | null | undefined): string {
   switch (code) {
     case "needs_login":
       return "signed out";
+    // S718: Rentals.ca emails the account owner a code before it takes a post.
+    case "needs_code":
+      return "it wants the code it emailed you";
     case "cloudflare":
     case "captcha":
       return "the site asked for a human check";

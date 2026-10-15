@@ -2,6 +2,7 @@
 // Run: npx tsx scripts/test-distribution-channels.ts
 import { existsSync, readFileSync } from "node:fs";
 import {
+  sessionCheckReason,
   CANONICAL_CHANNEL_REGISTRY,
   CHANNEL_CATEGORIES,
   CHANNEL_CONNECT_KINDS,
@@ -544,5 +545,8 @@ ok("S699: others keep the default", refreshDaysForChannel("rentfaster") === DEFA
 }
 
 // ---------------------------------------------------------------------------
+// S718: the robot's "needs a code" verdict reads plainly on the tile.
+ok("sessionCheckReason: needs_code reads as the emailed code", sessionCheckReason("needs_code") === "it wants the code it emailed you");
+ok("sessionCheckReason: needs_login unchanged", sessionCheckReason("needs_login") === "signed out");
 console.log(`\ndistribution-channels: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

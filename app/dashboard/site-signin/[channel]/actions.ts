@@ -15,6 +15,7 @@ import {
   siteSigninIsOpen,
 } from "@/lib/site-signin";
 import { triggerSigninWindow } from "@/lib/site-signin-dispatch";
+import { triggerPostNow } from "@/lib/post-now";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
@@ -96,10 +97,18 @@ export async function readSiteSigninWindow(id: string): Promise<SiteSigninWindow
   const supabase = createClient();
   const { data } = await supabase
     .from(TABLE)
-    .select("id, status, view_url, detail, expires_at")
+    .select("id, status, view_url, detail, expires_at, updated_at")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
+  // S718: a fresh sign-in releases posts that were waiting on it. Start the
+  // posting robot now instead of at its next scheduled check. Only for a
+  // window that finished in the last two minutes, so an old page does not
+  // keep starting it. Never blocks the read.
+  if (data.status === "done") {
+    const at = Date.parse(String(data.updated_at ?? ""));
+    if (!Number.isNaN(at) && Date.now() - at < 120_000) void triggerPostNow();
+  }
   return {
     id: data.id as string,
     status: data.status as string,
