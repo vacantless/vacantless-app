@@ -118,8 +118,8 @@ function Body() {
       <p className="mb-4 max-w-[64ch] leading-relaxed text-[#384a42]">
         So I built a system to run it properly, one vacancy at a time. Post the
         rental page, share it only when it is ready, let renters book their own
-        viewings into windows that suit me, keep every inquiry in one list, and
-        carry the right renter straight into a tenancy record. It has run day to
+        viewings into windows that suit me, and keep every inquiry in one list
+        with its viewings, notes and outcome. It has run day to
         day on a real rental portfolio, and the numbers are the reason I decided
         to open it up.
       </p>
@@ -166,7 +166,7 @@ function Body() {
       <p className="max-w-[64ch] leading-relaxed text-[#384a42]">
         Vacantless is early and deliberately focused. It is not trying to manage
         your entire rental business. It helps you fill the rental in front of
-        you without losing inquiries, viewings, follow-up, or the final handoff.
+        you without losing inquiries, viewings or follow-up.
         It is being opened to other small landlords who want that same calm way
         to fill their rentals. If that is you, the best way to see it is to start
         with one rental, free.
@@ -179,7 +179,7 @@ function Body() {
 const STATS = LEASING_PROOF_STATS;
 
 const PRINCIPLES: string[] = [
-  "One rental, one clear path, from empty page to signed tenancy.",
+  "One rental, one clear path, from empty page to the renter you choose.",
   "Honest links: renters only ever see what the rental status allows.",
   "Built and used by an operator first, so it fits how leasing actually happens.",
 ];
@@ -227,7 +227,7 @@ function SiteFooter() {
           </span>
         </Link>
         <span>
-          Rental page, safe sharing, viewing times, inquiries, tenancy handoff.
+          Rental page, safe sharing, viewing times, inquiries, reminders.
         </span>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link href="/about" className="hover:text-[#15211d]">
