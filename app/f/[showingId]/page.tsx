@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitFeedback } from "./actions";
+import { viewingIsInFuture } from "@/lib/feedback-server";
 import { StarRating } from "./star-rating";
 import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 
@@ -41,6 +42,8 @@ export default async function PublicFeedbackPage({
   const brandBg = brandGradientCss(c.brand_color, c.brand_color_secondary);
 
   const done = c.already_submitted || searchParams.submitted === "1";
+  // S720: before the viewing, show "not yet" instead of a form that would be refused.
+  const notYet = !done && (await viewingIsInFuture(c.showing_id));
   const addr = c.property_address || "your viewing";
 
   return (
@@ -73,6 +76,14 @@ export default async function PublicFeedbackPage({
               <h1 className="text-xl font-bold text-gray-900">Thanks for your feedback!</h1>
               <p className="mt-2 text-sm text-gray-600">
                 We appreciate you letting {c.org_name} know how it went.
+              </p>
+            </div>
+          ) : notYet ? (
+            <div className="text-center">
+              <h1 className="text-xl font-bold text-gray-900">Your viewing is coming up</h1>
+              <p className="mt-2 text-sm text-gray-600">
+                Hi {firstName(c.renter_name)}, you can rate your visit to{" "}
+                <span className="font-medium text-gray-800">{addr}</span> after it happens.
               </p>
             </div>
           ) : (

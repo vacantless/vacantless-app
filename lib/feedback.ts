@@ -80,3 +80,13 @@ export function feedbackAlertVars(input: {
     comments: comment ? `"${comment}"` : "(no comment)",
   };
 }
+
+// S720: a viewing that has not started yet cannot be rated. The /f page shows
+// "not yet" instead of the form, and submitFeedback refuses as a backstop.
+// Unknown or unparseable time = not in the future (the page stays usable).
+export function viewingNotYet(scheduledAtIso: string | null | undefined, nowMs: number): boolean {
+  if (typeof scheduledAtIso !== "string") return false;
+  // Postgres text form ends "+00"; Date.parse needs "+00:00".
+  const t = Date.parse(scheduledAtIso.replace(/([+-]\d{2})$/, "$1:00"));
+  return Number.isFinite(t) && t > nowMs;
+}

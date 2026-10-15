@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import { feedbackAlertVars } from "@/lib/feedback";
+import { viewingIsInFuture } from "@/lib/feedback-server";
 import type { NotifyMember } from "@/lib/incident-reports";
 
 const APP_URL =
@@ -107,23 +108,6 @@ async function notifyOperatorsOfFeedback(
     });
   } catch {
     // Swallow: the feedback is saved; the alert is best-effort.
-  }
-}
-
-/** S719: true only when the showing is found and starts after now. */
-async function viewingIsInFuture(showingId: string): Promise<boolean> {
-  try {
-    const admin = createAdminClient();
-    if (!admin) return false;
-    const { data } = await admin
-      .from("showings")
-      .select("scheduled_at")
-      .eq("id", showingId)
-      .maybeSingle();
-    const at = (data as { scheduled_at?: string | null } | null)?.scheduled_at;
-    return typeof at === "string" && Date.parse(at) > Date.now();
-  } catch {
-    return false;
   }
 }
 

@@ -1,5 +1,5 @@
 // Unit tests for the pure feedback-due logic. Run: npx tsx scripts/test-feedback.ts
-import { feedbackDue, HOUR_MS, FEEDBACK_MAX_AGE_HOURS, feedbackAlertVars } from "../lib/feedback";
+import { feedbackDue, HOUR_MS, FEEDBACK_MAX_AGE_HOURS, feedbackAlertVars, viewingNotYet } from "../lib/feedback";
 import { getNotificationEvent, renderNotification } from "../lib/notifications";
 
 let passed = 0;
@@ -139,6 +139,17 @@ ok(
     ok("render: no em dash", !/\u2014/.test(rOk.subject + rOk.body + ev.description));
     ok("render: no leftover tokens", !/{{/.test(rOk.subject + rOk.body));
   }
+}
+
+// S720: the /f page shows "not yet" before the viewing.
+{
+  const now = Date.parse("2026-10-15T14:30:00Z");
+  ok("notYet: tomorrow's viewing", viewingNotYet("2026-10-16T21:00:00+00", now) === true);
+  ok("notYet: past viewing", viewingNotYet("2026-10-14T21:00:00+00", now) === false);
+  ok("notYet: exactly now is not future", viewingNotYet("2026-10-15T14:30:00Z", now) === false);
+  ok("notYet: supabase-js form", viewingNotYet("2026-10-16T21:00:00+00:00", now) === true);
+  ok("notYet: null time", viewingNotYet(null, now) === false);
+  ok("notYet: garbage time", viewingNotYet("not a date", now) === false);
 }
 
 console.log(`\nfeedback: ${passed} passed, ${failed} failed`);
