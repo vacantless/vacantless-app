@@ -236,6 +236,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "move_in",
       "no_suitable_time_note",
       "screening",
+      "renter_message",
       "dashboard_url",
     ],
     defaultSubject: "New inquiry from {{lead_name}} for {{property_address}}",
@@ -247,7 +248,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     // collapse, so the email still reads cleanly. Runs of blank lines collapse
     // into one paragraph break (bodyToParagraphs splits on \n{2,}).
     defaultBody:
-      "New inquiry from {{lead_name}} for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{no_suitable_time_note}}\n\n{{screening}}\n\nReply when you can and log the contact in your dashboard: {{dashboard_url}}",
+      "New inquiry from {{lead_name}} for {{property_address}}.\n\nName: {{lead_name}}\nEmail: {{lead_email}}\nPhone: {{lead_phone}}\nMove-in: {{move_in}}\n\n{{renter_message}}\n\n{{no_suitable_time_note}}\n\n{{screening}}\n\nReply when you can and log the contact in your dashboard: {{dashboard_url}}",
     active: true,
   },
   // S717: a renter texted back (or called) the texting number. Before this the

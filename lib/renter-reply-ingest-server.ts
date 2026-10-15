@@ -526,6 +526,7 @@ export async function handleInboundReplyPost(
       move_in: "(not specified)",
       no_suitable_time_note: "",
       screening: "",
+      renter_message: "",
       dashboard_url: lead ? dashboardUrl(lead.id) : APP_URL,
     },
     operatorFallback: fallback,

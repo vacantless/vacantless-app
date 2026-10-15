@@ -559,6 +559,15 @@ export function kijijiAdIdFrom(
   return null;
 }
 
+/** S720: a North American phone number the renter typed into their message,
+ *  as typed. Null when there is none. Ten digits (or 1 + ten) only, so a
+ *  price, a date or a unit number is never taken for a phone. */
+export function phoneFromMessage(message: string | null | undefined): string | null {
+  if (!message) return null;
+  const m = /(?:^|[^\d])((?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/.exec(message);
+  return m ? m[1].trim() : null;
+}
+
 /**
  * Parse one Kijiji enquiry. Trust order, highest first:
  *   1. headers (Reply-To, X-Adid-Horizontal, X-Vip-Url) -> "exact"
@@ -573,21 +582,25 @@ export function parseKijijiLeadEmail(
 ): PortalLeadParseResult {
   const warnings: string[] = [];
 
+  // S720: read BOTH parts. Real Kijiji mail has a SHORT html part and a LONGER
+  // plain part, and the two use different layouts (html: "<label> is
+  // interested in ..." + "<label>:"; plain: "From: <label>" + the message).
+  // Picking the longer part alone read the plain part with html rules and lost
+  // the renter's name and message on every real email (Jem, 2026-10-13/15).
+  const toLines = (b: string) => b.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
   const htmlLines = input.htmlBody
-    ? htmlToLines(decodeQuotedPrintableIfNeeded(input.htmlBody))
-    : "";
-  const plain = input.textBody
-    ? decodeQuotedPrintableIfNeeded(input.textBody).replace(/\r/g, "")
-    : "";
-  const body = htmlLines.length >= plain.length ? htmlLines : plain;
-  const lines = body.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    ? toLines(htmlToLines(decodeQuotedPrintableIfNeeded(input.htmlBody)))
+    : [];
+  const plainLines = input.textBody
+    ? toLines(decodeQuotedPrintableIfNeeded(input.textBody).replace(/\r/g, ""))
+    : [];
 
   // The body is the authority for the label, because it appears there on its own
   // line rather than wedged between two pieces of free text as it is in the
   // subject.
   let label: string | null = null;
   let adTitle: string | null = null;
-  for (const line of lines) {
+  for (const line of [...htmlLines, ...plainLines]) {
     const m = /^(.*\S)\s+is interested in\s+"(.+)"\s*$/.exec(line);
     if (m) {
       label = m[1].trim();
@@ -596,11 +609,17 @@ export function parseKijijiLeadEmail(
     }
   }
   if (!label) {
-    const m = /^New message from\s+(.+?)\s+about\s+"(.+)"\s*$/.exec((input.subject ?? "").trim());
+    const m = /^New message from\s+(.+?)\s+about\s+"(.+)"\s*$/.exec(
+      (input.subject ?? "").replace(/\s+/g, " ").trim(),
+    );
     if (m) {
       label = m[1].trim();
       adTitle = m[2].trim();
-      warnings.push("fell back to the subject line for the renter label and ad title");
+      // The plain part's "From: <label>" line confirms the subject's label; only
+      // warn when the body offers no confirmation at all.
+      if (!plainLines.includes(`From: ${label}`)) {
+        warnings.push("fell back to the subject line for the renter label and ad title");
+      }
     }
   }
 
@@ -626,26 +645,27 @@ export function parseKijijiLeadEmail(
   const name = kijijiNameFromLabel(label);
   const requestedTimes = kijijiRequestedDates(input.headers);
 
-  // The renter's own words: the lines after the "<label>:" line, stopping at
-  // Kijiji's own footer blocks.
+  // The renter's own words. html: the lines after "<label>:"; plain: the lines
+  // after "From: <label>". Both stop at Kijiji's own footer blocks.
   let message: string | null = null;
   if (label) {
-    const start = lines.findIndex((l) => l === `${label}:`);
-    if (start >= 0) {
+    const stop = (line: string) =>
+      /^Other options:?$/i.test(line) ||
+      /^Want more eyes on your listing\??$/i.test(line) ||
+      /^You can respond to /i.test(line) ||
+      line === `Reply to ${label}`;
+    const grab = (lines: string[], startLine: string): string | null => {
+      const start = lines.findIndex((l) => l === startLine);
+      if (start < 0) return null;
       const out: string[] = [];
       for (const line of lines.slice(start + 1)) {
-        if (
-          /^Other options:?$/i.test(line) ||
-          /^Want more eyes on your listing\??$/i.test(line) ||
-          /^You can respond to /i.test(line)
-        ) {
-          break;
-        }
+        if (stop(line)) break;
         out.push(line);
       }
       const joined = out.join("\n").trim();
-      if (joined) message = joined;
-    }
+      return joined || null;
+    };
+    message = grab(htmlLines, `${label}:`) ?? grab(plainLines, `From: ${label}`);
   }
   if (!message) warnings.push("could not isolate the renter's message from the body");
 
@@ -661,7 +681,8 @@ export function parseKijijiLeadEmail(
       kind,
       name,
       email,
-      phone: null, // Kijiji never sends one; it only appears if typed into the message.
+      // Kijiji never sends one; S720 takes it from the message when typed there.
+      phone: phoneFromMessage(message),
       message,
       unit: null,
       adId,

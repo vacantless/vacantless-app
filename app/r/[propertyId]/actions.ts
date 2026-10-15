@@ -309,6 +309,7 @@ async function notifyOperatorsOfNewLead(
           ? "⚠ This renter couldn't find a workable viewing time — offer alternate times."
           : "",
         screening,
+        renter_message: "",
         dashboard_url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
       },
       operatorFallback,

@@ -60,7 +60,19 @@ export type NotifyNewLeadOptions = {
   // "filed unattributed" path), e.g. the address the portal put in the subject.
   // The operator still needs a hint about what the renter asked about.
   propertyAddressFallback?: string | null;
+  // S720: what the renter wrote on the listing site, shown in the alert so the
+  // team can answer it ("Is there a number to call you?") without opening the
+  // lead. Null or blank = the line is left out.
+  renterMessage?: string | null;
 };
+
+/** S720: the alert line for the renter's own words, or "" when there are none. */
+export function renterMessageLine(message: string | null | undefined): string {
+  const t = (message ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const clipped = t.length > 600 ? `${t.slice(0, 597)}...` : t;
+  return `They wrote: "${clipped}"`;
+}
 
 /**
  * Notify the org's leasing team that lead `leadId` came in. Reads the org,
@@ -134,6 +146,7 @@ export async function notifyOperatorsOfNewLeadById(
         // time; a portal-ingested lead has no booking step, so it is always blank.
         no_suitable_time_note: "",
         screening,
+        renter_message: renterMessageLine(opts.renterMessage),
         dashboard_url: dashboardUrl,
       },
       operatorFallback,

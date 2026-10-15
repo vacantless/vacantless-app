@@ -389,6 +389,7 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       no_suitable_time_note:
         "⚠ This renter couldn't find a workable viewing time — offer alternate times.",
       screening: "Screening\nOccupants: 3\nEmployment: Employed full-time",
+      renter_message: 'They wrote: "Is there a number to call you?"',
       dashboard_url: "https://x/dashboard/leads/abc",
     });
     ok("new_lead: renders name", rendered.body.includes("Karen Kenney"));
@@ -397,6 +398,7 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       "new_lead: renders no suitable time note",
       rendered.body.includes("couldn't find a workable viewing time"),
     );
+    ok("new_lead: shows what the renter wrote", rendered.body.includes('They wrote: "Is there a number to call you?"'));
     ok("new_lead: inlines screening", rendered.body.includes("Employment: Employed full-time"));
     ok("new_lead: no leftover tokens", !/\{\{/.test(rendered.subject + rendered.body));
     // Empty screening collapses cleanly (no orphan label, no literal token).
@@ -409,6 +411,7 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       move_in: "2026-08-01",
       no_suitable_time_note: "",
       screening: "",
+      renter_message: "",
       dashboard_url: "https://x/dashboard/leads/abc",
     });
     ok("new_lead: empty screening leaves no token", !/\{\{/.test(renderedEmpty.body));

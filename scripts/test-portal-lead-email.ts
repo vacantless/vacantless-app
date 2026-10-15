@@ -24,6 +24,7 @@ import {
   subjectAddressFor,
   parseZumperPropertyLine,
   addressMatchesZumperProperty,
+  phoneFromMessage,
 } from "../lib/portal-lead-email";
 
 let passed = 0;
@@ -540,6 +541,101 @@ ok("zumper key: another civic number never matches", k3 != null && !addressMatch
 const kLower = parseZumperPropertyLine("506 Manning Avenue #Lower");
 ok("zumper key: a named unit", kLower?.unit === "lower", kLower);
 ok("zumper key: no civic number is no key", parseZumperPropertyLine("Somewhere nice") === null);
+
+// ---------------------------------------------------------------------------
+// S720: a REAL Kijiji message with BOTH parts, as it reached rentals@ on
+// 2026-10-15 (renter Jem, Unit 3). The earlier fixtures carried only an html
+// part, so they never met the real shape: a SHORT html part next to a LONGER
+// plain part in a different layout. The parser read the longer part with html
+// rules and lost the renter's name and words on every real email.
+// ---------------------------------------------------------------------------
+const JEM_PLAIN = `Hello! The following is a reply to your "1 Bed 1 Bath - 833 Pillette Rd, Unit 3, Windsor, ON N8Y 3B4" Ad on Kijiji:
+From: Jem(jenburkoski@gmail.com)
+
+Hi, I’m interested. Is there a number to call you?
+
+Reply to Jem(jenburkoski@gmail.com)
+https://www.kijiji.ca/m-msg-my-messages/conversation/18r8:417pm07:2px81p55f?utm_source=automated_email&utm_medium=email&utm_campaign=reply_email&utm_content=reply_CTA
+
+You can respond to "Jem(jenburkoski@gmail.com)" by replying to this email.
+Other options:
+
+Want more replies? Promote your ad through My Kijiji.
+https://www.kijiji.ca/m-my-featured-ads.html
+
+Ad no longer relevant? Delete your ad from the original Manage My Ads email or from My Kijiji.
+https://www.kijiji.ca/m-delete-ad-survey-mail.html?adId=1744721877
+
+------------------------------------------------------------
+IMPORTANT TIPS FOR YOUR PROTECTION
+------------------------------------------------------------
+* Take steps to make your Kijiji transactions as secure as
+possible by following our suggested safety tips.
+Read our Safety Tips:
+https://help.kijiji.ca/helpdesk/safety/
+
+Email Masking:
+Please note that we now automatically mask email addresses of buyers and sellers on non-commercial ads. For your safety,
+we recommend you only use the masked email address when replying to emails.
+`;
+const JEM_HTML = `<html><head><style>body { font-family: Helvetica; }</style></head><body>
+<!--[if mso | IE]><table><tr><td><![endif]-->
+<div class="copy copy-blue copy-bold">
+Good news, Agile Real Estate Group!
+</div>
+<!--[if !mso]>-->
+<div class="copy">
+Jem(jenburkoski@gmail.com) is interested in "<a href="https://www.kijiji.ca/v-apartments-condos/windsor-area-on/1-bed-1-bath-833-pillette-rd-unit-3-windsor-on-n8y-3b4/1744721877">1 Bed 1 Bath - 833 Pillette Rd, Unit 3, Windsor, ON N8Y 3B4</a>"
+</div>
+<h2>Jem(jenburkoski@gmail.com):</h2>
+<p style="white-space:pre-line;">
+Hi, I’m interested. Is there a number to call you?
+</p>
+<p class="bigger secondary">Other options:</p>
+<p>You can respond to Jem(jenburkoski@gmail.com) by replying to this email.</p>
+</body></html>`;
+const JEM = {
+  subject: 'New message from Jem(jenburkoski@gmail.com) about "1 Bed 1 Bath - 833 Pillette\r\n Rd, Unit 3, Windsor, ON N8Y 3B4"',
+  from: "noreply@rts.kijiji.ca",
+  replyTo: "jenburkoski@gmail.com",
+  textBody: JEM_PLAIN,
+  htmlBody: JEM_HTML,
+  headers: {
+    "X-Adid-Horizontal": "1744721877",
+    "X-Vip-Url":
+      "https://www.kijiji.ca/v-apartments-condos/windsor-area-on/1-bed-1-bath-833-pillette-rd-unit-3-windsor-on-n8y-3b4/1744721877",
+    "X-Conversation-Id": "18r8:417pm07:2px81p55f",
+    "X-Mailgun-Tag": "Selling",
+  },
+};
+{
+  ok("jem: the plain part really is the longer one", JEM_PLAIN.length > htmlToLines(JEM_HTML).length);
+  const r = parsePortalLeadEmail(JEM);
+  ok("jem: parses", r.ok, r);
+  if (r.ok) {
+    const l = r.lead;
+    ok("jem: name", l.name === "Jem", l.name);
+    ok("jem: email", l.email === "jenburkoski@gmail.com", l.email);
+    ok("jem: the renter's words survive", l.message === "Hi, I’m interested. Is there a number to call you?", l.message);
+    ok("jem: ad title off the body", l.adTitle === "1 Bed 1 Bath - 833 Pillette Rd, Unit 3, Windsor, ON N8Y 3B4", l.adTitle);
+    ok("jem: no warnings", l.warnings.length === 0, l.warnings);
+    ok("jem: no phone (she did not give one)", l.phone === null, l.phone);
+  }
+  // Plain part only (a client that drops the html part): still read.
+  const rp = parsePortalLeadEmail({ ...JEM, htmlBody: undefined });
+  ok("jem plain-only: message", rp.ok && rp.lead.message === "Hi, I’m interested. Is there a number to call you?", rp);
+  ok("jem plain-only: no subject-fallback warning", rp.ok && rp.lead.warnings.length === 0, rp.ok && rp.lead.warnings);
+  // A typed phone becomes the lead's phone.
+  const typed = JEM_PLAIN.replace("Is there a number to call you?", "Call me at 519-555-0142 after 5.");
+  const rt = parsePortalLeadEmail({ ...JEM, textBody: typed, htmlBody: undefined });
+  ok("jem typed phone: taken from the message", rt.ok && rt.lead.phone === "519-555-0142", rt.ok && rt.lead.phone);
+}
+ok("phone: (519) 555-0142", phoneFromMessage("reach me (519) 555-0142") === "(519) 555-0142");
+ok("phone: 5195550142", phoneFromMessage("text 5195550142 thanks") === "5195550142");
+ok("phone: +1 519.555.0142", phoneFromMessage("+1 519.555.0142") === "+1 519.555.0142");
+ok("phone: a price is not a phone", phoneFromMessage("is $1,250 still the price?") === null);
+ok("phone: a date is not a phone", phoneFromMessage("move in 2026-11-01") === null);
+ok("phone: none", phoneFromMessage(null) === null);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

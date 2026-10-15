@@ -809,7 +809,24 @@ export async function handleInboundLeadPost(
           orgId,
           leadId,
           propertyAddressFallback: lead.subjectAddress,
+          renterMessage: lead.message,
         });
+        // S720: a renter writing again lands on the same record (0238), whose
+        // RPC keeps only "Wrote again via ...". Save what they wrote this time.
+        const returning =
+          rpcData && typeof rpcData === "object" &&
+          (rpcData as Record<string, unknown>).lead_returning === true;
+        if (returning && lead.message) {
+          const site = lead.portal === "kijiji" ? "Kijiji" : lead.portal === "zumper" ? "Zumper" : "Rentals.ca";
+          const { error: msgErr } = await admin.from("messages").insert({
+            organization_id: orgId,
+            lead_id: leadId,
+            channel: "note",
+            direction: "inbound",
+            body: `${site} message: ${lead.message}`,
+          });
+          if (msgErr) console.warn("inbound/lead: repeat message not saved", { message: msgErr.message });
+        }
         // S702: the renter who wrote through a site gets the same instant
         // reply as a website renter (booking link + an answer to their
         // question), unless the account answers renters itself.
@@ -907,6 +924,7 @@ export async function handleInboundLeadPost(
     orgId,
     leadId: inserted.id,
     propertyAddressFallback: lead.subjectAddress,
+    renterMessage: lead.message,
   });
 
   return NextResponse.json({
