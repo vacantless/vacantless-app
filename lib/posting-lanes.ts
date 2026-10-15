@@ -17,6 +17,30 @@ export function isRobotPostedChannel(channel: unknown): boolean {
   return (ROBOT_POSTED_CHANNELS as readonly string[]).includes(String(channel ?? ""));
 }
 
+/**
+ * S719: what the landlord does next when the robot has built an ad and
+ * stopped. On a robot site the landlord never submits the ad or pastes a link:
+ * they approve (or sign in once) on the rental's page and the robot posts it.
+ * Returns null for a person-posted site (the caller keeps its own wording).
+ */
+export function robotNextStep(
+  gate: string,
+  channel: unknown,
+  siteLabel: string,
+): string | null {
+  if (!isRobotPostedChannel(channel)) return null;
+  if (gate === "needs_operator") {
+    return `click "Approve and post" on the rental's page. We then post it on your ${siteLabel} account for you`;
+  }
+  if (gate === "needs_payment") {
+    return `open the rental's page and finish the ${siteLabel} payment step there. We never enter card details for you`;
+  }
+  if (gate === "needs_login") {
+    return `sign in once to ${siteLabel} from the rental's page. Then we post it for you`;
+  }
+  return null;
+}
+
 /** Only a person-posted site uses the monthly done-for-you allowance. */
 export function usesDeskAllowance(channel: unknown): boolean {
   return !isRobotPostedChannel(channel);

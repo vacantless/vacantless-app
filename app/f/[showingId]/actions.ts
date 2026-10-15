@@ -110,6 +110,23 @@ async function notifyOperatorsOfFeedback(
   }
 }
 
+/** S719: true only when the showing is found and starts after now. */
+async function viewingIsInFuture(showingId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    if (!admin) return false;
+    const { data } = await admin
+      .from("showings")
+      .select("scheduled_at")
+      .eq("id", showingId)
+      .maybeSingle();
+    const at = (data as { scheduled_at?: string | null } | null)?.scheduled_at;
+    return typeof at === "string" && Date.parse(at) > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 // Public, unauthenticated feedback submission. Calls a SECURITY DEFINER RPC
 // that resolves the org from the showing, inserts one feedback row, and logs
 // the lead timeline. The renter can leave feedback for their own showing but
@@ -125,6 +142,12 @@ export async function submitFeedback(formData: FormData) {
 
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     redirect(`/f/${showingId}?error=rating`);
+  }
+
+  // S719: a viewing that has not happened yet cannot be rated. The link is
+  // only emailed after an attended viewing, but the page is public by id.
+  if (await viewingIsInFuture(showingId)) {
+    redirect(`/f/${showingId}?error=not_yet`);
   }
 
   const supabase = createClient();

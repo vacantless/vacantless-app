@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-14",
-  "checksum": "bb68db1d765b1fc120531b74b3fce2ba00a75ce50cd0d7199b95dde62953cd68",
+  "generated": "2026-10-15",
+  "checksum": "1dca0823d1e87d9349fd680f0633126aefe99ff3dfb871938a3ffc17fdbcaf81",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/dashboard/(wizard)/getting-started/page.tsx",
@@ -118,7 +118,7 @@
     "lib/distribution-run.ts\u0000banned_word": 31,
     "lib/distribution-run.ts\u0000sentence_length": 2,
     "lib/distribution-stuck-sweep.ts\u0000all_caps": 1,
-    "lib/distribution-stuck-sweep.ts\u0000banned_word": 8,
+    "lib/distribution-stuck-sweep.ts\u0000banned_word": 7,
     "lib/distribution-stuck-sweep.ts\u0000parentheses": 1,
     "lib/distribution-stuck-sweep.ts\u0000sentence_length": 2,
     "lib/distribution-verification.ts\u0000ampersand_or_slash": 1,
@@ -171,7 +171,7 @@
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
-    "app/dashboard/settings/page.tsx": 304,
+    "app/dashboard/settings/page.tsx": 301,
     "app/dashboard/site-signin/[channel]/page.tsx": 16,
     "app/dashboard/site-signin/[channel]/window-panel.tsx": 6,
     "app/dashboard/today-lane.tsx": 5,
@@ -180,7 +180,7 @@
     "lib/distribution-capabilities.ts": 21,
     "lib/distribution-channel-contracts.ts": 68,
     "lib/distribution-channel-tile-statuses.ts": 11,
-    "lib/distribution-channels.ts": 132,
+    "lib/distribution-channels.ts": 133,
     "lib/distribution-freshness.ts": 20,
     "lib/distribution-launch-coverage.ts": 8,
     "lib/distribution-partner.ts": 13,
@@ -191,10 +191,10 @@
     "lib/listing-copy.ts": 59,
     "lib/listing-description.ts": 76,
     "lib/listing-distribution.ts": 21,
-    "lib/listing-health.ts": 13,
+    "lib/listing-health.ts": 15,
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
-    "lib/site-signin.ts": 23,
+    "lib/site-signin.ts": 26,
     "messages/en.json": 205,
     "messages/fr.json": 205
   },
@@ -2892,12 +2892,6 @@
       "file": "lib/distribution-stuck-sweep.ts",
       "text": "nobody has picked this up. Check that the channel is set up and authorized for this organization, then re-run it",
       "count": 3
-    },
-    {
-      "rule": "banned_word",
-      "file": "lib/distribution-stuck-sweep.ts",
-      "text": "review the prepared post and click submit, then paste the live URL",
-      "count": 1
     },
     {
       "rule": "parentheses",

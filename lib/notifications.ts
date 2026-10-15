@@ -440,7 +440,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultSubject:
       "Your {{channel_label}} ad for {{property_address}} is ready to post",
     defaultBody:
-      "We filled in your {{channel_label}} ad for {{property_address}} and stopped before posting it.\n\nWhat is left: {{next_step}}\n\nNothing has been posted, paid for or sent for you. When the ad is up, paste its link on the rental's page so it shows as live.\n\nOpen the rental: {{dashboard_url}}",
+      "We filled in your {{channel_label}} ad for {{property_address}} and stopped before posting it.\n\nWhat is left: {{next_step}}\n\nNothing has been posted, paid for or sent for you yet.\n\nOpen the rental: {{dashboard_url}}",
     defaultAccent: "#2563eb",
     active: true,
   },
@@ -489,7 +489,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "When a renter cancels their booked viewing from the confirmation email, your team is notified so you can free the slot and follow up. Defaults to members who manage inquiries; edit the recipients below.",
     tokens: [...COMMON_TOKENS, "lead_name", "showing_time", "dashboard_url"],
-    defaultSubject: "Viewing cancelled - {{lead_name}} at {{property_address}}",
+    defaultSubject: "Viewing cancelled: {{lead_name}}, {{property_address}}",
     defaultBody:
       "{{lead_name}} cancelled their viewing at {{property_address}} ({{showing_time}}).\n\nThe time slot is now free. You may want to follow up with the renter or offer another time.\n\nOpen the inquiry: {{dashboard_url}}",
     defaultAccent: "#d97706",

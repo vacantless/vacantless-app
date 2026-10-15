@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { scrubEmDashes } from "@/lib/email";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -392,7 +393,7 @@ export default async function LeadDetailPage({
                   <span className="font-semibold">
                     {money(incomeMagnitude.reportedCents)}/mo
                   </span>
-                  {" — "}
+                  {", "}
                   <span className="font-semibold">
                     {money(incomeMagnitude.shortfallCents)}/mo below
                   </span>{" "}
@@ -693,7 +694,7 @@ export default async function LeadDetailPage({
                   <span>{new Date(m.created_at).toLocaleString("en-US", { timeZone })}</span>
                 </div>
                 <p className="whitespace-pre-wrap text-sm text-gray-700">
-                  {m.body}
+                  {scrubEmDashes(m.body ?? "")}
                 </p>
               </li>
             );

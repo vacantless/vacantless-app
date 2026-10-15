@@ -180,7 +180,7 @@ export const STUCK_NEXT_STEP: Record<StuckKind, string> = {
   needs_payment:
     "complete the channel's payment, then review and submit the post",
   needs_operator:
-    "review the prepared post and click submit, then paste the live URL",
+    "post the prepared ad on the site yourself. Then paste the ad's link on the rental's page",
   unclaimed_concierge:
     "nobody has picked this up. Check that the channel is set up and authorized for this organization, then re-run it",
 };

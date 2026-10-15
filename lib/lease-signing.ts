@@ -180,7 +180,7 @@ export type AuditCertificateModel = {
 };
 
 function fmtTs(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   // ISO-ish, second precision, UTC-explicit — an audit log wants no ambiguity.
@@ -235,7 +235,7 @@ export function renderAuditCertificateHtml(m: AuditCertificateModel): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Certificate of Completion${m.propertyAddress ? " — " + escapeHtml(m.propertyAddress) : ""}</title>
+<title>Certificate of Completion${m.propertyAddress ? ", " + escapeHtml(m.propertyAddress) : ""}</title>
 <style>
   :root { --ink:#1a1a1a; --muted:#555; --line:#cfcfcf; --ok:#15803d; --pending:#92400e; }
   * { box-sizing: border-box; }
@@ -272,7 +272,7 @@ export function renderAuditCertificateHtml(m: AuditCertificateModel): string {
 <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
 <div class="sheet">
   <h1>Certificate of Completion</h1>
-  <p class="sub">${escapeHtml(m.leaseTitle)}${m.propertyAddress ? " — " + escapeHtml(m.propertyAddress) : ""}</p>
+  <p class="sub">${escapeHtml(m.leaseTitle)}${m.propertyAddress ? ", " + escapeHtml(m.propertyAddress) : ""}</p>
 
   <h2>Document</h2>
   <table class="summary">

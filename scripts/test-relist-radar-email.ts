@@ -128,7 +128,7 @@ function emailItem(overrides: Partial<RelistRadarEmailItem> = {}): RelistRadarEm
   ok("notice safety says no charge", email.body.includes("will not charge, repost, edit, or submit"));
   ok("notice has skip button", email.actions.some((a) => a.label === "Skip Kijiji"));
   ok("notice has paid refresh button", email.actions.some((a) => a.label === "Refresh for $54.95"));
-  ok("notice has manage button", email.actions.some((a) => a.label === "Manage in Distribute"));
+  ok("notice has manage button", email.actions.some((a) => a.label === "Open the rental"));
 }
 
 {
@@ -155,7 +155,7 @@ function emailItem(overrides: Partial<RelistRadarEmailItem> = {}): RelistRadarEm
   ok("paid lapse subject", email.subject.startsWith("Paid listing expired"));
   ok("paid lapse no-response copy", email.body.includes("No paid-refresh consent was recorded"));
   ok("paid lapse has paid consent action", email.actions.some((a) => a.label === "Refresh for the site fee"));
-  ok("paid lapse keeps manage action", email.actions.some((a) => a.label === "Manage in Distribute"));
+  ok("paid lapse keeps manage action", email.actions.some((a) => a.label === "Open the rental"));
 }
 
 {

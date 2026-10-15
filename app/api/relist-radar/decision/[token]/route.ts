@@ -161,7 +161,7 @@ export async function GET(
   if (tokenErr) {
     return htmlResponse({
       title: "Link unavailable",
-      body: "We could not check this Keep live link. Please open Distribute instead.",
+      body: "We could not check this Keep live link. Please open the rental's page instead.",
       status: 503,
     });
   }
@@ -196,7 +196,7 @@ export async function GET(
   if (eventErr) {
     return htmlResponse({
       title: "Link unavailable",
-      body: "We could not load this Keep live cycle. Please open Distribute instead.",
+      body: "We could not load this Keep live cycle. Please open the rental's page instead.",
       status: 503,
     });
   }

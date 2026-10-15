@@ -478,7 +478,7 @@ export async function GET(req: NextRequest) {
             channel: "email",
             direction: "outbound",
             body: `${label} viewing reminder sent to ${renterEmail}` +
-              (result.subject ? ` — "${result.subject}"` : ""),
+              (result.subject ? `: "${result.subject}"` : ""),
           });
           summary.sent++;
           didSomething = true;

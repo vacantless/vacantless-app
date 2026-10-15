@@ -1859,7 +1859,7 @@ export async function blastPriceDrop(formData: FormData) {
       direction: "outbound",
       body:
         `Price-drop alert sent to ${lead.email}` +
-        (result.subject ? ` — "${result.subject}"` : ""),
+        (result.subject ? `: "${result.subject}"` : ""),
     });
 
     sent++;

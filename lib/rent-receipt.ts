@@ -153,11 +153,11 @@ function safeColor(color: string | null, fallback: string): string {
 
 /** "2025-03-01" -> "Mar 2025" (the rent month a payment is FOR). */
 function formatPeriod(periodMonth: string | null): string {
-  if (!periodMonth) return "—";
+  if (!periodMonth) return "-";
   const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(periodMonth.trim());
-  if (!m) return "—";
+  if (!m) return "-";
   const mo = Number(m[2]);
-  if (mo < 1 || mo > 12) return "—";
+  if (mo < 1 || mo > 12) return "-";
   return `${MONTHS[mo - 1]} ${m[1]}`;
 }
 
@@ -222,7 +222,7 @@ export function renderRentReceiptHtml(model: RentReceiptModel): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rent Receipt ${model.year}${
-    model.rentalUnitAddress ? " — " + escapeHtml(model.rentalUnitAddress) : ""
+    model.rentalUnitAddress ? ", " + escapeHtml(model.rentalUnitAddress) : ""
   }</title>
 <style>
   :root { --ink: #1a1a1a; --muted: #555; --line: #cfcfcf; }
@@ -288,7 +288,7 @@ export function renderRentReceiptHtml(model: RentReceiptModel): string {
 <div class="sheet">
   ${masthead}
   <p class="eyebrow">Statement of Rent Paid</p>
-  <h1 style="color:${accent}">Rent Receipt — ${model.year}</h1>
+  <h1 style="color:${accent}">Rent Receipt ${model.year}</h1>
   <p class="sub">For the tenant's income-tax records</p>
 
   ${emptyNote}

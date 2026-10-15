@@ -132,7 +132,7 @@ async function sendLeaseupTakedownNeededNotification(
         args.org.reply_to_email,
         args.org.public_contact_email,
       ]),
-      action: { label: "Open Distribute", url: dashboardUrl },
+      action: { label: "Open the rental", url: dashboardUrl },
     });
   } catch {
     // The leased transition and take-down task are already recorded. Operator

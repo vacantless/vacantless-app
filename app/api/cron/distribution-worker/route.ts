@@ -36,7 +36,7 @@ import {
   type WorkerListingFacts,
 } from "@/lib/distribution-worker";
 import { composePostWithAgent } from "@/lib/distribution-worker-ai";
-import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { isRobotPostedChannel, robotNextStep } from "@/lib/posting-lanes";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import {
@@ -69,7 +69,8 @@ const NOTIF_EVENT = "leasing.distribution_job_needs_action";
 const GATE_STEP: Record<WorkerGate, string> = {
   needs_login: "log in to the channel (and clear any CAPTCHA), then review and submit the post",
   needs_payment: "complete the channel's payment, then review and submit the post",
-  needs_operator: "review the prepared post and click submit, then paste the live URL",
+  needs_operator:
+    "post the prepared ad on the site yourself. Then paste the ad's link on the rental's page",
 };
 
 type Summary = {
@@ -284,11 +285,11 @@ async function runStuckSweep(admin: AdminClient): Promise<SweepResult> {
           property_address: address ?? "",
           channel_label: channelByKey(item.channel)?.label ?? item.channel,
           gate_label: STUCK_GATE_LABEL[kind],
-          next_step: `${STUCK_NEXT_STEP[kind]}. ${waited}`,
+          next_step: `${robotNextStep(kind, item.channel, channelByKey(item.channel)?.label ?? item.channel) ?? STUCK_NEXT_STEP[kind]}. ${waited}`,
           dashboard_url: dashboardUrl,
         },
         operatorFallback: fallback,
-        action: { label: "Open Distribute", url: dashboardUrl },
+        action: { label: "Open the rental", url: dashboardUrl },
       });
 
       // Stamp whether or not it was delivered. An org with no reachable
@@ -607,7 +608,7 @@ export async function GET(req: NextRequest) {
         concierge_claimed_at: null,
         last_attempt_id: attemptRow.id,
         attempt_count: attempt.attempt_no,
-        audit_message: `Prepared by the posting worker. Next: ${GATE_STEP[gate]}.`,
+        audit_message: `Prepared by the posting worker. Next: ${robotNextStep(gate, job.channel, channelLabel) ?? GATE_STEP[gate]}.`,
         ...(spendCapBlock
           ? { error_code: spendCapBlock.code, error_message: spendCapBlock.message }
           : {}),
@@ -649,11 +650,11 @@ export async function GET(req: NextRequest) {
           property_address: address ?? "",
           channel_label: channelLabel,
           gate_label: gate,
-          next_step: GATE_STEP[gate],
+          next_step: robotNextStep(gate, job.channel, channelLabel) ?? GATE_STEP[gate],
           dashboard_url: dashboardUrl,
         },
         operatorFallback: fallback,
-        action: { label: "Open Distribute", url: dashboardUrl },
+        action: { label: "Open the rental", url: dashboardUrl },
       });
       summary.notified = result.delivered;
     }

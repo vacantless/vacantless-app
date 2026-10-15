@@ -93,7 +93,7 @@ ok("empty year: count 0, total 0, null bounds", empty.count === 0 && empty.total
 // --- render -----------------------------------------------------------------
 const html = renderRentReceiptHtml(model);
 ok("html is a full document", html.startsWith("<!doctype html>") && html.includes("</html>"));
-ok("html shows the year", html.includes("Rent Receipt — 2025"));
+ok("html shows the year", html.includes("Rent Receipt 2025"));
 ok("html shows the total", html.includes("$6,600"));
 ok("html lists tenants", html.includes("Liang Wu, Sam Park"));
 ok("html shows the address", html.includes("18 Shorncliffe Avenue"));

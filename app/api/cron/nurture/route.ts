@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
       channel: "email",
       direction: "outbound",
       body: `Nurture email (step ${step}/${NURTURE_STEPS}) sent to ${renterEmail}` +
-        (result.subject ? ` — "${result.subject}"` : ""),
+        (result.subject ? `: "${result.subject}"` : ""),
     });
 
     summary.sent++;

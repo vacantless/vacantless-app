@@ -667,7 +667,7 @@ export function buildRelistRadarEmail({
     }
   }
   actions.push({
-    label: lang === "fr" ? "Gerer dans Distribute" : "Manage in Distribute",
+    label: lang === "fr" ? "Ouvrir la location" : "Open the rental",
     url: dashboardUrl,
     variant: "secondary",
   });
@@ -757,7 +757,7 @@ export function buildRelistRadarAutopilotRecap({
   )} in ${monthLabel}.`;
   const safetyNote =
     "No paid listings were refreshed. Successful worker posts still wait for live-link confirmation before Vacantless marks a channel Live.";
-  const body = [summaryText, detailsText, safetyNote, `Open Distribute: ${dashboardUrl}`]
+  const body = [summaryText, detailsText, safetyNote, `Open the rental: ${dashboardUrl}`]
     .filter((part) => part.trim())
     .join("\n\n");
   return {
@@ -768,7 +768,7 @@ export function buildRelistRadarAutopilotRecap({
     detailsText,
     actions: [
       {
-        label: "Open Distribute",
+        label: "Open the rental",
         url: dashboardUrl,
         variant: "primary",
       },

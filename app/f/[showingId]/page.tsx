@@ -91,6 +91,11 @@ export default async function PublicFeedbackPage({
                   Please pick a star rating before submitting.
                 </p>
               )}
+              {searchParams.error === "not_yet" && (
+                <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  This viewing has not happened yet. You can rate it after your visit.
+                </p>
+              )}
               {searchParams.error === "1" && (
                 <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   We couldn&apos;t record that. Your feedback may already be in.

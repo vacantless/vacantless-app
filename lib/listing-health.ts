@@ -53,6 +53,12 @@ export type ListingHealthDigest = {
   firstDistributeUrl: string | null;
   summaryText: string;
   detailsText: string;
+  /** S718: where the email button goes. One unit: that rental's Renew box.
+   *  Several units: the rentals list, so no ad's own link equals the button
+   *  link (the renderer drops a body line that repeats the button link, which
+   *  hid one unit's link and left another bare, 2026-10-15). */
+  actionUrl: string | null;
+  actionLabel: string;
 };
 
 export type ListingHealthSnapshotItem = {
@@ -213,6 +219,8 @@ function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many;
 }
 
+const RENTALS_LIST_PATH = "/dashboard/properties";
+
 function distributeUrl(appUrl: string, propertyId: string): string {
   // S715: land on the Renew box (renew-ads-card.tsx), not the top of the tab.
   return `${appUrl.replace(/\/+$/, "")}/dashboard/properties/${encodeURIComponent(
@@ -250,16 +258,18 @@ export function buildListingHealthDigest(
   const summaryText =
     `${adCount} ${plural(adCount, "ad needs", "ads need")} a refresh ` +
     `across ${unitCount} ${plural(unitCount, "unit", "units")}.`;
+  const oneUnit = unitCount <= 1;
   const detailsText = channels
     .map((channel) => {
-      const url = distributeUrl(appUrl, channel.propertyId);
-      return [
-        `- ${channel.address}: ${channel.channelLabel}, ${adStateLabel(channel.reason, adAgeDays(channel.lastPostedOn, nowISO))}`,
-        `  ${url}`,
-      ].join("\n");
+      const line = `- ${channel.address}: ${channel.channelLabel}, ${adStateLabel(channel.reason, adAgeDays(channel.lastPostedOn, nowISO))}`;
+      // One unit: the button opens it, so no per-ad link. Several units: each
+      // ad keeps its own rental's link.
+      return oneUnit ? line : [line, `  ${distributeUrl(appUrl, channel.propertyId)}`].join("\n");
     })
     .join("\n");
-  return { adCount, unitCount, firstDistributeUrl, summaryText, detailsText };
+  const actionUrl = oneUnit ? firstDistributeUrl : appUrl.replace(/\/+$/, "") + RENTALS_LIST_PATH;
+  const actionLabel = oneUnit ? "Open the rental" : "Open your rentals";
+  return { adCount, unitCount, firstDistributeUrl, summaryText, detailsText, actionUrl, actionLabel };
 }
 
 export function listingHealthSnapshotSummary(

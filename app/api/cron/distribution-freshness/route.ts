@@ -446,12 +446,12 @@ async function sendListingHealthAlerts({
           affected_units_count: String(digest.unitCount),
           listing_health_summary: digest.summaryText,
           listing_health_details: digest.detailsText,
-          dashboard_url: digest.firstDistributeUrl ?? `${APP_URL}/dashboard/leasing`,
+          dashboard_url: digest.actionUrl ?? `${APP_URL}/dashboard/leasing`,
         },
         operatorFallback: fallback,
         action: {
-          label: "Open the rental",
-          url: digest.firstDistributeUrl ?? `${APP_URL}/dashboard/leasing`,
+          label: digest.actionLabel,
+          url: digest.actionUrl ?? `${APP_URL}/dashboard/leasing`,
         },
       });
 

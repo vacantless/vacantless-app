@@ -103,7 +103,7 @@ ok("recap subject names month", recap.subject.includes("August 2026"));
 ok("recap body counts free refresh", recap.body.includes("queued 1 free refresh"));
 ok("recap says paid channels were not touched", recap.body.includes("No paid listings"));
 ok("recap does not auto-mark live", recap.body.includes("before Vacantless marks a channel Live"));
-ok("recap action opens distribute", recap.actions.some((action) => action.label === "Open Distribute"));
+ok("recap action opens the rental", recap.actions.some((action) => action.label === "Open the rental"));
 
 const event = getNotificationEvent(RELIST_RADAR_AUTOPILOT_RECAP_EVENT_KEY);
 ok("recap notification registered", event?.key === RELIST_RADAR_AUTOPILOT_RECAP_EVENT_KEY);

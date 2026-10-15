@@ -182,7 +182,7 @@ export function renderLeaseDocumentHtml(model: LeaseRenderModel): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${escapeHtml(model.title)}${model.propertyAddress ? " — " + escapeHtml(model.propertyAddress) : ""}</title>
+<title>${escapeHtml(model.title)}${model.propertyAddress ? ", " + escapeHtml(model.propertyAddress) : ""}</title>
 <style>
   :root { --ink: #1a1a1a; --muted: #555; --line: #cfcfcf; }
   * { box-sizing: border-box; }

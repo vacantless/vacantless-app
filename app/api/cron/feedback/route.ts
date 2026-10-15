@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
         channel: "email",
         direction: "outbound",
         body: `Feedback request sent to ${renterEmail}` +
-          (result.subject ? ` — "${result.subject}"` : ""),
+          (result.subject ? `: "${result.subject}"` : ""),
       });
     }
 

@@ -135,7 +135,7 @@ export function renderN1Html(model: N1RenderModel): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Form N1 — Notice of Rent Increase${
-    model.rentalUnitAddress ? " — " + escapeHtml(model.rentalUnitAddress) : ""
+    model.rentalUnitAddress ? ", " + escapeHtml(model.rentalUnitAddress) : ""
   }</title>
 <style>
   :root { --ink: #1a1a1a; --muted: #555; --line: #cfcfcf; }

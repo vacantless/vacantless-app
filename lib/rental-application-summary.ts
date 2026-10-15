@@ -297,14 +297,14 @@ export function renderApplicationSummaryHtml(model: ApplicationSummaryModel): st
           .join("\n  ")
       : `<div class="banner">The applicant acknowledged consent without completing the optional fields.</div>`;
 
-  const titleAddr = model.propertyAddress ? " — " + escapeHtml(model.propertyAddress) : "";
+  const titleAddr = model.propertyAddress ? ", " + escapeHtml(model.propertyAddress) : "";
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rental application${model.applicantName ? " — " + escapeHtml(model.applicantName) : ""}${titleAddr}</title>
+<title>Rental application${model.applicantName ? ", " + escapeHtml(model.applicantName) : ""}${titleAddr}</title>
 <style>
   :root { --ink: #1a1a1a; --muted: #555; --line: #cfcfcf; }
   * { box-sizing: border-box; }
