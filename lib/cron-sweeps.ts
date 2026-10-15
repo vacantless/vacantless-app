@@ -39,6 +39,8 @@ export const SWEEP_PATHS = [
   "/api/cron/onboarding-emails",
   // S717: team addresses back off Brevo's blocklist after a stray unsubscribe.
   "/api/cron/team-unsubscribe-guard",
+  // S720: the daily health email to Noam (sends once a day, 8 AM Toronto).
+  "/api/cron/health-digest",
 ] as const;
 
 export type SweepResult = { path: string; status: number | null; ms: number; error?: string };

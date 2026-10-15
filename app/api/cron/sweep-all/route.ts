@@ -63,5 +63,23 @@ export async function GET(req: NextRequest) {
   );
   const summary = summarizeSweeps(results);
   if (summary.failed.length > 0) console.warn("[sweep-all] failed", summary.failed);
+  // S720: keep a line per run so the daily health email can see overnight
+  // failures (pg_net keeps responses only a few hours). Best-effort.
+  try {
+    const admin = createAdminClient();
+    if (admin) {
+      await admin.from("sweep_runs").insert({
+        ok: summary.failed.length === 0,
+        ran: summary.ran,
+        failed: summary.failed,
+      });
+      await admin
+        .from("sweep_runs")
+        .delete()
+        .lt("ran_at", new Date(Date.now() - 14 * 86_400_000).toISOString());
+    }
+  } catch {
+    // never fail the sweep over its own log
+  }
   return NextResponse.json({ ok: summary.failed.length === 0, ...summary, results }, { status: 200 });
 }
