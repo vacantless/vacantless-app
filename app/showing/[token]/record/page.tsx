@@ -150,7 +150,7 @@ export default async function ShowingRecordOutcomePage({
           )}
         </div>
 
-        <p className="mt-4 text-center text-xs text-gray-400">Powered by Vacantless</p>
+        <p className="mt-4 text-center text-xs text-gray-400"><a href="https://www.vacantless.com/?ref=powered-by" target="_blank" rel="noopener" className="hover:underline">Powered by Vacantless</a></p>
       </main>
     </div>
   );

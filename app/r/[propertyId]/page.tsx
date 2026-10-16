@@ -857,7 +857,7 @@ export default async function PublicListingPage({
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-400">
-          Powered by Vacantless
+          <a href="https://www.vacantless.com/?ref=powered-by" target="_blank" rel="noopener" className="hover:underline">Powered by Vacantless</a>
         </p>
       </main>
     </div>

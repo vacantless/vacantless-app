@@ -667,6 +667,12 @@ function SiteFooter() {
               Browse rentals
             </Link>
           )}
+          <Link href="/realtors" className="hover:text-[#15211d]">
+            For realtors
+          </Link>
+          <Link href="/compare/showinghero" className="hover:text-[#15211d]">
+            Vacantless vs ShowingHero
+          </Link>
           <Link href="/about" className="hover:text-[#15211d]">
             About
           </Link>

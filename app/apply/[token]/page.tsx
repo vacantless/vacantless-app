@@ -204,7 +204,7 @@ export default async function ApplyPage({
         )}
       </div>
       <p className="mx-auto mt-4 max-w-2xl text-center text-xs text-gray-400">
-        Powered by Vacantless
+        <a href="https://www.vacantless.com/?ref=powered-by" target="_blank" rel="noopener" className="hover:underline">Powered by Vacantless</a>
       </p>
     </div>
   );
