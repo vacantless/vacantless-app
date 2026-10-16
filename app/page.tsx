@@ -465,8 +465,8 @@ function Pricing() {
   return (
     <section id="pricing" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Two plans. Simple.">
-          Try it free on one rental. Move up when you have more than one.
+        <SectionHead title="Two plans. One add-on.">
+          Try it free on one rental. Move up when you have more than one. Add Posting when you want us to post your ads.
         </SectionHead>
         <div className="grid gap-4 md:grid-cols-2">
           {PLANS.map((p) => (
@@ -515,6 +515,7 @@ function Pricing() {
             </article>
           ))}
         </div>
+        <PostingAddonCard />
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">
           <div>
             <strong className="block text-[1rem]">Want a hand setting up?</strong>
@@ -531,6 +532,50 @@ function Pricing() {
         </p>
       </div>
     </section>
+  );
+}
+
+/* S722: the Posting add-on gets its own card. Every line is live: sign in once
+   (S705-S717), the robot posts only after "Approve and post" (rule 240), Kijiji
+   bills its own fee per ad on the landlord's account (S713). Add-on needs a
+   paid plan (lib/billing.ts canUseRobotPosting). */
+const POSTING_ADDON_INCLUDES: string[] = [
+  "We post your rental to Kijiji, Rentals.ca and Zumper for you",
+  "On your own accounts. You sign in to each site once",
+  "Nothing goes up until you click Approve and post",
+  "Every renter from those sites lands in the same list",
+];
+
+function PostingAddonCard() {
+  return (
+    <article
+      id="posting-addon"
+      className="mt-4 grid gap-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px] md:grid-cols-[minmax(0,240px)_1fr] md:items-start"
+    >
+      <div>
+        <p className="mb-1 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
+          Add-on for Growth
+        </p>
+        <h3 className="mb-1 text-[1.08rem] font-semibold">Posting</h3>
+        <span className="block text-[1.9rem] font-extrabold leading-tight">
+          CA$49
+          <small className="text-[0.86rem] font-bold text-[#59655f]"> a month</small>
+        </span>
+      </div>
+      <div>
+        <ul className="mb-3 grid list-none gap-2 p-0">
+          {POSTING_ADDON_INCLUDES.map((f) => (
+            <li key={f} className="flex items-start gap-2 text-[0.86rem] leading-snug text-[#273832]">
+              <CheckMark />
+              {f}
+            </li>
+          ))}
+        </ul>
+        <p className="text-[0.84rem] leading-snug text-[#59655f]">
+          Kijiji charges its own fee for each ad. Facebook Page posting is free on every plan.
+        </p>
+      </div>
+    </article>
   );
 }
 
@@ -571,7 +616,7 @@ const PLANS: {
       "Everything in Free",
       "Help from us when you need it",
     ],
-    addon: "Add Posting for CA$49 a month. We post to Kijiji, Rentals.ca and Zumper for you, on your own accounts. Kijiji charges its own fee for each ad.",
+    addon: "Add Posting for CA$49 a month. See below.",
     cta: "Choose Growth",
     href: "/signup?plan=growth",
     featured: true,
