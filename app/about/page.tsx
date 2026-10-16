@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
 import { VacantlessMark } from "../../components/vacantless-mark";
 
@@ -253,6 +254,9 @@ function SiteFooter() {
           </Link>
         </div>
       </div>
+      <p className="mx-auto mt-4 w-[min(1120px,calc(100%-32px))] text-[0.8rem] text-[#59655f]">
+        {OPERATOR_LINE}
+      </p>
     </footer>
   );
 }

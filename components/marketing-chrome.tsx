@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_LINE } from "@/lib/operator-line";
 import { VacantlessMark } from "./vacantless-mark";
 
 // S722: header and footer for the newer public marketing pages
@@ -115,6 +116,9 @@ export function MarketingFooter() {
           </a>
         </div>
       </div>
+      <p className="mx-auto mt-4 w-[min(1120px,calc(100%-32px))] text-[0.8rem] text-[#59655f]">
+        {OPERATOR_LINE}
+      </p>
     </footer>
   );
 }

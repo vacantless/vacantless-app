@@ -61,6 +61,13 @@ const COMPARE_ROWS: Row[] = [
     us: "Your Facebook Page, free. Kijiji, Rentals.ca and Zumper with the CA$49 a month Posting add-on, on your own accounts. Kijiji charges its own fee for each ad.",
     them: "25+ listing sites.",
   },
+  {
+    // S722: their homepage and pricing page (read 2026-10-15) name no Canadian
+    // site and do not mention Canada. Re-read both before changing this row.
+    topic: "Canadian rental sites",
+    us: "Built for Kijiji and Rentals.ca, where Canadian renters look, plus Zumper.",
+    them: "Their website does not name any Canadian rental site.",
+  },
   // UPDATE WHEN TEXTING SHIPS (Noam 2026-10-15): renter texting on a number per
   // landlord (Twilio) is planned. Once it is live for landlords, change this row
   // to what the product actually does, and add texting to the home page plans.
