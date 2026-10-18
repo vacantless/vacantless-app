@@ -9,6 +9,29 @@
 
 export const WATCH_WINDOW_DAYS = 14;
 
+// S722: the email listed our own test sign-ups (S712 Test Rentals, Stranger
+// Five Rentals) as if they were customers. Noam: "yes leave out". An account
+// whose every login is one of Noam's own addresses is ours, so it is left out
+// of this email. Done by address, not by a list of ids, so the next stranger
+// walk is left out without anyone remembering to add it. These orgs are NOT
+// made quiet: they still send their own emails, which is how we test them.
+const OWN_ADDRESS_PATTERNS: readonly RegExp[] = [
+  /^nmuscovitch(\+[^@]*)?@hotmail\.com$/i,
+  /^noam(\+[^@]*)?@royallepage\.ca$/i,
+  /^thadmusco(\+[^@]*)?@gmail\.com$/i,
+  /^[^@]+@vacantless\.com$/i,
+];
+
+export function isOwnAddress(email: string | null | undefined): boolean {
+  const e = (email ?? "").trim();
+  return !!e && OWN_ADDRESS_PATTERNS.some((re) => re.test(e));
+}
+
+/** True only when the account has at least one login and every login is ours. */
+export function isOwnTestAccount(memberEmails: readonly (string | null | undefined)[]): boolean {
+  return memberEmails.length > 0 && memberEmails.every(isOwnAddress);
+}
+
 export type AccountCounts = {
   id: string;
   name: string | null;

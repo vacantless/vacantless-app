@@ -7,6 +7,7 @@ import {
   WATCH_WINDOW_DAYS,
   buildWatchEmail,
   buildWatchRows,
+  isOwnTestAccount,
   type AccountCounts,
 } from "@/lib/new-account-watch";
 
@@ -59,8 +60,26 @@ export async function GET(req: NextRequest) {
   };
 
   const accounts: AccountCounts[] = [];
+  // S722: leave out accounts whose every login is one of Noam's own addresses.
+  const memberEmails = async (orgId: string): Promise<string[]> => {
+    const { data: members } = await admin
+      .from("memberships")
+      .select("user_id")
+      .eq("organization_id", orgId);
+    const emails: string[] = [];
+    for (const m of members ?? []) {
+      const { data } = await admin.auth.admin.getUserById(m.user_id);
+      emails.push(data?.user?.email ?? "");
+    }
+    return emails;
+  };
+
   for (const o of orgs ?? []) {
     if (exclude.has(o.id)) continue;
+    if (isOwnTestAccount(await memberEmails(o.id))) {
+      exclude.add(o.id);
+      continue;
+    }
     const [rentals, liveRentals, rules, overrides, enquiries, bookings] = await Promise.all([
       count("properties", o.id),
       count("properties", o.id, true),

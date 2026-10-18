@@ -2,6 +2,8 @@
 import {
   buildWatchEmail,
   buildWatchRows,
+  isOwnAddress,
+  isOwnTestAccount,
   isStalled,
   stageOf,
   type AccountCounts,
@@ -69,6 +71,18 @@ ok("subject counts", email?.subject === "New accounts: 3, 1 need a nudge");
 ok("no em dash", !(email?.body ?? "").includes("—") && !(email?.subject ?? "").includes("—"));
 ok("empty -> null", buildWatchEmail([]) === null);
 ok("all moving subject", buildWatchEmail(rows.filter((r) => !r.stalled))?.subject === "New accounts: 2, all moving");
+
+// S722: our own test sign-ups are left out; a real landlord is not.
+ok("s712 alias is ours", isOwnAddress("nmuscovitch+s712@hotmail.com"));
+ok("stranger5 alias is ours", isOwnAddress("noam+stranger5@royallepage.ca"));
+ok("vacantless address is ours", isOwnAddress("admin@vacantless.com"));
+ok("a landlord is not ours", !isOwnAddress("landlord@gmail.com"));
+ok("lookalike is not ours", !isOwnAddress("noam@royallepage.ca.evil.com"));
+ok("other noam is not ours", !isOwnAddress("noam.smith@gmail.com"));
+ok("all ours -> test account", isOwnTestAccount(["nmuscovitch+s712@hotmail.com"]));
+ok("one real login -> customer", !isOwnTestAccount(["noam+stranger5@royallepage.ca", "renter@x.com"]));
+ok("no logins -> not assumed ours", !isOwnTestAccount([]));
+ok("missing email -> customer", !isOwnTestAccount(["nmuscovitch+a@hotmail.com", ""]));
 
 console.log(`\nnew-account-watch: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
